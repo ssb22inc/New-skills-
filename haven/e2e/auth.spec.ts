@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 test.describe('Authentication', () => {
   test.beforeEach(async ({ page }) => {
@@ -43,5 +44,25 @@ test.describe('Authentication', () => {
     await page.click('button[type="submit"]');
 
     await expect(page.locator('text=/passwords do not match/i')).toBeVisible();
+  });
+
+  test('login page should be accessible', async ({ page }) => {
+    await page.goto('/login');
+
+    const accessibilityScanResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+
+    expect(accessibilityScanResults.violations).toEqual([]);
+  });
+
+  test('signup page should be accessible', async ({ page }) => {
+    await page.goto('/signup');
+
+    const accessibilityScanResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+
+    expect(accessibilityScanResults.violations).toEqual([]);
   });
 });

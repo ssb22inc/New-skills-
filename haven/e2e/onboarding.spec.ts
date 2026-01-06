@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 test.describe('Seeker Onboarding', () => {
   test('should display onboarding page', async ({ page }) => {
@@ -45,5 +46,15 @@ test.describe('Seeker Onboarding', () => {
 
     // Message should appear in chat
     await expect(page.locator('text=Houston')).toBeVisible({ timeout: 3000 });
+  });
+
+  test('onboarding page should be accessible', async ({ page }) => {
+    await page.goto('/onboarding/seeker');
+
+    const accessibilityScanResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+
+    expect(accessibilityScanResults.violations).toEqual([]);
   });
 });

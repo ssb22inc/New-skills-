@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 test.describe('Matching', () => {
   test('should display matches page structure', async ({ page }) => {
@@ -56,5 +57,15 @@ test.describe('Matching', () => {
 
     await page.goto('/matches');
     await expect(page.locator('text=/85.*match|match.*85/i')).toBeVisible({ timeout: 5000 });
+  });
+
+  test('matches page should be accessible', async ({ page }) => {
+    await page.goto('/matches');
+
+    const accessibilityScanResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+
+    expect(accessibilityScanResults.violations).toEqual([]);
   });
 });

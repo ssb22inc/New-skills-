@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 test.describe('Listings', () => {
   test('should display landing page', async ({ page }) => {
@@ -45,5 +46,25 @@ test.describe('Listings', () => {
     // Should show validation errors
     const titleInput = page.locator('input[name="title"], input[placeholder*="title"]').first();
     await expect(titleInput).toHaveAttribute('required', '');
+  });
+
+  test('listings page should be accessible', async ({ page }) => {
+    await page.goto('/listings');
+
+    const accessibilityScanResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+
+    expect(accessibilityScanResults.violations).toEqual([]);
+  });
+
+  test('new listing page should be accessible', async ({ page }) => {
+    await page.goto('/listings/new');
+
+    const accessibilityScanResults = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa'])
+      .analyze();
+
+    expect(accessibilityScanResults.violations).toEqual([]);
   });
 });
