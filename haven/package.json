@@ -36,7 +36,15 @@
     "security:audit:fix": "npm audit fix",
     "security:check": "npm run security:audit && npm run test:security",
     "security:scan": "bash scripts/security-audit.sh",
-    "security:full": "npm run security:scan && npm run security:check"
+    "security:full": "npm run security:scan && npm run security:check",
+    "deploy:docker": "bash scripts/deploy-docker.sh",
+    "deploy:k8s": "bash scripts/deploy-k8s.sh",
+    "deploy:staging": "bash scripts/deploy.sh staging",
+    "deploy:production": "bash scripts/deploy.sh production",
+    "rollback:staging": "bash scripts/rollback.sh staging",
+    "rollback:production": "bash scripts/rollback.sh production",
+    "scale:staging": "bash scripts/scale-k8s.sh",
+    "scale:production": "bash scripts/scale-k8s.sh"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
