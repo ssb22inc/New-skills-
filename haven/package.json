@@ -34,7 +34,9 @@
     "test:security": "vitest run tests/security",
     "security:audit": "npm audit --audit-level=moderate",
     "security:audit:fix": "npm audit fix",
-    "security:check": "npm run security:audit && npm run test:security"
+    "security:check": "npm run security:audit && npm run test:security",
+    "security:scan": "bash scripts/security-audit.sh",
+    "security:full": "npm run security:scan && npm run security:check"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
