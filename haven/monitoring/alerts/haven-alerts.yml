@@ -1,0 +1,157 @@
+groups:
+  - name: haven_app
+    interval: 30s
+    rules:
+      # Application availability
+      - alert: HavenAppDown
+        expr: up{job="haven-app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "Haven application is down"
+          description: "Haven app instance {{ $labels.instance }} has been down for more than 2 minutes."
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m]) /
+          rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}"
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High response time"
+          description: "95th percentile response time is {{ $value }}s on {{ $labels.instance }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (container_memory_usage_bytes{pod=~"haven-app-.*"} /
+          container_spec_memory_limit_bytes{pod=~"haven-app-.*"}) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          rate(container_cpu_usage_seconds_total{pod=~"haven-app-.*"}[5m]) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High CPU usage"
+          description: "Pod {{ $labels.pod }} CPU usage is {{ $value | humanizePercentage }}"
+
+      # Pod restart
+      - alert: PodRestarting
+        expr: rate(kube_pod_container_status_restarts_total{pod=~"haven-app-.*"}[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: stability
+        annotations:
+          summary: "Pod is restarting"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last hour"
+
+      # Low replica count
+      - alert: LowReplicaCount
+        expr: kube_deployment_status_replicas_available{deployment="haven-app"} < 2
+        for: 5m
+        labels:
+          severity: critical
+          component: availability
+        annotations:
+          summary: "Low replica count"
+          description: "Haven app has only {{ $value }} replicas available (minimum is 2)"
+
+  - name: haven_redis
+    interval: 30s
+    rules:
+      # Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} has been down for more than 2 minutes"
+
+      # High memory usage
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis is using {{ $value | humanizePercentage }} of available memory"
+
+      # Too many connections
+      - alert: RedisTooManyConnections
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis has too many connections"
+          description: "Redis has {{ $value }} connections"
+
+  - name: haven_business
+    interval: 1m
+    rules:
+      # Authentication failures
+      - alert: HighAuthenticationFailures
+        expr: rate(auth_failures_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value }} authentication failures per second"
+
+      # Rate limit hits
+      - alert: HighRateLimitHits
+        expr: rate(rate_limit_hits_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: info
+          component: security
+        annotations:
+          summary: "High rate limit hits"
+          description: "{{ $value }} rate limit hits per second"
+
+      # Payment failures
+      - alert: PaymentFailureSpike
+        expr: rate(payment_failures_total[5m]) > 5
+        for: 10m
+        labels:
+          severity: critical
+          component: payments
+        annotations:
+          summary: "Payment failure spike detected"
+          description: "{{ $value }} payment failures per second"

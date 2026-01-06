@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: haven-service
+  namespace: haven
+  labels:
+    app: haven
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    app: haven
+    component: web
+---
+# Headless service for internal communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: haven-headless
+  namespace: haven
+spec:
+  clusterIP: None
+  ports:
+    - port: 3000
+      name: http
+  selector:
+    app: haven
+    component: web

@@ -1,0 +1,19 @@
+apiVersion: v2
+name: haven
+description: A Helm chart for Haven - Safe Housing Marketplace
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - haven
+  - housing
+  - marketplace
+  - nextjs
+home: https://github.com/haven/haven
+sources:
+  - https://github.com/haven/haven
+maintainers:
+  - name: Haven Team
+    email: devops@haven.app
+icon: https://haven.app/icon.png
+dependencies: []

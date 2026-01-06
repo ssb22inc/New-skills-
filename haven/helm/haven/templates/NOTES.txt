@@ -1,0 +1,41 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+
+Haven is now accessible at:
+  https://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else }}
+
+To access Haven, run:
+
+  $ kubectl port-forward svc/{{ include "haven.fullname" . }} 3000:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+
+Then visit http://localhost:3000
+{{- end }}
+
+Health check endpoint:
+  {{ .Values.healthCheck.path }}
+
+{{- if .Values.autoscaling.enabled }}
+
+Autoscaling is enabled:
+  Min replicas: {{ .Values.autoscaling.minReplicas }}
+  Max replicas: {{ .Values.autoscaling.maxReplicas }}
+  Target CPU: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}%
+  Target Memory: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}%
+{{- end }}
+
+Monitor your deployment:
+  $ kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "haven.name" . }}
+  $ kubectl logs -f deployment/{{ include "haven.fullname" . }} -n {{ .Release.Namespace }}
