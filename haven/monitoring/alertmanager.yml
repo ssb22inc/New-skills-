@@ -1,0 +1,83 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  routes:
+    # Critical alerts go to PagerDuty and Slack
+    - match:
+        severity: critical
+      receiver: pagerduty
+      continue: true
+    - match:
+        severity: critical
+      receiver: slack-critical
+
+    # Warnings go to Slack
+    - match:
+        severity: warning
+      receiver: slack-warnings
+
+    # Info alerts
+    - match:
+        severity: info
+      receiver: slack-info
+
+receivers:
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+
+  - name: 'slack-critical'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-critical'
+        title: '🚨 Critical Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Severity:* {{ .Labels.severity }}
+          *Description:* {{ .Annotations.description }}
+          *Details:*
+          {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+          {{ end }}
+          {{ end }}
+
+  - name: 'slack-warnings'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-warnings'
+        title: '⚠️ Warning Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  - name: 'slack-info'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-info'
+        title: 'ℹ️ Info Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Labels.alertname }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  - name: 'pagerduty'
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        description: '{{ .CommonAnnotations.description }}'
+
+inhibit_rules:
+  # Inhibit warning if critical is firing for same alertname
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']

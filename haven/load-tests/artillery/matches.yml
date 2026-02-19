@@ -1,0 +1,38 @@
+config:
+  target: "{{ $processEnvironment.BASE_URL }}"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 180
+      arrivalRate: 20
+      name: "Sustained"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      Authorization: "Bearer {{ $processEnvironment.AUTH_TOKEN }}"
+
+scenarios:
+  - name: "Matching Flow"
+    flow:
+      - get:
+          url: "/api/matches?limit=20&minScore=40"
+          capture:
+            - json: "$.matches[0].listing.id"
+              as: "listingId"
+          expect:
+            - statusCode: 200
+      - think: 3
+      - post:
+          url: "/api/matches"
+          json:
+            listing_id: "{{ listingId }}"
+            action: "liked"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - get:
+          url: "/api/listings/{{ listingId }}"
+          expect:
+            - statusCode: 200

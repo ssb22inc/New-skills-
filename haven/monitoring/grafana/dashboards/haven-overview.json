@@ -1,0 +1,83 @@
+{
+  "dashboard": {
+    "title": "Haven Overview",
+    "tags": ["haven", "overview"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (status)",
+            "legendFormat": "{{ status }}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Response Time (95th percentile)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))",
+            "legendFormat": "Error Rate"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Active Pods",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 8, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "count(kube_pod_info{namespace=\"haven\", pod=~\"haven-app-.*\"})"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Memory Usage",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(container_memory_usage_bytes{pod=~\"haven-app-.*\"}) / sum(container_spec_memory_limit_bytes{pod=~\"haven-app-.*\"})",
+            "legendFormat": "Memory Usage %"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"haven-app-.*\"}[5m]))",
+            "legendFormat": "CPU Usage"
+          }
+        ]
+      }
+    ],
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 1
+  }
+}

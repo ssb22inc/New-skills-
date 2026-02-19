@@ -1,0 +1,11 @@
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "production"
+
+# EKS Configuration
+cluster_name         = "haven-production"
+node_instance_types  = ["t3.large"]
+node_min_size        = 3
+node_max_size        = 10
+node_desired_size    = 3
+enable_spot_instances = false

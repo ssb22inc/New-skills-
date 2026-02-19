@@ -1,0 +1,68 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Haven application logs
+  - job_name: haven-app
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - haven
+    pipeline_stages:
+      # Parse JSON logs
+      - json:
+          expressions:
+            level: level
+            message: message
+            timestamp: timestamp
+            userId: userId
+            requestId: requestId
+      # Set log level
+      - labels:
+          level:
+      # Drop debug logs in production
+      - drop:
+          source: level
+          expression: "debug"
+      # Parse timestamp
+      - timestamp:
+          source: timestamp
+          format: RFC3339
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: haven
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+
+  # System logs
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*log
+
+  # Kubernetes events
+  - job_name: kubernetes-events
+    kubernetes_sd_configs:
+      - role: pod
+    pipeline_stages:
+      - docker: {}
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_component]
+        action: keep
+        regex: kube-.*

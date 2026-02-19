@@ -1,0 +1,23 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: haven-app-pdb
+  namespace: haven
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: haven
+  unhealthyPodEvictionPolicy: AlwaysAllow
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: haven
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis

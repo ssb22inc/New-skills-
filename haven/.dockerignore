@@ -1,0 +1,60 @@
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+tests/
+e2e/
+test-results/
+playwright-report/
+
+# Next.js
+.next/
+out/
+
+# Production
+build
+dist
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+*.log
+logs/
+
+# Local env files
+.env*.local
+.env
+
+# Git
+.git
+.gitignore
+.github
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Documentation
+*.md
+docs/
+
+# Scripts
+scripts/
+
+# Load tests
+load-tests/
+
+# CI/CD
+.github/

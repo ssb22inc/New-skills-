@@ -1,0 +1,83 @@
+{{- if .Values.redis.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "haven.fullname" . }}-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "haven.labels" . | nindent 4 }}
+    component: redis
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+      name: redis
+  selector:
+    {{- include "haven.selectorLabels" . | nindent 4 }}
+    component: redis
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "haven.fullname" . }}-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "haven.labels" . | nindent 4 }}
+    component: redis
+spec:
+  serviceName: {{ include "haven.fullname" . }}-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "haven.selectorLabels" . | nindent 6 }}
+      component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "haven.selectorLabels" . | nindent 8 }}
+        component: redis
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6379
+              name: redis
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          {{- if .Values.redis.persistence.enabled }}
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          {{- end }}
+  {{- if .Values.redis.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.redis.persistence.size }}
+  {{- end }}
+{{- end }}

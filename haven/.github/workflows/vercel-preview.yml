@@ -1,0 +1,51 @@
+name: Vercel Preview Deployment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "preview-url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Comment PR with Preview URL
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 Preview deployment ready!\n\n**URL:** ${{ steps.deploy.outputs.preview-url }}\n\n_This preview will be updated with each commit._`
+            })
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: ${{ steps.deploy.outputs.preview-url }}
+          uploadArtifacts: true
+          temporaryPublicStorage: true
