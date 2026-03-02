@@ -1,63 +1,61 @@
-'use client'
+'use client';
 
-import { useState, useCallback } from 'react'
-import type { ChatMessage } from '@/types/ai'
+import { useState, useCallback } from 'react';
+import { OnboardingConversation } from '@/types/ai';
 
-export function useChat(initialMessages: ChatMessage[] = []) {
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export function useChat(type: 'onboarding' | 'listing' = 'onboarding') {
+  const [conversation, setConversation] = useState<OnboardingConversation | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const sendMessage = useCallback(
-    async (content: string, context?: Record<string, unknown>) => {
-      const userMessage: ChatMessage = { role: 'user', content }
-      setMessages((prev) => [...prev, userMessage])
-      setIsLoading(true)
-      setError(null)
+    async (message: string) => {
+      setLoading(true);
+      setError(null);
 
       try {
         const res = await fetch('/api/ai/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: [...messages, userMessage],
-            context,
-          }),
-        })
+          body: JSON.stringify({ message, conversation, type }),
+        });
 
-        if (!res.ok) throw new Error('Failed to send message')
+        if (!res.ok) throw new Error('Failed to send message');
 
-        const reader = res.body?.getReader()
-        const decoder = new TextDecoder()
-        let assistantContent = ''
-
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: '' },
-        ])
-
-        while (reader) {
-          const { done, value } = await reader.read()
-          if (done) break
-          assistantContent += decoder.decode(value, { stream: true })
-          setMessages((prev) => [
-            ...prev.slice(0, -1),
-            { role: 'assistant', content: assistantContent },
-          ])
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to send message')
-        setMessages((prev) => prev.slice(0, -1))
+        const updated: OnboardingConversation = await res.json();
+        setConversation(updated);
+        return updated;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to send message';
+        setError(message);
+        throw err;
       } finally {
-        setIsLoading(false)
+        setLoading(false);
       }
     },
-    [messages]
-  )
+    [conversation, type]
+  );
 
-  const clearMessages = useCallback(() => {
-    setMessages(initialMessages)
-  }, [initialMessages])
+  const reset = useCallback(() => {
+    setConversation(null);
+    setError(null);
+  }, []);
 
-  return { messages, isLoading, error, sendMessage, clearMessages }
+  const lastAssistantMessage = conversation?.messages
+    .filter(m => m.role === 'assistant')
+    .at(-1)?.content;
+
+  const extractedData = conversation?.extracted_data ?? {};
+  const completionPercentage = conversation?.completion_percentage ?? 0;
+
+  return {
+    conversation,
+    loading,
+    error,
+    sendMessage,
+    reset,
+    lastAssistantMessage,
+    extractedData,
+    completionPercentage,
+  };
 }

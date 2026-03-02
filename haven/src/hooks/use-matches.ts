@@ -1,38 +1,52 @@
-'use client'
+'use client';
 
-import { useState, useCallback } from 'react'
-import type { MatchWithDetails, SeekerAction } from '@/types/matching'
-import type { ApiResponse } from '@/types/api'
+import { useState, useCallback } from 'react';
+import { Match } from '@/types/matching';
 
 export function useMatches() {
-  const [matches, setMatches] = useState<MatchWithDetails[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchMatches = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
+  const fetchMatches = useCallback(async (params?: { limit?: number; minScore?: number }) => {
+    setLoading(true);
+    setError(null);
+
     try {
-      const res = await fetch('/api/matches')
-      const json: ApiResponse<MatchWithDetails[]> = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      if (json.data) setMatches(json.data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch matches')
+      const searchParams = new URLSearchParams();
+      if (params?.limit) searchParams.set('limit', String(params.limit));
+      if (params?.minScore) searchParams.set('minScore', String(params.minScore));
+
+      const res = await fetch(`/api/matches?${searchParams}`);
+      if (!res.ok) throw new Error('Failed to fetch matches');
+
+      const data = await res.json();
+      setMatches(data.matches);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch matches');
     } finally {
-      setIsLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
-  const recordAction = useCallback(async (matchId: string, action: SeekerAction) => {
-    const res = await fetch(`/api/matches/${matchId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seeker_action: action }),
-    })
-    const json: ApiResponse = await res.json()
-    if (!res.ok) throw new Error(json.error as string)
-  }, [])
+  const recordAction = async (listingId: string, action: 'liked' | 'skipped' | 'saved') => {
+    try {
+      const res = await fetch('/api/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listing_id: listingId, action }),
+      });
+      if (!res.ok) throw new Error('Failed to record action');
 
-  return { matches, isLoading, error, fetchMatches, recordAction }
+      setMatches(prev =>
+        prev.map(m =>
+          m.listing.id === listingId ? { ...m, seeker_action: action } : m
+        )
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to record action');
+    }
+  };
+
+  return { matches, loading, error, fetchMatches, recordAction };
 }

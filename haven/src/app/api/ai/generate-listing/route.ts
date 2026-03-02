@@ -1,20 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { generateListingContent } from '@/services/ai/listing-generator'
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { generateListing, generateListingEmbedding } from '@/services/ai/listing-generator';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    const body = await request.json()
-    const result = await generateListingContent(body)
-    return NextResponse.json({ data: result })
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const input = await request.json();
+
+    const listing = await generateListing(input);
+    const embedding = await generateListingEmbedding({
+      title: listing.title,
+      description: listing.description,
+      amenities: listing.amenities,
+      city: input.city,
+      neighborhood: input.neighborhood,
+    });
+
+    return NextResponse.json({ listing, embedding });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Listing generation failed' },
-      { status: 500 }
-    )
+    console.error('Listing generation error:', error);
+    return NextResponse.json({ error: 'Failed to generate listing' }, { status: 500 });
   }
 }

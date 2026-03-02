@@ -1,23 +1,36 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { getListingById, updateListing, deleteListing } from '@/services/listings/listing-service'
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
-    const listing = await getListingById(id)
-    if (!listing) {
-      return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
+    const { id } = await params;
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('listings')
+      .select(`
+        *,
+        photos:listing_photos(*),
+        landlord:profiles!listings_user_id_fkey(id, full_name, avatar_url)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    if (!data) {
+      return NextResponse.json({ error: 'Listing not found' }, { status: 404 });
     }
-    return NextResponse.json({ data: listing })
+
+    // Increment view count (fire-and-forget)
+    supabase.rpc('increment_listing_views', { listing_uuid: id }).then(() => {});
+
+    return NextResponse.json(data);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch listing' },
-      { status: 500 }
-    )
+    console.error('Listing fetch error:', error);
+    return NextResponse.json({ error: 'Failed to fetch listing' }, { status: 500 });
   }
 }
 
@@ -26,20 +39,40 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { id } = await params;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    const { id } = await params
-    const body = await request.json()
-    const listing = await updateListing(id, user.id, body)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    return NextResponse.json({ data: listing })
+    const body = await request.json();
+
+    // Verify ownership
+    const { data: existing } = await supabase
+      .from('listings')
+      .select('user_id')
+      .eq('id', id)
+      .single();
+
+    if (!existing || existing.user_id !== user.id) {
+      return NextResponse.json({ error: 'Not authorized' }, { status: 403 });
+    }
+
+    const { data, error } = await supabase
+      .from('listings')
+      .update(body)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json(data);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to update listing' },
-      { status: 500 }
-    )
+    console.error('Listing update error:', error);
+    return NextResponse.json({ error: 'Failed to update listing' }, { status: 500 });
   }
 }
 
@@ -48,18 +81,25 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { id } = await params;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    const { id } = await params
-    await deleteListing(id, user.id)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    return NextResponse.json({ message: 'Listing deleted' })
+    const { error } = await supabase
+      .from('listings')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to delete listing' },
-      { status: 500 }
-    )
+    console.error('Listing deletion error:', error);
+    return NextResponse.json({ error: 'Failed to delete listing' }, { status: 500 });
   }
 }

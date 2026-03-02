@@ -1,56 +1,71 @@
-'use client'
+'use client';
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { useAuthStore } from '@/stores/auth-store'
+import { useEffect, useState } from 'react';
+import { User } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
+import { Profile } from '@/types/user';
 
 export function useAuth() {
-  const { profile, isLoading, setProfile, setLoading, clearAuth } = useAuthStore()
-  const router = useRouter()
-  const supabase = createClient()
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+
       if (user) {
         const { data } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
-          .single()
-        setProfile(data)
-      } else {
-        clearAuth()
+          .single();
+        setProfile(data);
       }
-      setLoading(false)
-    }
 
-    getUser()
+      setLoading(false);
+    };
+
+    getUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          clearAuth()
-        } else if (session?.user) {
+        setUser(session?.user ?? null);
+        if (session?.user) {
           const { data } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
-            .single()
-          setProfile(data)
+            .single();
+          setProfile(data);
+        } else {
+          setProfile(null);
         }
       }
-    )
+    );
 
-    return () => subscription.unsubscribe()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => subscription.unsubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string, metadata?: { full_name?: string }) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: metadata },
+    });
+    return { error };
+  };
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    clearAuth()
-    router.push('/login')
-  }
+    await supabase.auth.signOut();
+  };
 
-  return { profile, isLoading, signOut }
+  return { user, profile, loading, signIn, signUp, signOut };
 }
