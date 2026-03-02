@@ -1,187 +1,304 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select } from '@/components/ui/select';
+import { PhotoUploader } from '@/components/listing/photo-uploader';
+import { VoiceRecorder } from '@/components/listing/voice-recorder';
+import { Camera, Mic, MessageSquare, Loader2 } from 'lucide-react';
+import { useListings } from '@/hooks/use-listings';
+
+interface Photo {
+  id?: string;
+  url: string;
+  file?: File;
+  position: number;
+  is_primary: boolean;
+  uploading?: boolean;
+}
 
 export default function NewListingPage() {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const [form, setForm] = useState({
+  const router = useRouter();
+  const { createListing, loading } = useListings();
+  const [activeTab, setActiveTab] = useState('photos');
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [formData, setFormData] = useState({
     title: '',
+    description: '',
     property_type: 'apartment',
     bedrooms: 1,
     bathrooms: 1,
-    price_monthly: '',
+    sqft: '',
     address_line1: '',
     city: '',
     state: '',
     zip_code: '',
-    description: '',
-  })
+    price_monthly: '',
+    amenities: [] as string[],
+  });
+  const [aiGenerating, setAiGenerating] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
-
+  const handlePhotoAnalysis = async () => {
+    if (photos.length < 3) return;
+    
+    setAiGenerating(true);
     try {
-      const res = await fetch('/api/listings', {
+      const res = await fetch('/api/ai/analyze-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrls: photos.map(p => p.url) }),
+      });
+      const analysis = await res.json();
+      
+      const listingRes = await fetch('/api/ai/generate-listing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
-          price_monthly: Number(form.price_monthly),
-          status: 'draft',
+          ...formData,
+          photo_analysis: analysis.photos,
         }),
-      })
-
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-
-      router.push(`/listings/${data.data.id}`)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create listing')
+      });
+      const { listing } = await listingRes.json();
+      
+      setFormData(prev => ({
+        ...prev,
+        title: listing.title || prev.title,
+        description: listing.description || prev.description,
+        amenities: listing.amenities || prev.amenities,
+      }));
+      
+      setActiveTab('details');
+    } catch (error) {
+      console.error('AI generation error:', error);
     } finally {
-      setIsLoading(false)
+      setAiGenerating(false);
     }
-  }
+  };
+
+  const handleVoiceTranscription = async (text: string) => {
+    setAiGenerating(true);
+    try {
+      const res = await fetch('/api/ai/generate-listing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          landlord_notes: text,
+        }),
+      });
+      const { listing } = await res.json();
+      
+      setFormData(prev => ({
+        ...prev,
+        title: listing.title || prev.title,
+        description: listing.description || prev.description,
+        amenities: listing.amenities || prev.amenities,
+      }));
+      
+      setActiveTab('details');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleSubmit = async (status: 'draft' | 'active') => {
+    const listing = await createListing({
+      ...formData,
+      sqft: formData.sqft ? parseInt(formData.sqft) : undefined,
+      price_monthly: parseInt(formData.price_monthly),
+      status,
+    });
+    
+    if (listing) {
+      router.push(`/listings/${listing.id}`);
+    }
+  };
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Create New Listing</h1>
-        <p className="text-muted-foreground mt-1">Add your rental property to Haven</p>
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900">Create New Listing</h1>
+        <p className="mt-1 text-gray-600">
+          Use AI to create a compelling listing in minutes
+        </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Property Details</CardTitle>
-          <CardDescription>Basic information about your rental</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-            )}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="photos" className="gap-2">
+            <Camera className="h-4 w-4" /> Photos
+          </TabsTrigger>
+          <TabsTrigger value="voice" className="gap-2">
+            <Mic className="h-4 w-4" /> Voice
+          </TabsTrigger>
+          <TabsTrigger value="details" className="gap-2">
+            <MessageSquare className="h-4 w-4" /> Details
+          </TabsTrigger>
+        </TabsList>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Title</label>
-              <Input
-                placeholder="Modern 2BR in Downtown Houston"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                required
+        <TabsContent value="photos" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Upload Photos</CardTitle>
+              <CardDescription>
+                Add at least 3 photos and our AI will analyze them to create your listing
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PhotoUploader
+                photos={photos}
+                onChange={setPhotos}
+                onAnalyze={handlePhotoAnalysis}
               />
-            </div>
+              
+              {aiGenerating && (
+                <div className="mt-4 flex items-center justify-center gap-2 text-blue-600">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Analyzing photos and generating listing...
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Type</label>
-                <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={form.property_type}
-                  onChange={(e) => setForm({ ...form, property_type: e.target.value })}
-                >
-                  <option value="apartment">Apartment</option>
-                  <option value="house">House</option>
-                  <option value="condo">Condo</option>
-                  <option value="room">Room</option>
-                  <option value="studio">Studio</option>
-                  <option value="townhouse">Townhouse</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Bedrooms</label>
+        <TabsContent value="voice" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Describe Your Property</CardTitle>
+              <CardDescription>
+                Tell us about your property and we'll create a listing for you
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VoiceRecorder onTranscription={handleVoiceTranscription} />
+              
+              {aiGenerating && (
+                <div className="mt-4 flex items-center justify-center gap-2 text-blue-600">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Generating listing from your description...
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="details" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Listing Details</CardTitle>
+              <CardDescription>
+                Review and edit your listing information
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <Input
+                label="Title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Cozy 2BR near Downtown Hospital"
+              />
+
+              <Textarea
+                label="Description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Describe your property..."
+                className="min-h-[150px]"
+              />
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Select
+                  label="Property Type"
+                  value={formData.property_type}
+                  onChange={(e) => setFormData({ ...formData, property_type: e.target.value })}
+                  options={[
+                    { value: 'apartment', label: 'Apartment' },
+                    { value: 'house', label: 'House' },
+                    { value: 'condo', label: 'Condo' },
+                    { value: 'room', label: 'Room' },
+                    { value: 'studio', label: 'Studio' },
+                  ]}
+                />
                 <Input
+                  label="Bedrooms"
                   type="number"
-                  min={0}
-                  max={20}
-                  value={form.bedrooms}
-                  onChange={(e) => setForm({ ...form, bedrooms: Number(e.target.value) })}
+                  value={formData.bedrooms}
+                  onChange={(e) => setFormData({ ...formData, bedrooms: parseInt(e.target.value) })}
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Bathrooms</label>
                 <Input
+                  label="Bathrooms"
                   type="number"
-                  min={0.5}
-                  max={20}
-                  step={0.5}
-                  value={form.bathrooms}
-                  onChange={(e) => setForm({ ...form, bathrooms: Number(e.target.value) })}
+                  step="0.5"
+                  value={formData.bathrooms}
+                  onChange={(e) => setFormData({ ...formData, bathrooms: parseFloat(e.target.value) })}
+                />
+                <Input
+                  label="Sq Ft"
+                  type="number"
+                  value={formData.sqft}
+                  onChange={(e) => setFormData({ ...formData, sqft: e.target.value })}
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Monthly Rent ($)</label>
-              <Input
-                type="number"
-                min={100}
-                placeholder="2500"
-                value={form.price_monthly}
-                onChange={(e) => setForm({ ...form, price_monthly: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Street Address</label>
-              <Input
-                placeholder="123 Main St"
-                value={form.address_line1}
-                onChange={(e) => setForm({ ...form, address_line1: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-1 space-y-2">
-                <label className="text-sm font-medium">City</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input
-                  placeholder="Houston"
-                  value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  required
+                  label="Address"
+                  value={formData.address_line1}
+                  onChange={(e) => setFormData({ ...formData, address_line1: e.target.value })}
+                  placeholder="123 Main Street"
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">State</label>
                 <Input
+                  label="City"
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                />
+                <Input
+                  label="State"
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                   placeholder="TX"
                   maxLength={2}
-                  value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
-                  required
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">ZIP</label>
                 <Input
-                  placeholder="77001"
-                  value={form.zip_code}
-                  onChange={(e) => setForm({ ...form, zip_code: e.target.value })}
-                  required
+                  label="ZIP Code"
+                  value={formData.zip_code}
+                  onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
                 />
               </div>
-            </div>
 
-            <div className="flex gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? 'Creating...' : 'Create Listing'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+              <Input
+                label="Monthly Rent"
+                type="number"
+                value={formData.price_monthly}
+                onChange={(e) => setFormData({ ...formData, price_monthly: e.target.value })}
+                placeholder="2000"
+              />
+
+              <div className="flex gap-4 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => handleSubmit('draft')}
+                  disabled={loading}
+                >
+                  Save as Draft
+                </Button>
+                <Button
+                  onClick={() => handleSubmit('active')}
+                  disabled={loading}
+                >
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Publish Listing
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
-  )
+  );
 }

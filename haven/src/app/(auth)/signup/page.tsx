@@ -1,103 +1,151 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Home, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function SignupPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
-  const supabase = createClient()
+  const router = useRouter();
+  const { signUp } = useAuth();
+  
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    userType: 'seeker' as 'seeker' | 'landlord',
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } },
-    })
-
-    if (error) {
-      setError(error.message)
-      setIsLoading(false)
-      return
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
     }
+    
+    setLoading(true);
+    setError('');
 
-    router.push('/onboarding/seeker')
-  }
+    const { error } = await signUp(formData.email, formData.password, {
+      full_name: formData.fullName,
+    });
+    
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+    } else {
+      router.push(`/onboarding/${formData.userType}`);
+    }
+  };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Create your Haven account</CardTitle>
-          <CardDescription>Find your perfect home match</CardDescription>
+          <Link href="/" className="inline-flex items-center justify-center gap-2 mb-4">
+            <Home className="h-8 w-8 text-blue-600" />
+            <span className="text-2xl font-bold">Haven</span>
+          </Link>
+          <CardTitle>Create your account</CardTitle>
+          <CardDescription>Start finding your perfect temporary home</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSignup} className="space-y-4">
+        
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="p-3 text-sm text-red-600 bg-red-50 rounded-lg">
                 {error}
               </div>
             )}
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="fullName">Full Name</label>
-              <Input
-                id="fullName"
-                type="text"
-                placeholder="Jane Smith"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
+            
+            {/* User type selection */}
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { value: 'seeker', label: 'Looking for housing', icon: '🏠' },
+                { value: 'landlord', label: 'Listing property', icon: '🔑' },
+              ].map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, userType: type.value as 'seeker' | 'landlord' })}
+                  className={`p-4 rounded-lg border-2 text-center transition-colors ${
+                    formData.userType === type.value
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="text-2xl">{type.icon}</span>
+                  <p className="mt-1 text-sm font-medium">{type.label}</p>
+                </button>
+              ))}
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="email">Email</label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="password">Password</label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="At least 8 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Creating account...' : 'Create account'}
+            
+            <Input
+              label="Full Name"
+              value={formData.fullName}
+              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+              placeholder="John Doe"
+              required
+            />
+            
+            <Input
+              label="Email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="you@example.com"
+              required
+            />
+            
+            <Input
+              label="Password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              placeholder="••••••••"
+              helperText="At least 8 characters with uppercase, lowercase, and number"
+              required
+            />
+            
+            <Input
+              label="Confirm Password"
+              type="password"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              placeholder="••••••••"
+              required
+            />
+          </CardContent>
+          
+          <CardFooter className="flex flex-col gap-4">
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Account
             </Button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </CardContent>
+            
+            <p className="text-xs text-center text-gray-500">
+              By signing up, you agree to our{' '}
+              <Link href="/terms" className="underline">Terms</Link> and{' '}
+              <Link href="/privacy" className="underline">Privacy Policy</Link>
+            </p>
+            
+            <p className="text-sm text-center text-gray-600">
+              Already have an account?{' '}
+              <Link href="/login" className="text-blue-600 hover:underline">
+                Sign in
+              </Link>
+            </p>
+          </CardFooter>
+        </form>
       </Card>
     </div>
-  )
+  );
 }

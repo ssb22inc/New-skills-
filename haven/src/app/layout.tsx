@@ -1,27 +1,25 @@
-import type { Metadata } from 'next'
-import { Geist } from 'next/font/google'
-import './globals.css'
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 
-const geist = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-})
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Haven — Find Your Perfect Home Match',
-  description: 'AI-powered rental matching that connects tenants and landlords based on true compatibility.',
-}
+  title: 'Haven - Find Your Perfect Temporary Home',
+  description: 'AI-powered housing platform connecting travel nurses with furnished rentals',
+  keywords: 'travel nurse housing, furnished rentals, temporary housing, healthcare housing',
+};
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${geist.variable} font-sans antialiased`}>
-        {children}
+    <html lang="en" className="h-full">
+      <body className={`${inter.className} h-full`}>
+        <ToastProvider>
+          {children}
+          <ToastViewport />
+        </ToastProvider>
       </body>
     </html>
-  )
+  );
 }
