@@ -1,61 +1,79 @@
-import type { Database, PropertyType, FurnitureStatus, ListingStatus } from './database'
+import { Database, PropertyType, FurnitureStatus, ListingStatus } from './database';
 
-export type Listing = Database['public']['Tables']['listings']['Row']
-export type ListingPhoto = Database['public']['Tables']['listing_photos']['Row']
+export type Listing = Database['public']['Tables']['listings']['Row'];
+export type ListingInsert = Database['public']['Tables']['listings']['Insert'];
+export type ListingUpdate = Database['public']['Tables']['listings']['Update'];
+export type ListingPhoto = Database['public']['Tables']['listing_photos']['Row'];
 
 export interface ListingWithPhotos extends Listing {
-  photos: ListingPhoto[]
-}
-
-export interface ListingFormData {
-  title: string
-  property_type: PropertyType
-  bedrooms: number
-  bathrooms: number
-  sqft?: number
-  address_line1: string
-  address_line2?: string
-  city: string
-  state: string
-  zip_code: string
-  neighborhood?: string
-  price_monthly: number
-  security_deposit?: number
-  utilities_included: boolean
-  utilities_estimate?: number
-  available_date?: string
-  minimum_stay_days: number
-  maximum_stay_days?: number
-  furniture_status: FurnitureStatus
-  amenities: string[]
-  house_rules: string[]
-  pet_policy?: string
-  smoking_policy?: string
-  description?: string
-  headline?: string
+  photos: ListingPhoto[];
+  landlord?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    response_rate?: number;
+    response_time_hours?: number;
+  };
 }
 
 export interface ListingFilters {
-  city?: string
-  state?: string
-  min_price?: number
-  max_price?: number
-  bedrooms?: number
-  property_type?: PropertyType
-  available_date?: string
-  amenities?: string[]
-  pet_policy?: string
-  furniture_status?: FurnitureStatus
-  status?: ListingStatus
+  city?: string;
+  state?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  propertyType?: PropertyType;
+  furnitureStatus?: FurnitureStatus;
+  amenities?: string[];
+  availableFrom?: string;
+  availableTo?: string;
+  instantBooking?: boolean;
+  petsAllowed?: boolean;
+  status?: ListingStatus;
+}
+
+export interface ListingSearchParams extends ListingFilters {
+  query?: string;
+  sortBy?: 'price_asc' | 'price_desc' | 'newest' | 'relevance';
+  page?: number;
+  limit?: number;
+  latitude?: number;
+  longitude?: number;
+  radiusMiles?: number;
 }
 
 export interface AIListingAnalysis {
-  condition_score: number
-  style: string
-  highlights: string[]
-  target_demographics: string[]
-  seo_keywords: string[]
-  suggested_title?: string
-  suggested_headline?: string
-  suggested_description?: string
+  condition_score: number;
+  style: string;
+  highlights: string[];
+  concerns: string[];
+  target_demographics: string[];
+  seo_keywords: string[];
+  suggested_price_range: {
+    min: number;
+    max: number;
+    confidence: number;
+  };
+}
+
+export interface PhotoAnalysis {
+  detected_room: string;
+  features: string[];
+  condition_score: number;
+  quality_score: number;
+  quality_issues: string[];
+  suggested_caption: string;
+  style?: string;
+  lighting?: string;
+}
+
+export interface GeneratedListing {
+  title: string;
+  headline: string;
+  description: string;
+  amenities: string[];
+  highlights: string[];
+  seo_title: string;
+  seo_description: string;
 }

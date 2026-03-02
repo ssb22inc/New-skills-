@@ -1,56 +1,88 @@
-import type { Database } from './database'
-import type { ListingWithPhotos } from './listing'
-import type { SeekerProfile } from './user'
-
-export type Match = Database['public']['Tables']['matches']['Row']
-
-export interface MatchWithDetails extends Match {
-  listing: ListingWithPhotos
-  seeker: SeekerProfile
-}
-
-export interface CompatibilityBreakdown {
-  total: number
-  lifestyle: {
-    score: number
-    details: string[]
-  }
-  personality: {
-    score: number
-    details: string[]
-  }
-  location: {
-    score: number
-    details: string[]
-  }
-  budget: {
-    score: number
-    details: string[]
-  }
-  amenities: {
-    score: number
-    matched: string[]
-    missing: string[]
-  }
-  trust: {
-    score: number
-    details: string[]
-  }
-  summary: string
-  highlights: string[]
-  concerns: string[]
-}
+import { ListingWithPhotos } from './listing';
+import { SeekerProfile } from './user';
 
 export interface MatchScore {
-  total_score: number
-  lifestyle_score: number
-  personality_score: number
-  location_score: number
-  budget_score: number
-  amenity_score: number
-  trust_score: number
-  breakdown: CompatibilityBreakdown
+  total: number;
+  lifestyle: number;
+  personality: number;
+  location: number;
+  budget: number;
+  amenity: number;
+  trust: number;
 }
 
-export type SeekerAction = 'liked' | 'skipped' | 'saved' | 'messaged'
-export type LandlordAction = 'accepted' | 'rejected' | 'messaged'
+export interface MatchBreakdown {
+  lifestyle: {
+    score: number;
+    factors: {
+      name: string;
+      score: number;
+      explanation: string;
+    }[];
+  };
+  personality: {
+    score: number;
+    compatibility_type: string;
+    explanation: string;
+  };
+  location: {
+    score: number;
+    distance_miles?: number;
+    commute_mins?: number;
+    in_preferred_area: boolean;
+  };
+  budget: {
+    score: number;
+    monthly_cost: number;
+    percent_of_max_budget: number;
+    includes_utilities: boolean;
+  };
+  amenity: {
+    score: number;
+    matched_must_haves: string[];
+    missing_must_haves: string[];
+    matched_nice_to_haves: string[];
+    dealbreaker_conflicts: string[];
+  };
+  trust: {
+    score: number;
+    landlord_verified: boolean;
+    landlord_rating?: number;
+    response_rate?: number;
+  };
+}
+
+export interface Match {
+  id: string;
+  listing: ListingWithPhotos;
+  scores: MatchScore;
+  breakdown: MatchBreakdown;
+  seeker_action?: 'liked' | 'skipped' | 'saved' | 'messaged';
+  landlord_action?: 'accepted' | 'rejected' | 'messaged';
+  created_at: string;
+}
+
+export interface MatchingPreferences {
+  weights?: {
+    lifestyle?: number;
+    personality?: number;
+    location?: number;
+    budget?: number;
+    amenity?: number;
+    trust?: number;
+  };
+  strict_dealbreakers?: boolean;
+  minimum_score?: number;
+}
+
+// Legacy type aliases for backward compatibility
+export type MatchWithDetails = Match;
+export type SeekerAction = 'liked' | 'skipped' | 'saved' | 'messaged';
+export type LandlordAction = 'accepted' | 'rejected' | 'messaged';
+
+export interface CompatibilityBreakdown extends MatchBreakdown {
+  total: number;
+  summary: string;
+  highlights: string[];
+  concerns: string[];
+}

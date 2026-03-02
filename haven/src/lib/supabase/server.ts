@@ -1,28 +1,36 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import type { Database } from '@/types/database'
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { Database } from '@/types/database';
 
-export async function createClient() {
-  const cookieStore = await cookies()
+export async function createServerSupabaseClient() {
+  const cookieStore = await cookies();
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll()
+        get(name: string) {
+          return cookieStore.get(name)?.value;
         },
-        setAll(cookiesToSet) {
+        set(name: string, value: string, options: CookieOptions) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
+            cookieStore.set({ name, value, ...options });
           } catch {
-            // Called from Server Component — cookie writes will be handled by middleware
+            // Called from Server Component — handled by middleware
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch {
+            // Called from Server Component — handled by middleware
           }
         },
       },
     }
-  )
+  );
 }
+
+// Alias for backward compatibility with existing API routes
+export const createClient = createServerSupabaseClient;
