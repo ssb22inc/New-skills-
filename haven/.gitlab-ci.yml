@@ -1,0 +1,109 @@
+stages:
+  - test
+  - build
+  - deploy-staging
+  - deploy-production
+
+variables:
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE
+  NODE_VERSION: "20"
+
+# ============================================
+# Test Stage
+# ============================================
+test:
+  stage: test
+  image: node:${NODE_VERSION}-alpine
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+  script:
+    - npm ci
+    - npm run lint
+    - npm run test:coverage
+  coverage: '/Lines\s*:\s*(\d+\.?\d*)%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+
+e2e:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.40.0-focal
+  needs: ["test"]
+  script:
+    - npm ci
+    - npm run build
+    - npm run e2e
+  artifacts:
+    when: always
+    paths:
+      - playwright-report/
+    expire_in: 30 days
+
+# ============================================
+# Build Stage
+# ============================================
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  needs: ["test"]
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
+    - docker push $DOCKER_IMAGE:$CI_COMMIT_SHA
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        docker tag $DOCKER_IMAGE:$CI_COMMIT_SHA $DOCKER_IMAGE:latest
+        docker push $DOCKER_IMAGE:latest
+      fi
+  only:
+    - main
+    - develop
+
+# ============================================
+# Deploy Staging
+# ============================================
+deploy-staging:
+  stage: deploy-staging
+  image: alpine/k8s:1.28.3
+  needs: ["build"]
+  environment:
+    name: staging
+    url: https://staging.haven.app
+  script:
+    - aws eks update-kubeconfig --name haven-staging --region us-east-1
+    - |
+      helm upgrade --install haven ./helm/haven \
+        --namespace haven-staging \
+        --set image.tag=$CI_COMMIT_SHA \
+        --values ./helm/haven/values-staging.yaml \
+        --wait
+  only:
+    - develop
+
+# ============================================
+# Deploy Production
+# ============================================
+deploy-production:
+  stage: deploy-production
+  image: alpine/k8s:1.28.3
+  needs: ["build"]
+  environment:
+    name: production
+    url: https://haven.app
+  script:
+    - aws eks update-kubeconfig --name haven-production --region us-east-1
+    - |
+      helm upgrade --install haven ./helm/haven \
+        --namespace haven \
+        --set image.tag=$CI_COMMIT_SHA \
+        --values ./helm/haven/values-production.yaml \
+        --wait
+  only:
+    - main
+  when: manual

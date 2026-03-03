@@ -1,0 +1,97 @@
+name: AWS EKS Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: 'Docker image tag to deploy'
+        required: true
+        default: 'latest'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: haven/app
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set cluster name
+        id: cluster
+        run: |
+          if [ "${{ github.event.inputs.environment }}" == "production" ]; then
+            echo "name=haven-production" >> $GITHUB_OUTPUT
+            echo "namespace=haven" >> $GITHUB_OUTPUT
+          else
+            echo "name=haven-staging" >> $GITHUB_OUTPUT
+            echo "namespace=haven-staging" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ steps.cluster.outputs.name }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.12.0'
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install haven ./helm/haven \
+            --namespace ${{ steps.cluster.outputs.namespace }} \
+            --create-namespace \
+            --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
+            --set image.tag=${{ github.event.inputs.image_tag }} \
+            --values ./helm/haven/values-${{ github.event.inputs.environment }}.yaml \
+            --wait \
+            --timeout 15m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/haven-app \
+            -n ${{ steps.cluster.outputs.namespace }} \
+            --timeout=5m
+
+      - name: Run smoke tests
+        run: |
+          if [ "${{ github.event.inputs.environment }}" == "production" ]; then
+            curl -f https://haven.app/api/health || exit 1
+          else
+            curl -f https://staging.haven.app/api/health || exit 1
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#alerts'
+          text: ':x: Deployment to ${{ github.event.inputs.environment }} failed!'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
