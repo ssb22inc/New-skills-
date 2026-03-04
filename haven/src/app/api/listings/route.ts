@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { listingSchema } from '@/lib/utils/validation';
+import { logger } from '@/lib/logger';
+import { ZodError } from 'zod';
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { searchParams } = new URL(request.url);
 
+    // Project only the fields the list view needs — excludes heavy columns like
+    // listing_embedding (1536 floats) and ai_analysis JSON.
     let query = supabase
       .from('listings')
-      .select('*, photos:listing_photos(*)', { count: 'exact' })
+      .select(
+        'id, title, headline, property_type, bedrooms, bathrooms, sqft, city, state, zip_code, neighborhood, price_monthly, available_date, instant_booking, furniture_status, amenities, status, created_at, slug, photos:listing_photos(id, url, thumbnail_url, is_primary)',
+        { count: 'exact' }
+      )
       .eq('status', 'active');
 
     const city = searchParams.get('city');
@@ -68,7 +75,7 @@ export async function GET(request: NextRequest) {
       pagination: { page, limit, total: count ?? 0 },
     });
   } catch (error) {
-    console.error('Listings fetch error:', error);
+    logger.error({ event: 'listings_get_error', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to fetch listings' }, { status: 500 });
   }
 }
@@ -82,7 +89,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+
     const validated = listingSchema.parse(body);
 
     const { data, error } = await supabase
@@ -99,13 +112,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (error: unknown) {
-    if (error instanceof Error && error.name === 'ZodError') {
+    if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: 'Validation failed', details: (error as unknown as { errors: unknown }).errors },
+        { error: 'Validation failed', details: error.flatten().fieldErrors },
         { status: 400 }
       );
     }
-    console.error('Listing creation error:', error);
+    logger.error({ event: 'listing_create_error', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to create listing' }, { status: 500 });
   }
 }

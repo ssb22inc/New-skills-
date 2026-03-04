@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import { randomBytes } from 'crypto';
 
 // Rate limiter using Upstash Redis
 const ratelimit = new Ratelimit({
@@ -23,11 +24,30 @@ const aiRatelimit = new Ratelimit({
   analytics: true,
 });
 
+/**
+ * Extract the real client IP. Trusts only the leftmost entry of
+ * X-Forwarded-For (set by the load balancer / ingress) and falls back to
+ * X-Real-IP before finally defaulting to a sentinel value. Both headers are
+ * normalised so a client-supplied header with extra whitespace or multiple
+ * IPs can't be used to bypass per-IP rate limiting.
+ */
+export function getClientIp(request: NextRequest | Request): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    // The leftmost IP is the original client; subsequent entries are proxies.
+    const first = forwarded.split(',')[0].trim();
+    if (first) return first;
+  }
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
+  return '127.0.0.1';
+}
+
 export async function rateLimit(
   request: NextRequest,
   type: 'default' | 'auth' | 'ai' = 'default'
 ): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> {
-  const ip = request.ip ?? request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+  const ip = getClientIp(request);
   const identifier = `${ip}:${type}`;
 
   const limiter = type === 'auth' ? authRatelimit : type === 'ai' ? aiRatelimit : ratelimit;
@@ -36,20 +56,29 @@ export async function rateLimit(
   return { success, limit, remaining, reset };
 }
 
-export function securityHeaders(): Headers {
+/** Generate a random per-request CSP nonce (base64url, 128 bits). */
+export function generateNonce(): string {
+  return randomBytes(16).toString('base64url');
+}
+
+export function securityHeaders(nonce?: string): Headers {
   const headers = new Headers();
 
   // Strict Transport Security
   headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
 
   // Content Security Policy
+  // When a nonce is provided it is used for Next.js inline scripts via
+  // 'strict-dynamic'. Without a nonce we fall back to 'self' only.
+  const scriptSrc = nonce
+    ? `'nonce-${nonce}' 'strict-dynamic' https://js.stripe.com`
+    : `'self' https://js.stripe.com`;
+
   headers.set(
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      // 'unsafe-inline' and 'unsafe-eval' removed. Use 'strict-dynamic' with per-request
-      // nonces for Next.js inline scripts (pass nonce via generateMetadata / layout).
-      "script-src 'self' 'strict-dynamic' https://js.stripe.com",
+      `script-src ${scriptSrc}`,
       "style-src 'self' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://*.supabase.co https://*.stripe.com",
@@ -84,8 +113,8 @@ export function securityHeaders(): Headers {
   return headers;
 }
 
-export function addSecurityHeaders(response: NextResponse): NextResponse {
-  const headers = securityHeaders();
+export function addSecurityHeaders(response: NextResponse, nonce?: string): NextResponse {
+  const headers = securityHeaders(nonce);
   headers.forEach((value, key) => {
     response.headers.set(key, value);
   });

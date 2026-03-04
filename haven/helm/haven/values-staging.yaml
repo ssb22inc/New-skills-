@@ -54,6 +54,7 @@ env:
   NODE_ENV: staging
   LOG_LEVEL: debug
   NEXT_PUBLIC_APP_URL: https://staging.haven.app
+  APP_VERSION: "unknown"
 
 # Use lower retention for staging logs
 podAnnotations:

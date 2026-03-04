@@ -83,6 +83,8 @@ env:
   NODE_ENV: production
   LOG_LEVEL: info
   NEXT_PUBLIC_APP_URL: https://haven.app
+  # Override at deploy time: --set env.APP_VERSION=$CI_COMMIT_SHA
+  APP_VERSION: "unknown"
 
 podAnnotations:
   prometheus.io/scrape: "true"

@@ -127,6 +127,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_APP_URL: http://localhost:3000
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+          # Skip server-side secret validation during E2E build — secrets injected at runtime.
+          SKIP_ENV_VALIDATION: "1"
 
       - name: Run E2E tests
         run: npm run e2e
@@ -254,6 +257,7 @@ jobs:
             --namespace haven-staging \
             --create-namespace \
             --set image.tag=${{ github.sha }} \
+            --set env.APP_VERSION=${{ github.sha }} \
             --set ingress.hosts[0].host=staging.haven.app \
             --values ./helm/haven/values-staging.yaml \
             --wait --timeout 10m
@@ -315,6 +319,7 @@ jobs:
           helm upgrade --install haven ./helm/haven \
             --namespace haven \
             --set image.tag=${{ github.sha }} \
+            --set env.APP_VERSION=${{ github.sha }} \
             --values ./helm/haven/values-production.yaml \
             --wait --timeout 10m
 

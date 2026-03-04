@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { findMatchesForSeeker } from '@/services/matching/match-engine';
+import { logger } from '@/lib/logger';
+import { z } from 'zod';
+
+const MATCH_ACTIONS = ['like', 'pass', 'super_like'] as const;
+
+const matchActionSchema = z.object({
+  listing_id: z.string().uuid('listing_id must be a valid UUID'),
+  action: z.enum(MATCH_ACTIONS),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,14 +31,15 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const minScore = parseInt(searchParams.get('minScore') || '30');
+    const MAX_LIMIT = 100;
+    const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(searchParams.get('limit') || '20') || 20));
+    const minScore = Math.max(0, Math.min(100, parseInt(searchParams.get('minScore') || '30') || 30));
 
     const matches = await findMatchesForSeeker(seekerProfile.id, { limit, minScore });
 
     return NextResponse.json({ matches });
   } catch (error) {
-    console.error('Matches fetch error:', error);
+    logger.error({ event: 'matches_get_error', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to fetch matches' }, { status: 500 });
   }
 }
@@ -43,7 +53,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { listing_id, action } = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+
+    const parsed = matchActionSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const { listing_id, action } = parsed.data;
 
     const { data: seekerProfile } = await supabase
       .from('seeker_profiles')
@@ -74,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Match action error:', error);
+    logger.error({ event: 'match_action_error', error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: 'Failed to record action' }, { status: 500 });
   }
 }

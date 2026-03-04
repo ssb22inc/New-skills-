@@ -45,7 +45,7 @@ export async function createCheckoutSession(params: {
       : [{
           price_data: {
             currency: 'usd',
-            unit_amount: params.amount! * 100,
+            unit_amount: Math.round((params.amount ?? 0) * 100),
             product_data: { name: 'Haven Booking' },
           },
           quantity: 1,

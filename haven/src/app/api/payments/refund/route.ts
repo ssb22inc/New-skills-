@@ -56,10 +56,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const refund = await stripe.refunds.create({
-      payment_intent: booking.stripe_payment_intent_id,
-      ...(reason && { reason }),
-    })
+    const refund = await stripe.refunds.create(
+      {
+        payment_intent: booking.stripe_payment_intent_id,
+        ...(reason && { reason }),
+      },
+      // Idempotency key prevents duplicate refunds on network retries.
+      { idempotencyKey: `refund-${bookingId}` }
+    )
 
     // Optimistically update payment_status; the webhook handler will also update it.
     const admin = createAdminClient()

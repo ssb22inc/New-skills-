@@ -506,6 +506,235 @@ paths:
         '401':
           description: Unauthorized — missing or invalid METRICS_TOKEN
 
+  /api/payments/webhook:
+    post:
+      operationId: stripeWebhook
+      summary: Stripe webhook receiver
+      description: |
+        Receives signed events from Stripe. Must include a valid
+        `Stripe-Signature` header. This endpoint is called by Stripe only and
+        should not be invoked by application clients.
+      security: []
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw Stripe Event object
+      responses:
+        '200':
+          description: Event received and processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                  skipped:
+                    type: string
+                    description: Present when event is a duplicate
+        '400':
+          description: Missing or invalid Stripe-Signature
+
+  /api/payments/refund:
+    post:
+      operationId: createRefund
+      summary: Issue a refund for a booking
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookingId]
+              properties:
+                bookingId:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+                  enum: [duplicate, fraudulent, requested_by_customer]
+      responses:
+        '200':
+          description: Refund created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refundId:
+                    type: string
+                  status:
+                    type: string
+        '403':
+          description: Forbidden — not a booking participant
+        '404':
+          description: Booking not found
+        '409':
+          description: Already refunded
+        '422':
+          description: No payment found for this booking
+
+  /api/ai/chat:
+    post:
+      operationId: aiChat
+      summary: AI conversation — onboarding or streaming chat
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [stream, onboarding]
+                message:
+                  type: string
+                  maxLength: 4000
+                  description: Required for type=onboarding
+                conversation:
+                  type: object
+                  description: Existing conversation state to continue
+      responses:
+        '200':
+          description: >
+            For type=onboarding: updated OnboardingConversation JSON.
+            For type=stream: text/plain streaming response (SSE-like chunks).
+        '400':
+          description: Validation error
+        '429':
+          description: AI rate limit exceeded
+
+  /api/ai/analyze-photos:
+    post:
+      operationId: analyzePhotos
+      summary: AI analysis of listing photos
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrls]
+              properties:
+                imageUrls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  minItems: 1
+                  maxItems: 20
+      responses:
+        '200':
+          description: Photo analysis results
+        '400':
+          description: Validation error (no images or too many)
+
+  /api/ai/verify-document:
+    post:
+      operationId: verifyDocument
+      summary: AI-powered identity / income document verification
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl, documentType]
+              properties:
+                imageUrl:
+                  type: string
+                  format: uri
+                documentType:
+                  type: string
+                  enum: [drivers_license, passport, national_id, pay_stub, bank_statement]
+      responses:
+        '200':
+          description: Verification result
+        '400':
+          description: Validation error
+
+  /api/ai/voice-to-listing:
+    post:
+      operationId: voiceToListing
+      summary: Convert audio description to listing draft
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: Audio file (max 25 MB, formats supported by OpenAI Whisper)
+      responses:
+        '200':
+          description: Transcription and generated listing draft
+        '400':
+          description: No audio file provided
+        '413':
+          description: Audio file too large (max 25 MB)
+
+  /api/users/gdpr:
+    get:
+      operationId: exportUserData
+      summary: "GDPR Article 15: Export all personal data"
+      tags: [Users]
+      responses:
+        '200':
+          description: JSON file containing all personal data
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+
+    delete:
+      operationId: deleteUserData
+      summary: "GDPR Article 17: Erase all personal data"
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  enum: ["DELETE MY ACCOUNT"]
+                  description: Must be the exact string "DELETE MY ACCOUNT"
+                hard_delete:
+                  type: boolean
+                  default: false
+                  description: If true, permanently deletes the auth account. If false, anonymises data.
+                preserve_audit_logs:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Data deleted or anonymised
+        '400':
+          description: Confirm string missing or wrong
+        '401':
+          description: Unauthorized
+
+
 tags:
   - name: System
     description: Health checks and operational endpoints
@@ -519,3 +748,5 @@ tags:
     description: Stripe payment and subscription management
   - name: AI
     description: AI-assisted content generation and analysis
+  - name: GDPR
+    description: GDPR data subject rights — export and erasure

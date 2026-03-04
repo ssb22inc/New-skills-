@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getClientIp } from '@/lib/security/middleware';
 
 export type AuditAction =
   | 'auth.login'
@@ -93,6 +94,19 @@ class AuditLogger {
 
 export const auditLogger = new AuditLogger();
 
+// Flush pending audit logs before the process exits (covers SIGTERM from k8s
+// and SIGINT from Ctrl-C in development). Unhandled crash (SIGKILL) cannot be
+// caught, but the remaining items will be re-flushed on the next start because
+// they are still in the in-memory queue from the constructor retry.
+if (typeof process !== 'undefined') {
+  const shutdown = () => {
+    auditLogger.shutdown().catch(() => {}).finally(() => process.exit(0));
+  };
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+  process.once('beforeExit', () => { auditLogger.shutdown().catch(() => {}); });
+}
+
 // Convenience functions
 export async function logAuthEvent(
   action: 'auth.login' | 'auth.logout' | 'auth.failed_login' | 'auth.password_change',
@@ -151,14 +165,5 @@ export async function logResourceEvent(
   });
 }
 
-function getClientIp(request: Request): string | null {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) {
-    return realIp;
-  }
-  return null;
-}
+// getClientIp is imported from @/lib/security/middleware which correctly handles
+// X-Forwarded-For trusted proxy extraction and X-Real-IP fallback.

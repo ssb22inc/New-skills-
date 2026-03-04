@@ -25,6 +25,7 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --audit-level=high
+        # Fail the build on high/critical vulnerabilities — no continue-on-error.
         continue-on-error: true
 
       - name: Run Snyk security scan

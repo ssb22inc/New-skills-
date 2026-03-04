@@ -1,4 +1,5 @@
 stages:
+  - validate
   - test
   - build
   - deploy-staging
@@ -9,10 +10,10 @@ variables:
   NODE_VERSION: "20"
 
 # ============================================
-# Test Stage
+# Validate Stage (lint, type-check, security)
 # ============================================
-test:
-  stage: test
+lint:
+  stage: validate
   image: node:${NODE_VERSION}-alpine
   cache:
     key: ${CI_COMMIT_REF_SLUG}
@@ -21,6 +22,40 @@ test:
   script:
     - npm ci
     - npm run lint
+    - npm run type-check
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+security-scan:
+  stage: validate
+  image: node:${NODE_VERSION}-alpine
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+  script:
+    - npm ci
+    # Fail on high or critical vulnerabilities — no --ignore flag.
+    - npm audit --audit-level=high
+  allow_failure: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# ============================================
+# Test Stage
+# ============================================
+test:
+  stage: test
+  image: node:${NODE_VERSION}-alpine
+  needs: ["lint"]
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+  script:
+    - npm ci
     - npm run test:coverage
   coverage: '/Lines\s*:\s*(\d+\.?\d*)%/'
   artifacts:
@@ -35,7 +70,8 @@ e2e:
   needs: ["test"]
   script:
     - npm ci
-    - npm run build
+    # Build against production mode with env validation skipped (secrets injected at runtime)
+    - SKIP_ENV_VALIDATION=1 npm run build
     - npm run e2e
   artifacts:
     when: always
@@ -51,19 +87,25 @@ build:
   image: docker:24
   services:
     - docker:24-dind
-  needs: ["test"]
+  needs: ["test", "security-scan"]
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker build -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
+    - docker build
+        --build-arg NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+        --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY
+        --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+        --build-arg NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+        --build-arg SKIP_ENV_VALIDATION=1
+        -t $DOCKER_IMAGE:$CI_COMMIT_SHA .
     - docker push $DOCKER_IMAGE:$CI_COMMIT_SHA
     - |
       if [ "$CI_COMMIT_BRANCH" == "main" ]; then
         docker tag $DOCKER_IMAGE:$CI_COMMIT_SHA $DOCKER_IMAGE:latest
         docker push $DOCKER_IMAGE:latest
       fi
-  only:
-    - main
-    - develop
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
 
 # ============================================
 # Deploy Staging
@@ -77,14 +119,23 @@ deploy-staging:
     url: https://staging.haven.app
   script:
     - aws eks update-kubeconfig --name haven-staging --region us-east-1
+    # Run database migrations before deploying new code
+    - |
+      apk add --no-cache nodejs npm
+      npm install -g supabase@latest
+      supabase db push --db-url "$STAGING_DATABASE_URL"
     - |
       helm upgrade --install haven ./helm/haven \
         --namespace haven-staging \
         --set image.tag=$CI_COMMIT_SHA \
+        --set env.APP_VERSION=$CI_COMMIT_SHA \
         --values ./helm/haven/values-staging.yaml \
-        --wait
-  only:
-    - develop
+        --wait --timeout 10m
+    # Smoke test after deploy
+    - sleep 30
+    - curl -f https://staging.haven.app/api/health || (helm rollback haven --namespace haven-staging && exit 1)
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
 
 # ============================================
 # Deploy Production
@@ -96,14 +147,31 @@ deploy-production:
   environment:
     name: production
     url: https://haven.app
-  script:
+  before_script:
     - aws eks update-kubeconfig --name haven-production --region us-east-1
+  script:
+    # Run database migrations before deploying new code
+    - |
+      apk add --no-cache nodejs npm
+      npm install -g supabase@latest
+      supabase db push --db-url "$PROD_DATABASE_URL"
+    # Capture current revision for rollback
+    - PREV_REVISION=$(helm history haven --namespace haven --max 1 -o json | jq -r '.[0].revision // "0"')
     - |
       helm upgrade --install haven ./helm/haven \
         --namespace haven \
         --set image.tag=$CI_COMMIT_SHA \
+        --set env.APP_VERSION=$CI_COMMIT_SHA \
         --values ./helm/haven/values-production.yaml \
-        --wait
-  only:
-    - main
+        --wait --timeout 10m
+    # Post-deploy smoke test with rollback on failure
+    - |
+      sleep 30
+      if ! curl -f https://haven.app/api/health; then
+        echo "Smoke test failed — rolling back to revision $PREV_REVISION"
+        helm rollback haven $PREV_REVISION --namespace haven --wait --timeout 5m
+        exit 1
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   when: manual

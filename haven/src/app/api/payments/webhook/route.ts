@@ -25,12 +25,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient()
 
-  // Idempotency guard: skip events already processed.
-  // The processed_webhook_events table schema:
-  //   CREATE TABLE processed_webhook_events (
-  //     stripe_event_id TEXT PRIMARY KEY,
-  //     processed_at TIMESTAMPTZ DEFAULT now()
-  //   );
+  // Idempotency guard
   const { data: alreadyProcessed } = await supabase
     .from('processed_webhook_events')
     .select('stripe_event_id')
@@ -45,11 +40,21 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.CheckoutSession
-        const { userId, planId } = session.metadata || {}
+        const { userId, planId, type, booking_id } = session.metadata || {}
 
-        // Validate planId is one of the known plans to prevent spoofing.
-        const ALLOWED_PLANS = ['landlord_basic', 'landlord_pro', 'landlord_unlimited']
-        if (userId && planId && ALLOWED_PLANS.includes(planId) && session.subscription) {
+        if (type === 'subscription' && userId && planId && session.subscription) {
+          // Validate planId before upsert
+          const ALLOWED_PLANS = ['landlord_basic', 'landlord_pro', 'landlord_unlimited']
+          if (!ALLOWED_PLANS.includes(planId)) break
+
+          // Verify userId corresponds to a real profile
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', userId)
+            .single()
+          if (!profile) break
+
           const { error } = await supabase.from('subscriptions').upsert({
             user_id: userId,
             stripe_customer_id: session.customer as string,
@@ -58,6 +63,29 @@ export async function POST(request: NextRequest) {
             status: 'active',
           })
           if (error) throw error
+        } else if (type === 'booking' && booking_id) {
+          await supabase
+            .from('bookings')
+            .update({ payment_status: 'paid' })
+            .eq('id', booking_id)
+        }
+        break
+      }
+
+      case 'customer.subscription.created': {
+        // New subscription created outside checkout (e.g. via API or Stripe dashboard)
+        const subscription = event.data.object as Stripe.Subscription
+        const userId = subscription.metadata?.userId
+        if (userId) {
+          await supabase.from('subscriptions').upsert({
+            user_id: userId,
+            stripe_customer_id: subscription.customer as string,
+            stripe_subscription_id: subscription.id,
+            plan_id: subscription.metadata?.planId ?? 'unknown',
+            status: subscription.status,
+            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          }, { onConflict: 'stripe_subscription_id' })
         }
         break
       }
@@ -77,10 +105,21 @@ export async function POST(request: NextRequest) {
         break
       }
 
+      case 'customer.subscription.trial_will_end': {
+        // Trial ending in 3 days — queue an in-app notification and email
+        const subscription = event.data.object as Stripe.Subscription
+        logger.info({
+          event: 'stripe_trial_ending',
+          stripe_subscription_id: subscription.id,
+          trial_end: subscription.trial_end,
+        })
+        // TODO: wire to notification service (email/push) for trial expiry reminder
+        break
+      }
+
       case 'invoice.payment_failed':
       case 'invoice.payment_action_required': {
         const invoice = event.data.object as Stripe.Invoice
-        // Mark the subscription as past_due / requires_action so the UI can prompt the user.
         if (invoice.subscription) {
           const newStatus =
             event.type === 'invoice.payment_failed' ? 'past_due' : 'requires_action'
@@ -93,7 +132,6 @@ export async function POST(request: NextRequest) {
       }
 
       case 'invoice.paid': {
-        // Subscription successfully renewed — ensure status is active.
         const invoice = event.data.object as Stripe.Invoice
         if (invoice.subscription) {
           await supabase
@@ -105,7 +143,6 @@ export async function POST(request: NextRequest) {
       }
 
       case 'payment_intent.succeeded': {
-        // One-time payment (e.g. booking deposit) confirmed.
         const intent = event.data.object as Stripe.PaymentIntent
         const { bookingId } = intent.metadata || {}
         if (bookingId) {
@@ -139,16 +176,35 @@ export async function POST(request: NextRequest) {
         }
         break
       }
+
+      case 'payment_method.attached':
+      case 'payment_method.detached': {
+        // Logged for audit purposes; no application state to update.
+        logger.info({
+          event: `stripe_${event.type.replace('.', '_')}`,
+          stripe_event_id: event.id,
+        })
+        break
+      }
+
+      case 'customer.updated': {
+        // If Stripe customer email changes, log it for reconciliation.
+        logger.info({ event: 'stripe_customer_updated', stripe_event_id: event.id })
+        break
+      }
+
+      default:
+        // Unhandled event — not an error, just not acted on.
+        logger.info({ event: 'stripe_unhandled_event', stripe_event_type: event.type })
     }
 
-    // Mark event as processed after successful handling.
+    // Mark event as processed
     await supabase
       .from('processed_webhook_events')
       .insert({ stripe_event_id: event.id })
 
     return NextResponse.json({ received: true })
   } catch (err) {
-    // Return 500 so Stripe will retry the webhook delivery.
     logger.error({
       event: 'webhook_processing_failed',
       stripe_event_id: event.id,
