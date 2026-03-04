@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.11"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
   }
 
   backend "s3" {
@@ -45,16 +49,11 @@ provider "aws" {
 # Variables
 # ============================================
 
-variable "aws_region" {
-  default = "us-east-1"
-}
+# Variables are defined in variables.tf
 
-variable "environment" {
-  default = "production"
-}
-
-variable "cluster_name" {
-  default = "haven-production"
+locals {
+  # Use provided certificate ARN or the one we create
+  certificate_arn = var.certificate_arn != "" ? var.certificate_arn : aws_acm_certificate.haven[0].arn
 }
 
 # ============================================
@@ -276,6 +275,170 @@ resource "aws_elasticache_subnet_group" "haven" {
 }
 
 # ============================================
+# Security Groups
+# ============================================
+
+module "security_group_alb" {
+  source  = "terraform-aws-modules/security-group/aws"
+  version = "~> 5.0"
+
+  name        = "haven-${var.environment}-alb"
+  description = "Security group for Haven ALB"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress_cidr_blocks = ["0.0.0.0/0"]
+  ingress_rules       = ["http-80-tcp", "https-443-tcp"]
+  egress_rules        = ["all-all"]
+}
+
+module "security_group_rds" {
+  source  = "terraform-aws-modules/security-group/aws"
+  version = "~> 5.0"
+
+  name        = "haven-${var.environment}-rds"
+  description = "Security group for Haven RDS"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress_with_source_security_group_id = [
+    {
+      rule                     = "postgresql-tcp"
+      source_security_group_id = module.eks.node_security_group_id
+    }
+  ]
+  egress_rules = ["all-all"]
+}
+
+module "security_group_redis" {
+  source  = "terraform-aws-modules/security-group/aws"
+  version = "~> 5.0"
+
+  name        = "haven-${var.environment}-redis"
+  description = "Security group for Haven ElastiCache Redis"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress_with_source_security_group_id = [
+    {
+      rule                     = "redis-tcp"
+      source_security_group_id = module.eks.node_security_group_id
+    }
+  ]
+  egress_rules = ["all-all"]
+}
+
+# ============================================
+# Application Load Balancer
+# ============================================
+
+resource "aws_lb" "haven" {
+  name               = "haven-${var.environment}"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [module.security_group_alb.security_group_id]
+  subnets            = module.vpc.public_subnets
+
+  enable_deletion_protection = var.environment == "production"
+
+  access_logs {
+    bucket  = aws_s3_bucket.uploads.bucket
+    prefix  = "alb-logs"
+    enabled = true
+  }
+
+  tags = {
+    Name = "haven-${var.environment}"
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.haven.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = local.certificate_arn
+
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Haven"
+      status_code  = "200"
+    }
+  }
+}
+
+resource "aws_lb_listener" "http_redirect" {
+  load_balancer_arn = aws_lb.haven.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+# ============================================
+# ACM Certificate (conditional — skip if ARN provided)
+# ============================================
+
+resource "aws_acm_certificate" "haven" {
+  count = var.certificate_arn == "" ? 1 : 0
+
+  # CloudFront requires certificates in us-east-1
+  provider          = aws.us_east_1
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  subject_alternative_names = [
+    "*.${var.domain_name}",
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_acm_certificate_validation" "haven" {
+  count = var.certificate_arn == "" ? 1 : 0
+
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.haven[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
+resource "aws_route53_record" "cert_validation" {
+  for_each = var.certificate_arn == "" ? {
+    for dvo in aws_acm_certificate.haven[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.haven.zone_id
+}
+
+data "aws_route53_zone" "haven" {
+  name         = var.domain_name
+  private_zone = false
+}
+
+# us-east-1 provider alias for ACM (CloudFront requires it)
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}
+
+# ============================================
 # S3 Bucket for uploads
 # ============================================
 
@@ -323,6 +486,10 @@ resource "aws_cloudfront_distribution" "haven" {
   origin {
     domain_name = aws_lb.haven.dns_name
     origin_id   = "haven-alb"
+    custom_header {
+      name  = "X-CloudFront-Secret"
+      value = random_password.cloudfront_secret.result
+    }
 
     custom_origin_config {
       http_port              = 80
@@ -380,7 +547,7 @@ resource "aws_cloudfront_distribution" "haven" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate.haven.arn
+    acm_certificate_arn      = local.certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
@@ -390,28 +557,15 @@ resource "aws_cloudfront_distribution" "haven" {
 # Secrets Manager
 # ============================================
 
+resource "random_password" "cloudfront_secret" {
+  length  = 32
+  special = false
+}
+
 resource "aws_secretsmanager_secret" "haven" {
   name = "haven/${var.environment}"
 
   recovery_window_in_days = var.environment == "production" ? 30 : 0
 }
 
-# ============================================
-# Outputs
-# ============================================
-
-output "cluster_endpoint" {
-  value = module.eks.cluster_endpoint
-}
-
-output "ecr_repository_url" {
-  value = aws_ecr_repository.haven.repository_url
-}
-
-output "cloudfront_distribution_id" {
-  value = aws_cloudfront_distribution.haven.id
-}
-
-output "rds_endpoint" {
-  value = module.rds.db_instance_endpoint
-}
+# Outputs are defined in outputs.tf

@@ -111,8 +111,15 @@ export const funnelStep = new Counter({
   registers: [register],
 });
 
-// Metrics endpoint
-export async function GET() {
+// Metrics endpoint — protected with bearer token to prevent info leakage
+export async function GET(request: Request) {
+  const authHeader = request.headers.get('authorization');
+  const token = process.env.METRICS_TOKEN;
+
+  if (!token || authHeader !== `Bearer ${token}`) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+
   const metrics = await register.metrics();
 
   return new NextResponse(metrics, {

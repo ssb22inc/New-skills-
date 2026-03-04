@@ -1,0 +1,62 @@
+# Staging environment overrides for Haven
+# Extends helm/haven/values.yaml
+
+replicaCount: 2
+
+image:
+  repository: haven/app
+  pullPolicy: Always
+  tag: "latest"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: staging.haven.app
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: haven-staging-tls
+      hosts:
+        - staging.haven.app
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Redis — smaller for staging
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      size: 2Gi
+
+# Staging-specific env
+env:
+  NODE_ENV: staging
+  LOG_LEVEL: debug
+  NEXT_PUBLIC_APP_URL: https://staging.haven.app
+
+# Use lower retention for staging logs
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3000"
+  environment: staging

@@ -37,3 +37,7 @@ enable_confirmations = false
 enabled = false
 client_id = ""
 secret = ""
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
