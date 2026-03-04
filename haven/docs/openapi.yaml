@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Haven API
-  version: 0.13.0
+  version: 0.1.0
   description: |
     Haven is an AI-powered housing marketplace matching seekers and landlords
     based on lifestyle compatibility, verified trust scores, and real-time chat.
@@ -122,12 +122,25 @@ components:
         onboarding_completed:
           type: boolean
 
+    CheckDetail:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        latency:
+          type: integer
+          description: Round-trip latency in milliseconds (database/redis checks)
+        memoryMB:
+          type: integer
+          description: Heap memory used in MB (memory check only)
+
     HealthResponse:
       type: object
       properties:
         status:
           type: string
-          enum: [ok, degraded, error]
+          enum: [healthy, unhealthy]
         timestamp:
           type: string
           format: date-time
@@ -137,11 +150,11 @@ components:
           type: object
           properties:
             database:
-              type: string
-              enum: [ok, error]
+              $ref: '#/components/schemas/CheckDetail'
             redis:
-              type: string
-              enum: [ok, error]
+              $ref: '#/components/schemas/CheckDetail'
+            memory:
+              $ref: '#/components/schemas/CheckDetail'
 
 paths:
   /api/health:
@@ -204,16 +217,19 @@ paths:
               schema:
                 type: object
                 properties:
-                  data:
+                  listings:
                     type: array
                     items:
                       $ref: '#/components/schemas/Listing'
-                  total:
-                    type: integer
-                  page:
-                    type: integer
-                  limit:
-                    type: integer
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
         '429':
           description: Rate limit exceeded
 

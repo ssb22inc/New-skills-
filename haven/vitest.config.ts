@@ -27,6 +27,25 @@ export default defineConfig({
           lines: 80,
           statements: 80,
         },
+        // Stricter thresholds for security-critical modules.
+        'src/lib/security/**': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        'src/app/api/payments/**': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
+        'src/lib/stripe/**': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
       },
     },
   },

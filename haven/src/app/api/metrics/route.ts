@@ -21,11 +21,14 @@ export {
 } from '@/lib/metrics/registry';
 
 // Metrics endpoint — protected with bearer token to prevent info leakage.
+// METRICS_TOKEN must be at least 32 characters to ensure sufficient entropy.
+const MIN_TOKEN_LENGTH = 32;
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   const token = process.env.METRICS_TOKEN;
 
-  if (!token || authHeader !== `Bearer ${token}`) {
+  if (!token || token.length < MIN_TOKEN_LENGTH || authHeader !== `Bearer ${token}`) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 

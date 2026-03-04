@@ -18,17 +18,26 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get('state');
     if (state) query = query.eq('state', state);
 
-    const minPrice = searchParams.get('minPrice');
-    if (minPrice) query = query.gte('price_monthly', parseInt(minPrice));
+    const minPriceRaw = parseInt(searchParams.get('minPrice') || '');
+    if (!isNaN(minPriceRaw) && minPriceRaw >= 0) {
+      query = query.gte('price_monthly', minPriceRaw);
+    }
 
-    const maxPrice = searchParams.get('maxPrice');
-    if (maxPrice) query = query.lte('price_monthly', parseInt(maxPrice));
+    const maxPriceRaw = parseInt(searchParams.get('maxPrice') || '');
+    if (!isNaN(maxPriceRaw) && maxPriceRaw >= 0) {
+      query = query.lte('price_monthly', maxPriceRaw);
+    }
 
-    const bedrooms = searchParams.get('bedrooms');
-    if (bedrooms) query = query.eq('bedrooms', parseInt(bedrooms));
+    const bedroomsRaw = parseInt(searchParams.get('bedrooms') || '');
+    if (!isNaN(bedroomsRaw) && bedroomsRaw >= 0) {
+      query = query.eq('bedrooms', bedroomsRaw);
+    }
 
+    const ALLOWED_PROPERTY_TYPES = ['apartment', 'house', 'condo', 'room', 'townhouse', 'studio'];
     const propertyType = searchParams.get('propertyType');
-    if (propertyType) query = query.eq('property_type', propertyType);
+    if (propertyType && ALLOWED_PROPERTY_TYPES.includes(propertyType)) {
+      query = query.eq('property_type', propertyType);
+    }
 
     const availableFrom = searchParams.get('availableFrom');
     if (availableFrom) query = query.lte('available_date', availableFrom);
@@ -36,16 +45,18 @@ export async function GET(request: NextRequest) {
     const instantBooking = searchParams.get('instantBooking');
     if (instantBooking === 'true') query = query.eq('instant_booking', true);
 
-    const sortBy = searchParams.get('sortBy') || 'newest';
+    const ALLOWED_SORT = ['newest', 'price_asc', 'price_desc'];
+    const sortBy = ALLOWED_SORT.includes(searchParams.get('sortBy') || '') ? searchParams.get('sortBy')! : 'newest';
     switch (sortBy) {
       case 'price_asc': query = query.order('price_monthly', { ascending: true }); break;
       case 'price_desc': query = query.order('price_monthly', { ascending: false }); break;
-      case 'newest':
       default: query = query.order('created_at', { ascending: false });
     }
 
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    // Clamp page and limit to prevent large offset scans.
+    const MAX_LIMIT = 100;
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1);
+    const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(searchParams.get('limit') || '20') || 20));
     const from = (page - 1) * limit;
     query = query.range(from, from + limit - 1);
 

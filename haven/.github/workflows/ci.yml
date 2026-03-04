@@ -304,7 +304,13 @@ jobs:
         env:
           PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
 
+      - name: Capture pre-deploy revision
+        id: pre-deploy
+        run: |
+          echo "revision=$(helm history haven --namespace haven --max 1 -o json | jq -r '.[0].revision // "0"')" >> "$GITHUB_OUTPUT"
+
       - name: Deploy to Kubernetes
+        id: helm-deploy
         run: |
           helm upgrade --install haven ./helm/haven \
             --namespace haven \
@@ -313,11 +319,19 @@ jobs:
             --wait --timeout 10m
 
       - name: Run smoke tests
+        id: smoke-test
         run: |
           sleep 30
           curl -f https://haven.app/api/health || exit 1
 
+      - name: Rollback on smoke test failure
+        if: failure() && steps.smoke-test.outcome == 'failure' && steps.pre-deploy.outputs.revision != '0'
+        run: |
+          echo "Smoke tests failed — rolling back to revision ${{ steps.pre-deploy.outputs.revision }}"
+          helm rollback haven ${{ steps.pre-deploy.outputs.revision }} --namespace haven --wait --timeout 5m
+
       - name: Create Sentry release
+        if: success() && env.SENTRY_AUTH_TOKEN != ''
         uses: getsentry/action-release@v1
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}

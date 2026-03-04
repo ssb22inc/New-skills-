@@ -47,8 +47,10 @@ export function securityHeaders(): Headers {
     'Content-Security-Policy',
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      // 'unsafe-inline' and 'unsafe-eval' removed. Use 'strict-dynamic' with per-request
+      // nonces for Next.js inline scripts (pass nonce via generateMetadata / layout).
+      "script-src 'self' 'strict-dynamic' https://js.stripe.com",
+      "style-src 'self' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://*.supabase.co https://*.stripe.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://api.openai.com",

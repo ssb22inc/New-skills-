@@ -35,10 +35,19 @@ export async function middleware(request: NextRequest) {
         response.headers.set('Retry-After', Math.ceil((reset - Date.now()) / 1000).toString());
         return addSecurityHeaders(response);
       }
-    } catch {
+    } catch (err) {
       // If rate limiting fails (e.g. Redis unavailable), allow the request through
-      // rather than blocking legitimate traffic. Log for monitoring.
-      console.warn('[middleware] Rate limit check failed, allowing request through');
+      // rather than blocking legitimate traffic. Emit structured log for alerting.
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          event: 'rate_limit_failure',
+          path: pathname,
+          rateLimitType,
+          error: err instanceof Error ? err.message : String(err),
+          ts: new Date().toISOString(),
+        })
+      );
     }
   }
 

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { Redis } from '@upstash/redis';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const checks: Record<string, { status: 'healthy' | 'unhealthy'; latency?: number }> = {};
+  const checks: Record<string, { status: 'healthy' | 'unhealthy'; latency?: number; memoryMB?: number }> = {};
   let overallHealthy = true;
 
   // Database check
@@ -18,13 +19,15 @@ export async function GET() {
     overallHealthy = false;
   }
 
-  // Redis check (if configured)
-  if (process.env.REDIS_URL) {
+  // Redis check (if configured via Upstash env vars)
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
     try {
       const start = Date.now();
-      // Redis ping would go here
+      const redis = Redis.fromEnv();
+      const pong = await redis.ping();
+      if (pong !== 'PONG') throw new Error('Unexpected PING response');
       checks.redis = { status: 'healthy', latency: Date.now() - start };
-    } catch (error) {
+    } catch {
       checks.redis = { status: 'unhealthy' };
       overallHealthy = false;
     }
@@ -35,7 +38,7 @@ export async function GET() {
   const memUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
   checks.memory = {
     status: memUsedMB < 900 ? 'healthy' : 'unhealthy',
-    latency: memUsedMB,
+    memoryMB: memUsedMB,
   };
 
   const response = {

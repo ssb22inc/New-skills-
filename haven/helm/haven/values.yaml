@@ -100,3 +100,9 @@ env:
 secrets:
   create: false
   # Values will be provided via external secrets or CI/CD
+
+# Database backup CronJob — disabled by default, enabled in values-production.yaml
+backup:
+  enabled: false
+  schedule: "0 */6 * * *"   # every 6 hours
+  secretName: haven-backup-secrets

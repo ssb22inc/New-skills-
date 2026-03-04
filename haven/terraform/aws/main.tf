@@ -24,6 +24,15 @@ terraform {
     }
   }
 
+  # PREREQUISITE: The S3 bucket and DynamoDB lock table must exist before running
+  # `terraform init`. Create them once with the bootstrap script:
+  #   scripts/bootstrap-terraform-backend.sh
+  #
+  # What it creates:
+  #   - S3 bucket "haven-terraform-state" with versioning + KMS encryption
+  #   - DynamoDB table "haven-terraform-locks" (PAY_PER_REQUEST, LockID hash key)
+  #
+  # If the bucket does not exist, `terraform init` will fail with a 404/403.
   backend "s3" {
     bucket         = "haven-terraform-state"
     key            = "production/terraform.tfstate"

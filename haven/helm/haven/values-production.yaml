@@ -46,10 +46,10 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
-# Production Redis — HA with persistence
+# Production Redis — HA sentinel replication with persistence
 redis:
   enabled: true
-  architecture: standalone
+  architecture: replication
   auth:
     enabled: true
     existingSecret: haven-redis-secret
@@ -64,6 +64,19 @@ redis:
       requests:
         cpu: 100m
         memory: 128Mi
+  replica:
+    replicaCount: 2
+    persistence:
+      size: 10Gi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  sentinel:
+    enabled: true
 
 # Production-specific env
 env:
@@ -75,6 +88,12 @@ podAnnotations:
   prometheus.io/scrape: "true"
   prometheus.io/port: "3000"
   environment: production
+
+# Database backup — enabled in production, every 6 hours
+backup:
+  enabled: true
+  schedule: "0 */6 * * *"
+  secretName: haven-backup-secrets
 
 # PodDisruptionBudget — ensure at least 2 pods always available
 podDisruptionBudget:
