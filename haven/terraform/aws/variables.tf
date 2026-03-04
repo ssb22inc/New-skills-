@@ -126,3 +126,17 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "eks_public_access_cidrs" {
+  description = "CIDRs allowed to reach the EKS public API endpoint. Restrict to your VPN/office ranges in production."
+  type        = list(string)
+  # Default to RFC 1918 private ranges only. Override in production tfvars with
+  # your VPN egress IPs or set to [] to disable public access entirely.
+  default = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+}
+
+variable "enable_waf" {
+  description = "Enable AWS WAF v2 Web ACL on CloudFront. Always true in production."
+  type        = bool
+  default     = true
+}

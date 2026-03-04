@@ -2,7 +2,13 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify, SignJWT } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret-change-me');
+if (!process.env.JWT_SECRET) {
+  throw new Error(
+    'JWT_SECRET environment variable is required. ' +
+      'Generate one with: openssl rand -base64 64'
+  );
+}
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // Create JWT token
 export async function createToken(payload: Record<string, unknown>, expiresIn: string = '1h'): Promise<string> {

@@ -110,8 +110,9 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = true
+  cluster_endpoint_public_access       = true
+  cluster_endpoint_private_access      = true
+  cluster_endpoint_public_access_cidrs = var.eks_public_access_cidrs
 
   # Cluster addons
   cluster_addons = {
@@ -578,3 +579,178 @@ resource "aws_secretsmanager_secret" "haven" {
 }
 
 # Outputs are defined in outputs.tf
+
+# ============================================
+# AWS WAF v2 — CloudFront Web ACL
+# ============================================
+# WAF must be deployed in us-east-1 for CloudFront.
+# If your primary region differs, add an alias provider for us-east-1.
+
+resource "aws_wafv2_web_acl" "haven" {
+  count = var.enable_waf ? 1 : 0
+
+  name  = "haven-${var.environment}-cloudfront-waf"
+  scope = "CLOUDFRONT"
+
+  default_action {
+    allow {}
+  }
+
+  # AWS Managed Rules: Common Rule Set (OWASP Top 10 mitigations)
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 10
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesCommonRuleSet"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules: Known Bad Inputs
+  rule {
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 20
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesKnownBadInputsRuleSet"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rules: SQL Injection Protection
+  rule {
+    name     = "AWSManagedRulesSQLiRuleSet"
+    priority = 30
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesSQLiRuleSet"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Rate-based rule: block IPs sending > 2000 req/5min
+  rule {
+    name     = "RateLimitPerIP"
+    priority = 40
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "RateLimitPerIP"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "haven-${var.environment}-waf"
+    sampled_requests_enabled   = true
+  }
+
+  tags = var.tags
+}
+
+# Associate WAF with CloudFront distribution
+resource "aws_wafv2_web_acl_association" "haven_cloudfront" {
+  count = var.enable_waf ? 1 : 0
+
+  resource_arn = aws_cloudfront_distribution.haven.arn
+  web_acl_arn  = aws_wafv2_web_acl.haven[0].arn
+}
+
+# ============================================
+# VPC Flow Logs
+# ============================================
+
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  name              = "/aws/vpc/haven-${var.environment}-flow-logs"
+  retention_in_days = 30
+}
+
+data "aws_iam_policy_document" "vpc_flow_logs_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "vpc_flow_logs_write" {
+  statement {
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role" "vpc_flow_logs" {
+  name               = "haven-${var.environment}-vpc-flow-logs"
+  assume_role_policy = data.aws_iam_policy_document.vpc_flow_logs_assume_role.json
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs" {
+  name   = "vpc-flow-logs-write"
+  role   = aws_iam_role.vpc_flow_logs.id
+  policy = data.aws_iam_policy_document.vpc_flow_logs_write.json
+}
+
+resource "aws_flow_log" "haven" {
+  vpc_id          = module.vpc.vpc_id
+  traffic_type    = "ALL"
+  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
+}
