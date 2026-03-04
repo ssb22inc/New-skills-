@@ -1,0 +1,36 @@
+# prometheus-local.yml — used by docker-compose for local / staging dev.
+# For production Kubernetes, see prometheus.yml (which uses credentials_file).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: haven-local
+    env: local
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Haven application (static — docker-compose service name)
+  # METRICS_TOKEN must match what the app is started with.
+  # Set METRICS_TOKEN in your .env and it will be substituted at container start.
+  - job_name: 'haven-app'
+    static_configs:
+      - targets: ['app:3000']
+    metrics_path: /api/metrics
+    authorization:
+      credentials_file: /etc/prometheus/metrics-token
+
+  # Redis metrics via redis_exporter sidecar (optional, comment out if not running)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:9121']

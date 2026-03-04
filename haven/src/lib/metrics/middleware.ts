@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { httpRequestsTotal, httpRequestDuration } from '@/app/api/metrics/route';
+import { httpRequestsTotal, httpRequestDuration } from '@/lib/metrics/registry';
 
 export function withMetrics(
   handler: (req: NextRequest, ctx: any) => Promise<NextResponse>

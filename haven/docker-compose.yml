@@ -22,6 +22,9 @@ services:
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - REDIS_URL=redis://redis:6379
+      - UPSTASH_REDIS_REST_URL=${UPSTASH_REDIS_REST_URL}
+      - UPSTASH_REDIS_REST_TOKEN=${UPSTASH_REDIS_REST_TOKEN}
+      - METRICS_TOKEN=${METRICS_TOKEN:-changeme-dev-token}
     depends_on:
       - redis
     networks:
@@ -80,15 +83,26 @@ services:
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
+    environment:
+      - METRICS_TOKEN=${METRICS_TOKEN:-changeme-dev-token}
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus-local.yml:/etc/prometheus/prometheus-local.yml:ro
       - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
+      - prometheus-token:/etc/prometheus
+    # Write the bearer token file then start Prometheus with the local config.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo -n "$$METRICS_TOKEN" > /etc/prometheus/metrics-token
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus-local.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=15d
     networks:
       - haven-network
+    depends_on:
+      - app
     restart: unless-stopped
 
   # ===========================================
@@ -148,5 +162,6 @@ networks:
 volumes:
   redis-data:
   prometheus-data:
+  prometheus-token:
   grafana-data:
   loki-data:

@@ -21,7 +21,13 @@ scrape_configs:
       - targets: ['localhost:9090']
 
   # Haven application
+  # Prometheus scrapes /api/metrics with a bearer token to prevent metric leakage.
+  # Create the secret: kubectl create secret generic prometheus-metrics-token \
+  #   --from-literal=token=<your-METRICS_TOKEN> -n haven-monitoring
+  # Then mount it: see helm/haven/templates/prometheus-deployment.yaml
   - job_name: 'haven-app'
+    authorization:
+      credentials_file: /etc/prometheus/metrics-token
     kubernetes_sd_configs:
       - role: pod
         namespaces:
