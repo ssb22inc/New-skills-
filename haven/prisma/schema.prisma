@@ -1,0 +1,394 @@
+// This Prisma schema is for reference and type generation only.
+// The actual database is managed through Supabase migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserType {
+  seeker
+  landlord
+  both
+}
+
+enum PropertyType {
+  apartment
+  house
+  condo
+  room
+  townhouse
+  studio
+}
+
+enum FurnitureStatus {
+  furnished
+  partially_furnished
+  unfurnished
+}
+
+enum ListingStatus {
+  draft
+  active
+  paused
+  rented
+  archived
+}
+
+enum VerificationStatus {
+  pending
+  verified
+  rejected
+  expired
+}
+
+enum BookingStatus {
+  inquiry
+  pending
+  confirmed
+  active
+  completed
+  cancelled
+}
+
+enum WorkSchedule {
+  day
+  night
+  rotating
+  flexible
+  remote
+}
+
+model Profile {
+  id                        String    @id
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+  email                     String
+  fullName                  String?   @map("full_name")
+  phone                     String?
+  avatarUrl                 String?   @map("avatar_url")
+  userType                  UserType  @default(seeker) @map("user_type")
+  onboardingCompleted       Boolean   @default(false) @map("onboarding_completed")
+  onboardingStep            Int       @default(0) @map("onboarding_step")
+  identityVerified          Boolean   @default(false) @map("identity_verified")
+  incomeVerified            Boolean   @default(false) @map("income_verified")
+  backgroundCheckCompleted  Boolean   @default(false) @map("background_check_completed")
+  verificationDate          DateTime? @map("verification_date")
+  emailNotifications        Boolean   @default(true) @map("email_notifications")
+  smsNotifications          Boolean   @default(false) @map("sms_notifications")
+  metadata                  Json      @default("{}")
+
+  seekerProfile   SeekerProfile?
+  landlordProfile LandlordProfile?
+  listings        Listing[]
+  bookingsAsSeeker Booking[] @relation("SeekerBookings")
+  bookingsAsLandlord Booking[] @relation("LandlordBookings")
+  reviewsGiven    Review[] @relation("ReviewerReviews")
+  reviewsReceived Review[] @relation("RevieweeReviews")
+  verifications   Verification[]
+  subscription    Subscription?
+  messages        Message[]
+
+  @@map("profiles")
+}
+
+model SeekerProfile {
+  id                      String       @id @default(uuid())
+  userId                  String       @unique @map("user_id")
+  createdAt               DateTime     @default(now()) @map("created_at")
+  updatedAt               DateTime     @updatedAt @map("updated_at")
+  profession              String?
+  employer                String?
+  workSchedule            WorkSchedule? @map("work_schedule")
+  budgetMin               Int?         @map("budget_min")
+  budgetMax               Int?         @map("budget_max")
+  moveInDate              DateTime?    @map("move_in_date")
+  moveOutDate             DateTime?    @map("move_out_date")
+  leaseFlexibility        String?      @map("lease_flexibility")
+  locationPreferences     Json         @default("[]") @map("location_preferences")
+  mustHaves               String[]     @default([]) @map("must_haves")
+  niceToHaves             String[]     @default([]) @map("nice_to_haves")
+  dealbreakers            String[]     @default([])
+  lifestyle               Json         @default("{}")
+  personality             Json         @default("{}")
+  verifiedMonthlyIncome   Int?         @map("verified_monthly_income")
+  incomeVerificationDate  DateTime?    @map("income_verification_date")
+  incomeDocumentType      String?      @map("income_document_type")
+
+  profile Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matches Match[]
+
+  @@map("seeker_profiles")
+}
+
+model LandlordProfile {
+  id                      String  @id @default(uuid())
+  userId                  String  @unique @map("user_id")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+  companyName             String? @map("company_name")
+  isProfessional          Boolean @default(false) @map("is_professional")
+  propertiesCount         Int     @default(0) @map("properties_count")
+  preferredTenantTypes    String[] @default([]) @map("preferred_tenant_types")
+  autoReplyEnabled        Boolean @default(true) @map("auto_reply_enabled")
+  instantBookingEnabled   Boolean @default(false) @map("instant_booking_enabled")
+  stripeAccountId         String? @map("stripe_account_id")
+  stripeOnboardingComplete Boolean @default(false) @map("stripe_onboarding_complete")
+  totalBookings           Int     @default(0) @map("total_bookings")
+  averageRating           Decimal? @map("average_rating")
+  responseRate            Decimal? @map("response_rate")
+  responseTimeHours       Decimal? @map("response_time_hours")
+
+  profile Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("landlord_profiles")
+}
+
+model Listing {
+  id              String        @id @default(uuid())
+  userId          String        @map("user_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  status          ListingStatus @default(draft)
+  publishedAt     DateTime?     @map("published_at")
+  title           String
+  headline        String?
+  description     String?
+  propertyType    PropertyType  @map("property_type")
+  bedrooms        Int?
+  bathrooms       Decimal?
+  sqft            Int?
+  floorLevel      Int?          @map("floor_level")
+  yearBuilt       Int?          @map("year_built")
+  addressLine1    String        @map("address_line1")
+  addressLine2    String?       @map("address_line2")
+  city            String
+  state           String
+  zipCode         String        @map("zip_code")
+  neighborhood    String?
+  latitude        Decimal?
+  longitude       Decimal?
+  priceMonthly    Int           @map("price_monthly")
+  priceWeekly     Int?          @map("price_weekly")
+  securityDeposit Int?          @map("security_deposit")
+  cleaningFee     Int?          @map("cleaning_fee")
+  utilitiesIncluded Boolean     @default(false) @map("utilities_included")
+  utilitiesEstimate Int?        @map("utilities_estimate")
+  availableDate   DateTime?     @map("available_date")
+  minimumStayDays Int           @default(30) @map("minimum_stay_days")
+  maximumStayDays Int?          @map("maximum_stay_days")
+  instantBooking  Boolean       @default(false) @map("instant_booking")
+  furnitureStatus FurnitureStatus @default(furnished) @map("furniture_status")
+  amenities       String[]      @default([])
+  houseRules      String[]      @default([]) @map("house_rules")
+  petPolicy       String?       @map("pet_policy")
+  smokingPolicy   String?       @map("smoking_policy")
+  guestPolicy     String?       @map("guest_policy")
+  aiAnalysis      Json          @default("{}") @map("ai_analysis")
+  slug            String?       @unique
+  seoTitle        String?       @map("seo_title")
+  seoDescription  String?       @map("seo_description")
+  viewsCount      Int           @default(0) @map("views_count")
+  inquiriesCount  Int           @default(0) @map("inquiries_count")
+  favoritesCount  Int           @default(0) @map("favorites_count")
+
+  user     Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos   ListingPhoto[]
+  matches  Match[]
+  bookings Booking[]
+  reviews  Review[]
+
+  @@map("listings")
+}
+
+model ListingPhoto {
+  id          String   @id @default(uuid())
+  listingId   String   @map("listing_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  storagePath String   @map("storage_path")
+  url         String
+  thumbnailUrl String? @map("thumbnail_url")
+  position    Int      @default(0)
+  roomType    String?  @map("room_type")
+  caption     String?
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  aiAnalysis  Json     @default("{}") @map("ai_analysis")
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@map("listing_photos")
+}
+
+model Match {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  seekerId        String   @map("seeker_id")
+  listingId       String   @map("listing_id")
+  totalScore      Int      @map("total_score")
+  lifestyleScore  Int?     @map("lifestyle_score")
+  personalityScore Int?    @map("personality_score")
+  locationScore   Int?     @map("location_score")
+  budgetScore     Int?     @map("budget_score")
+  amenityScore    Int?     @map("amenity_score")
+  trustScore      Int?     @map("trust_score")
+  scoreBreakdown  Json     @default("{}") @map("score_breakdown")
+  mlAdjustment    Int      @default(0) @map("ml_adjustment")
+  mlConfidence    Decimal? @map("ml_confidence")
+  seekerAction    String?  @map("seeker_action")
+  seekerActionAt  DateTime? @map("seeker_action_at")
+  landlordAction  String?  @map("landlord_action")
+  landlordActionAt DateTime? @map("landlord_action_at")
+  outcome         String?
+  outcomeAt       DateTime? @map("outcome_at")
+
+  seeker  SeekerProfile @relation(fields: [seekerId], references: [id], onDelete: Cascade)
+  listing Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([seekerId, listingId])
+  @@map("matches")
+}
+
+model Booking {
+  id                    String        @id @default(uuid())
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  listingId             String        @map("listing_id")
+  seekerId              String        @map("seeker_id")
+  landlordId            String        @map("landlord_id")
+  status                BookingStatus @default(inquiry)
+  checkInDate           DateTime      @map("check_in_date")
+  checkOutDate          DateTime      @map("check_out_date")
+  monthlyRate           Int           @map("monthly_rate")
+  totalRent             Int           @map("total_rent")
+  securityDeposit       Int?          @map("security_deposit")
+  cleaningFee           Int?          @map("cleaning_fee")
+  serviceFee            Int?          @map("service_fee")
+  totalAmount           Int           @map("total_amount")
+  stripePaymentIntentId String?       @map("stripe_payment_intent_id")
+  paymentStatus         String?       @map("payment_status")
+  paidAt                DateTime?     @map("paid_at")
+  initialMessage        String?       @map("initial_message")
+  cancelledAt           DateTime?     @map("cancelled_at")
+  cancelledBy           String?       @map("cancelled_by")
+  cancellationReason    String?       @map("cancellation_reason")
+  seekerReviewId        String?       @map("seeker_review_id")
+  landlordReviewId      String?       @map("landlord_review_id")
+
+  listing  Listing @relation(fields: [listingId], references: [id])
+  seeker   Profile @relation("SeekerBookings", fields: [seekerId], references: [id])
+  landlord Profile @relation("LandlordBookings", fields: [landlordId], references: [id])
+
+  @@map("bookings")
+}
+
+model Review {
+  id                  String   @id @default(uuid())
+  createdAt           DateTime @default(now()) @map("created_at")
+  bookingId           String   @map("booking_id")
+  reviewerId          String   @map("reviewer_id")
+  revieweeId          String   @map("reviewee_id")
+  listingId           String?  @map("listing_id")
+  reviewType          String   @map("review_type")
+  overallRating       Int      @map("overall_rating")
+  accuracyRating      Int?     @map("accuracy_rating")
+  communicationRating Int?     @map("communication_rating")
+  cleanlinessRating   Int?     @map("cleanliness_rating")
+  locationRating      Int?     @map("location_rating")
+  valueRating         Int?     @map("value_rating")
+  title               String?
+  content             String?
+  response            String?
+  responseAt          DateTime? @map("response_at")
+  isPublic            Boolean  @default(true) @map("is_public")
+
+  reviewer Profile  @relation("ReviewerReviews", fields: [reviewerId], references: [id])
+  reviewee Profile  @relation("RevieweeReviews", fields: [revieweeId], references: [id])
+  listing  Listing? @relation(fields: [listingId], references: [id])
+
+  @@map("reviews")
+}
+
+model Verification {
+  id                     String             @id @default(uuid())
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+  userId                 String             @map("user_id")
+  verificationType       String             @map("verification_type")
+  status                 VerificationStatus @default(pending)
+  documentType           String?            @map("document_type")
+  documentStoragePath    String?            @map("document_storage_path")
+  extractedData          Json               @default("{}") @map("extracted_data")
+  aiConfidence           Decimal?           @map("ai_confidence")
+  aiAnalysis             Json               @default("{}") @map("ai_analysis")
+  reviewedBy             String?            @map("reviewed_by")
+  reviewedAt             DateTime?          @map("reviewed_at")
+  reviewNotes            String?            @map("review_notes")
+  expiresAt              DateTime?          @map("expires_at")
+  externalVerificationId String?            @map("external_verification_id")
+  externalProvider       String?            @map("external_provider")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("verifications")
+}
+
+model Conversation {
+  id                  String    @id @default(uuid())
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  listingId           String?   @map("listing_id")
+  bookingId           String?   @map("booking_id")
+  participantIds      String[]  @map("participant_ids")
+  lastMessageAt       DateTime? @map("last_message_at")
+  lastMessagePreview  String?   @map("last_message_preview")
+  readStatus          Json      @default("{}") @map("read_status")
+
+  messages Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  createdAt      DateTime @default(now()) @map("created_at")
+  conversationId String   @map("conversation_id")
+  senderId       String   @map("sender_id")
+  content        String
+  messageType    String   @default("text") @map("message_type")
+  attachments    Json     @default("[]")
+  metadata       Json     @default("{}")
+  readAt         DateTime? @map("read_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       Profile      @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+model Subscription {
+  id                   String    @id @default(uuid())
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  userId               String    @unique @map("user_id")
+  stripeCustomerId     String?   @map("stripe_customer_id")
+  stripeSubscriptionId String?   @map("stripe_subscription_id")
+  planId               String    @map("plan_id")
+  planName             String?   @map("plan_name")
+  status               String
+  currentPeriodStart   DateTime? @map("current_period_start")
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  cancelAt             DateTime? @map("cancel_at")
+  cancelledAt          DateTime? @map("cancelled_at")
+  listingsLimit        Int?      @map("listings_limit")
+  listingsUsed         Int       @default(0) @map("listings_used")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}

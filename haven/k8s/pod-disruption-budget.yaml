@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: haven-pdb
+  namespace: haven
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: haven
+      component: web

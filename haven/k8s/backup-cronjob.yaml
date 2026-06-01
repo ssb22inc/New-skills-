@@ -1,0 +1,162 @@
+---
+# Kubernetes CronJob — Haven Database Backup
+# Runs every 6 hours. Uses two containers sharing an emptyDir:
+#   1. pg-dump  (postgres:15-alpine) — dumps and compresses the database
+#   2. encrypt-upload (alpine:3.19)  — GPG-encrypts, uploads to S3, notifies Slack
+#
+# Prerequisites:
+#   kubectl create secret generic haven-backup-secrets \
+#     --from-literal=database-url="<PROD_DATABASE_URL>" \
+#     --from-literal=aws-access-key-id="<AWS_ACCESS_KEY_ID>" \
+#     --from-literal=aws-secret-access-key="<AWS_SECRET_ACCESS_KEY>" \
+#     --from-literal=aws-region="us-east-1" \
+#     --from-literal=s3-bucket="<AWS_S3_BACKUP_BUCKET>" \
+#     --from-literal=encryption-key="<BACKUP_ENCRYPTION_KEY>" \
+#     --from-literal=slack-webhook="<SLACK_BACKUP_WEBHOOK>" \
+#     -n haven
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: haven-backup
+  namespace: haven
+  labels:
+    app.kubernetes.io/name: haven-backup
+    app.kubernetes.io/part-of: haven
+spec:
+  # Every 6 hours
+  schedule: "0 */6 * * *"
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Retry up to 2 times on failure before marking the job failed
+      backoffLimit: 2
+      # Kill the job if it hasn't finished in 30 minutes
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: haven-backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: default
+
+          initContainers:
+            - name: pg-dump
+              image: postgres:15-alpine
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+                  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                  FILENAME="haven_production_${TIMESTAMP}.sql.gz"
+                  echo "$FILENAME" > /backup/filename.txt
+
+                  echo "[$(date -u +%FT%TZ)] Dumping database..."
+                  pg_dump "$DATABASE_URL" \
+                    --format=plain \
+                    --no-owner \
+                    --no-acl \
+                    --clean \
+                    --if-exists \
+                    | gzip -9 > "/backup/${FILENAME}"
+
+                  DUMP_SIZE=$(du -sh "/backup/${FILENAME}" | cut -f1)
+                  echo "$DUMP_SIZE" > /backup/dump_size.txt
+                  echo "[$(date -u +%FT%TZ)] Dump complete: ${FILENAME} (${DUMP_SIZE})"
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: haven-backup-secrets
+                      key: database-url
+              volumeMounts:
+                - name: backup-staging
+                  mountPath: /backup
+
+          containers:
+            - name: encrypt-upload
+              image: alpine:3.19
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+
+                  echo "[$(date -u +%FT%TZ)] Installing tools..."
+                  apk add --no-cache aws-cli gpg gpg-agent curl 2>/dev/null
+
+                  FILENAME=$(cat /backup/filename.txt)
+                  DUMP_SIZE=$(cat /backup/dump_size.txt)
+                  ENV_NAME="production"
+
+                  echo "[$(date -u +%FT%TZ)] Encrypting ${FILENAME}..."
+                  gpg --batch --yes \
+                    --passphrase "$BACKUP_ENCRYPTION_KEY" \
+                    --symmetric \
+                    --cipher-algo AES256 \
+                    --output "/backup/${FILENAME}.gpg" \
+                    "/backup/${FILENAME}"
+
+                  rm -f "/backup/${FILENAME}"
+
+                  S3_PATH="s3://${AWS_S3_BACKUP_BUCKET}/backups/${ENV_NAME}/${FILENAME}.gpg"
+                  echo "[$(date -u +%FT%TZ)] Uploading to ${S3_PATH}..."
+                  aws s3 cp "/backup/${FILENAME}.gpg" "$S3_PATH" \
+                    --storage-class STANDARD_IA \
+                    --metadata "environment=${ENV_NAME}"
+
+                  # Verify the upload succeeded
+                  aws s3 ls "$S3_PATH" || { echo "ERROR: Upload verification failed!"; exit 1; }
+
+                  echo "[$(date -u +%FT%TZ)] Backup complete: ${S3_PATH}"
+
+                  # Slack notification (optional — won't fail if webhook is absent)
+                  if [ -n "${SLACK_BACKUP_WEBHOOK:-}" ]; then
+                    curl -s -X POST "$SLACK_BACKUP_WEBHOOK" \
+                      -H 'Content-Type: application/json' \
+                      -d "{\"text\": \"✅ Haven ${ENV_NAME} backup complete: \`${FILENAME}.gpg\` (${DUMP_SIZE})\"}" \
+                      || true
+                  fi
+              env:
+                - name: BACKUP_ENCRYPTION_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: haven-backup-secrets
+                      key: encryption-key
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: haven-backup-secrets
+                      key: aws-access-key-id
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: haven-backup-secrets
+                      key: aws-secret-access-key
+                - name: AWS_DEFAULT_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: haven-backup-secrets
+                      key: aws-region
+                - name: AWS_S3_BACKUP_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: haven-backup-secrets
+                      key: s3-bucket
+                - name: SLACK_BACKUP_WEBHOOK
+                  valueFrom:
+                    secretKeyRef:
+                      name: haven-backup-secrets
+                      key: slack-webhook
+                      optional: true
+              volumeMounts:
+                - name: backup-staging
+                  mountPath: /backup
+
+          volumes:
+            - name: backup-staging
+              emptyDir: {}

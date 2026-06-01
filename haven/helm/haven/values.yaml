@@ -1,0 +1,108 @@
+# Default values for Haven
+
+replicaCount: 3
+
+image:
+  repository: haven/app
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3000"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: haven.app
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: haven-tls
+      hosts:
+        - haven.app
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: haven
+          topologyKey: kubernetes.io/hostname
+
+# Redis configuration
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      size: 10Gi
+
+# Environment configuration
+env:
+  NODE_ENV: production
+  LOG_LEVEL: info
+
+# Secrets (use external secrets in production)
+secrets:
+  create: false
+  # Values will be provided via external secrets or CI/CD
+
+# Database backup CronJob — disabled by default, enabled in values-production.yaml
+backup:
+  enabled: false
+  schedule: "0 */6 * * *"   # every 6 hours
+  secretName: haven-backup-secrets

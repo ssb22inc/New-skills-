@@ -1,0 +1,63 @@
+config:
+  target: "{{ $processEnvironment.BASE_URL }}"
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 50
+      name: "Ramp up"
+    - duration: 300
+      arrivalRate: 100
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 10
+      name: "Cool down"
+  
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  
+  plugins:
+    expect: {}
+    metrics-by-endpoint: {}
+
+scenarios:
+  - name: "Browse Listings"
+    weight: 50
+    flow:
+      - get:
+          url: "/api/listings?page=1&limit=20"
+          expect:
+            - statusCode: 200
+            - contentType: json
+      - think: 2
+      - get:
+          url: "/api/listings?city=Houston&minPrice=1500&maxPrice=3000"
+          expect:
+            - statusCode: 200
+
+  - name: "View Listing Detail"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/listings"
+          capture:
+            - json: "$.listings[0].id"
+              as: "listingId"
+      - think: 1
+      - get:
+          url: "/api/listings/{{ listingId }}"
+          expect:
+            - statusCode: 200
+
+  - name: "User Authentication"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "test@example.com"
+            password: "Password123"
+          expect:
+            - statusCode: 200

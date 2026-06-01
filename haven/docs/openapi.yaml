@@ -1,0 +1,752 @@
+openapi: 3.1.0
+info:
+  title: Haven API
+  version: 0.1.0
+  description: |
+    Haven is an AI-powered housing marketplace matching seekers and landlords
+    based on lifestyle compatibility, verified trust scores, and real-time chat.
+  contact:
+    name: Haven Engineering
+    email: engineering@haven.app
+
+servers:
+  - url: https://haven.app
+    description: Production
+  - url: https://staging.haven.app
+    description: Staging
+  - url: http://localhost:3000
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT access token
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    Listing:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        headline:
+          type: string
+        description:
+          type: string
+        property_type:
+          type: string
+          enum: [apartment, house, condo, room, townhouse, studio]
+        bedrooms:
+          type: integer
+        bathrooms:
+          type: number
+        sqft:
+          type: integer
+        city:
+          type: string
+        state:
+          type: string
+        zip_code:
+          type: string
+        price_monthly:
+          type: integer
+        status:
+          type: string
+          enum: [draft, active, paused, rented, archived]
+        available_date:
+          type: string
+          format: date
+        amenities:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Match:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        listing_id:
+          type: string
+          format: uuid
+        total_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        lifestyle_score:
+          type: integer
+        personality_score:
+          type: integer
+        location_score:
+          type: integer
+        budget_score:
+          type: integer
+        amenity_score:
+          type: integer
+        trust_score:
+          type: integer
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        user_type:
+          type: string
+          enum: [seeker, landlord, both]
+        onboarding_completed:
+          type: boolean
+
+    CheckDetail:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        latency:
+          type: integer
+          description: Round-trip latency in milliseconds (database/redis checks)
+        memoryMB:
+          type: integer
+          description: Heap memory used in MB (memory check only)
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        checks:
+          type: object
+          properties:
+            database:
+              $ref: '#/components/schemas/CheckDetail'
+            redis:
+              $ref: '#/components/schemas/CheckDetail'
+            memory:
+              $ref: '#/components/schemas/CheckDetail'
+
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      description: Returns service health status. No authentication required.
+      security: []
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service is degraded or down
+
+  /api/listings:
+    get:
+      operationId: listListings
+      summary: List active listings
+      description: Returns paginated active listings with optional filters.
+      security: []
+      tags: [Listings]
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+        - name: min_price
+          in: query
+          schema:
+            type: integer
+        - name: max_price
+          in: query
+          schema:
+            type: integer
+        - name: bedrooms
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated listing results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  listings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Listing'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+        '429':
+          description: Rate limit exceeded
+
+    post:
+      operationId: createListing
+      summary: Create a new listing
+      tags: [Listings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Listing'
+      responses:
+        '201':
+          description: Listing created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listing'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+
+  /api/listings/{id}:
+    get:
+      operationId: getListing
+      summary: Get a single listing
+      security: []
+      tags: [Listings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Listing details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listing'
+        '404':
+          description: Listing not found
+
+    patch:
+      operationId: updateListing
+      summary: Update a listing
+      tags: [Listings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Listing'
+      responses:
+        '200':
+          description: Updated listing
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden — not the listing owner
+        '404':
+          description: Not found
+
+    delete:
+      operationId: deleteListing
+      summary: Delete a listing
+      tags: [Listings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/matches:
+    get:
+      operationId: listMatches
+      summary: Get matches for the current user
+      tags: [Matching]
+      responses:
+        '200':
+          description: List of matches ranked by score
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Match'
+
+  /api/matches/score:
+    post:
+      operationId: scoreMatch
+      summary: Compute a match score between a seeker and a listing
+      tags: [Matching]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seeker_id, listing_id]
+              properties:
+                seeker_id:
+                  type: string
+                  format: uuid
+                listing_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Match score result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+
+  /api/users/profile:
+    get:
+      operationId: getProfile
+      summary: Get current user profile
+      tags: [Users]
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+    patch:
+      operationId: updateProfile
+      summary: Update current user profile
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfile'
+      responses:
+        '200':
+          description: Updated profile
+
+  /api/payments/create-checkout:
+    post:
+      operationId: createCheckout
+      summary: Create a Stripe checkout session
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id]
+              properties:
+                plan_id:
+                  type: string
+                  enum: [basic, premium, professional]
+      responses:
+        '200':
+          description: Checkout session URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+
+  /api/ai/generate-listing:
+    post:
+      operationId: generateListing
+      summary: AI-generate listing content from a prompt
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+      responses:
+        '200':
+          description: Generated listing draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listing'
+        '429':
+          description: AI rate limit exceeded
+
+  /api/ai/suggest-pricing:
+    post:
+      operationId: suggestPricing
+      summary: AI pricing suggestion based on market comparables
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [city, state, bedrooms, sqft]
+              properties:
+                city:
+                  type: string
+                state:
+                  type: string
+                bedrooms:
+                  type: integer
+                sqft:
+                  type: integer
+      responses:
+        '200':
+          description: Pricing suggestion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggested_price:
+                    type: integer
+                  range_low:
+                    type: integer
+                  range_high:
+                    type: integer
+                  confidence:
+                    type: number
+
+  /api/metrics:
+    get:
+      operationId: getMetrics
+      summary: Prometheus metrics endpoint
+      description: |
+        Returns metrics in Prometheus text format.
+        **Requires `Authorization: Bearer <METRICS_TOKEN>` header.**
+      tags: [System]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain: {}
+        '401':
+          description: Unauthorized — missing or invalid METRICS_TOKEN
+
+  /api/payments/webhook:
+    post:
+      operationId: stripeWebhook
+      summary: Stripe webhook receiver
+      description: |
+        Receives signed events from Stripe. Must include a valid
+        `Stripe-Signature` header. This endpoint is called by Stripe only and
+        should not be invoked by application clients.
+      security: []
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Raw Stripe Event object
+      responses:
+        '200':
+          description: Event received and processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                  skipped:
+                    type: string
+                    description: Present when event is a duplicate
+        '400':
+          description: Missing or invalid Stripe-Signature
+
+  /api/payments/refund:
+    post:
+      operationId: createRefund
+      summary: Issue a refund for a booking
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookingId]
+              properties:
+                bookingId:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+                  enum: [duplicate, fraudulent, requested_by_customer]
+      responses:
+        '200':
+          description: Refund created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  refundId:
+                    type: string
+                  status:
+                    type: string
+        '403':
+          description: Forbidden — not a booking participant
+        '404':
+          description: Booking not found
+        '409':
+          description: Already refunded
+        '422':
+          description: No payment found for this booking
+
+  /api/ai/chat:
+    post:
+      operationId: aiChat
+      summary: AI conversation — onboarding or streaming chat
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [stream, onboarding]
+                message:
+                  type: string
+                  maxLength: 4000
+                  description: Required for type=onboarding
+                conversation:
+                  type: object
+                  description: Existing conversation state to continue
+      responses:
+        '200':
+          description: >
+            For type=onboarding: updated OnboardingConversation JSON.
+            For type=stream: text/plain streaming response (SSE-like chunks).
+        '400':
+          description: Validation error
+        '429':
+          description: AI rate limit exceeded
+
+  /api/ai/analyze-photos:
+    post:
+      operationId: analyzePhotos
+      summary: AI analysis of listing photos
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrls]
+              properties:
+                imageUrls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  minItems: 1
+                  maxItems: 20
+      responses:
+        '200':
+          description: Photo analysis results
+        '400':
+          description: Validation error (no images or too many)
+
+  /api/ai/verify-document:
+    post:
+      operationId: verifyDocument
+      summary: AI-powered identity / income document verification
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl, documentType]
+              properties:
+                imageUrl:
+                  type: string
+                  format: uri
+                documentType:
+                  type: string
+                  enum: [drivers_license, passport, national_id, pay_stub, bank_statement]
+      responses:
+        '200':
+          description: Verification result
+        '400':
+          description: Validation error
+
+  /api/ai/voice-to-listing:
+    post:
+      operationId: voiceToListing
+      summary: Convert audio description to listing draft
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: Audio file (max 25 MB, formats supported by OpenAI Whisper)
+      responses:
+        '200':
+          description: Transcription and generated listing draft
+        '400':
+          description: No audio file provided
+        '413':
+          description: Audio file too large (max 25 MB)
+
+  /api/users/gdpr:
+    get:
+      operationId: exportUserData
+      summary: "GDPR Article 15: Export all personal data"
+      tags: [Users]
+      responses:
+        '200':
+          description: JSON file containing all personal data
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+
+    delete:
+      operationId: deleteUserData
+      summary: "GDPR Article 17: Erase all personal data"
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm:
+                  type: string
+                  enum: ["DELETE MY ACCOUNT"]
+                  description: Must be the exact string "DELETE MY ACCOUNT"
+                hard_delete:
+                  type: boolean
+                  default: false
+                  description: If true, permanently deletes the auth account. If false, anonymises data.
+                preserve_audit_logs:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Data deleted or anonymised
+        '400':
+          description: Confirm string missing or wrong
+        '401':
+          description: Unauthorized
+
+
+tags:
+  - name: System
+    description: Health checks and operational endpoints
+  - name: Listings
+    description: Housing listing management
+  - name: Matching
+    description: AI-powered seeker-to-listing matching
+  - name: Users
+    description: User profile management
+  - name: Payments
+    description: Stripe payment and subscription management
+  - name: AI
+    description: AI-assisted content generation and analysis
+  - name: GDPR
+    description: GDPR data subject rights — export and erasure
