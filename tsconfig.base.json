@@ -12,6 +12,7 @@
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "types": ["node"],
     "sourceMap": true,
     "declaration": true,
     "outDir": "dist"

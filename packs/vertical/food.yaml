@@ -1,0 +1,36 @@
+vertical_id: food
+name: Food & Catering
+
+capacity:
+  unit_singular: plate
+  unit_plural: plates
+  time_granularity_minutes: 30
+
+booking:
+  # Food orders settle on completion; no deposit by default.
+  deposit_default_bps: 0
+  completion_proof:
+    - buyer_confirm
+
+mentor:
+  review_heuristics:
+    - signal: temperature
+      keywords:
+        - cold
+        - lukewarm
+        - not hot
+    - signal: portion
+      keywords:
+        - small portion
+        - likkle bit
+        - skimpy
+    - signal: wait_time
+      keywords:
+        - slow
+        - long wait
+        - took forever
+    - signal: freshness
+      keywords:
+        - stale
+        - fresh
+        - next day
