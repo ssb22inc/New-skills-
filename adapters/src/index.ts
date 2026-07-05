@@ -1,1 +1,19 @@
 export const WORKSPACE = '@sycamore/adapters';
+
+export type {
+  TaskType,
+  LlmRequest,
+  LlmResponse,
+  LlmProvider,
+  VendorConfig,
+  Route,
+  RoutingTable,
+} from './llm/types.js';
+export { assertPiiRoutingAllowed, PiiRoutingViolation } from './llm/policy.js';
+export { createLlmRouter, LlmRouterError, type LlmRouter } from './llm/router.js';
+export { mockProvider, type MockProviderOptions } from './llm/providers/mock.js';
+export { anthropicProvider, type AnthropicProviderOptions } from './llm/providers/anthropic.js';
+export {
+  openAiCompatProvider,
+  type OpenAiCompatProviderOptions,
+} from './llm/providers/openai-compat.js';
