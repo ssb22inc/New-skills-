@@ -30,3 +30,9 @@ mentor:
         - unsafe
         - life jacket
         - reckless
+
+trust:
+  licence_fields:
+    - Marine licence number
+    - TPDCo tour operator registration
+  back_on_time_guarantee: true

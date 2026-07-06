@@ -8,7 +8,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "load:gateway": "tsx src/load/gateway-load.ts",
-    "golden": "vitest run src/golden"
+    "golden": "vitest run src/golden",
+    "perf:trust": "tsx src/perf/trust-page-budget.ts"
   },
   "dependencies": {
     "@sycamore/adapters": "workspace:*",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
-    "@types/pg": "^8.20.0"
+    "@types/pg": "^8.20.0",
+    "playwright": "^1.61.1"
   }
 }

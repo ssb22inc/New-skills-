@@ -34,3 +34,8 @@ mentor:
         - stale
         - fresh
         - next day
+
+trust:
+  licence_fields:
+    - Food handler's permit
+  back_on_time_guarantee: false

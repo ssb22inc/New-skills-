@@ -43,3 +43,9 @@ dist/
 coverage/
 .env
 .env.local
+
+# Next.js #
+###########
+.next/
+next-env.d.ts
+*.tsbuildinfo

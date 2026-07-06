@@ -15,6 +15,9 @@ export class PackLoadError extends Error {
 }
 
 export function packsRoot(): string {
+  // Bundlers (Next/webpack) relocate this module; the env override keeps
+  // pack files resolvable from any runtime. Dev/tests use import.meta.url.
+  if (process.env.SYCAMORE_PACKS_DIR) return process.env.SYCAMORE_PACKS_DIR;
   // src/loader.ts lives one level below the packs workspace root.
   return fileURLToPath(new URL('..', import.meta.url));
 }

@@ -25,6 +25,14 @@ export const VerticalPackSchema = z
         completion_proof: z.array(CompletionProofSchema).min(1),
       })
       .strict(),
+    trust: z
+      .object({
+        /** Licence/credential labels the trust page must display slots for. */
+        licence_fields: z.array(z.string().min(1)),
+        /** Tours carry the back-on-time guarantee element (BUILD P14). */
+        back_on_time_guarantee: z.boolean(),
+      })
+      .strict(),
     mentor: z
       .object({
         /** Review-mining heuristics: what the Mentor may observe and advise on. */
