@@ -76,6 +76,7 @@ describe.runIf(reachable)('P9 — orders + completion verification (gate)', () =
       startsAt: new Date(`2026-09-01T${String(hour).padStart(2, '0')}:00:00Z`),
       endsAt: new Date(`2026-09-01T${String(hour + 2).padStart(2, '0')}:00:00Z`),
       totalUnits: units,
+      unitPriceMinor: 800_000,
     });
   }
 

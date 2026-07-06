@@ -7,12 +7,18 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "load:gateway": "tsx src/load/gateway-load.ts"
+    "load:gateway": "tsx src/load/gateway-load.ts",
+    "golden": "vitest run src/golden"
   },
   "dependencies": {
-    "@sycamore/gateway": "workspace:*"
+    "@sycamore/adapters": "workspace:*",
+    "@sycamore/core": "workspace:*",
+    "@sycamore/gateway": "workspace:*",
+    "@sycamore/packs": "workspace:*",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0"
+    "@types/node": "^26.1.0",
+    "@types/pg": "^8.20.0"
   }
 }

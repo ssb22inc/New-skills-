@@ -6,6 +6,7 @@ import * as identity from './0004_identity.js';
 import * as capacity from './0005_capacity.js';
 import * as orders from './0006_orders.js';
 import * as conversations from './0007_conversations.js';
+import * as windowPrice from './0008_window_price.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -20,6 +21,7 @@ export const migrations: Record<string, Migration> = {
   '0005_capacity': capacity,
   '0006_orders': orders,
   '0007_conversations': conversations,
+  '0008_window_price': windowPrice,
 };
 
 export const migrationProvider: MigrationProvider = {

@@ -59,6 +59,13 @@ export {
   type ConversationEngine,
 } from './conversations/engine.js';
 export {
+  autopilot,
+  type Autopilot,
+  type AutopilotDeps,
+  type AutopilotResult,
+  type ToolExecution,
+} from './autopilot/autopilot.js';
+export {
   marketsRegistry,
   MarketNotLiveError,
   FlipBlockedError,

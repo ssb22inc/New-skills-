@@ -120,13 +120,28 @@ importers:
 
   tests:
     dependencies:
+      '@sycamore/adapters':
+        specifier: workspace:*
+        version: link:../adapters
+      '@sycamore/core':
+        specifier: workspace:*
+        version: link:../core
       '@sycamore/gateway':
         specifier: workspace:*
         version: link:../apps/gateway
+      '@sycamore/packs':
+        specifier: workspace:*
+        version: link:../packs
+      pg:
+        specifier: ^8.22.0
+        version: 8.22.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.0
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
 
 packages:
 

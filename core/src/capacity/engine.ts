@@ -185,7 +185,13 @@ export function capacityEngine(db: Kysely<Database>, marketId: string) {
     /** Windows are vertical-pack driven: duration must fit the pack's granularity. */
     async createWindow(
       pack: VerticalPack,
-      input: { sellerId: string; startsAt: Date; endsAt: Date; totalUnits: number },
+      input: {
+        sellerId: string;
+        startsAt: Date;
+        endsAt: Date;
+        totalUnits: number;
+        unitPriceMinor: number;
+      },
     ) {
       const minutes = (input.endsAt.getTime() - input.startsAt.getTime()) / 60_000;
       const granularity = pack.capacity.time_granularity_minutes;
@@ -194,6 +200,9 @@ export function capacityEngine(db: Kysely<Database>, marketId: string) {
           `window of ${minutes}min does not fit ${pack.vertical_id}'s ` +
             `${granularity}min granularity`,
         );
+      }
+      if (!Number.isInteger(input.unitPriceMinor) || input.unitPriceMinor < 0) {
+        throw new CapacityError(`unitPriceMinor must be a non-negative integer minor-unit amount`);
       }
       return db
         .insertInto('capacity_windows')
@@ -204,9 +213,34 @@ export function capacityEngine(db: Kysely<Database>, marketId: string) {
           starts_at: input.startsAt,
           ends_at: input.endsAt,
           total_units: input.totalUnits,
+          unit_price_minor: input.unitPriceMinor,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
+    },
+
+    /** Live availability from the single source of truth — the database. */
+    async availability(windowId: string): Promise<{ total: number; available: number }> {
+      const window = await db
+        .selectFrom('capacity_windows')
+        .where('market_id', '=', marketId)
+        .where('id', '=', windowId)
+        .selectAll()
+        .executeTakeFirst();
+      if (!window) throw new CapacityError(`window ${windowId} not found`);
+      const row = await db
+        .selectFrom('capacity_holds')
+        .where('window_id', '=', windowId)
+        .where((eb) =>
+          eb.or([
+            eb('status', '=', 'confirmed'),
+            eb.and([eb('status', '=', 'held'), eb('expires_at', '>', sql<Date>`now()`)]),
+          ]),
+        )
+        .select((eb) => eb.fn.coalesce(eb.fn.sum<number>('units'), sql<number>`0`).as('used'))
+        .executeTakeFirstOrThrow();
+      const used = Number(row.used);
+      return { total: window.total_units, available: window.total_units - used };
     },
 
     /** Book or waitlist — atomically, under the window row lock. */

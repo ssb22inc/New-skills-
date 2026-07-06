@@ -62,6 +62,7 @@ describe.runIf(reachable)('P8 — capacity engine (functional)', () => {
       startsAt: new Date('2026-08-01T14:00:00Z'),
       endsAt: new Date('2026-08-01T16:00:00Z'),
       totalUnits: 2,
+      unitPriceMinor: 500_000,
     });
   }
 
@@ -72,6 +73,7 @@ describe.runIf(reachable)('P8 — capacity engine (functional)', () => {
         startsAt: new Date('2026-08-01T14:00:00Z'),
         endsAt: new Date('2026-08-01T14:45:00Z'), // 45min vs 60min granularity
         totalUnits: 10,
+        unitPriceMinor: 500_000,
       }),
     ).rejects.toThrowError(CapacityError);
     const win = await window2seats(); // 120min fits

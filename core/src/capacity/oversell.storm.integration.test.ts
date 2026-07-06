@@ -66,6 +66,7 @@ describe.runIf(reachable)('P8 — oversell storm (gate)', () => {
       startsAt: new Date('2026-08-15T14:00:00Z'),
       endsAt: new Date('2026-08-15T16:00:00Z'),
       totalUnits: SEATS,
+      unitPriceMinor: 750_000,
     });
   }
 

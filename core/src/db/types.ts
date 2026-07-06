@@ -71,6 +71,8 @@ export interface CapacityWindowsTable {
   starts_at: Date | string;
   ends_at: Date | string;
   total_units: number;
+  /** Integer minor units; currency comes from the market's context pack. */
+  unit_price_minor: string | number | bigint;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
