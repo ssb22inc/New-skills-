@@ -1,0 +1,15 @@
+# Runbook (P27) — one page, founder-readable. Fixer may ONLY do what is
+# listed under actions; each action is from the fixed allow-list.
+id: webhook-lag-rising
+version: 1
+title: Webhook processing lag climbing
+trigger:
+  vital: webhook_lag_ms
+  direction: up
+actions:
+  - retry
+  - restart
+notes: >
+  Retry the stuck deliveries first (idempotency keys make this safe),
+  then restart the worker pool. If lag keeps climbing after both, the
+  Watchman reopens the incident and the next occurrence pages the founder.

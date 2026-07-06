@@ -176,3 +176,27 @@ export {
   type FlipRequest,
 } from './markets/registry.js';
 export { coopService, CoopError, type CoopService } from './pulse/coop.js';
+export {
+  watchmanService,
+  detectDrift,
+  GOLDEN_VITALS,
+  type GoldenVital,
+  type VitalSeries,
+  type DriftDirection,
+  type WatchmanService,
+} from './agents/watchman.js';
+export {
+  fixerService,
+  FixerError,
+  type FixerService,
+  type ActionExecutor,
+} from './agents/fixer.js';
+export {
+  loadRunbooks,
+  runbooksRoot,
+  RunbookLoadError,
+  RunbookSchema,
+  RUNBOOK_ACTIONS,
+  type Runbook,
+  type RunbookAction,
+} from './agents/runbooks.js';

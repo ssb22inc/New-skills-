@@ -1,0 +1,11 @@
+# Test fixture: this runbook invents a verb outside the allow-list and
+# must refuse to load.
+id: improvised
+version: 1
+title: A runbook that improvises
+trigger:
+  vital: webhook_lag_ms
+  direction: up
+actions:
+  - delete_database
+notes: never

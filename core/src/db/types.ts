@@ -270,6 +270,30 @@ export interface CoopAttributionsTable {
   updated_at: Generated<Date>;
 }
 
+export interface AgentIncidentsTable {
+  id: Generated<string>;
+  market_id: string;
+  /** Which golden vital drifted (P27 Watchman). */
+  vital: string;
+  direction: string;
+  /** open | healed | escalated — enforced by DB check. */
+  status: Generated<string>;
+  runbook_id: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface AgentActionsTable {
+  id: Generated<string>;
+  market_id: string;
+  incident_id: string;
+  /** Always one of RUNBOOK_ACTIONS — Fixer refuses anything else. */
+  action: string;
+  runbook_id: string;
+  runbook_version: number;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -292,4 +316,6 @@ export interface Database {
   pulse_boosts: PulseBoostsTable;
   coop_campaigns: CoopCampaignsTable;
   coop_attributions: CoopAttributionsTable;
+  agent_incidents: AgentIncidentsTable;
+  agent_actions: AgentActionsTable;
 }
