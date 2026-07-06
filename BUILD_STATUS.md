@@ -17,7 +17,8 @@ human gates implemented up to the boundary and marked, never faked.
 | P5 | Channel gateway (mock-first) | ✅ gate-passed (replay ×5 → 1 effect; 100 msg/s × 60 s zero drops) |
 | P6 | Feature flags + canary + observability | ✅ gate-passed (forced failure → auto-rollback → alert) — Phase 0 exit |
 | P6.5 | Market registry & region lockdown | ✅ gate-passed (14 packs; DB-trigger lockdown; flip ceremony; chaos: 13 corrupted dark packs, jm zero errors) |
-| P7–P12 | Identity → Voice pipeline | 🔧 P7 next |
+| P7 | Identity + readiness gate | ✅ gate-passed (exhaustive transition matrix; suspension keeps data) |
+| P8–P12 | Capacity → Voice pipeline | 🔧 P8 next |
 | P13 | Genesis flow | ⬜ code queued · ⏸ HUMAN-GATE: 10 real sellers, voice-note-only |
 | P14 | Trust pages + PWA shell | ⬜ queued |
 | P15 | Double-entry ledger | ⬜ queued |

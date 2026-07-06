@@ -2,6 +2,7 @@ import type { Migration, MigrationProvider } from 'kysely/migration';
 import * as base from './0001_base.js';
 import * as featureFlags from './0002_feature_flags.js';
 import * as marketStatus from './0003_market_status.js';
+import * as identity from './0004_identity.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -12,6 +13,7 @@ export const migrations: Record<string, Migration> = {
   '0001_base': base,
   '0002_feature_flags': featureFlags,
   '0003_market_status': marketStatus,
+  '0004_identity': identity,
 };
 
 export const migrationProvider: MigrationProvider = {

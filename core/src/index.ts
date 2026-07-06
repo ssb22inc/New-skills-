@@ -12,6 +12,19 @@ export { MetricsRegistry } from './observability/metrics.js';
 export { ErrorBudget, type AlertSink, type ErrorBudgetOptions } from './observability/alerts.js';
 export { canaryRelease, type CanaryOptions, type CanaryResult } from './canary/canary.js';
 export {
+  transition,
+  initialSellerState,
+  hasVerifiedSurface,
+  InvalidTransitionError,
+  READINESS_STEPS,
+  ORDERS_REQUIRED_FOR_VERIFIED,
+  type Readiness,
+  type Standing,
+  type ReadinessEvent,
+  type SellerState,
+} from './identity/readiness.js';
+export { identityService, sellerStateOf, type IdentityService, type Seller } from './identity/identity.js';
+export {
   marketsRegistry,
   MarketNotLiveError,
   FlipBlockedError,

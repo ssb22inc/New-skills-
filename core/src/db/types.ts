@@ -22,6 +22,7 @@ export interface UsersTable {
   /** E.164 phone number — WhatsApp number is the login (Constitution §1). */
   phone: string;
   display_name: string;
+  role: Generated<string>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -31,8 +32,11 @@ export interface SellersTable {
   market_id: string;
   user_id: string;
   business_name: string;
-  /** Readiness gate state machine arrives in P7; base status only for now. */
-  status: Generated<string>;
+  /** P7 readiness gate: profile → catalog → capacity → first_orders → verified. */
+  readiness: Generated<string>;
+  /** active | suspended — orthogonal to readiness progress. */
+  standing: Generated<string>;
+  completed_orders: Generated<number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
