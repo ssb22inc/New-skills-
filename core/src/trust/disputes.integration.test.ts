@@ -33,7 +33,7 @@ describe.runIf(reachable)('P18 — refunds, disputes, evidence (gate)', () => {
   const orders = ordersService(db, 'jm');
   let sellerIds: string[] = [];
   let buyerId: string;
-  let windowBySeller = new Map<string, string>();
+  const windowBySeller = new Map<string, string>();
 
   beforeAll(async () => {
     await migrateDownAll(db);
