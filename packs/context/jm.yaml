@@ -62,6 +62,21 @@ compliance:
   marketplace_facilitator_collection: false
   verified_by_counsel: true
 
+signals:
+  cruise_ports:
+    - id: ocho-rios
+      name: Ocho Rios Cruise Port
+      parish: St Ann
+    - id: falmouth
+      name: Falmouth Cruise Port
+      parish: Trelawny
+    - id: montego-bay
+      name: Montego Bay Cruise Port
+      parish: St James
+    - id: port-royal
+      name: Port Royal Cruise Port
+      parish: Kingston
+
 splits:
   standard:
     seller_bps: 8800

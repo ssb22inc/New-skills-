@@ -98,6 +98,19 @@ export const ContextPackSchema = z
       })
       .strict(),
     /**
+     * Demand-signal geography (P23): cruise ports with their parishes.
+     * Dark markets may ship [] until local sources are wired.
+     */
+    signals: z
+      .object({
+        cruise_ports: z.array(
+          z
+            .object({ id: z.string().min(1), name: z.string().min(1), parish: z.string().min(1) })
+            .strict(),
+        ),
+      })
+      .strict(),
+    /**
      * The configured split tables (P17): basis points, MUST sum to exactly
      * 10000 each. `standard` settles unreferred orders; `referred` carries
      * the incumbent's referral credit inside the same split — no

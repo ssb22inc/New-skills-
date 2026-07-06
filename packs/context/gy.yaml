@@ -50,6 +50,9 @@ compliance:
   marketplace_facilitator_collection: false
   verified_by_counsel: false
 
+signals:
+  cruise_ports: []
+
 splits:
   standard:
     seller_bps: 8800

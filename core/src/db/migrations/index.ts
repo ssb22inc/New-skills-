@@ -13,6 +13,7 @@ import * as ledger from './0011_ledger.js';
 import * as settlement from './0012_settlement.js';
 import * as disputes from './0013_disputes.js';
 import * as reviews from './0014_reviews.js';
+import * as signals from './0015_signals.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -34,6 +35,7 @@ export const migrations: Record<string, Migration> = {
   '0012_settlement': settlement,
   '0013_disputes': disputes,
   '0014_reviews': reviews,
+  '0015_signals': signals,
 };
 
 export const migrationProvider: MigrationProvider = {

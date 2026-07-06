@@ -221,6 +221,30 @@ export interface ReviewRevisionsTable {
   updated_at: Generated<Date>;
 }
 
+export interface SignalsTable {
+  id: Generated<string>;
+  market_id: string;
+  /** cruise_arrival | platform_event */
+  kind: string;
+  port_id: string | null;
+  parish: string;
+  occurs_at: Date | string;
+  magnitude: number;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface PulseBoostsTable {
+  id: Generated<string>;
+  market_id: string;
+  signal_id: string | number | bigint;
+  vertical_id: string;
+  parish: string;
+  lead_days: number;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -239,4 +263,6 @@ export interface Database {
   disputes: DisputesTable;
   reviews: ReviewsTable;
   review_revisions: ReviewRevisionsTable;
+  signals: SignalsTable;
+  pulse_boosts: PulseBoostsTable;
 }

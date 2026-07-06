@@ -114,6 +114,13 @@ export {
   type BookingRecord,
 } from './discovery/ranking.js';
 export {
+  signalsService,
+  SignalError,
+  LEAD_MIN_DAYS,
+  LEAD_MAX_DAYS,
+  type SignalsService,
+} from './pulse/signals.js';
+export {
   overflowService,
   bundleService,
   type OverflowService,
