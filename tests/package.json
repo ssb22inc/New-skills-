@@ -6,7 +6,11 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "load:gateway": "tsx src/load/gateway-load.ts"
+  },
+  "dependencies": {
+    "@sycamore/gateway": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.0"
