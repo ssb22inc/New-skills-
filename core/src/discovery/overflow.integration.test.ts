@@ -41,7 +41,6 @@ describe.runIf(reachable)('P22 — overflow routing + bundles (Phase 3 exit gate
   let newcomerId: string;
   let incumbentWindow: string;
   let partnerWindow: string;
-  let newcomerWindow: string;
   let buyerId: string;
 
   beforeAll(async () => {
@@ -88,15 +87,13 @@ describe.runIf(reachable)('P22 — overflow routing + bundles (Phase 3 exit gate
         unitPriceMinor: 280_000,
       })
     ).id;
-    newcomerWindow = (
-      await engine.createWindow(tours, {
-        sellerId: newcomerId,
-        startsAt: new Date('2027-01-10T16:00:00Z'),
-        endsAt: new Date('2027-01-10T18:00:00Z'),
-        totalUnits: 8,
-        unitPriceMinor: 250_000,
-      })
-    ).id;
+    await engine.createWindow(tours, {
+      sellerId: newcomerId,
+      startsAt: new Date('2027-01-10T16:00:00Z'),
+      endsAt: new Date('2027-01-10T18:00:00Z'),
+      totalUnits: 8,
+      unitPriceMinor: 250_000,
+    });
 
     const identityBuyer = await identity.findOrCreateUserByPhone({
       phone: '+18764000010',
