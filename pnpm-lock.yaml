@@ -68,6 +68,10 @@ importers:
         version: 26.1.0
 
   apps/worker:
+    dependencies:
+      '@sycamore/core':
+        specifier: workspace:*
+        version: link:../../core
     devDependencies:
       '@types/node':
         specifier: ^26.1.0

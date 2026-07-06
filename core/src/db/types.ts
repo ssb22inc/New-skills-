@@ -63,10 +63,48 @@ export interface FeatureFlagsTable {
   updated_at: Generated<Date>;
 }
 
+export interface CapacityWindowsTable {
+  id: Generated<string>;
+  market_id: string;
+  seller_id: string;
+  vertical_id: string;
+  starts_at: Date | string;
+  ends_at: Date | string;
+  total_units: number;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface CapacityHoldsTable {
+  id: Generated<string>;
+  market_id: string;
+  window_id: string;
+  user_id: string;
+  units: number;
+  /** held | confirmed | released | expired */
+  status: Generated<string>;
+  expires_at: Date | string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface CapacityWaitlistTable {
+  id: Generated<string>;
+  market_id: string;
+  window_id: string;
+  user_id: string;
+  units: number;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
   sellers: SellersTable;
   events_outbox: EventsOutboxTable;
   feature_flags: FeatureFlagsTable;
+  capacity_windows: CapacityWindowsTable;
+  capacity_holds: CapacityHoldsTable;
+  capacity_waitlist: CapacityWaitlistTable;
 }

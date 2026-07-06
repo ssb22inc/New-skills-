@@ -30,6 +30,12 @@ export {
   type Seller,
 } from './identity/identity.js';
 export {
+  capacityEngine,
+  CapacityError,
+  type CapacityEngine,
+  type HoldOutcome,
+} from './capacity/engine.js';
+export {
   marketsRegistry,
   MarketNotLiveError,
   FlipBlockedError,
