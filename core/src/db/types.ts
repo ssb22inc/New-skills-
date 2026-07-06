@@ -46,9 +46,21 @@ export interface EventsOutboxTable {
   updated_at: Generated<Date>;
 }
 
+export interface FeatureFlagsTable {
+  market_id: string;
+  key: string;
+  enabled: boolean;
+  /** 0–10000 basis points; 500 = 5% canary. */
+  rollout_bps: Generated<number>;
+  description: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
   sellers: SellersTable;
   events_outbox: EventsOutboxTable;
+  feature_flags: FeatureFlagsTable;
 }
