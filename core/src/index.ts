@@ -94,6 +94,14 @@ export {
 } from './ledger/ledger.js';
 export { settlementService, type SettlementService } from './settlement/settlement.js';
 export {
+  shoeboxService,
+  TAX_DISCLAIMER,
+  type ShoeboxService,
+  type ShoeboxPack,
+  type ShoeboxTotals,
+} from './shoebox/shoebox.js';
+export { textPdf } from './shoebox/pdf.js';
+export {
   disputeService,
   DISPUTE_WINDOW_MS,
   type DisputeService,
