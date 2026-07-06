@@ -66,6 +66,13 @@ export {
   type ToolExecution,
 } from './autopilot/autopilot.js';
 export {
+  glossaryStore,
+  applyGlossary,
+  type GlossaryEntry,
+  type GlossaryStore,
+} from './voice/glossary.js';
+export { voicePipeline, type VoicePipeline, type VoiceIntentResult } from './voice/pipeline.js';
+export {
   marketsRegistry,
   MarketNotLiveError,
   FlipBlockedError,

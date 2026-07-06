@@ -17,3 +17,6 @@ export {
   openAiCompatProvider,
   type OpenAiCompatProviderOptions,
 } from './llm/providers/openai-compat.js';
+export type { AsrAdapter, AsrResult } from './media/asr/types.js';
+export { mockAsr } from './media/asr/mock.js';
+export { whisperAsr, type WhisperOptions } from './media/asr/whisper.js';

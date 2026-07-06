@@ -126,6 +126,19 @@ export interface ConversationSessionsTable {
   updated_at: Generated<Date>;
 }
 
+export interface AsrGlossaryTable {
+  id: Generated<string>;
+  market_id: string;
+  /** What the ASR heard (lowercased). */
+  heard: string;
+  /** What the speaker meant. */
+  meant: string;
+  /** Only founder-approved entries are applied pre-intent. */
+  approved: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -137,4 +150,5 @@ export interface Database {
   capacity_waitlist: CapacityWaitlistTable;
   orders: OrdersTable;
   conversation_sessions: ConversationSessionsTable;
+  asr_glossary: AsrGlossaryTable;
 }
