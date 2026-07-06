@@ -102,6 +102,18 @@ export {
 } from './shoebox/shoebox.js';
 export { textPdf } from './shoebox/pdf.js';
 export {
+  rank,
+  blendedScore,
+  bayesianRating,
+  newcomerShareOfFirstTimeBookings,
+  RATING_PRIOR_MEAN,
+  RATING_PRIOR_WEIGHT,
+  WEIGHTS,
+  type SellerSignals,
+  type RankedSlot,
+  type BookingRecord,
+} from './discovery/ranking.js';
+export {
   reviewsService,
   ReviewError,
   BURST_THRESHOLD,
