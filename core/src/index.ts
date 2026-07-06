@@ -114,6 +114,14 @@ export {
   type BookingRecord,
 } from './discovery/ranking.js';
 export {
+  overflowService,
+  bundleService,
+  type OverflowService,
+  type BundleService,
+  type OverflowAlternative,
+  type BundleOffer,
+} from './discovery/overflow.js';
+export {
   reviewsService,
   ReviewError,
   BURST_THRESHOLD,

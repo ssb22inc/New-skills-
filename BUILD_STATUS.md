@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 66% (P0–P7 of 35 prompts; Phase 0 done). Production-live requires the HUMAN GATES below.**
+**Code-complete: 69% (P0–P7 of 35 prompts; Phase 0 done). Production-live requires the HUMAN GATES below.**
 
 Per SYCAMORE_FULL_BUILD_DIRECTIVE.md: continuous execution to code-complete on mocks;
 human gates implemented up to the boundary and marked, never faked.
@@ -32,7 +32,8 @@ human gates implemented up to the boundary and marked, never faked.
 | P19 | The Shoebox | ✅ gate-passed (seeded month matches ledger to the cent; language rules pass; GCT watch) — Phase-2 code done · exit ⏸ HUMAN-GATE: 100 real paid orders |
 | P20 | Verified reviews + fraud signals | ✅ gate-passed (red-team: no-booking refused, burst held, competitor hit held; 1★→4★ honest history) |
 | P21 | Discovery ranking + exposure floor | ✅ gate-passed (math hand-verified; audition always badged, never slot 1; fairness moves with dial) |
-| P22–P25 | Overflow → Studio | 🔧 P22 next |
+| P22 | Overflow routing + bundles | ✅ gate-passed (sold-out → overflow converts; referral credit in incumbent payout; bundle newcomer slot rotates) — Phase 3 exit |
+| P23–P25 | Pulse → Studio | 🔧 P23 next |
 | P26 | Ad publishing + co-op pools | ⬜ code queued · ⏸ HUMAN-GATE: ad credentials + live co-op ≥20 sellers |
 | P27–P29 | Watchman → Builder/Bursar | ⬜ queued |
 | P30 | Herald + Chairman + Cockpit | ⬜ queued · ⏸ HUMAN-GATE (partial): live channel pilots |
@@ -42,7 +43,7 @@ human gates implemented up to the boundary and marked, never faked.
 
 ## Test counts
 
-124 tests green (last full run): core 84 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
+126 tests green (last full run): core 86 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 
 ## Human gates (production-live checklist — founder-owned, run in parallel)
