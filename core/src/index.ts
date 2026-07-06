@@ -102,6 +102,14 @@ export {
 } from './shoebox/shoebox.js';
 export { textPdf } from './shoebox/pdf.js';
 export {
+  reviewsService,
+  ReviewError,
+  BURST_THRESHOLD,
+  EARLY_DAYS_UNTIL,
+  type ReviewsService,
+  type ReviewDisplay,
+} from './trust/reviews.js';
+export {
   disputeService,
   DISPUTE_WINDOW_MS,
   type DisputeService,

@@ -286,6 +286,26 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
       });
     },
 
+    /**
+     * Balanced internal adjustment (e.g. funding the Make-Good fund from
+     * platform fees, or paying a make-good out of it). Same validation and
+     * idempotency as every other posting.
+     */
+    async postAdjustment(input: {
+      reference: string;
+      idempotencyKey: string;
+      entries: LedgerEntryInput[];
+    }): Promise<{ posted: boolean }> {
+      return db.transaction().execute((trx) =>
+        postTx(trx, {
+          kind: 'adjustment',
+          reference: input.reference,
+          idempotencyKey: input.idempotencyKey,
+          entries: input.entries,
+        }),
+      );
+    },
+
     /** What a seller is owed right now: payable + referral credits. */
     async sellerBalances(sellerId: string): Promise<{ payable: number; referral: number }> {
       const rows = await db

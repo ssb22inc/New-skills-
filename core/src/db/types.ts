@@ -195,6 +195,32 @@ export interface DisputesTable {
   updated_at: Generated<Date>;
 }
 
+export interface ReviewsTable {
+  id: Generated<string>;
+  market_id: string;
+  order_id: string;
+  seller_id: string;
+  buyer_user_id: string;
+  rating: number;
+  body: string;
+  /** published | held */
+  status: Generated<string>;
+  made_it_right: Generated<boolean>;
+  resolution_opened_at: Date | string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface ReviewRevisionsTable {
+  id: Generated<string>;
+  market_id: string;
+  review_id: string;
+  rating: number;
+  body: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -211,4 +237,6 @@ export interface Database {
   ledger_transactions: LedgerTransactionsTable;
   ledger_entries: LedgerEntriesTable;
   disputes: DisputesTable;
+  reviews: ReviewsTable;
+  review_revisions: ReviewRevisionsTable;
 }
