@@ -62,6 +62,14 @@ compliance:
   marketplace_facilitator_collection: false
   verified_by_counsel: true
 
+benchmarks:
+  food:
+    # J$1,500.00 typical plate — Kingston street-food median (founder research)
+    unit_price_typical_minor: 150000
+  tours:
+    # J$9,000.00 typical seat — half-day boat/tour median (founder research)
+    unit_price_typical_minor: 900000
+
 tax:
   gct_registration_threshold:
     # J$10,000,000.00 in minor units — counsel to reconfirm at build (BUILD §7).

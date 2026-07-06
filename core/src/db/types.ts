@@ -139,6 +139,19 @@ export interface AsrGlossaryTable {
   updated_at: Generated<Date>;
 }
 
+export interface CatalogItemsTable {
+  id: Generated<string>;
+  market_id: string;
+  seller_id: string;
+  name: string;
+  /** Channel-native media reference of the seller's real photo. */
+  photo_ref: string;
+  price_minor: string | number | bigint;
+  active: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -151,4 +164,5 @@ export interface Database {
   orders: OrdersTable;
   conversation_sessions: ConversationSessionsTable;
   asr_glossary: AsrGlossaryTable;
+  catalog_items: CatalogItemsTable;
 }

@@ -85,6 +85,20 @@ export const ContextPackSchema = z
         verified_by_counsel: z.boolean(),
       })
       .strict(),
+    /**
+     * Per-vertical pricing benchmarks (integer minor units in THIS market's
+     * currency). Genesis pricing suggestions REQUIRE an entry for the
+     * seller's vertical — a missing entry is a hard error, not a default.
+     * Dark markets may ship {} until local research lands.
+     */
+    benchmarks: z.record(
+      z.string(),
+      z
+        .object({
+          unit_price_typical_minor: z.number().int().positive(),
+        })
+        .strict(),
+    ),
     tax: z
       .object({
         gct_registration_threshold: z

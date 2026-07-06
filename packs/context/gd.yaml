@@ -50,6 +50,8 @@ compliance:
   marketplace_facilitator_collection: false
   verified_by_counsel: false
 
+benchmarks: {}
+
 tax:
   gct_registration_threshold:
     # Local sales-tax (VAT/GST/ABST) registration threshold, minor units.

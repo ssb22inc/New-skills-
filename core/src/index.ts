@@ -73,6 +73,16 @@ export {
 } from './voice/glossary.js';
 export { voicePipeline, type VoicePipeline, type VoiceIntentResult } from './voice/pipeline.js';
 export {
+  genesisEngine,
+  GenesisError,
+  type GenesisEngine,
+  type GenesisDeps,
+  type GenesisInbound,
+  type GenesisPrompt,
+  type GenesisState,
+  type GenesisStep,
+} from './genesis/genesis.js';
+export {
   marketsRegistry,
   MarketNotLiveError,
   FlipBlockedError,
