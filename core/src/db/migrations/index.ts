@@ -10,6 +10,7 @@ import * as windowPrice from './0008_window_price.js';
 import * as asrGlossary from './0009_asr_glossary.js';
 import * as catalog from './0010_catalog.js';
 import * as ledger from './0011_ledger.js';
+import * as settlement from './0012_settlement.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -28,6 +29,7 @@ export const migrations: Record<string, Migration> = {
   '0009_asr_glossary': asrGlossary,
   '0010_catalog': catalog,
   '0011_ledger': ledger,
+  '0012_settlement': settlement,
 };
 
 export const migrationProvider: MigrationProvider = {

@@ -109,6 +109,8 @@ export interface OrdersTable {
   hold_id: string | null;
   vertical_id: string;
   units: number;
+  /** Overflow routing (P22) stamps the incumbent who referred the buyer. */
+  referred_by_seller_id: string | null;
   /** draft | held | confirmed | completed | cancelled | disputed */
   status: Generated<string>;
   completion_proof: string | null;
@@ -172,6 +174,8 @@ export interface LedgerEntriesTable {
   direction: string;
   amount_minor: string | number | bigint;
   currency: string;
+  /** Stamped on seller_payable / referral_credits entries for payouts. */
+  seller_id: string | null;
   created_at: Generated<Date>;
 }
 

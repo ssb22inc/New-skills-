@@ -50,6 +50,18 @@ compliance:
   marketplace_facilitator_collection: false
   verified_by_counsel: false
 
+splits:
+  standard:
+    seller_bps: 8800
+    platform_bps: 1000
+    referral_bps: 0
+    processor_bps: 200
+  referred:
+    seller_bps: 8500
+    platform_bps: 1000
+    referral_bps: 300
+    processor_bps: 200
+
 benchmarks: {}
 
 tax:

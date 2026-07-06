@@ -92,6 +92,7 @@ export {
   type LedgerEntryInput,
   type SplitBps,
 } from './ledger/ledger.js';
+export { settlementService, type SettlementService } from './settlement/settlement.js';
 export {
   handlePaymentEvent,
   handlePaymentWebhook,

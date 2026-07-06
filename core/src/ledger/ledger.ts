@@ -19,6 +19,8 @@ export interface LedgerEntryInput {
   direction: EntryDirection;
   amountMinor: number;
   currency: string;
+  /** Seller attribution for payable/referral entries (payout batching). */
+  sellerId?: string;
 }
 
 export class LedgerError extends Error {
@@ -108,6 +110,7 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
           direction: e.direction,
           amount_minor: e.amountMinor,
           currency: e.currency,
+          seller_id: e.sellerId ?? null,
         })),
       )
       .execute();
@@ -220,6 +223,8 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
       currency: string;
       split: SplitBps;
       idempotencyKey: string;
+      sellerId?: string;
+      referralSellerId?: string;
     }): Promise<{ posted: boolean; amounts?: ReturnType<typeof computeSplit> }> {
       return db.transaction().execute(async (trx) => {
         const sums = await orderSums(trx, input.orderRef);
@@ -243,6 +248,7 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
             direction: 'credit',
             amountMinor: amounts.seller,
             currency: input.currency,
+            ...(input.sellerId && { sellerId: input.sellerId }),
           },
         ];
         if (amounts.platform > 0) {
@@ -259,6 +265,7 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
             direction: 'credit',
             amountMinor: amounts.referral,
             currency: input.currency,
+            ...(input.referralSellerId && { sellerId: input.referralSellerId }),
           });
         }
         if (amounts.processor > 0) {
@@ -276,6 +283,87 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
           entries,
         });
         return { ...result, amounts };
+      });
+    },
+
+    /** What a seller is owed right now: payable + referral credits. */
+    async sellerBalances(sellerId: string): Promise<{ payable: number; referral: number }> {
+      const rows = await db
+        .selectFrom('ledger_entries')
+        .where('market_id', '=', marketId)
+        .where('seller_id', '=', sellerId)
+        .select(['account', 'direction', 'amount_minor'])
+        .execute();
+      let payable = 0;
+      let referral = 0;
+      for (const r of rows) {
+        const signed = r.direction === 'credit' ? Number(r.amount_minor) : -Number(r.amount_minor);
+        if (r.account === 'seller_payable') payable += signed;
+        if (r.account === 'referral_credits') referral += signed;
+      }
+      return { payable, referral };
+    },
+
+    /**
+     * P17 payout: everything the seller is owed (payable + referral
+     * credits, settled inside the same batch — no inter-seller invoices)
+     * leaves in ONE transaction. Idempotent per batch key.
+     */
+    async payoutSeller(input: {
+      sellerId: string;
+      currency: string;
+      idempotencyKey: string;
+    }): Promise<{ posted: boolean; amountMinor: number }> {
+      return db.transaction().execute(async (trx) => {
+        const rows = await trx
+          .selectFrom('ledger_entries')
+          .where('market_id', '=', marketId)
+          .where('seller_id', '=', input.sellerId)
+          .select(['account', 'direction', 'amount_minor'])
+          .execute();
+        let payable = 0;
+        let referral = 0;
+        for (const r of rows) {
+          const signed =
+            r.direction === 'credit' ? Number(r.amount_minor) : -Number(r.amount_minor);
+          if (r.account === 'seller_payable') payable += signed;
+          if (r.account === 'referral_credits') referral += signed;
+        }
+        const total = payable + referral;
+        if (total <= 0) return { posted: false, amountMinor: 0 };
+        const entries: LedgerEntryInput[] = [
+          {
+            account: 'external',
+            direction: 'credit',
+            amountMinor: total,
+            currency: input.currency,
+          },
+        ];
+        if (payable > 0) {
+          entries.push({
+            account: 'seller_payable',
+            direction: 'debit',
+            amountMinor: payable,
+            currency: input.currency,
+            sellerId: input.sellerId,
+          });
+        }
+        if (referral > 0) {
+          entries.push({
+            account: 'referral_credits',
+            direction: 'debit',
+            amountMinor: referral,
+            currency: input.currency,
+            sellerId: input.sellerId,
+          });
+        }
+        const res = await postTx(trx, {
+          kind: 'payout',
+          reference: `payout:${input.sellerId}`,
+          idempotencyKey: input.idempotencyKey,
+          entries,
+        });
+        return { posted: res.posted, amountMinor: res.posted ? total : 0 };
       });
     },
 

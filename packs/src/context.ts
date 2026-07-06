@@ -23,6 +23,18 @@ const HolidaySchema = z
     message: 'exactly one of "date" or "rule" is required',
   });
 
+const SplitTableSchema = z
+  .object({
+    seller_bps: z.number().int().min(0).max(10000),
+    platform_bps: z.number().int().min(0).max(10000),
+    referral_bps: z.number().int().min(0).max(10000),
+    processor_bps: z.number().int().min(0).max(10000),
+  })
+  .strict()
+  .refine((s) => s.seller_bps + s.platform_bps + s.referral_bps + s.processor_bps === 10_000, {
+    message: 'split table must sum to exactly 10000 bps (100.00%)',
+  });
+
 export const ContextPackSchema = z
   .object({
     market_id: z.string().regex(/^[a-z]{2}$/, 'expected a two-letter market id like "jm"'),
@@ -83,6 +95,18 @@ export const ContextPackSchema = z
         marketplace_facilitator_collection: z.boolean(),
         /** A dark→live flip is BLOCKED while false (P6.5 flip ceremony). */
         verified_by_counsel: z.boolean(),
+      })
+      .strict(),
+    /**
+     * The configured split tables (P17): basis points, MUST sum to exactly
+     * 10000 each. `standard` settles unreferred orders; `referred` carries
+     * the incumbent's referral credit inside the same split — no
+     * inter-seller invoices, ever.
+     */
+    splits: z
+      .object({
+        standard: SplitTableSchema,
+        referred: SplitTableSchema,
       })
       .strict(),
     /**
