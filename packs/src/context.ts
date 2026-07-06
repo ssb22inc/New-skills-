@@ -62,7 +62,8 @@ export const ContextPackSchema = z
             z
               .object({
                 id: z.string().min(1),
-                kind: z.enum(['wallet', 'card', 'bank']),
+                /** 'placeholder' = dark market awaiting a real adapter. */
+                kind: z.enum(['wallet', 'card', 'bank', 'placeholder']),
               })
               .strict(),
           )
@@ -80,6 +81,8 @@ export const ContextPackSchema = z
           .strict(),
         /** Counsel-confirmed per market at pack launch (BUILD §7). */
         marketplace_facilitator_collection: z.boolean(),
+        /** A dark→live flip is BLOCKED while false (P6.5 flip ceremony). */
+        verified_by_counsel: z.boolean(),
       })
       .strict(),
     tax: z

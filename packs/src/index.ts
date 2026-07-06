@@ -9,7 +9,11 @@ export {
 } from './vertical.js';
 export {
   PackLoadError,
+  packsRoot,
   loadContextPack,
+  loadContextPackFrom,
+  loadAllContextPacks,
+  listContextPackIds,
   loadVerticalPack,
   parseContextPack,
   parseVerticalPack,

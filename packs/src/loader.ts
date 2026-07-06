@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
@@ -14,7 +14,7 @@ export class PackLoadError extends Error {
   }
 }
 
-function packsRoot(): string {
+export function packsRoot(): string {
   // src/loader.ts lives one level below the packs workspace root.
   return fileURLToPath(new URL('..', import.meta.url));
 }
@@ -52,13 +52,30 @@ export function parseVerticalPack(yamlText: string, source: string): VerticalPac
   return parsePack(VerticalPackSchema, yamlText, source);
 }
 
-export function loadContextPack(marketId: string): ContextPack {
-  const path = join(packsRoot(), 'context', `${marketId}.yaml`);
+/** Load from an explicit packs root — chaos drills point this at a corrupted copy. */
+export function loadContextPackFrom(rootDir: string, marketId: string): ContextPack {
+  const path = join(rootDir, 'context', `${marketId}.yaml`);
   const pack = parseContextPack(readPackFile(path), path);
   if (pack.market_id !== marketId) {
     throw new PackLoadError(path, `market_id "${pack.market_id}" does not match file name`);
   }
   return pack;
+}
+
+export function loadContextPack(marketId: string): ContextPack {
+  return loadContextPackFrom(packsRoot(), marketId);
+}
+
+export function listContextPackIds(rootDir = packsRoot()): string[] {
+  return readdirSync(join(rootDir, 'context'))
+    .filter((f) => f.endsWith('.yaml'))
+    .map((f) => f.replace(/\.yaml$/, ''))
+    .sort();
+}
+
+/** Every context pack in the registry, valid or the whole call fails. */
+export function loadAllContextPacks(rootDir = packsRoot()): ContextPack[] {
+  return listContextPackIds(rootDir).map((id) => loadContextPackFrom(rootDir, id));
 }
 
 export function loadVerticalPack(verticalId: string): VerticalPack {

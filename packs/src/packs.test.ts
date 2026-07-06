@@ -72,8 +72,8 @@ describe('P3 — pack loaders (gate)', () => {
       );
     });
 
-    it('a pack whose id does not match its file name is rejected', () => {
-      expect(() => loadContextPack('do')).toThrowError(PackLoadError); // no such file yet
+    it('a missing pack file is a load error', () => {
+      expect(() => loadContextPack('zz')).toThrowError(PackLoadError);
     });
   });
 

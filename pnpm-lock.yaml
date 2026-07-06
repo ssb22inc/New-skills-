@@ -75,6 +75,9 @@ importers:
 
   core:
     dependencies:
+      '@sycamore/packs':
+        specifier: workspace:*
+        version: link:../packs
       kysely:
         specifier: ^0.29.2
         version: 0.29.2

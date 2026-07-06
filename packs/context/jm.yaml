@@ -60,6 +60,7 @@ compliance:
   # Counsel-confirmed at pack launch (BUILD §7): Jamaica imposes no
   # US-style marketplace-facilitator collection duty today.
   marketplace_facilitator_collection: false
+  verified_by_counsel: true
 
 tax:
   gct_registration_threshold:

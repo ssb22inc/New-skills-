@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 18% (P0–P5 of 35 prompts). Production-live requires the HUMAN GATES below.**
+**Code-complete: 23% (P0–P6.5 of 35 prompts; Phase 0 done). Production-live requires the HUMAN GATES below.**
 
 Per SYCAMORE_FULL_BUILD_DIRECTIVE.md: continuous execution to code-complete on mocks;
 human gates implemented up to the boundary and marked, never faked.
@@ -16,8 +16,8 @@ human gates implemented up to the boundary and marked, never faked.
 | P4 | LLM router adapter | ✅ gate-passed |
 | P5 | Channel gateway (mock-first) | ✅ gate-passed (replay ×5 → 1 effect; 100 msg/s × 60 s zero drops) |
 | P6 | Feature flags + canary + observability | ✅ gate-passed (forced failure → auto-rollback → alert) — Phase 0 exit |
-| P6.5 | Market registry & region lockdown | 🔧 in progress |
-| P7–P12 | Identity → Voice pipeline | ⬜ queued |
+| P6.5 | Market registry & region lockdown | ✅ gate-passed (14 packs; DB-trigger lockdown; flip ceremony; chaos: 13 corrupted dark packs, jm zero errors) |
+| P7–P12 | Identity → Voice pipeline | 🔧 P7 next |
 | P13 | Genesis flow | ⬜ code queued · ⏸ HUMAN-GATE: 10 real sellers, voice-note-only |
 | P14 | Trust pages + PWA shell | ⬜ queued |
 | P15 | Double-entry ledger | ⬜ queued |
@@ -33,7 +33,7 @@ human gates implemented up to the boundary and marked, never faked.
 
 ## Test counts
 
-46 tests green (last full run): core 12 · packs 11 · adapters 10 · gateway 10 · trivial 3.
+54 tests green (last full run): core 20 · packs 11 · adapters 10 · gateway 10 · trivial 3.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 
 ## Human gates (production-live checklist — founder-owned, run in parallel)

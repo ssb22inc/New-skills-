@@ -11,3 +11,11 @@ export { createLogger } from './observability/logger.js';
 export { MetricsRegistry } from './observability/metrics.js';
 export { ErrorBudget, type AlertSink, type ErrorBudgetOptions } from './observability/alerts.js';
 export { canaryRelease, type CanaryOptions, type CanaryResult } from './canary/canary.js';
+export {
+  marketsRegistry,
+  MarketNotLiveError,
+  FlipBlockedError,
+  type MarketStatus,
+  type MarketsRegistry,
+  type FlipRequest,
+} from './markets/registry.js';

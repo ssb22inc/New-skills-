@@ -1,0 +1,59 @@
+market_id: bz
+name: Belize
+
+language:
+  primary: en-BZ
+  dialect: kriol
+  copy_directives:
+    - Greet warmly. Short sentences. No jargon, ever.
+    - Local phrasing where it lands naturally; never forced.
+    - Money is always plain numbers — "you spent X, it brought in Y."
+
+currency:
+  code: BZD
+  symbol: BZ$
+  exponent: 2
+
+timezone: America/Belize
+
+calendar:
+  holidays:
+    - name: New Year's Day
+      date: 01-01
+    - name: Good Friday
+      rule: easter-2
+    - name: Easter Monday
+      rule: easter+1
+    - name: Independence Day
+      date: 09-21
+    - name: Christmas Day
+      date: 12-25
+    - name: Boxing Day
+      date: 12-26
+
+channels:
+  primary: whatsapp
+  fallbacks:
+    - sms
+
+payments:
+  providers:
+    - id: pending-local-psp
+      kind: placeholder
+
+compliance:
+  data_protection:
+    law: Data Protection Act 2021 (Belize)
+    dpa_signature_required: true
+  # ALL fields below require local counsel verification before this market
+  # can flip live. Values here are drafting placeholders, not advice.
+  marketplace_facilitator_collection: false
+  verified_by_counsel: false
+
+tax:
+  gct_registration_threshold:
+    # Local sales-tax (VAT/GST/ABST) registration threshold, minor units.
+    # Placeholder pending counsel — flip is blocked regardless while
+    # verified_by_counsel is false.
+    amount_minor: 7500000
+    currency: BZD

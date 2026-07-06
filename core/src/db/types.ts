@@ -10,6 +10,8 @@ export interface MarketsTable {
   name: string;
   currency_code: string;
   timezone: string;
+  /** 'live' | 'dark' | 'retired' — defaults DARK; only a flip ceremony goes live. */
+  status: Generated<string>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

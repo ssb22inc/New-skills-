@@ -65,27 +65,22 @@ describe.runIf(reachable)('P2 — database core (gate)', () => {
     }
   });
 
-  it('seeds market jm idempotently', async () => {
+  it('seeds the market registry idempotently — jm live, everything else dark', async () => {
     await migrateToLatest(db);
     await seedMarkets(db);
     await seedMarkets(db); // second run must be a no-op, not an error
     const markets = await db.selectFrom('markets').selectAll().execute();
-    expect(markets).toHaveLength(1);
-    expect(markets[0]?.market_id).toBe('jm');
-    expect(markets[0]?.currency_code).toBe('JMD');
+    expect(markets.length).toBeGreaterThanOrEqual(14); // jm + Caribbean registry
+    const jm = markets.find((m) => m.market_id === 'jm');
+    expect(jm?.currency_code).toBe('JMD');
+    expect(jm?.status).toBe('live');
+    expect(markets.filter((m) => m.status === 'live')).toHaveLength(1);
   });
 
   it('cross-market isolation: a jm query can never return a do row', async () => {
-    await db
-      .insertInto('markets')
-      .values({
-        market_id: 'do',
-        name: 'República Dominicana',
-        currency_code: 'DOP',
-        timezone: 'America/Santo_Domingo',
-      })
-      .onConflict((oc) => oc.column('market_id').doNothing())
-      .execute();
+    // This test is about SCOPING, not lockdown — flip do live so its rows
+    // can exist at all (P6.5 lockdown otherwise blocks dark-market writes).
+    await db.updateTable('markets').set({ status: 'live' }).where('market_id', '=', 'do').execute();
 
     const jm = usersRepo(db, 'jm');
     const dom = usersRepo(db, 'do');
