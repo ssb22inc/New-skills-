@@ -42,6 +42,22 @@ export {
   type OrderStatus,
   type OrdersService,
 } from './orders/orders.js';
+export { detectIntent, buildIntentPrompt, INTENTS, type Intent } from './conversations/intents.js';
+export {
+  authorizeToolCalls,
+  INTENT_ALLOW_LIST,
+  TOOL_ARG_SCHEMAS,
+  type ToolName,
+  type ToolPolicy,
+  type ToolCallRequest,
+  type ToolCallDecision,
+} from './conversations/tools.js';
+export {
+  conversationEngine,
+  type ConversationAction,
+  type ConversationDeps,
+  type ConversationEngine,
+} from './conversations/engine.js';
 export {
   marketsRegistry,
   MarketNotLiveError,

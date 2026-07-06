@@ -79,6 +79,9 @@ importers:
 
   core:
     dependencies:
+      '@sycamore/adapters':
+        specifier: workspace:*
+        version: link:../adapters
       '@sycamore/packs':
         specifier: workspace:*
         version: link:../packs
@@ -91,6 +94,9 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^26.1.0

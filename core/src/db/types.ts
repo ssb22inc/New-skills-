@@ -114,6 +114,16 @@ export interface OrdersTable {
   updated_at: Generated<Date>;
 }
 
+export interface ConversationSessionsTable {
+  market_id: string;
+  user_id: string;
+  /** STOP flips this false in one UPDATE; RESUME restores. */
+  autopilot: Generated<boolean>;
+  state: Generated<Record<string, unknown>>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -124,4 +134,5 @@ export interface Database {
   capacity_holds: CapacityHoldsTable;
   capacity_waitlist: CapacityWaitlistTable;
   orders: OrdersTable;
+  conversation_sessions: ConversationSessionsTable;
 }
