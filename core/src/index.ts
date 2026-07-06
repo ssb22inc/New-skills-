@@ -114,6 +114,16 @@ export {
   type BookingRecord,
 } from './discovery/ranking.js';
 export {
+  pulseTick,
+  allocateBudget,
+  mutateDna,
+  CTR_FLOOR,
+  SCALE_CTR,
+  FATIGUE_FREQUENCY,
+  type CampaignState,
+  type PulseDecision,
+} from './pulse/campaigns.js';
+export {
   signalsService,
   SignalError,
   LEAD_MIN_DAYS,
