@@ -26,5 +26,11 @@ export type {
 export { mockPay, MOCK_PAY_SECRET, type WebhookDelivery } from './payments/mock-pay.js';
 export { lynkPayments, type LynkOptions } from './payments/lynk.js';
 export type { AsrAdapter, AsrResult } from './media/asr/types.js';
+export {
+  mockImagePolish,
+  mockVideo,
+  type ImagePolishAdapter,
+  type VideoAdapter,
+} from './media/image.js';
 export { mockAsr } from './media/asr/mock.js';
 export { whisperAsr, type WhisperOptions } from './media/asr/whisper.js';

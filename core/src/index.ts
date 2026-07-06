@@ -124,6 +124,15 @@ export {
   type PulseDecision,
 } from './pulse/campaigns.js';
 export {
+  studioPipeline,
+  complianceCheck,
+  StudioError,
+  BANNED_CLAIMS,
+  type StudioPipeline,
+  type AdOption,
+  type ComplianceResult,
+} from './studio/studio.js';
+export {
   signalsService,
   SignalError,
   LEAD_MIN_DAYS,
