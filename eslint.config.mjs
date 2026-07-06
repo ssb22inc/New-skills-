@@ -5,7 +5,14 @@ import prettier from 'eslint-config-prettier';
 export default tseslint.config(
   {
     // haven/ is an unrelated project with its own toolchain
-    ignores: ['haven/**', '**/dist/**', '**/node_modules/**', '**/coverage/**'],
+    ignores: [
+      'haven/**',
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/coverage/**',
+      '**/.next/**',
+      '**/next-env.d.ts',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
