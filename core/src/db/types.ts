@@ -98,6 +98,22 @@ export interface CapacityWaitlistTable {
   updated_at: Generated<Date>;
 }
 
+export interface OrdersTable {
+  id: Generated<string>;
+  market_id: string;
+  seller_id: string;
+  buyer_user_id: string;
+  window_id: string;
+  hold_id: string | null;
+  vertical_id: string;
+  units: number;
+  /** draft | held | confirmed | completed | cancelled | disputed */
+  status: Generated<string>;
+  completion_proof: string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -107,4 +123,5 @@ export interface Database {
   capacity_windows: CapacityWindowsTable;
   capacity_holds: CapacityHoldsTable;
   capacity_waitlist: CapacityWaitlistTable;
+  orders: OrdersTable;
 }

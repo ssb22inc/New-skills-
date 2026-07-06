@@ -36,6 +36,13 @@ export {
   type HoldOutcome,
 } from './capacity/engine.js';
 export {
+  ordersService,
+  OrderError,
+  type Order,
+  type OrderStatus,
+  type OrdersService,
+} from './orders/orders.js';
+export {
   marketsRegistry,
   MarketNotLiveError,
   FlipBlockedError,
