@@ -83,6 +83,16 @@ export {
   type GenesisStep,
 } from './genesis/genesis.js';
 export {
+  ledgerService,
+  computeSplit,
+  LedgerError,
+  LEDGER_ACCOUNTS,
+  type LedgerService,
+  type LedgerAccount,
+  type LedgerEntryInput,
+  type SplitBps,
+} from './ledger/ledger.js';
+export {
   marketsRegistry,
   MarketNotLiveError,
   FlipBlockedError,

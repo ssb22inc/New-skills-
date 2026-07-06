@@ -152,6 +152,29 @@ export interface CatalogItemsTable {
   updated_at: Generated<Date>;
 }
 
+export interface LedgerTransactionsTable {
+  id: Generated<string>;
+  market_id: string;
+  /** capture | refund | release | payout | adjustment */
+  kind: string;
+  /** What this money movement is about (e.g. an order id). */
+  reference: string;
+  /** One transaction per (market, key) — webhooks WILL double-fire. */
+  idempotency_key: string;
+  created_at: Generated<Date>;
+}
+
+export interface LedgerEntriesTable {
+  id: Generated<string>;
+  market_id: string;
+  transaction_id: string | number | bigint;
+  account: string;
+  direction: string;
+  amount_minor: string | number | bigint;
+  currency: string;
+  created_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -165,4 +188,6 @@ export interface Database {
   conversation_sessions: ConversationSessionsTable;
   asr_glossary: AsrGlossaryTable;
   catalog_items: CatalogItemsTable;
+  ledger_transactions: LedgerTransactionsTable;
+  ledger_entries: LedgerEntriesTable;
 }

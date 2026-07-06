@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 46% (P0–P7 of 35 prompts; Phase 0 done). Production-live requires the HUMAN GATES below.**
+**Code-complete: 49% (P0–P7 of 35 prompts; Phase 0 done). Production-live requires the HUMAN GATES below.**
 
 Per SYCAMORE_FULL_BUILD_DIRECTIVE.md: continuous execution to code-complete on mocks;
 human gates implemented up to the boundary and marked, never faked.
@@ -25,7 +25,7 @@ human gates implemented up to the boundary and marked, never faked.
 | P12 | Voice pipeline | ✅ gate-passed-mock (20 patois fixtures ≥90% intent accuracy; glossary founder-gated; real-Whisper accuracy = staging item) |
 | P13 | Genesis flow | ✅ code gate-passed-mock (synthetic run: 7 exchanges, one session) · ⏸ HUMAN-GATE: 10 real sellers, voice-note-only, zero help |
 | P14 | Trust pages + PWA shell | ✅ gate-passed (2.3KB transferred vs 100KB budget; interactive 448ms on throttled 3G+4x CPU; Lighthouse run pending CI wiring) |
-| P15 | Double-entry ledger | ⬜ queued |
+| P15 | Double-entry ledger | ✅ gate-passed (10k fuzz reconciles to the cent; append-only enforced by DB; splits exact) |
 | P16 | Payment adapter + links | ⬜ code queued · ⏸ HUMAN-GATE: payment credentials + counsel custody sign-off |
 | P17–P19 | Splits → Shoebox | ⬜ queued · Phase-2 exit ⏸ HUMAN-GATE: 100 real paid orders |
 | P20–P25 | Marketplace, Pulse, Studio | ⬜ queued |
@@ -38,7 +38,7 @@ human gates implemented up to the boundary and marked, never faked.
 
 ## Test counts
 
-97 tests green (last full run): core 57 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
+102 tests green (last full run): core 62 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 
 ## Human gates (production-live checklist — founder-owned, run in parallel)
