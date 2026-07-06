@@ -23,7 +23,12 @@ export {
   type ReadinessEvent,
   type SellerState,
 } from './identity/readiness.js';
-export { identityService, sellerStateOf, type IdentityService, type Seller } from './identity/identity.js';
+export {
+  identityService,
+  sellerStateOf,
+  type IdentityService,
+  type Seller,
+} from './identity/identity.js';
 export {
   marketsRegistry,
   MarketNotLiveError,
