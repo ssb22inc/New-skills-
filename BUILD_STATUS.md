@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 77% (P0–P7 of 35 prompts; Phase 0 done). Production-live requires the HUMAN GATES below.**
+**Code-complete: 80% (P0–P26 of 35 prompts, mock-complete). Production-live requires the HUMAN GATES below.**
 
 Per SYCAMORE_FULL_BUILD_DIRECTIVE.md: continuous execution to code-complete on mocks;
 human gates implemented up to the boundary and marked, never faked.
@@ -36,7 +36,7 @@ human gates implemented up to the boundary and marked, never faked.
 | P23 | Signal ingestion | ✅ gate-passed (seeded schedule → correct boosts at 1–3d lead; idempotent matcher) |
 | P24 | Campaign engine (Pulse core) | ✅ gate-passed (four behaviors reproduced deterministically; human caps absolute; plain-language narration) |
 | P25 | Studio speak-to-create | ✅ gate-passed-mock (voice→approved ad E2E; no-fabrication is a permanent CI check; compliance is code) |
-| P26 | Ad publishing + co-op pools | ⬜ code queued · ⏸ HUMAN-GATE: ad credentials + live co-op ≥20 sellers |
+| P26 | Ad publishing + co-op pools | ✅ code gate-passed-mock (24-seller co-op: per-seller trust-page landings, badged auditions, spend attributes to the cent, once-only reconcile, balanced ledger charge) · ⏸ HUMAN-GATE: ad credentials + live co-op ≥20 sellers |
 | P27–P29 | Watchman → Builder/Bursar | ⬜ queued |
 | P30 | Herald + Chairman + Cockpit | ⬜ queued · ⏸ HUMAN-GATE (partial): live channel pilots |
 | P31 | Market #2 by pack alone | ⬜ queued |
@@ -45,7 +45,7 @@ human gates implemented up to the boundary and marked, never faked.
 
 ## Test counts
 
-137 tests green (last full run): core 97 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
+139 tests green (last full run): core 99 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 
 ## Human gates (production-live checklist — founder-owned, run in parallel)

@@ -33,4 +33,12 @@ export {
   type VideoAdapter,
 } from './media/image.js';
 export { mockAsr } from './media/asr/mock.js';
+export {
+  mockAds,
+  type AdPlatformAdapter,
+  type AdCampaignRequest,
+  type AdCampaignHandle,
+  type AdSpendReport,
+  type CarouselCard,
+} from './ads/types.js';
 export { whisperAsr, type WhisperOptions } from './media/asr/whisper.js';

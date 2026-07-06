@@ -39,6 +39,8 @@ export interface SellersTable {
   /** active | suspended — orthogonal to readiness progress. */
   standing: Generated<string>;
   completed_orders: Generated<number>;
+  /** Geography for co-op pools (P26); Genesis will collect it. */
+  parish: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -245,6 +247,29 @@ export interface PulseBoostsTable {
   updated_at: Generated<Date>;
 }
 
+export interface CoopCampaignsTable {
+  id: Generated<string>;
+  market_id: string;
+  vertical_id: string;
+  parish: string;
+  external_id: string;
+  budget_minor: string | number | bigint;
+  reconciled: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface CoopAttributionsTable {
+  id: Generated<string>;
+  market_id: string;
+  campaign_id: string;
+  seller_id: string;
+  spend_minor: string | number | bigint;
+  impressions: number;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -265,4 +290,6 @@ export interface Database {
   review_revisions: ReviewRevisionsTable;
   signals: SignalsTable;
   pulse_boosts: PulseBoostsTable;
+  coop_campaigns: CoopCampaignsTable;
+  coop_attributions: CoopAttributionsTable;
 }

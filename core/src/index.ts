@@ -175,3 +175,4 @@ export {
   type MarketsRegistry,
   type FlipRequest,
 } from './markets/registry.js';
+export { coopService, CoopError, type CoopService } from './pulse/coop.js';
