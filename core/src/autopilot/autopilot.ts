@@ -1,5 +1,5 @@
 import type { Kysely } from 'kysely';
-import type { LlmRouter } from '@sycamore/adapters';
+import type { LlmRouter, PaymentAdapter } from '@sycamore/adapters';
 import type { ContextPack, VerticalPack } from '@sycamore/packs';
 import { formatAmount } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
@@ -18,6 +18,7 @@ export interface ToolExecution {
     | { kind: 'cancelled'; orderId: string }
     | { kind: 'rescheduled'; orderId: string }
     | { kind: 'quote'; amountMinor: number; rendered: string }
+    | { kind: 'payment_link'; url: string; amountMinor: number }
     | { kind: 'refused'; reason: string };
 }
 
@@ -32,6 +33,8 @@ export interface AutopilotDeps {
   contextPack: ContextPack;
   verticalPacks: Map<string, VerticalPack>;
   proposeToolCalls?: (intent: Intent, text: string) => Promise<ToolCallRequest[]>;
+  /** P16: payment links issued in chat, through the vendor adapter. */
+  payments?: PaymentAdapter;
 }
 
 /**
@@ -102,6 +105,26 @@ export function autopilot(deps: AutopilotDeps, marketId: string) {
         }
         await orders.reschedule(orderId, targetWindowId);
         return { kind: 'rescheduled', orderId };
+      }
+      case 'create_payment_link': {
+        if (!deps.payments) return { kind: 'refused', reason: 'payments not configured' };
+        const { orderId } = args as { orderId: string };
+        const order = await orders.get(orderId);
+        if (!order || order.buyer_user_id !== userId) {
+          return { kind: 'refused', reason: 'order not found for this customer' };
+        }
+        const window = await deps.db
+          .selectFrom('capacity_windows')
+          .where('id', '=', order.window_id)
+          .selectAll()
+          .executeTakeFirstOrThrow();
+        const amountMinor = Number(window.unit_price_minor) * order.units;
+        const link = await deps.payments.createLink({
+          orderRef: order.id,
+          amountMinor,
+          currency: deps.contextPack.currency.code,
+        });
+        return { kind: 'payment_link', url: link.url, amountMinor };
       }
       case 'quote_price': {
         const { windowId, units } = args as { windowId: string; units: number };

@@ -93,6 +93,11 @@ export {
   type SplitBps,
 } from './ledger/ledger.js';
 export {
+  handlePaymentEvent,
+  handlePaymentWebhook,
+  type PaymentEventOutcome,
+} from './payments/handler.js';
+export {
   marketsRegistry,
   MarketNotLiveError,
   FlipBlockedError,

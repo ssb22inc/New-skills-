@@ -19,6 +19,7 @@ export const TOOL_ARG_SCHEMAS = {
     .object({ orderId: z.string().uuid(), targetWindowId: z.string().uuid() })
     .strict(),
   quote_price: z.object({ windowId: z.string().uuid(), units: z.number().int().min(1) }).strict(),
+  create_payment_link: z.object({ orderId: z.string().uuid() }).strict(),
 } as const;
 
 export type ToolName = keyof typeof TOOL_ARG_SCHEMAS;
@@ -32,6 +33,7 @@ export const INTENT_ALLOW_LIST: Record<Intent, ToolPolicy[]> = {
   book: [
     { tool: 'check_availability', maxCalls: 3 },
     { tool: 'place_hold', maxCalls: 1 },
+    { tool: 'create_payment_link', maxCalls: 1 },
   ],
   cancel: [{ tool: 'cancel_order', maxCalls: 1 }],
   reschedule: [
