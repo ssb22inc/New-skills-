@@ -86,11 +86,9 @@ describe.runIf(reachable)('P19 — The Shoebox (gate)', () => {
         currency: 'JMD',
         idempotencyKey: `cap:${order.id}`,
       });
-      let net = amount;
       if (i % 10 === 3) {
         const refund = 20_000;
         seededRefunds += refund;
-        net -= refund;
         await settlement.ledger.refund({
           orderRef: order.id,
           amountMinor: refund,
