@@ -118,7 +118,7 @@ export function ordersService(db: Kysely<Database>, marketId: string) {
         }
         await trx
           .updateTable('orders')
-          .set({ status: 'completed', completion_proof: proof })
+          .set({ status: 'completed', completion_proof: proof, completed_at: new Date() })
           .where('id', '=', orderId)
           .execute();
         await emitEvent(trx, { marketId, topic: 'order.completed', payload: { orderId, proof } });

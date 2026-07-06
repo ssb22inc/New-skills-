@@ -94,6 +94,13 @@ export {
 } from './ledger/ledger.js';
 export { settlementService, type SettlementService } from './settlement/settlement.js';
 export {
+  disputeService,
+  DISPUTE_WINDOW_MS,
+  type DisputeService,
+  type DisputeOutcome,
+  type EvidenceFile,
+} from './trust/disputes.js';
+export {
   handlePaymentEvent,
   handlePaymentWebhook,
   type PaymentEventOutcome,

@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 54% (P0–P7 of 35 prompts; Phase 0 done). Production-live requires the HUMAN GATES below.**
+**Code-complete: 57% (P0–P7 of 35 prompts; Phase 0 done). Production-live requires the HUMAN GATES below.**
 
 Per SYCAMORE_FULL_BUILD_DIRECTIVE.md: continuous execution to code-complete on mocks;
 human gates implemented up to the boundary and marked, never faked.
@@ -28,7 +28,8 @@ human gates implemented up to the boundary and marked, never faked.
 | P15 | Double-entry ledger | ✅ gate-passed (10k fuzz reconciles to the cent; append-only enforced by DB; splits exact) |
 | P16 | Payment adapter + links | ✅ code gate-passed-mock (double-fire ×5 → 1 effect; out-of-order refund retries then applies once) · ⏸ HUMAN-GATE: partner sandbox + counsel custody sign-off |
 | P17 | Splits, release, payouts | ✅ gate-passed (1,000-order sim w/ 20% referrals balances to the cent; payout batch idempotent) |
-| P18–P19 | Refunds/disputes → Shoebox | 🔧 P18 next · Phase-2 exit ⏸ HUMAN-GATE: 100 real paid orders |
+| P18 | Refunds, disputes, evidence | ✅ gate-passed (§5.3-3/4 green; 4-claims/4-sellers/30d downgrade fires; 5th claim → human) |
+| P19 | The Shoebox | 🔧 next · Phase-2 exit ⏸ HUMAN-GATE: 100 real paid orders |
 | P20–P25 | Marketplace, Pulse, Studio | ⬜ queued |
 | P26 | Ad publishing + co-op pools | ⬜ code queued · ⏸ HUMAN-GATE: ad credentials + live co-op ≥20 sellers |
 | P27–P29 | Watchman → Builder/Bursar | ⬜ queued |
@@ -39,7 +40,7 @@ human gates implemented up to the boundary and marked, never faked.
 
 ## Test counts
 
-106 tests green (last full run): core 66 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
+111 tests green (last full run): core 71 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 
 ## Human gates (production-live checklist — founder-owned, run in parallel)

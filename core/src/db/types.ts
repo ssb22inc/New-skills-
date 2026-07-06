@@ -23,6 +23,8 @@ export interface UsersTable {
   phone: string;
   display_name: string;
   role: Generated<string>;
+  /** standard | restricted — refund-abuse downgrades privileges (P18). */
+  trust_level: Generated<string>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -111,6 +113,7 @@ export interface OrdersTable {
   units: number;
   /** Overflow routing (P22) stamps the incumbent who referred the buyer. */
   referred_by_seller_id: string | null;
+  completed_at: Date | string | null;
   /** draft | held | confirmed | completed | cancelled | disputed */
   status: Generated<string>;
   completion_proof: string | null;
@@ -179,6 +182,19 @@ export interface LedgerEntriesTable {
   created_at: Generated<Date>;
 }
 
+export interface DisputesTable {
+  id: Generated<string>;
+  market_id: string;
+  order_id: string;
+  opened_by_user_id: string;
+  reason: string;
+  /** open | auto_refunded | under_review | resolved */
+  status: Generated<string>;
+  evidence: JSONColumnType<Record<string, unknown>>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -194,4 +210,5 @@ export interface Database {
   catalog_items: CatalogItemsTable;
   ledger_transactions: LedgerTransactionsTable;
   ledger_entries: LedgerEntriesTable;
+  disputes: DisputesTable;
 }

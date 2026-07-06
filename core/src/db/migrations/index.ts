@@ -11,6 +11,7 @@ import * as asrGlossary from './0009_asr_glossary.js';
 import * as catalog from './0010_catalog.js';
 import * as ledger from './0011_ledger.js';
 import * as settlement from './0012_settlement.js';
+import * as disputes from './0013_disputes.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -30,6 +31,7 @@ export const migrations: Record<string, Migration> = {
   '0010_catalog': catalog,
   '0011_ledger': ledger,
   '0012_settlement': settlement,
+  '0013_disputes': disputes,
 };
 
 export const migrationProvider: MigrationProvider = {
