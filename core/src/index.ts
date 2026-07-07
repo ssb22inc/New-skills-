@@ -227,3 +227,16 @@ export {
   type VendorPricing,
   type SwapProposal,
 } from './agents/bursar.js';
+export {
+  heraldService,
+  HeraldError,
+  type HeraldService,
+  type PilotEvent,
+} from './agents/herald.js';
+export {
+  chairmanService,
+  ChairmanError,
+  type ChairmanService,
+  type MemoItem,
+  type WakeInput,
+} from './agents/chairman.js';

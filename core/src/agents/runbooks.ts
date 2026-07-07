@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { GOLDEN_VITALS } from './watchman.js';
@@ -38,8 +38,11 @@ export class RunbookLoadError extends Error {
 }
 
 export function runbooksRoot(): string {
+  // Env override for bundled runtimes (same pattern as packsRoot); the
+  // join() form (not `new URL(...)`) keeps webpack from treating the
+  // directory as a bundleable asset.
   if (process.env.SYCAMORE_RUNBOOKS_DIR) return process.env.SYCAMORE_RUNBOOKS_DIR;
-  return fileURLToPath(new URL('runbooks/', import.meta.url));
+  return join(dirname(fileURLToPath(import.meta.url)), 'runbooks');
 }
 
 export function loadRunbooks(rootDir = runbooksRoot()): Runbook[] {
