@@ -78,9 +78,8 @@ describe('P31 — the sacred core-diff gate', () => {
     },
   );
 
-  it('working tree carries no /core edits either', () => {
-    expect(git('status', '--porcelain', '--', 'core/')).toBe('');
-  });
+  // NOTE: no working-tree check here — later prompts (P32+) legitimately
+  // change /core. The gate is the pinned baseline..jm-plus-do range only.
 });
 
 describe.runIf(reachable)('P31 — DO staging stands up by pack alone', () => {

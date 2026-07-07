@@ -240,3 +240,10 @@ export {
   type MemoItem,
   type WakeInput,
 } from './agents/chairman.js';
+export { hurricaneMode, HurricaneError, type HurricaneMode } from './hurricane/hurricane.js';
+export {
+  HURRICANE_RUNBOOK,
+  scoreRehearsal,
+  type RunbookStep,
+  type RehearsalScore,
+} from './hurricane/runbook.js';

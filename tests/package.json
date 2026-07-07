@@ -9,7 +9,10 @@
     "typecheck": "tsc --noEmit",
     "load:gateway": "tsx src/load/gateway-load.ts",
     "golden": "vitest run src/golden",
-    "perf:trust": "tsx src/perf/trust-page-budget.ts"
+    "perf:trust": "tsx src/perf/trust-page-budget.ts",
+    "chaos:partner-down": "vitest run src/chaos/partner-down.chaos.test.ts",
+    "chaos:whatsapp": "vitest run src/chaos/whatsapp-degraded.chaos.test.ts",
+    "chaos:pg-failover": "vitest run src/chaos/pg-failover.chaos.test.ts"
   },
   "dependencies": {
     "@sycamore/adapters": "workspace:*",

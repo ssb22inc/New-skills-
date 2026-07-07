@@ -319,6 +319,24 @@ export interface RadarItemsTable {
   updated_at: Generated<Date>;
 }
 
+export interface HurricaneStatesTable {
+  market_id: string;
+  active: Generated<boolean>;
+  reason: string;
+  activated_at: Date | string | null;
+  updated_at: Generated<Date>;
+}
+
+export interface HurricaneImpactsTable {
+  id: Generated<string>;
+  market_id: string;
+  order_id: string;
+  /** pending | rebooked | refunded — enforced by DB check. */
+  disposition: Generated<string>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -345,4 +363,6 @@ export interface Database {
   agent_actions: AgentActionsTable;
   surveys: SurveysTable;
   radar_items: RadarItemsTable;
+  hurricane_states: HurricaneStatesTable;
+  hurricane_impacts: HurricaneImpactsTable;
 }

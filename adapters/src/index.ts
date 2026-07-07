@@ -26,6 +26,7 @@ export type {
 export { mockPay, MOCK_PAY_SECRET, type WebhookDelivery } from './payments/mock-pay.js';
 export { lynkPayments, type LynkOptions } from './payments/lynk.js';
 export { azulPayments, type AzulOptions } from './payments/azul.js';
+export { failoverPayments } from './payments/failover.js';
 export type { AsrAdapter, AsrResult } from './media/asr/types.js';
 export {
   mockImagePolish,
