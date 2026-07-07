@@ -1,6 +1,10 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 100% (P0–P33, all 35 prompts, mock-complete — tagged v1.0-code-complete). Production-live requires the HUMAN GATES below.**
+**Code-complete: 100% (P0–P33, all 35 prompts, mock-complete — v1.0-code-complete = commit 1483e10). Production-live requires the HUMAN GATES below.**
+
+> Note: the annotated tag `v1.0-code-complete` exists locally but this remote
+> only accepts branch pushes; re-run `git tag -a v1.0-code-complete 1483e10 && git push origin v1.0-code-complete`
+> from an unrestricted clone (or cut a GitHub Release at that commit).
 
 Per SYCAMORE_FULL_BUILD_DIRECTIVE.md: continuous execution to code-complete on mocks;
 human gates implemented up to the boundary and marked, never faked.
