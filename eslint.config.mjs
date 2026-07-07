@@ -12,6 +12,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/.next/**',
       '**/next-env.d.ts',
+      // Runs inside the k6 runtime (k6/* modules, __ENV/__VU globals).
+      'tests/src/load/k6-profiles.js',
     ],
   },
   js.configs.recommended,

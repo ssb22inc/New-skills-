@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 97% (P0–P32 of 35 prompts, mock-complete). Production-live requires the HUMAN GATES below.**
+**Code-complete: 100% (P0–P33, all 35 prompts, mock-complete — tagged v1.0-code-complete). Production-live requires the HUMAN GATES below.**
 
 Per SYCAMORE_FULL_BUILD_DIRECTIVE.md: continuous execution to code-complete on mocks;
 human gates implemented up to the boundary and marked, never faked.
@@ -43,11 +43,12 @@ human gates implemented up to the boundary and marked, never faked.
 | P30 | Herald + Chairman + Cockpit | ✅ code gate-passed-mock (change ships through full chain w/ founder tap; injected fault healed pre-impact; GEO JSON-LD + local pages; pilot fraud filter + holdout lift; disclosed-only forum; memo tested-items-only; zero spend authority; /cockpit pure-HTML) · ⏸ HUMAN-GATE (partial): live channel pilots — Phase 5 exit |
 | P31 | Market #2 by pack alone | ✅ gate-passed (DO staging by pack copy + azul adapter only; /core diff vs JM-only baseline EMPTY and enforced by test in CI; full DOP order settles; jm query returns zero do rows) |
 | P32 | Hurricane Mode + chaos program | ✅ code gate-passed-mock (staging rehearsal scored within runbook targets: DB-enforced freeze, rebook+refund waves idempotent to the cent, broadcasts, recovery promo; chaos calendar + 3 runnable drills in CI) · ⏸ HUMAN-GATE: timed PROD rehearsal |
-| P33 | Credit Passport v1 | ⬜ queued |
+| P33 | Credit Passport v1 | ✅ gate-passed (export matches ledger to the cent; ed25519-signed canonical JSON verifiable by a third party with only the document; tamper = dead signature; human PDF attached) |
 
 ## Test counts
 
-172 tests green (last full run): core 124 · golden 6 · markets 2 · chaos 3 · packs 11 · adapters 10 · gateway 10 · trivial 3.
+172 tests green (last full run): core 127 · tests 12 (golden 6, markets 2, chaos 3, trivial 1) · packs 11 · adapters 10 · gateway 10 · web 1 · worker 1.
+k6 load profiles (§5.5: normal day, Friday spike 20×, cruise surge 10×, viral seller 100×): tests/src/load/k6-profiles.js.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 
 ## Human gates (production-live checklist — founder-owned, run in parallel)

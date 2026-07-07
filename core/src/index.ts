@@ -247,3 +247,12 @@ export {
   type RunbookStep,
   type RehearsalScore,
 } from './hurricane/runbook.js';
+export {
+  passportService,
+  verifyPassport,
+  canonicalJson,
+  generatePassportKeys,
+  type PassportService,
+  type CreditPassport,
+  type PassportPayload,
+} from './passport/passport.js';
