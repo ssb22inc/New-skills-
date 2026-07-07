@@ -213,3 +213,17 @@ export {
   type MentorMessage,
   type MentorFinding,
 } from './agents/mentor.js';
+export {
+  builderPipeline,
+  type BuilderPipeline,
+  type BuilderRun,
+  type BuilderStage,
+  type AgentChange,
+} from './agents/builder.js';
+export {
+  bursarService,
+  BursarError,
+  type BursarService,
+  type VendorPricing,
+  type SwapProposal,
+} from './agents/bursar.js';

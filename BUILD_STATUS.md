@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 85% (P0–P28 of 35 prompts, mock-complete). Production-live requires the HUMAN GATES below.**
+**Code-complete: 88% (P0–P29 of 35 prompts, mock-complete). Production-live requires the HUMAN GATES below.**
 
 Per SYCAMORE_FULL_BUILD_DIRECTIVE.md: continuous execution to code-complete on mocks;
 human gates implemented up to the boundary and marked, never faked.
@@ -39,7 +39,7 @@ human gates implemented up to the boundary and marked, never faked.
 | P26 | Ad publishing + co-op pools | ✅ code gate-passed-mock (24-seller co-op: per-seller trust-page landings, badged auditions, spend attributes to the cent, once-only reconcile, balanced ledger charge) · ⏸ HUMAN-GATE: ad credentials + live co-op ≥20 sellers |
 | P27 | Watchman + Fixer | ✅ gate-passed (injected fault drill: known fault self-heals via versioned runbook, actions recorded; novel fault escalates with ZERO actions; tampered runbook stopped pre-execution) |
 | P28 | Listener + Scout + Mentor | ✅ gate-passed (survey→radar loop closes on seeded data; radar needs pain×market×lane + revenue estimate or it parks; Mentor cites a data source per line, skips when nothing, never judges taste) |
-| P29 | Builder + Bursar | ⬜ queued |
+| P29 | Builder + Bursar | ✅ gate-passed (quarterly drill: bad change caught at sandbox, simulation, canary AND founder tap; 72h auto-rollback fires on decay; cheaper non-DPA vendor blocked before the founder queue and again at execution) |
 | P30 | Herald + Chairman + Cockpit | ⬜ queued · ⏸ HUMAN-GATE (partial): live channel pilots |
 | P31 | Market #2 by pack alone | ⬜ queued |
 | P32 | Hurricane Mode + chaos program | ⬜ code queued · ⏸ HUMAN-GATE: timed prod rehearsal |
@@ -47,7 +47,7 @@ human gates implemented up to the boundary and marked, never faked.
 
 ## Test counts
 
-151 tests green (last full run): core 111 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
+155 tests green (last full run): core 115 · golden 6 · packs 11 · adapters 10 · gateway 10 · trivial 3.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 
 ## Human gates (production-live checklist — founder-owned, run in parallel)
