@@ -200,3 +200,16 @@ export {
   type Runbook,
   type RunbookAction,
 } from './agents/runbooks.js';
+export {
+  listenerService,
+  COMPLAINT_LANES,
+  type ListenerService,
+  type ComplaintPattern,
+} from './agents/listener.js';
+export { scoutService, CLEARANCE, type ScoutService, type RadarProposal } from './agents/scout.js';
+export {
+  mentorService,
+  type MentorService,
+  type MentorMessage,
+  type MentorFinding,
+} from './agents/mentor.js';

@@ -294,6 +294,31 @@ export interface AgentActionsTable {
   created_at: Generated<Date>;
 }
 
+export interface SurveysTable {
+  id: Generated<string>;
+  market_id: string;
+  user_id: string;
+  /** The one-tap answer (P28 Listener). */
+  thumbs_up: boolean;
+  comment: string | null;
+  created_at: Generated<Date>;
+}
+
+export interface RadarItemsTable {
+  id: Generated<string>;
+  market_id: string;
+  lane: string;
+  pain_score: number;
+  market_score: number;
+  lane_clearance: boolean;
+  revenue_estimate_minor: string | number | bigint | null;
+  /** cleared | parked — enforced by DB check. */
+  status: string;
+  source: string;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -318,4 +343,6 @@ export interface Database {
   coop_attributions: CoopAttributionsTable;
   agent_incidents: AgentIncidentsTable;
   agent_actions: AgentActionsTable;
+  surveys: SurveysTable;
+  radar_items: RadarItemsTable;
 }
