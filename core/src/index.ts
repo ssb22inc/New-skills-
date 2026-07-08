@@ -266,3 +266,8 @@ export {
   type BlackoutMode,
   type OfflineAction,
 } from './lifeline/lifeline.js';
+export {
+  exportIdentities,
+  rebindToChannel,
+  type EscrowedIdentity,
+} from './sovereignty/identity-escrow.js';

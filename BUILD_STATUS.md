@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 100% (P0–P33, all 35 prompts, mock-complete — v1.0-code-complete = commit 1483e10). Production-live requires the HUMAN GATES below.**
+**Code-complete: 100% (P0–P35 incl. Survivability Addendum, mock-complete — v1.0-code-complete = commit 1483e10, v1.1-survivability = this HEAD). Production-live requires the HUMAN GATES below.**
 
 > Note: the annotated tag `v1.0-code-complete` exists locally but this remote
 > only accepts branch pushes; re-run `git tag -a v1.0-code-complete 1483e10 && git push origin v1.0-code-complete`
@@ -49,11 +49,11 @@ human gates implemented up to the boundary and marked, never faked.
 | P32 | Hurricane Mode + chaos program | ✅ code gate-passed-mock (staging rehearsal scored within runbook targets: DB-enforced freeze, rebook+refund waves idempotent to the cent, broadcasts, recovery promo; chaos calendar + 3 runnable drills in CI) · ⏸ HUMAN-GATE: timed PROD rehearsal |
 | P33 | Credit Passport v1 | ✅ gate-passed (export matches ledger to the cent; ed25519-signed canonical JSON verifiable by a third party with only the document; tamper = dead signature; human PDF attached) |
 | P34 | Lifeline (offline & low-bandwidth) | ✅ gate-passed (48h blackout drill: SMS lane parses+verifies, orders land dark, PWA queue double-delivery → exactly-once, ledger to the cent, escrow paused during blackout, dispute windows +48h; auto lite mode) |
-| P35 | Channel sovereignty | ⬜ in progress |
+| P35 | Channel sovereignty | ✅ gate-passed (channel-blindness is permanent CI law: zero WhatsApp refs in /core code + doors work with WhatsApp absent; sovereign PWA chat door at /c; identity escrow export+rebind; cost & quality-rating Watchman vitals with runbooks; eviction drill: blast → rebind → book on alternate door, 80% recovery vs ≥70% target) |
 
 ## Test counts
 
-172 tests green (last full run): core 127 · tests 12 (golden 6, markets 2, chaos 3, trivial 1) · packs 11 · adapters 10 · gateway 10 · web 1 · worker 1.
+178 tests green (last full run): core 127 · tests 18 (golden 6, markets 2, chaos 3, lifeline 3, sovereignty 3, trivial 1) · packs 11 · adapters 10 · gateway 10 · web 1 · worker 1.
 k6 load profiles (§5.5: normal day, Friday spike 20×, cruise surge 10×, viral seller 100×): tests/src/load/k6-profiles.js.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 

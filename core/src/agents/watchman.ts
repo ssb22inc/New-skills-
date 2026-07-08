@@ -12,6 +12,9 @@ export const GOLDEN_VITALS = [
   'payment_success_rate',
   'order_confirm_rate',
   'webhook_lag_ms',
+  // P35d — the Bursar's channel hedges are watched vitals, not vibes.
+  'per_conversation_cost',
+  'channel_quality_rating',
 ] as const;
 export type GoldenVital = (typeof GOLDEN_VITALS)[number];
 

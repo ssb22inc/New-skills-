@@ -16,3 +16,4 @@ export {
   enqueueInbound,
 } from './queue.js';
 export { twilioSmsChannel, type TwilioSmsOptions } from './adapters/twilio-sms.js';
+export { pwaChannel, PWA_CHANNEL_SECRET } from './adapters/pwa-chat.js';
