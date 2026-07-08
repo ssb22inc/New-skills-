@@ -18,6 +18,7 @@ import * as coop from './0016_coop.js';
 import * as agents from './0017_agents.js';
 import * as keeper from './0018_keeper.js';
 import * as hurricane from './0019_hurricane.js';
+import * as lifeline from './0020_lifeline.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -44,6 +45,7 @@ export const migrations: Record<string, Migration> = {
   '0017_agents': agents,
   '0018_keeper': keeper,
   '0019_hurricane': hurricane,
+  '0020_lifeline': lifeline,
 };
 
 export const migrationProvider: MigrationProvider = {

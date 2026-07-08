@@ -48,6 +48,8 @@ human gates implemented up to the boundary and marked, never faked.
 | P31 | Market #2 by pack alone | ✅ gate-passed (DO staging by pack copy + azul adapter only; /core diff vs JM-only baseline EMPTY and enforced by test in CI; full DOP order settles; jm query returns zero do rows) |
 | P32 | Hurricane Mode + chaos program | ✅ code gate-passed-mock (staging rehearsal scored within runbook targets: DB-enforced freeze, rebook+refund waves idempotent to the cent, broadcasts, recovery promo; chaos calendar + 3 runnable drills in CI) · ⏸ HUMAN-GATE: timed PROD rehearsal |
 | P33 | Credit Passport v1 | ✅ gate-passed (export matches ledger to the cent; ed25519-signed canonical JSON verifiable by a third party with only the document; tamper = dead signature; human PDF attached) |
+| P34 | Lifeline (offline & low-bandwidth) | ✅ gate-passed (48h blackout drill: SMS lane parses+verifies, orders land dark, PWA queue double-delivery → exactly-once, ledger to the cent, escrow paused during blackout, dispute windows +48h; auto lite mode) |
+| P35 | Channel sovereignty | ⬜ in progress |
 
 ## Test counts
 

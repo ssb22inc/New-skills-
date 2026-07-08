@@ -256,3 +256,13 @@ export {
   type CreditPassport,
   type PassportPayload,
 } from './passport/passport.js';
+export {
+  liteModeService,
+  blackoutMode,
+  replayOfflineQueue,
+  LifelineError,
+  LITE_FLIP,
+  type LiteModeService,
+  type BlackoutMode,
+  type OfflineAction,
+} from './lifeline/lifeline.js';

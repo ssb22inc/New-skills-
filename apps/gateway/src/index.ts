@@ -15,3 +15,4 @@ export {
   createInboundWorker,
   enqueueInbound,
 } from './queue.js';
+export { twilioSmsChannel, type TwilioSmsOptions } from './adapters/twilio-sms.js';

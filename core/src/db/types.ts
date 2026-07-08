@@ -25,6 +25,8 @@ export interface UsersTable {
   role: Generated<string>;
   /** standard | restricted — refund-abuse downgrades privileges (P18). */
   trust_level: Generated<string>;
+  /** P34 Lifeline: text-only sessions while this user's link is bad. */
+  lite_mode: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -324,7 +326,19 @@ export interface HurricaneStatesTable {
   active: Generated<boolean>;
   reason: string;
   activated_at: Date | string | null;
+  /** P34 Blackout Mode: commerce continues, money release pauses. */
+  blackout: Generated<boolean>;
+  blackout_started_at: Date | string | null;
+  blackout_ended_at: Date | string | null;
   updated_at: Generated<Date>;
+}
+
+export interface OfflineReplaysTable {
+  id: Generated<string>;
+  market_id: string;
+  idempotency_key: string;
+  kind: string;
+  created_at: Generated<Date>;
 }
 
 export interface HurricaneImpactsTable {
@@ -365,4 +379,5 @@ export interface Database {
   radar_items: RadarItemsTable;
   hurricane_states: HurricaneStatesTable;
   hurricane_impacts: HurricaneImpactsTable;
+  offline_replays: OfflineReplaysTable;
 }

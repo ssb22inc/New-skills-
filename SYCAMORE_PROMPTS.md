@@ -294,3 +294,25 @@ history. Portable by design (the paradoxical-lock-in strategy).
 - Before every phase gate: adversarial suite §5.7.
 
 *v1.0 — 34 prompts, 6 phases, every gate executable. Start at P0.*
+
+---
+
+# PHASE 7 — SURVIVABILITY (Addendum v1.0; full text in SYCAMORE_SURVIVABILITY.md)
+
+## P34 — Lifeline: offline & low-bandwidth survival
+Same features, degraded transport. SMS as a FULL fallback channel; automatic
+per-user lite mode; offline-first PWA queue with exactly-once replay; Blackout
+Mode (commerce continues record-now-settle-later, escrow release pauses,
+dispute windows widen by the outage); server truth off-island.
+**✅ GATE (blackout drill, every June 1):** 48h simulated data loss — SMS orders
+land, queue replays once, ledger to the cent, zero duplicate side effects,
+dispute windows correctly extended.
+
+## P35 — Channel sovereignty: surviving a WhatsApp rule change
+WhatsApp is the door, not the house. Channel-blindness CI test (core builds and
+golden paths pass with the WhatsApp adapter deleted); sovereign PWA chat door;
+identity escrow (export + rebind to any channel); Bursar hedges (secondary BSP,
+per-conversation cost + quality rating as Watchman vitals); quarterly eviction
+fire drill.
+**✅ GATE:** channel-blindness CI test green; one full eviction drill executed in
+staging with recovery metrics recorded (≥70% of daily flow within 24h by drill #3).
