@@ -277,6 +277,8 @@ import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays } from "./date
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
+import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, validQ } from "./ngn.js";
+import { NGN_SAMPLES } from "./ngn-samples.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -344,14 +346,8 @@ async function askModel(providerId, prompt, maxTokens = 1000) {
   return t;
 }
 
-/* ---- validate AI-generated questions before they enter the bank ---- */
-const validQ = (x) =>
-  x && typeof x.stem === "string" && x.stem.length > 20 &&
-  Array.isArray(x.options) && x.options.length >= 3 && x.options.every((o) => typeof o === "string") &&
-  typeof x.rationale === "string" && x.rationale.length > 40 &&
-  [1, 2, 3].includes(x.diff) &&
-  ((x.type === "mc" && Number.isInteger(x.answer) && x.answer >= 0 && x.answer < x.options.length) ||
-   (x.type === "sata" && Array.isArray(x.answer) && x.answer.length > 0 && x.answer.every((n) => Number.isInteger(n) && n >= 0 && n < x.options.length)));
+/* validQ (src/ngn.js) validates questions before they enter the bank —
+   all six item types, mirroring the factory's validItem. */
 const DAILY_GOAL = 8;
 
 const freshCards = () => CARDS.map(() => ({ interval: 0, due: todayStr() }));
@@ -486,7 +482,7 @@ export default function App() {
   });
 
   const dueCount = srs.filter((c) => c.due <= todayStr()).length;
-  const allQuestions = useMemo(() => [...QUESTIONS, ...customQs], [customQs]);
+  const allQuestions = useMemo(() => [...QUESTIONS, ...NGN_SAMPLES, ...customQs], [customQs]);
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
 
   const resetAll = async () => {
@@ -711,7 +707,9 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
       Math.abs(itemRating(b, calibration) - pickTargetRating(ability, b.cat)));
     const pick = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
     setLastCat(pick.cat);
-    setQ(pick); setSel([]); setOrder([]); setPhase("answering");
+    setQ(pick);
+    setSel(pick.type === "bowtie" ? { actions: [], condition: null, parameters: [] } : []);
+    setOrder([]); setPhase("answering");
   };
 
   const nextQuestion = () => {
@@ -724,6 +722,9 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     if (q.type === "mc") ok = sel[0] === q.answer;
     if (q.type === "sata") ok = same(sel, q.answer);
     if (q.type === "order") ok = sameOrder(order, q.answer);
+    if (q.type === "matrix") ok = scoreMatrix(sel, q.answer);
+    if (q.type === "bowtie") ok = scoreBowtie(sel, q.answer);
+    if (q.type === "cloze") ok = scoreCloze(sel, q.answer);
     setWasCorrect(ok);
     record(q, ok);
     setSessionN((n) => n + 1);
@@ -787,6 +788,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
   );
 
   const isFlagged = flagged.includes(q.id);
+  const ext = ngnExt(q); // NGN payloads: rows/columns/actions/conditions/parameters/dropdowns
   const toggleSel = (i) => {
     if (phase !== "answering") return;
     if (q.type === "mc") setSel([i]);
@@ -796,18 +798,117 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     if (phase !== "answering") return;
     setOrder((o) => o.includes(i) ? o.filter((x) => x !== i) : [...o, i]);
   };
+  const setMatrixRow = (row, col) => {
+    if (phase !== "answering") return;
+    setSel((s) => { const n = [...s]; n[row] = col; return n; });
+  };
+  const setClozeGap = (gap, opt) => {
+    if (phase !== "answering") return;
+    setSel((s) => { const n = [...s]; n[gap] = opt; return n; });
+  };
+  const toggleBowtie = (slot, i, cap) => {
+    if (phase !== "answering") return;
+    setSel((s) => {
+      if (slot === "condition") return { ...s, condition: s.condition === i ? null : i };
+      const cur = s[slot] ?? [];
+      if (cur.includes(i)) return { ...s, [slot]: cur.filter((x) => x !== i) };
+      if (cur.length >= cap) return s; // per-column cap
+      return { ...s, [slot]: [...cur, i] };
+    });
+  };
 
-  const canSubmit = q.type === "order" ? order.length === q.options.length : sel.length > 0;
+  const canSubmit =
+    q.type === "order" ? order.length === q.options.length :
+    q.type === "matrix" ? ext.rows.every((_, i) => Number.isInteger(sel[i])) :
+    q.type === "bowtie" ? (sel.actions?.length === 2 && Number.isInteger(sel.condition) && sel.parameters?.length === 2) :
+    q.type === "cloze" ? ext.dropdowns.every((_, i) => Number.isInteger(sel[i])) :
+    sel.length > 0;
+
+  const TYPE_LABEL = {
+    mc: "MULTIPLE CHOICE", sata: "SELECT ALL", order: "ORDERED",
+    matrix: "MATRIX", bowtie: "BOW-TIE", cloze: "CLOZE (DROPDOWNS)",
+  };
 
   return (
     <div className="stack">
       <section className="card">
         <div className="q-meta mono">
           <span>{q.cat.toUpperCase()}{q.ai ? " · ✨ AI" : ""}{mode === "review" ? " · RETRY" : ""}</span>
-          <span>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {q.type === "sata" ? "SELECT ALL" : q.type === "order" ? "ORDERED" : "MULTIPLE CHOICE"}</span>
+          <span>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {TYPE_LABEL[q.type] ?? "MULTIPLE CHOICE"}</span>
         </div>
-        <p className="stem">{q.stem}</p>
+        {q.type === "cloze" ? (
+          <p className="stem">
+            {q.stem.split(/\{(\d+)\}/).map((part, idx) => {
+              if (idx % 2 === 0) return <span key={idx}>{part}</span>;
+              const gap = Number(part);
+              return (
+                <select key={idx} className="cloze-dd"
+                  value={Number.isInteger(sel[gap]) ? sel[gap] : ""}
+                  disabled={phase !== "answering"}
+                  onChange={(e) => setClozeGap(gap, Number(e.target.value))}>
+                  <option value="" disabled>Select…</option>
+                  {ext.dropdowns[gap].map((o, oi) => <option key={oi} value={oi}>{o}</option>)}
+                </select>
+              );
+            })}
+          </p>
+        ) : (
+          <p className="stem">{q.stem}</p>
+        )}
 
+        {q.type === "matrix" && (
+          <div className="ngn-matrix" role="table">
+            <div className="mx-row mx-head" style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
+              <span />
+              {ext.columns.map((c, ci) => <span key={ci} className="small mono mx-colhead">{c}</span>)}
+            </div>
+            {ext.rows.map((r, ri) => (
+              <div key={ri} className="mx-row" style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
+                <span className="small">
+                  {phase === "feedback" && <strong>{sel[ri] === q.answer[ri] ? "✓ " : "✗ "}</strong>}{r}
+                </span>
+                {ext.columns.map((c, ci) => {
+                  let cls = "mx-cell";
+                  if (sel[ri] === ci) cls += " picked";
+                  if (phase === "feedback") {
+                    if (q.answer[ri] === ci) cls += " right";
+                    else if (sel[ri] === ci) cls += " wrong";
+                  }
+                  return (
+                    <button key={ci} className={cls} onClick={() => setMatrixRow(ri, ci)} aria-label={`${r}: ${c}`}>
+                      {sel[ri] === ci ? "●" : "○"}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {q.type === "bowtie" && (
+          <div className="bt-cols">
+            {[
+              { slot: "actions", label: "Actions to take · pick 2", items: ext.actions, cap: 2, picked: sel.actions ?? [], keyed: q.answer.actions },
+              { slot: "condition", label: "Condition · pick 1", items: ext.conditions, cap: 1, picked: Number.isInteger(sel.condition) ? [sel.condition] : [], keyed: [q.answer.condition] },
+              { slot: "parameters", label: "Parameters to monitor · pick 2", items: ext.parameters, cap: 2, picked: sel.parameters ?? [], keyed: q.answer.parameters },
+            ].map((col) => (
+              <div key={col.slot} className="bt-col">
+                <p className="small mono bt-label">{col.label.toUpperCase()}</p>
+                {col.items.map((it, i) => {
+                  let cls = "opt bt-opt";
+                  if (col.picked.includes(i)) cls += " picked";
+                  if (phase === "feedback") {
+                    if (col.keyed.includes(i)) cls += " right";
+                    else if (col.picked.includes(i)) cls += " wrong";
+                  }
+                  return <button key={i} className={cls} onClick={() => toggleBowtie(col.slot, i, col.cap)}>{it}</button>;
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {["mc", "sata", "order"].includes(q.type) && (
         <div className="opts">
           {q.options.map((opt, i) => {
             let cls = "opt";
@@ -830,6 +931,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
             return <button key={i} className={cls} onClick={() => toggleOrder(i)}>{pos !== -1 ? <span className="ord mono">{pos + 1}</span> : <span className="ord mono dim">·</span>}{opt}</button>;
           })}
         </div>
+        )}
 
         {phase === "answering" && (
           <div className="row">
@@ -843,6 +945,9 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
             <p className="fb-head mono">{wasCorrect ? `CORRECT · +${10 * q.diff} XP` : "INCORRECT — IT RETURNS IN REVIEW MISSES"}</p>
             {q.type === "order" && !wasCorrect && (
               <p className="small"><strong>Correct order:</strong> {q.answer.map((i) => q.options[i]).join(" → ")}</p>
+            )}
+            {q.type === "cloze" && !wasCorrect && (
+              <p className="small"><strong>Correct choices:</strong> {q.answer.map((a, i) => ext.dropdowns[i][a]).join(" · ")}</p>
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
             {q.ai && <p className="small">✨ AI-generated item — solid for practice, but verify anything surprising against your course materials.</p>}
@@ -1239,6 +1344,26 @@ function Style() {
       .opt.picked{border-color:var(--teal);background:var(--pick-bg)}
       .opt.right{border-color:var(--teal);background:var(--right-bg);font-weight:600}
       .opt.wrong{border-color:var(--coral);background:var(--wrong-bg)}
+      /* NGN: matrix */
+      .ngn-matrix{margin-bottom:8px;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+      .mx-row{display:grid;gap:0;align-items:center;border-top:1px solid var(--line)}
+      .mx-row:first-child{border-top:none}
+      .mx-row>span{padding:10px 12px}
+      .mx-head{background:var(--surface)}
+      .mx-colhead{text-align:center;font-size:10px;letter-spacing:.08em}
+      .mx-cell{background:var(--surface);border:none;border-left:1px solid var(--line);padding:12px 4px;font-size:16px;cursor:pointer;color:var(--ink)}
+      .mx-cell.picked{background:var(--pick-bg);color:var(--accent-ink);font-weight:700}
+      .mx-cell.right{background:var(--right-bg);color:var(--accent-ink);font-weight:700}
+      .mx-cell.wrong{background:var(--wrong-bg);color:var(--coral)}
+      /* NGN: bow-tie */
+      .bt-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+      @media (max-width:520px){.bt-cols{grid-template-columns:1fr}}
+      .bt-col{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:8px}
+      .bt-label{margin-bottom:2px;font-size:10px;letter-spacing:.08em}
+      .bt-opt{padding:9px 10px;font-size:13px}
+      /* NGN: cloze */
+      .cloze-dd{display:inline-block;margin:0 4px;background:var(--surface);color:var(--ink);border:1.5px solid var(--teal);border-radius:8px;padding:6px 8px;font-family:'Archivo',sans-serif;font-size:14px;font-weight:600;max-width:100%}
+      .cloze-dd:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
       .ord{min-width:20px;height:20px;border-radius:6px;background:var(--teal);color:var(--btn-ink);display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
       .ord.dim{background:var(--bar-bg);color:var(--muted)}
       /* feedback: tinted frame carries the verdict; the rationale itself sits on a
