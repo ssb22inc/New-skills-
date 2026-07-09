@@ -275,6 +275,8 @@ function levelFor(xp) {
    Extracted to src/dates.js so tests can exercise them (PULSERN_BUILD.md §10.4). */
 import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays } from "./dates.js";
 import { supabase } from "./supabase.js";
+import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
+import { migrateBlob } from "./state.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -371,6 +373,9 @@ export default function App() {
   const [srs, setSrs] = useState(freshCards); // per-card {interval, due}
   const [customQs, setCustomQs] = useState([]); // AI-generated questions
   const [provider, setProvider] = useState("claude");
+  const [ability, setAbility] = useState(() => emptyAbility(CATS)); // Elo θ per category
+  const [plan, setPlan] = useState(null);           // weekly planner cache (§5.7)
+  const [calibration, setCalibration] = useState({}); // bank item ratings {id: {rating}}
 
   /* ---- load saved progress once ---- */
   useEffect(() => {
@@ -378,22 +383,24 @@ export default function App() {
       try {
         const raw = await store.get(STORE_KEY);
         if (raw) {
-          const s = JSON.parse(raw);
-          setTheme(s.theme ?? "light");
-          setXp(s.xp ?? 0);
-          setBestRun(s.bestRun ?? 0);
-          setLog(s.log ?? []);
-          setFlagged(s.flagged ?? []);
-          setStreak({ count: 0, lastDay: null, shield: true, ...(s.streak ?? {}) });
+          const s = migrateBlob(JSON.parse(raw), CATS); // legacy saves get defaults (§4)
+          setTheme(s.theme);
+          setXp(s.xp);
+          setBestRun(s.bestRun);
+          setLog(s.log);
+          setFlagged(s.flagged);
+          setStreak(s.streak);
           const d = s.daily ?? { day: todayStr(), answered: 0 };
           setDaily(d.day === todayStr() ? d : { day: todayStr(), answered: 0 });
-          if (Array.isArray(s.srs) && s.srs.length) {
+          if (s.srs.length) {
             // Merge saved schedule with current card list: keep existing
             // intervals, seed fresh entries for any cards added in an update.
             setSrs(CARDS.map((_, i) => s.srs[i] ?? { interval: 0, due: todayStr() }));
           }
-          setCustomQs(Array.isArray(s.customQs) ? s.customQs : []);
-          setProvider(s.provider ?? "claude");
+          setCustomQs(s.customQs);
+          setProvider(s.provider);
+          setAbility(s.ability);
+          setPlan(s.plan);
         }
       } catch (e) {
         /* first visit — nothing saved yet */
@@ -407,26 +414,33 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider]);
+  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan]);
+
+  /* ---- item calibration: bank ratings sharpen targeting & ability updates ---- */
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase.from("questions").select("id, elo_rating").eq("approved", true);
+      if (!error && Array.isArray(data)) {
+        setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
+      }
+    })();
+  }, []);
 
   const answeredIds = log.map((l) => l.id);
   const acc = log.length ? log.filter((l) => l.correct).length / log.length : 0;
 
-  const readiness = useMemo(() => {
-    if (log.length < 12) return null; // refuse to estimate on thin data
-    const coverage = Math.min(log.length / 20, 1);
-    return Math.round(acc * 100 * (0.55 + 0.45 * coverage));
-  }, [log]);
+  // Elo/Rasch readiness: {pct, low, high, theta, weakest} or null under 12 answers
+  const readiness = useMemo(() => readinessFrom(ability, log), [ability, log]);
 
   const readyLabel = readiness == null
     ? (log.length ? `Estimating — ${12 - log.length} more answers needed` : "No data yet")
-    : readiness >= 75 ? "High (estimate) — trending above passing standard"
-    : readiness >= 55 ? "Borderline (estimate) — keep drilling weak areas"
+    : readiness.pct >= 75 ? "High (estimate) — trending above passing standard"
+    : readiness.pct >= 55 ? "Borderline (estimate) — keep drilling weak areas"
     : "Below passing standard (estimate) — focus review";
 
   const touchDay = () => {
@@ -449,6 +463,17 @@ export default function App() {
   const record = (q, correct) => {
     setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct }]);
     touchDay();
+    const { ability: nextAbility, itemDelta } = updateAbility(ability, q, correct, calibration);
+    setAbility(nextAbility);
+    // Fire-and-forget item telemetry — bank items only (case-study pseudo-ids
+    // and locally-generated questions aren't in the shared bank).
+    if (calibration[q.id] !== undefined) {
+      fetch("/api/telemetry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: q.id, correct, itemDelta }),
+      }).catch(() => {});
+    }
     if (correct) {
       setXp((x) => x + 10 * q.diff);
       setRun((r) => { const n = r + 1; setBestRun((b) => Math.max(b, n)); return n; });
@@ -503,8 +528,9 @@ export default function App() {
       <main className="body">
         {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
           record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
+          ability={ability} calibration={calibration}
           srs={srs} setSrs={setSrs} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
-        {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} />}
+        {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
         {tab === "case" && <CaseStudy record={record} />}
         {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} srs={srs} setSrs={setSrs} touchDay={touchDay} />}
         {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} />}
@@ -535,7 +561,7 @@ function Today(props) {
   if (stage === "quiz") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 2 OF 2 · QUESTIONS</p>
-      <QBank record={props.record} log={props.log} flagged={props.flagged} setFlagged={props.setFlagged} questions={props.questions} provider={props.provider} auto onDone={() => setStage("done")} />
+      <QBank record={props.record} log={props.log} flagged={props.flagged} setFlagged={props.setFlagged} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} auto onDone={() => setStage("done")} />
     </div>
   );
 
@@ -579,8 +605,8 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
         <Ecg />
         <div className="vitals">
           <div className="vital">
-            <span className="vital-num">{readiness == null ? "--" : readiness}</span>
-            <span className="vital-lab">READINESS</span>
+            <span className="vital-num">{readiness == null ? "--" : `${readiness.low}–${readiness.high}%`}</span>
+            <span className="vital-lab">READINESS (ESTIMATE)</span>
           </div>
           <div className="vital">
             <span className="vital-num">{streak.count}</span>
@@ -647,7 +673,7 @@ function Ecg() {
 
 /* ================= QBANK ================= */
 
-function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions }) {
+function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {} }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [q, setQ] = useState(null);
   const [sel, setSel] = useState([]);
@@ -674,14 +700,15 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
 
   const pickFrom = (basePool) => {
     if (!basePool.length) { setPhase("done"); return; }
-    let pool = basePool.filter((x) => x.diff === diffTarget);
-
-    if (!pool.length) pool = basePool;
+    let pool = basePool;
     // interleave: avoid repeating the last category so related concepts stay mixed
     const interleaved = pool.filter((x) => x.cat !== lastCat);
     if (interleaved.length) pool = interleaved;
-    // break ties toward the weakest categories
-    pool = [...pool].sort((a, b) => catAccuracy(a.cat) - catAccuracy(b.cat));
+    // Elo targeting: prefer items rated nearest the ~70%-success sweet spot
+    // for their category (replaces the old diff-ladder sort).
+    pool = [...pool].sort((a, b) =>
+      Math.abs(itemRating(a, calibration) - pickTargetRating(ability, a.cat)) -
+      Math.abs(itemRating(b, calibration) - pickTargetRating(ability, b.cat)));
     const pick = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
     setLastCat(pick.cat);
     setQ(pick); setSel([]); setOrder([]); setPhase("answering");
