@@ -274,6 +274,7 @@ function levelFor(xp) {
 /* ---- date helpers for real multi-day spacing ----
    Extracted to src/dates.js so tests can exercise them (PULSERN_BUILD.md §10.4). */
 import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays } from "./dates.js";
+import { supabase } from "./supabase.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -289,20 +290,25 @@ const STORE_KEY = "pulsern-v1";
 ------------------------------------------------------------------------ */
 const store = {
   async get(key) {
-    if (typeof window !== "undefined" && window.storage?.get) {
-      const r = await window.storage.get(key); return r?.value ?? null;
-    }
-    if (typeof localStorage !== "undefined") return localStorage.getItem(key);
-    return null;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+    const { data, error } = await supabase.from("progress")
+      .select("blob").eq("user_id", session.user.id).eq("key", key).maybeSingle();
+    if (error || !data) return null;
+    return JSON.stringify(data.blob);
   },
   async set(key, value) {
-    if (typeof window !== "undefined" && window.storage?.set) return void (await window.storage.set(key, value));
-    if (typeof localStorage !== "undefined") localStorage.setItem(key, value);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    await supabase.from("progress").upsert({
+      user_id: session.user.id, key, blob: JSON.parse(value),
+      updated_at: new Date().toISOString(),
+    });
   },
   async delete(key) {
-
-    if (typeof window !== "undefined" && window.storage?.delete) return void (await window.storage.delete(key));
-    if (typeof localStorage !== "undefined") localStorage.removeItem(key);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
   },
 };
 
@@ -315,23 +321,23 @@ const store = {
    routes the others through a server-side proxy (e.g. LiteLLM/OpenRouter).
 ------------------------------------------------------------------------ */
 const AI_PROVIDERS = [
-  { id: "claude", name: "Claude Sonnet — Anthropic (US)", builtin: true, note: "Included in this preview. No key needed." },
-  { id: "gpt", name: "GPT series — OpenAI (US)", builtin: false, note: "Needs an API key via your server proxy in production." },
-  { id: "deepseek", name: "DeepSeek V3/R1 (China)", builtin: false, note: "Lowest cost tier. Needs an API key via proxy in production." },
-  { id: "qwen", name: "Qwen — Alibaba (China)", builtin: false, note: "Needs an API key via proxy in production." },
-  { id: "kimi", name: "Kimi — Moonshot (China)", builtin: false, note: "Needs an API key via proxy in production." },
+  { id: "claude", name: "Claude Sonnet — Anthropic (US)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
+  { id: "gpt", name: "GPT series — OpenAI (US)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
+  { id: "deepseek", name: "DeepSeek V3/R1 (China)", builtin: true, note: "Lowest cost tier. Routed through the PulseRN server." },
+  { id: "qwen", name: "Qwen — Alibaba (China)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
+  { id: "kimi", name: "Kimi — Moonshot (China)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
 ];
 
 async function askModel(providerId, prompt, maxTokens = 1000) {
   const p = AI_PROVIDERS.find((x) => x.id === providerId) || AI_PROVIDERS[0];
-  if (!p.builtin) { const e = new Error("KEY_REQUIRED"); e.code = "KEY_REQUIRED"; throw e; }
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const response = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ provider: p.id, prompt, maxTokens }),
   });
-  const data = await response.json();
-  const t = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "UPSTREAM");
+  const t = (data.text ?? "").trim();
   if (!t) throw new Error("EMPTY");
   return t;
 }
@@ -1006,13 +1012,18 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
       </section>
       <section className="card">
         <p className="eyebrow">Saved progress</p>
-        <p className="small">Your XP, streak, answer history, and flashcard schedule are stored on this device and reload automatically.</p>
+        <p className="small">Your XP, streak, answer history, and flashcard schedule sync to your account and reload on any device.</p>
         {!confirm
           ? <button className="btn ghost" onClick={() => setConfirm(true)}>Reset all progress…</button>
           : <div className="row">
               <button className="btn danger" onClick={() => { setConfirm(false); resetAll(); }}>Yes, erase everything</button>
               <button className="btn ghost" onClick={() => setConfirm(false)}>Keep my progress</button>
             </div>}
+      </section>
+      <section className="card">
+        <p className="eyebrow">Account</p>
+        <p className="small">Signing out keeps your synced progress safe — sign back in anywhere to continue.</p>
+        <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </section>
     </div>
   );
