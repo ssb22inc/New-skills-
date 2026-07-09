@@ -372,6 +372,7 @@ export default function App() {
   const [ability, setAbility] = useState(() => emptyAbility(CATS)); // Elo θ per category
   const [plan, setPlan] = useState(null);           // weekly planner cache (§5.7)
   const [calibration, setCalibration] = useState({}); // bank item ratings {id: {rating}}
+  const [bankQs, setBankQs] = useState(null);       // shared bank; null → offline fallback
 
   /* ---- load saved progress once ---- */
   useEffect(() => {
@@ -417,13 +418,20 @@ export default function App() {
     })();
   }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan]);
 
-  /* ---- item calibration: bank ratings sharpen targeting & ability updates ---- */
+  /* ---- shared bank + item calibration (one query feeds both) ----
+     RLS serves only approved, non-rejected rows. On any failure the
+     built-in local array stays in place as the offline fallback. */
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from("questions").select("id, elo_rating").eq("approved", true);
-      if (!error && Array.isArray(data)) {
-        setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
-      }
+      const { data, error } = await supabase.from("questions")
+        .select("id, cat, diff, type, stem, options, extra, answer, rationale, ai, elo_rating")
+        .eq("approved", true);
+      if (error || !Array.isArray(data) || !data.length) return;
+      setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
+      const items = data
+        .map(({ elo_rating, ...q }) => q)
+        .filter(validQ);
+      if (items.length) setBankQs(items);
     })();
   }, []);
 
@@ -482,7 +490,10 @@ export default function App() {
   });
 
   const dueCount = srs.filter((c) => c.due <= todayStr()).length;
-  const allQuestions = useMemo(() => [...QUESTIONS, ...NGN_SAMPLES, ...customQs], [customQs]);
+  const allQuestions = useMemo(
+    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES]), ...customQs],
+    [bankQs, customQs]
+  );
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
 
   const resetAll = async () => {
