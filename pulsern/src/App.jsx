@@ -271,18 +271,9 @@ function levelFor(xp) {
 
 /* ================= APP ================= */
 
-/* ---- date helpers for real multi-day spacing ---- */
-/* Local-date helpers. NEVER use toISOString() here — it returns the UTC date,
-   so a student studying at 9 PM in Florida would be logged as "tomorrow":
-   streaks would break and flashcards would come due a day early/late. */
-const fmtLocal = (d) => {
-  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-const todayStr = () => fmtLocal(new Date());
-const yesterdayStr = () => { const d = new Date(); d.setDate(d.getDate() - 1); return fmtLocal(d); };
-const twoDaysAgoStr = () => { const d = new Date(); d.setDate(d.getDate() - 2); return fmtLocal(d); };
-const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return fmtLocal(d); };
+/* ---- date helpers for real multi-day spacing ----
+   Extracted to src/dates.js so tests can exercise them (PULSERN_BUILD.md §10.4). */
+import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays } from "./dates.js";
 
 const STORE_KEY = "pulsern-v1";
 
