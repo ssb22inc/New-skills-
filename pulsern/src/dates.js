@@ -10,3 +10,8 @@ export const todayStr = () => fmtLocal(new Date());
 export const yesterdayStr = () => { const d = new Date(); d.setDate(d.getDate() - 1); return fmtLocal(d); };
 export const twoDaysAgoStr = () => { const d = new Date(); d.setDate(d.getDate() - 2); return fmtLocal(d); };
 export const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return fmtLocal(d); };
+export const weekStart = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to local Monday
+  return fmtLocal(d);
+};

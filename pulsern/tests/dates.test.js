@@ -2,7 +2,7 @@
    todayStr() equals a new Date()-derived local string;
    addDays(3) crosses month boundaries correctly. All dates LOCAL, never UTC. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { fmtLocal, todayStr, addDays } from "../src/dates.js";
+import { fmtLocal, todayStr, addDays, weekStart } from "../src/dates.js";
 
 describe("local-date helpers", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -36,5 +36,14 @@ describe("local-date helpers", () => {
 
   it("fmtLocal zero-pads month and day", () => {
     expect(fmtLocal(new Date(2026, 6, 9))).toBe("2026-07-09");
+  });
+
+  it("weekStart returns the local Monday, including on Sundays and Mondays", () => {
+    vi.setSystemTime(new Date(2026, 6, 9, 12, 0, 0)); // Thu Jul 9 2026
+    expect(weekStart()).toBe("2026-07-06");
+    vi.setSystemTime(new Date(2026, 6, 12, 23, 0, 0)); // Sun Jul 12
+    expect(weekStart()).toBe("2026-07-06");
+    vi.setSystemTime(new Date(2026, 6, 13, 0, 30, 0)); // Mon Jul 13
+    expect(weekStart()).toBe("2026-07-13");
   });
 });

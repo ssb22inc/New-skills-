@@ -19,5 +19,6 @@ export function migrateBlob(s, cats) {
     provider: s.provider ?? "claude",
     ability: { ...emptyAbility(cats), ...(s.ability ?? {}) },
     plan: s.plan ?? null,
+    examDate: s.examDate ?? null,
   };
 }

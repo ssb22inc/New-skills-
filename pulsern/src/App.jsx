@@ -273,7 +273,7 @@ function levelFor(xp) {
 
 /* ---- date helpers for real multi-day spacing ----
    Extracted to src/dates.js so tests can exercise them (PULSERN_BUILD.md §10.4). */
-import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays } from "./dates.js";
+import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays, weekStart } from "./dates.js";
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
@@ -371,6 +371,7 @@ export default function App() {
   const [provider, setProvider] = useState("claude");
   const [ability, setAbility] = useState(() => emptyAbility(CATS)); // Elo θ per category
   const [plan, setPlan] = useState(null);           // weekly planner cache (§5.7)
+  const [examDate, setExamDate] = useState(null);   // student's exam date (blob)
   const [calibration, setCalibration] = useState({}); // bank item ratings {id: {rating}}
   const [bankQs, setBankQs] = useState(null);       // shared bank; null → offline fallback
 
@@ -398,6 +399,7 @@ export default function App() {
           setProvider(s.provider);
           setAbility(s.ability);
           setPlan(s.plan);
+          setExamDate(s.examDate);
         }
       } catch (e) {
         /* first visit — nothing saved yet */
@@ -411,12 +413,12 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan]);
+  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate]);
 
   /* ---- shared bank + item calibration (one query feeds both) ----
      RLS serves only approved, non-rejected rows. On any failure the
@@ -500,8 +502,29 @@ export default function App() {
     try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
-    setSrs(freshCards()); setTab("today");
+    setSrs(freshCards()); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
   };
+
+  /* ---- weekly planner (§5.7): one LLM call per ISO week, cached in the blob ---- */
+  useEffect(() => {
+    if (!loaded || !examDate) return;
+    const wk = weekStart();
+    if (plan?.week === wk && Array.isArray(plan?.days) && plan.days.length) return;
+    (async () => {
+      try {
+        const r = await fetch("/api/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ examDate, ability, dueCount, answeredTotal: log.length, today: todayStr() }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok && Array.isArray(data.days) && data.days.length) setPlan({ week: wk, days: data.days });
+      } catch (e) { /* offline — keep whatever plan we had */ }
+    })();
+    // Deliberately NOT keyed on ability/log/dueCount: the plan refreshes when
+    // the ISO week rolls over or the exam date changes, not on every answer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, examDate, plan]);
 
   if (!loaded) return (
     <div className="app" data-theme={theme}>
@@ -535,12 +558,12 @@ export default function App() {
       <main className="body">
         {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
           record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
-          ability={ability} calibration={calibration}
+          ability={ability} calibration={calibration} plan={plan}
           srs={srs} setSrs={setSrs} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
         {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
         {tab === "case" && <CaseStudy record={record} />}
         {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} srs={srs} setSrs={setSrs} touchDay={touchDay} />}
-        {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} />}
+        {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} />}
       </main>
 
       <nav className="tabs" aria-label="Sections">
@@ -592,6 +615,21 @@ function Today(props) {
         <p className="small">{dueCount ? `${dueCount} flashcard${dueCount === 1 ? "" : "s"} due` : "No cards due"} + 8 smart questions · about 10 minutes</p>
       </section>
       <Monitor {...props} />
+      {Array.isArray(props.plan?.days) && props.plan.days.length > 0 && (
+        <section className="card">
+          <p className="eyebrow">This week's plan</p>
+          {props.plan.days.map((d) => (
+            <div key={d.day} className="cat-row">
+              <div className="cat-top">
+                <span className="small"><strong className="mono">{d.day.slice(5)}</strong> · {d.focusCat}</span>
+                <span className="small mono">{d.items}q</span>
+              </div>
+              <p className="small note">{d.note}</p>
+            </div>
+          ))}
+          <p className="small tip">Refreshes each week from your ability profile and exam date (set in Stats).</p>
+        </section>
+      )}
     </div>
   );
 }
@@ -962,7 +1000,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
             {q.ai && <p className="small">✨ AI-generated item — solid for practice, but verify anything surprising against your course materials.</p>}
-            <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} />
+            <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
             <button className="btn" onClick={advance}>Next question →</button>
           </div>
         )}
@@ -1124,12 +1162,19 @@ function Flashcards({ addXp, srs, setSrs, touchDay, embedded = false, onDone }) 
 
 /* ================= STATS ================= */
 
-function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, customCount }) {
+function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, customCount, examDate, setExamDate }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
   return (
     <div className="stack">
+      <section className="card">
+        <p className="eyebrow">Exam date</p>
+        <p className="small">Set your NCLEX date and Today gains a weekly plan built from your ability profile.</p>
+        <input type="date" className="select" aria-label="Exam date"
+          value={examDate ?? ""} min={addDays(1)}
+          onChange={(e) => setExamDate(e.target.value || null)} />
+      </section>
       <section className="card">
         <p className="eyebrow">Performance</p>
         <h2 className="h2">{log.length ? `${Math.round(acc * 100)}% overall accuracy` : "No questions answered yet"}</h2>
@@ -1227,23 +1272,54 @@ Respond ONLY with a raw JSON array (no markdown fences, no commentary) of 5 obje
 
 /* ================= AI TUTOR (provider-agnostic) ================= */
 
-function TutorExplain({ q, wasCorrect, provider = "claude" }) {
+function TutorExplain({ q, wasCorrect, provider = "claude", isBank = false }) {
   const [state, setState] = useState("idle"); // idle | loading | done | key | error
   const [text, setText] = useState("");
 
   const ask = async () => {
     setState("loading");
+    // Cache first (§5.6): bank items pay for each explanation exactly once, ever.
+    if (isBank) {
+      try {
+        const { data } = await supabase.from("tutor_cache")
+          .select("text").eq("item_id", q.id).eq("was_correct", wasCorrect).maybeSingle();
+        if (data?.text) { setText(data.text); setState("done"); return; }
+      } catch (e) { /* cache miss path below */ }
+    }
     try {
+      const ext = ngnExt(q);
+      const optionsLine =
+        Array.isArray(q.options) ? q.options.join(" | ")
+        : q.type === "matrix" ? `Rows: ${ext.rows.join(" | ")} — Columns: ${ext.columns.join(" | ")}`
+        : q.type === "bowtie" ? `Actions: ${ext.actions.join(" | ")} — Conditions: ${ext.conditions.join(" | ")} — Parameters: ${ext.parameters.join(" | ")}`
+        : q.type === "cloze" ? ext.dropdowns.map((d, i) => `Blank {${i}}: ${d.join(" / ")}`).join(" — ")
+        : "";
+      const answerLine =
+        q.type === "mc" ? q.options[q.answer]
+        : q.type === "sata" ? q.answer.map((i) => q.options[i]).join("; ")
+        : q.type === "order" ? q.answer.map((i) => q.options[i]).join(" → ")
+        : q.type === "matrix" ? ext.rows.map((r, i) => `${r} → ${ext.columns[q.answer[i]]}`).join("; ")
+        : q.type === "bowtie" ? `Actions: ${q.answer.actions.map((i) => ext.actions[i]).join("; ")} — Condition: ${ext.conditions[q.answer.condition]} — Parameters: ${q.answer.parameters.map((i) => ext.parameters[i]).join("; ")}`
+        : q.type === "cloze" ? q.answer.map((a, i) => ext.dropdowns[i][a]).join("; ")
+        : "";
       const t = await askModel(provider, `You are a warm, expert NCLEX tutor. A student ${wasCorrect ? "answered this question correctly and wants to understand it more deeply" : "just missed this question"}.
 
 Question: ${q.stem}
-Options: ${q.options.join(" | ")}
-Correct answer: ${Array.isArray(q.answer) ? q.answer.map((i) => q.options[i]).join("; ") : q.options[q.answer]}
+Options: ${optionsLine}
+Correct answer: ${answerLine}
 Textbook rationale: ${q.rationale}
 
-Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a tired student at midnight would understand, under 120 words. End with one short memory trick or mnemonic. No preamble, no headers.`);
+Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a tired student at midnight would understand, under 120 words. End with one short memory trick or mnemonic. No preamble, no headers. Educational exam prep only — do not give real-world dosing or treatment instructions.`);
       setText(t);
       setState("done");
+      // Write-through so the next student gets it free (service role, server-side).
+      if (isBank && t.length <= 2000) {
+        fetch("/api/tutor-cache", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId: q.id, wasCorrect, text: t }),
+        }).catch(() => {});
+      }
     } catch (e) {
       setState(e.code === "KEY_REQUIRED" ? "key" : "error");
     }
