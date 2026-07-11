@@ -1,8 +1,18 @@
 # PulseRN — Build & Verification Report
 
-Build executed per PULSERN_PROMPTS.md, prompts 0–12 complete with every
-verification gate green. Production deploy (Prompt 13's `vercel --prod`) is
-the one step that still needs your accounts — see "What's left" below.
+**Production: https://pulsern.vercel.app · Review console: https://pulsern.vercel.app/review/**
+
+Build executed per PULSERN_PROMPTS.md, prompts 0–13 complete with every
+verification gate green, including the post-deploy production smoke test:
+
+- Sign-in and Today dashboard render on the live site.
+- Answering a question fired live `/api/telemetry` (item stats and Elo moved
+  in the DB, correct direction) and the tutor's `/api/ai` call completed in
+  ~6s with `/api/tutor-cache` write-through — the cached explanation is
+  readable by signed-in students (pay-once verified).
+- Setting an exam date produced a live `/api/plan` 7-day plan rendered on
+  Today, leading with the weakest category.
+- `/review/` serves the Clinical Review Console.
 
 ## What was built and verified
 
@@ -46,11 +56,8 @@ reviewer-registered account.
 
 ## What's left (human tasks — HUMAN_TASKS.md)
 
-1. **H3 · Vercel**: import the GitHub repo (root directory: `pulsern/`),
-   framework Vite. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-   (client) and `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-   `OPENROUTER_API_KEY` (server). Then the tutor cache write-through and
-   `/api/*` routes go live (they cannot run under `vite preview`).
+1. ~~H3 · Vercel~~ — **done**: deployed at https://pulsern.vercel.app with all
+   five env vars; every `/api` route verified live.
 2. **H4 · GitHub secrets**: repo Settings → Secrets → Actions:
    `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENROUTER_API_KEY` —
    the twice-daily factory workflow needs them.
