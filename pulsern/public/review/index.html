@@ -48,15 +48,22 @@
 </div>
 
 <div id="app" style="display:none">
-  <p class="count" id="queueCount"></p>
-  <div id="item"></div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="skip" id="tabQueue" onclick="showTab('queue')" style="font-weight:700">Review queue</button>
+    <button class="skip" id="tabHealth" onclick="showTab('health')">Item health</button>
+  </div>
+  <div id="queueView">
+    <p class="count" id="queueCount"></p>
+    <div id="item"></div>
+  </div>
+  <div id="healthView" style="display:none"></div>
 </div>
 
 <script>
 /* CONFIG — public values only. The anon key is safe here; RLS decides
    what a signed-in reviewer can see and change (SQL in the build doc). */
-const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+const SUPABASE_URL = 'https://xlfdywudgamrnzjwtrtd.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_wH9FG2HgmC9hrvqNO4hZiQ_eJi86SUd';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let queue = [], idx = 0, user = null;
@@ -156,6 +163,47 @@ async function decide(approve) {
   const { error } = await sb.from('questions').update(patch).eq('id', q.id);
   if (error) { alert('Save failed: ' + error.message); return; }
   idx++; render();
+}
+
+/* ---- Health tab: approved items whose aggregate stats look broken ----
+   itemHealth copied verbatim from src/ability-engine.js (no bundler here). */
+function itemHealth({ timesAnswered, timesCorrect, rating }) {
+  if (timesAnswered < 20) return { status: "collecting", flag: false };
+  const p = timesCorrect / timesAnswered;
+  if (p > 0.95) return { status: "too easy — no signal", flag: true };
+  if (p < 0.15) return { status: "too hard or miskeyed — audit the key", flag: true };
+  if (rating < 900 || rating > 1750) return { status: "rating drifted — re-review", flag: true };
+  return { status: "healthy", flag: false };
+}
+
+function showTab(t) {
+  document.getElementById('queueView').style.display = t === 'queue' ? 'block' : 'none';
+  document.getElementById('healthView').style.display = t === 'health' ? 'block' : 'none';
+  document.getElementById('tabQueue').style.fontWeight = t === 'queue' ? '700' : '400';
+  document.getElementById('tabHealth').style.fontWeight = t === 'health' ? '700' : '400';
+  if (t === 'health') loadHealth();
+}
+
+async function loadHealth() {
+  const el = document.getElementById('healthView');
+  el.innerHTML = '<div class="card empty"><p class="sub">Checking approved items…</p></div>';
+  const { data, error } = await sb.from('questions')
+    .select('id, cat, type, diff, stem, times_answered, times_correct, elo_rating')
+    .eq('approved', true).is('rejected_at', null);
+  if (error) { el.innerHTML = `<div class="card empty"><p class="sub">Load failed: ${esc(error.message)}</p></div>`; return; }
+  const flagged = (data || []).map((q) => ({
+    q, h: itemHealth({ timesAnswered: q.times_answered, timesCorrect: q.times_correct, rating: q.elo_rating ?? 1300 }),
+  })).filter((x) => x.h.flag);
+  if (!flagged.length) {
+    el.innerHTML = `<div class="card empty"><p style="font-size:32px">✅</p><p><b>No flagged items.</b></p><p class="sub">Every approved item with enough data looks statistically healthy (${(data || []).length} approved items checked).</p></div>`;
+    return;
+  }
+  el.innerHTML = flagged.map(({ q, h }) => `
+    <div class="card">
+      <div class="meta"><span>#${q.id}</span><span>${esc(q.cat)}</span><span>${esc(q.type)}</span><span>diff ${q.diff}</span></div>
+      <p class="stem">${esc(q.stem.slice(0, 140))}${q.stem.length > 140 ? '…' : ''}</p>
+      <div class="ainotes"><b>⚠ ${esc(h.status)}</b> · answered ${q.times_answered}× · ${q.times_answered ? Math.round((q.times_correct / q.times_answered) * 100) : 0}% correct · rating ${q.elo_rating == null ? 'unseeded' : Math.round(q.elo_rating)}</div>
+    </div>`).join('');
 }
 </script>
 </body>
