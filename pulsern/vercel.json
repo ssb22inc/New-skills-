@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/review", "destination": "/review/index.html" },
+    { "source": "/((?!api|assets|review).*)", "destination": "/index.html" }
+  ]
+}

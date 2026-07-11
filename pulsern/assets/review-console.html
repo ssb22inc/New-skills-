@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PulseRN · Clinical Review Console</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root { --ink:#12211e; --teal:#0e6e5c; --bg:#f4f7f6; --card:#fff; --line:#dde5e2;
+          --ok:#0e6e5c; --no:#b3432e; --warn:#9a6a12; --muted:#5a6a65; }
+  * { box-sizing:border-box; margin:0; }
+  body { font:16px/1.55 system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--ink); padding:16px; max-width:820px; margin:0 auto; }
+  h1 { font-size:20px; margin-bottom:2px; } h1 b { color:var(--teal); }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
+  .meta { display:flex; gap:8px; flex-wrap:wrap; font:600 11px/1 ui-monospace,monospace; color:var(--muted); margin-bottom:10px; text-transform:uppercase; }
+  .meta span { background:var(--bg); padding:4px 8px; border-radius:6px; }
+  .stem { font-weight:600; margin-bottom:10px; white-space:pre-wrap; }
+  .opt { padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; font-size:15px; }
+  .opt.key { border-color:var(--ok); background:#e8f3ef; font-weight:600; }
+  .rationale { background:var(--bg); border-left:3px solid var(--teal); padding:10px 12px; border-radius:0 8px 8px 0; font-size:14px; margin:10px 0; }
+  .ainotes { background:#fcf3e2; border-left:3px solid var(--warn); padding:10px 12px; border-radius:0 8px 8px 0; font-size:13px; color:#5c4410; margin:10px 0; }
+  .row { display:flex; gap:8px; margin-top:12px; }
+  button { flex:1; padding:12px; border:0; border-radius:10px; font:700 15px system-ui; cursor:pointer; }
+  .approve { background:var(--ok); color:#fff; } .reject { background:var(--no); color:#fff; }
+  .skip { background:var(--bg); color:var(--ink); border:1px solid var(--line) !important; }
+  textarea, input { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font:15px system-ui; margin-top:8px; }
+  .count { font:700 13px ui-monospace,monospace; color:var(--teal); }
+  .empty { text-align:center; padding:40px 16px; color:var(--muted); }
+  .grid { font-size:14px; } .grid table { border-collapse:collapse; width:100%; margin:8px 0; }
+  .grid td, .grid th { border:1px solid var(--line); padding:6px 8px; text-align:left; }
+  .grid td.key { background:#e8f3ef; font-weight:700; }
+  #auth.card input { margin-top:8px; }
+  .checklist { font-size:13px; color:var(--muted); margin:10px 0; }
+  .checklist li { margin-bottom:3px; }
+</style>
+</head>
+<body>
+<h1>PULSE<b>RN</b> · Clinical Review Console</h1>
+<p class="sub">Nothing goes live to students until you approve it here. You are the safety gate.</p>
+
+<div id="auth" class="card">
+  <p><b>Reviewer sign-in</b> (licensed RN account)</p>
+  <input id="email" type="email" placeholder="email" autocomplete="username">
+  <input id="pw" type="password" placeholder="password" autocomplete="current-password">
+  <div class="row"><button class="approve" onclick="signIn()">Sign in</button></div>
+  <p class="sub" id="autherr" style="color:var(--no)"></p>
+</div>
+
+<div id="app" style="display:none">
+  <p class="count" id="queueCount"></p>
+  <div id="item"></div>
+</div>
+
+<script>
+/* CONFIG — public values only. The anon key is safe here; RLS decides
+   what a signed-in reviewer can see and change (SQL in the build doc). */
+const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR-ANON-PUBLIC-KEY';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let queue = [], idx = 0, user = null;
+
+async function signIn() {
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: document.getElementById('email').value,
+    password: document.getElementById('pw').value,
+  });
+  if (error) { document.getElementById('autherr').textContent = error.message; return; }
+  user = data.user;
+  document.getElementById('auth').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  await loadQueue();
+}
+
+async function loadQueue() {
+  const { data, error } = await sb.from('questions')
+    .select('*').eq('approved', false).is('rejected_at', null)
+    .order('created_at', { ascending: true }).limit(200);
+  if (error) { alert('Load failed: ' + error.message + '\nCheck the reviewer RLS policies (build doc §Gate 4).'); return; }
+  queue = data || []; idx = 0; render();
+}
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function answerView(q) {
+  const ex = q.extra || {};
+  if (q.type === 'mc')
+    return q.options.map((o,i)=>`<div class="opt${i===q.answer?' key':''}">${i===q.answer?'✓ ':''}${esc(o)}</div>`).join('');
+  if (q.type === 'sata')
+    return q.options.map((o,i)=>`<div class="opt${q.answer.includes(i)?' key':''}">${q.answer.includes(i)?'☑ ':'☐ '}${esc(o)}</div>`).join('');
+  if (q.type === 'order')
+    return q.answer.map((oi,pos)=>`<div class="opt key">${pos+1}. ${esc(q.options[oi])}</div>`).join('');
+  if (q.type === 'matrix') {
+    const rows = ex.rows.map((r,ri)=>`<tr><td>${esc(r)}</td>${ex.columns.map((c,ci)=>`<td class="${q.answer[ri]===ci?'key':''}">${q.answer[ri]===ci?'✓':''}</td>`).join('')}</tr>`).join('');
+    return `<div class="grid"><table><tr><th></th>${ex.columns.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>${rows}</table></div>`;
+  }
+  if (q.type === 'bowtie') {
+    const a = q.answer;
+    return `<div class="grid">
+      <p><b>Actions to take:</b> ${a.actions.map(i=>esc(ex.actions[i])).join(' · ')}</p>
+      <p><b>Condition:</b> ${esc(ex.conditions[a.condition])}</p>
+      <p><b>Parameters to monitor:</b> ${a.parameters.map(i=>esc(ex.parameters[i])).join(' · ')}</p>
+      <p class="sub">Candidate pools — actions: ${ex.actions.map(esc).join(', ')} | conditions: ${ex.conditions.map(esc).join(', ')} | parameters: ${ex.parameters.map(esc).join(', ')}</p></div>`;
+  }
+  if (q.type === 'cloze') {
+    let stem = esc(q.stem);
+    ex.dropdowns.forEach((d,i)=>{ stem = stem.replace(`{${i}}`, `<b style="color:var(--teal)">[${esc(d[q.answer[i]])}]</b> <span class="sub">(of: ${d.map(esc).join(' / ')})</span>`); });
+    return `<div class="grid">${stem}</div>`;
+  }
+  return '<p>Unknown type</p>';
+}
+
+function render() {
+  document.getElementById('queueCount').textContent =
+    queue.length ? `${queue.length - idx} of ${queue.length} awaiting review` : '';
+  const el = document.getElementById('item');
+  if (idx >= queue.length) {
+    el.innerHTML = `<div class="card empty"><p style="font-size:32px">🎉</p><p><b>Queue clear.</b></p><p class="sub">Every pending item has been reviewed. Run the content factory to refill.</p></div>`;
+    return;
+  }
+  const q = queue[idx];
+  el.innerHTML = `
+  <div class="card">
+    <div class="meta">
+      <span>${esc(q.cat)}</span><span>${esc(q.type)}</span><span>diff ${q.diff}</span>
+      ${q.ai ? `<span>✨ AI · ${esc(q.gen_model||'?')}</span>` : '<span>human-written</span>'}
+    </div>
+    <p class="stem">${esc(q.stem)}</p>
+    ${answerView(q)}
+    <div class="rationale"><b>Rationale.</b> ${esc(q.rationale)}</div>
+    ${q.reviewer_notes ? `<div class="ainotes"><b>AI adversarial reviewer said:</b> ${esc(q.reviewer_notes)}</div>` : ''}
+    <ul class="checklist">
+      <li>☐ Key is truly and solely correct against a current source</li>
+      <li>☐ Every distractor is defensibly wrong — no second right answer</li>
+      <li>☐ Current practice — no outdated values, drugs, protocols</li>
+      <li>☐ Correct category and fair difficulty tag</li>
+      <li>☐ Nothing readable as real-world treatment advice</li>
+    </ul>
+    <textarea id="note" placeholder="Reviewer note (required to reject — say exactly what's wrong)"></textarea>
+    <div class="row">
+      <button class="approve" onclick="decide(true)">✓ Approve — goes live</button>
+      <button class="reject" onclick="decide(false)">✗ Reject</button>
+      <button class="skip" onclick="idx++;render()">Skip →</button>
+    </div>
+  </div>`;
+}
+
+async function decide(approve) {
+  const q = queue[idx];
+  const note = document.getElementById('note').value.trim();
+  if (!approve && !note) { alert('A rejection needs a note — it trains the factory prompts.'); return; }
+  const patch = approve
+    ? { approved: true, last_reviewed_at: new Date().toISOString(), reviewed_by: user.id, human_review_note: note || null }
+    : { rejected_at: new Date().toISOString(), reviewed_by: user.id, human_review_note: note };
+  const { error } = await sb.from('questions').update(patch).eq('id', q.id);
+  if (error) { alert('Save failed: ' + error.message); return; }
+  idx++; render();
+}
+</script>
+</body>
+</html>

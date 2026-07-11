@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+.vercel/
+
+# repo-root .gitignore excludes *.sql; migrations must be tracked
+!supabase/migrations/*.sql
