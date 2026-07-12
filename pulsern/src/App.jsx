@@ -279,6 +279,7 @@ import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRatin
 import { migrateBlob } from "./state.js";
 import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, validQ } from "./ngn.js";
 import { NGN_SAMPLES } from "./ngn-samples.js";
+import { LAB_GROUPS } from "./labs.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -374,6 +375,8 @@ export default function App() {
   const [examDate, setExamDate] = useState(null);   // student's exam date (blob)
   const [calibration, setCalibration] = useState({}); // bank item ratings {id: {rating}}
   const [bankQs, setBankQs] = useState(null);       // shared bank; null → offline fallback
+  const [menuOpen, setMenuOpen] = useState(false);  // header menu
+  const [labOpen, setLabOpen] = useState(false);    // lab-values drawer
 
   /* ---- load saved progress once ---- */
   useEffect(() => {
@@ -537,10 +540,10 @@ export default function App() {
     <div className="app" data-theme={theme}>
       <Style />
       <header className="top">
-        <div className="brand">
+        <button className="brand brand-btn" onClick={() => { setTab("today"); setMenuOpen(false); }} title="Back to Today">
           <span className="pulse-dot" aria-hidden="true" />
           <span className="brand-name">PULSE<em>RN</em></span>
-        </div>
+        </button>
         <div className="top-stats mono">
           <span title="Experience points">◆ {xp} XP</span>
           <span title="Day streak">🔥 {streak.count}</span>
@@ -552,7 +555,19 @@ export default function App() {
           >
             {theme === "light" ? "☾ Dim" : "☀ Light"}
           </button>
+          <button className="theme-btn menu-btn" onClick={() => setMenuOpen((m) => !m)} aria-label="Menu" aria-expanded={menuOpen}>☰</button>
         </div>
+        {menuOpen && (
+          <>
+            <div className="menu-overlay" onClick={() => setMenuOpen(false)} />
+            <nav className="menu-panel" aria-label="Main menu">
+              <button className="menu-item" onClick={() => { setTab("today"); setMenuOpen(false); }}>🏠 Home — Today</button>
+              <button className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
+              <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
+              <button className="menu-item" onClick={() => supabase.auth.signOut()}>↪ Sign out</button>
+            </nav>
+          </>
+        )}
       </header>
 
       <main className="body">
@@ -571,7 +586,49 @@ export default function App() {
           <button key={k} className={tab === k ? "tab on" : "tab"} onClick={() => setTab(k)}>{label}</button>
         ))}
       </nav>
+
+      <LabRef open={labOpen} setOpen={setLabOpen} />
     </div>
+  );
+}
+
+/* ================= LAB VALUES DRAWER =================
+   Always-available normal ranges so students never leave the app to look
+   one up — and see them so often they stick. Flip open from the LABS tab
+   on the right edge or the header menu. */
+
+function LabRef({ open, setOpen }) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const groups = LAB_GROUPS
+    .map((g) => ({ ...g, rows: g.rows.filter(([n, v]) => !needle || n.toLowerCase().includes(needle) || v.toLowerCase().includes(needle) || g.group.toLowerCase().includes(needle)) }))
+    .filter((g) => g.rows.length);
+  return (
+    <>
+      {!open && (
+        <button className="lab-tab mono" onClick={() => setOpen(true)} aria-label="Open lab values reference">🧪 LABS</button>
+      )}
+      {open && <div className="lab-overlay" onClick={() => setOpen(false)} />}
+      <aside className={open ? "lab-drawer open" : "lab-drawer"} aria-hidden={!open} aria-label="Normal lab and vital-sign reference ranges">
+        <div className="lab-head">
+          <p className="eyebrow">Normal reference ranges</p>
+          <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
+        </div>
+        <input className="select lab-search" placeholder="Search — e.g. potassium, INR, ABG…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="lab-body">
+          {groups.map((g) => (
+            <div key={g.group} className="lab-group">
+              <p className="lab-group-name mono">{g.group.toUpperCase()}</p>
+              {g.rows.map(([n, v]) => (
+                <div key={n} className="lab-row"><span>{n}</span><span className="mono lab-val">{v}</span></div>
+              ))}
+            </div>
+          ))}
+          {!groups.length && <p className="small">Nothing matches “{q}”.</p>}
+          <p className="small tip">Study reference only — ranges vary slightly by lab and textbook. Verify against your course materials.</p>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -1096,6 +1153,7 @@ function CaseStudy({ record }) {
 function Flashcards({ addXp, srs, setSrs, touchDay, embedded = false, onDone }) {
   const [sessionQueue, setSessionQueue] = useState(null); // indices due today
   const [show, setShow] = useState(false);
+  const [typed, setTyped] = useState(""); // typed recall attempt (optional, self-graded)
 
   const due = srs.map((c, i) => ({ ...c, i })).filter((c) => c.due <= todayStr());
   useEffect(() => {
@@ -1110,6 +1168,7 @@ function Flashcards({ addXp, srs, setSrs, touchDay, embedded = false, onDone }) 
 
   const grade = (g) => {
     setShow(false);
+    setTyped("");
     touchDay();
     const card = srs[cur];
     let interval = card.interval;
@@ -1146,6 +1205,20 @@ function Flashcards({ addXp, srs, setSrs, touchDay, embedded = false, onDone }) 
           <p className="fc-side mono">{show ? "ANSWER" : "PROMPT — TAP TO FLIP"}</p>
           <p className="fc-text">{show ? CARDS[cur].b : CARDS[cur].f}</p>
         </button>
+        {!show && (
+          <input
+            className="select fc-input"
+            placeholder="Type your answer first, then flip…"
+            value={typed}
+            autoComplete="off"
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") setShow(true); }}
+            aria-label="Type your answer before flipping"
+          />
+        )}
+        {show && typed.trim() && (
+          <p className="small fc-compare"><strong>You typed:</strong> {typed} — grade yourself honestly against the answer above.</p>
+        )}
         {show && (
           <div className="grades">
             <button className="btn grade again" onClick={() => grade("again")}>Again</button>
@@ -1154,7 +1227,7 @@ function Flashcards({ addXp, srs, setSrs, touchDay, embedded = false, onDone }) 
             <button className="btn grade easy" onClick={() => grade("easy")}>Easy<span className="grade-sub">{srs[cur].interval < 1 ? "7d" : `${Math.min(srs[cur].interval * 3 + 1, 90)}d`}</span></button>
           </div>
         )}
-        <p className="small tip">Recall the answer out loud before flipping — the retrieval attempt is what builds the memory, not seeing the answer. Grades now set real calendar dates.</p>
+        <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory — the flip is just the check. Enter flips the card. Grades set real calendar dates.</p>
       </section>
     </div>
   );
@@ -1451,6 +1524,31 @@ function Style() {
       /* NGN: cloze */
       .cloze-dd{display:inline-block;margin:0 4px;background:var(--surface);color:var(--ink);border:1.5px solid var(--teal);border-radius:8px;padding:6px 8px;font-family:'Archivo',sans-serif;font-size:14px;font-weight:600;max-width:100%}
       .cloze-dd:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+      /* header: clickable brand + menu */
+      .brand-btn{background:none;border:none;padding:0;cursor:pointer;color:inherit}
+      .brand-btn:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:6px}
+      .menu-btn{font-size:15px;line-height:1;padding:5px 11px}
+      .menu-overlay{position:fixed;inset:0;z-index:40}
+      .menu-panel{position:absolute;top:52px;right:12px;z-index:41;display:flex;flex-direction:column;min-width:230px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(10,25,20,.18);overflow:hidden}
+      .menu-item{background:none;border:none;border-bottom:1px solid var(--line);text-align:left;padding:13px 16px;font-family:'Archivo',sans-serif;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
+      .menu-item:last-child{border-bottom:none}
+      .menu-item:hover{background:var(--surface)}
+      /* lab values drawer */
+      .lab-tab{position:fixed;right:0;top:38%;z-index:39;writing-mode:vertical-rl;background:var(--teal);color:var(--btn-ink);border:none;border-radius:10px 0 0 10px;padding:14px 8px;font-size:11px;font-weight:700;letter-spacing:.12em;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.2)}
+      .lab-overlay{position:fixed;inset:0;background:rgba(8,20,16,.45);z-index:48}
+      .lab-drawer{position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);z-index:49;background:var(--card);border-left:1px solid var(--line);transform:translateX(102%);transition:transform .22s ease;display:flex;flex-direction:column;padding:14px 14px calc(14px + env(safe-area-inset-bottom))}
+      .lab-drawer.open{transform:translateX(0)}
+      .lab-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+      .lab-head .eyebrow{margin:0}
+      .lab-search{margin:0 0 10px}
+      .lab-body{overflow-y:auto;flex:1}
+      .lab-group{margin-bottom:14px}
+      .lab-group-name{font-size:10px;letter-spacing:.12em;color:var(--accent-ink);margin-bottom:6px}
+      .lab-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
+      .lab-val{color:var(--accent-ink);font-size:12.5px;text-align:right;white-space:nowrap}
+      /* flashcard typed recall */
+      .fc-input{margin-top:10px}
+      .fc-compare{background:var(--surface);border-left:3px solid var(--amber);padding:8px 10px;border-radius:0 8px 8px 0;margin-top:10px}
       .ord{min-width:20px;height:20px;border-radius:6px;background:var(--teal);color:var(--btn-ink);display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
       .ord.dim{background:var(--bar-bg);color:var(--muted)}
       /* feedback: tinted frame carries the verdict; the rationale itself sits on a
