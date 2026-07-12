@@ -9,6 +9,7 @@ export function AuthScreen() {
   const [mode, setMode] = useState("signin"); // signin | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -52,6 +53,10 @@ export function AuthScreen() {
         .auth-sub { color: #5b6472; font-size: 14px; margin: 0 0 20px; }
         .auth-field { display: block; width: 100%; box-sizing: border-box; padding: 11px 12px; margin-bottom: 10px;
           border: 1px solid #d5dae1; border-radius: 10px; font-size: 15px; }
+        .auth-pw-wrap { position: relative; }
+        .auth-pw-wrap .auth-field { padding-right: 64px; }
+        .auth-eye { position: absolute; right: 6px; top: 5px; height: 32px; padding: 0 10px; border: 0;
+          background: none; color: #5b6472; font-size: 13px; font-weight: 600; cursor: pointer; }
         .auth-btn { display: block; width: 100%; padding: 11px 12px; border-radius: 10px; border: 0;
           background: #b42318; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
         .auth-btn:disabled { opacity: .6; cursor: default; }
@@ -69,9 +74,15 @@ export function AuthScreen() {
         <form onSubmit={submit}>
           <input className="auth-field" type="email" required placeholder="Email" autoComplete="email"
             value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className="auth-field" type="password" required minLength={6} placeholder="Password (6+ characters)"
-            autoComplete={mode === "signup" ? "new-password" : "current-password"}
-            value={password} onChange={(e) => setPassword(e.target.value)} />
+          <div className="auth-pw-wrap">
+            <input className="auth-field" type={showPw ? "text" : "password"} required minLength={6} placeholder="Password (6+ characters)"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              value={password} onChange={(e) => setPassword(e.target.value)} />
+            <button type="button" className="auth-eye" onClick={() => setShowPw((s) => !s)}
+              aria-label={showPw ? "Hide password" : "Show password"}>
+              {showPw ? "🙈 Hide" : "👁 Show"}
+            </button>
+          </div>
           <button className="auth-btn" type="submit" disabled={busy}>
             {busy ? "One moment…" : mode === "signup" ? "Create account" : "Sign in"}
           </button>
