@@ -200,44 +200,7 @@ const QUESTIONS = [
   },
 ];
 
-const CASE_STUDY = {
-  title: "NGN Case Study · Deteriorating Client",
-  intro: "0730 · Medical unit. Mr. Alvarez, 68, admitted yesterday with community-acquired pneumonia. Night shift reports he 'seemed more tired than usual.'",
-  vitals: [
-    ["Temp", "38.9 °C"], ["HR", "118/min"], ["BP", "92/58"], ["RR", "28/min"], ["SpO₂", "89% RA"],
-  ],
-  labs: [["WBC", "16,400/µL"], ["Lactate", "3.1 mmol/L"]],
-  note: "Client is drowsy but arousable, oriented to name only. Skin warm and flushed. Crackles in the right lower lobe. Urine output 90 mL over the past 6 hours.",
-  steps: [
-    {
-      phase: "Recognize Cues", type: "sata",
-      stem: "Which findings require immediate follow-up? Select all that apply.",
-      options: ["Temperature 38.9 °C", "Blood pressure 92/58", "New disorientation and drowsiness", "SpO₂ 89% with RR 28", "Crackles in the right lower lobe", "Lactate 3.1 mmol/L"],
-      answer: [1, 2, 3, 5],
-      rationale: "Fever and localized crackles are expected with pneumonia. The alarming pattern is what's new and systemic: hypotension, altered mentation, hypoxia with tachypnea, and an elevated lactate — together these signal poor perfusion, not just infection.",
-    },
-    {
-      phase: "Analyze & Prioritize", type: "mc",
-      stem: "Based on the assessment, which complication is the client most likely developing?",
-      options: ["Fluid volume overload", "Sepsis progressing toward septic shock", "Pulmonary embolism", "Hypoglycemia"],
-      answer: 1,
-      rationale: "A known infection plus fever, tachycardia, tachypnea, elevated WBC, hypotension, rising lactate, falling urine output, and new confusion is the classic trajectory of sepsis moving toward septic shock. Overload would show edema and hypertension; PE typically presents with sudden pleuritic pain; nothing supports hypoglycemia.",
-    },
-    {
-      phase: "Take Action", type: "sata",
-      stem: "Which actions should the nurse take? Select all that apply.",
-      options: [
-        "Apply supplemental oxygen and titrate to prescribed saturation",
-        "Notify the rapid response team / provider immediately",
-        "Anticipate blood cultures before broad-spectrum antibiotics",
-        "Anticipate an IV fluid bolus as prescribed",
-        "Delay antibiotics until the chest x-ray is repeated",
-      ],
-      answer: [0, 1, 2, 3],
-      rationale: "Sepsis care is time-critical: support oxygenation, escalate immediately, obtain cultures before antibiotics (without delaying them), and restore perfusion with fluids. Holding antibiotics for repeat imaging violates the hour-one bundle and worsens mortality.",
-    },
-  ],
-};
+/* Case-study library lives in src/case-studies.js (three NCJMM cases). */
 
 const CARDS = [
   { f: "Normal serum potassium", b: "3.5 – 5.0 mEq/L" },
@@ -284,6 +247,7 @@ import { migrateBlob } from "./state.js";
 import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, validQ } from "./ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
+import { CASE_STUDIES } from "./case-studies.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -592,7 +556,7 @@ export default function App() {
           ability={ability} calibration={calibration} plan={plan}
           srs={srs} setSrs={setSrs} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
         {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
-        {tab === "case" && <CaseStudy record={record} />}
+        {tab === "case" && <CaseStudy record={record} provider={provider} />}
         {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} srs={srs} setSrs={setSrs} touchDay={touchDay} />}
         {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} />}
       </main>
@@ -649,7 +613,7 @@ function Tour({ step, setStep, onClose }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = NGN case walkthrough. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges with AI lookup for unlisted ones. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges with AI lookup for unlisted ones. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
@@ -1283,22 +1247,24 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
 }
 /* ================= CASE STUDY ================= */
 
-function CaseStudy({ record }) {
+function CaseStudy({ record, provider = "claude" }) {
+  const [caseIdx, setCaseIdx] = useState(null); // null = case picker
   const [step, setStep] = useState(-1);
   const [sel, setSel] = useState([]);
   const [phase, setPhase] = useState("read");
   const [score, setScore] = useState(0);
   const [ok, setOk] = useState(false);
-  const cs = CASE_STUDY;
+  const cs = caseIdx == null ? null : CASE_STUDIES[caseIdx];
 
+  const openCase = (i) => { setCaseIdx(i); setStep(-1); setPhase("read"); setScore(0); setSel([]); };
   const start = () => { setStep(0); setPhase("answering"); setSel([]); };
-  const s = cs.steps[step];
+  const s = cs?.steps[step];
 
   const submit = () => {
     const correct = s.type === "mc" ? sel[0] === s.answer : same(sel, s.answer);
     setOk(correct);
     if (correct) setScore((x) => x + 1);
-    record({ id: 100 + step, cat: "Physiological Adaptation", diff: 3 }, correct);
+    record({ id: 100 + caseIdx * 10 + step, cat: cs.cat, diff: 3 }, correct);
     setPhase("feedback");
   };
 
@@ -1307,10 +1273,32 @@ function CaseStudy({ record }) {
     else setPhase("done");
   };
 
-  return (
+  if (caseIdx == null) return (
     <div className="stack">
       <section className="card">
         <p className="eyebrow">Next Generation NCLEX</p>
+        <h2 className="h2">Case studies</h2>
+        <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps — recognize cues, analyze, prioritize, plan, act, evaluate. Each step scores like the real exam.</p>
+      </section>
+      {CASE_STUDIES.map((c, i) => (
+        <section key={c.title} className="card">
+          <p className="eyebrow">{c.cat}</p>
+          <h2 className="h2">{c.title}</h2>
+          <p className="small">{c.blurb}</p>
+          <p className="small mono">{c.steps.length} steps</p>
+          <button className="btn" onClick={() => openCase(i)}>Open case →</button>
+        </section>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="stack">
+      <section className="card">
+        <div className="q-meta mono">
+          <span>{cs.cat.toUpperCase()}</span>
+          <button className="auth-switch mono" style={{ color: "var(--accent-ink)", fontSize: 11 }} onClick={() => setCaseIdx(null)}>← ALL CASES</button>
+        </div>
         <h2 className="h2">{cs.title}</h2>
 
         <p className="small">{cs.intro}</p>
@@ -1348,6 +1336,7 @@ function CaseStudy({ record }) {
             <div className={ok ? "feedback ok" : "feedback no"}>
               <p className="fb-head mono">{ok ? "CORRECT · +30 XP" : "INCORRECT"}</p>
               <p className="rationale"><strong>Rationale.</strong> {s.rationale}</p>
+              <TutorExplain key={`${caseIdx}-${step}`} q={{ ...s, id: 100 + caseIdx * 10 + step }} wasCorrect={ok} provider={provider} isBank={false} />
               <button className="btn" onClick={next}>{step + 1 < cs.steps.length ? "Next step →" : "Finish case"}</button>
             </div>
           )}
@@ -1358,6 +1347,7 @@ function CaseStudy({ record }) {
         <section className="card">
           <h2 className="h2">Case complete — {score}/{cs.steps.length}</h2>
           <p className="small">{score === cs.steps.length ? "Flawless clinical judgment. You recognized cues, prioritized the hypothesis, and took the right actions." : "Review the rationales above — NGN cases reward recognizing the pattern across findings, not any single number."}</p>
+          <button className="btn" onClick={() => setCaseIdx(null)}>Back to all cases</button>
         </section>
       )}
     </div>
@@ -1638,7 +1628,7 @@ Options: ${optionsLine}
 Correct answer: ${answerLine}
 Textbook rationale: ${q.rationale}
 
-Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a tired student at midnight would understand, under 120 words. End with one short memory trick or mnemonic. No preamble, no headers. Educational exam prep only — do not give real-world dosing or treatment instructions.`);
+Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a tired student at midnight would understand, under 120 words. End with one short memory trick or mnemonic. No preamble, no headers, plain text only — no markdown, no asterisks, no bullet lists. Educational exam prep only — do not give real-world dosing or treatment instructions.`);
       setText(t);
       setState("done");
       // Write-through so the next student gets it free (service role, server-side).
