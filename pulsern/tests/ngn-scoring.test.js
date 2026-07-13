@@ -2,7 +2,7 @@
    exact match correct, any deviation incorrect. Plus validQ coverage of the
    sample items and corrupted shapes. */
 import { describe, it, expect } from "vitest";
-import { scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, validQ, ngnExt } from "../src/ngn.js";
+import { scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, fourFn, validQ, ngnExt } from "../src/ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "../src/ngn-samples.js";
 
 describe("matrix scoring", () => {
@@ -88,6 +88,29 @@ describe("calc (dosage math) scoring", () => {
     expect(validQ({ ...c, answer: "125" })).toBe(false);
     expect(validQ({ ...c, extra: { ...c.extra, unit: "" } })).toBe(false);
     expect(validQ({ ...c, extra: { ...c.extra, tolerance: -1 } })).toBe(false);
+  });
+});
+
+describe("fourFn (on-screen calculator math)", () => {
+  it("computes the four operations", () => {
+    expect(fourFn(600, 15, "×")).toBe(9000);
+    expect(fourFn(9000, 300, "÷")).toBe(30);
+    expect(fourFn(240, 2, "÷")).toBe(120);
+    expect(fourFn(0.25, 0.125, "÷")).toBe(2);
+    expect(fourFn(100, 25, "−")).toBe(75);
+    expect(fourFn(1.5, 2.25, "+")).toBe(3.75);
+  });
+  it("trims floating-point noise", () => {
+    expect(fourFn(0.1, 0.2, "+")).toBe(0.3);
+  });
+  it("division by zero is NaN, not Infinity", () => {
+    expect(Number.isNaN(fourFn(5, 0, "÷"))).toBe(true);
+  });
+  it("calc samples all carry work steps", () => {
+    for (const s of CALC_SAMPLES) {
+      expect(Array.isArray(s.extra.work)).toBe(true);
+      expect(s.extra.work.length).toBeGreaterThanOrEqual(2);
+    }
   });
 });
 

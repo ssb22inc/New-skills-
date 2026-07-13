@@ -115,10 +115,11 @@ function validItem(x) {
       if (!Number.isInteger(x.answer[i]) || x.answer[i] < 0 || x.answer[i] >= x.dropdowns[i].length) return "cloze answer out of range";
     }
   } else if (t === "calc") {
-    // dosage calculation: numeric-entry answer with a unit
+    // dosage calculation: numeric-entry answer with a unit and worked steps
     if (typeof x.answer !== "number" || !Number.isFinite(x.answer)) return "calc answer must be a number";
     if (typeof x.unit !== "string" || !x.unit) return "calc needs a unit";
     if (x.tolerance !== undefined && (typeof x.tolerance !== "number" || x.tolerance < 0)) return "calc tolerance invalid";
+    if (!Array.isArray(x.work) || x.work.length < 2 || !x.work.every((w) => typeof w === "string" && w.length)) return "calc needs work steps";
   } else if (t === "highlight") {
     // NGN highlight: tap the findings that answer the stem
     if (!Array.isArray(x.tokens) || x.tokens.length < 4) return "highlight needs 4+ tokens";
@@ -162,7 +163,7 @@ Type schemas — respond ONLY with a raw JSON array, no fences, no commentary:
 - matrix:{"cat","diff","type":"matrix","stem","rows":[3-5 findings/actions],"columns":[2-3 judgments e.g. "Indicated","Contraindicated"],"answer":[column index per row],"rationale"}
 - bowtie:{"cat","diff","type":"bowtie","stem":clinical scenario,"actions":[5 candidates],"conditions":[4 candidates],"parameters":[5 candidates],"answer":{"actions":[2 indices],"condition":index,"parameters":[2 indices]},"rationale"}
 - cloze: {"cat","diff","type":"cloze","stem":text containing {0} and {1} placeholders,"dropdowns":[[options for {0}],[options for {1}]],"answer":[index per dropdown],"rationale"}
-- calc:  {"cat","diff","type":"calc","stem":dosage-calculation scenario phrased as practice (include "Record the whole number" or rounding instruction),"unit":"mL/hr"|"gtt/min"|"mg"|"mL"|"tablet(s)","answer":number,"tolerance":0,"rationale":show the dimensional-analysis steps}
+- calc:  {"cat","diff","type":"calc","stem":dosage-calculation scenario phrased as practice (include "Record the whole number" or rounding instruction),"unit":"mL/hr"|"gtt/min"|"mg"|"mL"|"tablet(s)","answer":number,"tolerance":0,"work":["Formula: <name the formula>","= <substituted values>","= <result with unit>"],"rationale":why the answer makes clinical sense}
 - highlight: {"cat","diff","type":"highlight","stem":instruction like "Highlight each finding that requires immediate follow-up","tokens":[6-8 short clinical findings],"answer":[indices of the correct tokens],"rationale"}
 Any item may optionally include "exhibit":[{"label":"Laboratory results","content":"multi-line chart data"}] when the stem refers to chart/exhibit data.
 
@@ -252,6 +253,7 @@ async function run() {
       parameters: item.parameters ?? null, dropdowns: item.dropdowns ?? null,
       unit: item.unit ?? null, tolerance: item.tolerance ?? null,
       tokens: item.tokens ?? null, exhibit: item.exhibit ?? null,
+      work: item.work ?? null,
     },
     answer: item.answer,
     rationale: item.rationale,

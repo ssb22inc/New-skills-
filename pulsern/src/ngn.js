@@ -32,6 +32,14 @@ export const scoreCalc = (sel, answer, tolerance = 0) => {
   return Number.isFinite(n) && Number.isFinite(answer) && Math.abs(n - answer) <= tolerance;
 };
 
+/* Four-function calculator step (immediate execution, like the NCLEX
+   on-screen calculator). Deterministic plain math; result is trimmed of
+   floating-point noise. */
+export const fourFn = (a, b, op) => {
+  const r = op === "+" ? a + b : op === "−" ? a - b : op === "×" ? a * b : b === 0 ? NaN : a / b;
+  return Number.isFinite(r) ? parseFloat(r.toPrecision(12)) : NaN;
+};
+
 /* highlight: set-equal selection of token indices (NGN enhanced hot spot). */
 export const scoreHighlight = (sel, answer) =>
   Array.isArray(sel) && Array.isArray(answer) && sel.length === answer.length &&
