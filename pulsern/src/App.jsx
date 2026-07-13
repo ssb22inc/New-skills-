@@ -1285,6 +1285,7 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
         <p className="eyebrow">Account</p>
         <p className="small">Signing out keeps your synced progress safe — sign back in anywhere to continue.</p>
         <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms · Privacy · Educational-use disclaimer</a></p>
       </section>
     </div>
   );

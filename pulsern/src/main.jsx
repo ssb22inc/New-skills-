@@ -1,9 +1,11 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import AuthGate from "./auth.jsx";
+import AuthGate, { ErrorBoundary } from "./auth.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AuthGate />
+    <ErrorBoundary>
+      <AuthGate />
+    </ErrorBoundary>
   </React.StrictMode>
 );
