@@ -11,28 +11,57 @@ export const CALC_SAMPLES = [
   {
     id: 904, cat: "Pharmacology", diff: 1, type: "calc",
     stem: "In this practice scenario, a provider prescribes 1,000 mL of 0.9% sodium chloride to infuse over 8 hours by infusion pump. At how many mL/hr should the nurse set the pump? (Record the whole number.)",
-    extra: { unit: "mL/hr", tolerance: 0 },
+    extra: {
+      unit: "mL/hr", tolerance: 0,
+      work: [
+        "Formula: pump rate (mL/hr) = total volume (mL) ÷ time (hr)",
+        "= 1,000 mL ÷ 8 hr",
+        "= 125 mL/hr",
+      ],
+    },
     answer: 125,
     rationale: "Volume ÷ time in hours: 1,000 mL ÷ 8 hr = 125 mL/hr. Pump rates are set in mL/hr, so no drop factor is involved — drop factors only apply to gravity tubing.",
   },
   {
     id: 905, cat: "Pharmacology", diff: 2, type: "calc",
     stem: "In this practice scenario, 600 mL of lactated Ringer's is prescribed to infuse over 5 hours by gravity. The tubing's drop factor is 15 gtt/mL. At how many gtt/min should the nurse regulate the infusion? (Record the whole number.)",
-    extra: { unit: "gtt/min", tolerance: 0 },
+    extra: {
+      unit: "gtt/min", tolerance: 0,
+      work: [
+        "Formula: gtt/min = (volume (mL) × drop factor (gtt/mL)) ÷ time (min)",
+        "Convert time: 5 hr × 60 = 300 min",
+        "= (600 mL × 15 gtt/mL) ÷ 300 min",
+        "= 9,000 ÷ 300 = 30 gtt/min",
+      ],
+    },
     answer: 30,
     rationale: "Rate = (volume × drop factor) ÷ minutes: (600 mL × 15 gtt/mL) ÷ 300 min = 9,000 ÷ 300 = 30 gtt/min. Converting 5 hours to 300 minutes first is the step most students miss.",
   },
   {
     id: 906, cat: "Pharmacology", diff: 1, type: "calc",
     stem: "In this practice scenario, digoxin 0.25 mg by mouth daily is prescribed. The pharmacy supplies 0.125 mg tablets. How many tablets should the nurse administer per dose? (Record the whole number.)",
-    extra: { unit: "tablet(s)", tolerance: 0 },
+    extra: {
+      unit: "tablet(s)", tolerance: 0,
+      work: [
+        "Formula: tablets = desired dose ÷ dose on hand",
+        "= 0.25 mg ÷ 0.125 mg per tablet",
+        "= 2 tablets",
+      ],
+    },
     answer: 2,
     rationale: "Desired ÷ have: 0.25 mg ÷ 0.125 mg = 2 tablets. A quick reasonableness check — the ordered dose is exactly double the tablet strength — confirms the math before giving more than one tablet.",
   },
   {
     id: 907, cat: "Pharmacology", diff: 2, type: "calc",
     stem: "In this practice scenario, a medication is prescribed at 8 mg/kg/day divided every 12 hours for a child weighing 30 kg. How many mg should the nurse administer per dose? (Record the whole number.)",
-    extra: { unit: "mg", tolerance: 0 },
+    extra: {
+      unit: "mg", tolerance: 0,
+      work: [
+        "Step 1 — total daily dose: 8 mg/kg/day × 30 kg = 240 mg/day",
+        "Step 2 — every 12 hours = 2 doses per day",
+        "= 240 mg ÷ 2 = 120 mg per dose",
+      ],
+    },
     answer: 120,
     rationale: "Daily dose = 8 mg/kg × 30 kg = 240 mg/day. Divided every 12 hours means two doses per day: 240 ÷ 2 = 120 mg per dose. Weight-based orders are calculated per day first, then split per dose.",
   },

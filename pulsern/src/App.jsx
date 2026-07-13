@@ -244,7 +244,7 @@ import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays, weekStart } f
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
-import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, validQ } from "./ngn.js";
+import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, fourFn, validQ } from "./ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
@@ -883,6 +883,7 @@ function Ecg() {
 
 function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {} }) {
   const [diffTarget, setDiffTarget] = useState(1);
+  const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
   const [sel, setSel] = useState([]);
   const [order, setOrder] = useState([]);
@@ -1177,14 +1178,24 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
         )}
 
         {q.type === "calc" && (
-          <div className="calc-box row" style={{ alignItems: "center" }}>
-            <input className="select calc-input" type="text" inputMode="decimal" autoComplete="off"
-              placeholder="Enter the number" aria-label="Numeric answer"
-              value={typeof sel === "string" ? sel : ""} disabled={phase !== "answering"}
-              onChange={(e) => setSel(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && canSubmit && phase === "answering") submit(); }} />
-            <span className="mono calc-unit">{ext.unit}</span>
-          </div>
+          <>
+            <div className="calc-box row" style={{ alignItems: "center" }}>
+              <input className="select calc-input" type="text" inputMode="decimal" autoComplete="off"
+                placeholder="Enter the number" aria-label="Numeric answer"
+                value={typeof sel === "string" ? sel : ""} disabled={phase !== "answering"}
+                onChange={(e) => setSel(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && canSubmit && phase === "answering") submit(); }} />
+              <span className="mono calc-unit">{ext.unit}</span>
+            </div>
+            {phase === "answering" && (
+              <>
+                <button className="btn ghost tutor-btn" onClick={() => setCalcOpen((o) => !o)}>
+                  {calcOpen ? "Hide calculator" : "🧮 Open calculator"}
+                </button>
+                {calcOpen && <Calculator onUse={(v) => setSel(v)} />}
+              </>
+            )}
+          </>
         )}
 
         {["mc", "sata", "order"].includes(q.type) && (
@@ -1230,6 +1241,12 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
             )}
             {q.type === "calc" && (
               <p className="small"><strong>{wasCorrect ? "Answer:" : "Correct answer:"}</strong> {q.answer} {ext.unit}{!wasCorrect && ` — you entered ${String(sel).trim() || "nothing"}`}</p>
+            )}
+            {q.type === "calc" && Array.isArray(ext.work) && ext.work.length > 0 && (
+              <div className="calc-work">
+                <p className="small" style={{ marginBottom: 4 }}><strong>Show the work:</strong></p>
+                {ext.work.map((line, i) => <p key={i} className="mono calc-work-line">{line}</p>)}
+              </div>
             )}
             {q.type === "highlight" && !wasCorrect && (
               <p className="small"><strong>Should be highlighted:</strong> {q.answer.map((i) => ext.tokens[i]).join(" · ")}</p>
@@ -1493,6 +1510,70 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
         <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
         <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms · Privacy · Educational-use disclaimer</a></p>
       </section>
+    </div>
+  );
+}
+
+/* ---- on-screen calculator for dosage-calc items (NCLEX provides one) ----
+   Immediate-execution four-function calculator, deterministic plain math. */
+function Calculator({ onUse }) {
+  const [display, setDisplay] = useState("0");
+  const [acc, setAcc] = useState(null);
+  const [op, setOp] = useState(null);
+  const [fresh, setFresh] = useState(true); // next digit starts a new number
+
+  const digit = (d) => {
+    if (display === "Error") return;
+    if (fresh) { setDisplay(d === "." ? "0." : d); setFresh(false); return; }
+    if (d === "." && display.includes(".")) return;
+    if (display.length < 12) setDisplay(display + d);
+  };
+  const clear = () => { setDisplay("0"); setAcc(null); setOp(null); setFresh(true); };
+  const applyOp = (nextOp) => {
+    if (display === "Error") return;
+    const cur = parseFloat(display);
+    if (op != null && acc != null && !fresh) {
+      const r = fourFn(acc, cur, op);
+      if (!Number.isFinite(r)) { clear(); setDisplay("Error"); return; }
+      setAcc(r); setDisplay(String(r));
+    } else {
+      setAcc(cur);
+    }
+    setOp(nextOp); setFresh(true);
+  };
+  const equals = () => {
+    if (op == null || acc == null || display === "Error") return;
+    const r = fourFn(acc, parseFloat(display), op);
+    setDisplay(Number.isFinite(r) ? String(r) : "Error");
+    setAcc(null); setOp(null); setFresh(true);
+  };
+  const back = () => {
+    if (fresh || display === "Error") return;
+    setDisplay(display.length > 1 ? display.slice(0, -1) : "0");
+  };
+
+  const KEYS = [["7", "8", "9", "÷"], ["4", "5", "6", "×"], ["1", "2", "3", "−"], ["0", ".", "⌫", "+"]];
+  return (
+    <div className="calc-pad" role="group" aria-label="On-screen calculator">
+      <div className="calc-screen mono">
+        <span className="calc-pending">{acc != null && op ? `${acc} ${op}` : " "}</span>
+        <span className="calc-display">{display}</span>
+      </div>
+      {KEYS.map((row, ri) => (
+        <div key={ri} className="calc-row">
+          {row.map((k) => (
+            <button key={k} type="button" className={"calc-key" + ("+−×÷".includes(k) ? " op" : "")}
+              onClick={() => ("+−×÷".includes(k) ? applyOp(k) : k === "⌫" ? back() : digit(k))}>{k}</button>
+          ))}
+        </div>
+      ))}
+      <div className="calc-row">
+        <button type="button" className="calc-key op" onClick={clear}>C</button>
+        <button type="button" className="calc-key eq" onClick={equals}>=</button>
+      </div>
+      <button type="button" className="btn ghost calc-use" onClick={() => { if (display !== "Error") onUse(display); }}>
+        Use as my answer ↑
+      </button>
     </div>
   );
 }
@@ -1812,6 +1893,19 @@ function Style() {
       .calc-box{margin-bottom:8px}
       .calc-input{margin-top:0;max-width:220px;font-size:18px;font-family:'IBM Plex Mono',monospace}
       .calc-unit{font-size:14px;color:var(--accent-ink);font-weight:700}
+      /* on-screen calculator */
+      .calc-pad{max-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+      .calc-screen{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-bottom:8px;text-align:right}
+      .calc-pending{display:block;font-size:11px;color:var(--muted);min-height:14px}
+      .calc-display{display:block;font-size:22px;font-weight:700;color:var(--ink);overflow:hidden}
+      .calc-row{display:flex;gap:6px;margin-bottom:6px}
+      .calc-key{flex:1;padding:11px 0;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;cursor:pointer}
+      .calc-key.op{background:var(--bar-bg);color:var(--accent-ink)}
+      .calc-key.eq{flex:3;background:var(--teal);color:var(--btn-ink);border-color:var(--teal)}
+      .calc-use{width:100%;margin-top:2px}
+      /* worked solution */
+      .calc-work{background:var(--surface);border-left:3px solid var(--teal);border-radius:0 8px 8px 0;padding:10px 12px;margin:10px 0}
+      .calc-work-line{font-size:13px;line-height:1.7;color:var(--ink);margin:0}
       /* AI lab lookup + report box */
       .lab-ai{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:12px;margin:8px 0}
       .report-box{margin-bottom:8px}

@@ -130,7 +130,8 @@ function answerBody(q, ex) {
     return `<div class="grid">${stem}</div>`;
   }
   if (q.type === 'calc')
-    return `<div class="opt key">✓ ${esc(String(q.answer))} ${esc(ex.unit ?? '')}${ex.tolerance ? ` <span class="sub">(± ${esc(String(ex.tolerance))})</span>` : ''}</div>`;
+    return `<div class="opt key">✓ ${esc(String(q.answer))} ${esc(ex.unit ?? '')}${ex.tolerance ? ` <span class="sub">(± ${esc(String(ex.tolerance))})</span>` : ''}</div>`
+      + (Array.isArray(ex.work) && ex.work.length ? `<div class="rationale"><b>Work:</b><br>${ex.work.map(esc).join('<br>')}</div>` : '');
   if (q.type === 'highlight')
     return ex.tokens.map((t,i)=>`<div class="opt${q.answer.includes(i)?' key':''}">${q.answer.includes(i)?'🖍 ':''}${esc(t)}</div>`).join('');
   return '<p>Unknown type</p>';
