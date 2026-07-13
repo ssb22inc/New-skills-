@@ -90,7 +90,7 @@ export function AuthScreen() {
                 value={password} onChange={(e) => setPassword(e.target.value)} />
               <button type="button" className="auth-eye" onClick={() => setShowPw((s) => !s)}
                 aria-label={showPw ? "Hide password" : "Show password"}>
-                {showPw ? "🙈 Hide" : "👁 Show"}
+                {showPw ? "Hide" : "Show"}
               </button>
             </div>
           )}
@@ -107,7 +107,7 @@ export function AuthScreen() {
         <p style={{ marginTop: 14, fontSize: 14, color: "#5b6472" }}>
           {mode === "signup" ? "Already have an account? " : mode === "forgot" ? "Remembered it? " : "New to PulseRN? "}
           <button className="auth-switch" type="button" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); setNotice(""); }}>
-            {mode === "signin" ? "Create one" : "Sign in"}
+            {mode === "signin" ? "Create account" : "Sign in"}
           </button>
         </p>
         <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX-RN® is a registered trademark of NCSBN, which does not endorse this product. <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
@@ -145,7 +145,7 @@ function NewPasswordScreen({ onDone }) {
               value={password} onChange={(e) => setPassword(e.target.value)} />
             <button type="button" className="auth-eye" onClick={() => setShowPw((s) => !s)}
               aria-label={showPw ? "Hide password" : "Show password"}>
-              {showPw ? "🙈 Hide" : "👁 Show"}
+              {showPw ? "Hide" : "Show"}
             </button>
           </div>
           <button className="auth-btn" type="submit" disabled={busy}>{busy ? "Saving…" : "Save new password"}</button>

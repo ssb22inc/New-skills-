@@ -1,0 +1,193 @@
+/* NGN case-study library. Cases 2 and 3 are hand-written six-step cases
+   following the NCSBN Clinical Judgment Measurement Model (recognize cues →
+   analyze cues → prioritize hypotheses → generate solutions → take action →
+   evaluate outcomes). H7 formal RN review applies. Steps reuse the mc/sata
+   shapes, so scoring and the AI tutor work unchanged. */
+
+export const CASE_STUDIES = [
+  {
+    title: "Deteriorating Client · Sepsis",
+    cat: "Physiological Adaptation",
+    blurb: "A 68-year-old with pneumonia is 'more tired than usual.' Catch the pattern before it becomes shock.",
+    intro: "0730 · Medical unit. Mr. Alvarez, 68, admitted yesterday with community-acquired pneumonia. Night shift reports he 'seemed more tired than usual.'",
+    vitals: [["Temp", "38.9 °C"], ["HR", "118/min"], ["BP", "92/58"], ["RR", "28/min"], ["SpO₂", "89% RA"]],
+    labs: [["WBC", "16,400/µL"], ["Lactate", "3.1 mmol/L"]],
+    note: "Client is drowsy but arousable, oriented to name only. Skin warm and flushed. Crackles in the right lower lobe. Urine output 90 mL over the past 6 hours.",
+    steps: [
+      {
+        phase: "Recognize Cues", type: "sata",
+        stem: "Which findings require immediate follow-up? Select all that apply.",
+        options: ["Temperature 38.9 °C", "Blood pressure 92/58", "New disorientation and drowsiness", "SpO₂ 89% with RR 28", "Crackles in the right lower lobe", "Lactate 3.1 mmol/L"],
+        answer: [1, 2, 3, 5],
+        rationale: "Fever and localized crackles are expected with pneumonia. The alarming pattern is what's new and systemic: hypotension, altered mentation, hypoxia with tachypnea, and an elevated lactate — together these signal poor perfusion, not just infection.",
+      },
+      {
+        phase: "Analyze & Prioritize", type: "mc",
+        stem: "Based on the assessment, which complication is the client most likely developing?",
+        options: ["Fluid volume overload", "Sepsis progressing toward septic shock", "Pulmonary embolism", "Hypoglycemia"],
+        answer: 1,
+        rationale: "A known infection plus fever, tachycardia, tachypnea, elevated WBC, hypotension, rising lactate, falling urine output, and new confusion is the classic trajectory of sepsis moving toward septic shock. Overload would show edema and hypertension; PE typically presents with sudden pleuritic pain; nothing supports hypoglycemia.",
+      },
+      {
+        phase: "Take Action", type: "sata",
+        stem: "Which actions should the nurse take? Select all that apply.",
+        options: [
+          "Apply supplemental oxygen and titrate to prescribed saturation",
+          "Notify the rapid response team / provider immediately",
+          "Anticipate blood cultures before broad-spectrum antibiotics",
+          "Anticipate an IV fluid bolus as prescribed",
+          "Delay antibiotics until the chest x-ray is repeated",
+        ],
+        answer: [0, 1, 2, 3],
+        rationale: "Sepsis care is time-critical: support oxygenation, escalate immediately, obtain cultures before antibiotics (without delaying them), and restore perfusion with fluids. Holding antibiotics for repeat imaging violates the hour-one bundle and worsens mortality.",
+      },
+    ],
+  },
+  {
+    title: "Hyperglycemic Crisis · DKA",
+    cat: "Physiological Adaptation",
+    blurb: "A 19-year-old with type 1 diabetes ran out of insulin two days ago and is now 'breathing funny.'",
+    intro: "1400 · Emergency department. Ms. Chen, 19, with type 1 diabetes, is brought in by her roommate for nausea, vomiting, and 'breathing funny' since this morning. She ran out of insulin two days ago.",
+    vitals: [["Temp", "37.2 °C"], ["HR", "122/min"], ["BP", "98/60"], ["RR", "30/min deep"], ["SpO₂", "99% RA"]],
+    labs: [["Glucose", "486 mg/dL"], ["pH", "7.18"], ["HCO₃⁻", "12 mEq/L"], ["K⁺", "5.6 mEq/L"], ["Serum ketones", "large"]],
+    note: "Drowsy but oriented ×3. Deep, rapid respirations with a fruity breath odor. Mucous membranes dry, poor skin turgor. Reports diffuse abdominal pain 5/10.",
+    steps: [
+      {
+        phase: "Recognize Cues", type: "sata",
+        stem: "Which findings require immediate follow-up? Select all that apply.",
+        options: ["Glucose 486 mg/dL", "pH 7.18 with HCO₃⁻ 12 mEq/L", "Deep, rapid respirations with fruity breath", "Potassium 5.6 mEq/L", "SpO₂ 99% on room air", "Temperature 37.2 °C"],
+        answer: [0, 1, 2, 3],
+        rationale: "Severe hyperglycemia, metabolic acidosis, Kussmaul respirations, and an abnormal potassium define the emergency. The oxygen saturation and temperature are unremarkable — the deep breathing is compensation for acidosis, not hypoxia.",
+      },
+      {
+        phase: "Analyze Cues", type: "mc",
+        stem: "These findings are most consistent with which condition?",
+        options: ["Diabetic ketoacidosis", "Hyperosmolar hyperglycemic state", "Hypoglycemia with rebound", "Acute gastroenteritis with anxiety"],
+        answer: 0,
+        rationale: "Type 1 diabetes, missed insulin, large ketones, acidosis (pH 7.18, HCO₃⁻ 12), and Kussmaul respirations are diagnostic of DKA. HHS occurs mostly in type 2 diabetes with higher glucose and minimal ketosis; hypoglycemia presents with a low glucose; gastroenteritis doesn't explain the acidosis or ketones.",
+      },
+      {
+        phase: "Prioritize Hypotheses", type: "mc",
+        stem: "Which problem poses the greatest immediate risk to this client?",
+        options: [
+          "Hypovolemia from osmotic diuresis and vomiting",
+          "Hyperkalemia requiring immediate calcium gluconate",
+          "Untreated infection",
+          "Acute anxiety reaction",
+        ],
+        answer: 0,
+        rationale: "Osmotic diuresis plus vomiting produces profound volume depletion — the tachycardia, low-normal blood pressure, and poor turgor show it — so fluid resuscitation comes first. The potassium of 5.6 looks high but total-body potassium is actually depleted and will fall quickly once insulin starts; it doesn't need calcium now.",
+      },
+      {
+        phase: "Generate Solutions", type: "sata",
+        stem: "Which prescriptions should the nurse anticipate? Select all that apply.",
+        options: [
+          "0.9% sodium chloride IV bolus",
+          "Regular insulin by continuous IV infusion",
+          "Hourly blood glucose checks",
+          "Potassium replacement once the level falls into range and urine output is confirmed",
+          "Routine IV sodium bicarbonate",
+          "Clear oral fluids only, no IV access",
+        ],
+        answer: [0, 1, 2, 3],
+        rationale: "DKA management is isotonic fluids first, then a regular-insulin infusion with hourly glucose monitoring, and potassium replacement as insulin drives potassium into cells. Bicarbonate is reserved for extreme acidosis, and oral-only fluids cannot correct this deficit.",
+      },
+      {
+        phase: "Take Action", type: "mc",
+        stem: "Two hours into the insulin infusion, the potassium result is 3.2 mEq/L. Which action should the nurse take first?",
+        options: [
+          "Notify the provider and anticipate potassium replacement per protocol",
+          "Continue the infusion unchanged — potassium is expected to fall",
+          "Stop the insulin and give a dose of subcutaneous insulin instead",
+          "Administer sodium bicarbonate",
+        ],
+        answer: 0,
+        rationale: "Insulin shifts potassium into cells, so a falling level is expected — but 3.2 is now below normal and continued insulin risks dangerous hypokalemia and dysrhythmias. Protocols call for potassium replacement (and often holding insulin if the level drops further), which requires provider notification now.",
+      },
+      {
+        phase: "Evaluate Outcomes", type: "sata",
+        stem: "Which findings indicate the treatment plan is effective? Select all that apply.",
+        options: [
+          "Respirations 18/min and unlabored",
+          "Blood glucose 210 mg/dL and trending down",
+          "pH 7.32 with HCO₃⁻ 19 mEq/L",
+          "Client alert and oriented ×4",
+          "Urine output 15 mL/hr",
+        ],
+        answer: [0, 1, 2, 3],
+        rationale: "Resolving Kussmaul respirations, falling glucose, a correcting pH, and improving mentation all show the acidosis and dehydration are reversing. Urine output of 15 mL/hr is below the 30 mL/hr minimum and suggests perfusion is still inadequate.",
+      },
+    ],
+  },
+  {
+    title: "Severe Preeclampsia · Magnesium Sulfate",
+    cat: "Pharmacology",
+    blurb: "A 36-week client arrives with BP 168/112, a headache, and 'spots in my vision.'",
+    intro: "0900 · Labor & delivery triage. Ms. Okafor, 29, G1P0 at 36 weeks, sent in from clinic for elevated blood pressure with headache.",
+    vitals: [["BP", "168/112"], ["HR", "92/min"], ["RR", "16/min"], ["Temp", "36.8 °C"], ["SpO₂", "98% RA"]],
+    labs: [["Urine protein", "3+"], ["Platelets", "98,000/µL"], ["AST", "88 U/L"], ["Creatinine", "1.3 mg/dL"]],
+    note: "Reports a persistent headache and 'spots in my vision.' Epigastric tenderness on palpation. Deep tendon reflexes 3+ without clonus. Fetal heart rate 140s with moderate variability.",
+    steps: [
+      {
+        phase: "Recognize Cues", type: "sata",
+        stem: "Which findings require immediate follow-up? Select all that apply.",
+        options: ["Blood pressure 168/112", "Headache with visual disturbances", "Platelets 98,000/µL", "AST 88 U/L with epigastric tenderness", "Fetal heart rate 140s with moderate variability", "Temperature 36.8 °C"],
+        answer: [0, 1, 2, 3],
+        rationale: "Severe-range blood pressure, cerebral symptoms (headache, visual spots), thrombocytopenia, and elevated liver enzymes with epigastric pain are severe features of preeclampsia. The fetal tracing described is reassuring, and the temperature is normal.",
+      },
+      {
+        phase: "Analyze Cues", type: "mc",
+        stem: "The client's presentation is most consistent with which condition?",
+        options: ["Preeclampsia with severe features", "Gestational hypertension", "Chronic hypertension", "Migraine with aura"],
+        answer: 0,
+        rationale: "Hypertension after 20 weeks plus proteinuria and severe features — severe-range pressures, cerebral symptoms, low platelets, elevated liver enzymes — defines preeclampsia with severe features. Gestational and chronic hypertension lack these end-organ findings, and a migraine doesn't explain the labs or blood pressure.",
+      },
+      {
+        phase: "Prioritize Hypotheses", type: "mc",
+        stem: "Which complication poses the greatest immediate risk?",
+        options: ["Eclamptic seizure", "Postpartum infection", "Gestational diabetes", "Deep vein thrombosis"],
+        answer: 0,
+        rationale: "Severe hypertension with headache, visual changes, and hyperreflexia signals central nervous system irritability — the direct precursor to an eclamptic seizure, which threatens both client and fetus. The other options are not supported by the current data.",
+      },
+      {
+        phase: "Generate Solutions", type: "sata",
+        stem: "Which interventions should the nurse anticipate? Select all that apply.",
+        options: [
+          "Magnesium sulfate IV per protocol",
+          "An antihypertensive such as labetalol as prescribed",
+          "Seizure precautions at the bedside",
+          "Continuous fetal monitoring",
+          "Ambulating in the hallway to lower blood pressure",
+          "Bright lights on for frequent visual assessments",
+        ],
+        answer: [0, 1, 2, 3],
+        rationale: "Magnesium sulfate prevents seizures, antihypertensives treat severe-range pressures, and seizure precautions plus continuous fetal monitoring protect both patients. Activity and environmental stimulation are minimized — a quiet, dimly lit room reduces seizure triggers.",
+      },
+      {
+        phase: "Take Action", type: "mc",
+        stem: "During the magnesium sulfate infusion, which finding requires the nurse to intervene immediately?",
+        options: [
+          "Respiratory rate 10/min with absent deep tendon reflexes",
+          "Blood pressure 150/95",
+          "Report of feeling warm and flushed",
+          "Urine output 40 mL/hr",
+        ],
+        answer: 0,
+        rationale: "Respiratory depression with absent reflexes is magnesium toxicity: stop the infusion, notify the provider, and anticipate calcium gluconate. Flushing is an expected effect, the blood pressure is improved from baseline, and 40 mL/hr of urine is adequate for continued magnesium clearance.",
+      },
+      {
+        phase: "Evaluate Outcomes", type: "sata",
+        stem: "Which findings indicate the plan of care is effective? Select all that apply.",
+        options: [
+          "No seizure activity",
+          "Deep tendon reflexes 2+",
+          "Respiratory rate 14/min",
+          "Urine output 45 mL/hr",
+          "Deep tendon reflexes absent",
+        ],
+        answer: [0, 1, 2, 3],
+        rationale: "The therapeutic goal of magnesium is seizure prevention with normal reflexes, adequate respirations, and urine output sufficient to clear the drug. Absent reflexes are not success — they're the first warning of toxicity.",
+      },
+    ],
+  },
+];
