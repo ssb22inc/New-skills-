@@ -1702,14 +1702,23 @@ function TutorExplain({ q, wasCorrect, provider = "claude", isBank = false }) {
         : q.type === "calc" ? `${q.answer} ${ext.unit ?? ""}`
         : q.type === "highlight" ? q.answer.map((i) => ext.tokens[i]).join("; ")
         : "";
-      const t = await askModel(provider, `You are a warm, expert NCLEX tutor. A student ${wasCorrect ? "answered this question correctly and wants to understand it more deeply" : "just missed this question"}.
+      const prompt = q.type === "calc"
+        ? `You are a precise NCLEX dosage-calculation tutor. A student ${wasCorrect ? "answered this correctly and wants the method locked in" : "just missed this calculation"}.
+
+Question: ${q.stem}
+Correct answer: ${answerLine}
+${Array.isArray(ext.work) && ext.work.length ? `Verified solution steps: ${ext.work.join(" | ")}` : `Textbook rationale: ${q.rationale}`}
+
+Rewrite the verified steps in plain, calm language, one step per line: name the formula, plug in the exact numbers from the question, state the result with its unit. Use ONLY the numbers in this question. Absolute rules: no analogies of any kind (no money, food, sports, or anything outside the clinical scenario); verify silently first and give only the final, correct explanation — never think out loud, never backtrack or correct yourself mid-answer. Under 100 words, plain text only, no markdown. End by restating the answer with its unit. Educational exam prep only.`
+        : `You are a warm, expert NCLEX tutor. A student ${wasCorrect ? "answered this question correctly and wants to understand it more deeply" : "just missed this question"}.
 
 Question: ${q.stem}
 Options: ${optionsLine}
 Correct answer: ${answerLine}
 Textbook rationale: ${q.rationale}
 
-Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a tired student at midnight would understand, under 120 words. End with one short memory trick or mnemonic. No preamble, no headers, plain text only — no markdown, no asterisks, no bullet lists. Educational exam prep only — do not give real-world dosing or treatment instructions.`);
+Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a tired student at midnight would understand, under 120 words. Stay inside the clinical scenario — no analogies to money, food, sports, or other unrelated domains. Verify silently first and give only the final, correct explanation: never think out loud, never backtrack or correct yourself mid-answer. End with one short memory trick or mnemonic drawn from the clinical content itself. No preamble, no headers, plain text only — no markdown, no asterisks, no bullet lists. Educational exam prep only — do not give real-world dosing or treatment instructions.`;
+      const t = await askModel(provider, prompt);
       setText(t);
       setState("done");
       // Write-through so the next student gets it free (service role, server-side).
