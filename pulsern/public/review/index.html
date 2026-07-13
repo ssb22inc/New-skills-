@@ -45,7 +45,7 @@
   <div style="position:relative">
     <input id="pw" type="password" placeholder="password" autocomplete="current-password" style="padding-right:70px">
     <button type="button" id="pwToggle" style="position:absolute;right:4px;top:12px;flex:none;width:auto;padding:6px 10px;background:none;border:none;color:var(--muted);font:600 13px system-ui;cursor:pointer"
-      onclick="const p=document.getElementById('pw');const show=p.type==='password';p.type=show?'text':'password';this.textContent=show?'🙈 Hide':'👁 Show'">👁 Show</button>
+      onclick="const p=document.getElementById('pw');const show=p.type==='password';p.type=show?'text':'password';this.textContent=show?'Hide':'Show'">Show</button>
   </div>
   <div class="row"><button class="approve" onclick="signIn()">Sign in</button></div>
   <p class="sub" id="autherr" style="color:var(--no)"></p>
