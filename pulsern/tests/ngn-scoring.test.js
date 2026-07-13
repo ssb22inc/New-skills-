@@ -2,8 +2,8 @@
    exact match correct, any deviation incorrect. Plus validQ coverage of the
    sample items and corrupted shapes. */
 import { describe, it, expect } from "vitest";
-import { scoreMatrix, scoreBowtie, scoreCloze, validQ, ngnExt } from "../src/ngn.js";
-import { NGN_SAMPLES } from "../src/ngn-samples.js";
+import { scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, validQ, ngnExt } from "../src/ngn.js";
+import { NGN_SAMPLES, CALC_SAMPLES } from "../src/ngn-samples.js";
 
 describe("matrix scoring", () => {
   const answer = [0, 0, 1];
@@ -60,6 +60,34 @@ describe("validQ accepts the NGN shapes (mirrors the factory gate)", () => {
     expect(validQ({ ...base, type: "mc", options: ["a", "b", "c"], answer: 1 })).toBe(true);
     expect(validQ({ ...base, type: "sata", options: ["a", "b", "c", "d", "e"], answer: [0, 2] })).toBe(true);
     expect(validQ({ ...base, type: "order", options: ["a", "b", "c", "d"], answer: [3, 1, 0, 2] })).toBe(true);
+  });
+});
+
+describe("calc (dosage math) scoring", () => {
+  it("exact numeric match is correct, commas and spaces forgiven", () => {
+    expect(scoreCalc("125", 125)).toBe(true);
+    expect(scoreCalc(" 1,250 ", 1250)).toBe(true);
+    expect(scoreCalc("125.0", 125)).toBe(true);
+  });
+  it("any deviation without tolerance is incorrect", () => {
+    expect(scoreCalc("124", 125)).toBe(false);
+    expect(scoreCalc("125.1", 125)).toBe(false);
+  });
+  it("tolerance admits rounding", () => {
+    expect(scoreCalc("31.3", 31.25, 0.1)).toBe(true);
+    expect(scoreCalc("31.5", 31.25, 0.1)).toBe(false);
+  });
+  it("non-numeric or empty entry is incorrect", () => {
+    expect(scoreCalc("", 125)).toBe(false);
+    expect(scoreCalc("abc", 125)).toBe(false);
+    expect(scoreCalc(null, 125)).toBe(false);
+  });
+  it("validQ accepts the hand-written calc samples and rejects corruptions", () => {
+    for (const s of CALC_SAMPLES) expect(validQ(s)).toBe(true);
+    const c = CALC_SAMPLES[0];
+    expect(validQ({ ...c, answer: "125" })).toBe(false);
+    expect(validQ({ ...c, extra: { ...c.extra, unit: "" } })).toBe(false);
+    expect(validQ({ ...c, extra: { ...c.extra, tolerance: -1 } })).toBe(false);
   });
 });
 

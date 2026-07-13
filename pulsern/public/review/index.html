@@ -121,6 +121,8 @@ function answerView(q) {
     ex.dropdowns.forEach((d,i)=>{ stem = stem.replace(`{${i}}`, `<b style="color:var(--teal)">[${esc(d[q.answer[i]])}]</b> <span class="sub">(of: ${d.map(esc).join(' / ')})</span>`); });
     return `<div class="grid">${stem}</div>`;
   }
+  if (q.type === 'calc')
+    return `<div class="opt key">✓ ${esc(String(q.answer))} ${esc(ex.unit ?? '')}${ex.tolerance ? ` <span class="sub">(± ${esc(String(ex.tolerance))})</span>` : ''}</div>`;
   return '<p>Unknown type</p>';
 }
 

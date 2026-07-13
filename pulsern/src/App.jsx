@@ -277,8 +277,8 @@ import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays, weekStart } f
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
-import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, validQ } from "./ngn.js";
-import { NGN_SAMPLES } from "./ngn-samples.js";
+import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, validQ } from "./ngn.js";
+import { NGN_SAMPLES, CALC_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
 
 const STORE_KEY = "pulsern-v1";
@@ -506,7 +506,7 @@ export default function App() {
 
   const dueCount = srs.filter((c) => c.due <= todayStr()).length;
   const allQuestions = useMemo(
-    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES]), ...customQs],
+    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES]), ...customQs],
     [bankQs, customQs]
   );
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
@@ -614,7 +614,7 @@ export default function App() {
 
 const TOUR_STEPS = [
   { icon: "▶", title: "Today — one tap, that's the job", body: "Every day, press the big Start button. PulseRN picks your due flashcards and 8 smart questions — about 10 minutes. The monitor above it shows your readiness estimate once you've answered 12+ questions." },
-  { icon: "🎯", title: "Practice — an exam that adapts", body: "The QBank serves all six NCLEX item types — including Next-Gen matrix, bow-tie, and cloze — and steers toward your weak categories at the difficulty you're ready for. Miss one? It returns in Review misses until you beat it." },
+  { icon: "🎯", title: "Practice — an exam that adapts", body: "The QBank serves every NCLEX item type — Next-Gen matrix, bow-tie, cloze, and dosage-calculation math. Want to drill one area? Use the Focus chips to pick categories or question types. Miss one? It returns in Review misses until you beat it." },
   { icon: "🧪", title: "LABS — ranges without leaving", body: "The green LABS tab on the right edge opens every normal range you'll be tested on — searchable. If something isn't listed, the AI looks it up for you." },
   { icon: "🃏", title: "Cards — memory on a schedule", body: "Flashcards come due right before you'd forget them. Type your answer before flipping — the typing is what builds the memory — then grade yourself honestly." },
   { icon: "🧠", title: "Tutors, plans & help", body: "After any question, ask the AI tutor to explain it differently. Set your exam date in Stats to get a weekly plan. Stuck or found a bad question? Menu → Help & Contact, or the ⚠ report button under any question." },
@@ -645,7 +645,7 @@ function Tour({ step, setStep, onClose }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank with all six item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze); missed questions return in "Review misses". Case Study tab = NGN case walkthrough. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges with AI lookup for unlisted ones. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank with seven item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math); Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = NGN case walkthrough. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges with AI lookup for unlisted ones. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
@@ -930,8 +930,16 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
   log.forEach((l) => { latest[l.id] = l.correct; });
   const missedIds = Object.keys(latest).filter((id) => !latest[id]).map(Number);
 
-  const freshPool = questions.filter((x) => !answeredIds.includes(x.id));
-  const reviewPool = questions.filter((x) => missedIds.includes(x.id));
+  // focused practice: empty filter = everything (the adaptive default)
+  const [catFilter, setCatFilter] = useState([]);
+  const [typeFilter, setTypeFilter] = useState([]);
+  const inFocus = (x) =>
+    (!catFilter.length || catFilter.includes(x.cat)) &&
+    (!typeFilter.length || typeFilter.includes(x.type));
+  const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  const freshPool = questions.filter((x) => !answeredIds.includes(x.id) && inFocus(x));
+  const reviewPool = questions.filter((x) => missedIds.includes(x.id) && inFocus(x));
 
   const catAccuracy = (cat) => {
     const rows = log.filter((l) => l.cat === cat);
@@ -952,7 +960,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     const pick = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
     setLastCat(pick.cat);
     setQ(pick);
-    setSel(pick.type === "bowtie" ? { actions: [], condition: null, parameters: [] } : []);
+    setSel(pick.type === "bowtie" ? { actions: [], condition: null, parameters: [] } : pick.type === "calc" ? "" : []);
     setOrder([]); setPhase("answering");
   };
 
@@ -969,6 +977,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     if (q.type === "matrix") ok = scoreMatrix(sel, q.answer);
     if (q.type === "bowtie") ok = scoreBowtie(sel, q.answer);
     if (q.type === "cloze") ok = scoreCloze(sel, q.answer);
+    if (q.type === "calc") ok = scoreCalc(sel, q.answer, ngnExt(q).tolerance ?? 0);
     setWasCorrect(ok);
     record(q, ok);
     setSessionN((n) => n + 1);
@@ -996,12 +1005,32 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, phase]);
 
+  const TYPE_CHIPS = [["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"]];
+
   if (phase === "pick") return (
     <div className="stack">
       <section className="card">
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
         <p className="small">Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real CAT exam, steering toward your weakest categories.</p>
+
+        <p className="eyebrow" style={{ marginTop: 10 }}>Focus — leave everything off for the full adaptive mix</p>
+        <div className="fchips" role="group" aria-label="Filter by category">
+          {CATS.map((c) => (
+            <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
+              onClick={() => toggleIn(catFilter, setCatFilter)(c)}>{c}</button>
+          ))}
+        </div>
+        <div className="fchips" role="group" aria-label="Filter by question type">
+          {TYPE_CHIPS.map(([t, label]) => (
+            <button key={t} className={typeFilter.includes(t) ? "fchip on" : "fchip"}
+              onClick={() => toggleIn(typeFilter, setTypeFilter)(t)}>{label}</button>
+          ))}
+        </div>
+        {(catFilter.length > 0 || typeFilter.length > 0) && (
+          <p className="small tip">Focused session: {catFilter.length ? catFilter.join(", ") : "all categories"} · {typeFilter.length ? typeFilter.map((t) => TYPE_CHIPS.find(([k]) => k === t)[1]).join(", ") : "all types"} — <button className="auth-switch" style={{ color: "var(--accent-ink)" }} onClick={() => { setCatFilter([]); setTypeFilter([]); }}>clear</button></p>
+        )}
+
         <p className="small mono">{freshPool.length} new · {reviewPool.length} missed · difficulty target {diffTarget}/3</p>
         <div className="row">
           <button className="btn" onClick={() => { setMode("new"); pickFrom(freshPool); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
@@ -1066,11 +1095,12 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     q.type === "matrix" ? ext.rows.every((_, i) => Number.isInteger(sel[i])) :
     q.type === "bowtie" ? (sel.actions?.length === 2 && Number.isInteger(sel.condition) && sel.parameters?.length === 2) :
     q.type === "cloze" ? ext.dropdowns.every((_, i) => Number.isInteger(sel[i])) :
+    q.type === "calc" ? Number.isFinite(parseFloat(String(sel).replace(/,/g, "").trim())) :
     sel.length > 0;
 
   const TYPE_LABEL = {
     mc: "MULTIPLE CHOICE", sata: "SELECT ALL", order: "ORDERED",
-    matrix: "MATRIX", bowtie: "BOW-TIE", cloze: "CLOZE (DROPDOWNS)",
+    matrix: "MATRIX", bowtie: "BOW-TIE", cloze: "CLOZE (DROPDOWNS)", calc: "DOSAGE CALC",
   };
 
   return (
@@ -1152,6 +1182,17 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
           </div>
         )}
 
+        {q.type === "calc" && (
+          <div className="calc-box row" style={{ alignItems: "center" }}>
+            <input className="select calc-input" type="text" inputMode="decimal" autoComplete="off"
+              placeholder="Enter the number" aria-label="Numeric answer"
+              value={typeof sel === "string" ? sel : ""} disabled={phase !== "answering"}
+              onChange={(e) => setSel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && canSubmit && phase === "answering") submit(); }} />
+            <span className="mono calc-unit">{ext.unit}</span>
+          </div>
+        )}
+
         {["mc", "sata", "order"].includes(q.type) && (
         <div className="opts">
           {q.options.map((opt, i) => {
@@ -1192,6 +1233,9 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
             )}
             {q.type === "cloze" && !wasCorrect && (
               <p className="small"><strong>Correct choices:</strong> {q.answer.map((a, i) => ext.dropdowns[i][a]).join(" · ")}</p>
+            )}
+            {q.type === "calc" && (
+              <p className="small"><strong>{wasCorrect ? "Answer:" : "Correct answer:"}</strong> {q.answer} {ext.unit}{!wasCorrect && ` — you entered ${String(sel).trim() || "nothing"}`}</p>
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
             {q.ai && <p className="small">✨ AI-generated item — solid for practice, but verify anything surprising against your course materials.</p>}
@@ -1541,6 +1585,7 @@ function TutorExplain({ q, wasCorrect, provider = "claude", isBank = false }) {
         : q.type === "matrix" ? `Rows: ${ext.rows.join(" | ")} — Columns: ${ext.columns.join(" | ")}`
         : q.type === "bowtie" ? `Actions: ${ext.actions.join(" | ")} — Conditions: ${ext.conditions.join(" | ")} — Parameters: ${ext.parameters.join(" | ")}`
         : q.type === "cloze" ? ext.dropdowns.map((d, i) => `Blank {${i}}: ${d.join(" / ")}`).join(" — ")
+        : q.type === "calc" ? "(numeric entry — the student calculates the value)"
         : "";
       const answerLine =
         q.type === "mc" ? q.options[q.answer]
@@ -1549,6 +1594,7 @@ function TutorExplain({ q, wasCorrect, provider = "claude", isBank = false }) {
         : q.type === "matrix" ? ext.rows.map((r, i) => `${r} → ${ext.columns[q.answer[i]]}`).join("; ")
         : q.type === "bowtie" ? `Actions: ${q.answer.actions.map((i) => ext.actions[i]).join("; ")} — Condition: ${ext.conditions[q.answer.condition]} — Parameters: ${q.answer.parameters.map((i) => ext.parameters[i]).join("; ")}`
         : q.type === "cloze" ? q.answer.map((a, i) => ext.dropdowns[i][a]).join("; ")
+        : q.type === "calc" ? `${q.answer} ${ext.unit ?? ""}`
         : "";
       const t = await askModel(provider, `You are a warm, expert NCLEX tutor. A student ${wasCorrect ? "answered this question correctly and wants to understand it more deeply" : "just missed this question"}.
 
@@ -1724,6 +1770,13 @@ function Style() {
       /* flashcard typed recall */
       .fc-input{margin-top:10px}
       .fc-compare{background:var(--surface);border-left:3px solid var(--amber);padding:8px 10px;border-radius:0 8px 8px 0;margin-top:10px}
+      /* focus filter chips + dosage calc */
+      .fchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+      .fchip{background:var(--surface);border:1.5px solid var(--line);border-radius:99px;padding:7px 12px;font-family:'Archivo',sans-serif;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer}
+      .fchip.on{border-color:var(--teal);background:var(--pick-bg);color:var(--accent-ink)}
+      .calc-box{margin-bottom:8px}
+      .calc-input{margin-top:0;max-width:220px;font-size:18px;font-family:'IBM Plex Mono',monospace}
+      .calc-unit{font-size:14px;color:var(--accent-ink);font-weight:700}
       /* AI lab lookup + report box */
       .lab-ai{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:12px;margin:8px 0}
       .report-box{margin-bottom:8px}

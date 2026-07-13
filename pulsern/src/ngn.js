@@ -25,6 +25,13 @@ export const scoreCloze = (sel, answer) =>
   Array.isArray(sel) && Array.isArray(answer) &&
   answer.every((a, i) => sel[i] === a);
 
+/* calc: numeric entry within tolerance (exact by default). Accepts the
+   typed string; commas and leading/trailing space are forgiven. */
+export const scoreCalc = (sel, answer, tolerance = 0) => {
+  const n = parseFloat(String(sel ?? "").replace(/,/g, "").trim());
+  return Number.isFinite(n) && Number.isFinite(answer) && Math.abs(n - answer) <= tolerance;
+};
+
 /* Validate items before they enter the bank — mirrors the factory's
    validItem structurally, with the app's original text thresholds so the
    built-in bank stays valid. Returns boolean (app convention). */
@@ -68,6 +75,10 @@ export function validQ(x) {
       }
       return true;
     }
+    case "calc":
+      return typeof x.answer === "number" && Number.isFinite(x.answer) &&
+        typeof ext.unit === "string" && ext.unit.length > 0 &&
+        (ext.tolerance === undefined || (typeof ext.tolerance === "number" && ext.tolerance >= 0));
     default:
       return false;
   }

@@ -34,7 +34,7 @@ const CATS = [
   "Management of Care", "Safety & Infection Control", "Pharmacology",
   "Physiological Adaptation", "Reduction of Risk", "Psychosocial & Health Promotion",
 ];
-const TYPES_STD = ["mc", "sata", "order"];
+const TYPES_STD = ["mc", "sata", "order", "calc"];
 const TYPES_NGN = ["matrix", "bowtie", "cloze"];
 
 const GEN_MODEL = "anthropic/claude-sonnet-4.6";   // strong writer
@@ -113,6 +113,11 @@ function validItem(x) {
       if (!x.stem.includes(`{${i}}`)) return `cloze stem missing {${i}}`;
       if (!Number.isInteger(x.answer[i]) || x.answer[i] < 0 || x.answer[i] >= x.dropdowns[i].length) return "cloze answer out of range";
     }
+  } else if (t === "calc") {
+    // dosage calculation: numeric-entry answer with a unit
+    if (typeof x.answer !== "number" || !Number.isFinite(x.answer)) return "calc answer must be a number";
+    if (typeof x.unit !== "string" || !x.unit) return "calc needs a unit";
+    if (x.tolerance !== undefined && (typeof x.tolerance !== "number" || x.tolerance < 0)) return "calc tolerance invalid";
   } else return "unknown type";
   return null; // valid
 }
@@ -145,6 +150,7 @@ Type schemas — respond ONLY with a raw JSON array, no fences, no commentary:
 - matrix:{"cat","diff","type":"matrix","stem","rows":[3-5 findings/actions],"columns":[2-3 judgments e.g. "Indicated","Contraindicated"],"answer":[column index per row],"rationale"}
 - bowtie:{"cat","diff","type":"bowtie","stem":clinical scenario,"actions":[5 candidates],"conditions":[4 candidates],"parameters":[5 candidates],"answer":{"actions":[2 indices],"condition":index,"parameters":[2 indices]},"rationale"}
 - cloze: {"cat","diff","type":"cloze","stem":text containing {0} and {1} placeholders,"dropdowns":[[options for {0}],[options for {1}]],"answer":[index per dropdown],"rationale"}
+- calc:  {"cat","diff","type":"calc","stem":dosage-calculation scenario phrased as practice (include "Record the whole number" or rounding instruction),"unit":"mL/hr"|"gtt/min"|"mg"|"mL"|"tablet(s)","answer":number,"tolerance":0,"rationale":show the dimensional-analysis steps}
 
 Rules:
 - Clinical-judgment stems grounded in current practice standards; plausible distractors; exactly one defensible key.
@@ -226,10 +232,11 @@ async function run() {
     cat: item.cat, diff: item.diff, type: item.type,
     stem: item.stem,
     options: item.options ?? null,
-    extra: {  // NGN payloads live here; null for mc/sata/order
+    extra: {  // NGN/calc payloads live here; null for mc/sata/order
       rows: item.rows ?? null, columns: item.columns ?? null,
       actions: item.actions ?? null, conditions: item.conditions ?? null,
       parameters: item.parameters ?? null, dropdowns: item.dropdowns ?? null,
+      unit: item.unit ?? null, tolerance: item.tolerance ?? null,
     },
     answer: item.answer,
     rationale: item.rationale,
