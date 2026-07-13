@@ -2,13 +2,17 @@ import { useState, useMemo, useEffect } from "react";
 
 /* ================= DATA ================= */
 
+/* The eight client-needs categories of the official NCSBN NCLEX-RN test
+   plan ("Pharmacology" = Pharmacological & Parenteral Therapies). */
 const CATS = [
   "Management of Care",
   "Safety & Infection Control",
+  "Health Promotion & Maintenance",
+  "Psychosocial Integrity",
+  "Basic Care & Comfort",
   "Pharmacology",
-  "Physiological Adaptation",
   "Reduction of Risk",
-  "Psychosocial & Health Promotion",
+  "Physiological Adaptation",
 ];
 
 const QUESTIONS = [
@@ -163,7 +167,7 @@ const QUESTIONS = [
     rationale: "Neutropenic (protective) precautions shield the immunocompromised client from organisms: private room, strict hand hygiene, no fresh flowers or standing water, a low-microbial diet, and screening anyone entering for illness. Airborne precautions and negative pressure protect others from the client and are not indicated here — if anything, protective environments use positive pressure.",
   },
   {
-    id: 19, cat: "Psychosocial & Health Promotion", diff: 1, type: "mc",
+    id: 19, cat: "Psychosocial Integrity", diff: 1, type: "mc",
     stem: "A client scheduled for surgery tomorrow says, \"I'm so scared something will go wrong.\" Which response by the nurse is most therapeutic?",
     options: [
       "\"Don't worry — your surgeon has done this hundreds of times.\"",
@@ -175,7 +179,7 @@ const QUESTIONS = [
     rationale: "An open-ended invitation to explore feelings is therapeutic — it keeps the focus on the client and encourages expression. False reassurance (\"don't worry,\" \"everything will be fine\") dismisses the client's fear, and offering to call family changes the subject before the concern is explored.",
   },
   {
-    id: 20, cat: "Psychosocial & Health Promotion", diff: 3, type: "mc",
+    id: 20, cat: "Health Promotion & Maintenance", diff: 3, type: "mc",
     stem: "During a wellness visit, a 45-year-old client at average risk asks about colorectal cancer screening. Which response is accurate?",
     options: [
       "\"Screening is recommended to begin now, at age 45.\"",
@@ -277,8 +281,8 @@ import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays, weekStart } f
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
-import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, validQ } from "./ngn.js";
-import { NGN_SAMPLES } from "./ngn-samples.js";
+import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, validQ } from "./ngn.js";
+import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
 
 const STORE_KEY = "pulsern-v1";
@@ -377,6 +381,9 @@ export default function App() {
   const [bankQs, setBankQs] = useState(null);       // shared bank; null → offline fallback
   const [menuOpen, setMenuOpen] = useState(false);  // header menu
   const [labOpen, setLabOpen] = useState(false);    // lab-values drawer
+  const [helpOpen, setHelpOpen] = useState(false);  // help & contact center
+  const [tourStep, setTourStep] = useState(null);   // null = closed, 0..n = showing
+  const [tourSeen, setTourSeen] = useState(false);  // persisted in blob
 
   /* ---- load saved progress once ---- */
   useEffect(() => {
@@ -403,6 +410,7 @@ export default function App() {
           setAbility(s.ability);
           setPlan(s.plan);
           setExamDate(s.examDate);
+          setTourSeen(s.tourSeen);
         }
       } catch (e) {
         /* first visit — nothing saved yet */
@@ -416,12 +424,18 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate]);
+  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen]);
+
+  /* first visit → run the 30-second tour once */
+  useEffect(() => {
+    if (loaded && !tourSeen) setTourStep(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
 
   /* ---- shared bank + item calibration (one query feeds both) ----
      RLS serves only approved, non-rejected rows. On any failure the
@@ -496,7 +510,7 @@ export default function App() {
 
   const dueCount = srs.filter((c) => c.due <= todayStr()).length;
   const allQuestions = useMemo(
-    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES]), ...customQs],
+    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES]), ...customQs],
     [bankQs, customQs]
   );
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
@@ -563,6 +577,8 @@ export default function App() {
             <nav className="menu-panel" aria-label="Main menu">
               <button className="menu-item" onClick={() => { setTab("today"); setMenuOpen(false); }}>🏠 Home — Today</button>
               <button className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
+              <button className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & Contact</button>
+              <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
               <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
               <button className="menu-item" onClick={() => supabase.auth.signOut()}>↪ Sign out</button>
             </nav>
@@ -588,7 +604,104 @@ export default function App() {
       </nav>
 
       <LabRef open={labOpen} setOpen={setLabOpen} />
+      <HelpCenter open={helpOpen} setOpen={setHelpOpen} provider={provider} />
+      {tourStep != null && (
+        <Tour step={tourStep} setStep={setTourStep} onClose={() => { setTourStep(null); setTourSeen(true); }} />
+      )}
     </div>
+  );
+}
+
+/* ================= FIRST-RUN TOUR =================
+   A 30-second walkthrough of the five places that matter. Shows once for
+   new accounts; replayable from the menu. */
+
+const TOUR_STEPS = [
+  { icon: "▶", title: "Today — one tap, that's the job", body: "Every day, press the big Start button. PulseRN picks your due flashcards and 8 smart questions — about 10 minutes. The monitor above it shows your readiness estimate once you've answered 12+ questions." },
+  { icon: "🎯", title: "Practice — an exam that adapts", body: "The QBank serves every NCLEX item type — Next-Gen matrix, bow-tie, cloze, and dosage-calculation math. Want to drill one area? Use the Focus chips to pick categories or question types. Miss one? It returns in Review misses until you beat it." },
+  { icon: "🧪", title: "LABS — ranges without leaving", body: "The green LABS tab on the right edge opens every normal range you'll be tested on — searchable. If something isn't listed, the AI looks it up for you." },
+  { icon: "🃏", title: "Cards — memory on a schedule", body: "Flashcards come due right before you'd forget them. Type your answer before flipping — the typing is what builds the memory — then grade yourself honestly." },
+  { icon: "🧠", title: "Tutors, plans & help", body: "After any question, ask the AI tutor to explain it differently. Set your exam date in Stats to get a weekly plan. Stuck or found a bad question? Menu → Help & Contact, or the ⚠ report button under any question." },
+];
+
+function Tour({ step, setStep, onClose }) {
+  const s = TOUR_STEPS[step];
+  const last = step === TOUR_STEPS.length - 1;
+  return (
+    <div className="tour-overlay" role="dialog" aria-label="App tour">
+      <div className="tour-card">
+        <p className="tour-icon">{s.icon}</p>
+        <h2 className="h2">{s.title}</h2>
+        <p className="small">{s.body}</p>
+        <div className="tour-dots">{TOUR_STEPS.map((_, i) => <span key={i} className={i === step ? "dot on" : "dot"} />)}</div>
+        <div className="row">
+          <button className="btn" onClick={() => (last ? onClose() : setStep(step + 1))}>{last ? "Start studying" : "Next"}</button>
+          {!last && <button className="btn ghost" onClick={onClose}>Skip</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================= HELP & CONTACT =================
+   AI support chat for how-do-I and study questions, plus direct contact.
+   The chat never gives medical advice and points account/billing issues
+   to a human. */
+
+const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = NGN case walkthrough. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges with AI lookup for unlisted ones. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
+Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
+
+function HelpCenter({ open, setOpen, provider }) {
+  const [msgs, setMsgs] = useState([]); // {role: "you"|"ai", text}
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput("");
+    setMsgs((m) => [...m, { role: "you", text }]);
+    setBusy(true);
+    try {
+      const transcript = [...msgs, { role: "you", text }].slice(-8)
+        .map((m) => `${m.role === "you" ? "Student" : "Helper"}: ${m.text}`).join("\n");
+      const t = await askModel(provider, `${SUPPORT_CONTEXT}\n\nConversation so far:\n${transcript}\n\nReply as Helper:`, 400);
+      setMsgs((m) => [...m, { role: "ai", text: t }]);
+    } catch (e) {
+      setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now. For anything urgent, email ssb22inc@gmail.com or call (786) 399-2660." }]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) return null;
+  return (
+    <>
+      <div className="lab-overlay" onClick={() => setOpen(false)} />
+      <aside className="lab-drawer open" aria-label="Help and contact">
+        <div className="lab-head">
+          <p className="eyebrow">Help & contact</p>
+          <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
+        </div>
+        <div className="help-contact">
+          <p className="small"><strong>Reach a human:</strong> <a href="mailto:ssb22inc@gmail.com">ssb22inc@gmail.com</a> · <a href="tel:+17863992660">(786) 399-2660</a></p>
+        </div>
+        <div className="lab-body help-chat" aria-live="polite">
+          {!msgs.length && <p className="small">Ask me anything — “how does readiness work?”, “where do I set my exam date?”, “explain preload vs afterload”. Account or billing questions go to the email above.</p>}
+          {msgs.map((m, i) => (
+            <p key={i} className={m.role === "you" ? "chat-msg you" : "chat-msg ai"}>{m.text}</p>
+          ))}
+          {busy && <p className="chat-msg ai">…</p>}
+        </div>
+        <div className="help-input">
+          <input className="select" style={{ marginTop: 0 }} placeholder="Type a question…" value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
+          <button className="btn" onClick={send} disabled={busy || !input.trim()}>Send</button>
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -599,10 +712,27 @@ export default function App() {
 
 function LabRef({ open, setOpen }) {
   const [q, setQ] = useState("");
+  const [aiAnswers, setAiAnswers] = useState({}); // {query: text} — session cache
+  const [aiBusy, setAiBusy] = useState(false);
   const needle = q.trim().toLowerCase();
   const groups = LAB_GROUPS
     .map((g) => ({ ...g, rows: g.rows.filter(([n, v]) => !needle || n.toLowerCase().includes(needle) || v.toLowerCase().includes(needle) || g.group.toLowerCase().includes(needle)) }))
     .filter((g) => g.rows.length);
+
+  const askAi = async () => {
+    const query = q.trim();
+    if (!query || aiBusy) return;
+    setAiBusy(true);
+    try {
+      const t = await askModel("deepseek", `You are an NCLEX-review reference. State the standard adult normal reference range for "${query}" exactly as NCLEX review textbooks teach it, in one short line formatted "Name: range (units)". If a therapeutic or critical value is commonly tested, add it in one more short line. If "${query}" is not a laboratory test, vital sign, or monitored parameter, reply exactly: NOT_A_LAB. Educational exam-prep reference only — do not give treatment advice.`, 200);
+      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: t.includes("NOT_A_LAB") ? `"${query}" doesn't look like a lab test or vital sign — try another term.` : t }));
+    } catch (e) {
+      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: "The AI lookup is unavailable right now — try again in a moment." }));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  const aiHit = aiAnswers[needle];
   return (
     <>
       {!open && (
@@ -624,7 +754,19 @@ function LabRef({ open, setOpen }) {
               ))}
             </div>
           ))}
-          {!groups.length && <p className="small">Nothing matches “{q}”.</p>}
+          {!groups.length && !aiHit && (
+            <div className="lab-ai">
+              <p className="small">“{q}” isn't in the built-in list.</p>
+              <button className="btn" onClick={askAi} disabled={aiBusy}>{aiBusy ? "Looking it up…" : `🧠 Ask AI for “${q.trim()}”`}</button>
+            </div>
+          )}
+          {aiHit && (
+            <div className="lab-ai">
+              <p className="lab-group-name mono">AI LOOKUP</p>
+              <p className="small" style={{ whiteSpace: "pre-wrap" }}>{aiHit}</p>
+              <p className="small">✨ AI answer — verify against your course materials before relying on it.</p>
+            </div>
+          )}
           <p className="small tip">Study reference only — ranges vary slightly by lab and textbook. Verify against your course materials.</p>
         </div>
       </aside>
@@ -792,8 +934,16 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
   log.forEach((l) => { latest[l.id] = l.correct; });
   const missedIds = Object.keys(latest).filter((id) => !latest[id]).map(Number);
 
-  const freshPool = questions.filter((x) => !answeredIds.includes(x.id));
-  const reviewPool = questions.filter((x) => missedIds.includes(x.id));
+  // focused practice: empty filter = everything (the adaptive default)
+  const [catFilter, setCatFilter] = useState([]);
+  const [typeFilter, setTypeFilter] = useState([]);
+  const inFocus = (x) =>
+    (!catFilter.length || catFilter.includes(x.cat)) &&
+    (!typeFilter.length || typeFilter.includes(x.type));
+  const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+  const freshPool = questions.filter((x) => !answeredIds.includes(x.id) && inFocus(x));
+  const reviewPool = questions.filter((x) => missedIds.includes(x.id) && inFocus(x));
 
   const catAccuracy = (cat) => {
     const rows = log.filter((l) => l.cat === cat);
@@ -814,7 +964,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     const pick = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
     setLastCat(pick.cat);
     setQ(pick);
-    setSel(pick.type === "bowtie" ? { actions: [], condition: null, parameters: [] } : []);
+    setSel(pick.type === "bowtie" ? { actions: [], condition: null, parameters: [] } : pick.type === "calc" ? "" : []);
     setOrder([]); setPhase("answering");
   };
 
@@ -831,6 +981,8 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     if (q.type === "matrix") ok = scoreMatrix(sel, q.answer);
     if (q.type === "bowtie") ok = scoreBowtie(sel, q.answer);
     if (q.type === "cloze") ok = scoreCloze(sel, q.answer);
+    if (q.type === "calc") ok = scoreCalc(sel, q.answer, ngnExt(q).tolerance ?? 0);
+    if (q.type === "highlight") ok = scoreHighlight(sel, q.answer);
     setWasCorrect(ok);
     record(q, ok);
     setSessionN((n) => n + 1);
@@ -858,12 +1010,32 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, phase]);
 
+  const TYPE_CHIPS = [["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
+
   if (phase === "pick") return (
     <div className="stack">
       <section className="card">
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
         <p className="small">Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real CAT exam, steering toward your weakest categories.</p>
+
+        <p className="eyebrow" style={{ marginTop: 10 }}>Focus — leave everything off for the full adaptive mix</p>
+        <div className="fchips" role="group" aria-label="Filter by category">
+          {CATS.map((c) => (
+            <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
+              onClick={() => toggleIn(catFilter, setCatFilter)(c)}>{c}</button>
+          ))}
+        </div>
+        <div className="fchips" role="group" aria-label="Filter by question type">
+          {TYPE_CHIPS.map(([t, label]) => (
+            <button key={t} className={typeFilter.includes(t) ? "fchip on" : "fchip"}
+              onClick={() => toggleIn(typeFilter, setTypeFilter)(t)}>{label}</button>
+          ))}
+        </div>
+        {(catFilter.length > 0 || typeFilter.length > 0) && (
+          <p className="small tip">Focused session: {catFilter.length ? catFilter.join(", ") : "all categories"} · {typeFilter.length ? typeFilter.map((t) => TYPE_CHIPS.find(([k]) => k === t)[1]).join(", ") : "all types"} — <button className="auth-switch" style={{ color: "var(--accent-ink)" }} onClick={() => { setCatFilter([]); setTypeFilter([]); }}>clear</button></p>
+        )}
+
         <p className="small mono">{freshPool.length} new · {reviewPool.length} missed · difficulty target {diffTarget}/3</p>
         <div className="row">
           <button className="btn" onClick={() => { setMode("new"); pickFrom(freshPool); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
@@ -898,7 +1070,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
   const toggleSel = (i) => {
     if (phase !== "answering") return;
     if (q.type === "mc") setSel([i]);
-    else if (q.type === "sata") setSel((s) => s.includes(i) ? s.filter((x) => x !== i) : [...s, i]);
+    else if (q.type === "sata" || q.type === "highlight") setSel((s) => s.includes(i) ? s.filter((x) => x !== i) : [...s, i]);
   };
   const toggleOrder = (i) => {
     if (phase !== "answering") return;
@@ -928,11 +1100,12 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     q.type === "matrix" ? ext.rows.every((_, i) => Number.isInteger(sel[i])) :
     q.type === "bowtie" ? (sel.actions?.length === 2 && Number.isInteger(sel.condition) && sel.parameters?.length === 2) :
     q.type === "cloze" ? ext.dropdowns.every((_, i) => Number.isInteger(sel[i])) :
+    q.type === "calc" ? Number.isFinite(parseFloat(String(sel).replace(/,/g, "").trim())) :
     sel.length > 0;
 
   const TYPE_LABEL = {
     mc: "MULTIPLE CHOICE", sata: "SELECT ALL", order: "ORDERED",
-    matrix: "MATRIX", bowtie: "BOW-TIE", cloze: "CLOZE (DROPDOWNS)",
+    matrix: "MATRIX", bowtie: "BOW-TIE", cloze: "CLOZE (DROPDOWNS)", calc: "DOSAGE CALC", highlight: "HIGHLIGHT",
   };
 
   return (
@@ -942,6 +1115,17 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
           <span>{q.cat.toUpperCase()}{q.ai ? " · ✨ AI" : ""}{mode === "review" ? " · RETRY" : ""}</span>
           <span>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {TYPE_LABEL[q.type] ?? "MULTIPLE CHOICE"}</span>
         </div>
+        {Array.isArray(ext.exhibit) && ext.exhibit.length > 0 && (
+          <div className="exhibit">
+            {ext.exhibit.map((tab, i) => (
+              <details key={i} className="exhibit-tab" open={i === 0}>
+                <summary className="mono">📋 {tab.label}</summary>
+                <p className="small exhibit-body">{tab.content}</p>
+              </details>
+            ))}
+          </div>
+        )}
+
         {q.type === "cloze" ? (
           <p className="stem">
             {q.stem.split(/\{(\d+)\}/).map((part, idx) => {
@@ -960,6 +1144,20 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
           </p>
         ) : (
           <p className="stem">{q.stem}</p>
+        )}
+
+        {q.type === "highlight" && (
+          <div className="hl-box" role="group" aria-label="Tap each finding to highlight it">
+            {ext.tokens.map((t, i) => {
+              let cls = "hl-token";
+              if (sel.includes(i)) cls += " picked";
+              if (phase === "feedback") {
+                if (q.answer.includes(i)) cls += " right";
+                else if (sel.includes(i)) cls += " wrong";
+              }
+              return <button key={i} className={cls} onClick={() => toggleSel(i)}>{t}</button>;
+            })}
+          </div>
         )}
 
         {q.type === "matrix" && (
@@ -1014,6 +1212,17 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
           </div>
         )}
 
+        {q.type === "calc" && (
+          <div className="calc-box row" style={{ alignItems: "center" }}>
+            <input className="select calc-input" type="text" inputMode="decimal" autoComplete="off"
+              placeholder="Enter the number" aria-label="Numeric answer"
+              value={typeof sel === "string" ? sel : ""} disabled={phase !== "answering"}
+              onChange={(e) => setSel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && canSubmit && phase === "answering") submit(); }} />
+            <span className="mono calc-unit">{ext.unit}</span>
+          </div>
+        )}
+
         {["mc", "sata", "order"].includes(q.type) && (
         <div className="opts">
           {q.options.map((opt, i) => {
@@ -1055,9 +1264,16 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
             {q.type === "cloze" && !wasCorrect && (
               <p className="small"><strong>Correct choices:</strong> {q.answer.map((a, i) => ext.dropdowns[i][a]).join(" · ")}</p>
             )}
+            {q.type === "calc" && (
+              <p className="small"><strong>{wasCorrect ? "Answer:" : "Correct answer:"}</strong> {q.answer} {ext.unit}{!wasCorrect && ` — you entered ${String(sel).trim() || "nothing"}`}</p>
+            )}
+            {q.type === "highlight" && !wasCorrect && (
+              <p className="small"><strong>Should be highlighted:</strong> {q.answer.map((i) => ext.tokens[i]).join(" · ")}</p>
+            )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
             {q.ai && <p className="small">✨ AI-generated item — solid for practice, but verify anything surprising against your course materials.</p>}
             <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
+            <ReportIssue key={`r${q.id}`} q={q} isBank={calibration[q.id] !== undefined} />
             <button className="btn" onClick={advance}>Next question →</button>
           </div>
         )}
@@ -1285,7 +1501,43 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
         <p className="eyebrow">Account</p>
         <p className="small">Signing out keeps your synced progress safe — sign back in anywhere to continue.</p>
         <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms · Privacy · Educational-use disclaimer</a></p>
       </section>
+    </div>
+  );
+}
+
+/* ---- report a problem with a question → reviewers' Reports tab ---- */
+function ReportIssue({ q, isBank }) {
+  const [state, setState] = useState("idle"); // idle | open | busy | sent | error
+  const [msg, setMsg] = useState("");
+
+  if (!isBank) return null; // local/custom items aren't in the shared bank
+
+  const send = async () => {
+    const message = msg.trim();
+    if (message.length < 3) return;
+    setState("busy");
+    const { data: { session } } = await supabase.auth.getSession();
+    const { error } = await supabase.from("question_reports").insert({
+      item_id: q.id, user_id: session?.user?.id ?? null, message: message.slice(0, 1000),
+    });
+    setState(error ? "error" : "sent");
+  };
+
+  if (state === "sent") return <p className="small tip">✅ Thanks — your report goes straight to our nurse reviewer.</p>;
+  if (state === "idle") return (
+    <button className="btn ghost tutor-btn" onClick={() => setState("open")}>⚠ Report a problem with this question</button>
+  );
+  return (
+    <div className="report-box">
+      <textarea className="select" rows={3} placeholder="What's wrong? (e.g. 'the keyed answer conflicts with current guidelines because…')"
+        value={msg} onChange={(e) => setMsg(e.target.value)} maxLength={1000} />
+      <div className="row">
+        <button className="btn" disabled={state === "busy" || msg.trim().length < 3} onClick={send}>{state === "busy" ? "Sending…" : "Send report"}</button>
+        <button className="btn ghost" onClick={() => setState("idle")}>Cancel</button>
+      </div>
+      {state === "error" && <p className="small" style={{ color: "var(--coral)" }}>Couldn't send — check your connection and try again.</p>}
     </div>
   );
 }
@@ -1366,6 +1618,8 @@ function TutorExplain({ q, wasCorrect, provider = "claude", isBank = false }) {
         : q.type === "matrix" ? `Rows: ${ext.rows.join(" | ")} — Columns: ${ext.columns.join(" | ")}`
         : q.type === "bowtie" ? `Actions: ${ext.actions.join(" | ")} — Conditions: ${ext.conditions.join(" | ")} — Parameters: ${ext.parameters.join(" | ")}`
         : q.type === "cloze" ? ext.dropdowns.map((d, i) => `Blank {${i}}: ${d.join(" / ")}`).join(" — ")
+        : q.type === "calc" ? "(numeric entry — the student calculates the value)"
+        : q.type === "highlight" ? `Findings to consider: ${ext.tokens.join(" | ")}`
         : "";
       const answerLine =
         q.type === "mc" ? q.options[q.answer]
@@ -1374,6 +1628,8 @@ function TutorExplain({ q, wasCorrect, provider = "claude", isBank = false }) {
         : q.type === "matrix" ? ext.rows.map((r, i) => `${r} → ${ext.columns[q.answer[i]]}`).join("; ")
         : q.type === "bowtie" ? `Actions: ${q.answer.actions.map((i) => ext.actions[i]).join("; ")} — Condition: ${ext.conditions[q.answer.condition]} — Parameters: ${q.answer.parameters.map((i) => ext.parameters[i]).join("; ")}`
         : q.type === "cloze" ? q.answer.map((a, i) => ext.dropdowns[i][a]).join("; ")
+        : q.type === "calc" ? `${q.answer} ${ext.unit ?? ""}`
+        : q.type === "highlight" ? q.answer.map((i) => ext.tokens[i]).join("; ")
         : "";
       const t = await askModel(provider, `You are a warm, expert NCLEX tutor. A student ${wasCorrect ? "answered this question correctly and wants to understand it more deeply" : "just missed this question"}.
 
@@ -1549,6 +1805,45 @@ function Style() {
       /* flashcard typed recall */
       .fc-input{margin-top:10px}
       .fc-compare{background:var(--surface);border-left:3px solid var(--amber);padding:8px 10px;border-radius:0 8px 8px 0;margin-top:10px}
+      /* highlight + exhibit */
+      .hl-box{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+      .hl-token{background:var(--surface);border:1.5px solid var(--line);border-radius:8px;padding:8px 11px;font-family:'Archivo',sans-serif;font-size:13.5px;line-height:1.45;color:var(--ink);cursor:pointer;text-align:left}
+      .hl-token.picked{border-color:var(--amber);background:var(--pick-bg);box-shadow:inset 0 -3px 0 var(--amber)}
+      .hl-token.right{border-color:var(--teal);background:var(--right-bg);font-weight:600}
+      .hl-token.wrong{border-color:var(--coral);background:var(--wrong-bg)}
+      .exhibit{margin-bottom:12px}
+      .exhibit-tab{border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:var(--surface);overflow:hidden}
+      .exhibit-tab summary{padding:10px 12px;font-size:11px;letter-spacing:.06em;font-weight:700;color:var(--accent-ink);cursor:pointer}
+      .exhibit-body{white-space:pre-wrap;padding:0 12px 10px;margin:0;font-family:'IBM Plex Mono',monospace;font-size:13px}
+      /* focus filter chips + dosage calc */
+      .fchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+      .fchip{background:var(--surface);border:1.5px solid var(--line);border-radius:99px;padding:7px 12px;font-family:'Archivo',sans-serif;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer}
+      .fchip.on{border-color:var(--teal);background:var(--pick-bg);color:var(--accent-ink)}
+      .calc-box{margin-bottom:8px}
+      .calc-input{margin-top:0;max-width:220px;font-size:18px;font-family:'IBM Plex Mono',monospace}
+      .calc-unit{font-size:14px;color:var(--accent-ink);font-weight:700}
+      /* AI lab lookup + report box */
+      .lab-ai{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:12px;margin:8px 0}
+      .report-box{margin-bottom:8px}
+      .report-box textarea{margin-top:0;margin-bottom:8px;resize:vertical}
+      /* help & contact */
+      .help-contact{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--surface)}
+      .help-contact .small{margin:0}
+      .help-contact a{color:var(--accent-ink);font-weight:600}
+      .help-chat{display:flex;flex-direction:column;gap:8px;padding-bottom:8px}
+      .chat-msg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:14px;line-height:1.5}
+      .chat-msg.you{align-self:flex-end;background:var(--teal);color:var(--btn-ink);border-bottom-right-radius:4px}
+      .chat-msg.ai{align-self:flex-start;background:var(--surface);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:4px;white-space:pre-wrap}
+      .help-input{display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+      .help-input .btn{margin:0}
+      /* tour */
+      .tour-overlay{position:fixed;inset:0;z-index:60;background:rgba(8,20,16,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+      .tour-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:400px;width:100%;text-align:center}
+      .tour-icon{font-size:34px;margin-bottom:6px}
+      .tour-card .row{justify-content:center;margin-top:14px}
+      .tour-dots{display:flex;gap:6px;justify-content:center;margin-top:12px}
+      .tour-dots .dot{width:8px;height:8px;border-radius:99px;background:var(--bar-bg)}
+      .tour-dots .dot.on{background:var(--teal)}
       .ord{min-width:20px;height:20px;border-radius:6px;background:var(--teal);color:var(--btn-ink);display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
       .ord.dim{background:var(--bar-bg);color:var(--muted)}
       /* feedback: tinted frame carries the verdict; the rationale itself sits on a

@@ -31,10 +31,11 @@
 import { createClient } from "@supabase/supabase-js";
 
 const CATS = [
-  "Management of Care", "Safety & Infection Control", "Pharmacology",
-  "Physiological Adaptation", "Reduction of Risk", "Psychosocial & Health Promotion",
+  "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
+  "Psychosocial Integrity", "Basic Care & Comfort", "Pharmacology",
+  "Reduction of Risk", "Physiological Adaptation",
 ];
-const TYPES_STD = ["mc", "sata", "order"];
+const TYPES_STD = ["mc", "sata", "order", "calc"];
 const TYPES_NGN = ["matrix", "bowtie", "cloze"];
 
 const GEN_MODEL = "anthropic/claude-sonnet-4.6";   // strong writer
@@ -113,7 +114,23 @@ function validItem(x) {
       if (!x.stem.includes(`{${i}}`)) return `cloze stem missing {${i}}`;
       if (!Number.isInteger(x.answer[i]) || x.answer[i] < 0 || x.answer[i] >= x.dropdowns[i].length) return "cloze answer out of range";
     }
+  } else if (t === "calc") {
+    // dosage calculation: numeric-entry answer with a unit
+    if (typeof x.answer !== "number" || !Number.isFinite(x.answer)) return "calc answer must be a number";
+    if (typeof x.unit !== "string" || !x.unit) return "calc needs a unit";
+    if (x.tolerance !== undefined && (typeof x.tolerance !== "number" || x.tolerance < 0)) return "calc tolerance invalid";
+  } else if (t === "highlight") {
+    // NGN highlight: tap the findings that answer the stem
+    if (!Array.isArray(x.tokens) || x.tokens.length < 4) return "highlight needs 4+ tokens";
+    if (!Array.isArray(x.answer) || !x.answer.length || x.answer.length >= x.tokens.length) return "highlight answer count invalid";
+    if (new Set(x.answer).size !== x.answer.length ||
+        !x.answer.every((n) => Number.isInteger(n) && n >= 0 && n < x.tokens.length)) return "highlight answer indices invalid";
   } else return "unknown type";
+  // optional chart/exhibit payload, allowed on any type
+  if (x.exhibit !== undefined) {
+    if (!Array.isArray(x.exhibit) || !x.exhibit.length ||
+        !x.exhibit.every((e) => e && typeof e.label === "string" && typeof e.content === "string")) return "exhibit shape invalid";
+  }
   return null; // valid
 }
 
@@ -145,6 +162,9 @@ Type schemas — respond ONLY with a raw JSON array, no fences, no commentary:
 - matrix:{"cat","diff","type":"matrix","stem","rows":[3-5 findings/actions],"columns":[2-3 judgments e.g. "Indicated","Contraindicated"],"answer":[column index per row],"rationale"}
 - bowtie:{"cat","diff","type":"bowtie","stem":clinical scenario,"actions":[5 candidates],"conditions":[4 candidates],"parameters":[5 candidates],"answer":{"actions":[2 indices],"condition":index,"parameters":[2 indices]},"rationale"}
 - cloze: {"cat","diff","type":"cloze","stem":text containing {0} and {1} placeholders,"dropdowns":[[options for {0}],[options for {1}]],"answer":[index per dropdown],"rationale"}
+- calc:  {"cat","diff","type":"calc","stem":dosage-calculation scenario phrased as practice (include "Record the whole number" or rounding instruction),"unit":"mL/hr"|"gtt/min"|"mg"|"mL"|"tablet(s)","answer":number,"tolerance":0,"rationale":show the dimensional-analysis steps}
+- highlight: {"cat","diff","type":"highlight","stem":instruction like "Highlight each finding that requires immediate follow-up","tokens":[6-8 short clinical findings],"answer":[indices of the correct tokens],"rationale"}
+Any item may optionally include "exhibit":[{"label":"Laboratory results","content":"multi-line chart data"}] when the stem refers to chart/exhibit data.
 
 Rules:
 - Clinical-judgment stems grounded in current practice standards; plausible distractors; exactly one defensible key.
@@ -226,10 +246,12 @@ async function run() {
     cat: item.cat, diff: item.diff, type: item.type,
     stem: item.stem,
     options: item.options ?? null,
-    extra: {  // NGN payloads live here; null for mc/sata/order
+    extra: {  // NGN/calc payloads live here; null for mc/sata/order
       rows: item.rows ?? null, columns: item.columns ?? null,
       actions: item.actions ?? null, conditions: item.conditions ?? null,
       parameters: item.parameters ?? null, dropdowns: item.dropdowns ?? null,
+      unit: item.unit ?? null, tolerance: item.tolerance ?? null,
+      tokens: item.tokens ?? null, exhibit: item.exhibit ?? null,
     },
     answer: item.answer,
     rationale: item.rationale,

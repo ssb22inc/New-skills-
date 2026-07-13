@@ -3,8 +3,9 @@
 // saved blob until the ISO week changes, so this runs at most once a week
 // per student.
 const CATS = [
-  'Management of Care', 'Safety & Infection Control', 'Pharmacology',
-  'Physiological Adaptation', 'Reduction of Risk', 'Psychosocial & Health Promotion',
+  'Management of Care', 'Safety & Infection Control', 'Health Promotion & Maintenance',
+  'Psychosocial Integrity', 'Basic Care & Comfort', 'Pharmacology',
+  'Reduction of Risk', 'Physiological Adaptation',
 ];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

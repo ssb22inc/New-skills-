@@ -1,12 +1,12 @@
 /* Auth screen + session gate (PULSERN_BUILD.md §5.2).
    No session → auth screen. Signed in → <App> keyed by user id, so an
    auth change remounts the app and reloads the saved blob. */
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
 import App from "./App.jsx";
 
 export function AuthScreen() {
-  const [mode, setMode] = useState("signin"); // signin | signup
+  const [mode, setMode] = useState("signin"); // signin | signup | forgot
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -22,6 +22,12 @@ export function AuthScreen() {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         if (data.user && !data.session) setNotice("Check your email to confirm your account, then sign in.");
+      } else if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin,
+        });
+        if (error) throw error;
+        setNotice("If that email has an account, a reset link is on its way. Open it on this device.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -68,48 +74,122 @@ export function AuthScreen() {
       `}</style>
       <div className="auth-card">
         <p className="auth-logo">PulseRN</p>
-        <p className="auth-sub">{mode === "signup" ? "Create your account — progress syncs to every device." : "Sign in to continue studying."}</p>
+        <p className="auth-sub">{
+          mode === "signup" ? "Create your account — progress syncs to every device."
+          : mode === "forgot" ? "Enter your email and we'll send a reset link."
+          : "Sign in to continue studying."}</p>
         {error && <p className="auth-err">{error}</p>}
         {notice && <p className="auth-note">{notice}</p>}
         <form onSubmit={submit}>
           <input className="auth-field" type="email" required placeholder="Email" autoComplete="email"
             value={email} onChange={(e) => setEmail(e.target.value)} />
+          {mode !== "forgot" && (
+            <div className="auth-pw-wrap">
+              <input className="auth-field" type={showPw ? "text" : "password"} required minLength={6} placeholder="Password (6+ characters)"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                value={password} onChange={(e) => setPassword(e.target.value)} />
+              <button type="button" className="auth-eye" onClick={() => setShowPw((s) => !s)}
+                aria-label={showPw ? "Hide password" : "Show password"}>
+                {showPw ? "🙈 Hide" : "👁 Show"}
+              </button>
+            </div>
+          )}
+          <button className="auth-btn" type="submit" disabled={busy}>
+            {busy ? "One moment…" : mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset link" : "Sign in"}
+          </button>
+        </form>
+        {mode !== "forgot" && <button className="auth-btn alt" type="button" onClick={google}>Continue with Google</button>}
+        {mode === "signin" && (
+          <p style={{ marginTop: 10, fontSize: 14 }}>
+            <button className="auth-switch" type="button" onClick={() => { setMode("forgot"); setError(""); setNotice(""); }}>Forgot password?</button>
+          </p>
+        )}
+        <p style={{ marginTop: 14, fontSize: 14, color: "#5b6472" }}>
+          {mode === "signup" ? "Already have an account? " : mode === "forgot" ? "Remembered it? " : "New to PulseRN? "}
+          <button className="auth-switch" type="button" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(""); setNotice(""); }}>
+            {mode === "signin" ? "Create one" : "Sign in"}
+          </button>
+        </p>
+        <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX-RN® is a registered trademark of NCSBN, which does not endorse this product. <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
+      </div>
+    </div>
+  );
+}
+
+/* Shown when the user arrives from a password-reset email link. */
+function NewPasswordScreen({ onDone }) {
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError("");
+    const { error } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (error) { setError(error.message); return; }
+    onDone();
+  };
+
+  return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <p className="auth-logo">PulseRN</p>
+        <p className="auth-sub">Choose a new password to finish resetting your account.</p>
+        {error && <p className="auth-err">{error}</p>}
+        <form onSubmit={submit}>
           <div className="auth-pw-wrap">
-            <input className="auth-field" type={showPw ? "text" : "password"} required minLength={6} placeholder="Password (6+ characters)"
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            <input className="auth-field" type={showPw ? "text" : "password"} required minLength={6}
+              placeholder="New password (6+ characters)" autoComplete="new-password"
               value={password} onChange={(e) => setPassword(e.target.value)} />
             <button type="button" className="auth-eye" onClick={() => setShowPw((s) => !s)}
               aria-label={showPw ? "Hide password" : "Show password"}>
               {showPw ? "🙈 Hide" : "👁 Show"}
             </button>
           </div>
-          <button className="auth-btn" type="submit" disabled={busy}>
-            {busy ? "One moment…" : mode === "signup" ? "Create account" : "Sign in"}
-          </button>
+          <button className="auth-btn" type="submit" disabled={busy}>{busy ? "Saving…" : "Save new password"}</button>
         </form>
-        <button className="auth-btn alt" type="button" onClick={google}>Continue with Google</button>
-        <p style={{ marginTop: 14, fontSize: 14, color: "#5b6472" }}>
-          {mode === "signup" ? "Already have an account? " : "New to PulseRN? "}
-          <button className="auth-switch" type="button" onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(""); setNotice(""); }}>
-            {mode === "signup" ? "Sign in" : "Create one"}
-          </button>
-        </p>
-        <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX-RN® is a registered trademark of NCSBN, which does not endorse this product.</p>
       </div>
     </div>
   );
 }
 
+/* A crash anywhere in the app shows a friendly recovery card instead of a
+   blank screen — study progress is safe in the cloud either way. */
+export class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { crashed: false }; }
+  static getDerivedStateFromError() { return { crashed: true }; }
+  componentDidCatch(err) { console.error("PulseRN crashed:", err); }
+  render() {
+    if (!this.state.crashed) return this.props.children;
+    return (
+      <div className="auth-wrap">
+        <div className="auth-card">
+          <p className="auth-logo">PulseRN</p>
+          <p className="auth-sub">Something went wrong on this screen. Your progress is saved to your account — reloading will pick up right where you left off.</p>
+          <button className="auth-btn" onClick={() => window.location.reload()}>Reload PulseRN</button>
+        </div>
+      </div>
+    );
+  }
+}
+
 export default function AuthGate() {
   const [session, setSession] = useState(undefined); // undefined = still checking
+  const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "PASSWORD_RECOVERY") setRecovering(true);
+      setSession(s);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
   if (session === undefined) return null;
+  if (recovering && session) return <NewPasswordScreen onDone={() => setRecovering(false)} />;
   if (!session) return <AuthScreen />;
   return <App key={session.user.id} />;
 }

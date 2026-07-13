@@ -55,12 +55,14 @@
   <div class="row" style="margin-bottom:12px">
     <button class="skip" id="tabQueue" onclick="showTab('queue')" style="font-weight:700">Review queue</button>
     <button class="skip" id="tabHealth" onclick="showTab('health')">Item health</button>
+    <button class="skip" id="tabReports" onclick="showTab('reports')">Reports</button>
   </div>
   <div id="queueView">
     <p class="count" id="queueCount"></p>
     <div id="item"></div>
   </div>
   <div id="healthView" style="display:none"></div>
+  <div id="reportsView" style="display:none"></div>
 </div>
 
 <script>
@@ -96,6 +98,14 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'
 
 function answerView(q) {
   const ex = q.extra || {};
+  const exhibit = Array.isArray(ex.exhibit) && ex.exhibit.length
+    ? `<div class="grid">${ex.exhibit.map((e)=>`<p><b>📋 ${esc(e.label)}</b></p><p class="sub" style="white-space:pre-wrap">${esc(e.content)}</p>`).join('')}</div>`
+    : '';
+  const body = answerBody(q, ex);
+  return exhibit + body;
+}
+
+function answerBody(q, ex) {
   if (q.type === 'mc')
     return q.options.map((o,i)=>`<div class="opt${i===q.answer?' key':''}">${i===q.answer?'✓ ':''}${esc(o)}</div>`).join('');
   if (q.type === 'sata')
@@ -119,6 +129,10 @@ function answerView(q) {
     ex.dropdowns.forEach((d,i)=>{ stem = stem.replace(`{${i}}`, `<b style="color:var(--teal)">[${esc(d[q.answer[i]])}]</b> <span class="sub">(of: ${d.map(esc).join(' / ')})</span>`); });
     return `<div class="grid">${stem}</div>`;
   }
+  if (q.type === 'calc')
+    return `<div class="opt key">✓ ${esc(String(q.answer))} ${esc(ex.unit ?? '')}${ex.tolerance ? ` <span class="sub">(± ${esc(String(ex.tolerance))})</span>` : ''}</div>`;
+  if (q.type === 'highlight')
+    return ex.tokens.map((t,i)=>`<div class="opt${q.answer.includes(i)?' key':''}">${q.answer.includes(i)?'🖍 ':''}${esc(t)}</div>`).join('');
   return '<p>Unknown type</p>';
 }
 
@@ -183,9 +197,44 @@ function itemHealth({ timesAnswered, timesCorrect, rating }) {
 function showTab(t) {
   document.getElementById('queueView').style.display = t === 'queue' ? 'block' : 'none';
   document.getElementById('healthView').style.display = t === 'health' ? 'block' : 'none';
+  document.getElementById('reportsView').style.display = t === 'reports' ? 'block' : 'none';
   document.getElementById('tabQueue').style.fontWeight = t === 'queue' ? '700' : '400';
   document.getElementById('tabHealth').style.fontWeight = t === 'health' ? '700' : '400';
+  document.getElementById('tabReports').style.fontWeight = t === 'reports' ? '700' : '400';
   if (t === 'health') loadHealth();
+  if (t === 'reports') loadReports();
+}
+
+/* ---- Reports tab: student-filed problems with live questions ---- */
+async function loadReports() {
+  const el = document.getElementById('reportsView');
+  el.innerHTML = '<div class="card empty"><p class="sub">Loading reports…</p></div>';
+  const { data, error } = await sb.from('question_reports')
+    .select('id, item_id, message, created_at, questions(stem, cat, type)')
+    .is('resolved_at', null).order('created_at', { ascending: true }).limit(100);
+  if (error) { el.innerHTML = `<div class="card empty"><p class="sub">Load failed: ${esc(error.message)}</p></div>`; return; }
+  if (!data?.length) {
+    el.innerHTML = '<div class="card empty"><p style="font-size:32px">📭</p><p><b>No open reports.</b></p><p class="sub">When a student flags a problem with a question, it lands here.</p></div>';
+    return;
+  }
+  el.innerHTML = data.map((r) => `
+    <div class="card">
+      <div class="meta"><span>report #${r.id}</span><span>item #${r.item_id ?? '?'}</span>
+        ${r.questions ? `<span>${esc(r.questions.cat)}</span><span>${esc(r.questions.type)}</span>` : ''}
+        <span>${esc((r.created_at || '').slice(0, 10))}</span></div>
+      ${r.questions ? `<p class="stem">${esc(r.questions.stem.slice(0, 160))}${r.questions.stem.length > 160 ? '…' : ''}</p>` : ''}
+      <div class="ainotes"><b>Student says:</b> ${esc(r.message)}</div>
+      <div class="row">
+        <button class="approve" onclick="resolveReport(${r.id})">✓ Mark resolved</button>
+      </div>
+    </div>`).join('');
+}
+
+async function resolveReport(id) {
+  const { error } = await sb.from('question_reports')
+    .update({ resolved_at: new Date().toISOString(), resolved_by: user.id }).eq('id', id);
+  if (error) { alert('Update failed: ' + error.message); return; }
+  loadReports();
 }
 
 async function loadHealth() {

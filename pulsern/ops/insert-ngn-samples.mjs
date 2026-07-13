@@ -8,13 +8,13 @@
    Usage: node ops/insert-ngn-samples.mjs [--dry-run]
 */
 import { createClient } from "@supabase/supabase-js";
-import { NGN_SAMPLES } from "../src/ngn-samples.js";
+import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "../src/ngn-samples.js";
 
 const DRY = process.argv.includes("--dry-run");
 
-const rows = NGN_SAMPLES.map((s) => ({
+const rows = [...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES].map((s) => ({
   cat: s.cat, diff: s.diff, type: s.type,
-  stem: s.stem, options: null, extra: s.extra,
+  stem: s.stem, options: s.options ?? null, extra: s.extra ?? null,
   answer: s.answer, rationale: s.rationale,
   ai: false, approved: true,
 }));

@@ -6,8 +6,9 @@ import { migrateBlob } from "../src/state.js";
 import { emptyAbility } from "../src/ability-engine.js";
 
 const CATS = [
-  "Management of Care", "Safety & Infection Control", "Pharmacology",
-  "Physiological Adaptation", "Reduction of Risk", "Psychosocial & Health Promotion",
+  "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
+  "Psychosocial Integrity", "Basic Care & Comfort", "Pharmacology",
+  "Reduction of Risk", "Physiological Adaptation",
 ];
 
 /* A v5.1-era save: everything the old app persisted, no ability/plan. */
@@ -38,6 +39,7 @@ describe("state migration", () => {
       ability: { ...emptyAbility(CATS), [CATS[2]]: { theta: 1345.5, n: 17 } },
       plan: { week: "2026-07-06", days: [{ day: "2026-07-06", focusCat: CATS[2], items: 10, note: "drill pharm" }] },
       examDate: "2026-09-15",
+      tourSeen: true,
     };
     expect(migrateBlob(full, CATS)).toEqual(full);
   });
@@ -48,7 +50,7 @@ describe("state migration", () => {
       theme: "light", xp: 0, bestRun: 0, log: [], flagged: [],
       streak: { count: 0, lastDay: null, shield: true },
       daily: null, srs: [], customQs: [], provider: "claude",
-      ability: emptyAbility(CATS), plan: null, examDate: null,
+      ability: emptyAbility(CATS), plan: null, examDate: null, tourSeen: false,
     });
   });
 
@@ -56,5 +58,11 @@ describe("state migration", () => {
     const s = migrateBlob({ ...legacyBlob, ability: { [CATS[0]]: { theta: 1400, n: 9 } } }, CATS);
     expect(s.ability[CATS[0]]).toEqual({ theta: 1400, n: 9 });
     expect(s.ability[CATS[5]]).toEqual({ theta: 1200, n: 0 });
+  });
+
+  it("moves ability history from the retired merged category to Psychosocial Integrity", () => {
+    const s = migrateBlob({ ability: { "Psychosocial & Health Promotion": { theta: 1380, n: 12 } } }, CATS);
+    expect(s.ability["Psychosocial Integrity"]).toEqual({ theta: 1380, n: 12 });
+    expect(s.ability["Psychosocial & Health Promotion"]).toBeUndefined();
   });
 });
