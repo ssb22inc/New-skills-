@@ -613,7 +613,7 @@ function Tour({ step, setStep, onClose }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges with AI lookup for unlisted ones. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges, and its AI lookup also answers general NCLEX study questions typed into the search box. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
@@ -688,8 +688,14 @@ function LabRef({ open, setOpen }) {
     if (!query || aiBusy) return;
     setAiBusy(true);
     try {
-      const t = await askModel("deepseek", `You are an NCLEX-review reference. State the standard adult normal reference range for "${query}" exactly as NCLEX review textbooks teach it, in one short line formatted "Name: range (units)". If a therapeutic or critical value is commonly tested, add it in one more short line. If "${query}" is not a laboratory test, vital sign, or monitored parameter, reply exactly: NOT_A_LAB. Educational exam-prep reference only — do not give treatment advice.`, 200);
-      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: t.includes("NOT_A_LAB") ? `"${query}" doesn't look like a lab test or vital sign — try another term.` : t }));
+      const t = await askModel("deepseek", `You are an NCLEX-review study reference. The student typed: "${query}"
+
+If it names a laboratory test, vital sign, or monitored parameter: reply with the standard adult normal reference range exactly as NCLEX review textbooks teach it, one short line formatted "Name: range (units)", plus one more short line for a commonly tested therapeutic or critical value if relevant.
+
+Otherwise, treat it as an NCLEX study question and answer it: plain, clear language, under 110 words, focused on what the exam tests. Verify silently first and give only the final, correct answer — no thinking out loud, no self-correction, no analogies outside the clinical domain.
+
+Both cases: plain text only (no markdown), educational exam-prep register only — never real-world dosing or treatment instructions.`, 400);
+      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: t }));
     } catch (e) {
       setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: "The AI lookup is unavailable right now — try again in a moment." }));
     } finally {
@@ -708,7 +714,9 @@ function LabRef({ open, setOpen }) {
           <p className="eyebrow">Normal reference ranges</p>
           <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
         </div>
-        <input className="select lab-search" placeholder="Search — e.g. potassium, INR, ABG…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="select lab-search" placeholder="Search a lab value — or ask any NCLEX question…" value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !groups.length && !aiHit) askAi(); }} />
         <div className="lab-body">
           {groups.map((g) => (
             <div key={g.group} className="lab-group">
@@ -720,8 +728,8 @@ function LabRef({ open, setOpen }) {
           ))}
           {!groups.length && !aiHit && (
             <div className="lab-ai">
-              <p className="small">“{q}” isn't in the built-in list.</p>
-              <button className="btn" onClick={askAi} disabled={aiBusy}>{aiBusy ? "Looking it up…" : `🧠 Ask AI for “${q.trim()}”`}</button>
+              <p className="small">“{q}” isn't in the built-in list — ask the AI: lab values come back as ranges, study questions get a short explanation.</p>
+              <button className="btn" onClick={askAi} disabled={aiBusy}>{aiBusy ? "Thinking…" : "🧠 Ask AI"}</button>
             </div>
           )}
           {aiHit && (
