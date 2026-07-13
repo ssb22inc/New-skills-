@@ -20,5 +20,6 @@ export function migrateBlob(s, cats) {
     ability: { ...emptyAbility(cats), ...(s.ability ?? {}) },
     plan: s.plan ?? null,
     examDate: s.examDate ?? null,
+    tourSeen: s.tourSeen ?? false,
   };
 }

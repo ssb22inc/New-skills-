@@ -99,4 +99,27 @@ export const LAB_GROUPS = [
       ["Magnesium sulfate (OB)", "4–7 mEq/L"],
     ],
   },
+  {
+    group: "Perfusion & inflammation",
+    rows: [
+      ["Lactic acid (lactate)", "0.5–2.2 mEq/L"],
+      ["CRP", "< 1.0 mg/dL"],
+      ["ESR", "M ≤ 15 · F ≤ 20 mm/hr"],
+      ["Procalcitonin", "< 0.1 ng/mL"],
+      ["D-dimer", "< 0.4 mcg/mL"],
+    ],
+  },
+  {
+    group: "Endocrine & other",
+    rows: [
+      ["TSH", "0.4–4.0 mIU/L"],
+      ["Free T4", "0.8–1.8 ng/dL"],
+      ["Serum iron", "M 65–175 · F 50–170 mcg/dL"],
+      ["Ferritin", "M 12–300 · F 10–150 ng/mL"],
+      ["Uric acid", "M 3.5–7.2 · F 2.6–6.0 mg/dL"],
+      ["Serum osmolality", "275–295 mOsm/kg"],
+      ["Intracranial pressure (ICP)", "5–15 mm Hg"],
+      ["Central venous pressure (CVP)", "2–8 mm Hg"],
+    ],
+  },
 ];
