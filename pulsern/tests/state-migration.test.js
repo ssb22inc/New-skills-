@@ -6,8 +6,9 @@ import { migrateBlob } from "../src/state.js";
 import { emptyAbility } from "../src/ability-engine.js";
 
 const CATS = [
-  "Management of Care", "Safety & Infection Control", "Pharmacology",
-  "Physiological Adaptation", "Reduction of Risk", "Psychosocial & Health Promotion",
+  "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
+  "Psychosocial Integrity", "Basic Care & Comfort", "Pharmacology",
+  "Reduction of Risk", "Physiological Adaptation",
 ];
 
 /* A v5.1-era save: everything the old app persisted, no ability/plan. */
@@ -57,5 +58,11 @@ describe("state migration", () => {
     const s = migrateBlob({ ...legacyBlob, ability: { [CATS[0]]: { theta: 1400, n: 9 } } }, CATS);
     expect(s.ability[CATS[0]]).toEqual({ theta: 1400, n: 9 });
     expect(s.ability[CATS[5]]).toEqual({ theta: 1200, n: 0 });
+  });
+
+  it("moves ability history from the retired merged category to Psychosocial Integrity", () => {
+    const s = migrateBlob({ ability: { "Psychosocial & Health Promotion": { theta: 1380, n: 12 } } }, CATS);
+    expect(s.ability["Psychosocial Integrity"]).toEqual({ theta: 1380, n: 12 });
+    expect(s.ability["Psychosocial & Health Promotion"]).toBeUndefined();
   });
 });

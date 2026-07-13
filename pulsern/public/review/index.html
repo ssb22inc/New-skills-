@@ -98,6 +98,14 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'
 
 function answerView(q) {
   const ex = q.extra || {};
+  const exhibit = Array.isArray(ex.exhibit) && ex.exhibit.length
+    ? `<div class="grid">${ex.exhibit.map((e)=>`<p><b>📋 ${esc(e.label)}</b></p><p class="sub" style="white-space:pre-wrap">${esc(e.content)}</p>`).join('')}</div>`
+    : '';
+  const body = answerBody(q, ex);
+  return exhibit + body;
+}
+
+function answerBody(q, ex) {
   if (q.type === 'mc')
     return q.options.map((o,i)=>`<div class="opt${i===q.answer?' key':''}">${i===q.answer?'✓ ':''}${esc(o)}</div>`).join('');
   if (q.type === 'sata')
@@ -123,6 +131,8 @@ function answerView(q) {
   }
   if (q.type === 'calc')
     return `<div class="opt key">✓ ${esc(String(q.answer))} ${esc(ex.unit ?? '')}${ex.tolerance ? ` <span class="sub">(± ${esc(String(ex.tolerance))})</span>` : ''}</div>`;
+  if (q.type === 'highlight')
+    return ex.tokens.map((t,i)=>`<div class="opt${q.answer.includes(i)?' key':''}">${q.answer.includes(i)?'🖍 ':''}${esc(t)}</div>`).join('');
   return '<p>Unknown type</p>';
 }
 

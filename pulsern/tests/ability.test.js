@@ -8,8 +8,9 @@ import {
 } from "../src/ability-engine.js";
 
 const CATS = [
-  "Management of Care", "Safety & Infection Control", "Pharmacology",
-  "Physiological Adaptation", "Reduction of Risk", "Psychosocial & Health Promotion",
+  "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
+  "Psychosocial Integrity", "Basic Care & Comfort", "Pharmacology",
+  "Reduction of Risk", "Physiological Adaptation",
 ];
 
 /* Deterministic PRNG so the simulation never flakes. */
@@ -43,14 +44,15 @@ function simulate(trueTheta, total, seed) {
 
 describe("readiness simulation", () => {
   it("scores a strong student above 60", () => {
-    const { ability, log } = simulate(1550, 120, 42);
+    // 20 answers per category — same evidence density as the shipped test
+    const { ability, log } = simulate(1550, CATS.length * 20, 42);
     const r = readinessFrom(ability, log);
     expect(r).not.toBeNull();
     expect(r.pct).toBeGreaterThan(60);
   });
 
   it("scores a weak student below 40", () => {
-    const { ability, log } = simulate(1050, 120, 42);
+    const { ability, log } = simulate(1050, CATS.length * 20, 42);
     const r = readinessFrom(ability, log);
     expect(r).not.toBeNull();
     expect(r.pct).toBeLessThan(40);
@@ -77,14 +79,14 @@ describe("coverage weighting", () => {
     partial[CATS[0]] = { theta: 1600, n: 100 };
     const full = Object.fromEntries(CATS.map((c) => [c, { theta: 1600, n: 100 }]));
     expect(overallTheta(partial)).toBeLessThan(overallTheta(full));
-    expect(overallTheta(partial)).toBeCloseTo((1600 + 5 * 1200) / 6, 5);
+    expect(overallTheta(partial)).toBeCloseTo((1600 + (CATS.length - 1) * 1200) / CATS.length, 5);
     expect(overallTheta(full)).toBeCloseTo(1600, 5);
   });
 
   it("gives partial weight below 5 answers in a category", () => {
     const ab = emptyAbility(CATS);
     ab[CATS[0]] = { theta: 1600, n: 2 }; // weight 0.4
-    const expected = ((0.4 * 1600 + 0.6 * 1200) + 5 * 1200) / 6;
+    const expected = ((0.4 * 1600 + 0.6 * 1200) + (CATS.length - 1) * 1200) / CATS.length;
     expect(overallTheta(ab)).toBeCloseTo(expected, 5);
   });
 });

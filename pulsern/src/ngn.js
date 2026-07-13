@@ -32,6 +32,11 @@ export const scoreCalc = (sel, answer, tolerance = 0) => {
   return Number.isFinite(n) && Number.isFinite(answer) && Math.abs(n - answer) <= tolerance;
 };
 
+/* highlight: set-equal selection of token indices (NGN enhanced hot spot). */
+export const scoreHighlight = (sel, answer) =>
+  Array.isArray(sel) && Array.isArray(answer) && sel.length === answer.length &&
+  [...sel].sort((a, b) => a - b).every((v, i) => v === [...answer].sort((a, b) => a - b)[i]);
+
 /* Validate items before they enter the bank — mirrors the factory's
    validItem structurally, with the app's original text thresholds so the
    built-in bank stays valid. Returns boolean (app convention). */
@@ -79,6 +84,13 @@ export function validQ(x) {
       return typeof x.answer === "number" && Number.isFinite(x.answer) &&
         typeof ext.unit === "string" && ext.unit.length > 0 &&
         (ext.tolerance === undefined || (typeof ext.tolerance === "number" && ext.tolerance >= 0));
+    case "highlight":
+      return Array.isArray(ext.tokens) && ext.tokens.length >= 4 &&
+        ext.tokens.every((t) => typeof t === "string" && t.length) &&
+        Array.isArray(x.answer) && x.answer.length >= 1 &&
+        x.answer.length < ext.tokens.length &&
+        new Set(x.answer).size === x.answer.length &&
+        x.answer.every((n) => Number.isInteger(n) && n >= 0 && n < ext.tokens.length);
     default:
       return false;
   }

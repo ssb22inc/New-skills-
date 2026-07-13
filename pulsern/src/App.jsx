@@ -2,13 +2,17 @@ import { useState, useMemo, useEffect } from "react";
 
 /* ================= DATA ================= */
 
+/* The eight client-needs categories of the official NCSBN NCLEX-RN test
+   plan ("Pharmacology" = Pharmacological & Parenteral Therapies). */
 const CATS = [
   "Management of Care",
   "Safety & Infection Control",
+  "Health Promotion & Maintenance",
+  "Psychosocial Integrity",
+  "Basic Care & Comfort",
   "Pharmacology",
-  "Physiological Adaptation",
   "Reduction of Risk",
-  "Psychosocial & Health Promotion",
+  "Physiological Adaptation",
 ];
 
 const QUESTIONS = [
@@ -163,7 +167,7 @@ const QUESTIONS = [
     rationale: "Neutropenic (protective) precautions shield the immunocompromised client from organisms: private room, strict hand hygiene, no fresh flowers or standing water, a low-microbial diet, and screening anyone entering for illness. Airborne precautions and negative pressure protect others from the client and are not indicated here — if anything, protective environments use positive pressure.",
   },
   {
-    id: 19, cat: "Psychosocial & Health Promotion", diff: 1, type: "mc",
+    id: 19, cat: "Psychosocial Integrity", diff: 1, type: "mc",
     stem: "A client scheduled for surgery tomorrow says, \"I'm so scared something will go wrong.\" Which response by the nurse is most therapeutic?",
     options: [
       "\"Don't worry — your surgeon has done this hundreds of times.\"",
@@ -175,7 +179,7 @@ const QUESTIONS = [
     rationale: "An open-ended invitation to explore feelings is therapeutic — it keeps the focus on the client and encourages expression. False reassurance (\"don't worry,\" \"everything will be fine\") dismisses the client's fear, and offering to call family changes the subject before the concern is explored.",
   },
   {
-    id: 20, cat: "Psychosocial & Health Promotion", diff: 3, type: "mc",
+    id: 20, cat: "Health Promotion & Maintenance", diff: 3, type: "mc",
     stem: "During a wellness visit, a 45-year-old client at average risk asks about colorectal cancer screening. Which response is accurate?",
     options: [
       "\"Screening is recommended to begin now, at age 45.\"",
@@ -277,8 +281,8 @@ import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays, weekStart } f
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
-import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, validQ } from "./ngn.js";
-import { NGN_SAMPLES, CALC_SAMPLES } from "./ngn-samples.js";
+import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, validQ } from "./ngn.js";
+import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
 
 const STORE_KEY = "pulsern-v1";
@@ -506,7 +510,7 @@ export default function App() {
 
   const dueCount = srs.filter((c) => c.due <= todayStr()).length;
   const allQuestions = useMemo(
-    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES]), ...customQs],
+    () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES]), ...customQs],
     [bankQs, customQs]
   );
   const addQuestions = (qs) => setCustomQs((c) => [...c, ...qs]);
@@ -645,7 +649,7 @@ function Tour({ step, setStep, onClose }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank with seven item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math); Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = NGN case walkthrough. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges with AI lookup for unlisted ones. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = NGN case walkthrough. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges with AI lookup for unlisted ones. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
@@ -978,6 +982,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     if (q.type === "bowtie") ok = scoreBowtie(sel, q.answer);
     if (q.type === "cloze") ok = scoreCloze(sel, q.answer);
     if (q.type === "calc") ok = scoreCalc(sel, q.answer, ngnExt(q).tolerance ?? 0);
+    if (q.type === "highlight") ok = scoreHighlight(sel, q.answer);
     setWasCorrect(ok);
     record(q, ok);
     setSessionN((n) => n + 1);
@@ -1005,7 +1010,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, phase]);
 
-  const TYPE_CHIPS = [["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"]];
+  const TYPE_CHIPS = [["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
   if (phase === "pick") return (
     <div className="stack">
@@ -1065,7 +1070,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
   const toggleSel = (i) => {
     if (phase !== "answering") return;
     if (q.type === "mc") setSel([i]);
-    else if (q.type === "sata") setSel((s) => s.includes(i) ? s.filter((x) => x !== i) : [...s, i]);
+    else if (q.type === "sata" || q.type === "highlight") setSel((s) => s.includes(i) ? s.filter((x) => x !== i) : [...s, i]);
   };
   const toggleOrder = (i) => {
     if (phase !== "answering") return;
@@ -1100,7 +1105,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
 
   const TYPE_LABEL = {
     mc: "MULTIPLE CHOICE", sata: "SELECT ALL", order: "ORDERED",
-    matrix: "MATRIX", bowtie: "BOW-TIE", cloze: "CLOZE (DROPDOWNS)", calc: "DOSAGE CALC",
+    matrix: "MATRIX", bowtie: "BOW-TIE", cloze: "CLOZE (DROPDOWNS)", calc: "DOSAGE CALC", highlight: "HIGHLIGHT",
   };
 
   return (
@@ -1110,6 +1115,17 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
           <span>{q.cat.toUpperCase()}{q.ai ? " · ✨ AI" : ""}{mode === "review" ? " · RETRY" : ""}</span>
           <span>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {TYPE_LABEL[q.type] ?? "MULTIPLE CHOICE"}</span>
         </div>
+        {Array.isArray(ext.exhibit) && ext.exhibit.length > 0 && (
+          <div className="exhibit">
+            {ext.exhibit.map((tab, i) => (
+              <details key={i} className="exhibit-tab" open={i === 0}>
+                <summary className="mono">📋 {tab.label}</summary>
+                <p className="small exhibit-body">{tab.content}</p>
+              </details>
+            ))}
+          </div>
+        )}
+
         {q.type === "cloze" ? (
           <p className="stem">
             {q.stem.split(/\{(\d+)\}/).map((part, idx) => {
@@ -1128,6 +1144,20 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
           </p>
         ) : (
           <p className="stem">{q.stem}</p>
+        )}
+
+        {q.type === "highlight" && (
+          <div className="hl-box" role="group" aria-label="Tap each finding to highlight it">
+            {ext.tokens.map((t, i) => {
+              let cls = "hl-token";
+              if (sel.includes(i)) cls += " picked";
+              if (phase === "feedback") {
+                if (q.answer.includes(i)) cls += " right";
+                else if (sel.includes(i)) cls += " wrong";
+              }
+              return <button key={i} className={cls} onClick={() => toggleSel(i)}>{t}</button>;
+            })}
+          </div>
         )}
 
         {q.type === "matrix" && (
@@ -1236,6 +1266,9 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
             )}
             {q.type === "calc" && (
               <p className="small"><strong>{wasCorrect ? "Answer:" : "Correct answer:"}</strong> {q.answer} {ext.unit}{!wasCorrect && ` — you entered ${String(sel).trim() || "nothing"}`}</p>
+            )}
+            {q.type === "highlight" && !wasCorrect && (
+              <p className="small"><strong>Should be highlighted:</strong> {q.answer.map((i) => ext.tokens[i]).join(" · ")}</p>
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
             {q.ai && <p className="small">✨ AI-generated item — solid for practice, but verify anything surprising against your course materials.</p>}
@@ -1586,6 +1619,7 @@ function TutorExplain({ q, wasCorrect, provider = "claude", isBank = false }) {
         : q.type === "bowtie" ? `Actions: ${ext.actions.join(" | ")} — Conditions: ${ext.conditions.join(" | ")} — Parameters: ${ext.parameters.join(" | ")}`
         : q.type === "cloze" ? ext.dropdowns.map((d, i) => `Blank {${i}}: ${d.join(" / ")}`).join(" — ")
         : q.type === "calc" ? "(numeric entry — the student calculates the value)"
+        : q.type === "highlight" ? `Findings to consider: ${ext.tokens.join(" | ")}`
         : "";
       const answerLine =
         q.type === "mc" ? q.options[q.answer]
@@ -1595,6 +1629,7 @@ function TutorExplain({ q, wasCorrect, provider = "claude", isBank = false }) {
         : q.type === "bowtie" ? `Actions: ${q.answer.actions.map((i) => ext.actions[i]).join("; ")} — Condition: ${ext.conditions[q.answer.condition]} — Parameters: ${q.answer.parameters.map((i) => ext.parameters[i]).join("; ")}`
         : q.type === "cloze" ? q.answer.map((a, i) => ext.dropdowns[i][a]).join("; ")
         : q.type === "calc" ? `${q.answer} ${ext.unit ?? ""}`
+        : q.type === "highlight" ? q.answer.map((i) => ext.tokens[i]).join("; ")
         : "";
       const t = await askModel(provider, `You are a warm, expert NCLEX tutor. A student ${wasCorrect ? "answered this question correctly and wants to understand it more deeply" : "just missed this question"}.
 
@@ -1770,6 +1805,16 @@ function Style() {
       /* flashcard typed recall */
       .fc-input{margin-top:10px}
       .fc-compare{background:var(--surface);border-left:3px solid var(--amber);padding:8px 10px;border-radius:0 8px 8px 0;margin-top:10px}
+      /* highlight + exhibit */
+      .hl-box{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+      .hl-token{background:var(--surface);border:1.5px solid var(--line);border-radius:8px;padding:8px 11px;font-family:'Archivo',sans-serif;font-size:13.5px;line-height:1.45;color:var(--ink);cursor:pointer;text-align:left}
+      .hl-token.picked{border-color:var(--amber);background:var(--pick-bg);box-shadow:inset 0 -3px 0 var(--amber)}
+      .hl-token.right{border-color:var(--teal);background:var(--right-bg);font-weight:600}
+      .hl-token.wrong{border-color:var(--coral);background:var(--wrong-bg)}
+      .exhibit{margin-bottom:12px}
+      .exhibit-tab{border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:var(--surface);overflow:hidden}
+      .exhibit-tab summary{padding:10px 12px;font-size:11px;letter-spacing:.06em;font-weight:700;color:var(--accent-ink);cursor:pointer}
+      .exhibit-body{white-space:pre-wrap;padding:0 12px 10px;margin:0;font-family:'IBM Plex Mono',monospace;font-size:13px}
       /* focus filter chips + dosage calc */
       .fchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
       .fchip{background:var(--surface);border:1.5px solid var(--line);border-radius:99px;padding:7px 12px;font-family:'Archivo',sans-serif;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer}

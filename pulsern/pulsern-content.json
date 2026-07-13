@@ -3,10 +3,12 @@
   "categories": [
     "Management of Care",
     "Safety & Infection Control",
+    "Health Promotion & Maintenance",
+    "Psychosocial Integrity",
+    "Basic Care & Comfort",
     "Pharmacology",
-    "Physiological Adaptation",
     "Reduction of Risk",
-    "Psychosocial & Health Promotion"
+    "Physiological Adaptation"
   ],
   "questions": [
     {
@@ -37,7 +39,7 @@
         "Ringing in the ears"
       ],
       "answer": 1,
-      "rationale": "The therapeutic digoxin range is 0.5–2.0 ng/mL, so 2.4 is toxic. Early toxicity classically shows GI symptoms (anorexia, nausea, vomiting) and visual changes such as yellow-green halos. A dry cough suggests an ACE inhibitor effect, tremor and diarrhea point toward lithium or hyperthyroid pictures, and tinnitus is associated with aspirin toxicity."
+      "rationale": "The therapeutic digoxin range is 0.5\u20132.0 ng/mL, so 2.4 is toxic. Early toxicity classically shows GI symptoms (anorexia, nausea, vomiting) and visual changes such as yellow-green halos. A dry cough suggests an ACE inhibitor effect, tremor and diarrhea point toward lithium or hyperthyroid pictures, and tinnitus is associated with aspirin toxicity."
     },
     {
       "id": 3,
@@ -52,13 +54,12 @@
         "A unit of packed red blood cells"
       ],
       "answer": 2,
-      "rationale": "The usual therapeutic INR on warfarin is 2–3. At 4.8 the client is over-anticoagulated, so the antidote vitamin K is anticipated along with holding warfarin. Protamine sulfate reverses heparin, not warfarin. Increasing the dose would worsen bleeding risk, and PRBCs are not indicated without hemorrhage or anemia."
+      "rationale": "The usual therapeutic INR on warfarin is 2\u20133. At 4.8 the client is over-anticoagulated, so the antidote vitamin K is anticipated along with holding warfarin. Protamine sulfate reverses heparin, not warfarin. Increasing the dose would worsen bleeding risk, and PRBCs are not indicated without hemorrhage or anemia."
     },
     {
       "id": 4,
       "cat": "Pharmacology",
       "diff": 1,
- 
       "type": "mc",
       "stem": "A postoperative client who received IV morphine has a respiratory rate of 6/min and is difficult to arouse. Which medication should the nurse prepare?",
       "options": [
@@ -68,7 +69,7 @@
         "Atropine"
       ],
       "answer": 1,
-      "rationale": "Naloxone is the opioid antagonist and reverses opioid-induced respiratory depression. Flumazenil reverses benzodiazepines, acetylcysteine treats acetaminophen overdose, and atropine treats symptomatic bradycardia — none address opioid toxicity."
+      "rationale": "Naloxone is the opioid antagonist and reverses opioid-induced respiratory depression. Flumazenil reverses benzodiazepines, acetylcysteine treats acetaminophen overdose, and atropine treats symptomatic bradycardia \u2014 none address opioid toxicity."
     },
     {
       "id": 5,
@@ -98,7 +99,7 @@
         "A client with a preprandial blood glucose of 180 mg/dL"
       ],
       "answer": 1,
-      "rationale": "Restlessness is an early sign of hypoxia, and a saturation of 88% signals a breathing problem — airway and breathing come before pain, teaching, or a modestly elevated glucose. Pain 8/10 is urgent but not immediately life-threatening; teaching and a glucose of 180 are stable needs."
+      "rationale": "Restlessness is an early sign of hypoxia, and a saturation of 88% signals a breathing problem \u2014 airway and breathing come before pain, teaching, or a modestly elevated glucose. Pain 8/10 is urgent but not immediately life-threatening; teaching and a glucose of 180 are stable needs."
     },
     {
       "id": 7,
@@ -113,13 +114,12 @@
         "Evaluating a client's response to a new antihypertensive"
       ],
       "answer": 0,
-      "rationale": "APs may perform routine, standardized tasks on stable, predictable clients — such as vital signs, ADLs, and I&O. Assessment, teaching, and evaluation are steps of the nursing process that cannot be delegated to unlicensed personnel."
+      "rationale": "APs may perform routine, standardized tasks on stable, predictable clients \u2014 such as vital signs, ADLs, and I&O. Assessment, teaching, and evaluation are steps of the nursing process that cannot be delegated to unlicensed personnel."
     },
     {
       "id": 8,
       "cat": "Safety & Infection Control",
       "diff": 2,
- 
       "type": "sata",
       "stem": "The nurse is admitting a client with active pulmonary tuberculosis. Which interventions should the nurse include? Select all that apply.",
       "options": [
@@ -135,7 +135,7 @@
         2,
         3
       ],
-      "rationale": "Active TB requires airborne precautions: a negative-pressure isolation room with the door closed, an N95 (or higher) respirator for staff, and a surgical mask on the client whenever they leave the room. A gown is worn per standard precautions only when soiling or contact with body fluids is anticipated — it is not automatic for airborne precautions."
+      "rationale": "Active TB requires airborne precautions: a negative-pressure isolation room with the door closed, an N95 (or higher) respirator for staff, and a surgical mask on the client whenever they leave the room. A gown is worn per standard precautions only when soiling or contact with body fluids is anticipated \u2014 it is not automatic for airborne precautions."
     },
     {
       "id": 9,
@@ -177,10 +177,9 @@
         3,
         4
       ],
-      "rationale": "Donning sequence: hand hygiene → gown → mask/respirator → eye protection → gloves last so the cuffs can cover the gown sleeves. (Doffing is nearly reversed: gloves first because they are the most contaminated.)"
+      "rationale": "Donning sequence: hand hygiene \u2192 gown \u2192 mask/respirator \u2192 eye protection \u2192 gloves last so the cuffs can cover the gown sleeves. (Doffing is nearly reversed: gloves first because they are the most contaminated.)"
     },
     {
- 
       "id": 11,
       "cat": "Reduction of Risk",
       "diff": 2,
@@ -193,7 +192,7 @@
         "The lung has fully re-expanded"
       ],
       "answer": 1,
-      "rationale": "Intermittent bubbling with respiration in the water-seal chamber is expected; continuous bubbling means air is entering the system — an air leak. The nurse should check all connections from the dressing to the drainage unit. Gentle continuous bubbling is normal only in the suction-control chamber."
+      "rationale": "Intermittent bubbling with respiration in the water-seal chamber is expected; continuous bubbling means air is entering the system \u2014 an air leak. The nurse should check all connections from the dressing to the drainage unit. Gentle continuous bubbling is normal only in the suction-control chamber."
     },
     {
       "id": 12,
@@ -223,7 +222,7 @@
         "Irregular respirations"
       ],
       "answer": 1,
-      "rationale": "The level of consciousness is the most sensitive and earliest indicator of rising ICP — subtle restlessness, confusion, or increased drowsiness appears first. Widened pulse pressure and irregular respirations (Cushing triad) and fixed pupils are late, ominous signs."
+      "rationale": "The level of consciousness is the most sensitive and earliest indicator of rising ICP \u2014 subtle restlessness, confusion, or increased drowsiness appears first. Widened pulse pressure and irregular respirations (Cushing triad) and fixed pupils are late, ominous signs."
     },
     {
       "id": 14,
@@ -241,7 +240,6 @@
       "rationale": "Late decelerations reflect uteroplacental insufficiency. The first intrauterine resuscitation step is repositioning to the side to improve placental perfusion, followed by stopping the oxytocin, giving oxygen, an IV bolus, and notifying the provider. Increasing oxytocin worsens the problem; documentation alone ignores fetal compromise."
     },
     {
- 
       "id": 15,
       "cat": "Physiological Adaptation",
       "diff": 1,
@@ -260,14 +258,14 @@
         2,
         4
       ],
-      "rationale": "Hypoglycemia triggers a sympathetic response — sweating, tremors, tachycardia, hunger — and neuroglycopenia causes confusion. A fruity breath odor indicates ketosis from hyperglycemia (DKA), not low blood glucose."
+      "rationale": "Hypoglycemia triggers a sympathetic response \u2014 sweating, tremors, tachycardia, hunger \u2014 and neuroglycopenia causes confusion. A fruity breath odor indicates ketosis from hyperglycemia (DKA), not low blood glucose."
     },
     {
       "id": 16,
       "cat": "Reduction of Risk",
       "diff": 2,
       "type": "mc",
-      "stem": "Fifteen minutes into a transfusion of packed red blood cells, the client develops chills, flank pain, and a temperature increase of 1.2°C. What should the nurse do first?",
+      "stem": "Fifteen minutes into a transfusion of packed red blood cells, the client develops chills, flank pain, and a temperature increase of 1.2\u00b0C. What should the nurse do first?",
       "options": [
         "Slow the transfusion rate",
         "Stop the transfusion",
@@ -295,14 +293,13 @@
         2,
         3
       ],
-      "rationale": "Air is injected into the NPH vial first (without touching the solution), then into the regular vial. Regular insulin is drawn up first — clear before cloudy — so the rapid-acting vial is never contaminated with intermediate-acting insulin."
+      "rationale": "Air is injected into the NPH vial first (without touching the solution), then into the regular vial. Regular insulin is drawn up first \u2014 clear before cloudy \u2014 so the rapid-acting vial is never contaminated with intermediate-acting insulin."
     },
     {
       "id": 18,
       "cat": "Safety & Infection Control",
       "diff": 3,
       "type": "sata",
- 
       "stem": "The nurse is caring for a client with neutropenia following chemotherapy. Which precautions should be implemented? Select all that apply.",
       "options": [
         "Assign the client to a private room",
@@ -317,26 +314,26 @@
         2,
         3
       ],
-      "rationale": "Neutropenic (protective) precautions shield the immunocompromised client from organisms: private room, strict hand hygiene, no fresh flowers or standing water, a low-microbial diet, and screening anyone entering for illness. Airborne precautions and negative pressure protect others from the client and are not indicated here — if anything, protective environments use positive pressure."
+      "rationale": "Neutropenic (protective) precautions shield the immunocompromised client from organisms: private room, strict hand hygiene, no fresh flowers or standing water, a low-microbial diet, and screening anyone entering for illness. Airborne precautions and negative pressure protect others from the client and are not indicated here \u2014 if anything, protective environments use positive pressure."
     },
     {
       "id": 19,
-      "cat": "Psychosocial & Health Promotion",
+      "cat": "Psychosocial Integrity",
       "diff": 1,
       "type": "mc",
       "stem": "A client scheduled for surgery tomorrow says, \"I'm so scared something will go wrong.\" Which response by the nurse is most therapeutic?",
       "options": [
-        "\"Don't worry — your surgeon has done this hundreds of times.\"",
+        "\"Don't worry \u2014 your surgeon has done this hundreds of times.\"",
         "\"Tell me more about what's worrying you.\"",
         "\"Everything will be fine. Try to get some rest.\"",
         "\"Would you like me to call your family?\""
       ],
       "answer": 1,
-      "rationale": "An open-ended invitation to explore feelings is therapeutic — it keeps the focus on the client and encourages expression. False reassurance (\"don't worry,\" \"everything will be fine\") dismisses the client's fear, and offering to call family changes the subject before the concern is explored."
+      "rationale": "An open-ended invitation to explore feelings is therapeutic \u2014 it keeps the focus on the client and encourages expression. False reassurance (\"don't worry,\" \"everything will be fine\") dismisses the client's fear, and offering to call family changes the subject before the concern is explored."
     },
     {
       "id": 20,
-      "cat": "Psychosocial & Health Promotion",
+      "cat": "Health Promotion & Maintenance",
       "diff": 3,
       "type": "mc",
       "stem": "During a wellness visit, a 45-year-old client at average risk asks about colorectal cancer screening. Which response is accurate?",
@@ -354,7 +351,7 @@
       "cat": "Physiological Adaptation",
       "diff": 3,
       "type": "mc",
-      "stem": "A client with COPD has these arterial blood gas results: pH 7.30, PaCO₂ 55 mm Hg, HCO₃⁻ 26 mEq/L. How should the nurse interpret them?",
+      "stem": "A client with COPD has these arterial blood gas results: pH 7.30, PaCO\u2082 55 mm Hg, HCO\u2083\u207b 26 mEq/L. How should the nurse interpret them?",
       "options": [
         "Metabolic acidosis, compensated",
         "Respiratory acidosis, uncompensated",
@@ -362,18 +359,17 @@
         "Metabolic alkalosis, partially compensated"
       ],
       "answer": 1,
-      "rationale": "The pH is acidotic (below 7.35) and the CO₂ is elevated (above 45), so the respiratory system is the culprit — respiratory acidosis. The bicarbonate is still within the normal 22–26 range, meaning the kidneys have not yet compensated, so it is uncompensated."
- 
+      "rationale": "The pH is acidotic (below 7.35) and the CO\u2082 is elevated (above 45), so the respiratory system is the culprit \u2014 respiratory acidosis. The bicarbonate is still within the normal 22\u201326 range, meaning the kidneys have not yet compensated, so it is uncompensated."
     }
   ],
   "caseStudies": [
     {
-      "title": "NGN Case Study · Deteriorating Client",
-      "intro": "0730 · Medical unit. Mr. Alvarez, 68, admitted yesterday with community-acquired pneumonia. Night shift reports he 'seemed more tired than usual.'",
+      "title": "NGN Case Study \u00b7 Deteriorating Client",
+      "intro": "0730 \u00b7 Medical unit. Mr. Alvarez, 68, admitted yesterday with community-acquired pneumonia. Night shift reports he 'seemed more tired than usual.'",
       "vitals": [
         [
           "Temp",
-          "38.9 °C"
+          "38.9 \u00b0C"
         ],
         [
           "HR",
@@ -388,14 +384,14 @@
           "28/min"
         ],
         [
-          "SpO₂",
+          "SpO\u2082",
           "89% RA"
         ]
       ],
       "labs": [
         [
           "WBC",
-          "16,400/µL"
+          "16,400/\u00b5L"
         ],
         [
           "Lactate",
@@ -409,10 +405,10 @@
           "type": "sata",
           "stem": "Which findings require immediate follow-up? Select all that apply.",
           "options": [
-            "Temperature 38.9 °C",
+            "Temperature 38.9 \u00b0C",
             "Blood pressure 92/58",
             "New disorientation and drowsiness",
-            "SpO₂ 89% with RR 28",
+            "SpO\u2082 89% with RR 28",
             "Crackles in the right lower lobe",
             "Lactate 3.1 mmol/L"
           ],
@@ -422,9 +418,8 @@
             3,
             5
           ],
-          "rationale": "Fever and localized crackles are expected with pneumonia. The alarming pattern is what's new and systemic: hypotension, altered mentation, hypoxia with tachypnea, and an elevated lactate — together these signal poor perfusion, not just infection."
+          "rationale": "Fever and localized crackles are expected with pneumonia. The alarming pattern is what's new and systemic: hypotension, altered mentation, hypoxia with tachypnea, and an elevated lactate \u2014 together these signal poor perfusion, not just infection."
         },
- 
         {
           "phase": "Analyze & Prioritize",
           "type": "mc",
@@ -463,19 +458,19 @@
   "flashcards": [
     {
       "f": "Normal serum potassium",
-      "b": "3.5 – 5.0 mEq/L"
+      "b": "3.5 \u2013 5.0 mEq/L"
     },
     {
       "f": "Normal serum sodium",
-      "b": "135 – 145 mEq/L"
+      "b": "135 \u2013 145 mEq/L"
     },
     {
       "f": "Therapeutic digoxin level",
-      "b": "0.5 – 2.0 ng/mL · hold dose if apical pulse < 60/min (adult)"
+      "b": "0.5 \u2013 2.0 ng/mL \u00b7 hold dose if apical pulse < 60/min (adult)"
     },
     {
       "f": "Therapeutic INR on warfarin",
-      "b": "2.0 – 3.0"
+      "b": "2.0 \u2013 3.0"
     },
     {
       "f": "Antidote: heparin",
@@ -485,7 +480,6 @@
       "f": "Antidote: warfarin",
       "b": "Vitamin K (phytonadione)"
     },
- 
     {
       "f": "Antidote: acetaminophen",
       "b": "Acetylcysteine"
@@ -500,7 +494,7 @@
     },
     {
       "f": "Normal ABG values",
-      "b": "pH 7.35–7.45 · PaCO₂ 35–45 · HCO₃⁻ 22–26"
+      "b": "pH 7.35\u20137.45 \u00b7 PaCO\u2082 35\u201345 \u00b7 HCO\u2083\u207b 22\u201326"
     },
     {
       "f": "Earliest sign of increased ICP",
@@ -508,7 +502,7 @@
     },
     {
       "f": "Airborne precautions diseases",
-      "b": "TB, measles, varicella — N95 + negative-pressure room"
+      "b": "TB, measles, varicella \u2014 N95 + negative-pressure room"
     }
   ],
   "levels": [

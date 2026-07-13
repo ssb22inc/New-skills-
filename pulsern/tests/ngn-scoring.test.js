@@ -2,8 +2,8 @@
    exact match correct, any deviation incorrect. Plus validQ coverage of the
    sample items and corrupted shapes. */
 import { describe, it, expect } from "vitest";
-import { scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, validQ, ngnExt } from "../src/ngn.js";
-import { NGN_SAMPLES, CALC_SAMPLES } from "../src/ngn-samples.js";
+import { scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, validQ, ngnExt } from "../src/ngn.js";
+import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "../src/ngn-samples.js";
 
 describe("matrix scoring", () => {
   const answer = [0, 0, 1];
@@ -88,6 +88,33 @@ describe("calc (dosage math) scoring", () => {
     expect(validQ({ ...c, answer: "125" })).toBe(false);
     expect(validQ({ ...c, extra: { ...c.extra, unit: "" } })).toBe(false);
     expect(validQ({ ...c, extra: { ...c.extra, tolerance: -1 } })).toBe(false);
+  });
+});
+
+describe("highlight scoring", () => {
+  const answer = [0, 1, 4];
+  it("set-equal selection is correct regardless of tap order", () => {
+    expect(scoreHighlight([4, 0, 1], answer)).toBe(true);
+  });
+  it("missing or extra highlights are incorrect", () => {
+    expect(scoreHighlight([0, 1], answer)).toBe(false);
+    expect(scoreHighlight([0, 1, 4, 5], answer)).toBe(false);
+    expect(scoreHighlight([0, 1, 5], answer)).toBe(false);
+    expect(scoreHighlight([], answer)).toBe(false);
+  });
+});
+
+describe("coverage samples validate", () => {
+  for (const s of COVERAGE_SAMPLES) {
+    it(`accepts sample ${s.id} (${s.type}, ${s.cat})`, () => expect(validQ(s)).toBe(true));
+  }
+  it("rejects a highlight with duplicate answer indices", () => {
+    const h = COVERAGE_SAMPLES.find((s) => s.type === "highlight");
+    expect(validQ({ ...h, answer: [0, 0, 1] })).toBe(false);
+  });
+  it("rejects a highlight where everything is keyed", () => {
+    const h = COVERAGE_SAMPLES.find((s) => s.type === "highlight");
+    expect(validQ({ ...h, answer: h.extra.tokens.map((_, i) => i) })).toBe(false);
   });
 });
 

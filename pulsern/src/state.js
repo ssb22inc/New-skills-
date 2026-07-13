@@ -5,7 +5,13 @@
    (readiness, weak areas) are recomputed elsewhere, never stored. */
 import { emptyAbility } from "./ability-engine.js";
 
+/* Category renames from the test-plan alignment: ability history recorded
+   under an old name moves to its closest official category. */
+const CAT_RENAMES = { "Psychosocial & Health Promotion": "Psychosocial Integrity" };
+
 export function migrateBlob(s, cats) {
+  const ability = {};
+  for (const [k, v] of Object.entries(s.ability ?? {})) ability[CAT_RENAMES[k] ?? k] = v;
   return {
     theme: s.theme ?? "light",
     xp: s.xp ?? 0,
@@ -17,7 +23,7 @@ export function migrateBlob(s, cats) {
     srs: Array.isArray(s.srs) ? s.srs : [],
     customQs: Array.isArray(s.customQs) ? s.customQs : [],
     provider: s.provider ?? "claude",
-    ability: { ...emptyAbility(cats), ...(s.ability ?? {}) },
+    ability: { ...emptyAbility(cats), ...ability },
     plan: s.plan ?? null,
     examDate: s.examDate ?? null,
     tourSeen: s.tourSeen ?? false,
