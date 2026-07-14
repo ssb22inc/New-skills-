@@ -37,6 +37,7 @@ const flag = (f) => args.includes(f);
 const opt = (f, d) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : d; };
 const COUNT = parseInt(opt("--count", "2"), 10);
 const FORCE_CAT = opt("--cat", null);
+const EXAM_FORM = opt("--exam-form", null) ? parseInt(opt("--exam-form", null), 10) : null;
 const DRY = flag("--dry-run");
 
 let _sb = null;
@@ -193,7 +194,8 @@ ${JSON.stringify(c)}`, 6000);
         cat: c.cat, title: c.title, blurb: c.blurb, intro: c.intro,
         vitals: c.vitals, labs: c.labs, note: c.note, steps: c.steps,
         ai: true, approved: true, // owner-amended gate: adversarial review passed
-        gen_model: GEN_MODEL, review_model: REVIEW_MODEL, reviewer_notes: rev.notes ?? null,
+        exam_form: EXAM_FORM, // null = library case; 1..10 = quarantined to that exam
+        gen_model: GEN_MODEL, review_model: REVIEW_MODEL, reviewer_notes: null,
       });
       if (error) { console.log(`  ~ skip (${error.code === "23505" ? "duplicate title" : error.message.slice(0, 50)})`); continue; }
       existingTitles.push(c.title);
