@@ -111,26 +111,37 @@ Respond ONLY with one raw JSON object, no fences, no commentary, exactly this sh
 Rules:
 - A coherent single client whose data stays consistent across all six steps.
 - Exactly one defensible key per step; distractors plausible but clearly wrong to a competent nurse.
+- CUE KEYING (the #1 rejection cause — follow strictly): in every select-all step, each KEYED option must be UNAMBIGUOUSLY abnormal or a classic red flag (clearly outside normal range or textbook-concerning), and each NON-KEYED option must be clearly normal or expected. NEVER use borderline values that nurses could argue about — no SpO₂ 94-96%, no HR 100-115 in isolation, no "irregular" rhythm without context, no BP that is high-ish but not severe. Make abnormals obviously abnormal and normals obviously normal.
 - Current practice standards; educational exam-prep register — never real-world dosing/treatment instructions.
 - Plain text throughout, no markdown.
 - Do NOT reuse these existing case topics: ${existingTitles.join(" ~ ") || "(none)"}`;
 }
 
 function reviewPrompt(c) {
-  return `You are a hostile NGN case-study reviewer — a licensed nurse educator whose job is to REJECT flawed cases. Attack this case:
-1. KEY CHECK per step — is each keyed answer truly and solely correct? Actively argue for a distractor on every step.
-2. CONSISTENCY — do the vitals, labs, note, and all six steps describe the same coherent client without contradiction?
-3. CURRENCY — outdated values, drugs, or protocols anywhere?
-4. SAFETY — anything readable as real-world treatment instruction?
+  return `You are a rigorous NGN case-study reviewer — a licensed nurse educator. Judge EACH of the six steps separately.
+
+Fail a step ONLY for MATERIAL flaws:
+- a keyed option that is factually wrong or unsafe,
+- a non-keyed option that is equally defensible as correct,
+- outdated values/drugs/protocols,
+- contradiction with the case chart or other steps,
+- anything readable as real-world treatment instruction.
+Do NOT fail a step for stylistic preference or a judgment call where the key is clearly defensible as the single BEST answer — that standard, not perfection, is what the NCLEX itself uses.
 
 Respond ONLY with one raw JSON object:
-{"verdict":"pass"|"fail","confidence":0-1,"notes":"if fail, exactly which step and why"}
-
-Fail anything you are not certain about — including any single weak step. A false pass harms nursing students.
+{"steps":[{"step":1,"verdict":"pass"|"fail","notes":"why, specifically"}, … one entry per step, 6 total],"overall":"pass"|"fail","confidence":0-1}
+overall = pass only if every step passes. Material doubt → fail that step.
 
 CASE:
 ${JSON.stringify(c)}`;
 }
+
+const reviewOk = (rev) =>
+  rev && rev.overall === "pass" && (rev.confidence ?? 0) >= PASS_CONFIDENCE &&
+  Array.isArray(rev.steps) && rev.steps.every((s) => s.verdict === "pass");
+const failNotes = (rev) =>
+  (rev?.steps ?? []).filter((s) => s.verdict === "fail")
+    .map((s) => `Step ${s.step}: ${s.notes}`).join(" | ") || rev?.notes || "(no notes)";
 
 async function run() {
   console.log(`Case factory · count=${COUNT} · ${DRY ? "DRY RUN" : "live, auto-publish at ≥" + PASS_CONFIDENCE}`);
@@ -149,15 +160,34 @@ async function run() {
     console.log(`\n[${i + 1}/${COUNT}] generating a "${cat}" case…`);
     try {
       const raw = await llm(GEN_MODEL, genPrompt(cat, existingTitles), 6000);
-      const c = parseJson(raw);
-      const err = validCase(c);
+      let c = parseJson(raw);
+      let err = validCase(c);
       if (err) { console.log(`  ✗ schema reject: ${err}`); continue; }
-      const rev = parseJson(await llm(REVIEW_MODEL, reviewPrompt(c), 2000));
-      if (rev.verdict !== "pass" || (rev.confidence ?? 0) < PASS_CONFIDENCE) {
-        console.log(`  ✗ REVIEW FAIL (${rev.confidence ?? "?"}): ${(rev.notes ?? "").slice(0, 100)}`);
+      // per-step review → targeted repair loop (up to 3 rounds); each repair
+      // fixes only the steps the reviewer failed, then the case is re-reviewed.
+      let rev = parseJson(await llm(REVIEW_MODEL, reviewPrompt(c), 3000));
+      let repairs = 0;
+      while (!reviewOk(rev) && repairs < 3) {
+        repairs++;
+        console.log(`  ↻ repair ${repairs}: ${failNotes(rev).slice(0, 110)}`);
+        const fixedRaw = await llm(GEN_MODEL, `You wrote this NGN case study; a reviewer failed specific steps. Rewrite ONLY the failed steps so every keyed option is unambiguously the best answer and every non-keyed option is clearly not (obvious abnormals vs obvious normals — no borderline values). Keep every passing step and the chart EXACTLY as-is. Respond ONLY with the complete corrected case as raw JSON in the same shape, no fences, no commentary.
+
+FAILED STEPS:
+${failNotes(rev)}
+
+CASE:
+${JSON.stringify(c)}`, 6000);
+        const fixed = parseJson(fixedRaw);
+        err = validCase(fixed);
+        if (err) { console.log(`  ✗ repair broke schema: ${err}`); break; }
+        c = fixed;
+        rev = parseJson(await llm(REVIEW_MODEL, reviewPrompt(c), 3000));
+      }
+      if (err || !reviewOk(rev)) {
+        console.log(`  ✗ REVIEW FAIL after ${repairs} repair(s) (${rev?.confidence ?? "?"}): ${failNotes(rev).slice(0, 110)}`);
         continue;
       }
-      console.log(`  ✓ pass (${rev.confidence}): "${c.title}"`);
+      console.log(`  ✓ pass (${rev.confidence}${repairs ? `, after ${repairs} repair(s)` : ""}): "${c.title}"`);
       if (DRY) { published++; continue; }
       const { error } = await db().from("case_studies").insert({
         cat: c.cat, title: c.title, blurb: c.blurb, intro: c.intro,
