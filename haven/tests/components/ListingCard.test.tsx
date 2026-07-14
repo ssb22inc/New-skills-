@@ -22,7 +22,10 @@ describe('ListingCard', () => {
     render(<ListingCard listing={mockListing as any} />);
 
     const img = screen.getByRole('img');
-    expect(img).toHaveAttribute('src', mockListing.photos[0].url);
+    // next/image routes the source through the optimizer endpoint.
+    expect(img.getAttribute('src')).toContain(
+      encodeURIComponent(mockListing.photos[0].url)
+    );
   });
 
   it('shows "No photo" when no photos exist', () => {

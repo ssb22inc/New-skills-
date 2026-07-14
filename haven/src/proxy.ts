@@ -25,7 +25,7 @@ export async function proxy(request: NextRequest) {
   // Apply rate limiting on API routes only (avoids overhead on page navigations)
   if (pathname.startsWith('/api/')) {
     try {
-      const { success, limit, remaining, reset } = await rateLimit(request, rateLimitType);
+      const { success, limit, reset } = await rateLimit(request, rateLimitType);
 
       if (!success) {
         const response = NextResponse.json(

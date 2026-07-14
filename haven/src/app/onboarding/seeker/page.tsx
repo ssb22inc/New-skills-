@@ -20,8 +20,9 @@ export default function SeekerOnboardingPage() {
   const { step, setStep } = useOnboardingStore();
 
   useEffect(() => {
+    // setStep is a stable zustand setter.
     setStep(0);
-  }, []);
+  }, [setStep]);
 
   const handleComplete = async () => {
     router.push('/dashboard');

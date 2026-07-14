@@ -1,7 +1,7 @@
 import type { SeekerProfile } from '@/types/user'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-export function scoreTrust(seeker: SeekerProfile): { score: number; details: string[] } {
+export function scoreTrust(_seeker: SeekerProfile): { score: number; details: string[] } {
   // Placeholder - in production this would consider verification status
   return { score: 70, details: ['Basic profile verification'] }
 }

@@ -30,6 +30,9 @@ export function Avatar({ src, alt, fallback, size = 'md', className, ...props }:
       {...props}
     >
       {src && !error ? (
+        // Avatar URLs can point at arbitrary external hosts (OAuth providers),
+        // which next/image would reject without allowlisting each one.
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt={alt || 'Avatar'}

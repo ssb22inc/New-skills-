@@ -9,6 +9,11 @@ const eslintConfig = defineConfig([
     rules: {
       // Stylistic; safe content and noisy in JSX copy.
       "react/no-unescaped-entities": "off",
+      // Underscore prefix marks intentionally unused parameters/vars.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
     },
   },
   {
@@ -25,6 +30,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone k6 / pentest scripts, not part of the Next.js app.
+    // k6 idioms (anonymous default export, `check(...) || counter.add(1)`)
+    // conflict with app lint rules.
+    "load-tests/**",
+    "security-tests/**",
   ]),
 ]);
 

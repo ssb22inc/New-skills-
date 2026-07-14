@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Heart, X, ChevronDown, ChevronUp, MapPin, Bed, Bath, DollarSign } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,13 @@ export function MatchCard({ match, onLike, onSkip, onViewDetails }: MatchCardPro
       {/* Photo */}
       <div className="relative aspect-[4/3]">
         {primaryPhoto ? (
-          <img src={primaryPhoto.url} alt={listing.title} className="h-full w-full object-cover" />
+          <Image
+            src={primaryPhoto.url}
+            alt={listing.title}
+            fill
+            sizes="(max-width: 768px) 100vw, 28rem"
+            className="object-cover"
+          />
         ) : (
           <div className="h-full w-full bg-gray-200" />
         )}

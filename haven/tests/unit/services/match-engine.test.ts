@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { calculateMatchScore } from '@/services/matching/match-engine';
 import { createMockSeekerProfile, createMockListing } from '../../mocks/data';
 

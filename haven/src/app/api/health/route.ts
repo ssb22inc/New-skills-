@@ -24,7 +24,7 @@ export async function GET() {
     const supabase = await createServerSupabaseClient();
     await withTimeout(supabase.from('profiles').select('id').limit(1), 3000);
     checks.database = { status: 'healthy', latencyMs: Date.now() - start };
-  } catch (error) {
+  } catch {
     checks.database = { status: 'unhealthy', detail: 'database unreachable' };
     overallHealthy = false;
   }

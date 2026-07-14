@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useMatches } from '@/hooks/use-matches';
 import { useMatchStore } from '@/stores/match-store';
 import { MatchCard } from './match-card';
@@ -15,10 +15,11 @@ export function SwipeInterface() {
   const { matches, currentIndex, nextMatch, setMatches } = useMatchStore();
 
   useEffect(() => {
+    // fetchMatches is a stable useCallback; setMatches is a stable zustand setter.
     fetchMatches({ limit: 20, minScore: 40 }).then((data) => {
       if (data) setMatches(data);
     });
-  }, []);
+  }, [fetchMatches, setMatches]);
 
   const currentMatch = matches[currentIndex];
 

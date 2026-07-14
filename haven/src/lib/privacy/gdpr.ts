@@ -1,5 +1,4 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { encrypt, decrypt, maskEmail, maskPhone } from '@/lib/security/encryption';
 import type { Database } from '@/types/database';
 
 // Data Subject Rights Implementation

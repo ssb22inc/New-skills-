@@ -45,7 +45,8 @@ export function SeekerChat() {
         updateLifestyle(data.lifestyle);
       }
     }
-  }, [conversation?.extracted_data]);
+    // Store setters are stable zustand references.
+  }, [conversation?.extracted_data, updateHousingPreferences, updateLifestyle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

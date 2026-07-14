@@ -30,8 +30,9 @@ export async function verifyToken(token: string): Promise<Record<string, unknown
   }
 }
 
-// Authenticate request
-export async function authenticateRequest(request: NextRequest): Promise<{
+// Authenticate request. The request parameter is unused today (Supabase reads
+// auth from cookies) but kept for API stability.
+export async function authenticateRequest(_request: NextRequest): Promise<{
   authenticated: boolean;
   user: User | null;
   error?: string;

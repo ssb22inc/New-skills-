@@ -7,13 +7,6 @@ describe('SQL Injection Prevention', () => {
     expect(escapeForLike('test_user')).toBe('test\\_user');
     expect(escapeForLike("'; DROP TABLE users;--")).toBe("'; DROP TABLE users;--");
   });
-
-  it('parameterized queries prevent injection', async () => {
-    // This would be an integration test with actual DB
-    const maliciousInput = "'; DROP TABLE listings;--";
-    // The input should be passed as a parameter, not concatenated
-    // Supabase client handles this automatically
-  });
 });
 
 describe('XSS Prevention', () => {

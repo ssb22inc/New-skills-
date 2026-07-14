@@ -1,5 +1,4 @@
 import { ListingWithPhotos } from './listing';
-import { SeekerProfile } from './user';
 
 export interface MatchScore {
   total: number;

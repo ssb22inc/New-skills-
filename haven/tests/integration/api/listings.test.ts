@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { createMockListing } from '../../mocks/data';
 
 describe('Listings API', () => {
   describe('GET /api/listings', () => {

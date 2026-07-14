@@ -157,6 +157,8 @@ export function PhotoUploader({ listingId, photos, onChange, onAnalyze, maxPhoto
                 draggedIndex === index ? 'opacity-50' : ''
               )}
             >
+              {/* Previews are blob: object URLs, which next/image cannot optimize. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={photo.url}
                 alt={`Listing photo ${index + 1}`}

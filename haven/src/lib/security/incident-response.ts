@@ -1,4 +1,3 @@
-import { securityMonitor } from './monitoring';
 import { auditLogger } from './audit';
 
 export type IncidentSeverity = 'P1' | 'P2' | 'P3' | 'P4';

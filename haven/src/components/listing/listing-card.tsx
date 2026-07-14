@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Heart, MapPin, Bed, Bath, Square } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,10 +23,12 @@ export function ListingCard({ listing, onSave, isSaved, showMatchScore, matchSco
       <Link href={`/listings/${listing.id}`}>
         <div className="relative aspect-[4/3]">
           {primaryPhoto ? (
-            <img
+            <Image
               src={primaryPhoto.url}
               alt={listing.title}
-              className="h-full w-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              className="object-cover"
             />
           ) : (
             <div className="h-full w-full bg-gray-200 flex items-center justify-center">
