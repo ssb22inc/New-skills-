@@ -437,10 +437,18 @@ export default function App() {
     })();
     // flashcard + case banks load independently — a failure in one never blocks the others
     (async () => {
-      const { data, error } = await supabase.from("flashcards")
-        .select("id, cat, topic, front, back").eq("approved", true);
-      if (!error && data?.length) {
-        setBankCards(data.map((r) => ({ id: `c${r.id}`, cat: r.cat, topic: r.topic, front: r.front, back: r.back, ai: true })));
+      // paginate: the bank is past Supabase's 1,000-row-per-request cap
+      const all = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from("flashcards")
+          .select("id, cat, topic, front, back").eq("approved", true)
+          .order("id").range(from, from + 999);
+        if (error || !data?.length) break;
+        all.push(...data);
+        if (data.length < 1000) break;
+      }
+      if (all.length) {
+        setBankCards(all.map((r) => ({ id: `c${r.id}`, cat: r.cat, topic: r.topic, front: r.front, back: r.back, ai: true })));
       }
     })();
     (async () => {
@@ -1434,6 +1442,9 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
 
 /* ================= FLASHCARDS (real spaced repetition) ================= */
 
+const CALC_CHIP = "Dosage calculations"; // topic-based focus: math cards live inside Pharmacology
+const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i.test(c.topic);
+
 function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = false, onDone }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
@@ -1441,7 +1452,9 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
   const [typed, setTyped] = useState(""); // typed recall attempt (optional, self-graded)
 
   const filtered = useMemo(
-    () => (catFilter.length ? cards.filter((c) => catFilter.includes(c.cat)) : cards),
+    () => (catFilter.length
+      ? cards.filter((c) => catFilter.some((f) => (f === CALC_CHIP ? isCalcCard(c) : f === c.cat)))
+      : cards),
     [cards, catFilter]
   );
 
@@ -1474,9 +1487,9 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
 
   const chips = !embedded && (
     <div className="fchips" role="group" aria-label="Filter cards by category">
-      {CATS.map((c) => (
+      {[...CATS, CALC_CHIP].map((c) => (
         <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
-          onClick={() => setCatFilter((f) => f.includes(c) ? f.filter((x) => x !== c) : [...f, c])}>{c}</button>
+          onClick={() => setCatFilter((f) => f.includes(c) ? f.filter((x) => x !== c) : [...f, c])}>{c === CALC_CHIP ? "🧮 " + c : c}</button>
       ))}
     </div>
   );

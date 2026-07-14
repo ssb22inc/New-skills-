@@ -38,6 +38,7 @@ const flag = (f) => args.includes(f);
 const opt = (f, d) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : d; };
 const BATCH = parseInt(opt("--batch", "40"), 10);
 const FORCE_CAT = opt("--cat", null);
+const FORCE_TOPIC = opt("--topic", null);
 const DRY = flag("--dry-run");
 
 let _sb = null;
@@ -87,7 +88,9 @@ Respond ONLY with a raw JSON array, no fences, no commentary:
 
 Rules:
 - One testable fact per card. Front must be answerable without seeing the back.
-- Cover a SPREAD of topics within each category — labs, meds, priorities, positioning, precautions, developmental norms, therapeutic communication principles, as fits the category.
+${FORCE_TOPIC
+  ? `- EVERY card's topic must be "${FORCE_TOPIC}" and its content strictly about that topic — formulas by name, unit conversions with exact factors, rounding rules, and short worked one-step examples that fit on a card.`
+  : "- Cover a SPREAD of topics within each category — labs, meds, priorities, positioning, precautions, developmental norms, therapeutic communication principles, as fits the category."}
 - Current practice standards only. Educational exam-prep register — never real-world dosing or treatment instructions.
 - Plain text only, no markdown.
 - Do NOT duplicate these existing card fronts: ${existingFronts.slice(0, 120).join(" ~ ") || "(none yet)"}`;
