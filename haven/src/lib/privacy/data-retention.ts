@@ -1,7 +1,10 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import type { Database } from '@/types/database';
+
+type TableName = keyof Database['public']['Tables'] & string;
 
 interface RetentionPolicy {
-  table: string;
+  table: TableName;
   retentionDays: number;
   condition?: string;
   action: 'delete' | 'anonymize';
@@ -13,12 +16,6 @@ const retentionPolicies: RetentionPolicy[] = [
     table: 'audit_logs',
     retentionDays: 90,
     condition: "severity != 'critical'",
-    action: 'delete',
-  },
-  // Analytics events - keep for 365 days
-  {
-    table: 'events',
-    retentionDays: 365,
     action: 'delete',
   },
   // Messages from deleted conversations - 30 days
@@ -39,7 +36,7 @@ const retentionPolicies: RetentionPolicy[] = [
   {
     table: 'blocked_ips',
     retentionDays: 7,
-    condition: 'blocked_until < NOW()',
+    condition: 'expires_at < NOW()',
     action: 'delete',
   },
 ];
@@ -55,7 +52,9 @@ export async function enforceRetentionPolicies(): Promise<{
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - policy.retentionDays);
 
-    let query = supabase.from(policy.table).select('id');
+    // Table name is dynamic; every policy table has `id` and `created_at`,
+    // so anchor the builder's types on one such table.
+    let query = supabase.from(policy.table as 'audit_logs').select('id');
 
     // Apply time-based filter
     query = query.lt('created_at', cutoffDate.toISOString());
@@ -69,7 +68,7 @@ export async function enforceRetentionPolicies(): Promise<{
       const ids = records.map((r) => r.id);
 
       if (policy.action === 'delete') {
-        await supabase.from(policy.table).delete().in('id', ids);
+        await supabase.from(policy.table as 'audit_logs').delete().in('id', ids);
       } else if (policy.action === 'anonymize') {
         // Anonymization depends on table structure
         await anonymizeRecords(policy.table, ids);
@@ -82,25 +81,19 @@ export async function enforceRetentionPolicies(): Promise<{
   return { policiesApplied: retentionPolicies.length, recordsAffected: totalAffected };
 }
 
-async function anonymizeRecords(table: string, ids: string[]): Promise<void> {
+async function anonymizeRecords(table: TableName, ids: string[]): Promise<void> {
   const supabase = await createServerSupabaseClient();
 
-  const anonymizationMap: Record<string, Record<string, unknown>> = {
-    verifications: {
-      document_storage_path: null,
-      extracted_data: {},
-      ai_analysis: {},
-    },
-    profiles: {
-      full_name: '[Anonymized]',
-      phone: null,
-      avatar_url: null,
-    },
-  };
-
-  const updates = anonymizationMap[table];
-  if (updates) {
-    await supabase.from(table).update(updates).in('id', ids);
+  if (table === 'verifications') {
+    await supabase
+      .from('verifications')
+      .update({ document_storage_path: null, extracted_data: {}, ai_analysis: {} })
+      .in('id', ids);
+  } else if (table === 'profiles') {
+    await supabase
+      .from('profiles')
+      .update({ full_name: '[Anonymized]', phone: null, avatar_url: null })
+      .in('id', ids);
   }
 }
 

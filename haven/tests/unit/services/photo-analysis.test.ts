@@ -10,6 +10,9 @@ vi.mock('@/lib/openai/client', () => ({
       },
     },
   },
+  MODEL: 'gpt-4o',
+  VISION_MODEL: 'gpt-4o',
+  EMBEDDING_MODEL: 'text-embedding-3-small',
 }));
 
 describe('Photo Analysis Service', () => {
@@ -55,11 +58,11 @@ describe('Photo Analysis Service', () => {
       ];
 
       let callCount = 0;
-      vi.mocked(openai.chat.completions.create).mockImplementation(() => {
+      vi.mocked(openai.chat.completions.create).mockImplementation((() => {
         return Promise.resolve({
           choices: [{ message: { content: JSON.stringify(mockResponses[callCount++]) } }],
-        } as any);
-      });
+        });
+      }) as never);
 
       const result = await analyzeMultiplePhotos([
         'https://example.com/1.jpg',

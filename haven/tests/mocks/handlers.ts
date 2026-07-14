@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw';
+import type { Match } from '@/types/matching';
 
 export const mockUser = {
   id: 'user-123',
@@ -32,6 +33,7 @@ export const mockListing = {
 
 export const mockMatch = {
   id: 'match-123',
+  created_at: '2024-01-01T00:00:00.000Z',
   listing: mockListing,
   scores: {
     total: 85,
@@ -50,7 +52,8 @@ export const mockMatch = {
     amenity: { score: 88, matched_must_haves: ['wifi'], missing_must_haves: [], matched_nice_to_haves: ['parking'], dealbreaker_conflicts: [] },
     trust: { score: 82, landlord_verified: true },
   },
-};
+  // The hand-rolled mock listing is intentionally a subset of the full Row.
+} as unknown as Match;
 
 export const handlers = [
   // Auth endpoints
@@ -63,10 +66,22 @@ export const handlers = [
   }),
 
   // Listings endpoints
-  http.get('/api/listings', () => {
+  http.get('/api/listings', ({ request }) => {
+    const url = new URL(request.url);
+    const page = Number(url.searchParams.get('page') ?? '1');
+    const limit = Number(url.searchParams.get('limit') ?? '20');
+    const city = url.searchParams.get('city');
+
+    let listings = [mockListing];
+    if (city) {
+      listings = listings.filter((l) =>
+        l.city.toLowerCase().includes(city.toLowerCase())
+      );
+    }
+
     return HttpResponse.json({
-      listings: [mockListing],
-      pagination: { page: 1, limit: 20, total: 1 },
+      listings,
+      pagination: { page, limit, total: listings.length },
     });
   }),
 
@@ -78,7 +93,18 @@ export const handlers = [
   }),
 
   http.post('/api/listings', async ({ request }) => {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
+
+    // Mirror the API's required-field validation.
+    const required = ['title', 'description', 'property_type', 'city', 'price_monthly'];
+    const missing = required.filter((field) => body[field] == null);
+    if (missing.length > 0) {
+      return HttpResponse.json(
+        { error: 'Validation failed', missing },
+        { status: 400 }
+      );
+    }
+
     return HttpResponse.json({ ...mockListing, ...body, id: 'new-listing-123' }, { status: 201 });
   }),
 
@@ -132,7 +158,7 @@ export const handlers = [
   }),
 
   http.patch('/api/users/profile', async ({ request }) => {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
     return HttpResponse.json({ ...mockUser, ...body });
   }),
 ];

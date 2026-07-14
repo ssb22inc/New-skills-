@@ -5,6 +5,19 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      // Stylistic; safe content and noisy in JSX copy.
+      "react/no-unescaped-entities": "off",
+    },
+  },
+  {
+    files: ["tests/**"],
+    rules: {
+      // Test doubles and fixtures legitimately reach for `any`.
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

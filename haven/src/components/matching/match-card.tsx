@@ -102,6 +102,7 @@ export function MatchCard({ match, onLike, onSkip, onViewDetails }: MatchCardPro
             variant="outline"
             size="lg"
             className="rounded-full h-14 w-14 p-0"
+            aria-label="Skip"
           >
             <X className="h-6 w-6 text-gray-500" />
           </Button>
@@ -118,6 +119,7 @@ export function MatchCard({ match, onLike, onSkip, onViewDetails }: MatchCardPro
             onClick={onLike}
             size="lg"
             className="rounded-full h-14 w-14 p-0 bg-red-500 hover:bg-red-600"
+            aria-label="Like"
           >
             <Heart className="h-6 w-6" />
           </Button>

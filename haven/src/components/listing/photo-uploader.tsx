@@ -47,16 +47,19 @@ export function PhotoUploader({ listingId, photos, onChange, onAnalyze, maxPhoto
       });
     }
 
-    onChange([...photos, ...newPhotos]);
+    // onChange takes a plain array, not a functional updater — track the
+    // evolving list locally so each finished upload builds on the last.
+    let current = [...photos, ...newPhotos];
+    onChange(current);
 
     // Upload each photo
     for (const photo of newPhotos) {
       if (!photo.file) continue;
-      
+
       const fileName = `${Date.now()}-${photo.file.name}`;
       const path = listingId ? `listings/${listingId}/${fileName}` : `temp/${fileName}`;
 
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('photos')
         .upload(path, photo.file);
 
@@ -67,11 +70,10 @@ export function PhotoUploader({ listingId, photos, onChange, onAnalyze, maxPhoto
 
       const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(path);
 
-      onChange((prev) =>
-        prev.map((p) =>
-          p.url === photo.url ? { ...p, url: publicUrl, uploading: false } : p
-        )
+      current = current.map((p) =>
+        p.url === photo.url ? { ...p, url: publicUrl, uploading: false } : p
       );
+      onChange(current);
     }
   }, [photos, onChange, maxPhotos, listingId, supabase]);
 
@@ -155,7 +157,11 @@ export function PhotoUploader({ listingId, photos, onChange, onAnalyze, maxPhoto
                 draggedIndex === index ? 'opacity-50' : ''
               )}
             >
-              <img src={photo.url} alt="" className="h-full w-full object-cover" />
+              <img
+                src={photo.url}
+                alt={`Listing photo ${index + 1}`}
+                className="h-full w-full object-cover"
+              />
               
               {photo.uploading && (
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">

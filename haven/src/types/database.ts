@@ -31,8 +31,9 @@ export interface Database {
           sms_notifications: boolean;
           metadata: Json;
         };
-        Insert: Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'updated_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['profiles']['Row'], 'created_at' | 'updated_at'>>;
         Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
+        Relationships: [];
       };
       seeker_profiles: {
         Row: {
@@ -59,8 +60,17 @@ export interface Database {
           income_document_type: string | null;
           profile_embedding: number[] | null;
         };
-        Insert: Omit<Database['public']['Tables']['seeker_profiles']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['seeker_profiles']['Row'], 'id' | 'created_at' | 'updated_at'>>;
         Update: Partial<Database['public']['Tables']['seeker_profiles']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'seeker_profiles_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: true;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       landlord_profiles: {
         Row: {
@@ -81,8 +91,17 @@ export interface Database {
           response_rate: number | null;
           response_time_hours: number | null;
         };
-        Insert: Omit<Database['public']['Tables']['landlord_profiles']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['landlord_profiles']['Row'], 'id' | 'created_at' | 'updated_at'>>;
         Update: Partial<Database['public']['Tables']['landlord_profiles']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'landlord_profiles_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: true;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       listings: {
         Row: {
@@ -134,8 +153,16 @@ export interface Database {
           favorites_count: number;
           listing_embedding: number[] | null;
         };
-        Insert: Omit<Database['public']['Tables']['listings']['Row'], 'id' | 'created_at' | 'updated_at' | 'views_count' | 'inquiries_count' | 'favorites_count'>;
+        Insert: Partial<Omit<Database['public']['Tables']['listings']['Row'], 'id' | 'created_at' | 'updated_at' | 'views_count' | 'inquiries_count' | 'favorites_count'>>;
         Update: Partial<Database['public']['Tables']['listings']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'listings_user_id_fkey';
+            columns: ['user_id'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       listing_photos: {
         Row: {
@@ -151,8 +178,16 @@ export interface Database {
           is_primary: boolean;
           ai_analysis: Json;
         };
-        Insert: Omit<Database['public']['Tables']['listing_photos']['Row'], 'id' | 'created_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['listing_photos']['Row'], 'id' | 'created_at'>>;
         Update: Partial<Database['public']['Tables']['listing_photos']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'listing_photos_listing_id_fkey';
+            columns: ['listing_id'];
+            referencedRelation: 'listings';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       matches: {
         Row: {
@@ -178,8 +213,22 @@ export interface Database {
           outcome: string | null;
           outcome_at: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['matches']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['matches']['Row'], 'id' | 'created_at' | 'updated_at'>>;
         Update: Partial<Database['public']['Tables']['matches']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'matches_seeker_id_fkey';
+            columns: ['seeker_id'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'matches_listing_id_fkey';
+            columns: ['listing_id'];
+            referencedRelation: 'listings';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       bookings: {
         Row: {
@@ -206,8 +255,28 @@ export interface Database {
           cancelled_by: string | null;
           cancellation_reason: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['bookings']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['bookings']['Row'], 'id' | 'created_at' | 'updated_at'>>;
         Update: Partial<Database['public']['Tables']['bookings']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'bookings_listing_id_fkey';
+            columns: ['listing_id'];
+            referencedRelation: 'listings';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'bookings_seeker_id_fkey';
+            columns: ['seeker_id'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'bookings_landlord_id_fkey';
+            columns: ['landlord_id'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       conversations: {
         Row: {
@@ -221,8 +290,9 @@ export interface Database {
           last_message_preview: string | null;
           read_status: Json;
         };
-        Insert: Omit<Database['public']['Tables']['conversations']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['conversations']['Row'], 'id' | 'created_at' | 'updated_at'>>;
         Update: Partial<Database['public']['Tables']['conversations']['Insert']>;
+        Relationships: [];
       };
       messages: {
         Row: {
@@ -236,8 +306,16 @@ export interface Database {
           metadata: Json;
           read_at: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['messages']['Row'], 'id' | 'created_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['messages']['Row'], 'id' | 'created_at'>>;
         Update: Partial<Database['public']['Tables']['messages']['Insert']>;
+        Relationships: [
+          {
+            foreignKeyName: 'messages_conversation_id_fkey';
+            columns: ['conversation_id'];
+            referencedRelation: 'conversations';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       reviews: {
         Row: {
@@ -260,8 +338,9 @@ export interface Database {
           response_at: string | null;
           is_public: boolean;
         };
-        Insert: Omit<Database['public']['Tables']['reviews']['Row'], 'id' | 'created_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['reviews']['Row'], 'id' | 'created_at'>>;
         Update: Partial<Database['public']['Tables']['reviews']['Insert']>;
+        Relationships: [];
       };
       verifications: {
         Row: {
@@ -283,8 +362,9 @@ export interface Database {
           external_verification_id: string | null;
           external_provider: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['verifications']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['verifications']['Row'], 'id' | 'created_at' | 'updated_at'>>;
         Update: Partial<Database['public']['Tables']['verifications']['Insert']>;
+        Relationships: [];
       };
       subscriptions: {
         Row: {
@@ -304,12 +384,113 @@ export interface Database {
           listings_limit: number | null;
           listings_used: number;
         };
-        Insert: Omit<Database['public']['Tables']['subscriptions']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Omit<Database['public']['Tables']['subscriptions']['Row'], 'id' | 'created_at' | 'updated_at'>>;
         Update: Partial<Database['public']['Tables']['subscriptions']['Insert']>;
+        Relationships: [];
+      };
+      security_alerts: {
+        Row: {
+          id: string;
+          created_at: string;
+          alert_type: string;
+          severity: 'low' | 'medium' | 'high' | 'critical';
+          title: string;
+          description: string | null;
+          ip_address: string | null;
+          user_id: string | null;
+          request_path: string | null;
+          user_agent: string | null;
+          metadata: Json;
+          resolved: boolean;
+          resolved_at: string | null;
+          resolved_by: string | null;
+        };
+        Insert: Partial<Omit<Database['public']['Tables']['security_alerts']['Row'], 'id'>>;
+        Update: Partial<Database['public']['Tables']['security_alerts']['Insert']>;
+        Relationships: [];
+      };
+      blocked_ips: {
+        Row: {
+          id: string;
+          created_at: string;
+          ip_address: string;
+          reason: string;
+          blocked_by: string | null;
+          expires_at: string | null;
+          metadata: Json;
+        };
+        Insert: Partial<Omit<Database['public']['Tables']['blocked_ips']['Row'], 'id'>>;
+        Update: Partial<Database['public']['Tables']['blocked_ips']['Insert']>;
+        Relationships: [];
+      };
+      consent_records: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          user_id: string;
+          consent_type: string;
+          granted: boolean;
+          ip_address: string | null;
+          user_agent: string | null;
+          version: string;
+          metadata: Json;
+        };
+        Insert: Partial<Omit<Database['public']['Tables']['consent_records']['Row'], 'id' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Database['public']['Tables']['consent_records']['Insert']>;
+        Relationships: [];
+      };
+      data_deletion_requests: {
+        Row: {
+          id: string;
+          created_at: string;
+          updated_at: string;
+          user_id: string;
+          status: 'pending' | 'processing' | 'completed' | 'failed';
+          requested_at: string;
+          completed_at: string | null;
+          reason: string | null;
+        };
+        Insert: Partial<Omit<Database['public']['Tables']['data_deletion_requests']['Row'], 'id' | 'created_at' | 'updated_at'>>;
+        Update: Partial<Database['public']['Tables']['data_deletion_requests']['Insert']>;
+        Relationships: [];
+      };
+      audit_logs: {
+        Row: {
+          id: string;
+          created_at: string;
+          timestamp: string;
+          action: string;
+          user_id: string | null;
+          ip_address: string | null;
+          user_agent: string | null;
+          resource_type: string | null;
+          resource_id: string | null;
+          details: Json;
+          severity: 'info' | 'warning' | 'critical';
+          success: boolean;
+        };
+        Insert: Partial<Omit<Database['public']['Tables']['audit_logs']['Row'], 'id' | 'created_at'>>;
+        Update: Partial<Database['public']['Tables']['audit_logs']['Insert']>;
+        Relationships: [];
+      };
+      processed_webhook_events: {
+        Row: {
+          stripe_event_id: string;
+          processed_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['processed_webhook_events']['Row']>;
+        Update: Partial<Database['public']['Tables']['processed_webhook_events']['Insert']>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      increment_listing_views: {
+        Args: { listing_uuid: string };
+        Returns: undefined;
+      };
+    };
     Enums: {
       user_type: UserType;
       property_type: PropertyType;

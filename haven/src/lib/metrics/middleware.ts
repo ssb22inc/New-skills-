@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { httpRequestsTotal, httpRequestDuration } from '@/lib/metrics/registry';
 
-export function withMetrics(
-  handler: (req: NextRequest, ctx: any) => Promise<NextResponse>
+export function withMetrics<Ctx>(
+  handler: (req: NextRequest, ctx: Ctx) => Promise<NextResponse>
 ) {
-  return async (req: NextRequest, ctx: any) => {
+  return async (req: NextRequest, ctx: Ctx) => {
     const start = Date.now();
     const path = req.nextUrl.pathname;
     const method = req.method;

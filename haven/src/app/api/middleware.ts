@@ -6,7 +6,7 @@ import { logSecurityEvent } from '@/lib/security/audit';
 
 export type ApiHandler = (
   request: NextRequest,
-  context: { params: Record<string, string>; user?: any }
+  context: { params: Record<string, string>; user?: unknown }
 ) => Promise<NextResponse>;
 
 interface MiddlewareOptions {

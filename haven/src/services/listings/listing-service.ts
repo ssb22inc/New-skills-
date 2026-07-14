@@ -1,5 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Listing, ListingFilters } from '@/types/listing'
+import type { Database } from '@/types/database'
+
+type ListingInsert = Database['public']['Tables']['listings']['Insert']
+type ListingUpdate = Database['public']['Tables']['listings']['Update']
 
 export async function getListings(
   filters: ListingFilters = {},
@@ -18,12 +22,12 @@ export async function getListings(
 
   if (filters.city) query = query.ilike('city', filters.city)
   if (filters.state) query = query.eq('state', filters.state)
-  if (filters.min_price) query = query.gte('price_monthly', filters.min_price)
-  if (filters.max_price) query = query.lte('price_monthly', filters.max_price)
+  if (filters.minPrice) query = query.gte('price_monthly', filters.minPrice)
+  if (filters.maxPrice) query = query.lte('price_monthly', filters.maxPrice)
   if (filters.bedrooms !== undefined) query = query.eq('bedrooms', filters.bedrooms)
-  if (filters.property_type) query = query.eq('property_type', filters.property_type)
-  if (filters.furniture_status) query = query.eq('furniture_status', filters.furniture_status)
-  if (filters.available_date) query = query.lte('available_date', filters.available_date)
+  if (filters.propertyType) query = query.eq('property_type', filters.propertyType)
+  if (filters.furnitureStatus) query = query.eq('furniture_status', filters.furnitureStatus)
+  if (filters.availableFrom) query = query.lte('available_date', filters.availableFrom)
   if (filters.amenities?.length) query = query.contains('amenities', filters.amenities)
 
   const { data, count, error } = await query
@@ -51,7 +55,7 @@ export async function createListing(
   const supabase = createAdminClient()
   const { data: listing, error } = await supabase
     .from('listings')
-    .insert({ ...data, user_id: userId } as Listing)
+    .insert({ ...data, user_id: userId } as ListingInsert)
     .select()
     .single()
 
@@ -67,7 +71,7 @@ export async function updateListing(
   const supabase = createAdminClient()
   const { data: listing, error } = await supabase
     .from('listings')
-    .update(data)
+    .update(data as ListingUpdate)
     .eq('id', id)
     .eq('user_id', userId)
     .select()

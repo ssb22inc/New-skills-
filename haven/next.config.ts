@@ -48,6 +48,10 @@ if (process.env.SKIP_ENV_VALIDATION !== '1') {
 }
 
 const nextConfig: NextConfig = {
+  // Explicit (empty) Turbopack config: Next 16 defaults to Turbopack and
+  // errors out when a webpack config (injected by withSentryConfig) exists
+  // without one.
+  turbopack: {},
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
@@ -74,7 +78,4 @@ export default withSentryConfig(nextConfig, {
   silent: !process.env.CI,
   widenClientFileUpload: true,
   tunnelRoute: '/monitoring',
-  hideSourceMaps: true,
-  disableLogger: true,
-  automaticVercelMonitors: false,
 });

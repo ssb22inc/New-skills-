@@ -35,3 +35,6 @@ Sentry.init({
     return breadcrumb;
   },
 });
+
+// Instrument client-side navigations for performance tracing.
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

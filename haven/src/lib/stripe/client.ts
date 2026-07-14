@@ -1,8 +1,26 @@
 import Stripe from 'stripe';
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-02-24.acacia',
-  typescript: true,
+// apiVersion intentionally omitted: the SDK pins the API version it was
+// generated against (currently 2026-06-24.dahlia), which is the only version
+// its types are guaranteed to match.
+//
+// Lazily constructed so importing this module (e.g. during `next build`
+// page-data collection) doesn't require STRIPE_SECRET_KEY.
+let _client: Stripe | null = null;
+
+function getClient(): Stripe {
+  if (!_client) {
+    _client = new Stripe(process.env.STRIPE_SECRET_KEY!, { typescript: true });
+  }
+  return _client;
+}
+
+export const stripe: Stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    const client = getClient();
+    const value = client[prop as keyof Stripe];
+    return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(client) : value;
+  },
 });
 
 export const PLANS = {

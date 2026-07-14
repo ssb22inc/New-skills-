@@ -3,6 +3,9 @@ import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { setupServer } from 'msw/node';
 import { handlers } from './mocks/handlers';
 
+// Modules under test validate required secrets at import time.
+process.env.JWT_SECRET ??= 'vitest-only-jwt-secret-never-use-in-production-0123456789abcdef';
+
 // MSW Server setup
 export const server = setupServer(...handlers);
 

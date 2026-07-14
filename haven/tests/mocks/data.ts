@@ -1,5 +1,7 @@
 import { faker } from '@faker-js/faker';
-import type { Listing, Profile, SeekerProfile, Match } from '@/types';
+import type { Listing } from '@/types/listing';
+import type { Profile, SeekerProfile } from '@/types/user';
+import type { Match } from '@/types/matching';
 
 export function createMockProfile(overrides?: Partial<Profile>): Profile {
   return {
@@ -43,8 +45,8 @@ export function createMockListing(overrides?: Partial<Listing>): Listing {
     state: faker.location.state({ abbreviated: true }),
     zip_code: faker.location.zipCode(),
     neighborhood: faker.location.county(),
-    latitude: parseFloat(faker.location.latitude()),
-    longitude: parseFloat(faker.location.longitude()),
+    latitude: faker.location.latitude(),
+    longitude: faker.location.longitude(),
     price_monthly: faker.number.int({ min: 1000, max: 5000 }),
     utilities_included: faker.datatype.boolean(),
     available_date: faker.date.future().toISOString().split('T')[0],
@@ -104,7 +106,8 @@ export function createMockListings(count: number): Listing[] {
 export function createMockMatches(count: number): Match[] {
   return Array.from({ length: count }, () => ({
     id: faker.string.uuid(),
-    listing: createMockListing(),
+    // Mock listings omit the photos relation; Match expects ListingWithPhotos.
+    listing: { ...createMockListing(), listing_photos: [] } as unknown as Match['listing'],
     scores: {
       total: faker.number.int({ min: 40, max: 100 }),
       lifestyle: faker.number.int({ min: 40, max: 100 }),

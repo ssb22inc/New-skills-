@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeText, sanitizeHtml, escapeForLike } from '@/lib/security/sanitize';
+import { sanitizeText, sanitizeHtml, sanitizeUrl, escapeForLike } from '@/lib/security/sanitize';
 
 describe('SQL Injection Prevention', () => {
   it('escapes SQL LIKE special characters', () => {
@@ -30,7 +30,10 @@ describe('XSS Prevention', () => {
 
   it('sanitizes javascript: URLs', () => {
     const dirty = '<a href="javascript:alert(1)">Click</a>';
-    expect(sanitizeHtml(dirty)).toBe('');
+    const clean = sanitizeHtml(dirty);
+    // DOMPurify keeps the text content but must strip the dangerous URL.
+    expect(clean).not.toContain('javascript:');
+    expect(clean).not.toContain('href');
   });
 
   it('allows safe HTML in sanitizeHtml', () => {
@@ -45,17 +48,28 @@ describe('XSS Prevention', () => {
 });
 
 describe('Path Traversal Prevention', () => {
-  it('rejects path traversal attempts', () => {
+  it('rejects dangerous URL schemes', () => {
+    expect(sanitizeUrl('file:///etc/passwd')).toBeNull();
+    expect(sanitizeUrl('javascript:alert(1)')).toBeNull();
+    expect(sanitizeUrl('data:text/html,<script>alert(1)</script>')).toBeNull();
+    expect(sanitizeUrl('ftp://internal-host/secret')).toBeNull();
+    expect(sanitizeUrl('not a url')).toBeNull();
+    expect(sanitizeUrl('https://example.com/photo.jpg')).toBe('https://example.com/photo.jpg');
+  });
+
+  it('detects traversal sequences in file paths', () => {
     const maliciousPaths = [
       '../../../etc/passwd',
       '..\\..\\..\\windows\\system32\\config\\sam',
       '/etc/passwd',
-      'file:///etc/passwd',
     ];
 
+    const isSuspicious = (p: string) =>
+      p.includes('..') || p.startsWith('/') || p.includes('\\');
+
     maliciousPaths.forEach((path) => {
-      // Your file handling should reject these
-      expect(path.includes('..') || path.startsWith('/')).toBeTruthy();
+      expect(isSuspicious(path)).toBe(true);
     });
+    expect(isSuspicious('listings/abc/photo.jpg')).toBe(false);
   });
 });

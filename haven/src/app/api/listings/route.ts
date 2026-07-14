@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { listingSchema } from '@/lib/utils/validation';
 import { logger } from '@/lib/logger';
 import { ZodError } from 'zod';
+import type { PropertyType } from '@/types/database';
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
     const ALLOWED_PROPERTY_TYPES = ['apartment', 'house', 'condo', 'room', 'townhouse', 'studio'];
     const propertyType = searchParams.get('propertyType');
     if (propertyType && ALLOWED_PROPERTY_TYPES.includes(propertyType)) {
-      query = query.eq('property_type', propertyType);
+      query = query.eq('property_type', propertyType as PropertyType);
     }
 
     const availableFrom = searchParams.get('availableFrom');

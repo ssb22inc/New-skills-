@@ -38,9 +38,8 @@ describe('MatchCard', () => {
   it('calls onLike when like button is clicked', () => {
     render(<MatchCard {...defaultProps} />);
 
-    const likeButtons = screen.getAllByRole('button');
-    const likeButton = likeButtons.find(btn => btn.className.includes('bg-red'));
-    fireEvent.click(likeButton!);
+    const likeButton = screen.getByRole('button', { name: /like/i });
+    fireEvent.click(likeButton);
 
     expect(defaultProps.onLike).toHaveBeenCalledTimes(1);
   });
@@ -48,8 +47,7 @@ describe('MatchCard', () => {
   it('calls onSkip when skip button is clicked', () => {
     render(<MatchCard {...defaultProps} />);
 
-    const buttons = screen.getAllByRole('button');
-    const skipButton = buttons[0]; // First button is skip
+    const skipButton = screen.getByRole('button', { name: /skip/i });
     fireEvent.click(skipButton);
 
     expect(defaultProps.onSkip).toHaveBeenCalledTimes(1);

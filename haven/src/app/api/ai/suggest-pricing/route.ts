@@ -33,7 +33,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const result = await suggestPricing(parsed.data)
+    // Map the snake_case API contract onto the camelCase engine input.
+    // Haven listings are furnished rentals, so furnished defaults to true.
+    const result = await suggestPricing({
+      propertyType: parsed.data.property_type ?? 'apartment',
+      bedrooms: parsed.data.bedrooms,
+      bathrooms: parsed.data.bathrooms ?? 1,
+      sqft: parsed.data.sqft,
+      city: parsed.data.city,
+      amenities: parsed.data.amenities ?? [],
+      furnished: true,
+    })
     return NextResponse.json({ data: result })
   } catch (error) {
     logger.error({ event: 'ai_pricing_error', error: error instanceof Error ? error.message : String(error) })

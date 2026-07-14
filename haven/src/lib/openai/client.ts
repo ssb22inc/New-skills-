@@ -1,7 +1,22 @@
 import OpenAI from 'openai';
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Lazily construct the client so importing this module (e.g. during
+// `next build` page-data collection) doesn't require OPENAI_API_KEY.
+let _client: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!_client) {
+    _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _client;
+}
+
+export const openai: OpenAI = new Proxy({} as OpenAI, {
+  get(_target, prop) {
+    const client = getClient();
+    const value = client[prop as keyof OpenAI];
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
 });
 
 export const MODEL = 'gpt-4o';

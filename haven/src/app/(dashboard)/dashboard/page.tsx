@@ -3,15 +3,17 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Home, Heart, MessageSquare, Eye } from 'lucide-react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+  if (!user) redirect('/login');
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('*, seeker_profile:seeker_profiles(*)')
-    .eq('id', user?.id)
+    .eq('id', user.id)
     .single();
 
   const isSeeker = profile?.user_type === 'seeker' || profile?.user_type === 'both';

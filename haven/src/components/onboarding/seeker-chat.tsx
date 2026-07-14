@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useChat } from '@/hooks/use-chat';
 import { useOnboardingStore } from '@/stores/onboarding-store';
 import { cn } from '@/lib/utils/cn';
+import type { LocationPreference } from '@/types/user';
 
 export function SeekerChat() {
   const [input, setInput] = useState('');
@@ -32,7 +33,9 @@ export function SeekerChat() {
           budget_max: data.budget_max,
           move_in_date: data.move_in_date,
           move_out_date: data.move_out_date,
-          location_preferences: data.location_preferences,
+          location_preferences: data.location_preferences as unknown as
+            | LocationPreference[]
+            | undefined,
           must_haves: data.must_haves,
           nice_to_haves: data.nice_to_haves,
           dealbreakers: data.dealbreakers,

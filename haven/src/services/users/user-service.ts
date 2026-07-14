@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { Profile } from '@/types/user'
+import type { Database } from '@/types/database'
 
 export async function getProfile(userId: string): Promise<Profile | null> {
   const supabase = createAdminClient()
@@ -20,7 +21,7 @@ export async function updateProfile(
   const supabase = createAdminClient()
   const { data: profile, error } = await supabase
     .from('profiles')
-    .update(data)
+    .update(data as Database['public']['Tables']['profiles']['Update'])
     .eq('id', userId)
     .select()
     .single()

@@ -21,9 +21,12 @@ export function useMatches() {
       if (!res.ok) throw new Error('Failed to fetch matches');
 
       const data = await res.json();
-      setMatches(data.matches);
+      const fetched: Match[] = data.matches ?? [];
+      setMatches(fetched);
+      return fetched;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to fetch matches');
+      return undefined;
     } finally {
       setLoading(false);
     }

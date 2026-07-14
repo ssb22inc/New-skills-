@@ -112,7 +112,7 @@ export default function NewListingPage() {
       sqft: formData.sqft ? parseInt(formData.sqft) : undefined,
       price_monthly: parseInt(formData.price_monthly),
       status,
-    });
+    } as Parameters<typeof createListing>[0]);
     
     if (listing) {
       router.push(`/listings/${listing.id}`);

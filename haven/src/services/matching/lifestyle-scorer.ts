@@ -54,7 +54,7 @@ export function scoreLocation(
   seeker: SeekerProfile,
   listing: Listing
 ): { score: number; details: string[] } {
-  const preferences = seeker.location_preferences as LocationPreference[]
+  const preferences = seeker.location_preferences as unknown as LocationPreference[]
   const details: string[] = []
 
   if (!preferences || preferences.length === 0) {

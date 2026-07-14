@@ -4,6 +4,27 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logger } from '@/lib/logger'
 import type Stripe from 'stripe'
 
+// As of Stripe API 2025-03-31.basil, billing periods live on subscription
+// items rather than the subscription itself.
+function subscriptionPeriod(subscription: Stripe.Subscription): {
+  start: string | null
+  end: string | null
+} {
+  const item = subscription.items?.data?.[0]
+  return {
+    start: item ? new Date(item.current_period_start * 1000).toISOString() : null,
+    end: item ? new Date(item.current_period_end * 1000).toISOString() : null,
+  }
+}
+
+// As of Stripe API 2025-03-31.basil, invoice.subscription was replaced by
+// invoice.parent.subscription_details.subscription.
+function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const sub = invoice.parent?.subscription_details?.subscription
+  if (!sub) return null
+  return typeof sub === 'string' ? sub : sub.id
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.text()
   const signature = request.headers.get('stripe-signature')
@@ -39,7 +60,7 @@ export async function POST(request: NextRequest) {
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.CheckoutSession
+        const session = event.data.object as Stripe.Checkout.Session
         const { userId, planId, type, booking_id } = session.metadata || {}
 
         if (type === 'subscription' && userId && planId && session.subscription) {
@@ -77,14 +98,15 @@ export async function POST(request: NextRequest) {
         const subscription = event.data.object as Stripe.Subscription
         const userId = subscription.metadata?.userId
         if (userId) {
+          const period = subscriptionPeriod(subscription)
           await supabase.from('subscriptions').upsert({
             user_id: userId,
             stripe_customer_id: subscription.customer as string,
             stripe_subscription_id: subscription.id,
             plan_id: subscription.metadata?.planId ?? 'unknown',
             status: subscription.status,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: period.start,
+            current_period_end: period.end,
           }, { onConflict: 'stripe_subscription_id' })
         }
         break
@@ -93,12 +115,13 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
+        const period = subscriptionPeriod(subscription)
         const { error } = await supabase
           .from('subscriptions')
           .update({
             status: subscription.status,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: period.start,
+            current_period_end: period.end,
           })
           .eq('stripe_subscription_id', subscription.id)
         if (error) throw error
@@ -120,24 +143,26 @@ export async function POST(request: NextRequest) {
       case 'invoice.payment_failed':
       case 'invoice.payment_action_required': {
         const invoice = event.data.object as Stripe.Invoice
-        if (invoice.subscription) {
+        const subscriptionId = invoiceSubscriptionId(invoice)
+        if (subscriptionId) {
           const newStatus =
             event.type === 'invoice.payment_failed' ? 'past_due' : 'requires_action'
           await supabase
             .from('subscriptions')
             .update({ status: newStatus })
-            .eq('stripe_subscription_id', invoice.subscription as string)
+            .eq('stripe_subscription_id', subscriptionId)
         }
         break
       }
 
       case 'invoice.paid': {
         const invoice = event.data.object as Stripe.Invoice
-        if (invoice.subscription) {
+        const subscriptionId = invoiceSubscriptionId(invoice)
+        if (subscriptionId) {
           await supabase
             .from('subscriptions')
             .update({ status: 'active' })
-            .eq('stripe_subscription_id', invoice.subscription as string)
+            .eq('stripe_subscription_id', subscriptionId)
         }
         break
       }

@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { encrypt, decrypt, maskEmail, maskPhone } from '@/lib/security/encryption';
+import type { Database } from '@/types/database';
 
 // Data Subject Rights Implementation
 
@@ -49,7 +50,11 @@ export async function deleteUserData(
   let deletedCount = 0;
 
   // Order matters due to foreign key constraints
-  const tables = [
+  const tables: Array<{
+    name: keyof Database['public']['Tables'] & string;
+    column: string;
+    via?: 'listings';
+  }> = [
     { name: 'messages', column: 'sender_id' },
     { name: 'reviews', column: 'reviewer_id' },
     { name: 'bookings', column: 'seeker_id' },
@@ -73,14 +78,19 @@ export async function deleteUserData(
       if (parentIds) {
         for (const parent of parentIds) {
           const { count } = await supabase
-            .from(table.name)
+            .from(table.name as 'listing_photos')
             .delete()
             .eq('listing_id', parent.id);
           deletedCount += count || 0;
         }
       }
     } else {
-      const { count } = await supabase.from(table.name).delete().eq(table.column, userId);
+      // Dynamic table/column pair; anchor builder types on a table that has
+      // user-scoped rows.
+      const { count } = await supabase
+        .from(table.name as 'listings')
+        .delete()
+        .eq(table.column as 'user_id', userId);
       deletedCount += count || 0;
     }
   }
@@ -129,7 +139,10 @@ export async function rectifyUserData(
     }
   }
 
-  await supabase.from('profiles').update(updates).eq('id', userId);
+  await supabase
+    .from('profiles')
+    .update(updates as Database['public']['Tables']['profiles']['Update'])
+    .eq('id', userId);
 
   return { success: true };
 }
@@ -198,5 +211,5 @@ export async function getConsentStatus(
     .eq('id', userId)
     .single();
 
-  return (data?.metadata as any)?.consents || {};
+  return (data?.metadata as { consents?: Record<string, boolean> } | null)?.consents || {};
 }

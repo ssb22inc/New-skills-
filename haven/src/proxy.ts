@@ -8,7 +8,7 @@ const AUTH_ROUTES = ['/api/auth', '/(auth)/login', '/(auth)/signup', '/api/users
 // Routes that use AI rate limiting
 const AI_ROUTES = ['/api/ai/'];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Generate a per-request nonce for CSP strict-dynamic.

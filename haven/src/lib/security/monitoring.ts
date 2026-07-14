@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import type { Json } from '@/types/database';
 
 interface SecurityAlert {
   type: 'brute_force' | 'suspicious_activity' | 'rate_limit_abuse' | 'injection_attempt' | 'unauthorized_access';
@@ -59,12 +60,13 @@ class SecurityMonitor {
     // Store in database
     const supabase = await createServerSupabaseClient();
     await supabase.from('security_alerts').insert({
-      type: alert.type,
+      alert_type: alert.type,
       severity: alert.severity,
+      title: alert.type.replace(/_/g, ' '),
       description: alert.description,
       ip_address: alert.ip_address,
       user_id: alert.user_id,
-      metadata: alert.metadata,
+      metadata: (alert.metadata ?? {}) as Json,
       created_at: new Date().toISOString(),
     });
 
@@ -136,7 +138,7 @@ class SecurityMonitor {
           await supabase.from('blocked_ips').insert({
             ip_address: alert.ip_address,
             reason: 'Brute force attack',
-            blocked_until: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
           });
         }
         break;
@@ -154,7 +156,7 @@ class SecurityMonitor {
           await supabase.from('blocked_ips').insert({
             ip_address: alert.ip_address,
             reason: 'Injection attempt',
-            blocked_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
           });
         }
         break;
@@ -188,7 +190,7 @@ export async function isIpBlocked(ipAddress: string): Promise<boolean> {
     .from('blocked_ips')
     .select('id')
     .eq('ip_address', ipAddress)
-    .gt('blocked_until', new Date().toISOString())
+    .gt('expires_at', new Date().toISOString())
     .single();
 
   return !!data;

@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { jwtVerify, SignJWT } from 'jose';
+import type { User } from '@supabase/supabase-js';
 
 if (!process.env.JWT_SECRET) {
   throw new Error(
@@ -32,7 +33,7 @@ export async function verifyToken(token: string): Promise<Record<string, unknown
 // Authenticate request
 export async function authenticateRequest(request: NextRequest): Promise<{
   authenticated: boolean;
-  user: any | null;
+  user: User | null;
   error?: string;
 }> {
   try {
@@ -44,7 +45,7 @@ export async function authenticateRequest(request: NextRequest): Promise<{
     }
 
     return { authenticated: true, user };
-  } catch (error) {
+  } catch {
     return { authenticated: false, user: null, error: 'Authentication failed' };
   }
 }
