@@ -263,6 +263,8 @@ import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY } from "./srs.js";
+import Calculator from "./calculator.jsx";
+import ExamCenter from "./exam.jsx";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -352,6 +354,7 @@ export default function App() {
 
   const [srs, setSrs] = useState(freshCards); // legacy fixed-position schedule (kept for the blob contract)
   const [srsMap, setSrsMap] = useState({});   // scalable per-card-id schedule {id: {interval, due}}
+  const [examResults, setExamResults] = useState({}); // {form: {pct, verdict, ...}}
   const [bankCards, setBankCards] = useState(null); // AI card bank; null → built-ins only
   const [bankCases, setBankCases] = useState(null); // AI case bank; null → built-ins only
   const [customQs, setCustomQs] = useState([]); // AI-generated questions
@@ -388,6 +391,7 @@ export default function App() {
             setSrs(CARDS.map((_, i) => s.srs[i] ?? { interval: 0, due: todayStr() }));
           }
           setSrsMap(migrateLegacySrs(s.srs, s.srsMap));
+          setExamResults(s.examResults);
           setCustomQs(s.customQs);
           setProvider(s.provider);
           setAbility(s.ability);
@@ -407,12 +411,12 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap]);
+  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults]);
 
   /* first visit → run the 30-second tour once */
   useEffect(() => {
@@ -427,7 +431,7 @@ export default function App() {
     (async () => {
       const { data, error } = await supabase.from("questions")
         .select("id, cat, diff, type, stem, options, extra, answer, rationale, ai, elo_rating")
-        .eq("approved", true);
+        .eq("approved", true).is("exam_form", null); // exam items stay quarantined
       if (error || !Array.isArray(data) || !data.length) return;
       setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
       const items = data
@@ -453,7 +457,8 @@ export default function App() {
     })();
     (async () => {
       const { data, error } = await supabase.from("case_studies")
-        .select("id, cat, title, blurb, intro, vitals, labs, note, steps").eq("approved", true);
+        .select("id, cat, title, blurb, intro, vitals, labs, note, steps")
+        .eq("approved", true).is("exam_form", null); // exam cases stay quarantined
       if (!error && data?.length) {
         setBankCases(data.map((r) => ({ ...r, dbId: r.id, ai: true })));
       }
@@ -530,7 +535,7 @@ export default function App() {
     try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
-    setSrs(freshCards()); setSrsMap({}); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
+    setSrs(freshCards()); setSrsMap({}); setExamResults({}); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
   };
 
   /* ---- weekly planner (§5.7): one LLM call per ISO week, cached in the blob ---- */
@@ -588,6 +593,7 @@ export default function App() {
             <nav className="menu-panel" aria-label="Main menu">
               <button className="menu-item" onClick={() => { setTab("today"); setMenuOpen(false); }}>🏠 Home — Today</button>
               <button className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
+              <button className="menu-item" onClick={() => { setTab("exams"); setMenuOpen(false); }}>📝 Readiness exams</button>
               <button className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & Contact</button>
               <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
               <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
@@ -605,6 +611,7 @@ export default function App() {
         {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
         {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
         {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} />}
+        {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} />}
         {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} />}
       </main>
 
@@ -660,7 +667,7 @@ function Tour({ step, setStep, onClose }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges, and its AI lookup also answers general NCLEX study questions typed into the search box. The ☰ menu has Home, Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges, and its AI lookup also answers general NCLEX study questions typed into the search box. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness verdict), Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
@@ -1603,70 +1610,6 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
   );
 }
 
-/* ---- on-screen calculator for dosage-calc items (NCLEX provides one) ----
-   Immediate-execution four-function calculator, deterministic plain math. */
-function Calculator({ onUse }) {
-  const [display, setDisplay] = useState("0");
-  const [acc, setAcc] = useState(null);
-  const [op, setOp] = useState(null);
-  const [fresh, setFresh] = useState(true); // next digit starts a new number
-
-  const digit = (d) => {
-    if (display === "Error") return;
-    if (fresh) { setDisplay(d === "." ? "0." : d); setFresh(false); return; }
-    if (d === "." && display.includes(".")) return;
-    if (display.length < 12) setDisplay(display + d);
-  };
-  const clear = () => { setDisplay("0"); setAcc(null); setOp(null); setFresh(true); };
-  const applyOp = (nextOp) => {
-    if (display === "Error") return;
-    const cur = parseFloat(display);
-    if (op != null && acc != null && !fresh) {
-      const r = fourFn(acc, cur, op);
-      if (!Number.isFinite(r)) { clear(); setDisplay("Error"); return; }
-      setAcc(r); setDisplay(String(r));
-    } else {
-      setAcc(cur);
-    }
-    setOp(nextOp); setFresh(true);
-  };
-  const equals = () => {
-    if (op == null || acc == null || display === "Error") return;
-    const r = fourFn(acc, parseFloat(display), op);
-    setDisplay(Number.isFinite(r) ? String(r) : "Error");
-    setAcc(null); setOp(null); setFresh(true);
-  };
-  const back = () => {
-    if (fresh || display === "Error") return;
-    setDisplay(display.length > 1 ? display.slice(0, -1) : "0");
-  };
-
-  const KEYS = [["7", "8", "9", "÷"], ["4", "5", "6", "×"], ["1", "2", "3", "−"], ["0", ".", "⌫", "+"]];
-  return (
-    <div className="calc-pad" role="group" aria-label="On-screen calculator">
-      <div className="calc-screen mono">
-        <span className="calc-pending">{acc != null && op ? `${acc} ${op}` : " "}</span>
-        <span className="calc-display">{display}</span>
-      </div>
-      {KEYS.map((row, ri) => (
-        <div key={ri} className="calc-row">
-          {row.map((k) => (
-            <button key={k} type="button" className={"calc-key" + ("+−×÷".includes(k) ? " op" : "")}
-              onClick={() => ("+−×÷".includes(k) ? applyOp(k) : k === "⌫" ? back() : digit(k))}>{k}</button>
-          ))}
-        </div>
-      ))}
-      <div className="calc-row">
-        <button type="button" className="calc-key op" onClick={clear}>C</button>
-        <button type="button" className="calc-key eq" onClick={equals}>=</button>
-      </div>
-      <button type="button" className="btn ghost calc-use" onClick={() => { if (display !== "Error") onUse(display); }}>
-        Use as my answer ↑
-      </button>
-    </div>
-  );
-}
-
 /* ---- report a problem with a question → reviewers' Reports tab ---- */
 function ReportIssue({ q, isBank }) {
   const [state, setState] = useState("idle"); // idle | open | busy | sent | error
@@ -1991,6 +1934,10 @@ function Style() {
       .calc-box{margin-bottom:8px}
       .calc-input{margin-top:0;max-width:220px;font-size:18px;font-family:'IBM Plex Mono',monospace}
       .calc-unit{font-size:14px;color:var(--accent-ink);font-weight:700}
+      /* readiness exams */
+      .exam-clock{font-weight:700;color:var(--accent-ink)}
+      .exam-clock.low{color:var(--coral)}
+      .exam-head-card{padding:10px 18px}
       /* on-screen calculator */
       .calc-pad{max-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
       .calc-screen{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-bottom:8px;text-align:right}

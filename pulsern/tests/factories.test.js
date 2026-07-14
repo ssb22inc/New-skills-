@@ -2,6 +2,16 @@
 import { describe, it, expect } from "vitest";
 import { validCard } from "../ops/card-factory.mjs";
 import { validCase } from "../ops/case-factory.mjs";
+import { BLUEPRINT, STANDALONE_PER_FORM, CASES_PER_FORM } from "../ops/exam-factory.mjs";
+
+describe("exam blueprint", () => {
+  it("mirrors the NCLEX: 67 standalone + 3 cases = 85 items", () => {
+    expect(Object.values(BLUEPRINT).reduce((a, b) => a + b, 0)).toBe(67);
+    expect(STANDALONE_PER_FORM).toBe(67);
+    expect(STANDALONE_PER_FORM + CASES_PER_FORM * 6).toBe(85);
+    expect(Object.keys(BLUEPRINT).length).toBe(8);
+  });
+});
 
 const goodCard = {
   cat: "Pharmacology", topic: "Antidotes",
