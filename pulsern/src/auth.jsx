@@ -55,7 +55,8 @@ export function AuthScreen() {
           background: #f6f7f9; font-family: system-ui, -apple-system, sans-serif; padding: 16px; }
         .auth-card { background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 32px;
           width: 100%; max-width: 400px; box-shadow: 0 4px 24px rgba(20,30,50,.06); }
-        .auth-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #b42318; margin: 0 0 4px; }
+        .auth-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #b42318; margin: 0 0 2px; }
+        .auth-motto { font-size: 13px; font-style: italic; color: #0e6e5c; font-weight: 600; margin: 0 0 10px; }
         .auth-sub { color: #5b6472; font-size: 14px; margin: 0 0 20px; }
         .auth-field { display: block; width: 100%; box-sizing: border-box; padding: 11px 12px; margin-bottom: 10px;
           border: 1px solid #d5dae1; border-radius: 10px; font-size: 15px; }
@@ -74,6 +75,7 @@ export function AuthScreen() {
       `}</style>
       <div className="auth-card">
         <p className="auth-logo">PulseRN</p>
+        <p className="auth-motto">Created by a licensed RN — for future RNs.</p>
         <p className="auth-sub">{
           mode === "signup" ? "Create your account — progress syncs to every device."
           : mode === "forgot" ? "Enter your email and we'll send a reset link."
