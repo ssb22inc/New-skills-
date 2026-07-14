@@ -7,6 +7,7 @@ PulseRN: an adaptive NCLEX-RN study platform. React web app (Expo port later), S
 ## Non-negotiable rules
 
 - 1. The approval gate is sacred. No code path other than the review console (a signed-in human reviewer) may ever set questions.approved = true. The content factory, seed exceptions aside, always writes approved = false. If you find yourself writing approved: true anywhere else, stop — it's wrong.
+  - Owner amendment (licensed-RN owner, 2026-07-13): for SCALED content — flashcards and case studies — cross-vendor adversarial AI review at ≥0.85 confidence IS the publication gate (card-factory.mjs / case-factory.mjs insert approved=true on pass, drop on fail). QBank practice questions keep the human console gate unchanged. The console retains rejection authority over everything, and all AI content stays labeled ✨ with the verify-against-your-materials note.
 
 - 2. Secrets live server-side only. OPENROUTER_API_KEY and SUPABASE_SERVICE_ROLE_KEY appear ONLY in Vercel env vars and GitHub Actions secrets. Never in client code, never committed, never in VITE_-prefixed vars. The client may hold only VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
 

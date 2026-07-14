@@ -40,6 +40,7 @@ describe("state migration", () => {
       plan: { week: "2026-07-06", days: [{ day: "2026-07-06", focusCat: CATS[2], items: 10, note: "drill pharm" }] },
       examDate: "2026-09-15",
       tourSeen: true,
+      srsMap: { b0: { interval: 3, due: "2026-07-12" }, c17: { interval: 0, due: "2026-07-09" } },
     };
     expect(migrateBlob(full, CATS)).toEqual(full);
   });
@@ -50,7 +51,7 @@ describe("state migration", () => {
       theme: "light", xp: 0, bestRun: 0, log: [], flagged: [],
       streak: { count: 0, lastDay: null, shield: true },
       daily: null, srs: [], customQs: [], provider: "claude",
-      ability: emptyAbility(CATS), plan: null, examDate: null, tourSeen: false,
+      ability: emptyAbility(CATS), plan: null, examDate: null, tourSeen: false, srsMap: {},
     });
   });
 

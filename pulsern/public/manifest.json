@@ -1,7 +1,7 @@
 {
   "name": "PulseRN — Adaptive NCLEX-RN Prep",
   "short_name": "PulseRN",
-  "description": "Adaptive NCLEX-RN practice: all six item types, spaced repetition, an honest readiness estimate, and an AI tutor.",
+  "description": "Created by a licensed RN, for future RNs. Adaptive NCLEX-RN practice: every item type, spaced repetition, case studies, and an AI tutor.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F2F6F4",

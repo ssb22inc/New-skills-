@@ -218,6 +218,20 @@ const CARDS = [
   { f: "Airborne precautions diseases", b: "TB, measles, varicella — N95 + negative-pressure room" },
 ];
 
+/* Built-ins carry stable ids (b0..b11) so per-card SRS survives the bank
+   growing — plus category/topic tags for the Cards focus filter. */
+const BUILTIN_CARD_META = [
+  ["Reduction of Risk", "Electrolytes"], ["Reduction of Risk", "Electrolytes"],
+  ["Pharmacology", "Therapeutic drug levels"], ["Pharmacology", "Anticoagulation"],
+  ["Pharmacology", "Antidotes"], ["Pharmacology", "Antidotes"], ["Pharmacology", "Antidotes"],
+  ["Pharmacology", "Antidotes"], ["Pharmacology", "Antidotes"],
+  ["Reduction of Risk", "ABG"], ["Physiological Adaptation", "Neuro assessment"],
+  ["Safety & Infection Control", "Transmission precautions"],
+];
+const BUILTIN_CARDS = CARDS.map((c, i) => ({
+  id: `b${i}`, cat: BUILTIN_CARD_META[i][0], topic: BUILTIN_CARD_META[i][1], front: c.f, back: c.b,
+}));
+
 const LEVELS = [
   [0, "Student Nurse"], [80, "New Grad"], [200, "Staff Nurse"], [380, "Preceptor"], [600, "Charge Nurse"], [900, "Nurse Educator"],
 ];
@@ -248,6 +262,7 @@ import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
+import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY } from "./srs.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -335,7 +350,10 @@ export default function App() {
   const [streak, setStreak] = useState({ count: 0, lastDay: null, shield: true }); // real day streak + one-miss shield
   const [daily, setDaily] = useState({ day: todayStr(), answered: 0 });
 
-  const [srs, setSrs] = useState(freshCards); // per-card {interval, due}
+  const [srs, setSrs] = useState(freshCards); // legacy fixed-position schedule (kept for the blob contract)
+  const [srsMap, setSrsMap] = useState({});   // scalable per-card-id schedule {id: {interval, due}}
+  const [bankCards, setBankCards] = useState(null); // AI card bank; null → built-ins only
+  const [bankCases, setBankCases] = useState(null); // AI case bank; null → built-ins only
   const [customQs, setCustomQs] = useState([]); // AI-generated questions
   const [provider, setProvider] = useState("claude");
   const [ability, setAbility] = useState(() => emptyAbility(CATS)); // Elo θ per category
@@ -369,6 +387,7 @@ export default function App() {
             // intervals, seed fresh entries for any cards added in an update.
             setSrs(CARDS.map((_, i) => s.srs[i] ?? { interval: 0, due: todayStr() }));
           }
+          setSrsMap(migrateLegacySrs(s.srs, s.srsMap));
           setCustomQs(s.customQs);
           setProvider(s.provider);
           setAbility(s.ability);
@@ -388,12 +407,12 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen]);
+  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap]);
 
   /* first visit → run the 30-second tour once */
   useEffect(() => {
@@ -415,6 +434,21 @@ export default function App() {
         .map(({ elo_rating, ...q }) => q)
         .filter(validQ);
       if (items.length) setBankQs(items);
+    })();
+    // flashcard + case banks load independently — a failure in one never blocks the others
+    (async () => {
+      const { data, error } = await supabase.from("flashcards")
+        .select("id, cat, topic, front, back").eq("approved", true);
+      if (!error && data?.length) {
+        setBankCards(data.map((r) => ({ id: `c${r.id}`, cat: r.cat, topic: r.topic, front: r.front, back: r.back, ai: true })));
+      }
+    })();
+    (async () => {
+      const { data, error } = await supabase.from("case_studies")
+        .select("id, cat, title, blurb, intro, vitals, labs, note, steps").eq("approved", true);
+      if (!error && data?.length) {
+        setBankCases(data.map((r) => ({ ...r, dbId: r.id, ai: true })));
+      }
     })();
   }, []);
 
@@ -472,7 +506,12 @@ export default function App() {
     return { cat: c, n: rows.length, pct: rows.length ? Math.round((rows.filter(r => r.correct).length / rows.length) * 100) : null };
   });
 
-  const dueCount = srs.filter((c) => c.due <= todayStr()).length;
+  const allCards = useMemo(() => [...BUILTIN_CARDS, ...(bankCards ?? [])], [bankCards]);
+  const allCases = useMemo(() => [
+    ...CASE_STUDIES.map((c) => ({ ...c, ai: false })),
+    ...(bankCases ?? []),
+  ], [bankCases]);
+  const dueCount = useMemo(() => dueQueue(allCards, srsMap).length, [allCards, srsMap]);
   const allQuestions = useMemo(
     () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES]), ...customQs],
     [bankQs, customQs]
@@ -483,7 +522,7 @@ export default function App() {
     try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
-    setSrs(freshCards()); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
+    setSrs(freshCards()); setSrsMap({}); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
   };
 
   /* ---- weekly planner (§5.7): one LLM call per ISO week, cached in the blob ---- */
@@ -554,10 +593,10 @@ export default function App() {
         {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
           record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
           ability={ability} calibration={calibration} plan={plan}
-          srs={srs} setSrs={setSrs} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
+          cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
         {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
-        {tab === "case" && <CaseStudy record={record} provider={provider} />}
-        {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} srs={srs} setSrs={setSrs} touchDay={touchDay} />}
+        {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
+        {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} />}
         {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} />}
       </main>
 
@@ -755,7 +794,7 @@ function Today(props) {
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} srs={props.srs} setSrs={props.setSrs} touchDay={props.touchDay} embedded onDone={() => setStage("quiz")} />
+      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} embedded onDone={() => setStage("quiz")} />
     </div>
   );
 
@@ -1272,24 +1311,27 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
 }
 /* ================= CASE STUDY ================= */
 
-function CaseStudy({ record, provider = "claude" }) {
+function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
   const [caseIdx, setCaseIdx] = useState(null); // null = case picker
+  const [catFilter, setCatFilter] = useState([]);
   const [step, setStep] = useState(-1);
   const [sel, setSel] = useState([]);
   const [phase, setPhase] = useState("read");
   const [score, setScore] = useState(0);
   const [ok, setOk] = useState(false);
-  const cs = caseIdx == null ? null : CASE_STUDIES[caseIdx];
+  const cs = caseIdx == null ? null : cases[caseIdx];
 
   const openCase = (i) => { setCaseIdx(i); setStep(-1); setPhase("read"); setScore(0); setSel([]); };
   const start = () => { setStep(0); setPhase("answering"); setSel([]); };
   const s = cs?.steps[step];
+  // pseudo-ids stay outside the shared question-bank id space
+  const stepId = cs ? (cs.dbId ? 50000 + cs.dbId * 10 + step : 100 + caseIdx * 10 + step) : 0;
 
   const submit = () => {
     const correct = s.type === "mc" ? sel[0] === s.answer : same(sel, s.answer);
     setOk(correct);
     if (correct) setScore((x) => x + 1);
-    record({ id: 100 + caseIdx * 10 + step, cat: cs.cat, diff: 3 }, correct);
+    record({ id: stepId, cat: cs.cat, diff: 3 }, correct);
     setPhase("feedback");
   };
 
@@ -1298,24 +1340,34 @@ function CaseStudy({ record, provider = "claude" }) {
     else setPhase("done");
   };
 
-  if (caseIdx == null) return (
-    <div className="stack">
-      <section className="card">
-        <p className="eyebrow">Next Generation NCLEX</p>
-        <h2 className="h2">Case studies</h2>
-        <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps — recognize cues, analyze, prioritize, plan, act, evaluate. Each step scores like the real exam.</p>
-      </section>
-      {CASE_STUDIES.map((c, i) => (
-        <section key={c.title} className="card">
-          <p className="eyebrow">{c.cat}</p>
-          <h2 className="h2">{c.title}</h2>
-          <p className="small">{c.blurb}</p>
-          <p className="small mono">{c.steps.length} steps</p>
-          <button className="btn" onClick={() => openCase(i)}>Open case →</button>
+  if (caseIdx == null) {
+    const list = catFilter.length ? cases.filter((c) => catFilter.includes(c.cat)) : cases;
+    return (
+      <div className="stack">
+        <section className="card">
+          <p className="eyebrow">Next Generation NCLEX</p>
+          <h2 className="h2">Case studies · {cases.length} in the library</h2>
+          <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps — recognize cues, analyze, prioritize, plan, act, evaluate. Each step scores like the real exam.</p>
+          <div className="fchips" role="group" aria-label="Filter cases by category">
+            {CATS.map((c) => (
+              <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
+                onClick={() => setCatFilter((f) => f.includes(c) ? f.filter((x) => x !== c) : [...f, c])}>{c}</button>
+            ))}
+          </div>
         </section>
-      ))}
-    </div>
-  );
+        {list.map((c) => (
+          <section key={c.title} className="card">
+            <p className="eyebrow">{c.cat}{c.ai ? " · ✨ AI" : ""}</p>
+            <h2 className="h2">{c.title}</h2>
+            <p className="small">{c.blurb}</p>
+            <p className="small mono">{c.steps.length} steps</p>
+            <button className="btn" onClick={() => openCase(cases.indexOf(c))}>Open case →</button>
+          </section>
+        ))}
+        {!list.length && <section className="card"><p className="small">No cases in this focus yet — the case factory adds more on every run.</p></section>}
+      </div>
+    );
+  }
 
   return (
     <div className="stack">
@@ -1332,6 +1384,7 @@ function CaseStudy({ record, provider = "claude" }) {
           {cs.labs.map(([k, v]) => <span key={k} className="chip lab">{k} {v}</span>)}
         </div>
         <p className="small note">Nurse's note: {cs.note}</p>
+        {cs.ai && <p className="small">✨ AI-generated case, adversarially reviewed — verify anything surprising against your course materials.</p>}
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
       </section>
 
@@ -1381,60 +1434,75 @@ function CaseStudy({ record, provider = "claude" }) {
 
 /* ================= FLASHCARDS (real spaced repetition) ================= */
 
-function Flashcards({ addXp, srs, setSrs, touchDay, embedded = false, onDone }) {
-  const [sessionQueue, setSessionQueue] = useState(null); // indices due today
+function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = false, onDone }) {
+  const [catFilter, setCatFilter] = useState([]); // empty = all categories
+  const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
   const [show, setShow] = useState(false);
   const [typed, setTyped] = useState(""); // typed recall attempt (optional, self-graded)
 
-  const due = srs.map((c, i) => ({ ...c, i })).filter((c) => c.due <= todayStr());
+  const filtered = useMemo(
+    () => (catFilter.length ? cards.filter((c) => catFilter.includes(c.cat)) : cards),
+    [cards, catFilter]
+  );
+
+  // (Re)build the queue when the deck or focus changes — not on every grade.
   useEffect(() => {
-    if (sessionQueue == null && due.length) setSessionQueue(due.map((c) => c.i));
+    setSessionQueue(dueQueue(filtered, srsMap));
+    setShow(false); setTyped("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionQueue, srs]);
+  }, [filtered.length, catFilter.join("|")]);
 
-
-  const cur = sessionQueue?.[0];
-
-  const schedule = (interval) => addDays(Math.max(0, interval));
+  const curId = sessionQueue?.[0];
+  const cur = curId != null ? cards.find((c) => c.id === curId) : null;
 
   const grade = (g) => {
     setShow(false);
     setTyped("");
     touchDay();
-    const card = srs[cur];
-    let interval = card.interval;
-    if (g === "again") interval = 0;                       // relearn: back later today
-    else if (g === "hard") interval = 1;                   // tomorrow
-    else if (g === "good") { interval = interval < 1 ? 3 : Math.min(interval * 2 + 1, 60); addXp(5); } // 3 → 7 → 15 → 31d
-    else { interval = interval < 1 ? 7 : Math.min(interval * 3 + 1, 90); addXp(8); }                   // easy: 7 → 22d…
-
-    setSrs((all) => all.map((c, i) => i === cur ? { interval, due: schedule(interval) } : c));
+    setSrsMap((m) => ({ ...m, [curId]: nextSchedule(m[curId], g) }));
+    if (g === "good") addXp(5);
+    else if (g === "easy") addXp(8);
     setSessionQueue((q) => {
       const rest = q.slice(1);
-      if (g === "again") { const at = Math.min(2, rest.length); return [...rest.slice(0, at), cur, ...rest.slice(at)]; }
+      if (g === "again") { const at = Math.min(2, rest.length); return [...rest.slice(0, at), curId, ...rest.slice(at)]; }
       return rest; // scheduled to a future date — leaves today's queue
     });
   };
 
-  const nextDue = srs.filter((c) => c.due > todayStr()).map((c) => c.due).sort()[0];
+  const interval = srsMap[curId]?.interval ?? 0;
+  const nextDue = filtered.map((c) => srsMap[c.id]?.due).filter((d) => d && d > todayStr()).sort()[0];
 
-  if (cur == null) return (
-    <section className="card">
-      <p className="eyebrow">Spaced repetition</p>
-      <h2 className="h2">Nothing due today 🎉</h2>
-      <p className="small">Your queue is clear — and that's the point. Reviews land right before you'd forget: graded "Hard" returns tomorrow, "Good" stretches to 3, 7, then 15 days, "Easy" pushes even further. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
-      <p className="small tip">Your schedule is saved on this device — come back on the due date and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</p>
-      {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
-    </section>
+  const chips = !embedded && (
+    <div className="fchips" role="group" aria-label="Filter cards by category">
+      {CATS.map((c) => (
+        <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
+          onClick={() => setCatFilter((f) => f.includes(c) ? f.filter((x) => x !== c) : [...f, c])}>{c}</button>
+      ))}
+    </div>
+  );
+
+  if (!cur) return (
+    <div className="stack">
+      {chips}
+      <section className="card">
+        <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
+        <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
+        <p className="small">Your queue is clear — and that's the point. Reviews land right before you'd forget: graded "Hard" returns tomorrow, "Good" stretches to 3, 7, then 15 days, "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day so the deck never buries you. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
+        <p className="small tip">Your schedule syncs to your account — come back on the due date and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</p>
+        {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
+      </section>
+    </div>
   );
 
   return (
     <div className="stack">
+      {chips}
       <section className="card">
-        <p className="eyebrow">Spaced repetition · {sessionQueue.length} due today</p>
+        <p className="eyebrow">Spaced repetition · {sessionQueue.length} in today's queue · deck of {filtered.length}</p>
+        <p className="small mono" style={{ marginBottom: 6 }}>{cur.cat.toUpperCase()} · {cur.topic.toUpperCase()}{cur.ai ? " · ✨ AI" : ""}</p>
         <button className="flashcard" onClick={() => setShow((s) => !s)}>
           <p className="fc-side mono">{show ? "ANSWER" : "PROMPT — TAP TO FLIP"}</p>
-          <p className="fc-text">{show ? CARDS[cur].b : CARDS[cur].f}</p>
+          <p className="fc-text">{show ? cur.back : cur.front}</p>
         </button>
         {!show && (
           <input
@@ -1454,11 +1522,11 @@ function Flashcards({ addXp, srs, setSrs, touchDay, embedded = false, onDone }) 
           <div className="grades">
             <button className="btn grade again" onClick={() => grade("again")}>Again</button>
             <button className="btn grade hard" onClick={() => grade("hard")}>Hard<span className="grade-sub">1d</span></button>
-            <button className="btn grade good" onClick={() => grade("good")}>Good<span className="grade-sub">{srs[cur].interval < 1 ? "3d" : `${Math.min(srs[cur].interval * 2 + 1, 60)}d`}</span></button>
-            <button className="btn grade easy" onClick={() => grade("easy")}>Easy<span className="grade-sub">{srs[cur].interval < 1 ? "7d" : `${Math.min(srs[cur].interval * 3 + 1, 90)}d`}</span></button>
+            <button className="btn grade good" onClick={() => grade("good")}>Good<span className="grade-sub">{interval < 1 ? "3d" : `${Math.min(interval * 2 + 1, 60)}d`}</span></button>
+            <button className="btn grade easy" onClick={() => grade("easy")}>Easy<span className="grade-sub">{interval < 1 ? "7d" : `${Math.min(interval * 3 + 1, 90)}d`}</span></button>
           </div>
         )}
-        <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory — the flip is just the check. Enter flips the card. Grades set real calendar dates.</p>
+        <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory — the flip is just the check. Enter flips the card. Grades set real calendar dates.{cur.ai ? " ✨ AI card — verify anything surprising against your course materials." : ""}</p>
       </section>
     </div>
   );
