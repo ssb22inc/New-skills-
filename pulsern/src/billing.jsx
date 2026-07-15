@@ -144,7 +144,13 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
 }
 
 /* Small "Your plan" card for Stats. */
-export function PlanCard({ ent, onManage }) {
+export function PlanCard({ ent, onManage, isOwner = false }) {
+  if (isOwner) return (
+    <section className="card">
+      <p className="eyebrow">Your plan · owner</p>
+      <p className="small"><strong>Owner — full development access.</strong> Paywall, exam locks, and content protection don't apply to this account. Exam runs from here never burn attempts.</p>
+    </section>
+  );
   if (!ent) return null;
   const label =
     ent.status === "active" ? `Active until ${ent.expiresAt ? new Date(ent.expiresAt).toLocaleDateString() : "—"}` :

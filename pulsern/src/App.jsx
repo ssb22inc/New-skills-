@@ -458,8 +458,10 @@ export default function App() {
      Copy/context-menu are disabled on study content and the app blurs the
      moment it loses focus (which also blanks app-switcher previews and cuts
      casual capture). A browser can't fully block OS screenshots — the CSS
-     and blur are deterrents, the legal notice is the enforcement. */
+     and blur are deterrents, the legal notice is the enforcement.
+     The owner (reviewers member) is exempt: development needs screenshots. */
   useEffect(() => {
+    if (isOwner) { setShield(false); return; }
     const noCtx = (e) => { if (e.target.closest?.(".body")) e.preventDefault(); };
     const noCopy = (e) => { if (e.target.closest?.(".body") && !e.target.closest("input, textarea")) e.preventDefault(); };
     const onKey = (e) => {
@@ -485,7 +487,7 @@ export default function App() {
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [isOwner]);
 
   /* ---- shared bank + item calibration (one query feeds both) ----
      RLS serves only approved, non-rejected rows. On any failure the
@@ -629,11 +631,12 @@ export default function App() {
     </div>
   );
 
-  /* expired / never-entitled accounts see only the paywall (plus sign-out) */
-  const locked = ent && (ent.status === "expired" || ent.status === "none");
+  /* expired / never-entitled accounts see only the paywall (plus sign-out);
+     the owner is never locked — full site access for development */
+  const locked = !isOwner && ent && (ent.status === "expired" || ent.status === "none");
 
   return (
-    <div className={shield ? "app shield" : "app"} data-theme={theme}>
+    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "")} data-theme={theme}>
       <Style />
       <header className="top">
         <button className="brand brand-btn" onClick={() => { setTab("today"); setMenuOpen(false); }} title="Back to Today">
@@ -674,7 +677,7 @@ export default function App() {
 
       <main className="body">
         {locked && <Paywall ent={ent} onRefresh={refreshEnt} />}
-        {!locked && ent?.status === "trial" && tab !== "plans" && (
+        {!locked && !isOwner && ent?.status === "trial" && tab !== "plans" && (
           <section className="card trial-banner">
             <p className="small"><strong>Free pass</strong> — full study access{ent.expiresAt ? ` until ${new Date(ent.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} tomorrow` : ""}. <button className="auth-switch" onClick={() => setTab("plans")}>See plans →</button></p>
           </section>
@@ -687,7 +690,7 @@ export default function App() {
           {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
           {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} />}
-          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
+          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
           {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} />}
         </>}
@@ -1649,7 +1652,7 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
   return (
     <div className="stack">
-      <PlanCard ent={ent} onManage={onManagePlan} />
+      <PlanCard ent={ent} onManage={onManagePlan} isOwner={isOwner} />
       <section className="card">
         <p className="eyebrow">Exam date</p>
         <p className="small">Set your NCLEX date and Today gains a weekly plan built from your ability profile.</p>
@@ -2030,10 +2033,12 @@ function Style() {
       /* readiness exams */
       .exam-clock{font-weight:700;color:var(--accent-ink)}
       .exam-clock.low{color:var(--coral)}
-      /* content protection: owner's property — deter copy/capture */
+      /* content protection: owner's property — deter copy/capture.
+         .owner (developer account) is exempt from all of it. */
       .body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
       .body input,.body textarea{-webkit-user-select:text;user-select:text}
       .app.shield .body{filter:blur(16px);transition:filter .15s}
+      .app.owner .body{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
       @media print{.body,.tabs,.lab-drawer,.menu-panel{display:none !important}}
       .trial-banner{border-color:var(--teal);padding:10px 14px}
       .exam-head-card{padding:10px 18px}

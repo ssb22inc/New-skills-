@@ -35,3 +35,9 @@ Claude Code executes everything else. These run in parallel with the build.
 ## Later (Expo phase)
 
 - H11 · Expo/EAS account + Apple Developer ($99/yr) + Google Play ($25 one-time) — only when the web version has retention worth porting.
+
+## Payments (added 2026-07-15, round 11)
+
+- H12 · Stripe activation — the checkout + webhook code is deployed and dormant until you: (1) create a Stripe account at stripe.com, (2) in Vercel → pulsern → Settings → Environment Variables add STRIPE_SECRET_KEY (from Stripe → Developers → API keys, the sk_live_… one), (3) in Stripe → Developers → Webhooks add endpoint https://pulsern.vercel.app/api/stripe-webhook with event `checkout.session.completed`, then add its signing secret to Vercel as STRIPE_WEBHOOK_SECRET, (4) redeploy. Until then the buy buttons show "Payments are not switched on yet." (~30 min)
+
+- H13 · Partner discount codes — one SQL insert per partner in the Supabase SQL editor: `insert into discount_codes (code, partner, amount_off_cents) values ('CODENAME', 'partner-name', 3000);` ($30 off; use percent_off instead for %). Monthly payout report: `select discount_code, count(*) as sales, sum(price_cents)/100.0 as revenue from subscriptions where discount_code is not null group by 1;` A demo code RNPARTNER30 ($30 off → 30-day at $69) is live — deactivate it before launch with `update discount_codes set active = false where code = 'RNPARTNER30';`
