@@ -37,7 +37,11 @@ export const fmtUsd = (cents) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(c
 export function computeEntitlement(subRows, attemptRows, now = Date.now()) {
   const rows = Array.isArray(subRows) ? subRows : [];
   const attempts = Array.isArray(attemptRows) ? attemptRows : [];
-  const activeRows = rows.filter((r) => new Date(r.expires_at).getTime() > now && new Date(r.starts_at).getTime() <= now);
+  // Active = not yet expired. Deliberately NO starts_at check: grants always
+  // begin immediately, and starts_at is server-stamped while `now` is the
+  // client clock — a client a second behind the server would see its
+  // brand-new pass as "not started" and get locked out at signup.
+  const activeRows = rows.filter((r) => new Date(r.expires_at).getTime() > now);
   const paidActive = activeRows.some((r) => r.plan !== "pass1");
   const active = activeRows.length > 0;
   const granted = rows.reduce((a, r) => a + (r.exams_granted || 0), 0);
