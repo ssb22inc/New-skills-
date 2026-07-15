@@ -39,14 +39,9 @@ export function AuthScreen() {
     }
   };
 
-  const google = async () => {
-    setError("");
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) setError(error.message);
-  };
+  /* Google sign-in returns when the owner enables the Google provider in
+     Supabase (needs their Google Cloud OAuth credentials — HUMAN_TASKS H6).
+     Until then the button is gone: a button that errors is worse than none. */
 
   return (
     <div className="auth-wrap">
@@ -100,7 +95,6 @@ export function AuthScreen() {
             {busy ? "One moment…" : mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset link" : "Sign in"}
           </button>
         </form>
-        {mode !== "forgot" && <button className="auth-btn alt" type="button" onClick={google}>Continue with Google</button>}
         {mode === "signin" && (
           <p style={{ marginTop: 10, fontSize: 14 }}>
             <button className="auth-switch" type="button" onClick={() => { setMode("forgot"); setError(""); setNotice(""); }}>Forgot password?</button>
@@ -112,7 +106,7 @@ export function AuthScreen() {
             {mode === "signin" ? "Create account" : "Sign in"}
           </button>
         </p>
-        <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX-RN® is a registered trademark of NCSBN, which does not endorse this product. <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
+        <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX-RN® is a registered trademark of NCSBN, which does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
       </div>
     </div>
   );

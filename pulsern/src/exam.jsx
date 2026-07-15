@@ -57,7 +57,7 @@ const fmtClock = (secs) => {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-export default function ExamCenter({ record, examResults, setExamResults, cats }) {
+export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, onAttempt, onUpgrade }) {
   const [stage, setStage] = useState("picker"); // picker | intro | running | results | review
   const [availability, setAvailability] = useState(null); // {form: {items, cases}}
   const [form, setForm] = useState(null);
@@ -92,6 +92,14 @@ export default function ExamCenter({ record, examResults, setExamResults, cats }
 
   const begin = async () => {
     setLoading(true);
+    // Consume the attempt FIRST. The primary key on (user, form) plus the
+    // no-update/no-delete policies make this permanent: no account is ever
+    // shown the same exam twice, even across devices or resets.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) { setLoading(false); return; }
+    const { error: attemptErr } = await supabase.from("exam_attempts").insert({ user_id: session.user.id, form });
+    if (attemptErr) { setLoading(false); setStage("picker"); return; }
+    onAttempt?.(form);
     const [{ data: items }, { data: cases }] = await Promise.all([
       supabase.from("questions")
         .select("id, cat, diff, type, stem, options, extra, answer, rationale")
@@ -185,33 +193,55 @@ export default function ExamCenter({ record, examResults, setExamResults, cats }
   };
 
   /* ================= PICKER ================= */
-  if (stage === "picker") return (
-    <div className="stack">
-      <section className="card">
-        <p className="eyebrow">Readiness self-assessment</p>
-        <h2 className="h2">NCLEX-style exams</h2>
-        <p className="small">Ten standardized 85-item exams built to feel like the real NCLEX-RN: 3 full case studies plus 67 standalone questions weighted to the official test plan, a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal.</p>
-      </section>
-      {EXAM_FORMS.map((f) => {
-        const a = availability?.[f];
-        const ready = a && a.items >= FULL_STANDALONE && a.cases >= FULL_CASES;
-        const partial = a && !ready && (a.items > 0 || a.cases > 0);
-        const past = examResults?.[f];
-        return (
-          <section key={f} className="card">
-            <div className="cat-top">
-              <span className="small"><strong>Readiness Exam {f}</strong></span>
-              <span className="small mono">{a ? `${Math.min(a.items, FULL_STANDALONE)}/${FULL_STANDALONE} items · ${Math.min(a.cases, FULL_CASES)}/${FULL_CASES} cases` : "…"}</span>
-            </div>
-            {past && <p className="small">Last attempt: <strong>{past.pct}%</strong> · {past.verdict} · {past.date}{past.attempts > 1 ? ` · ${past.attempts} attempts` : ""}</p>}
-            {ready
-              ? <button className="btn" onClick={() => { setForm(f); setStage("intro"); }}>{past ? "Retake exam" : "Start exam"} →</button>
-              : <p className="small tip">{partial ? "Still being built by the exam factory — check back soon." : "Not built yet — the factory generates one form at a time."}</p>}
+  if (stage === "picker") {
+    const attempted = new Set(ent?.attempted ?? []);
+    const trial = ent?.status === "trial";
+    const examsLeft = ent?.examsLeft ?? 0;
+    return (
+      <div className="stack">
+        <section className="card">
+          <p className="eyebrow">Readiness self-assessment</p>
+          <h2 className="h2">NCLEX-style exams</h2>
+          <p className="small">Ten standardized 85-item exams built to feel like the real NCLEX-RN: 3 full case studies plus 67 standalone questions weighted to the official test plan, a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal — and no account is ever shown the same exam twice.</p>
+          {ent && !trial && <p className="small tip">You have <strong>{examsLeft}</strong> self-assessment{examsLeft === 1 ? "" : "s"} remaining.{examsLeft === 0 && onUpgrade ? <> Add one for $45 from <button className="auth-switch" onClick={onUpgrade}>Plans & upgrades</button>.</> : null}</p>}
+        </section>
+        {trial && (
+          <section className="card">
+            <p className="eyebrow">Included with any subscription</p>
+            <p className="small">The free pass opens every study tool; readiness exams come with a subscription so each one stays an honest, never-repeated measure.</p>
+            {onUpgrade && <button className="btn" onClick={onUpgrade}>See plans →</button>}
           </section>
-        );
-      })}
-    </div>
-  );
+        )}
+        {EXAM_FORMS.map((f) => {
+          const a = availability?.[f];
+          const ready = a && a.items >= FULL_STANDALONE && a.cases >= FULL_CASES;
+          const partial = a && !ready && (a.items > 0 || a.cases > 0);
+          const past = examResults?.[f];
+          const done = attempted.has(f) || !!past; // an exam is one-shot, forever
+          return (
+            <section key={f} className="card">
+              <div className="cat-top">
+                <span className="small"><strong>Readiness Exam {f}</strong></span>
+                <span className="small mono">{a ? `${Math.min(a.items, FULL_STANDALONE)}/${FULL_STANDALONE} items · ${Math.min(a.cases, FULL_CASES)}/${FULL_CASES} cases` : "…"}</span>
+              </div>
+              {past && <p className="small">Your result: <strong>{past.pct}%</strong> · {past.verdict} · {past.date}</p>}
+              {done
+                ? <p className="small tip">Completed — exams are never repeated, so this score stays an honest signal.</p>
+                : !ready
+                  ? <p className="small tip">{partial ? "Still being built by the exam factory — check back soon." : "Not built yet — the factory generates one form at a time."}</p>
+                  : !ent
+                    ? <p className="small tip">Checking your plan…</p>
+                    : trial
+                      ? <p className="small tip">🔒 Unlocks with a subscription.</p>
+                      : examsLeft <= 0
+                        ? <p className="small tip">🔒 No self-assessments remaining on your plan.</p>
+                        : <button className="btn" onClick={() => { setForm(f); setStage("intro"); }}>Start exam →</button>}
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
 
   /* ================= INTRO ================= */
   if (stage === "intro") return (
