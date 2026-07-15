@@ -265,6 +265,7 @@ import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY } from "./srs.js";
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
+import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -369,6 +370,9 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);  // help & contact center
   const [tourStep, setTourStep] = useState(null);   // null = closed, 0..n = showing
   const [tourSeen, setTourSeen] = useState(false);  // persisted in blob
+  const [ent, setEnt] = useState(null);             // entitlement (server truth, not in blob)
+  const [isOwner, setIsOwner] = useState(false);    // reviewers-table member = owner tools
+  const [shield, setShield] = useState(false);      // blur content when app loses focus
 
   /* ---- load saved progress once ---- */
   useEffect(() => {
@@ -423,6 +427,65 @@ export default function App() {
     if (loaded && !tourSeen) setTourStep(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
+
+  /* ---- entitlement: who gets in, and how many exams they have left ----
+     Brand-new accounts self-grant the 1-day free pass (capped at one per
+     account for life by a DB unique index). If the reads fail we fail open
+     on content — a network blip should never lock a paying student out. */
+  const refreshEnt = async () => {
+    try {
+      let e = await fetchEntitlement();
+      if (e.status === "none") { try { e = await grantFreePass(); } catch { /* index says they had one */ } }
+      setEnt(e);
+    } catch {
+      setEnt({ status: "offline", expiresAt: null, hadPaid: false, examsLeft: 0, attempted: [] });
+    }
+  };
+  useEffect(() => {
+    refreshEnt();
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) return;
+        const { data } = await supabase.from("reviewers").select("user_id").eq("user_id", session.user.id).maybeSingle();
+        setIsOwner(!!data);
+      } catch { /* owner tools stay hidden */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ---- content protection: all materials are the owner's property ----
+     Copy/context-menu are disabled on study content and the app blurs the
+     moment it loses focus (which also blanks app-switcher previews and cuts
+     casual capture). A browser can't fully block OS screenshots — the CSS
+     and blur are deterrents, the legal notice is the enforcement. */
+  useEffect(() => {
+    const noCtx = (e) => { if (e.target.closest?.(".body")) e.preventDefault(); };
+    const noCopy = (e) => { if (e.target.closest?.(".body") && !e.target.closest("input, textarea")) e.preventDefault(); };
+    const onKey = (e) => {
+      if (e.key === "PrintScreen") {
+        try { navigator.clipboard.writeText(""); } catch { /* clipboard may be unavailable */ }
+        setShield(true); setTimeout(() => setShield(false), 1200);
+      }
+    };
+    const onVis = () => setShield(document.visibilityState !== "visible");
+    const onBlur = () => setShield(true);
+    const onFocus = () => setShield(false);
+    document.addEventListener("contextmenu", noCtx);
+    document.addEventListener("copy", noCopy);
+    window.addEventListener("keyup", onKey);
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("contextmenu", noCtx);
+      document.removeEventListener("copy", noCopy);
+      window.removeEventListener("keyup", onKey);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
 
   /* ---- shared bank + item calibration (one query feeds both) ----
      RLS serves only approved, non-rejected rows. On any failure the
@@ -566,8 +629,11 @@ export default function App() {
     </div>
   );
 
+  /* expired / never-entitled accounts see only the paywall (plus sign-out) */
+  const locked = ent && (ent.status === "expired" || ent.status === "none");
+
   return (
-    <div className="app" data-theme={theme}>
+    <div className={shield ? "app shield" : "app"} data-theme={theme}>
       <Style />
       <header className="top">
         <button className="brand brand-btn" onClick={() => { setTab("today"); setMenuOpen(false); }} title="Back to Today">
@@ -591,12 +657,15 @@ export default function App() {
           <>
             <div className="menu-overlay" onClick={() => setMenuOpen(false)} />
             <nav className="menu-panel" aria-label="Main menu">
-              <button className="menu-item" onClick={() => { setTab("today"); setMenuOpen(false); }}>🏠 Home — Today</button>
-              <button className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
-              <button className="menu-item" onClick={() => { setTab("exams"); setMenuOpen(false); }}>📝 Readiness exams</button>
-              <button className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & Contact</button>
-              <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
-              <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
+              {!locked && <>
+                <button className="menu-item" onClick={() => { setTab("today"); setMenuOpen(false); }}>🏠 Home — Today</button>
+                <button className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
+                <button className="menu-item" onClick={() => { setTab("exams"); setMenuOpen(false); }}>📝 Readiness exams</button>
+                <button className="menu-item" onClick={() => { setTab("plans"); setMenuOpen(false); }}>💳 Plans & upgrades</button>
+                <button className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & Contact</button>
+                <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
+                <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
+              </>}
               <button className="menu-item" onClick={() => supabase.auth.signOut()}>↪ Sign out</button>
             </nav>
           </>
@@ -604,22 +673,33 @@ export default function App() {
       </header>
 
       <main className="body">
-        {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
-          record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
-          ability={ability} calibration={calibration} plan={plan}
-          cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
-        {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
-        {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
-        {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} />}
-        {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} />}
-        {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} />}
+        {locked && <Paywall ent={ent} onRefresh={refreshEnt} />}
+        {!locked && ent?.status === "trial" && tab !== "plans" && (
+          <section className="card trial-banner">
+            <p className="small"><strong>Free pass</strong> — full study access{ent.expiresAt ? ` until ${new Date(ent.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} tomorrow` : ""}. <button className="auth-switch" onClick={() => setTab("plans")}>See plans →</button></p>
+          </section>
+        )}
+        {!locked && <>
+          {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
+            record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
+            ability={ability} calibration={calibration} plan={plan}
+            cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
+          {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
+          {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
+          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} />}
+          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
+          {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
+          {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} />}
+        </>}
       </main>
 
-      <nav className="tabs" aria-label="Sections">
-        {[["today", "Today"], ["qbank", "Practice"], ["case", "Case Study"], ["cards", "Cards"], ["stats", "Stats"]].map(([k, label]) => (
-          <button key={k} className={tab === k ? "tab on" : "tab"} onClick={() => setTab(k)}>{label}</button>
-        ))}
-      </nav>
+      {!locked && (
+        <nav className="tabs" aria-label="Sections">
+          {[["today", "Today"], ["qbank", "Practice"], ["case", "Case Study"], ["cards", "Cards"], ["stats", "Stats"]].map(([k, label]) => (
+            <button key={k} className={tab === k ? "tab on" : "tab"} onClick={() => setTab(k)}>{label}</button>
+          ))}
+        </nav>
+      )}
 
       <LabRef open={labOpen} setOpen={setLabOpen} />
       <HelpCenter open={helpOpen} setOpen={setHelpOpen} provider={provider} />
@@ -667,7 +747,8 @@ function Tour({ step, setStep, onClose }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade). Stats tab = performance by category, exam date, AI engine picker, sign out. The LABS tab on the right edge opens searchable normal lab ranges, and its AI lookup also answers general NCLEX study questions typed into the search box. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness verdict), Lab values, Help & Contact, Quick tour, Settings, Sign out. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The LABS tab on the right edge opens searchable normal lab ranges, and its AI lookup also answers general NCLEX study questions typed into the search box. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness verdict — each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & Contact, Quick tour, Settings, Sign out.
+Plans: every new account gets a free 1-day pass with full study access (no exams). Subscriptions: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). After a subscription: 7-day renewal $45 (content only) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
@@ -1457,6 +1538,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
   const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
   const [show, setShow] = useState(false);
   const [typed, setTyped] = useState(""); // typed recall attempt (optional, self-graded)
+  const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator for dosage cards
 
   const filtered = useMemo(
     () => (catFilter.length
@@ -1478,6 +1560,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
   const grade = (g) => {
     setShow(false);
     setTyped("");
+    setCalcOpen(false);
     touchDay();
     setSrsMap((m) => ({ ...m, [curId]: nextSchedule(m[curId], g) }));
     if (g === "good") addXp(5);
@@ -1538,6 +1621,12 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
         {show && typed.trim() && (
           <p className="small fc-compare"><strong>You typed:</strong> {typed} — grade yourself honestly against the answer above.</p>
         )}
+        {isCalcCard(cur) && (
+          <>
+            <button className="btn ghost tutor-btn" onClick={() => setCalcOpen((o) => !o)}>{calcOpen ? "Hide calculator" : "🧮 Open calculator"}</button>
+            {calcOpen && <Calculator onUse={(v) => { setTyped(v); }} />}
+          </>
+        )}
         {show && (
           <div className="grades">
             <button className="btn grade again" onClick={() => grade("again")}>Again</button>
@@ -1554,12 +1643,13 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
 
 /* ================= STATS ================= */
 
-function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, customCount, examDate, setExamDate }) {
+function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
   return (
     <div className="stack">
+      <PlanCard ent={ent} onManage={onManagePlan} />
       <section className="card">
         <p className="eyebrow">Exam date</p>
         <p className="small">Set your NCLEX date and Today gains a weekly plan built from your ability profile.</p>
@@ -1582,14 +1672,16 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
         ))}
         <p className="small tip">Aim for ≥ 75% in every category before test day. The QBank automatically feeds you more questions from red bars.</p>
       </section>
-      <section className="card">
-        <p className="eyebrow">AI engine</p>
-        <p className="small">The tutor and question generator run through a provider adapter: one neutral prompt format in, plain text out. Your study context (history, schedule, weak areas) lives on your device — never with the model — so swapping engines loses nothing.</p>
-        <select className="select" value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="AI engine">
-          {AI_PROVIDERS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-        </select>
-        <p className="small tip">{p.note}{customCount ? ` · ${customCount} AI-generated questions in your bank.` : ""}</p>
-      </section>
+      {isOwner && (
+        <section className="card">
+          <p className="eyebrow">AI engine · owner tools</p>
+          <p className="small">Developer control — students never see this. The tutor and question generator run through a provider adapter: one neutral prompt format in, plain text out, so swapping engines loses nothing.</p>
+          <select className="select" value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="AI engine">
+            {AI_PROVIDERS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select>
+          <p className="small tip">{p.note}{customCount ? ` · ${customCount} AI-generated questions in your bank.` : ""}</p>
+        </section>
+      )}
       <section className="card">
         <p className="eyebrow">Saved progress</p>
         <p className="small">Your XP, streak, answer history, and flashcard schedule sync to your account and reload on any device.</p>
@@ -1604,6 +1696,7 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
         <p className="eyebrow">Account</p>
         <p className="small">Signing out keeps your synced progress safe — sign back in anywhere to continue.</p>
         <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <p className="small tip">All questions, case studies, flashcards, exams, and materials are the property of the owner of PulseRN and may not be copied, captured, or used outside this app without the owner's explicit consent.</p>
         <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms · Privacy · Educational-use disclaimer</a></p>
       </section>
     </div>
@@ -1937,6 +2030,12 @@ function Style() {
       /* readiness exams */
       .exam-clock{font-weight:700;color:var(--accent-ink)}
       .exam-clock.low{color:var(--coral)}
+      /* content protection: owner's property — deter copy/capture */
+      .body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+      .body input,.body textarea{-webkit-user-select:text;user-select:text}
+      .app.shield .body{filter:blur(16px);transition:filter .15s}
+      @media print{.body,.tabs,.lab-drawer,.menu-panel{display:none !important}}
+      .trial-banner{border-color:var(--teal);padding:10px 14px}
       .exam-head-card{padding:10px 18px}
       /* on-screen calculator */
       .calc-pad{max-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
