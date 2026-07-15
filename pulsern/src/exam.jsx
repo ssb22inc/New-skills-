@@ -57,7 +57,7 @@ const fmtClock = (secs) => {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, onAttempt, onUpgrade }) {
+export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, isOwner = false, onAttempt, onUpgrade }) {
   const [stage, setStage] = useState("picker"); // picker | intro | running | results | review
   const [availability, setAvailability] = useState(null); // {form: {items, cases}}
   const [form, setForm] = useState(null);
@@ -95,11 +95,14 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     // Consume the attempt FIRST. The primary key on (user, form) plus the
     // no-update/no-delete policies make this permanent: no account is ever
     // shown the same exam twice, even across devices or resets.
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) { setLoading(false); return; }
-    const { error: attemptErr } = await supabase.from("exam_attempts").insert({ user_id: session.user.id, form });
-    if (attemptErr) { setLoading(false); setStage("picker"); return; }
-    onAttempt?.(form);
+    // Owner exception: development runs don't write attempts at all.
+    if (!isOwner) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) { setLoading(false); return; }
+      const { error: attemptErr } = await supabase.from("exam_attempts").insert({ user_id: session.user.id, form });
+      if (attemptErr) { setLoading(false); setStage("picker"); return; }
+      onAttempt?.(form);
+    }
     const [{ data: items }, { data: cases }] = await Promise.all([
       supabase.from("questions")
         .select("id, cat, diff, type, stem, options, extra, answer, rationale")
@@ -202,10 +205,11 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
         <section className="card">
           <p className="eyebrow">Readiness self-assessment</p>
           <h2 className="h2">NCLEX-style exams</h2>
-          <p className="small">Ten standardized 85-item exams built to feel like the real NCLEX-RN: 3 full case studies plus 67 standalone questions weighted to the official test plan, a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal — and no account is ever shown the same exam twice.</p>
-          {ent && !trial && <p className="small tip">You have <strong>{examsLeft}</strong> self-assessment{examsLeft === 1 ? "" : "s"} remaining.{examsLeft === 0 && onUpgrade ? <> Add one for $45 from <button className="auth-switch" onClick={onUpgrade}>Plans & upgrades</button>.</> : null}</p>}
+          <p className="small">Ten standardized exams of <strong>85 questions each</strong> — the real NCLEX-RN's minimum length. Every form is 67 standalone questions plus 3 full case studies (6 questions each, 18 total) weighted to the official test plan, with a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal — and no account is ever shown the same exam twice.</p>
+          {isOwner && <p className="small tip">🔧 Owner dev access: every exam is open, retakes allowed, nothing is burned.</p>}
+          {ent && !isOwner && !trial && <p className="small tip">You have <strong>{examsLeft}</strong> self-assessment{examsLeft === 1 ? "" : "s"} remaining.{examsLeft === 0 && onUpgrade ? <> Add one for $45 from <button className="auth-switch" onClick={onUpgrade}>Plans & upgrades</button>.</> : null}</p>}
         </section>
-        {trial && (
+        {trial && !isOwner && (
           <section className="card">
             <p className="eyebrow">Included with any subscription</p>
             <p className="small">The free pass opens every study tool; readiness exams come with a subscription so each one stays an honest, never-repeated measure.</p>
@@ -216,26 +220,30 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
           const a = availability?.[f];
           const ready = a && a.items >= FULL_STANDALONE && a.cases >= FULL_CASES;
           const partial = a && !ready && (a.items > 0 || a.cases > 0);
+          const qReady = a ? Math.min(a.items, FULL_STANDALONE) + Math.min(a.cases, FULL_CASES) * 6 : 0;
           const past = examResults?.[f];
-          const done = attempted.has(f) || !!past; // an exam is one-shot, forever
+          const done = !isOwner && (attempted.has(f) || !!past); // an exam is one-shot, forever (owner excepted)
           return (
             <section key={f} className="card">
               <div className="cat-top">
                 <span className="small"><strong>Readiness Exam {f}</strong></span>
-                <span className="small mono">{a ? `${Math.min(a.items, FULL_STANDALONE)}/${FULL_STANDALONE} items · ${Math.min(a.cases, FULL_CASES)}/${FULL_CASES} cases` : "…"}</span>
+                <span className="small mono">{a ? `${qReady}/85 questions` : "…"}</span>
               </div>
+              {ready && <p className="small">Full-length 85-question exam · includes 3 case studies</p>}
               {past && <p className="small">Your result: <strong>{past.pct}%</strong> · {past.verdict} · {past.date}</p>}
               {done
                 ? <p className="small tip">Completed — exams are never repeated, so this score stays an honest signal.</p>
                 : !ready
                   ? <p className="small tip">{partial ? "Still being built by the exam factory — check back soon." : "Not built yet — the factory generates one form at a time."}</p>
-                  : !ent
-                    ? <p className="small tip">Checking your plan…</p>
-                    : trial
-                      ? <p className="small tip">🔒 Unlocks with a subscription.</p>
-                      : examsLeft <= 0
-                        ? <p className="small tip">🔒 No self-assessments remaining on your plan.</p>
-                        : <button className="btn" onClick={() => { setForm(f); setStage("intro"); }}>Start exam →</button>}
+                  : isOwner
+                    ? <button className="btn" onClick={() => { setForm(f); setStage("intro"); }}>Start exam (owner) →</button>
+                    : !ent
+                      ? <p className="small tip">Checking your plan…</p>
+                      : trial
+                        ? <p className="small tip">🔒 Unlocks with a subscription.</p>
+                        : examsLeft <= 0
+                          ? <p className="small tip">🔒 No self-assessments remaining on your plan.</p>
+                          : <button className="btn" onClick={() => { setForm(f); setStage("intro"); }}>Start exam →</button>}
             </section>
           );
         })}
