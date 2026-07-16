@@ -266,6 +266,7 @@ import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY } from "./srs.js"
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
 import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
+import { ProfileCard, useProfile } from "./profile.jsx";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -371,6 +372,7 @@ export default function App() {
   const [tourStep, setTourStep] = useState(null);   // null = closed, 0..n = showing
   const [tourSeen, setTourSeen] = useState(false);  // persisted in blob
   const [ent, setEnt] = useState(null);             // entitlement (server truth, not in blob)
+  const [profile, setProfile] = useProfile();       // name/phone/SMS consent (server truth)
   const [isOwner, setIsOwner] = useState(false);    // reviewers-table member = owner tools
   const [shield, setShield] = useState(false);      // blur content when app loses focus
 
@@ -683,6 +685,7 @@ export default function App() {
           </section>
         )}
         {!locked && <>
+          {tab === "today" && profile === null && <ProfileCard profile={null} setProfile={setProfile} prompt />}
           {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
             record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
             ability={ability} calibration={calibration} plan={plan}
@@ -692,7 +695,7 @@ export default function App() {
           {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} />}
+          {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
         </>}
       </main>
 
@@ -751,6 +754,7 @@ function Tour({ step, setStep, onClose }) {
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
 How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The LABS tab on the right edge opens searchable normal lab ranges, and its AI lookup also answers general NCLEX study questions typed into the search box. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness verdict — each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & Contact, Quick tour, Settings, Sign out.
+Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 1-day pass with full study access (no exams). Subscriptions: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). After a subscription: 7-day renewal $45 (content only) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
@@ -1646,13 +1650,14 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
 
 /* ================= STATS ================= */
 
-function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan }) {
+function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
   return (
     <div className="stack">
       <PlanCard ent={ent} onManage={onManagePlan} isOwner={isOwner} />
+      {profile !== undefined && <ProfileCard key={profile?.updated_at ?? "new"} profile={profile} setProfile={setProfile} />}
       <section className="card">
         <p className="eyebrow">Exam date</p>
         <p className="small">Set your NCLEX date and Today gains a weekly plan built from your ability profile.</p>
@@ -2041,6 +2046,8 @@ function Style() {
       .app.owner .body{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
       @media print{.body,.tabs,.lab-drawer,.menu-panel{display:none !important}}
       .trial-banner{border-color:var(--teal);padding:10px 14px}
+      .consent-row{display:flex;gap:8px;align-items:flex-start;margin:0 0 6px;cursor:pointer}
+      .consent-row input{margin-top:2px;accent-color:var(--teal)}
       .exam-head-card{padding:10px 18px}
       /* on-screen calculator */
       .calc-pad{max-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
