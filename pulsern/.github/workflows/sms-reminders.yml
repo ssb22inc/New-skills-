@@ -1,0 +1,36 @@
+name: sms-reminders
+# Daily study-reminder texts to consented students who've gone quiet,
+# after mirroring carrier-level STOPs back into profiles. Does nothing
+# until the Twilio secrets exist (HUMAN_TASKS.md H14). Offers are NEVER
+# sent on a schedule — the owner sends those by hand with
+#   node ops/sms-blast.mjs --offer "…"
+on:
+  schedule:
+    - cron: "0 17 * * *"   # ~1pm ET daily
+  workflow_dispatch: {}
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: install deps
+        working-directory: pulsern
+        run: npm ci --omit=dev
+      - name: sync STOPs, then send reminders
+        working-directory: pulsern
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM: ${{ secrets.TWILIO_FROM }}
+        run: |
+          if [ -z "$TWILIO_ACCOUNT_SID" ]; then
+            echo "Twilio secrets not configured yet (H14) — skipping."
+            exit 0
+          fi
+          node ops/sms-blast.mjs --sync-stops
+          node ops/sms-blast.mjs --reminders --days 2
