@@ -106,7 +106,7 @@ export function AuthScreen() {
             {mode === "signin" ? "Create account" : "Sign in"}
           </button>
         </p>
-        <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX-RN® is a registered trademark of NCSBN, which does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
+        <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
       </div>
     </div>
   );
