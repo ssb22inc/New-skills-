@@ -374,6 +374,8 @@ export default function App() {
   const [ent, setEnt] = useState(null);             // entitlement (server truth, not in blob)
   const [profile, setProfile] = useProfile();       // name/phone/SMS consent (server truth)
   const [examLock, setExamLock] = useState(false);  // exam running → whole app locks down
+  const [profileCardDismissed, setProfileCardDismissed] = useState(false); // blob (additive)
+  const [scrolling, setScrolling] = useState(false); // floating UI hides while scrolling
   const [isOwner, setIsOwner] = useState(false);    // reviewers-table member = owner tools
   const [shield, setShield] = useState(false);      // blur content when app loses focus
 
@@ -405,6 +407,7 @@ export default function App() {
           setPlan(s.plan);
           setExamDate(s.examDate);
           setTourSeen(s.tourSeen);
+          setProfileCardDismissed(s.profileCardDismissed);
         }
       } catch (e) {
         /* first visit — nothing saved yet */
@@ -418,12 +421,12 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults]);
+  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed]);
 
   /* first visit → run the 30-second tour once */
   useEffect(() => {
@@ -455,6 +458,19 @@ export default function App() {
       } catch { /* owner tools stay hidden */ }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* floating UI (LABS tab) hides while the page scrolls so it never sits
+     on top of text or buttons, then fades back when scrolling stops */
+  useEffect(() => {
+    let t = null;
+    const onScroll = () => {
+      setScrolling(true);
+      clearTimeout(t);
+      t = setTimeout(() => setScrolling(false), 650);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { clearTimeout(t); window.removeEventListener("scroll", onScroll); };
   }, []);
 
   /* ---- content protection: all materials are the owner's property ----
@@ -639,7 +655,7 @@ export default function App() {
   const locked = !isOwner && ent && (ent.status === "expired" || ent.status === "none");
 
   return (
-    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "")} data-theme={theme}>
+    <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "")} data-theme={theme}>
       <Style />
       <header className="top">
         {/* Exam lockdown: while a readiness exam runs, all navigation and
@@ -697,10 +713,10 @@ export default function App() {
           </section>
         )}
         {!locked && <>
-          {tab === "today" && profile === null && <ProfileCard profile={null} setProfile={setProfile} prompt />}
           {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
             record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
             ability={ability} calibration={calibration} plan={plan}
+            profile={profile} setProfile={setProfile} profileCardDismissed={profileCardDismissed} dismissProfileCard={() => setProfileCardDismissed(true)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
           {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
@@ -928,6 +944,9 @@ function Today(props) {
         <p className="small">Day {streak.count} locked in. The science says stop here — spacing does its work between sessions, not during them. Tomorrow, tap the same button.</p>
         <button className="btn ghost" onClick={() => setStage("home")}>Back to Today</button>
       </section>
+      {props.profile === null && !props.profileCardDismissed && (
+        <ProfileCard profile={null} setProfile={props.setProfile} prompt onDismiss={props.dismissProfileCard} />
+      )}
     </div>
   );
 
@@ -975,7 +994,8 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
         <Ecg />
         <div className="vitals">
           <div className="vital">
-            <span className="vital-num">{readiness == null ? "--" : `${readiness.low}–${readiness.high}%`}</span>
+            <span className="vital-num">{readiness == null ? "--" : Math.round((readiness.low + readiness.high) / 2)}</span>
+            <span className="vital-range mono">{readiness == null ? "12+ answers needed" : `range ${readiness.low}–${readiness.high}% (estimate)`}</span>
             <span className="vital-lab">READINESS (ESTIMATE)</span>
           </div>
           <div className="vital">
@@ -1686,8 +1706,9 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
         <p className="eyebrow">By client-needs category</p>
         {catStats.map((c) => (
           <div key={c.cat} className="cat-row">
-            <div className="cat-top"><span className="small">{c.cat}</span><span className="small mono">{c.pct == null ? "—" : `${c.pct}% · ${c.n}q`}</span></div>
-            <div className="bar"><div className={"bar-fill" + (c.pct != null && c.pct < 60 ? " low" : "")} style={{ width: `${c.pct ?? 0}%` }} /></div>
+            {/* under n=5 a percentage is noise, not signal — no red, no green */}
+            <div className="cat-top"><span className="small">{c.cat}</span><span className="small mono">{c.n < 5 ? `needs more data — ${c.n}q so far` : `${c.pct}% · ${c.n}q`}</span></div>
+            <div className="bar"><div className={"bar-fill" + (c.n < 5 ? " na" : c.pct < 60 ? " low" : "")} style={{ width: c.n < 5 ? "100%" : `${c.pct}%` }} /></div>
           </div>
         ))}
         <p className="small tip">Aim for ≥ 75% in every category before test day. The QBank automatically feeds you more questions from red bars.</p>
@@ -1717,6 +1738,7 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
         <p className="small">Signing out keeps your synced progress safe — sign back in anywhere to continue.</p>
         <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
         <p className="small tip">All questions, case studies, flashcards, exams, and materials are the property of the owner of PulseRN and may not be copied, captured, or used outside this app without the owner's explicit consent.</p>
+        <p className="small tip">NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. Educational exam preparation only.</p>
         <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms · Privacy · Educational-use disclaimer</a></p>
       </section>
     </div>
@@ -2062,6 +2084,11 @@ function Style() {
       .consent-row input{margin-top:2px;accent-color:var(--teal)}
       .exam-lock-chip{font-weight:700;font-size:12px;color:var(--coral);letter-spacing:.04em}
       .brand-btn:disabled{cursor:default;opacity:.85}
+      .bar-fill.na{background:var(--line)}
+      .vital-range{display:block;font-size:9.5px;color:var(--ecg);opacity:.75;margin-top:1px}
+      /* floating UI never fights the content: fade out while scrolling */
+      .lab-tab{transition:opacity .2s}
+      .app.scrolling .lab-tab{opacity:0;pointer-events:none}
       .exam-head-card{padding:10px 18px}
       /* on-screen calculator */
       .calc-pad{max-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}

@@ -29,5 +29,6 @@ export function migrateBlob(s, cats) {
     tourSeen: s.tourSeen ?? false,
     srsMap: s.srsMap ?? {},
     examResults: s.examResults ?? {},
+    profileCardDismissed: s.profileCardDismissed ?? false,
   };
 }

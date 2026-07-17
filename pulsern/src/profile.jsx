@@ -19,7 +19,7 @@ export function useProfile() {
   return [profile, setProfile];
 }
 
-export function ProfileCard({ profile, setProfile, prompt = false, onDone }) {
+export function ProfileCard({ profile, setProfile, prompt = false, onDone, onDismiss }) {
   const [name, setName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [reminders, setReminders] = useState(profile?.sms_reminders ?? false);
@@ -54,7 +54,11 @@ export function ProfileCard({ profile, setProfile, prompt = false, onDone }) {
   };
 
   return (
-    <section className="card">
+    <section className="card" style={{ position: "relative" }}>
+      {onDismiss && (
+        <button type="button" onClick={onDismiss} aria-label="Dismiss — you can always do this later in Stats"
+          style={{ position: "absolute", top: 8, right: 10, background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", padding: 4 }}>✕</button>
+      )}
       <p className="eyebrow">{prompt ? "Finish setting up" : "Profile & notifications"}</p>
       {prompt && <p className="small">Tell us who you are and we'll keep you on track with study reminders.</p>}
       <input className="select" style={{ marginBottom: 8 }} placeholder="Your name" value={name}
