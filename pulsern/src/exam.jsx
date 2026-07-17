@@ -57,7 +57,7 @@ const fmtClock = (secs) => {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, isOwner = false, onAttempt, onUpgrade }) {
+export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, isOwner = false, onRunning, onAttempt, onUpgrade }) {
   const [stage, setStage] = useState("picker"); // picker | intro | running | results | review
   const [availability, setAvailability] = useState(null); // {form: {items, cases}}
   const [form, setForm] = useState(null);
@@ -74,6 +74,15 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
   const timerRef = useRef(null);
   const outcomesRef = useRef(outcomes);
   outcomesRef.current = outcomes;
+
+  /* lockdown: tell the app shell when the exam is live so it hides every
+     menu, tab, and reference — the calculator on calc items is the only
+     tool, exactly like the real testing center */
+  useEffect(() => {
+    onRunning?.(stage === "running");
+    return () => onRunning?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
 
   /* availability: how complete is each form's bank */
   useEffect(() => {
@@ -262,7 +271,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
           <li>• {Math.floor(EXAM_MINUTES / 60)} hours {EXAM_MINUTES % 60} minutes on the clock — it auto-submits at zero</li>
           <li>• One question at a time. You must answer to move on. <strong>No going back.</strong></li>
           <li>• No rationales, no tutor, no lab reference until you finish</li>
-          <li>• The on-screen calculator is available on calculation items</li>
+          <li>• The on-screen calculator is available on calculation items — it's the ONLY tool: menus, lab references, and the rest of the app lock until you finish, just like the real testing center</li>
           <li>• Plan to finish in one sitting — leaving the exam loses your progress</li>
         </ul>
         <div className="row">

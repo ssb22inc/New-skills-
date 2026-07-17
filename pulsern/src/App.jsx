@@ -373,6 +373,7 @@ export default function App() {
   const [tourSeen, setTourSeen] = useState(false);  // persisted in blob
   const [ent, setEnt] = useState(null);             // entitlement (server truth, not in blob)
   const [profile, setProfile] = useProfile();       // name/phone/SMS consent (server truth)
+  const [examLock, setExamLock] = useState(false);  // exam running → whole app locks down
   const [isOwner, setIsOwner] = useState(false);    // reviewers-table member = owner tools
   const [shield, setShield] = useState(false);      // blur content when app loses focus
 
@@ -641,13 +642,24 @@ export default function App() {
     <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "")} data-theme={theme}>
       <Style />
       <header className="top">
-        <button className="brand brand-btn" onClick={() => { setTab("today"); setMenuOpen(false); }} title="Back to Today">
+        {/* Exam lockdown: while a readiness exam runs, all navigation and
+            references disappear — only the exam (and its calculator) exists,
+            just like the real testing center. */}
+        <button className="brand brand-btn" disabled={examLock}
+          onClick={() => { if (!examLock) { setTab("today"); setMenuOpen(false); } }}
+          title={examLock ? "Locked during the exam" : "Back to Today"}>
           <span className="pulse-dot" aria-hidden="true" />
           <span className="brand-name">PULSE<em>RN</em></span>
         </button>
         <div className="top-stats mono">
-          <span title="Experience points">◆ {xp} XP</span>
-          <span title="Day streak">🔥 {streak.count}</span>
+          {examLock ? (
+            <span className="exam-lock-chip" title="Navigation is locked until you submit or end the exam">🔒 EXAM IN PROGRESS</span>
+          ) : (
+            <>
+              <span title="Experience points">◆ {xp} XP</span>
+              <span title="Day streak">🔥 {streak.count}</span>
+            </>
+          )}
           <button
             className="theme-btn"
             onClick={() => setTheme(theme === "light" ? "dim" : "light")}
@@ -656,9 +668,9 @@ export default function App() {
           >
             {theme === "light" ? "☾ Dim" : "☀ Light"}
           </button>
-          <button className="theme-btn menu-btn" onClick={() => setMenuOpen((m) => !m)} aria-label="Menu" aria-expanded={menuOpen}>☰</button>
+          {!examLock && <button className="theme-btn menu-btn" onClick={() => setMenuOpen((m) => !m)} aria-label="Menu" aria-expanded={menuOpen}>☰</button>}
         </div>
-        {menuOpen && (
+        {menuOpen && !examLock && (
           <>
             <div className="menu-overlay" onClick={() => setMenuOpen(false)} />
             <nav className="menu-panel" aria-label="Main menu">
@@ -693,13 +705,13 @@ export default function App() {
           {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
           {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} />}
-          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
+          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
           {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
         </>}
       </main>
 
-      {!locked && (
+      {!locked && !examLock && (
         <nav className="tabs" aria-label="Sections">
           {[["today", "Today"], ["qbank", "Practice"], ["case", "Case Study"], ["cards", "Cards"], ["stats", "Stats"]].map(([k, label]) => (
             <button key={k} className={tab === k ? "tab on" : "tab"} onClick={() => setTab(k)}>{label}</button>
@@ -707,7 +719,7 @@ export default function App() {
         </nav>
       )}
 
-      <LabRef open={labOpen} setOpen={setLabOpen} />
+      {!examLock && <LabRef open={labOpen} setOpen={setLabOpen} />}
       <HelpCenter open={helpOpen} setOpen={setHelpOpen} provider={provider} />
       {tourStep != null && (
         <Tour step={tourStep} setStep={setTourStep} onClose={() => { setTourStep(null); setTourSeen(true); }} />
@@ -2048,6 +2060,8 @@ function Style() {
       .trial-banner{border-color:var(--teal);padding:10px 14px}
       .consent-row{display:flex;gap:8px;align-items:flex-start;margin:0 0 6px;cursor:pointer}
       .consent-row input{margin-top:2px;accent-color:var(--teal)}
+      .exam-lock-chip{font-weight:700;font-size:12px;color:var(--coral);letter-spacing:.04em}
+      .brand-btn:disabled{cursor:default;opacity:.85}
       .exam-head-card{padding:10px 18px}
       /* on-screen calculator */
       .calc-pad{max-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
