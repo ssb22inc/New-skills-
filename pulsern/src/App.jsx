@@ -760,6 +760,7 @@ export default function App() {
         </nav>
       )}
 
+      {!examLock && !locked && <Fab onLabs={() => setLabOpen(true)} onHelp={() => setHelpOpen(true)} />}
       {!examLock && <LabRef open={labOpen} setOpen={setLabOpen} />}
       <HelpCenter open={helpOpen} setOpen={setHelpOpen} provider={provider} />
       {tourStep != null && (
@@ -776,7 +777,7 @@ export default function App() {
 const TOUR_STEPS = [
   { icon: "▶", title: "Today — one tap, that's the job", body: "Every day, press the big Start button. PulseRN picks your due flashcards and 8 smart questions — about 10 minutes. The monitor above it shows your readiness estimate once you've answered 12+ questions." },
   { icon: "🎯", title: "Practice — an exam that adapts", body: "The QBank serves every NCLEX item type — Next-Gen matrix, bow-tie, cloze, and dosage-calculation math. Want to drill one area? Use the Focus chips to pick categories or question types. Miss one? It returns in Review misses until you beat it." },
-  { icon: "🧪", title: "LABS — ranges without leaving", body: "The green LABS tab on the right edge opens every normal range you'll be tested on — searchable. If something isn't listed, the AI looks it up for you." },
+  { icon: "🧪", title: "The floating button — ranges & help", body: "The round floating button near the bottom right opens lab values (every normal range, searchable, with AI lookup) and the help chat — from anywhere in the app." },
   { icon: "🃏", title: "Cards — memory on a schedule", body: "Flashcards come due right before you'd forget them. Type your answer before flipping — the typing is what builds the memory — then grade yourself honestly." },
   { icon: "🧠", title: "Tutors, plans & help", body: "After any question, ask the AI tutor to explain it differently. Set your exam date in Stats to get a weekly plan. Stuck or found a bad question? Menu → Help & Contact, or the ⚠ report button under any question." },
 ];
@@ -806,7 +807,7 @@ function Tour({ step, setStep, onClose }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The LABS tab on the right edge opens searchable normal lab ranges, and its AI lookup also answers general NCLEX study questions typed into the search box. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness verdict — each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & Contact, Quick tour, Settings, Sign out.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness verdict — each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & Contact, Quick tour, Settings, Sign out.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 1-day pass with full study access (no exams). Subscriptions: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). After a subscription: 7-day renewal $45 (content only) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call (786) 399-2660. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
@@ -864,6 +865,29 @@ function HelpCenter({ open, setOpen, provider }) {
   );
 }
 
+/* ================= FLOATING ACTION BUTTON =================
+   RN pack prompt 5, visible edition: the edge controls collapse into one
+   round floating button above the tab bar. Tap to expand Labs + Help;
+   it fades while scrolling and disappears entirely during exams. */
+function Fab({ onLabs, onHelp }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      {open && <div className="fab-overlay" onClick={() => setOpen(false)} />}
+      {open && (
+        <div className="fab-menu">
+          <button className="fab-mini" onClick={() => { setOpen(false); onLabs(); }}>🧪 <span>Lab values</span></button>
+          <button className="fab-mini" onClick={() => { setOpen(false); onHelp(); }}>💬 <span>Help</span></button>
+        </div>
+      )}
+      <button className={open ? "fab open" : "fab"} onClick={() => setOpen((o) => !o)}
+        aria-label={open ? "Close quick actions" : "Open quick actions: lab values and help"} aria-expanded={open}>
+        {open ? "✕" : "🧪"}
+      </button>
+    </>
+  );
+}
+
 /* ================= LAB VALUES DRAWER =================
    Always-available normal ranges so students never leave the app to look
    one up — and see them so often they stick. Flip open from the LABS tab
@@ -900,9 +924,6 @@ Both cases: plain text only (no markdown), educational exam-prep register only �
   const aiHit = aiAnswers[needle];
   return (
     <>
-      {!open && (
-        <button className="lab-tab mono" onClick={() => setOpen(true)} aria-label="Open lab values reference">🧪 LABS</button>
-      )}
       {open && <div className="lab-overlay" onClick={() => setOpen(false)} />}
       <aside className={open ? "lab-drawer open" : "lab-drawer"} aria-hidden={!open} aria-label="Normal lab and vital-sign reference ranges">
         <div className="lab-head">
@@ -2103,7 +2124,11 @@ function Style() {
       .menu-item:last-child{border-bottom:none}
       .menu-item:hover{background:var(--surface)}
       /* lab values drawer */
-      .lab-tab{position:fixed;right:0;top:38%;z-index:39;writing-mode:vertical-rl;background:var(--teal);color:var(--btn-ink);border:none;border-radius:10px 0 0 10px;padding:14px 8px;font-size:11px;font-weight:700;letter-spacing:.12em;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.2)}
+      .fab{position:fixed;right:14px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:47;width:54px;height:54px;border-radius:50%;background:var(--teal);color:var(--btn-ink);border:none;font-size:22px;cursor:pointer;box-shadow:0 6px 18px rgba(8,20,16,.35);display:flex;align-items:center;justify-content:center;transition:opacity .2s,transform .15s}
+      .fab.open{transform:rotate(90deg)}
+      .fab-overlay{position:fixed;inset:0;z-index:46}
+      .fab-menu{position:fixed;right:14px;bottom:calc(140px + env(safe-area-inset-bottom));z-index:47;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+      .fab-mini{display:flex;align-items:center;gap:8px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:24px;padding:10px 16px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(8,20,16,.25)}
       .lab-overlay{position:fixed;inset:0;background:rgba(8,20,16,.45);z-index:48}
       .lab-drawer{position:fixed;top:0;right:0;bottom:0;width:min(360px,92vw);z-index:49;background:var(--card);border-left:1px solid var(--line);transform:translateX(102%);transition:transform .22s ease;display:flex;flex-direction:column;padding:14px 14px calc(14px + env(safe-area-inset-bottom))}
       .lab-drawer.open{transform:translateX(0)}
@@ -2157,8 +2182,7 @@ function Style() {
       .exh-svg{width:100%;display:block}
       .vital-range{display:block;font-size:9.5px;color:var(--ecg);opacity:.75;margin-top:1px}
       /* floating UI never fights the content: fade out while scrolling */
-      .lab-tab{transition:opacity .2s}
-      .app.scrolling .lab-tab{opacity:0;pointer-events:none}
+      .app.scrolling .fab{opacity:0;pointer-events:none}
       .exam-head-card{padding:10px 18px}
       /* on-screen calculator */
       .calc-pad{max-width:260px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
