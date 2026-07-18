@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "./supabase.js";
 import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight } from "./ngn.js";
 import Calculator from "./calculator.jsx";
+import { ExhibitVisual } from "./exhibits.jsx";
 
 export const EXAM_FORMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 export const EXAM_MINUTES = 170; // 5h/150 items on the real exam → 85 items ≈ 2h50m
@@ -359,6 +360,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
       )}
 
       <section className="card">
+        <ExhibitVisual spec={ext.visual} />
         {Array.isArray(ext.exhibit) && ext.exhibit.length > 0 && (
           <div className="exhibit">
             {ext.exhibit.map((tab, i) => (
