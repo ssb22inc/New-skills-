@@ -266,6 +266,7 @@ import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY } from "./srs.js"
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
 import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
+import { ExhibitVisual } from "./exhibits.jsx";
 import { ProfileCard, useProfile } from "./profile.jsx";
 
 const STORE_KEY = "pulsern-v1";
@@ -1287,6 +1288,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
           <span>{q.cat.toUpperCase()}{q.ai ? " · ✨ AI" : ""}{mode === "review" ? " · RETRY" : ""}</span>
           <span>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {TYPE_LABEL[q.type] ?? "MULTIPLE CHOICE"}</span>
         </div>
+        <ExhibitVisual spec={ext.visual} />
         {Array.isArray(ext.exhibit) && ext.exhibit.length > 0 && (
           <div className="exhibit">
             {ext.exhibit.map((tab, i) => (
@@ -2151,6 +2153,8 @@ function Style() {
       .bar-fill.na{background:var(--line)}
       .why-toggle{background:none;border:none;padding:0;margin:4px 0 0;color:var(--accent-ink);font-size:12px;cursor:pointer;text-decoration:underline dotted}
       .why-body{margin-top:6px;padding:8px 10px;background:var(--surface);border-radius:8px}\n      .fc-scale{width:100%;max-width:340px;display:block;margin:8px auto}\n      .fc-pair{display:flex;gap:10px;align-items:center;justify-content:center;margin:8px 0}\n      .fc-arrow{color:var(--accent-ink);font-weight:700}\n      .fc-anti{background:var(--right-bg)}
+      .exh-wrap{margin:4px 0 10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px}
+      .exh-svg{width:100%;display:block}
       .vital-range{display:block;font-size:9.5px;color:var(--ecg);opacity:.75;margin-top:1px}
       /* floating UI never fights the content: fade out while scrolling */
       .lab-tab{transition:opacity .2s}
