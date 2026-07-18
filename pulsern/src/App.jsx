@@ -1217,7 +1217,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
         <p className="small">Adaptive practice — difficulty adjusts to you.</p>
-        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real CAT exam, steering toward your weakest categories.</Why>
+        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real NCLEX-RN — a computer-adaptive test — steering toward your weakest categories.</Why>
 
         <p className="eyebrow" style={{ marginTop: 10 }}>Focus — leave everything off for the full adaptive mix</p>
         <div className="fchips" role="group" aria-label="Filter by category">
