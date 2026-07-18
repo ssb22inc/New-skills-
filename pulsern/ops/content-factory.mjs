@@ -143,7 +143,7 @@ async function pickTargets() {
   const counts = {};
   for (const c of CATS) {
     const { count } = await db().from("questions").select("id", { count: "exact", head: true })
-      .eq("cat", c).eq("approved", true);
+      .eq("cat", c).eq("approved", true).is("exam_form", null); // practice bank only — exam items are quarantined
     counts[c] = count ?? 0;
   }
   const sorted = CATS.slice().sort((a, b) => counts[a] - counts[b]);
