@@ -43,6 +43,7 @@ describe("state migration", () => {
       srsMap: { b0: { interval: 3, due: "2026-07-12" }, c17: { interval: 0, due: "2026-07-09" } },
       examResults: { 1: { pct: 71, verdict: "HIGH", date: "2026-07-14", attempts: 1 } },
       profileCardDismissed: true,
+      fcFlips: 7,
     };
     expect(migrateBlob(full, CATS)).toEqual(full);
   });
@@ -53,7 +54,7 @@ describe("state migration", () => {
       theme: "light", xp: 0, bestRun: 0, log: [], flagged: [],
       streak: { count: 0, lastDay: null, shield: true },
       daily: null, srs: [], customQs: [], provider: "claude",
-      ability: emptyAbility(CATS), plan: null, examDate: null, tourSeen: false, srsMap: {}, examResults: {}, profileCardDismissed: false,
+      ability: emptyAbility(CATS), plan: null, examDate: null, tourSeen: false, srsMap: {}, examResults: {}, profileCardDismissed: false, fcFlips: 0,
     });
   });
 

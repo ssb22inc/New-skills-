@@ -338,6 +338,18 @@ async function askModel(providerId, prompt, maxTokens = 1000) {
    all six item types, mirroring the factory's validItem. */
 const DAILY_GOAL = 8;
 
+/* Progressive disclosure: one-line UI, science on demand (RN pack prompt 4).
+   Collapsed by default everywhere; nothing is deleted, only tucked away. */
+function Why({ label = "why this works", children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="why">
+      <button type="button" className="why-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>ⓘ {label} {open ? "▴" : "▾"}</button>
+      {open && <div className="why-body small">{children}</div>}
+    </div>
+  );
+}
+
 const freshCards = () => CARDS.map(() => ({ interval: 0, due: todayStr() }));
 
 /* ================= APP ================= */
@@ -375,6 +387,7 @@ export default function App() {
   const [profile, setProfile] = useProfile();       // name/phone/SMS consent (server truth)
   const [examLock, setExamLock] = useState(false);  // exam running → whole app locks down
   const [profileCardDismissed, setProfileCardDismissed] = useState(false); // blob (additive)
+  const [fcFlips, setFcFlips] = useState(0);        // blob (additive): lifetime card flips, gates first-run coaching
   const [scrolling, setScrolling] = useState(false); // floating UI hides while scrolling
   const [isOwner, setIsOwner] = useState(false);    // reviewers-table member = owner tools
   const [shield, setShield] = useState(false);      // blur content when app loses focus
@@ -408,6 +421,7 @@ export default function App() {
           setExamDate(s.examDate);
           setTourSeen(s.tourSeen);
           setProfileCardDismissed(s.profileCardDismissed);
+          setFcFlips(s.fcFlips);
         }
       } catch (e) {
         /* first visit — nothing saved yet */
@@ -421,12 +435,12 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed]);
+  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips]);
 
   /* first visit → run the 30-second tour once */
   useEffect(() => {
@@ -629,10 +643,18 @@ export default function App() {
     if (plan?.week === wk && Array.isArray(plan?.days) && plan.days.length) return;
     (async () => {
       try {
+        // honest inventory: the plan may never schedule questions that
+        // don't exist (RN pack prompt 2)
+        const answeredIds = new Set(log.map((l) => l.id));
+        const lastById = {};
+        for (const l of log) lastById[l.id] = l.correct;
+        const perCat = Object.fromEntries(CATS.map((c) => [c, 0]));
+        for (const q of allQuestions) if (!answeredIds.has(q.id) && perCat[q.cat] !== undefined) perCat[q.cat]++;
+        const misses = Object.values(lastById).filter((ok) => !ok).length;
         const r = await fetch("/api/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ examDate, ability, dueCount, answeredTotal: log.length, today: todayStr() }),
+          body: JSON.stringify({ examDate, ability, dueCount, answeredTotal: log.length, today: todayStr(), inventory: { perCat, misses } }),
         });
         const data = await r.json().catch(() => ({}));
         if (r.ok && Array.isArray(data.days) && data.days.length) setPlan({ week: wk, days: data.days });
@@ -717,10 +739,11 @@ export default function App() {
             record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
             ability={ability} calibration={calibration} plan={plan}
             profile={profile} setProfile={setProfile} profileCardDismissed={profileCardDismissed} dismissProfileCard={() => setProfileCardDismissed(true)}
+            fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
           {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
-          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} />}
+          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
           {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
@@ -925,7 +948,7 @@ function Today(props) {
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} embedded onDone={() => setStage("quiz")} />
+      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} fcFlips={props.fcFlips} onFlip={props.onFlip} embedded onDone={() => setStage("quiz")} />
     </div>
   );
 
@@ -1018,9 +1041,9 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
         <p className="eyebrow">Today's goal · little and often</p>
         <h2 className="h2">{daily.answered >= DAILY_GOAL ? "Goal met — spacing secured" : `${daily.answered} / ${DAILY_GOAL} questions today`}</h2>
         <div className="bar"><div className="bar-fill" style={{ width: `${goalPct}%` }} /></div>
-        <p className="small">{daily.answered >= DAILY_GOAL
+        <Why>{daily.answered >= DAILY_GOAL
           ? "One block a day beats a weekend marathon. Clear your flashcard queue, then rest — the forgetting curve is doing the work now."
-          : "Distributed practice: a short block today is worth more than a long one someday. Your streak counts days, not hours."}</p>
+          : "Distributed practice: a short block today is worth more than a long one someday. Your streak counts days, not hours."}</Why>
         {dueCount > 0 && <p className="small tip"><strong>{dueCount} flashcard{dueCount === 1 ? "" : "s"} due today</strong> — spaced reviews only count if they happen on schedule.</p>}
         <p className="small tip">{streak.shield ? "🛡 Streak shield ready — one missed day won't break your streak." : "🛡 Shield used. A 7-day run restores it."}</p>
       </section>
@@ -1164,7 +1187,8 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
       <section className="card">
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
-        <p className="small">Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real CAT exam, steering toward your weakest categories.</p>
+        <p className="small">Adaptive practice — difficulty adjusts to you.</p>
+        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real CAT exam, steering toward your weakest categories.</Why>
 
         <p className="eyebrow" style={{ marginTop: 10 }}>Focus — leave everything off for the full adaptive mix</p>
         <div className="fchips" role="group" aria-label="Filter by category">
@@ -1572,7 +1596,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
 const CALC_CHIP = "Dosage calculations"; // topic-based focus: math cards live inside Pharmacology
 const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i.test(c.topic);
 
-function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = false, onDone }) {
+function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = false, onDone, fcFlips = 99, onFlip }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
   const [show, setShow] = useState(false);
@@ -1629,8 +1653,8 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
       <section className="card">
         <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
         <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
-        <p className="small">Your queue is clear — and that's the point. Reviews land right before you'd forget: graded "Hard" returns tomorrow, "Good" stretches to 3, 7, then 15 days, "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day so the deck never buries you. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
-        <p className="small tip">Your schedule syncs to your account — come back on the due date and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</p>
+        <p className="small">Your queue is clear — and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
+        <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow, "Good" stretches to 3, 7, then 15 days, "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day so the deck never buries you. Your schedule syncs to your account — come back on the due date and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
         {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
       </section>
     </div>
@@ -1642,7 +1666,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
       <section className="card">
         <p className="eyebrow">Spaced repetition · {sessionQueue.length} in today's queue · deck of {filtered.length}</p>
         <p className="small mono" style={{ marginBottom: 6 }}>{cur.cat.toUpperCase()} · {cur.topic.toUpperCase()}{cur.ai ? " · ✨ AI" : ""}</p>
-        <button className="flashcard" onClick={() => setShow((s) => !s)}>
+        <button className="flashcard" onClick={() => { if (!show) onFlip?.(); setShow((s) => !s); }}>
           <p className="fc-side mono">{show ? "ANSWER" : "PROMPT — TAP TO FLIP"}</p>
           <p className="fc-text">{show ? cur.back : cur.front}</p>
         </button>
@@ -1653,7 +1677,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
             value={typed}
             autoComplete="off"
             onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") setShow(true); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { onFlip?.(); setShow(true); } }}
             aria-label="Type your answer before flipping"
           />
         )}
@@ -1674,7 +1698,9 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
             <button className="btn grade easy" onClick={() => grade("easy")}>Easy<span className="grade-sub">{interval < 1 ? "7d" : `${Math.min(interval * 3 + 1, 90)}d`}</span></button>
           </div>
         )}
-        <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory — the flip is just the check. Enter flips the card. Grades set real calendar dates.{cur.ai ? " ✨ AI card — verify anything surprising against your course materials." : ""}</p>
+        {fcFlips < 3 && <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory — the flip is just the check.</p>}
+        <p className="small tip">Enter flips the card · grades set real calendar dates.{cur.ai ? " ✨ AI card — verify anything surprising against your course materials." : ""}</p>
+        <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. Reviews land right before you'd forget — that's the spacing effect doing the work.</Why>
       </section>
     </div>
   );
@@ -1716,7 +1742,7 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
       {isOwner && (
         <section className="card">
           <p className="eyebrow">AI engine · owner tools</p>
-          <p className="small">Developer control — students never see this. The tutor and question generator run through a provider adapter: one neutral prompt format in, plain text out, so swapping engines loses nothing.</p>
+          <Why label="how this works">Developer control — students never see this. The tutor and question generator run through a provider adapter: one neutral prompt format in, plain text out, so swapping engines loses nothing.</Why>
           <select className="select" value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="AI engine">
             {AI_PROVIDERS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
@@ -2085,6 +2111,8 @@ function Style() {
       .exam-lock-chip{font-weight:700;font-size:12px;color:var(--coral);letter-spacing:.04em}
       .brand-btn:disabled{cursor:default;opacity:.85}
       .bar-fill.na{background:var(--line)}
+      .why-toggle{background:none;border:none;padding:0;margin:4px 0 0;color:var(--accent-ink);font-size:12px;cursor:pointer;text-decoration:underline dotted}
+      .why-body{margin-top:6px;padding:8px 10px;background:var(--surface);border-radius:8px}
       .vital-range{display:block;font-size:9.5px;color:var(--ecg);opacity:.75;margin-top:1px}
       /* floating UI never fights the content: fade out while scrolling */
       .lab-tab{transition:opacity .2s}

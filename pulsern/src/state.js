@@ -30,5 +30,6 @@ export function migrateBlob(s, cats) {
     srsMap: s.srsMap ?? {},
     examResults: s.examResults ?? {},
     profileCardDismissed: s.profileCardDismissed ?? false,
+    fcFlips: s.fcFlips ?? 0,
   };
 }
