@@ -244,7 +244,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
               {done
                 ? <p className="small tip">Completed — exams are never repeated, so this score stays an honest signal.</p>
                 : !ready
-                  ? <p className="small tip">{partial ? "Still being built by the exam factory — check back soon." : "Not built yet — the factory generates one form at a time."}</p>
+                  ? <p className="small tip">{!a ? "Checking availability…" : partial ? "Still being built by the exam factory — check back soon." : "Not built yet — the factory generates one form at a time."}</p>
                   : isOwner
                     ? <button className="btn" onClick={() => { setForm(f); setStage("intro"); }}>Start exam (owner) →</button>
                     : !ent

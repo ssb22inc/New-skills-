@@ -6,7 +6,7 @@
 - Design system: teal/green palette, coral only for incorrect/critical, amber only for caution, monitor motif, IBM Plex Mono for stats. No new colors, no stock photos — visuals are hand-drawn inline SVG in the app palette.
 - Straight quotes in code. Accessibility: focus rings, reduced-motion, ≥4.5:1 contrast both themes.
 - Claims hygiene: compare, never equate ("like the real exam", never "same as"); readiness never promises outcomes; NCSBN trademark disclaimer stays in footer and app.
-- Owner amendment (standing, reaffirmed 2026-07-16): despite the pack's human-review framing, the ADVERSARIAL AI is the accuracy gate for ALL site content — questions, exams, cases, flashcards, images/visuals, and site copy (ops/audit-sweep.mjs, factory review passes, copy audits). QBank practice questions additionally keep the human console gate. The owner-RN retains full rejection/oversight authority over everything; nothing unapproved reaches students.
+- Owner amendment (standing, reaffirmed 2026-07-16): despite the pack's human-review framing, the ADVERSARIAL AI is the accuracy gate for ALL site content — questions, exams, cases, flashcards, images/visuals, and site copy (ops/audit-sweep.mjs, factory review passes, copy audits). Owner extension (2026-07-16, explicit order): QBank practice questions now ALSO publish through the adversarial gate at >=0.85 (content-factory --publish) so the bank can reach 3,000+ live items; the console keeps rejection authority. The owner-RN retains full rejection/oversight authority over everything; nothing unapproved reaches students.
 
 ## What this project is
 
@@ -15,7 +15,7 @@ PulseRN: an adaptive NCLEX-RN study platform. React web app (Expo port later), S
 ## Non-negotiable rules
 
 - 1. The approval gate is sacred. No code path other than the review console (a signed-in human reviewer) may ever set questions.approved = true. The content factory, seed exceptions aside, always writes approved = false. If you find yourself writing approved: true anywhere else, stop — it's wrong.
-  - Owner amendment (licensed-RN owner, 2026-07-13): for SCALED content — flashcards and case studies — cross-vendor adversarial AI review at ≥0.85 confidence IS the publication gate (card-factory.mjs / case-factory.mjs insert approved=true on pass, drop on fail). QBank practice questions keep the human console gate unchanged. The console retains rejection authority over everything, and all AI content stays labeled ✨ with the verify-against-your-materials note.
+  - Owner amendment (licensed-RN owner, 2026-07-13): for SCALED content — flashcards and case studies — cross-vendor adversarial AI review at ≥0.85 confidence IS the publication gate (card-factory.mjs / case-factory.mjs insert approved=true on pass, drop on fail). QBank practice questions originally kept the human console gate; superseded 2026-07-16 by owner order — they now publish via the adversarial gate too (console retains rejection authority). The console retains rejection authority over everything, and all AI content stays labeled ✨ with the verify-against-your-materials note.
 
 - 2. Secrets live server-side only. OPENROUTER_API_KEY and SUPABASE_SERVICE_ROLE_KEY appear ONLY in Vercel env vars and GitHub Actions secrets. Never in client code, never committed, never in VITE_-prefixed vars. The client may hold only VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
 
