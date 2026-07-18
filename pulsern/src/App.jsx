@@ -823,16 +823,22 @@ function HelpCenter({ open, setOpen, provider }) {
     setInput("");
     setMsgs((m) => [...m, { role: "you", text }]);
     setBusy(true);
-    try {
-      const transcript = [...msgs, { role: "you", text }].slice(-8)
-        .map((m) => `${m.role === "you" ? "Student" : "Helper"}: ${m.text}`).join("\n");
-      const t = await askModel(provider, `${SUPPORT_CONTEXT}\n\nConversation so far:\n${transcript}\n\nReply as Helper:`, 400);
-      setMsgs((m) => [...m, { role: "ai", text: t }]);
-    } catch (e) {
-      setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now. For anything urgent, email ssb22inc@gmail.com or call (786) 399-2660." }]);
-    } finally {
-      setBusy(false);
+    const transcript = [...msgs, { role: "you", text }].slice(-8)
+      .map((m) => `${m.role === "you" ? "Student" : "Helper"}: ${m.text}`).join("\n");
+    const prompt = `${SUPPORT_CONTEXT}\n\nConversation so far:\n${transcript}\n\nReply as Helper:`;
+    // one quiet client-side retry before apologizing — the server already
+    // retries + falls back models, so two layers cover transient blips
+    let answered = false;
+    for (let attempt = 0; attempt < 2 && !answered; attempt++) {
+      try {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+        const t = await askModel(provider, prompt, 400);
+        setMsgs((m) => [...m, { role: "ai", text: t }]);
+        answered = true;
+      } catch (e) { /* retry once */ }
     }
+    if (!answered) setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now — try sending that once more in a few seconds. For anything urgent, email ssb22inc@gmail.com or call (786) 399-2660." }]);
+    setBusy(false);
   };
 
   if (!open) return null;

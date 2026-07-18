@@ -18,24 +18,30 @@ export default async function handler(req, res) {
   if (!prompt || typeof prompt !== 'string' || prompt.length > 20000)
     return res.status(400).json({ error: 'Bad prompt' });
 
-  try {
-    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, // server-side only
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: Math.min(maxTokens, 4000),
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-    const data = await r.json();
-    const text = data?.choices?.[0]?.message?.content ?? '';
-    if (!text) return res.status(502).json({ error: 'Empty response' });
-    return res.status(200).json({ text });
-  } catch (e) {
-    return res.status(502).json({ error: 'Upstream failed' });
+  // Resilience: the content factory shares this OpenRouter key, so a
+  // student's request can lose a rate-limit race. Retry the chosen model
+  // once, then fall back to a different model before giving up — a slower
+  // answer beats an apology.
+  const attempts = [model, model, MODELS.deepseek !== model ? MODELS.deepseek : MODELS.claude];
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      if (i > 0) await new Promise((r2) => setTimeout(r2, 1200));
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, // server-side only
+        },
+        body: JSON.stringify({
+          model: attempts[i],
+          max_tokens: Math.min(maxTokens, 4000),
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      const data = await r.json();
+      const text = data?.choices?.[0]?.message?.content ?? '';
+      if (text) return res.status(200).json({ text });
+    } catch (e) { /* retry / fall back */ }
   }
+  return res.status(502).json({ error: 'Upstream failed' });
 }
