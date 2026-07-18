@@ -177,7 +177,7 @@ async function decide(approve) {
   const note = document.getElementById('note').value.trim();
   if (!approve && !note) { alert('A rejection needs a note — it trains the factory prompts.'); return; }
   const patch = approve
-    ? { approved: true, last_reviewed_at: new Date().toISOString(), reviewed_by: user.id, human_review_note: note || null }
+    ? { approved: true, last_reviewed_at: new Date().toISOString(), reviewed_at: new Date().toISOString(), reviewed_by: user.id, human_review_note: note || null }
     : { rejected_at: new Date().toISOString(), reviewed_by: user.id, human_review_note: note };
   const { error } = await sb.from('questions').update(patch).eq('id', q.id);
   if (error) { alert('Save failed: ' + error.message); return; }
