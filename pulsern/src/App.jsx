@@ -718,6 +718,7 @@ export default function App() {
                 <button className="menu-item" onClick={() => { setTab("exams"); setMenuOpen(false); }}>📝 Readiness exams</button>
                 <button className="menu-item" onClick={() => { setTab("plans"); setMenuOpen(false); }}>💳 Plans & upgrades</button>
                 <button className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & Contact</button>
+                <button className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 About — your RN reviewer</button>
                 <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
                 <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
               </>}
