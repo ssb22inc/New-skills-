@@ -45,6 +45,7 @@ const args = process.argv.slice(2);
 const flag = (f) => args.includes(f);
 const opt = (f, d) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : d; };
 const BATCH = parseInt(opt("--batch", "10"), 10);
+const PUBLISH = args.includes("--publish"); // owner order 2026-07-16: adversarial gate publishes directly
 const FORCE_CAT = opt("--cat", null);
 const DRY = flag("--dry-run");
 const NGN_ONLY = flag("--ngn");
@@ -231,7 +232,7 @@ async function run() {
   const survivors = [];
   schemaOk.forEach((it, i) => {
     const r = reviews[i] ?? { verdict: "fail", notes: "no review returned" };
-    if (r.verdict === "pass" && (r.confidence ?? 0) >= 0.7) {
+    if (r.verdict === "pass" && (r.confidence ?? 0) >= (PUBLISH ? 0.85 : 0.7)) {
       survivors.push({ item: it, reviewNotes: r.notes });
       console.log(`  ✓ pass (${r.confidence}): "${it.stem.slice(0, 55)}…"`);
     } else {
@@ -257,13 +258,13 @@ async function run() {
     },
     answer: item.answer,
     rationale: item.rationale,
-    ai: true, approved: false,
+    ai: true, approved: PUBLISH, reviewed_at: PUBLISH ? new Date().toISOString() : null,
     gen_model: GEN_MODEL, review_model: REVIEW_MODEL,
     reviewer_notes: reviewNotes,
   }));
   const { error } = await db().from("questions").insert(rows);
   if (error) throw error;
-  console.log(`Inserted ${rows.length} items → review queue (approved=false). Open the review console to approve.`);
+  console.log(`Inserted ${rows.length} items → ${PUBLISH ? "PUBLISHED live (adversarial gate)" : "review queue (approved=false)"}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
