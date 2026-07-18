@@ -141,7 +141,7 @@ async function fillCategory(cat, need, existingStems) {
         tokens: it.tokens ?? null, exhibit: it.exhibit ?? null, work: it.work ?? null,
       },
       answer: it.answer, rationale: it.rationale,
-      ai: true, approved: true, exam_form: FORM, // owner-directed adversarial gate for exams
+      ai: true, approved: true, reviewed_at: new Date().toISOString(), exam_form: FORM, // owner-directed adversarial gate for exams
       gen_model: GEN_MODEL, review_model: REVIEW_MODEL, reviewer_notes: r.notes ?? null,
     });
     if (!error) inserted++;

@@ -193,7 +193,7 @@ ${JSON.stringify(c)}`, 6000);
       const { error } = await db().from("case_studies").insert({
         cat: c.cat, title: c.title, blurb: c.blurb, intro: c.intro,
         vitals: c.vitals, labs: c.labs, note: c.note, steps: c.steps,
-        ai: true, approved: true, // owner-amended gate: adversarial review passed
+        ai: true, approved: true, reviewed_at: new Date().toISOString(), // owner-amended gate: adversarial review passed
         exam_form: EXAM_FORM, // null = library case; 1..10 = quarantined to that exam
         gen_model: GEN_MODEL, review_model: REVIEW_MODEL, reviewer_notes: null,
       });

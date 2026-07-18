@@ -158,7 +158,7 @@ async function run() {
 
   const rows = survivors.map(({ card, notes }) => ({
     cat: card.cat, topic: card.topic, front: card.front, back: card.back,
-    ai: true, approved: true, // owner-amended gate: adversarial review passed
+    ai: true, approved: true, reviewed_at: new Date().toISOString(), // owner-amended gate: adversarial review passed
     gen_model: GEN_MODEL, review_model: REVIEW_MODEL, reviewer_notes: notes,
   }));
   let inserted = 0;
