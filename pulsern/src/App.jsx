@@ -1595,6 +1595,37 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
 /* ================= FLASHCARDS (real spaced repetition) ================= */
 
 const CALC_CHIP = "Dosage calculations"; // topic-based focus: math cards live inside Pharmacology
+/* Prompt 9: numeric ranges as scales. The numbers are parsed from the
+   already-reviewed card text itself — the visual adds no new facts, so it
+   inherits the card's adversarial review. */
+function RangeScale({ lo, hi, unit }) {
+  const pad = (hi - lo) * 0.35 || 1;
+  const min = lo - pad, max = hi + pad;
+  const x = (v) => 10 + ((v - min) / (max - min)) * 280;
+  return (
+    <svg viewBox="0 0 300 48" className="fc-scale" role="img" aria-label={`Normal range ${lo} to ${hi} ${unit ?? ""}`}>
+      <line x1="10" y1="30" x2="290" y2="30" stroke="var(--line)" strokeWidth="3" />
+      <rect x={x(lo)} y="22" width={Math.max(4, x(hi) - x(lo))} height="16" rx="4" fill="var(--teal)" opacity="0.28" />
+      <line x1={x(lo)} y1="20" x2={x(lo)} y2="40" stroke="var(--teal)" strokeWidth="2.5" />
+      <line x1={x(hi)} y1="20" x2={x(hi)} y2="40" stroke="var(--teal)" strokeWidth="2.5" />
+      <text x={x(lo)} y="14" textAnchor="middle" fontSize="11" fill="var(--accent-ink)" fontFamily="'IBM Plex Mono',monospace">{lo}</text>
+      <text x={x(hi)} y="14" textAnchor="middle" fontSize="11" fill="var(--accent-ink)" fontFamily="'IBM Plex Mono',monospace">{hi}</text>
+      {unit ? <text x="290" y="46" textAnchor="end" fontSize="9" fill="var(--muted)" fontFamily="'IBM Plex Mono',monospace">{unit}</text> : null}
+    </svg>
+  );
+}
+const parseRangeBack = (back) => {
+  const m = (back ?? "").match(/^\s*(\d+(?:\.\d+)?)\s*[–—-]\s*(\d+(?:\.\d+)?)\s*([^\d]{0,24}?)\s*$/);
+  if (!m) return null;
+  const lo = parseFloat(m[1]), hi = parseFloat(m[2]);
+  return hi > lo ? { lo, hi, unit: m[3] || "" } : null;
+};
+const parseAntidote = (c) => {
+  if (!/antidote/i.test(c.topic ?? "")) return null;
+  const m = (c.front ?? "").match(/antidote\s+(?:for|to)\s+(.+?)\s*(?:overdose|toxicity)?\s*\??$/i);
+  return m ? m[1] : null;
+};
+
 const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i.test(c.topic);
 
 function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = false, onDone, fcFlips = 99, onFlip }) {
@@ -1684,6 +1715,12 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
         )}
         {show && typed.trim() && (
           <p className="small fc-compare"><strong>You typed:</strong> {typed} — grade yourself honestly against the answer above.</p>
+        )}
+        {show && parseRangeBack(cur.back) && (() => { const r = parseRangeBack(cur.back); return <RangeScale lo={r.lo} hi={r.hi} unit={r.unit} />; })()}
+        {show && parseAntidote(cur) && (
+          <div className="fc-pair mono" aria-label="drug and its antidote">
+            <span className="chip">{parseAntidote(cur)}</span><span className="fc-arrow">→</span><span className="chip fc-anti">{cur.back}</span>
+          </div>
         )}
         {isCalcCard(cur) && (
           <>
@@ -2113,7 +2150,7 @@ function Style() {
       .brand-btn:disabled{cursor:default;opacity:.85}
       .bar-fill.na{background:var(--line)}
       .why-toggle{background:none;border:none;padding:0;margin:4px 0 0;color:var(--accent-ink);font-size:12px;cursor:pointer;text-decoration:underline dotted}
-      .why-body{margin-top:6px;padding:8px 10px;background:var(--surface);border-radius:8px}
+      .why-body{margin-top:6px;padding:8px 10px;background:var(--surface);border-radius:8px}\n      .fc-scale{width:100%;max-width:340px;display:block;margin:8px auto}\n      .fc-pair{display:flex;gap:10px;align-items:center;justify-content:center;margin:8px 0}\n      .fc-arrow{color:var(--accent-ink);font-weight:700}\n      .fc-anti{background:var(--right-bg)}
       .vital-range{display:block;font-size:9.5px;color:var(--ecg);opacity:.75;margin-top:1px}
       /* floating UI never fights the content: fade out while scrolling */
       .lab-tab{transition:opacity .2s}
