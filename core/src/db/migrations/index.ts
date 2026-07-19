@@ -1,0 +1,53 @@
+import type { Migration, MigrationProvider } from 'kysely/migration';
+import * as base from './0001_base.js';
+import * as featureFlags from './0002_feature_flags.js';
+import * as marketStatus from './0003_market_status.js';
+import * as identity from './0004_identity.js';
+import * as capacity from './0005_capacity.js';
+import * as orders from './0006_orders.js';
+import * as conversations from './0007_conversations.js';
+import * as windowPrice from './0008_window_price.js';
+import * as asrGlossary from './0009_asr_glossary.js';
+import * as catalog from './0010_catalog.js';
+import * as ledger from './0011_ledger.js';
+import * as settlement from './0012_settlement.js';
+import * as disputes from './0013_disputes.js';
+import * as reviews from './0014_reviews.js';
+import * as signals from './0015_signals.js';
+import * as coop from './0016_coop.js';
+import * as agents from './0017_agents.js';
+import * as keeper from './0018_keeper.js';
+import * as hurricane from './0019_hurricane.js';
+import * as lifeline from './0020_lifeline.js';
+
+/**
+ * Static provider: migrations are imported code, not files discovered at
+ * runtime, so they survive bundling and need no fs/path configuration.
+ * Add new migrations here in order; never edit a shipped one.
+ */
+export const migrations: Record<string, Migration> = {
+  '0001_base': base,
+  '0002_feature_flags': featureFlags,
+  '0003_market_status': marketStatus,
+  '0004_identity': identity,
+  '0005_capacity': capacity,
+  '0006_orders': orders,
+  '0007_conversations': conversations,
+  '0008_window_price': windowPrice,
+  '0009_asr_glossary': asrGlossary,
+  '0010_catalog': catalog,
+  '0011_ledger': ledger,
+  '0012_settlement': settlement,
+  '0013_disputes': disputes,
+  '0014_reviews': reviews,
+  '0015_signals': signals,
+  '0016_coop': coop,
+  '0017_agents': agents,
+  '0018_keeper': keeper,
+  '0019_hurricane': hurricane,
+  '0020_lifeline': lifeline,
+};
+
+export const migrationProvider: MigrationProvider = {
+  getMigrations: () => Promise.resolve(migrations),
+};

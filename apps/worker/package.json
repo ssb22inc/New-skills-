@@ -1,0 +1,17 @@
+{
+  "name": "@sycamore/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0"
+  },
+  "dependencies": {
+    "@sycamore/core": "workspace:*"
+  }
+}

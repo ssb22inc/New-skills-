@@ -1,0 +1,104 @@
+market_id: jm
+name: Jamaica
+
+language:
+  primary: en-JM
+  dialect: patois
+  copy_directives:
+    - Greet warmly. Short sentences. No jargon, ever.
+    - Patois phrasing where it lands naturally; never forced or performative.
+    - Money is always plain numbers — "you spent X, it brought in Y."
+
+currency:
+  code: JMD
+  symbol: J$
+  exponent: 2
+
+timezone: America/Jamaica
+
+calendar:
+  holidays:
+    - name: New Year's Day
+      date: 01-01
+    - name: Ash Wednesday
+      rule: easter-46
+    - name: Good Friday
+      rule: easter-2
+    - name: Easter Monday
+      rule: easter+1
+    - name: Carnival Road March
+      rule: easter+7
+    - name: Labour Day
+      date: 05-23
+    - name: Emancipation Day
+      date: 08-01
+    - name: Independence Day
+      date: 08-06
+    - name: National Heroes Day
+      rule: third-monday-october
+    - name: Christmas Day
+      date: 12-25
+    - name: Boxing Day
+      date: 12-26
+
+channels:
+  primary: whatsapp
+  fallbacks:
+    - sms
+
+payments:
+  providers:
+    - id: lynk
+      kind: wallet
+    - id: cardnet
+      kind: card
+
+compliance:
+  data_protection:
+    law: Jamaica Data Protection Act 2020
+    dpa_signature_required: true
+  # Counsel-confirmed at pack launch (BUILD §7): Jamaica imposes no
+  # US-style marketplace-facilitator collection duty today.
+  marketplace_facilitator_collection: false
+  verified_by_counsel: true
+
+signals:
+  cruise_ports:
+    - id: ocho-rios
+      name: Ocho Rios Cruise Port
+      parish: St Ann
+    - id: falmouth
+      name: Falmouth Cruise Port
+      parish: Trelawny
+    - id: montego-bay
+      name: Montego Bay Cruise Port
+      parish: St James
+    - id: port-royal
+      name: Port Royal Cruise Port
+      parish: Kingston
+
+splits:
+  standard:
+    seller_bps: 8800
+    platform_bps: 1000
+    referral_bps: 0
+    processor_bps: 200
+  referred:
+    seller_bps: 8500
+    platform_bps: 1000
+    referral_bps: 300
+    processor_bps: 200
+
+benchmarks:
+  food:
+    # J$1,500.00 typical plate — Kingston street-food median (founder research)
+    unit_price_typical_minor: 150000
+  tours:
+    # J$9,000.00 typical seat — half-day boat/tour median (founder research)
+    unit_price_typical_minor: 900000
+
+tax:
+  gct_registration_threshold:
+    # J$10,000,000.00 in minor units — counsel to reconfirm at build (BUILD §7).
+    amount_minor: 1000000000
+    currency: JMD

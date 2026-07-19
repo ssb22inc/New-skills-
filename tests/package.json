@@ -1,0 +1,29 @@
+{
+  "name": "@sycamore/tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "load:gateway": "tsx src/load/gateway-load.ts",
+    "golden": "vitest run src/golden",
+    "perf:trust": "tsx src/perf/trust-page-budget.ts",
+    "chaos:partner-down": "vitest run src/chaos/partner-down.chaos.test.ts",
+    "chaos:whatsapp": "vitest run src/chaos/whatsapp-degraded.chaos.test.ts",
+    "chaos:pg-failover": "vitest run src/chaos/pg-failover.chaos.test.ts"
+  },
+  "dependencies": {
+    "@sycamore/adapters": "workspace:*",
+    "@sycamore/core": "workspace:*",
+    "@sycamore/gateway": "workspace:*",
+    "@sycamore/packs": "workspace:*",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/pg": "^8.20.0",
+    "playwright": "^1.61.1"
+  }
+}
