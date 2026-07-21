@@ -1785,10 +1785,11 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
       {profile !== undefined && <ProfileCard key={profile?.updated_at ?? "new"} profile={profile} setProfile={setProfile} />}
       <section className="card">
         <p className="eyebrow">Exam date</p>
-        <p className="small">Set your NCLEX date and Today gains a weekly plan built from your ability profile.</p>
+        <p className="small">Set your NCLEX date and the Today tab will build you a weekly plan from your ability profile.</p>
         <input type="date" className="select" aria-label="Exam date"
           value={examDate ?? ""} min={addDays(1)}
           onChange={(e) => setExamDate(e.target.value || null)} />
+        <p className="small tip">Haven't registered yet? Apply through your state's Board of Nursing, then sign up for the NCLEX at <a href="https://www.nclex.com" target="_blank" rel="noopener" style={{ color: "inherit", fontWeight: 600 }}>nclex.com</a> (official NCSBN site) and schedule through <a href="https://www.pearsonvue.com/us/en/nclex.html" target="_blank" rel="noopener" style={{ color: "inherit", fontWeight: 600 }}>Pearson VUE</a>.</p>
       </section>
       <section className="card">
         <p className="eyebrow">Performance</p>
