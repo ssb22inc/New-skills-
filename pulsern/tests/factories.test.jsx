@@ -3,13 +3,20 @@ import { describe, it, expect } from "vitest";
 import { validCard } from "../ops/card-factory.mjs";
 import { validCase } from "../ops/case-factory.mjs";
 import { BLUEPRINT, STANDALONE_PER_FORM, CASES_PER_FORM } from "../ops/exam-factory.mjs";
+import { FULL_STANDALONE, FULL_CASES } from "../src/exam.jsx";
 
 describe("exam blueprint", () => {
-  it("mirrors the NCLEX: 67 standalone + 3 cases = 85 items", () => {
+  it("provisions 67 standalone + 5 cases per form (buffer over the runner's draw)", () => {
     expect(Object.values(BLUEPRINT).reduce((a, b) => a + b, 0)).toBe(67);
     expect(STANDALONE_PER_FORM).toBe(67);
-    expect(STANDALONE_PER_FORM + CASES_PER_FORM * 6).toBe(85);
+    expect(CASES_PER_FORM).toBe(5);
     expect(Object.keys(BLUEPRINT).length).toBe(8);
+  });
+  it("the exam runner delivers 85 questions: 55 standalone + 5 cases x 6 = 30 case questions", () => {
+    expect(FULL_STANDALONE + FULL_CASES * 6).toBe(85);
+    expect(FULL_CASES * 6).toBeGreaterThanOrEqual(30);
+    expect(STANDALONE_PER_FORM).toBeGreaterThanOrEqual(FULL_STANDALONE);
+    expect(CASES_PER_FORM).toBeGreaterThanOrEqual(FULL_CASES);
   });
 });
 

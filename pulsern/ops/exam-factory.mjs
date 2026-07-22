@@ -39,7 +39,7 @@ export const BLUEPRINT = {
   "Reduction of Risk": 8,
   "Physiological Adaptation": 9,
 };
-export const CASES_PER_FORM = 3;
+export const CASES_PER_FORM = 5; // owner order: >=30 case-study questions per exam (5 cases x 6 = 30)
 export const STANDALONE_PER_FORM = Object.values(BLUEPRINT).reduce((a, b) => a + b, 0); // 67
 
 const GEN_MODEL = "anthropic/claude-sonnet-4.6";

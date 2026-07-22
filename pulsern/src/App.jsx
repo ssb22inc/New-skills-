@@ -528,10 +528,18 @@ export default function App() {
      built-in local array stays in place as the offline fallback. */
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from("questions")
-        .select("id, cat, diff, type, stem, options, extra, answer, rationale, ai, elo_rating")
-        .eq("approved", true).is("exam_form", null); // exam items stay quarantined
-      if (error || !Array.isArray(data) || !data.length) return;
+      // paginate: the practice bank is way past Supabase's 1,000-row cap
+      const data = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: page, error } = await supabase.from("questions")
+          .select("id, cat, diff, type, stem, options, extra, answer, rationale, ai, elo_rating, population")
+          .eq("approved", true).is("exam_form", null) // exam items stay quarantined
+          .order("id").range(from, from + 999);
+        if (error || !Array.isArray(page)) break;
+        data.push(...page);
+        if (page.length < 1000) break;
+      }
+      if (!data.length) return;
       setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
       const items = data
         .map(({ elo_rating, ...q }) => q)
@@ -556,7 +564,7 @@ export default function App() {
     })();
     (async () => {
       const { data, error } = await supabase.from("case_studies")
-        .select("id, cat, title, blurb, intro, vitals, labs, note, steps")
+        .select("id, cat, title, blurb, intro, vitals, labs, note, steps, population")
         .eq("approved", true).is("exam_form", null); // exam cases stay quarantined
       if (!error && data?.length) {
         setBankCases(data.map((r) => ({ ...r, dbId: r.id, ai: true })));
@@ -1136,9 +1144,11 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
   // focused practice: empty filter = everything (the adaptive default)
   const [catFilter, setCatFilter] = useState([]);
   const [typeFilter, setTypeFilter] = useState([]);
+  const [popFilter, setPopFilter] = useState([]); // population focus: peds / geriatric / maternal
   const inFocus = (x) =>
     (!catFilter.length || catFilter.includes(x.cat)) &&
-    (!typeFilter.length || typeFilter.includes(x.type));
+    (!typeFilter.length || typeFilter.includes(x.type)) &&
+    (!popFilter.length || popFilter.includes(x.population));
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const freshPool = questions.filter((x) => !answeredIds.includes(x.id) && inFocus(x));
@@ -1232,8 +1242,14 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
               onClick={() => toggleIn(typeFilter, setTypeFilter)(t)}>{label}</button>
           ))}
         </div>
-        {(catFilter.length > 0 || typeFilter.length > 0) && (
-          <p className="small tip">Focused session: {catFilter.length ? catFilter.join(", ") : "all categories"} · {typeFilter.length ? typeFilter.map((t) => TYPE_CHIPS.find(([k]) => k === t)[1]).join(", ") : "all types"} — <button className="auth-switch" style={{ color: "var(--accent-ink)" }} onClick={() => { setCatFilter([]); setTypeFilter([]); }}>clear</button></p>
+        <div className="fchips" role="group" aria-label="Filter by client population">
+          {[["peds", "🧒 Pediatrics"], ["geriatric", "👵 Geriatrics"], ["maternal", "🤰 Maternal"]].map(([p, label]) => (
+            <button key={p} className={popFilter.includes(p) ? "fchip on" : "fchip"}
+              onClick={() => toggleIn(popFilter, setPopFilter)(p)}>{label}</button>
+          ))}
+        </div>
+        {(catFilter.length > 0 || typeFilter.length > 0 || popFilter.length > 0) && (
+          <p className="small tip">Focused session: {catFilter.length ? catFilter.join(", ") : "all categories"} · {typeFilter.length ? typeFilter.map((t) => TYPE_CHIPS.find(([k]) => k === t)[1]).join(", ") : "all types"} — <button className="auth-switch" style={{ color: "var(--accent-ink)" }} onClick={() => { setCatFilter([]); setTypeFilter([]); setPopFilter([]); }}>clear</button></p>
         )}
 
         <p className="small mono">{freshPool.length} new · {reviewPool.length} missed · difficulty target {diffTarget}/3</p>
@@ -1530,30 +1546,39 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
   };
 
   if (caseIdx == null) {
-    const list = catFilter.length ? cases.filter((c) => catFilter.includes(c.cat)) : cases;
+    // sub-category accordion: cases stay tucked away until a group is opened
+    const groups = [
+      { key: "🧒 Pediatrics", match: (c) => c.population === "peds" },
+      { key: "🤰 Maternal & Newborn", match: (c) => c.population === "maternal" },
+      { key: "👵 Geriatrics", match: (c) => c.population === "geriatric" },
+      ...CATS.map((cat) => ({ key: cat, match: (c) => c.cat === cat })),
+    ].map((g) => ({ ...g, items: cases.map((c, i) => ({ c, i })).filter(({ c }) => g.match(c)) }))
+     .filter((g) => g.items.length > 0);
+    const openGroup = groups.find((g) => g.key === catFilter[0]);
+    const list = openGroup ? openGroup.items : [];
     return (
       <div className="stack">
         <section className="card">
           <p className="eyebrow">Next Generation NCLEX</p>
           <h2 className="h2">Case studies · {cases.length} in the library</h2>
           <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps — recognize cues, analyze, prioritize, plan, act, evaluate. Each step scores like the real exam.</p>
-          <div className="fchips" role="group" aria-label="Filter cases by category">
-            {CATS.map((c) => (
-              <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
-                onClick={() => setCatFilter((f) => f.includes(c) ? f.filter((x) => x !== c) : [...f, c])}>{c}</button>
+          <p className="small tip">Pick a sub-category to see its cases.</p>
+          <div className="fchips" role="group" aria-label="Case sub-categories">
+            {groups.map((g) => (
+              <button key={g.key} className={catFilter[0] === g.key ? "fchip on" : "fchip"}
+                onClick={() => setCatFilter((f) => (f[0] === g.key ? [] : [g.key]))}>{g.key} · {g.items.length}</button>
             ))}
           </div>
         </section>
-        {list.map((c) => (
+        {list.map(({ c, i }) => (
           <section key={c.title} className="card">
             <p className="eyebrow">{c.cat}{c.ai ? " · ✨ AI" : ""}</p>
             <h2 className="h2">{c.title}</h2>
             <p className="small">{c.blurb}</p>
             <p className="small mono">{c.steps.length} steps</p>
-            <button className="btn" onClick={() => openCase(cases.indexOf(c))}>Open case →</button>
+            <button className="btn" onClick={() => openCase(i)}>Open case →</button>
           </section>
         ))}
-        {!list.length && <section className="card"><p className="small">No cases in this focus yet — the case factory adds more on every run.</p></section>}
       </div>
     );
   }
