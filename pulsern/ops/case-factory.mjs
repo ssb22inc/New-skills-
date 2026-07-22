@@ -38,6 +38,7 @@ const opt = (f, d) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] :
 const COUNT = parseInt(opt("--count", "2"), 10);
 const FORCE_CAT = opt("--cat", null);
 const EXAM_FORM = opt("--exam-form", null) ? parseInt(opt("--exam-form", null), 10) : null;
+const POPULATION = opt("--population", null); // 'peds' | 'geriatric' | 'maternal' 
 const DRY = flag("--dry-run");
 
 let _sb = null;
@@ -89,6 +90,7 @@ export function validCase(c) {
 
 function genPrompt(cat, existingTitles) {
   return `You are an expert NCLEX-RN item writer creating a Next Generation NCLEX case study for the client-needs category "${cat}", following the NCSBN Clinical Judgment Measurement Model.
+${POPULATION === "peds" ? "The client MUST be pediatric (newborn through adolescent) — state the age, use weight-based/age-appropriate norms in vitals and labs, involve a parent/caregiver where natural." : POPULATION === "geriatric" ? "The client MUST be an older adult (65+) — state the age and weave in geriatric considerations (polypharmacy, atypical presentations, fall/delirium risk)." : POPULATION === "maternal" ? "The client MUST be a maternal/newborn scenario — antepartum, intrapartum, postpartum, or neonate." : ""}
 
 Respond ONLY with one raw JSON object, no fences, no commentary, exactly this shape:
 {
@@ -194,6 +196,7 @@ ${JSON.stringify(c)}`, 6000);
         cat: c.cat, title: c.title, blurb: c.blurb, intro: c.intro,
         vitals: c.vitals, labs: c.labs, note: c.note, steps: c.steps,
         ai: true, approved: true, reviewed_at: new Date().toISOString(), // owner-amended gate: adversarial review passed
+        population: POPULATION ?? null,
         exam_form: EXAM_FORM, // null = library case; 1..10 = quarantined to that exam
         gen_model: GEN_MODEL, review_model: REVIEW_MODEL, reviewer_notes: null,
       });

@@ -11,7 +11,10 @@ import { ExhibitVisual } from "./exhibits.jsx";
 
 export const EXAM_FORMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 export const EXAM_MINUTES = 170; // 5h/150 items on the real exam → 85 items ≈ 2h50m
-const FULL_STANDALONE = 67, FULL_CASES = 3;
+/* Owner order: >=30 case-study questions per exam. 5 cases x 6 steps = 30,
+   plus 55 standalone = the same 85-question NCLEX-minimum length. The DB
+   holds 67 standalone per form; the runner draws 55 of them. */
+export const FULL_STANDALONE = 55, FULL_CASES = 5;
 
 /* ---- deterministic verdict tiers (self-assessment estimate) ---- */
 export function verdictFor(pct) {
@@ -124,11 +127,12 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     setLoading(false);
     if (!items?.length) return;
     // deterministic-enough shuffle for a fresh order each attempt
-    const standalone = [...items].sort(() => Math.random() - 0.5).map((q) => ({ q }));
+    const standalone = [...items].sort(() => Math.random() - 0.5).slice(0, FULL_STANDALONE).map((q) => ({ q }));
     const seq = [...standalone];
     // insert case blocks at roughly 1/4, 1/2, 3/4 of the exam, like the real thing
+    const nCases = Math.min((cases ?? []).length, FULL_CASES);
     (cases ?? []).slice(0, FULL_CASES).forEach((c, ci) => {
-      const at = Math.min(seq.length, Math.floor(((ci + 1) / 4) * (seq.length + c.steps.length * (ci + 1))));
+      const at = Math.min(seq.length, Math.floor(((ci + 1) / (nCases + 1)) * seq.length) + ci * c.steps.length);
       const steps = c.steps.map((s, si) => ({
         q: { ...s, id: `x${c.id}-${si}`, cat: c.cat, diff: 3 },
         caseInfo: { title: c.title, intro: c.intro, vitals: c.vitals, labs: c.labs, note: c.note, step: si + 1, of: c.steps.length },
@@ -215,7 +219,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
         <section className="card">
           <p className="eyebrow">Readiness self-assessment</p>
           <h2 className="h2">NCLEX-style exams</h2>
-          <p className="small">Ten standardized exams of <strong>85 questions each</strong> — the real NCLEX-RN's minimum length. Every form is 67 standalone questions plus 3 full case studies (6 questions each, 18 total) weighted to the official test plan, with a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal — and no account is ever shown the same exam twice.</p>
+          <p className="small">Ten standardized exams of <strong>85 questions each</strong> — the real NCLEX-RN's minimum length. Every form is 55 standalone questions plus 5 full case studies (6 questions each — 30 case-study questions) weighted to the official test plan, with a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal — and no account is ever shown the same exam twice.</p>
           {isOwner && <p className="small tip">🔧 Owner dev access: every exam is open, retakes allowed, nothing is burned.</p>}
           {ent && !isOwner && !trial && <p className="small tip">You have <strong>{examsLeft}</strong> self-assessment{examsLeft === 1 ? "" : "s"} remaining.{examsLeft === 0 && onUpgrade ? <> Add one for $45 from <button className="auth-switch" onClick={onUpgrade}>Plans & upgrades</button>.</> : null}</p>}
         </section>
@@ -239,7 +243,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
                 <span className="small"><strong>Readiness Exam {f}</strong></span>
                 <span className="small mono">{a ? `${qReady}/85 questions` : "…"}</span>
               </div>
-              {ready && <p className="small">Full-length 85-question exam · includes 3 case studies</p>}
+              {ready && <p className="small">Full-length 85-question exam · includes 5 case studies (30 questions)</p>}
               {past && <p className="small">Your result: <strong>{past.pct}%</strong> · {past.verdict} · {past.date}</p>}
               {done
                 ? <p className="small tip">Completed — exams are never repeated, so this score stays an honest signal.</p>
@@ -268,7 +272,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
         <p className="eyebrow">Readiness Exam {form}</p>
         <h2 className="h2">Exam conditions — just like test day</h2>
         <ul className="checklist" style={{ fontSize: 14, color: "var(--ink)" }}>
-          <li>• 85 items: 67 standalone questions + 3 full case studies (6 steps each)</li>
+          <li>• 85 questions: 55 standalone + 5 full case studies (6 questions each — 30 case-study questions)</li>
           <li>• {Math.floor(EXAM_MINUTES / 60)} hours {EXAM_MINUTES % 60} minutes on the clock — it auto-submits at zero</li>
           <li>• One question at a time. You must answer to move on. <strong>No going back.</strong></li>
           <li>• No rationales, no tutor, no lab reference until you finish</li>

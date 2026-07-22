@@ -46,6 +46,7 @@ const flag = (f) => args.includes(f);
 const opt = (f, d) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : d; };
 const BATCH = parseInt(opt("--batch", "10"), 10);
 const PUBLISH = args.includes("--publish"); // owner order 2026-07-16: adversarial gate publishes directly
+const POPULATION = opt("--population", null); // 'peds' | 'geriatric' — population-focused batch
 const FORCE_CAT = opt("--cat", null);
 const DRY = flag("--dry-run");
 const NGN_ONLY = flag("--ngn");
@@ -169,7 +170,7 @@ Type schemas — respond ONLY with a raw JSON array, no fences, no commentary:
 Any item may optionally include "exhibit":[{"label":"Laboratory results","content":"multi-line chart data"}] when the stem refers to chart/exhibit data.
 
 Rules:
-- Clinical-judgment stems grounded in current practice standards; plausible distractors; exactly one defensible key.
+${POPULATION === 'peds' ? '- EVERY item must center on a PEDIATRIC client (newborn through adolescent) — vary the ages: neonates, infants, toddlers, school-age, teens. State the age in the stem.\n' : POPULATION === 'geriatric' ? '- EVERY item must center on an OLDER-ADULT client (65+) — include geriatric considerations: polypharmacy, fall risk, delirium vs dementia, age-related changes. State the age in the stem.\n' : ''}- Clinical-judgment stems grounded in current practice standards; plausible distractors; exactly one defensible key.
 - Rationale must explain why the key is right AND why each distractor is wrong.
 - No real-world dosing advice framed as treatment instructions; educational register only.
 - Do NOT duplicate these existing topics: ${existingStems.join(" ~ ")}`;
@@ -259,6 +260,7 @@ async function run() {
     answer: item.answer,
     rationale: item.rationale,
     ai: true, approved: PUBLISH, reviewed_at: PUBLISH ? new Date().toISOString() : null,
+    population: POPULATION ?? null,
     gen_model: GEN_MODEL, review_model: REVIEW_MODEL,
     reviewer_notes: reviewNotes,
   }));
