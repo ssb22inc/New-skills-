@@ -272,12 +272,12 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
         <p className="eyebrow">Readiness Exam {form}</p>
         <h2 className="h2">Exam conditions — just like test day</h2>
         <ul className="checklist" style={{ fontSize: 14, color: "var(--ink)" }}>
-          <li>• 85 questions: 55 standalone + 5 full case studies (6 questions each — 30 case-study questions)</li>
-          <li>• {Math.floor(EXAM_MINUTES / 60)} hours {EXAM_MINUTES % 60} minutes on the clock — it auto-submits at zero</li>
-          <li>• One question at a time. You must answer to move on. <strong>No going back.</strong></li>
-          <li>• No rationales, no tutor, no lab reference until you finish</li>
-          <li>• The on-screen calculator is available on calculation items — it's the ONLY tool: menus, lab references, and the rest of the app lock until you finish, just like the real testing center</li>
-          <li>• Plan to finish in one sitting — leaving the exam loses your progress</li>
+          <li>85 questions: 55 standalone + 5 full case studies (6 questions each — 30 case-study questions)</li>
+          <li>{Math.floor(EXAM_MINUTES / 60)} hours {EXAM_MINUTES % 60} minutes on the clock — it auto-submits at zero</li>
+          <li>One question at a time. You must answer to move on. <strong>No going back.</strong></li>
+          <li>No rationales, no tutor, no lab reference until you finish</li>
+          <li>The on-screen calculator is available on calculation items — it's the ONLY tool: menus, lab references, and the rest of the app lock until you finish, just like the real testing center</li>
+          <li>Plan to finish in one sitting — leaving the exam loses your progress</li>
         </ul>
         <div className="row">
           <button className="btn" onClick={begin} disabled={loading}>{loading ? "Preparing exam…" : "Begin exam"}</button>
