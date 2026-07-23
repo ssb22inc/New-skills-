@@ -2227,6 +2227,8 @@ function Style() {
       .trial-banner{border-color:var(--teal);padding:10px 14px}
       .consent-row{display:flex;gap:8px;align-items:flex-start;margin:0 0 6px;cursor:pointer}
       .consent-row input{margin-top:2px;accent-color:var(--teal)}
+      .checklist{padding-left:20px;margin:6px 0}
+      .checklist li{margin-bottom:7px;line-height:1.5}
       .exam-lock-chip{font-weight:700;font-size:12px;color:var(--coral);letter-spacing:.04em}
       .brand-btn:disabled{cursor:default;opacity:.85}
       .bar-fill.na{background:var(--line)}
