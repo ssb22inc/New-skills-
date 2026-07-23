@@ -602,7 +602,8 @@ export default function App() {
   };
 
   const record = (q, correct) => {
-    setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct }]);
+    // population is additive on the log entry — old entries simply lack it
+    setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}) }]);
     touchDay();
     const { ability: nextAbility, itemDelta } = updateAbility(ability, q, correct, calibration);
     setAbility(nextAbility);
@@ -624,6 +625,17 @@ export default function App() {
   const catStats = CATS.map((c) => {
     const rows = log.filter((l) => l.cat === c);
     return { cat: c, n: rows.length, pct: rows.length ? Math.round((rows.filter(r => r.correct).length / rows.length) * 100) : null };
+  });
+
+  // Special-population performance (peds/geriatric/maternal), tracked via the
+  // pop tag now stored on each answer. Separate from client-needs categories.
+  const popStats = [
+    { key: "peds", label: "🧒 Pediatrics" },
+    { key: "geriatric", label: "👵 Geriatrics" },
+    { key: "maternal", label: "🤰 Maternal & Newborn" },
+  ].map(({ key, label }) => {
+    const rows = log.filter((l) => l.pop === key);
+    return { cat: label, n: rows.length, pct: rows.length ? Math.round((rows.filter((r) => r.correct).length / rows.length) * 100) : null };
   });
 
   const allCards = useMemo(() => [...BUILTIN_CARDS, ...(bankCards ?? [])], [bankCards]);
@@ -751,12 +763,12 @@ export default function App() {
             profile={profile} setProfile={setProfile} profileCardDismissed={profileCardDismissed} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
-          {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} />}
+          {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} isOwner={isOwner} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
           {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats log={log} catStats={catStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
+          {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
         </>}
       </main>
 
@@ -1123,7 +1135,7 @@ function Ecg() {
 
 /* ================= QBANK ================= */
 
-function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {} }) {
+function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, isOwner = false }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
@@ -1257,7 +1269,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
           <button className="btn" onClick={() => { setMode("new"); pickFrom(freshPool); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
           <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(reviewPool); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
-        {addQuestions && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
+        {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
 
         {!freshPool.length && !reviewPool.length && <p className="small tip">Bank cleared with every miss corrected — that's mastery. Check Stats, then keep the flashcard schedule alive.</p>}
       </section>
@@ -1800,7 +1812,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
 
 /* ================= STATS ================= */
 
-function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile }) {
+function Stats({ log, catStats, popStats = [], acc, flagged, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
@@ -1831,6 +1843,16 @@ function Stats({ log, catStats, acc, flagged, resetAll, provider, setProvider, c
           </div>
         ))}
         <p className="small tip">Aim for ≥ 75% in every category before test day. The QBank automatically feeds you more questions from red bars.</p>
+      </section>
+      <section className="card">
+        <p className="eyebrow">By special population</p>
+        {popStats.map((c) => (
+          <div key={c.cat} className="cat-row">
+            <div className="cat-top"><span className="small">{c.cat}</span><span className="small mono">{c.n < 5 ? `needs more data — ${c.n}q so far` : `${c.pct}% · ${c.n}q`}</span></div>
+            <div className="bar"><div className={"bar-fill" + (c.n < 5 ? " na" : c.pct < 60 ? " low" : "")} style={{ width: c.n < 5 ? "100%" : `${c.pct}%` }} /></div>
+          </div>
+        ))}
+        <p className="small tip">Pediatric, geriatric, and maternal/newborn clients appear across every category — use the 🧒 👵 🤰 focus chips in Practice to drill them, and track your accuracy here.</p>
       </section>
       {isOwner && (
         <section className="card">
