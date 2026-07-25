@@ -80,3 +80,100 @@ Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci
 | SLO 99.9 → 99.99 | >50k MAU or first SLA-bearing contract |
 | SSO + hardware-key enforcement on founder cockpit | first hire with cockpit access |
 | External pen test cadence annual → semi-annual | Phase 4 live (ad spend custody) |
+
+---
+
+# COMPLETION AUDIT — 2026-07-25 (read-only)
+
+Every ✅ below was earned by opening the code AND executing its test in this
+session. Nothing is marked from memory or from a plan file. Full suite command:
+`pnpm -r test` → exit 0, 203 passed / 0 failed / 0 skipped (Postgres + Redis up).
+
+## Scoreboard
+
+| Section | ✅ BUILT | ⚠️ PARTIAL | ❌ MISSING | 🚧 HUMAN-GATE | Items |
+|---|---|---|---|---|---|
+| 1 Foundation | 7 | 3 | 1 | 0 | 11 |
+| 2 Core product | 11 | 2 | 0 | 0 | 13 |
+| 3 Money | 9 | 0 | 0 | 1 | 10 |
+| 4 Marketplace | 8 | 2 | 1 | 0 | 11 |
+| 5 Growth engines | 5 | 1 | 0 | 1 | 7 |
+| 6 Agent crew | 9 | 1 | 0 | 0 | 10 |
+| 7 Survival & scale | 12 | 0 | 0 | 0 | 12 |
+| 8 Cross-cutting | 1 | 3 | 2 | 0 | 6 |
+| **Total** | **62** | **12** | **4** | **2** | **80** |
+
+**Code-complete: 95%. Verified by passing tests: 78%.**
+
+(Code-complete counts every item whose code exists and runs — ✅ + ⚠️ + 🚧.
+Verified counts only ✅: code opened AND its test executed green in this session.)
+
+## Headline numbers, measured this session
+
+| Gate | Command | Actual result |
+|---|---|---|
+| Oversell storm | `vitest run src/capacity/oversell.storm` | 500 concurrent → **exactly 12 held**, 488 waitlisted; kill-storm: 12 held / 10 conns killed / 478 waitlisted, zero oversell |
+| Ledger fuzz | `vitest run src/ledger/ledger.property` | 10,000 sequences → 8,031 ops, 1,544 idempotent replays, 2,082 guard refusals; debits 978,289,687 = credits 978,289,687 → **drift exactly 0** |
+| Settlement sim | `vitest run src/settlement` | 1,000 orders w/ referrals: captured 200,940,812 · refunded 13,050,869 · paid 165,344,092 · platform 18,788,531 · processor 3,757,320 — balanced |
+| Injection suite | `vitest run src/conversations/injection` | **50 attacks, 0 unsafe (100%)**; zero unauthorized tool calls |
+| Voice intent | `vitest run src/voice` | ≥90% asserted and passing over 20 patois fixtures — **mock ASR + scripted router**, exact % not emitted |
+| Trust page budget | `pnpm --filter @sycamore/tests perf:trust` | **2,299 B transferred, interactive 506 ms** on throttled 3G (budget 100 KB / 2,000 ms) — Playwright, not Lighthouse; **not run by CI** |
+| Hurricane rehearsal | `vitest run src/hurricane` | 226 ms total; every step inside runbook target (freeze 26/5000, rebook 72/30000, refund 118/30000, broadcast 2/5000, reopen 8/5000) |
+| Dark-pack chaos | `vitest run src/markets/lockdown` | jm loads and operates with **all 13 dark packs corrupted** |
+| Blackout drill | `vitest run src/lifeline/blackout-drill` | 48h dark: SMS orders land, double-delivered queue → exactly-once, ledger balanced, dispute window +48h |
+| Channel blindness | `vitest run src/sovereignty/channel-blindness` | zero WhatsApp refs in /core code; doors work with the adapter absent |
+| market_id coverage | schema scan of `core/src/db/migrations/*.ts` | **28 of 28 domain tables** carry `market_id` |
+
+## Gap table (every ⚠️ and ❌)
+
+| # | Item | Status | Where | What's missing | Effort |
+|---|---|---|---|---|---|
+| 1 | No hardcoded user-facing strings | ❌ | `core/src/{shoebox,hurricane,pulse,lifeline,agents}/*.ts` | **No localization engine module exists.** 53 hardcoded English sentences in core/src + 15 in apps/web HTML. Copy is either literal or ad-hoc LLM prompts embedding `copy_directives`. CLAUDE.md data rule says zero. | L |
+| 2 | Design system package used everywhere | ❌ | `apps/web/app/**` (7 files) | No design package in `pnpm-workspace.yaml`. 13 distinct raw hex values inline; only 3 (`#0B1A26`, `#F4A24C`, `#F7F3EC`) are named tokens. Panel drifted to `#12283A` vs spec `#11283A`. Fraunces/Inter/Space Mono type system not implemented — everything is `system-ui`. | M |
+| 3 | Fairness metric emitted to cockpit | ❌ | `core/src/discovery/ranking.ts:138`, `apps/web/app/cockpit/route.ts` | `newcomerShareOfFirstTimeBookings` is computed and unit-tested but has **zero callers outside tests**. Cockpit has 4 panels; fairness is not one. | S |
+| 4 | Infra cost estimate vs <US$700/mo | ❌ | `SYCAMORE_BUILD.md:95,251` | Targets are stated (<$150/mo hosting, <$700/mo all-in). No computed estimate, no per-service breakdown, no artifact. | S |
+| 5 | CLAUDE.md carries the install-prompt law | ⚠️ | `CLAUDE.md` | 7 laws, Four Packs, money rules, AGENT SESSION LAWS, SCOPE LAW all present. The P36 ASYMMETRIC CLIENTS rule exists only in SYCAMORE_PROMPTS.md + code comments. | S |
+| 6 | Rollback script | ⚠️ | `core/src/canary/canary.ts` | Automatic rollback is code and is tested. There is no operator-facing rollback script or runbook file. | S |
+| 7 | Observability: traces | ⚠️ | `core/src/observability/`, `apps/gateway/package.json:15` | Logs ✅ and `/metrics` ✅ (`apps/gateway/src/server.ts:28`). **No tracing at all** — `@opentelemetry/api` is a declared dependency that is never imported by any source file (also a law-7 violation: an unjustified moving part). | M |
+| 8 | Voice ≥90% intent accuracy | ⚠️ | `core/src/voice/voice.integration.test.ts` | Passes, but ASR is `mockAsr` returning fixed transcripts and the router is `scriptedRouter()`. This measures the classifier over pre-written text, not speech recognition. Real-model accuracy is explicitly deferred. | M |
+| 9 | Trust page budget as a CI check | ⚠️ | `.github/workflows/ci.yml`, `tests/src/perf/trust-page-budget.ts` | Script passes when run by hand; CI runs only lint/format/typecheck/test. The budget can regress without failing a build. No Lighthouse anywhere. | S |
+| 10 | Device-cluster fraud detection | ⚠️ | `core/src/trust/reviews.ts:70-95` | Burst-window and competitor-hit signals exist and are red-teamed. There is no device/IP clustering — **no device or IP column exists in the schema**. | M |
+| 11 | No code path suppresses a genuine review | ⚠️ | `core/src/trust/reviews.ts` | True in fact: `deleteFrom` appears exactly once in all of core (`capacity/engine.ts:72`, waitlist) and never on `reviews`. But **no test asserts it**, so nothing stops a future path from appearing. | S |
+| 12 | Sellers never touch an ad account | ⚠️ | `core/src/pulse/coop.ts:17`, `adapters/src/ads/types.ts` | Agency-of-record is the architecture and co-op attribution is tested. No test asserts the absence of a seller→ad-account path. | S |
+| 13 | Founder cockpit renders all of the above | ⚠️ | `apps/web/app/cockpit/route.ts` | Renders 4 panels: report-cards (Watchman/Fixer/Builder only), install-rate, incidents, radar. **No panel for Listener, Mentor, Bursar, Herald, Chairman memo, fairness, or money.** | M |
+| 14 | Every Constitution law has an enforcing test | ⚠️ | see law→test map below | Laws 1,2,3,5 mapped. Law 4 partial (explain data exists, no user-facing surface). Laws 6 and 7 have no enforcing test. | M |
+| 15 | k6 load profiles runnable | ⚠️ | `tests/src/load/k6-profiles.js` | File defines all four profiles. **k6 is not installed** in this environment and is not in CI; not executed this session. | S |
+| 16 | Coverage % on /core | ⚠️ | — | **Unmeasured.** No coverage provider is a dependency of any Sycamore package (`@vitest/coverage-v8` exists only under `haven/`, which is off-limits). Cannot be reported without adding a dependency. | S |
+
+## Constitution law → enforcing test
+
+| Law | Enforcing test | Verified |
+|---|---|---|
+| 1 One door | `core/src/genesis/genesis.integration.test.ts` :: "a synthetic seller goes from first message to approved broadcast in ONE session"; `core/src/voice/voice.integration.test.ts` :: 20-fixture gate | ✅ |
+| 2 Thumbs-up governance | `core/src/agents/builder.integration.test.ts` :: "a good change ships with founder tap…"; `phase5` :: "Chairman … ZERO spend authority" | ✅ |
+| 3 Plain-number ledgers | `core/src/shoebox/shoebox.integration.test.ts` :: "the message passes the pack language rules" | ✅ |
+| 4 Show-me-why | `core/src/discovery/ranking.test.ts` (explain components); `agents/keeper` :: "every line cites a data source" | ⚠️ data only — no one-tap surface |
+| 5 Trust is never traded | `studio` :: "PERMANENT CI CHECK: no source photo → NO ad"; `reviews` red-team ×3; `phase5` :: "undisclosed forum post is refused"; `adapters/llm` :: PII/DPA gate | ✅ |
+| 6 Hold the trust, never the float | — | ❌ no test |
+| 7 Boring by default | — | ❌ no test; `@opentelemetry/api` is an unused dependency |
+
+## Concerns found that are NOT on the checklist
+
+1. **A Postgres outage turns CI green while skipping every money gate.** 35 test
+   files are wrapped in `describe.runIf(reachable)`. Proven this session: with
+   Postgres stopped, `vitest run src/capacity/oversell.storm` reports
+   "1 skipped" and **exits 0**. If the CI Postgres service fails to start, the
+   build passes with the storm, the ledger fuzz, and every drill silently not
+   run. The guard needs to be "skip locally, hard-fail in CI".
+2. **`tests/` now depends on `apps/web`** (added during P36 so the cockpit gate
+   renders the real route). A test package reaching into an app package is a
+   dependency direction worth a deliberate decision, not a side effect.
+3. **The P31 core-diff gate is pinned to fixed commits** (`jm-only-baseline.txt`
+   / `jm-plus-do.txt`). It proves history, not the present: core changed in P34,
+   P35 and P36 without that gate being able to notice.
+4. **`v1.0-code-complete` and `v1.1-survivability` are not real git tags** —
+   the remote refuses tag pushes, so they exist only as commit pointers in prose
+   here (1483e10, 6007270). Nothing enforces them.
+5. **The 10,000-op fuzz is single-process.** It proves arithmetic, not
+   concurrency, on the ledger. The only true concurrency proof in the repo is
+   the capacity storm.
