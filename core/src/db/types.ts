@@ -27,10 +27,6 @@ export interface UsersTable {
   trust_level: Generated<string>;
   /** P34 Lifeline: text-only sessions while this user's link is bad. */
   lite_mode: Generated<boolean>;
-  /** Academy sign-up captures it; nullable — chat-first users may not have one. */
-  email: string | null;
-  /** EXPLICIT marketing consent, default OFF (DPA 2020; Constitution §5). */
-  marketing_opt_in: Generated<boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -355,27 +351,6 @@ export interface HurricaneImpactsTable {
   updated_at: Generated<Date>;
 }
 
-export interface StudyEnrollmentsTable {
-  id: Generated<string>;
-  market_id: string;
-  user_id: string;
-  course: string;
-  reminder_hour_local: Generated<number>;
-  last_studied_on: Date | string | null;
-  last_reminded_on: Date | string | null;
-  active: Generated<boolean>;
-  created_at: Generated<Date>;
-  updated_at: Generated<Date>;
-}
-
-export interface MarketingSendsTable {
-  id: Generated<string>;
-  market_id: string;
-  campaign_id: string;
-  user_id: string;
-  created_at: Generated<Date>;
-}
-
 export interface Database {
   markets: MarketsTable;
   users: UsersTable;
@@ -405,6 +380,4 @@ export interface Database {
   hurricane_states: HurricaneStatesTable;
   hurricane_impacts: HurricaneImpactsTable;
   offline_replays: OfflineReplaysTable;
-  study_enrollments: StudyEnrollmentsTable;
-  marketing_sends: MarketingSendsTable;
 }

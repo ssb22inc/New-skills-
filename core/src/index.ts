@@ -271,10 +271,3 @@ export {
   rebindToChannel,
   type EscrowedIdentity,
 } from './sovereignty/identity-escrow.js';
-export {
-  academyService,
-  AcademyError,
-  SignUpSchema,
-  type AcademyService,
-  type SignUpInput,
-} from './academy/academy.js';
