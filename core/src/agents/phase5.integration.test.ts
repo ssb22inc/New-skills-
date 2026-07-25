@@ -35,7 +35,7 @@ const USER_IMPACT_LAG_MS = 5000;
 
 describe.runIf(reachable)('P30 — Herald + Chairman + Cockpit (Phase 5 exit gate)', () => {
   const db = createDb(databaseUrl());
-  const chairman = chairmanService(db, 'jm');
+  const chairman = chairmanService(db, 'jm', jm);
   const herald = heraldService(db, 'jm', jm);
   let sellerId: string;
 

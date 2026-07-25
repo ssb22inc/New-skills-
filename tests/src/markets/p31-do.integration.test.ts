@@ -9,7 +9,7 @@
  * pack, never the registry file.
  */
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -78,8 +78,49 @@ describe('P31 — the sacred core-diff gate', () => {
     },
   );
 
-  // NOTE: no working-tree check here — later prompts (P32+) legitimately
-  // change /core. The gate is the pinned baseline..jm-plus-do range only.
+  // NOTE: the range gate above proves HISTORY. The audit pointed out
+  // that it structurally cannot see today: core changed in P34, P35 and
+  // P36 without that pinned range noticing. So the present-day half of
+  // the law lives here — core, as it stands right now, must contain no
+  // market-specific branching at all. That is the thing the empty diff
+  // was ever a proxy for.
+  it('GATE (present day): core contains no market-specific branching', () => {
+    const CORE_SRC = new URL('../../../core/src', import.meta.url).pathname;
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (entry.endsWith('.ts') && !entry.includes('.test.')) files.push(full);
+      }
+    };
+    walk(CORE_SRC);
+
+    // A market id compared against a literal is the tell. `marketId` as
+    // a parameter threaded through queries is the whole design; a
+    // `marketId === 'jm'` is core learning a country's name.
+    const BRANCH =
+      /marketId\s*[=!]==?\s*['"](jm|do|mx|tt|bb|bs|gy|bz|lc|gd|vc|ag|kn|dm)['"]|market_id\s*===\s*['"][a-z]{2}['"]/;
+    const offenders: string[] = [];
+    for (const file of files) {
+      const code = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '');
+      if (BRANCH.test(code)) offenders.push(file.split('/core/src/')[1] ?? file);
+    }
+    expect(
+      offenders,
+      `core/src branches on a specific market:\n${offenders.join('\n')}\n` +
+        `If core must change to enter a market, the abstraction is wrong — ` +
+        `stop and fix the abstraction (CLAUDE.md, Four Packs rule).`,
+    ).toEqual([]);
+
+    // And core must not read pack FILES for a named market either.
+    const namedPackLoads = files.filter((f) =>
+      /loadContextPack\(\s*['"][a-z]{2}['"]\s*\)/.test(readFileSync(f, 'utf8')),
+    );
+    expect(namedPackLoads.map((f) => f.split('/core/src/')[1])).toEqual([]);
+  });
 });
 
 describe.runIf(reachable)('P31 — DO staging stands up by pack alone', () => {

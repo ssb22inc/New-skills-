@@ -20,6 +20,7 @@ import * as keeper from './0018_keeper.js';
 import * as hurricane from './0019_hurricane.js';
 import * as lifeline from './0020_lifeline.js';
 import * as installPrompt from './0021_install_prompt.js';
+import * as reviewDevice from './0022_review_device.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -48,6 +49,7 @@ export const migrations: Record<string, Migration> = {
   '0019_hurricane': hurricane,
   '0020_lifeline': lifeline,
   '0021_install_prompt': installPrompt,
+  '0022_review_device': reviewDevice,
 };
 
 export const migrationProvider: MigrationProvider = {

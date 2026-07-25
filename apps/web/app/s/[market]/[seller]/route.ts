@@ -1,4 +1,6 @@
 import { createDb, databaseUrl, marketsRegistry } from '@sycamore/core';
+import { loadContextPack, translator } from '@sycamore/packs';
+import { darkTheme, INK } from '@sycamore/design';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +29,9 @@ function esc(s: string): string {
  *     never comes again.
  *   • This page is the SELLER's door. The buyer surfaces (`/t/…`, `/c/…`)
  *     carry no install affordance at all.
+ *
+ * Every string the script renders is handed to it as pack copy — the
+ * client script owns no sentences either.
  */
 export async function GET(
   req: Request,
@@ -46,55 +51,65 @@ export async function GET(
     .executeTakeFirst();
   if (!seller) return new Response('not found', { status: 404 });
 
+  const pack = loadContextPack(market);
+  const say = translator(pack);
+
   const offered = new URL(req.url).searchParams.get('offer') === '1';
   const alreadyInstalled = seller.install_prompt_state === 'installed';
   const showInstallOffer = offered && !alreadyInstalled;
   const dayUrl = `/s/${market}/${sellerId}/day.json`;
   const actionsUrl = `/s/${market}/${sellerId}/actions`;
 
+  // The script renders rows client-side, so it needs its sentences up
+  // front. They come from the catalogue, never from the script itself.
+  const copy = {
+    upToDate: say('seller_day.up_to_date'),
+    offlineAsOf: say('seller_day.offline_as_of', { when: '{when}' }),
+    offlineNoCache: say('seller_day.offline_no_cache'),
+    noOpenOrders: say('seller_day.no_open_orders'),
+    noCapacity: say('seller_day.no_capacity'),
+    noContacts: say('seller_day.no_contacts'),
+    noCatalog: say('seller_day.no_catalog'),
+    done: say('seller_day.done'),
+    sent: say('seller_day.sent'),
+    queueWaiting: say('seller_day.queue_waiting', { count: '{count}' }),
+  };
+
   const html = `<!doctype html>
-<html lang="en">
+<html lang="${esc(pack.language.primary)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0B1A26">
-<title>${esc(seller.business_name)} — your day</title>
+<meta name="theme-color" content="${INK}">
+<title>${esc(seller.business_name)} — Sycamore</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <style>
-body{margin:0;background:#0B1A26;color:#F7F3EC;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
-main{max-width:480px;margin:0 auto;padding:16px}
-h1{font-size:22px;margin:0 0 4px}
-h2{font-size:14px;color:#9FB3C0;text-transform:uppercase;letter-spacing:.06em;margin:20px 0 8px}
-section{background:#12283A;border-radius:12px;padding:14px;margin-bottom:12px}
-p{margin:6px 0;font-size:15px}
-button{background:#F4A24C;color:#0B1A26;border:none;border-radius:12px;padding:12px 16px;font-weight:700;font-size:15px}
-button.ghost{background:transparent;color:#9FB3C0;font-weight:400;text-decoration:underline}
-.muted{color:#9FB3C0;font-size:13px}
-.stale{color:#F4A24C;font-size:13px}
-[hidden]{display:none!important}
+${darkTheme()}
 </style>
 </head>
 <body><main>
 <h1>${esc(seller.business_name)}</h1>
-<p class="muted" id="freshness" data-freshness>Loading your day…</p>
+<p class="muted" id="freshness" data-freshness>${esc(say('seller_day.loading'))}</p>
 
 <section id="install-offer" data-panel="install-offer" ${showInstallOffer ? '' : 'hidden'}>
-<p>Put this on your home screen — it opens faster, and it keeps working when the internet drops.</p>
-<button type="button" data-action="install">Add to home screen</button>
-<button type="button" class="ghost" data-action="decline">Not now</button>
+<p>${esc(say('seller_day.install_pitch'))}</p>
+<button type="button" data-action="install">${esc(say('seller_day.install_accept'))}</button>
+<button type="button" class="ghost" data-action="decline">${esc(
+    say('seller_day.install_decline'),
+  )}</button>
 </section>
 
-<h2>Open orders</h2>
+<h2>${esc(say('seller_day.open_orders'))}</h2>
 <section data-panel="open-orders"><p class="muted">…</p></section>
 
-<h2>Next 7 days</h2>
+<h2>${esc(say('seller_day.next_seven_days'))}</h2>
 <section data-panel="capacity"><p class="muted">…</p></section>
 
-<h2>Your people</h2>
+<h2>${esc(say('seller_day.your_people'))}</h2>
 <section data-panel="contacts"><p class="muted">…</p></section>
 
-<h2>What you sell</h2>
+<h2>${esc(say('seller_day.what_you_sell'))}</h2>
 <section data-panel="catalog"><p class="muted">…</p></section>
 
 <p class="muted" id="queue-state" data-queue-state></p>
@@ -102,6 +117,7 @@ button.ghost{background:transparent;color:#9FB3C0;font-weight:400;text-decoratio
 <script>
 (function(){
   var DAY_URL=${JSON.stringify(dayUrl)}, ACTIONS_URL=${JSON.stringify(actionsUrl)};
+  var COPY=${JSON.stringify(copy)};
   var DAY_KEY='sycamore-day:'+DAY_URL, QUEUE_KEY='sycamore-queue:'+ACTIONS_URL;
 
   // The installed client launches at /s/ — remember whose day this is.
@@ -124,7 +140,7 @@ button.ghost{background:transparent;color:#9FB3C0;font-weight:400;text-decoratio
     var q=queue();
     var el=document.getElementById('queue-state');
     if(!q.length){ if(el) el.textContent=''; return; }
-    if(el) el.textContent=q.length+' change'+(q.length===1?'':'s')+' waiting to send.';
+    if(el) el.textContent=COPY.queueWaiting.replace('{count}',q.length);
     if(!navigator.onLine) return;
     // Idempotency keys are generated ONCE, when the action happens, so a
     // resend after a crash is the same action, not a second one (P34).
@@ -155,31 +171,31 @@ button.ghost{background:transparent;color:#9FB3C0;font-weight:400;text-decoratio
   function render(day,fromCache){
     var f=document.getElementById('freshness');
     f.textContent=fromCache
-      ? 'Offline — showing your day as of '+new Date(day.capturedAt).toLocaleString()
-      : 'Up to date.';
+      ? COPY.offlineAsOf.replace('{when}', new Date(day.capturedAt).toLocaleString())
+      : COPY.upToDate;
     f.className=fromCache?'stale':'muted';
     fill('open-orders',day.openOrders,function(o){
-      return '<p data-order="'+o.id+'">'+esc(o.buyerName)+' — '+o.units+' ('+esc(o.status)+') '+
-        '<button type="button" data-complete="'+o.id+'">Done</button></p>';
-    },'Nothing open right now.');
+      return '<p data-order="'+o.id+'">'+esc(o.buyerName)+' — <span class="num">'+o.units+'</span> ('+esc(o.status)+') '+
+        '<button type="button" data-complete="'+o.id+'">'+esc(COPY.done)+'</button></p>';
+    },COPY.noOpenOrders);
     fill('capacity',day.capacity,function(c){
-      return '<p data-window="'+c.windowId+'">'+new Date(c.startsAt).toDateString()+' — '+c.available+' of '+c.totalUnits+' open</p>';
-    },'No openings set for the next 7 days.');
+      return '<p data-window="'+c.windowId+'">'+new Date(c.startsAt).toDateString()+' — <span class="num">'+c.available+'/'+c.totalUnits+'</span></p>';
+    },COPY.noCapacity);
     fill('contacts',day.contacts,function(p){
-      return '<p data-contact="'+p.userId+'">'+esc(p.name)+' <a href="tel:'+esc(p.phone)+'">'+esc(p.phone)+'</a></p>';
-    },'No customers yet.');
-    fill('catalog',day.catalog,function(i){ return '<p data-item="'+i.id+'">'+esc(i.name)+'</p>'; },'Nothing listed yet.');
+      return '<p data-contact="'+p.userId+'">'+esc(p.name)+' <a class="num" href="tel:'+esc(p.phone)+'">'+esc(p.phone)+'</a></p>';
+    },COPY.noContacts);
+    fill('catalog',day.catalog,function(i){ return '<p data-item="'+i.id+'">'+esc(i.name)+'</p>'; },COPY.noCatalog);
     Array.prototype.forEach.call(document.querySelectorAll('[data-complete]'),function(b){
       b.addEventListener('click',function(){
         var id=b.getAttribute('data-complete');
         enqueue({idempotencyKey:'complete:'+id,kind:'complete_order',payload:{orderId:id}});
-        b.disabled=true; b.textContent='Sent';
+        b.disabled=true; b.textContent=COPY.sent;
       });
     });
   }
   function fill(panel,rows,fn,empty){
     var el=document.querySelector('[data-panel="'+panel+'"]');
-    el.innerHTML=(rows&&rows.length)?rows.map(fn).join(''):'<p class="muted">'+empty+'</p>';
+    el.innerHTML=(rows&&rows.length)?rows.map(fn).join(''):'<p class="muted">'+esc(empty)+'</p>';
   }
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -190,7 +206,7 @@ button.ghost{background:transparent;color:#9FB3C0;font-weight:400;text-decoratio
   fetch(DAY_URL).then(function(r){ return r.json(); }).then(function(day){
     localStorage.setItem(DAY_KEY,JSON.stringify(day));
     render(day,false);
-  }).catch(function(){ if(!cached) document.getElementById('freshness').textContent='Offline — no saved day yet.'; });
+  }).catch(function(){ if(!cached) document.getElementById('freshness').textContent=COPY.offlineNoCache; });
   flush();
 })();
 </script>

@@ -1,4 +1,14 @@
-import { chairmanService, createDb, databaseUrl, sellerInstallRate } from '@sycamore/core';
+import {
+  chairmanService,
+  createDb,
+  databaseUrl,
+  fairnessMeter,
+  listenerService,
+  marketMoney,
+  sellerInstallRate,
+} from '@sycamore/core';
+import { formatAmount, loadContextPack } from '@sycamore/packs';
+import { darkTheme } from '@sycamore/design';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,11 +27,23 @@ function esc(s: string): string {
  * five minutes on a Monday. Pure HTML like the trust page — the founder
  * is on the same phones our sellers are. Hardening (SSO + hardware key)
  * is a Phase-7 trigger item, on record in BUILD_STATUS.md.
+ *
+ * Every one of the EIGHT agents reports here, and every number behind a
+ * report card is a row in a table or the outbox — never a figure
+ * computed for display. Money is plain numbers, per Constitution §3, and
+ * the fairness meter is on the page because a promise nobody can see is
+ * a promise nobody keeps.
+ *
+ * This page is founder-facing operational instrumentation: agent names,
+ * vitals and lane ids are the founder's working vocabulary and stay in
+ * English by design. Seller- and buyer-facing surfaces localize.
  */
 export async function GET(req: Request): Promise<Response> {
   const marketId = new URL(req.url).searchParams.get('market') ?? 'jm';
-  const chairman = chairmanService(db, marketId);
+  const pack = loadContextPack(marketId);
+  const chairman = chairmanService(db, marketId, pack);
   const cards = await chairman.reportCards();
+  const patterns = await listenerService(db, marketId).minePatterns();
 
   const incidents = await db
     .selectFrom('agent_incidents')
@@ -33,6 +55,8 @@ export async function GET(req: Request): Promise<Response> {
   // P36d — survivability, not vanity: how much of this market can still
   // be reached through a door we own.
   const install = await sellerInstallRate(db, marketId);
+  const fairness = await fairnessMeter(db, marketId);
+  const money = await marketMoney(db, marketId);
   const radar = await db
     .selectFrom('radar_items')
     .where('market_id', '=', marketId)
@@ -42,6 +66,9 @@ export async function GET(req: Request): Promise<Response> {
     .selectAll()
     .execute();
 
+  const pct = (n: number): string => (n * 100).toFixed(0);
+  const cash = (n: number): string => formatAmount(pack, n);
+
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -49,30 +76,64 @@ export async function GET(req: Request): Promise<Response> {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sycamore cockpit — ${esc(marketId)}</title>
 <style>
-body{margin:0;background:#0B1A26;color:#F7F3EC;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
-main{max-width:640px;margin:0 auto;padding:16px}
-h1{font-size:22px}h2{font-size:15px;color:#9FB3C0;text-transform:uppercase;letter-spacing:.06em}
-section{background:#12283A;border-radius:12px;padding:14px;margin-bottom:12px}
-table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:4px 8px;font-size:14px}
-.ok{color:#7BD8A8}.warn{color:#F4A24C}.bad{color:#F26D6D}
+${darkTheme()}
 </style>
 </head>
 <body><main>
 <h1>Sycamore cockpit — ${esc(marketId)}</h1>
+
+<section data-panel="money">
+<h2>Money</h2>
+<table>
+<tr><td>Buyers paid in</td><td class="num money" data-money="captured">${esc(cash(money.capturedMinor))}</td></tr>
+<tr><td>Refunded</td><td class="num money" data-money="refunded">${esc(cash(money.refundedMinor))}</td></tr>
+<tr><td>Paid out to sellers</td><td class="num money" data-money="paid-out">${esc(cash(money.paidOutMinor))}</td></tr>
+<tr><td>Sycamore kept</td><td class="num money" data-money="fees">${esc(cash(money.feesMinor))}</td></tr>
+</table>
+</section>
+
+<section data-panel="fairness">
+<h2>Fairness meter</h2>
+<p data-fairness="${pct(fairness.newcomerShare)}">${pct(fairness.newcomerShare)}% of first-time bookings went to a newcomer — ${fairness.newcomerSellers} of ${fairness.sellers} sellers are still building their record.</p>
+<p class="muted">Exposure floor: newcomers get audition slots, always badged, never the top slot.</p>
+</section>
+
+<section data-panel="install-rate">
+<h2>Seller install rate</h2>
+<p data-install-rate="${pct(install.rate)}">${install.installed} of ${install.active} active sellers reachable through our own door — <strong>${pct(install.rate)}%</strong></p>
+<p class="muted">Watched, never chased: sellers are offered the install at most twice, ever.</p>
+</section>
+
 <section data-panel="report-cards">
 <h2>Agent report cards</h2>
 <table>
 <tr><th>Agent</th><th>Record</th></tr>
-<tr><td>Watchman</td><td>${cards.watchman.incidentsOpened} incidents opened</td></tr>
-<tr><td>Fixer</td><td class="${cards.fixer.escalated > 0 ? 'warn' : 'ok'}">${cards.fixer.healed} healed · ${cards.fixer.escalated} escalated · ${cards.fixer.actionsExecuted} runbook actions</td></tr>
-<tr><td>Builder</td><td>${cards.builder.shipped} shipped · ${cards.builder.stopped} stopped at a gate</td></tr>
+<tr data-agent="watchman"><td>Watchman</td><td>${cards.watchman.incidentsOpened} incidents opened</td></tr>
+<tr data-agent="fixer"><td>Fixer</td><td class="${cards.fixer.escalated > 0 ? 'warn' : 'ok'}">${cards.fixer.healed} healed · ${cards.fixer.escalated} escalated · ${cards.fixer.actionsExecuted} runbook actions</td></tr>
+<tr data-agent="listener"><td>Listener</td><td>${cards.listener.surveysSent} surveys · ${cards.listener.thumbsUp} 👍 · ${cards.listener.thumbsDown} 👎</td></tr>
+<tr data-agent="scout"><td>Scout</td><td>${cards.scout.cleared} cleared · ${cards.scout.parked} parked</td></tr>
+<tr data-agent="mentor"><td>Mentor</td><td>${cards.mentor.messagesSent} weekly messages sent</td></tr>
+<tr data-agent="builder"><td>Builder</td><td>${cards.builder.shipped} shipped · ${cards.builder.stopped} stopped at a gate</td></tr>
+<tr data-agent="bursar"><td>Bursar</td><td class="${cards.bursar.blockedOnDpa > 0 ? 'ok' : ''}">${cards.bursar.reviews} reviews · ${cards.bursar.proposed} swaps proposed · ${cards.bursar.blockedOnDpa} blocked on DPA</td></tr>
+<tr data-agent="herald"><td>Herald</td><td>${cards.herald.pilots} pilots · best lift ${(cards.herald.bestLift * 100).toFixed(1)}%</td></tr>
+<tr data-agent="chairman"><td>Chairman</td><td>Memo below · zero spend authority</td></tr>
 </table>
 </section>
-<section data-panel="install-rate">
-<h2>Seller install rate</h2>
-<p data-install-rate="${(install.rate * 100).toFixed(0)}">${install.installed} of ${install.active} active sellers reachable through our own door — <strong>${(install.rate * 100).toFixed(0)}%</strong></p>
-<p class="muted" style="color:#9FB3C0;font-size:13px">Watched, never chased: sellers are offered the install at most twice, ever.</p>
+
+<section data-panel="complaints">
+<h2>Listener — what people are unhappy about</h2>
+${
+  patterns.length === 0
+    ? '<p class="ok">Nothing recurring this month.</p>'
+    : patterns
+        .map(
+          (p) =>
+            `<p data-complaint-lane="${esc(p.lane)}">${esc(p.lane)} — <span class="num">${p.count}</span></p>`,
+        )
+        .join('\n')
+}
 </section>
+
 <section data-panel="incidents">
 <h2>Incidents</h2>
 ${
@@ -86,6 +147,7 @@ ${
         .join('\n')
 }
 </section>
+
 <section data-panel="radar">
 <h2>Scout radar (cleared)</h2>
 ${
@@ -94,7 +156,7 @@ ${
     : radar
         .map(
           (r) =>
-            `<p data-radar="${r.id}">${esc(r.lane)} — pain ${r.pain_score}, est. ${Number(r.revenue_estimate_minor ?? 0)} minor/mo</p>`,
+            `<p data-radar="${r.id}">${esc(r.lane)} — pain <span class="num">${r.pain_score}</span>, est. <span class="num money">${esc(cash(Number(r.revenue_estimate_minor ?? 0)))}</span>/mo</p>`,
         )
         .join('\n')
 }

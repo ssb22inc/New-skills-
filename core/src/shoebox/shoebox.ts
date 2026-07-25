@@ -1,6 +1,6 @@
 import { sql, type Kysely } from 'kysely';
 import type { ContextPack } from '@sycamore/packs';
-import { formatAmount } from '@sycamore/packs';
+import { formatAmount, translator } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
 import { textPdf } from './pdf.js';
 
@@ -19,9 +19,17 @@ export interface ShoeboxPack {
   thresholdStatus: 'nothing_to_do' | 'approaching' | 'over';
 }
 
-/** The mandatory line — records, never advice. */
-export const TAX_DISCLAIMER =
-  'These are your records, not tax advice — carry them to your accountant or TAJ.';
+/**
+ * The mandatory line — records, never advice. The WORDS live in the copy
+ * catalogue (`shoebox.disclaimer`) because "TAJ" is Jamaica's tax
+ * authority and Trinidad's is not; this key is the contract.
+ */
+export const TAX_DISCLAIMER_KEY = 'shoebox.disclaimer';
+
+/** The rendered disclaimer for a market — never a constant string. */
+export function taxDisclaimer(pack: ContextPack): string {
+  return translator(pack)(TAX_DISCLAIMER_KEY);
+}
 
 /**
  * P19 — The Shoebox: a formatting job on the ledger. One plain-language
@@ -29,6 +37,7 @@ export const TAX_DISCLAIMER =
  * registration threshold watch from the context pack.
  */
 export function shoeboxService(db: Kysely<Database>, marketId: string, pack: ContextPack) {
+  const say = translator(pack);
   async function sellerMonthRows(sellerId: string, from: Date, to: Date) {
     return db
       .selectFrom('ledger_transactions')
@@ -112,20 +121,21 @@ export function shoeboxService(db: Kysely<Database>, marketId: string, pack: Con
 
       const monthLabel = `${year}-${String(month).padStart(2, '0')}`;
       const f = (n: number) => formatAmount(pack, n);
+      const rollingText = f(rolling.salesMinor);
       const thresholdLine =
         thresholdStatus === 'over'
-          ? `Heads up: your last 12 months of sales (${f(rolling.salesMinor)}) crossed the GCT registration threshold. Time to talk to your accountant.`
+          ? say('shoebox.tax_over', { rolling: rollingText })
           : thresholdStatus === 'approaching'
-            ? `Heads up: your last 12 months of sales (${f(rolling.salesMinor)}) are getting close to the GCT registration threshold. Nothing due yet — just know it's coming.`
-            : 'GCT: nothing to do this month.';
+            ? say('shoebox.tax_approaching', { rolling: rollingText })
+            : say('shoebox.tax_nothing');
       const message = [
-        `Your ${monthLabel} money, plain and simple:`,
-        `You sold ${f(totals.salesMinor)}.`,
-        `Refunds gave back ${f(totals.refundsMinor)}.`,
-        `Fees took ${f(totals.feesMinor)}.`,
-        `${f(totals.payoutsMinor)} was paid out to you.`,
+        say('shoebox.header', { month: monthLabel }),
+        say('shoebox.sold', { sales: f(totals.salesMinor) }),
+        say('shoebox.refunds', { refunds: f(totals.refundsMinor) }),
+        say('shoebox.fees', { fees: f(totals.feesMinor) }),
+        say('shoebox.paid_out', { payouts: f(totals.payoutsMinor) }),
         thresholdLine,
-        TAX_DISCLAIMER,
+        say(TAX_DISCLAIMER_KEY),
       ].join('\n');
 
       const rows = await sellerMonthRows(sellerId, from, to);
@@ -138,13 +148,13 @@ export function shoeboxService(db: Kysely<Database>, marketId: string, pack: Con
         ),
       ].join('\n');
 
-      const pdf = textPdf(`Sycamore record pack — ${monthLabel}`, [
-        `Sales: ${f(totals.salesMinor)}`,
-        `Refunds: ${f(totals.refundsMinor)}`,
-        `Fees: ${f(totals.feesMinor)}`,
-        `Paid out: ${f(totals.payoutsMinor)}`,
+      const pdf = textPdf(say('shoebox.pdf_title', { month: monthLabel }), [
+        say('shoebox.pdf_sales', { sales: f(totals.salesMinor) }),
+        say('shoebox.pdf_refunds', { refunds: f(totals.refundsMinor) }),
+        say('shoebox.pdf_fees', { fees: f(totals.feesMinor) }),
+        say('shoebox.pdf_paid_out', { payouts: f(totals.payoutsMinor) }),
         '',
-        TAX_DISCLAIMER,
+        say(TAX_DISCLAIMER_KEY),
       ]);
 
       return { totals, message, csv, pdf, thresholdStatus };

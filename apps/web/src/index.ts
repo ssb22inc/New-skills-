@@ -9,3 +9,5 @@ export const WORKSPACE = '@sycamore/web';
  */
 export { GET as cockpitPage } from '../app/cockpit/route.js';
 export { GET as webManifest } from '../app/manifest.webmanifest/route.js';
+export { GET as whyPage } from '../app/why/[market]/[seller]/route.js';
+export { GET as trustPage } from '../app/t/[market]/[seller]/route.js';

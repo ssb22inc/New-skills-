@@ -28,6 +28,9 @@ jobs:
     env:
       DATABASE_URL: postgres://sycamore:sycamore@localhost:5432/sycamore
       REDIS_URL: redis://localhost:6379
+      # A Postgres that fails to start must FAIL the build, not skip
+      # every money gate and go green (tests/src/ci/database-required).
+      SYCAMORE_REQUIRE_DB: '1'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,3 +47,11 @@ jobs:
       - run: pnpm format
       - run: pnpm typecheck
       - run: pnpm test
+      # The trust-page budget (<100KB, interactive <2s on throttled 3G)
+      # is a product law, so it is a build step — not a script somebody
+      # remembers to run.
+      - run: pnpm --filter @sycamore/web build
+      - run: pnpm --filter @sycamore/tests perf:trust
+      # Load profiles run against the real gateway on every push; k6 is
+      # the heavy weekly profile, this is the always-on floor.
+      - run: pnpm --filter @sycamore/tests load:smoke

@@ -11,7 +11,9 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "format": "prettier --check .",
-    "format:fix": "prettier --write ."
+    "format:fix": "prettier --write .",
+    "rollback": "tsx scripts/rollback.mts",
+    "test:coverage": "pnpm --filter @sycamore/core exec vitest run --coverage"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -20,13 +22,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@sycamore/core": "workspace:*",
     "@types/node": "^26.1.0",
+    "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.4",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",
-    "vitest": "^4.1.9"
+    "vitest": "4.1.9"
   }
 }

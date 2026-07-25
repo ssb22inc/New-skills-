@@ -7,7 +7,7 @@ import { seedMarkets } from '../db/seed.js';
 import { identityService } from '../identity/identity.js';
 import { capacityEngine } from '../capacity/engine.js';
 import { settlementService } from '../settlement/settlement.js';
-import { shoeboxService, TAX_DISCLAIMER } from './shoebox.js';
+import { shoeboxService, taxDisclaimer } from './shoebox.js';
 
 async function postgresReachable(): Promise<boolean> {
   const client = new pg.Client({ connectionString: databaseUrl(), connectionTimeoutMillis: 1500 });
@@ -135,7 +135,7 @@ describe.runIf(reachable)('P19 — The Shoebox (gate)', () => {
     expect(pack.message).toContain(`You sold J$`);
     expect(pack.message).toMatch(/J\$[\d,]+\.\d{2} was paid out to you\./);
     // The mandatory records-not-tax-advice line, always.
-    expect(pack.message).toContain(TAX_DISCLAIMER);
+    expect(pack.message).toContain(taxDisclaimer(jm));
     // Below threshold: say so plainly.
     expect(pack.thresholdStatus).toBe('nothing_to_do');
     expect(pack.message).toContain('GCT: nothing to do this month.');

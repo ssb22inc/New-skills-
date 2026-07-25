@@ -1,0 +1,131 @@
+# Base English copy catalogue.
+#
+# Every user-facing sentence Sycamore can say lives in a catalogue file —
+# never in code (CLAUDE.md data rules). Resolution order is
+# market override → exact language tag → base language; a key missing
+# from all three is a LOAD ERROR, never a silent default.
+#
+# Placeholders are {braced} and are substituted by the localization
+# engine. A placeholder with no supplied value is an error too — copy
+# that renders "undefined" at a seller is a bug, not a nuance.
+
+shoebox:
+  header: 'Your {month} money, plain and simple:'
+  sold: 'You sold {sales}.'
+  refunds: 'Refunds gave back {refunds}.'
+  fees: 'Fees took {fees}.'
+  paid_out: '{payouts} was paid out to you.'
+  tax_over: >-
+    Heads up: your last 12 months of sales ({rolling}) crossed the sales-tax
+    registration threshold. Time to talk to your accountant.
+  tax_approaching: >-
+    Heads up: your last 12 months of sales ({rolling}) are getting close to the
+    sales-tax registration threshold. Nothing due yet — just know it's coming.
+  tax_nothing: 'Sales tax: nothing to do this month.'
+  disclaimer: 'These are your records, not tax advice — carry them to your accountant.'
+  pdf_title: 'Sycamore record pack — {month}'
+  pdf_sales: 'Sales: {sales}'
+  pdf_refunds: 'Refunds: {refunds}'
+  pdf_fees: 'Fees: {fees}'
+  pdf_paid_out: 'Paid out: {payouts}'
+
+settlement:
+  payout: '{amount} is on the way to you today.'
+
+hurricane:
+  freeze: 'Storm coming — bookings are paused while we look after everyone booked in. Stay safe.'
+  were_safe: 'We came through fine. Everyone booked has been moved or refunded — check your chat.'
+  were_open: 'We are OPEN again. Sellers are back and taking bookings now.'
+
+lifeline:
+  blackout_broadcast: 'Storm mode — your money is safe and held until this settles.'
+  media_stripped: "(Photos/voice notes can't reach you right now — text me instead.)"
+
+pulse:
+  kill: >-
+    We stopped one ad that spent {spend} but hardly anyone tapped it. That money
+    now goes to your ads that are working.
+  refresh: >-
+    People have seen this ad a lot and taps are cooling off, so we freshened up
+    the look and words. Same offer, new energy.
+  scale: >-
+    Your ad is doing well — plenty taps for the money. We put {allocated} behind
+    it today (your cap: {cap}).
+  hold: 'We kept {allocated} on this ad while it finds its crowd.'
+  cross_pollinate: >-
+    The style that works for your best ad is now trying out in {vertical} too,
+    with words written for that crowd.
+
+mentor:
+  photo_freshness: >-
+    Your menu photos are getting old — send me one new photo and I will refresh
+    everything.
+  repeat_rate: '{repeaters} of your {buyers} customers came back for more — regulars are your engine.'
+
+chairman:
+  memo_header: 'Weekly memo — what held up in testing:'
+  probes_header: 'Small probes worth a try:'
+
+install:
+  offer_fallback: >-
+    Your business is growing. Put Sycamore on your home screen — it opens faster,
+    and it keeps working when the internet drops. {link}
+
+trust_page:
+  verified_badge: 'Sycamore Verified'
+  early_days: 'Early days — first {orders} orders done'
+  guarantee_back_on_time: 'Back-on-time guarantee: late return, money back.'
+  next_openings: 'Next openings'
+  no_openings: 'Message us for the next dates.'
+  open_units: '{units} open'
+  cta: 'Message us on WhatsApp'
+  why_ranked: 'Why am I seeing this seller?'
+  licences: 'Licences'
+  licence_on_file: '{field}: on file'
+  reviews: 'Reviews'
+  reviews_blurb: >-
+    Verified reviews come only from completed bookings. This business is building
+    its record — watch this space.
+
+why:
+  title: 'Why you are seeing this'
+  intro: 'Every ranking decision explains itself. Here is this one, in full.'
+  rating: 'Rating so far: {rating} out of 5, smoothed until there are enough reviews to trust it.'
+  response: 'Answers fast: usually replies in about {minutes} minutes.'
+  acceptance: 'Takes the bookings they get: {acceptance}%.'
+  cancellation: 'Keeps the bookings they take: {cancellation}%.'
+  availability: 'Has room when people ask: {availability}%.'
+  newcomer: 'Shown in a newcomer audition slot — always badged, never the top spot.'
+  score: 'Blended score: {score} out of 100.'
+  no_seller: 'That business is not on Sycamore.'
+  back: 'Back to the business'
+
+sovereign_door:
+  tagline: 'Chat and book right here — same conversation, your own door.'
+  input_placeholder: 'Ask about dates, prices, anything…'
+  send: 'Send'
+  footer: 'Works on any connection. Reply STOP any time to pause messages.'
+
+seller_day:
+  loading: 'Loading your day…'
+  install_pitch: >-
+    Put this on your home screen — it opens faster, and it keeps working when the
+    internet drops.
+  install_accept: 'Add to home screen'
+  install_decline: 'Not now'
+  open_orders: 'Open orders'
+  next_seven_days: 'Next 7 days'
+  your_people: 'Your people'
+  what_you_sell: 'What you sell'
+  no_open_orders: 'Nothing open right now.'
+  no_capacity: 'No openings set for the next 7 days.'
+  no_contacts: 'No customers yet.'
+  no_catalog: 'Nothing listed yet.'
+  up_to_date: 'Up to date.'
+  offline_as_of: 'Offline — showing your day as of {when}'
+  offline_no_cache: 'Offline — no saved day yet.'
+  done: 'Done'
+  sent: 'Sent'
+  launch_hint: 'Open the link we sent you in chat once, and this icon will bring you straight back here.'
+  opening: 'Opening your day…'
+  queue_waiting: '{count} changes waiting to send.'

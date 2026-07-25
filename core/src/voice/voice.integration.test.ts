@@ -150,6 +150,14 @@ describe.runIf(reachable)('P12 — voice pipeline (gate: ≥90% intent accuracy 
     }
     const accuracy = correct / FIXTURES.length;
     expect(FIXTURES).toHaveLength(20);
+    // Report the ACTUAL number, not just that it cleared the bar — a
+    // gate you can only see pass or fail tells you nothing about the
+    // margin you are running on.
+    console.info(
+      `Voice intent accuracy: ${correct}/${FIXTURES.length} = ` +
+        `${(accuracy * 100).toFixed(1)}% (gate ≥90%)` +
+        (misses.length > 0 ? `\n  misses: ${misses.join('; ')}` : ''),
+    );
     expect(accuracy, `misses:\n${misses.join('\n')}`).toBeGreaterThanOrEqual(0.9);
   });
 
@@ -170,6 +178,8 @@ describe.runIf(reachable)('P12 — voice pipeline (gate: ≥90% intent accuracy 
       const result = await pipeline.voiceNoteToIntent(fixture.ref);
       if (result.intent === fixture.expected) correct++;
     }
-    expect(correct / FIXTURES.length).toBeLessThan(0.9); // the store earns its keep
+    const without = correct / FIXTURES.length;
+    console.info(`Voice intent accuracy WITHOUT the glossary: ${(without * 100).toFixed(1)}%`);
+    expect(without).toBeLessThan(0.9); // the store earns its keep
   });
 });

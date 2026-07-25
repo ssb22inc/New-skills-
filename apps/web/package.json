@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@sycamore/core": "workspace:*",
+    "@sycamore/design": "workspace:*",
     "@sycamore/packs": "workspace:*",
     "next": "^16.2.10",
     "react": "^19.2.7",

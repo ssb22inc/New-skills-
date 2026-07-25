@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
-import type { ContextPack } from '@sycamore/packs';
+import { translator, type ContextPack } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
 import { emitEvent } from '../db/outbox.js';
 import { ledgerService, type SplitBps } from '../ledger/ledger.js';
@@ -20,7 +20,8 @@ export const LITE_FLIP = { latencyMs: 8_000, failureRate: 0.25 } as const;
  * text-only sessions, media stripped at the boundary with a "text me
  * instead" prompt, and an automatic flip driven by delivery health.
  */
-export function liteModeService(db: Kysely<Database>, marketId: string) {
+export function liteModeService(db: Kysely<Database>, marketId: string, pack: ContextPack) {
+  const say = translator(pack);
   return {
     async flip(userId: string, on: boolean) {
       await db
@@ -52,7 +53,7 @@ export function liteModeService(db: Kysely<Database>, marketId: string) {
     /** Media degrades at the boundary; text always gets through. */
     stripToText(message: { text: string; mediaRefs?: string[] }): string {
       if (!message.mediaRefs || message.mediaRefs.length === 0) return message.text;
-      return `${message.text}\n(Photos/voice notes can't reach you right now — text me instead.)`;
+      return `${message.text}\n${say('lifeline.media_stripped')}`;
     },
   };
 }
@@ -105,6 +106,7 @@ export async function replayOfflineQueue(
  * order, then lift.
  */
 export function blackoutMode(db: Kysely<Database>, marketId: string, pack: ContextPack) {
+  const say = translator(pack);
   const ledger = ledgerService(db, marketId);
 
   async function state() {
@@ -154,7 +156,7 @@ export function blackoutMode(db: Kysely<Database>, marketId: string, pack: Conte
         topic: 'lifeline.blackout_broadcast',
         payload: {
           channel: 'sms',
-          text: 'Storm mode — your money is safe and held until this settles.',
+          text: say('lifeline.blackout_broadcast'),
         },
       });
     },

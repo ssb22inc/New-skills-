@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
-import type { ContextPack } from '@sycamore/packs';
+import { translator, type ContextPack } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
 import { emitEvent } from '../db/outbox.js';
 import { ledgerService } from '../ledger/ledger.js';
@@ -21,6 +21,7 @@ export class HurricaneError extends Error {
  * the P32 HUMAN GATE; the runbook score below runs against staging.
  */
 export function hurricaneMode(db: Kysely<Database>, marketId: string, pack: ContextPack) {
+  const say = translator(pack);
   const ledger = ledgerService(db, marketId);
   const orders = ordersService(db, marketId);
 
@@ -65,7 +66,7 @@ export function hurricaneMode(db: Kysely<Database>, marketId: string, pack: Cont
         topic: 'hurricane.broadcast',
         payload: {
           kind: 'freeze',
-          text: 'Storm coming — bookings are paused while we look after everyone booked in. Stay safe.',
+          text: say('hurricane.freeze'),
         },
       });
       return { frozenOrders: inFlight.length };
@@ -130,10 +131,7 @@ export function hurricaneMode(db: Kysely<Database>, marketId: string, pack: Cont
     },
 
     async broadcast(kind: 'were_safe' | 'were_open') {
-      const text =
-        kind === 'were_safe'
-          ? 'We came through fine. Everyone booked has been moved or refunded — check your chat.'
-          : 'We are OPEN again. Sellers are back and taking bookings now.';
+      const text = kind === 'were_safe' ? say('hurricane.were_safe') : say('hurricane.were_open');
       await emitEvent(db, { marketId, topic: 'hurricane.broadcast', payload: { kind, text } });
     },
 

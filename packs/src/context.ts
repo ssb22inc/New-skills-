@@ -56,6 +56,15 @@ export const ContextPackSchema = z
       })
       .strict(),
     timezone: z.string().min(1),
+    /**
+     * The market's status the first time it is seeded. Core must never
+     * know a country's name (Four Packs rule), so "which market is live"
+     * is pack data, not an `=== 'jm'` in the seeder. A pack may only
+     * declare `live` when counsel has verified it — the seeder enforces
+     * that, and every LATER change of status goes through the flip
+     * ceremony in markets/registry.ts.
+     */
+    launch_status: z.enum(['live', 'dark']),
     calendar: z
       .object({
         holidays: z.array(HolidaySchema).min(1),

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { sql, type Kysely } from 'kysely';
 import type { Database } from '../db/types.js';
 import { ledgerService } from '../ledger/ledger.js';
@@ -12,6 +13,25 @@ export class ReviewError extends Error {
 /** Burst detection: this many reviews on one seller inside the window → hold. */
 export const BURST_THRESHOLD = 4;
 export const BURST_WINDOW_MS = 24 * 60 * 60 * 1000;
+/**
+ * Device-cluster detection: this many reviews from ONE handset or ONE
+ * network inside the window → hold. A ring buying fresh SIM cards still
+ * only has so many phones, and a paid-booking gate makes each fake
+ * expensive; this makes the cheap part — the reviewing — visible too.
+ */
+export const CLUSTER_THRESHOLD = 3;
+export const CLUSTER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Origin identifiers are stored as salted hashes and never raw. The
+ * fraud signal only ever needs "same origin as that one"; a hash answers
+ * exactly that and nothing more (Jamaica DPA 2020 is a floor, not a
+ * goal — Constitution §5).
+ */
+export function originHash(marketId: string, value: string): string {
+  const salt = process.env.SYCAMORE_ORIGIN_SALT ?? 'sycamore-origin-salt';
+  return createHash('sha256').update(`${salt}:${marketId}:${value}`).digest('hex').slice(0, 32);
+}
 /** Early-Days display until this many completed paid bookings. */
 export const EARLY_DAYS_UNTIL = 10;
 
@@ -45,6 +65,10 @@ export function reviewsService(db: Kysely<Database>, marketId: string) {
       buyerUserId: string;
       rating: number;
       body: string;
+      /** Channel-reported handset id, if the surface can supply one. */
+      deviceId?: string;
+      /** Client IP or network id, if the surface can supply one. */
+      networkId?: string;
       now?: Date;
     }) {
       const now = input.now ?? new Date();
@@ -100,6 +124,30 @@ export function reviewsService(db: Kysely<Database>, marketId: string) {
         }
       }
 
+      // Fraud signal 3 — device/network cluster: several reviews from
+      // one handset or one network, whatever numbers they arrive on.
+      const deviceHash = input.deviceId ? originHash(marketId, input.deviceId) : null;
+      const networkHash = input.networkId ? originHash(marketId, input.networkId) : null;
+      if (status === 'published' && (deviceHash || networkHash)) {
+        const since = new Date(now.getTime() - CLUSTER_WINDOW_MS);
+        const clustered = await db
+          .selectFrom('reviews')
+          .where('market_id', '=', marketId)
+          .where('created_at', '>', since)
+          .where((eb) =>
+            eb.or([
+              ...(deviceHash ? [eb('device_hash', '=', deviceHash)] : []),
+              ...(networkHash ? [eb('network_hash', '=', networkHash)] : []),
+            ]),
+          )
+          .select((eb) => eb.fn.countAll<number>().as('n'))
+          .executeTakeFirstOrThrow();
+        if (Number(clustered.n) >= CLUSTER_THRESHOLD) {
+          status = 'held';
+          holdReason = 'several reviews from one device or network — held for verification';
+        }
+      }
+
       const review = await db
         .insertInto('reviews')
         .values({
@@ -110,6 +158,8 @@ export function reviewsService(db: Kysely<Database>, marketId: string) {
           rating: input.rating,
           body: input.body,
           status,
+          device_hash: deviceHash,
+          network_hash: networkHash,
         })
         .returningAll()
         .executeTakeFirstOrThrow();

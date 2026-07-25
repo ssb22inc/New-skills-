@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import type { ContextPack } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
+import { emitEvent } from '../db/outbox.js';
 
 export class HeraldError extends Error {
   constructor(message: string) {
@@ -129,3 +130,12 @@ export function heraldService(db: Kysely<Database>, marketId: string, pack: Cont
 }
 
 export type HeraldService = ReturnType<typeof heraldService>;
+
+/** A measured pilot goes on the record — the cockpit reads it, not a log. */
+export async function recordPilot(
+  db: Kysely<Database>,
+  marketId: string,
+  measurement: { pilotId: string; lift: number; filteredOut: number; sample: number },
+): Promise<void> {
+  await emitEvent(db, { marketId, topic: 'herald.pilot', payload: { ...measurement } });
+}

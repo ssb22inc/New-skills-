@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
+import { translator, type ContextPack } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
 
 export class ChairmanError extends Error {
@@ -31,7 +32,8 @@ export interface WakeInput {
   ledgerDriftMinor: number;
 }
 
-export function chairmanService(db: Kysely<Database>, marketId: string) {
+export function chairmanService(db: Kysely<Database>, marketId: string, pack: ContextPack) {
+  const say = translator(pack);
   return {
     /** Tested-items-only: every claim cites its test; probes are capped. */
     weeklyMemo(items: MemoItem[]): string {
@@ -50,10 +52,10 @@ export function chairmanService(db: Kysely<Database>, marketId: string) {
       }
       const tested = items.filter((i) => i.kind === 'tested');
       return [
-        'Weekly memo — what held up in testing:',
+        say('chairman.memo_header'),
         ...tested.map((i) => `• ${i.statement} [${i.evidence}]`),
         ...(probes.length > 0
-          ? ['Small probes worth a try:', ...probes.map((i) => `• ${i.statement}`)]
+          ? [say('chairman.probes_header'), ...probes.map((i) => `• ${i.statement}`)]
           : []),
       ].join('\n');
     },
@@ -81,6 +83,53 @@ export function chairmanService(db: Kysely<Database>, marketId: string) {
           sql<string>`payload->>'passed'`.as('passed'),
         ])
         .execute();
+      // The remaining crew keep their record in the same two places:
+      // their own tables, or the outbox. A report card with no record
+      // behind it is theatre, so every number below is a row somewhere.
+      const surveys = await db
+        .selectFrom('surveys')
+        .where('market_id', '=', marketId)
+        .select(['thumbs_up', (eb) => eb.fn.countAll().as('n')])
+        .groupBy('thumbs_up')
+        .execute();
+      const thumbsUp = Number(surveys.find((r) => r.thumbs_up)?.n ?? 0);
+      const thumbsDown = Number(surveys.find((r) => !r.thumbs_up)?.n ?? 0);
+
+      const radar = await db
+        .selectFrom('radar_items')
+        .where('market_id', '=', marketId)
+        .select(['status', (eb) => eb.fn.countAll().as('n')])
+        .groupBy('status')
+        .execute();
+      const radarBy = Object.fromEntries(radar.map((r) => [r.status, Number(r.n)]));
+
+      const counts = async (topic: string) =>
+        Number(
+          (
+            await db
+              .selectFrom('events_outbox')
+              .where('market_id', '=', marketId)
+              .where('topic', '=', topic)
+              .select((eb) => eb.fn.countAll().as('n'))
+              .executeTakeFirst()
+          )?.n ?? 0,
+        );
+      const bursarRuns = await db
+        .selectFrom('events_outbox')
+        .where('market_id', '=', marketId)
+        .where('topic', '=', 'bursar.review')
+        .select([
+          sql<string>`payload->>'proposed'`.as('proposed'),
+          sql<string>`payload->>'blocked'`.as('blocked'),
+        ])
+        .execute();
+      const heraldPilots = await db
+        .selectFrom('events_outbox')
+        .where('market_id', '=', marketId)
+        .where('topic', '=', 'herald.pilot')
+        .select([sql<string>`payload->>'lift'`.as('lift')])
+        .execute();
+
       return {
         watchman: {
           incidentsOpened:
@@ -94,6 +143,25 @@ export function chairmanService(db: Kysely<Database>, marketId: string) {
         builder: {
           shipped: builderStages.filter((s) => s.stage === 'shipped' && s.passed === 'true').length,
           stopped: builderStages.filter((s) => s.passed === 'false').length,
+        },
+        listener: {
+          surveysSent: await counts('listener.survey_sent'),
+          thumbsUp,
+          thumbsDown,
+        },
+        scout: { cleared: radarBy['cleared'] ?? 0, parked: radarBy['parked'] ?? 0 },
+        mentor: { messagesSent: await counts('mentor.message_sent') },
+        bursar: {
+          reviews: bursarRuns.length,
+          proposed: bursarRuns.reduce((s, r) => s + Number(r.proposed ?? 0), 0),
+          blockedOnDpa: bursarRuns.reduce((s, r) => s + Number(r.blocked ?? 0), 0),
+        },
+        herald: {
+          pilots: heraldPilots.length,
+          bestLift:
+            heraldPilots.length === 0
+              ? 0
+              : Math.max(...heraldPilots.map((p) => Number(p.lift ?? 0))),
         },
       };
     },

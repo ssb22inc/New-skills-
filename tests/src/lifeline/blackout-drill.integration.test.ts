@@ -82,7 +82,7 @@ describe('P34 — SMS lane parses like any other door', () => {
 describe.runIf(reachable)('P34 — the 48h blackout drill (gate)', () => {
   const db = createDb(databaseUrl());
   const blackout = blackoutMode(db, 'jm', jm);
-  const lite = liteModeService(db, 'jm');
+  const lite = liteModeService(db, 'jm', jm);
   const orders = ordersService(db, 'jm');
   let sellerId: string;
   let windowId: string;

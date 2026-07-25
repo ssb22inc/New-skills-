@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { Queue } from 'bullmq';
 import type { ChannelAdapter } from './types.js';
 import { handleWebhook } from './ingress.js';
-import type { MetricsRegistry } from '@sycamore/core';
+import { NOOP_TRACER, traced, type MetricsRegistry, type Tracer } from '@sycamore/core';
 
 export interface GatewayServerOptions {
   adapters: Map<string, ChannelAdapter>;
@@ -11,6 +11,11 @@ export interface GatewayServerOptions {
   verifyToken?: string;
   /** When provided, /metrics renders it and webhook counters feed it. */
   metrics?: MetricsRegistry;
+  /**
+   * Spans for webhook handling. Defaults to the no-op tracer, so a
+   * deployment with no collector pays nothing (Constitution §7).
+   */
+  tracer?: Tracer;
 }
 
 const startedAt = Date.now();
@@ -96,7 +101,15 @@ export function createGatewayServer(options: GatewayServerOptions): Server {
       for (const [k, v] of Object.entries(req.headers)) {
         headers[k] = Array.isArray(v) ? v[0] : v;
       }
-      handleWebhook(adapter, options.queue, rawBody, headers)
+      const tracer = options.tracer ?? NOOP_TRACER;
+      traced(tracer, 'gateway.webhook', { channel: adapter.id, bytes: rawBody.length }, (span) =>
+        handleWebhook(adapter, options.queue, rawBody, headers).then((result) => {
+          span.setAttribute('status', result.status);
+          if ('received' in result) span.setAttribute('messages', result.received);
+          else span.recordError(result.error);
+          return result;
+        }),
+      )
         .then((result) => {
           options.metrics
             ?.counter('gateway_webhooks_total', 'Webhook deliveries by outcome')

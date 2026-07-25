@@ -12,11 +12,14 @@
     "perf:trust": "tsx src/perf/trust-page-budget.ts",
     "chaos:partner-down": "vitest run src/chaos/partner-down.chaos.test.ts",
     "chaos:whatsapp": "vitest run src/chaos/whatsapp-degraded.chaos.test.ts",
-    "chaos:pg-failover": "vitest run src/chaos/pg-failover.chaos.test.ts"
+    "chaos:pg-failover": "vitest run src/chaos/pg-failover.chaos.test.ts",
+    "load:smoke": "LOAD_RATE=100 LOAD_SECONDS=5 tsx src/load/gateway-load.ts",
+    "load:profiles": "tsx src/load/profiles.ts"
   },
   "dependencies": {
     "@sycamore/adapters": "workspace:*",
     "@sycamore/core": "workspace:*",
+    "@sycamore/design": "workspace:*",
     "@sycamore/gateway": "workspace:*",
     "@sycamore/packs": "workspace:*",
     "@sycamore/web": "workspace:*",

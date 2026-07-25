@@ -6,7 +6,14 @@ import {
   marketsRegistry,
   sellerStateOf,
 } from '@sycamore/core';
-import { formatAmount, loadContextPack, loadVerticalPack, unitLabel } from '@sycamore/packs';
+import {
+  formatAmount,
+  loadContextPack,
+  loadVerticalPack,
+  translator,
+  unitLabel,
+} from '@sycamore/packs';
+import { lightTheme } from '@sycamore/design';
 
 export const dynamic = 'force-dynamic'; // live availability, always
 
@@ -23,11 +30,14 @@ function esc(s: string): string {
 /**
  * The buyer-facing trust page (P14): verified badge state, licence slots
  * from the vertical pack, verified-review slots (Early Days until P20),
- * LIVE availability from capacity, WhatsApp CTA, back-on-time guarantee
- * for tours. Served as PURE HTML — zero client JavaScript — because the
+ * LIVE availability from capacity, chat CTA, back-on-time guarantee for
+ * tours. Served as PURE HTML — zero client JavaScript — because the
  * performance budget (<100KB, interactive <2s on 3G) is a product law,
- * and a buyer page with one link needs no framework runtime. The Next
- * shell still hosts checkout and the founder cockpit as React routes.
+ * and a buyer page with one link needs no framework runtime.
+ *
+ * Every sentence comes from the copy catalogue and every colour from the
+ * design tokens: the page must read as this market's own, and it must
+ * never drift from the palette by somebody hand-editing a hex.
  */
 export async function GET(
   _req: Request,
@@ -49,6 +59,7 @@ export async function GET(
   if (!seller) return new Response('not found', { status: 404 });
 
   const contextPack = loadContextPack(market);
+  const say = translator(contextPack);
   const owner = await db
     .selectFrom('users')
     .where('id', '=', seller.user_id)
@@ -88,15 +99,7 @@ export async function GET(
 <title>${esc(seller.business_name)} — Sycamore</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <style>
-body{margin:0;background:#F7F3EC;color:#0B1A26;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
-main{max-width:480px;margin:0 auto;padding:16px}
-header{background:linear-gradient(135deg,#0B4F6C,#01BAEF);color:#F7F3EC;border-radius:12px;padding:20px}
-h1{margin:0;font-size:28px}h2{font-size:16px}
-article{background:#fff;border-radius:8px;padding:12px;margin-bottom:8px}
-article span{float:right;font-family:ui-monospace,monospace}
-.g{background:#E8F6F1;border-radius:8px;padding:12px;margin-top:12px}
-.muted{color:#4A5A66}
-.cta{display:block;text-align:center;background:#F4A24C;color:#0B1A26;font-weight:700;border-radius:12px;padding:16px;margin-top:20px;text-decoration:none}
+${lightTheme()}
 </style>
 </head>
 <body><main>
@@ -104,54 +107,65 @@ article span{float:right;font-family:ui-monospace,monospace}
 <h1>${esc(seller.business_name)}</h1>
 <p>${
     verified
-      ? '<strong data-badge="verified">✓ Sycamore Verified</strong>'
-      : `<span data-badge="early-days">🌱 Early days — first ${seller.completed_orders} orders done</span>`
+      ? `<strong data-badge="verified">✓ ${esc(say('trust_page.verified_badge'))}</strong>`
+      : `<span data-badge="early-days">🌱 ${esc(
+          say('trust_page.early_days', { orders: seller.completed_orders }),
+        )}</span>`
   }</p>
 </header>
 ${
   verticalPack.trust.back_on_time_guarantee
-    ? '<section class="g" data-guarantee="back-on-time">⏱ Back-on-time guarantee: late return, money back.</section>'
+    ? `<section class="g" data-guarantee="back-on-time">⏱ ${esc(
+        say('trust_page.guarantee_back_on_time'),
+      )}</section>`
     : ''
 }
 <section>
 ${items
   .map(
     (i) =>
-      `<article><strong>${esc(i.name)}</strong><span>${esc(
+      `<article><strong>${esc(i.name)}</strong><span class="money">${esc(
         formatAmount(contextPack, Number(i.price_minor)),
       )}</span></article>`,
   )
   .join('\n')}
 </section>
 <section>
-<h2>Next openings</h2>
+<h2>${esc(say('trust_page.next_openings'))}</h2>
 ${
   availability.length === 0
-    ? '<p>Message us for the next dates.</p>'
+    ? `<p>${esc(say('trust_page.no_openings'))}</p>`
     : availability
         .map(
           ({ window, available }) =>
             `<p data-window="${window.id}">${new Date(window.starts_at)
               .toUTCString()
-              .slice(
-                0,
-                22,
-              )} — <strong>${esc(unitLabel(verticalPack, available))} open</strong></p>`,
+              .slice(0, 22)} — <strong>${esc(
+              say('trust_page.open_units', { units: unitLabel(verticalPack, available) }),
+            )}</strong></p>`,
         )
         .join('\n')
 }
 </section>
 <section>
-<h2>Licences</h2>
+<h2>${esc(say('trust_page.licences'))}</h2>
 ${verticalPack.trust.licence_fields
-  .map((f) => `<p class="muted" data-licence-slot="${esc(f)}">${esc(f)}: on file</p>`)
+  .map(
+    (f) =>
+      `<p class="muted" data-licence-slot="${esc(f)}">${esc(
+        say('trust_page.licence_on_file', { field: f }),
+      )}</p>`,
+  )
   .join('\n')}
 </section>
 <section data-reviews="early-days">
-<h2>Reviews</h2>
-<p class="muted">Verified reviews come only from completed bookings. This business is building its record — watch this space.</p>
+<h2>${esc(say('trust_page.reviews'))}</h2>
+<p class="muted">${esc(say('trust_page.reviews_blurb'))}</p>
 </section>
-<a class="cta" data-cta="whatsapp" href="${waLink}">Chat &amp; book on WhatsApp</a>
+<p class="muted"><a data-why href="/why/${esc(market)}/${esc(sellerId)}">${esc(
+    say('trust_page.why_ranked'),
+  )}</a></p>
+<a class="cta" data-cta="whatsapp" href="${waLink}">${esc(say('trust_page.cta'))}</a>
 </main></body></html>`;
 
   return new Response(html, {

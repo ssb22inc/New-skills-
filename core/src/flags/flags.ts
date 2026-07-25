@@ -44,6 +44,23 @@ export function flagsRepo(db: Kysely<Database>, marketId: string) {
         .execute();
     },
 
+    /** Every flag in this market — the rollback script's inventory. */
+    async list(): Promise<FeatureFlag[]> {
+      const rows = await db
+        .selectFrom('feature_flags')
+        .where('market_id', '=', marketId)
+        .orderBy('key', 'asc')
+        .selectAll()
+        .execute();
+      return rows.map((row) => ({
+        marketId: row.market_id,
+        key: row.key,
+        enabled: row.enabled,
+        rolloutBps: row.rollout_bps,
+        description: row.description,
+      }));
+    },
+
     async get(key: string): Promise<FeatureFlag | undefined> {
       const row = await db
         .selectFrom('feature_flags')

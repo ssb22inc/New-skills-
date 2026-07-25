@@ -1,6 +1,6 @@
 import { sql, type Kysely } from 'kysely';
 import type { LlmRouter } from '@sycamore/adapters';
-import type { ContextPack } from '@sycamore/packs';
+import { translator, type ContextPack } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
 import { emitEvent } from '../db/outbox.js';
 
@@ -179,6 +179,7 @@ export function installOfferService(deps: InstallOfferDeps, marketId: string) {
       }
 
       const link = `${deps.appOrigin}/s/${marketId}/${input.sellerId}?offer=1`;
+      const say = translator(deps.pack);
       const res = await deps.router.complete({
         task: 'creative',
         system:
@@ -192,7 +193,10 @@ export function installOfferService(deps: InstallOfferDeps, marketId: string) {
         prompt: `business: ${seller.business_name}; link: ${link}`,
         containsPii: false,
       });
-      const text = res.text.trim();
+      // The model writes the line in the market's voice; if it returns
+      // nothing usable the catalogue supplies the sentence. Even the
+      // fallback is pack data — code owns no copy (CLAUDE.md data rules).
+      const text = res.text.trim() || say('install.offer_fallback', { link });
 
       const offersSent = seller.install_offers_sent + 1;
       await db

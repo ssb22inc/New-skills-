@@ -1,7 +1,8 @@
 import type { Kysely } from 'kysely';
 import { sql } from 'kysely';
-import type { VerticalPack } from '@sycamore/packs';
+import { translator, type ContextPack, type VerticalPack } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
+import { emitEvent } from '../db/outbox.js';
 
 /**
  * P28 — the Mentor. One weekly message from the seller's OWN data,
@@ -25,7 +26,13 @@ export interface MentorMessage {
 
 const PHOTO_STALE_DAYS = 60;
 
-export function mentorService(db: Kysely<Database>, marketId: string, pack: VerticalPack) {
+export function mentorService(
+  db: Kysely<Database>,
+  marketId: string,
+  pack: VerticalPack,
+  contextPack: ContextPack,
+) {
+  const say = translator(contextPack);
   return {
     /** Returns null when there is nothing worth saying this week. */
     async weeklyMessage(sellerId: string): Promise<MentorMessage | null> {
@@ -81,7 +88,7 @@ export function mentorService(db: Kysely<Database>, marketId: string, pack: Vert
         if (ageDays > PHOTO_STALE_DAYS) {
           issues.push({
             signal: 'photo_freshness',
-            text: 'Your menu photos are getting old — send me one new photo and I will refresh everything.',
+            text: say('mentor.photo_freshness'),
             source: {
               kind: 'catalog',
               evidence: `newest photo is ${Math.floor(ageDays)} days old`,
@@ -104,7 +111,7 @@ export function mentorService(db: Kysely<Database>, marketId: string, pack: Vert
       if (buyers >= 5 && repeaters / buyers >= 0.3) {
         strengths.push({
           signal: 'repeat_rate',
-          text: `${repeaters} of your ${buyers} customers came back for more — regulars are your engine.`,
+          text: say('mentor.repeat_rate', { repeaters, buyers }),
           source: {
             kind: 'orders',
             evidence: `${repeaters}/${buyers} buyers with 2+ completed orders`,
@@ -126,3 +133,17 @@ export function mentorService(db: Kysely<Database>, marketId: string, pack: Vert
 }
 
 export type MentorService = ReturnType<typeof mentorService>;
+
+/** One weekly message, on the record, so the cockpit can count them. */
+export async function recordMentorMessage(
+  db: Kysely<Database>,
+  marketId: string,
+  sellerId: string,
+  message: MentorMessage,
+): Promise<void> {
+  await emitEvent(db, {
+    marketId,
+    topic: 'mentor.message_sent',
+    payload: { sellerId, suggestions: message.suggestions.length, hasStrength: !!message.strength },
+  });
+}

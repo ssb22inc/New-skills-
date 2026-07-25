@@ -1,5 +1,5 @@
 import type { ContextPack } from '@sycamore/packs';
-import { formatAmount } from '@sycamore/packs';
+import { formatAmount, translator } from '@sycamore/packs';
 
 /**
  * P24 — Pulse core: bandit budgets under HUMAN caps, fatigue refresh,
@@ -96,6 +96,7 @@ export function pulseTick(input: {
 }): PulseDecision[] {
   const { pack, campaigns, rng } = input;
   const f = (n: number) => formatAmount(pack, n);
+  const say = translator(pack);
   const decisions: PulseDecision[] = [];
 
   // 1. Kill underperformers first — their budget reallocates this tick.
@@ -107,9 +108,7 @@ export function pulseTick(input: {
         campaignId: c.id,
         action: 'kill_reallocate',
         allocatedMinor: 0,
-        narration:
-          `We stopped one ad that spent ${f(c.spendMinor)} but hardly anyone tapped it. ` +
-          `That money now goes to your ads that are working.`,
+        narration: say('pulse.kill', { spend: f(c.spendMinor) }),
       });
     }
   }
@@ -134,9 +133,7 @@ export function pulseTick(input: {
         action: 'refresh',
         allocatedMinor: allocated,
         newTemplateDna: newDna,
-        narration:
-          `People have seen this ad a lot and taps are cooling off, ` +
-          `so we freshened up the look and words. Same offer, new energy.`,
+        narration: say('pulse.refresh'),
       });
       continue;
     }
@@ -146,9 +143,10 @@ export function pulseTick(input: {
         campaignId: c.id,
         action: 'scale',
         allocatedMinor: allocated,
-        narration:
-          `Your ad is doing well — plenty taps for the money. ` +
-          `We put ${f(allocated)} behind it today (your cap: ${f(input.humanCapMinor)}).`,
+        narration: say('pulse.scale', {
+          allocated: f(allocated),
+          cap: f(input.humanCapMinor),
+        }),
       });
       continue;
     }
@@ -157,7 +155,7 @@ export function pulseTick(input: {
       campaignId: c.id,
       action: 'hold',
       allocatedMinor: allocated,
-      narration: `We kept ${f(allocated)} on this ad while it finds its crowd.`,
+      narration: say('pulse.hold', { allocated: f(allocated) }),
     });
   }
 
@@ -188,9 +186,7 @@ export function pulseTick(input: {
         action: 'cross_pollinate',
         allocatedMinor: 0,
         spawnedCampaign: spawned,
-        narration:
-          `The style that works for your best ad is now trying out in ` +
-          `${target} too, with words written for that crowd.`,
+        narration: say('pulse.cross_pollinate', { vertical: target }),
       });
     }
   }

@@ -25,6 +25,19 @@ they win — then update this file.
    doesn't ship. If you propose a new dependency or service, justify it against this law
    in one sentence or drop it.
 
+## The asymmetric-client law (P36)
+
+- **Sellers** may be OFFERED an install of the PWA. They use Sycamore daily with money
+  at stake, and the installed client is their offline mode and our migration insurance.
+- **Buyers are NEVER prompted to install.** Not on a trust page, not in chat, not by the
+  browser's own banner — `beforeinstallprompt` is captured and suppressed everywhere.
+  A buyer arrives from a link, books, pays, and leaves.
+- The install is **always optional**, never during Genesis onboarding, and offered **at
+  most twice in a seller's lifetime**. Two declines means never again — the cap is
+  enforced in code AND by a DB check constraint.
+- A seller who never installs loses nothing but offline mode. Law 1 (one door) still
+  governs: no feature may require the installed client.
+
 ## The Four Packs rule (the globalization mechanism)
 
 - New country = one **Context Pack** (`packs/context/<market>.yaml`).
@@ -64,9 +77,14 @@ gate is literal: `git diff` on `/core` between JM-only and JM+DO must be empty.
 - **Every table carries `market_id`**, and every query is market-scoped (future sharding
   key). A `jm` query can never return a `do` row.
 - All times stored UTC, rendered in market timezone.
-- **No hardcoded user-facing strings.** All copy goes through the localization engine and
-  is driven by Context Pack directives (dialect, language rules). Zero hardcoded
-  fallbacks — a missing pack field is a load error, not a silent default.
+- **No hardcoded user-facing strings.** All copy goes through the localization engine
+  (`packs/src/copy.ts`) and lives in `packs/copy/`, driven by Context Pack directives
+  (dialect, language rules). Resolution is market override → language tag → base
+  language; a key missing from all three THROWS, and so does a placeholder with no
+  value. Zero hardcoded fallbacks — code owns no sentence a seller or buyer can read,
+  and `tests/src/copy/no-hardcoded-copy.test.ts` fails the build if one appears.
+- **No ad-hoc colour or type.** Every token comes from `@sycamore/design`; a raw hex in
+  an app surface fails `tests/src/design/tokens.test.ts`.
 - PII routing is a **hard-coded policy check, not a prompt**: requests flagged
   `contains_pii=true` may only route to vendors with `dpa_signed=true`. Violation throws.
 

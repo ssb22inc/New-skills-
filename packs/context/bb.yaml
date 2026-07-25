@@ -16,6 +16,9 @@ currency:
 
 timezone: America/Barbados
 
+# Seeded status. Only a flip ceremony changes it after that.
+launch_status: dark
+
 calendar:
   holidays:
     - name: New Year's Day

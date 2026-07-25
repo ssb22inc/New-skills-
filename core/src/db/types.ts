@@ -216,6 +216,9 @@ export interface ReviewsTable {
   status: Generated<string>;
   made_it_right: Generated<boolean>;
   resolution_opened_at: Date | string | null;
+  /** P20 device-cluster signal — SALTED HASH, never a raw device id. */
+  device_hash: string | null;
+  network_hash: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

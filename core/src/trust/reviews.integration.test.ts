@@ -6,7 +6,13 @@ import { migrateDownAll, migrateToLatest } from '../db/migrator.js';
 import { seedMarkets } from '../db/seed.js';
 import { identityService } from '../identity/identity.js';
 import { capacityEngine } from '../capacity/engine.js';
-import { reviewsService, ReviewError, BURST_THRESHOLD } from './reviews.js';
+import {
+  reviewsService,
+  originHash,
+  ReviewError,
+  BURST_THRESHOLD,
+  CLUSTER_THRESHOLD,
+} from './reviews.js';
 
 async function postgresReachable(): Promise<boolean> {
   const client = new pg.Client({ connectionString: databaseUrl(), connectionTimeoutMillis: 1500 });
@@ -53,7 +59,7 @@ describe.runIf(reachable)('P20 — verified reviews + fraud signals (red-team ga
         unitPriceMinor: 100_000,
       })
     ).id;
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 26; i++) {
       const u = await identity.findOrCreateUserByPhone({
         phone: `+187650001${String(i).padStart(2, '0')}`,
         displayName: `Review Buyer ${i}`,
@@ -194,6 +200,83 @@ describe.runIf(reachable)('P20 — verified reviews + fraud signals (red-team ga
     });
     expect(review.status).toBe('held');
     expect(holdReason).toContain('competitor');
+  });
+
+  it('RED-TEAM: a device/network cluster is held even on fresh phone numbers', async () => {
+    // The ring's tell is not the numbers — SIMs are cheap. It is that
+    // every "different customer" reviews from the same handset. Each of
+    // these is a genuinely paid, genuinely completed booking on its own
+    // number; only the shared origin gives them away.
+    //
+    // A fresh seller, so the burst signal (same seller, 24h) cannot be
+    // what does the holding — this test must prove the CLUSTER signal.
+    const identity = identityService(db, 'jm');
+    const engine = capacityEngine(db, 'jm');
+    const ringTargetOwner = await identity.findOrCreateUserByPhone({
+      phone: '+18765003000',
+      displayName: 'Ring Target Owner',
+      role: 'seller',
+    });
+    const ringTarget = await identity.createSeller({
+      userId: ringTargetOwner.id,
+      businessName: 'Ring Target Tours',
+    });
+    const ringWindow = await engine.createWindow(tours, {
+      sellerId: ringTarget.id,
+      startsAt: new Date('2026-12-20T14:00:00Z'),
+      endsAt: new Date('2026-12-20T16:00:00Z'),
+      totalUnits: 20,
+      unitPriceMinor: 100_000,
+    });
+
+    const outcomes: { status: string; reason?: string }[] = [];
+    for (let i = 0; i < CLUSTER_THRESHOLD + 1; i++) {
+      const buyer = buyers[20 + i]!;
+      const order = await db
+        .insertInto('orders')
+        .values({
+          market_id: 'jm',
+          seller_id: ringTarget.id,
+          buyer_user_id: buyer,
+          window_id: ringWindow.id,
+          vertical_id: 'tours',
+          units: 1,
+          status: 'completed',
+          completion_proof: 'qr_scan',
+          completed_at: new Date(),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await reviews.ledger.capture({
+        orderRef: order.id,
+        amountMinor: 100_000,
+        currency: 'JMD',
+        idempotencyKey: `ring-cap:${order.id}`,
+      });
+      const { review, holdReason } = await reviews.submitReview({
+        orderId: order.id,
+        buyerUserId: buyer,
+        rating: 5,
+        body: `ring review #${i}`,
+        deviceId: 'one-handset-many-sims',
+      });
+      outcomes.push({ status: review.status, ...(holdReason ? { reason: holdReason } : {}) });
+    }
+    // The first few look like ordinary happy customers…
+    expect(outcomes.slice(0, CLUSTER_THRESHOLD).every((o) => o.status === 'published')).toBe(true);
+    // …and from the threshold on, the cluster is visible and held.
+    expect(outcomes[CLUSTER_THRESHOLD]!.status).toBe('held');
+    expect(outcomes[CLUSTER_THRESHOLD]!.reason).toContain('device or network');
+  });
+
+  it('the origin identifier is stored as a salted hash, never raw', () => {
+    // The signal needs "same origin as that one" and nothing more.
+    const hash = originHash('jm', 'one-handset-many-sims');
+    expect(hash).not.toContain('one-handset');
+    expect(hash).toMatch(/^[0-9a-f]{32}$/);
+    // Deterministic within a market, different across markets.
+    expect(originHash('jm', 'one-handset-many-sims')).toBe(hash);
+    expect(originHash('do', 'one-handset-many-sims')).not.toBe(hash);
   });
 
   it('GATE: a resolved 1★→4★ renders with honest history + Made it right badge', async () => {

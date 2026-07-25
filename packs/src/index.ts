@@ -19,3 +19,14 @@ export {
   parseVerticalPack,
 } from './loader.js';
 export { formatAmount, unitLabel } from './format.js';
+export {
+  loadCopy,
+  translator,
+  t,
+  clearCopyCache,
+  catalogueKeys,
+  baseLanguageOf,
+  CopyError,
+  type CopyCatalogue,
+  type Translator,
+} from './copy.js';

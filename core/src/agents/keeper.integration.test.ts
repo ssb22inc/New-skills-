@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
-import { loadVerticalPack } from '@sycamore/packs';
+import { loadContextPack, loadVerticalPack } from '@sycamore/packs';
 import { createDb, databaseUrl } from '../db/database.js';
 import { migrateDownAll, migrateToLatest } from '../db/migrator.js';
 import { seedMarkets } from '../db/seed.js';
@@ -26,12 +26,13 @@ const reachable = await postgresReachable();
 if (!reachable) console.warn('⚠ P28 gate tests SKIPPED: Postgres unreachable.');
 
 const food = loadVerticalPack('food');
+const jm = loadContextPack('jm');
 
 describe.runIf(reachable)('P28 — Listener + Scout + Mentor (gate)', () => {
   const db = createDb(databaseUrl());
   const listener = listenerService(db, 'jm');
   const scout = scoutService(db, 'jm');
-  const mentor = mentorService(db, 'jm', food);
+  const mentor = mentorService(db, 'jm', food, jm);
   const buyerIds: string[] = [];
   let sellerId: string;
   let windowId: string;

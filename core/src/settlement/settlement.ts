@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ContextPack } from '@sycamore/packs';
-import { formatAmount } from '@sycamore/packs';
+import { formatAmount, translator } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
 import { ledgerService, type SplitBps } from '../ledger/ledger.js';
 
@@ -25,6 +25,7 @@ function toSplitBps(t: {
  * transaction and one plain-number message.
  */
 export function settlementService(db: Kysely<Database>, marketId: string, pack: ContextPack) {
+  const say = translator(pack);
   const ledger = ledgerService(db, marketId);
 
   return {
@@ -77,7 +78,7 @@ export function settlementService(db: Kysely<Database>, marketId: string, pack: 
           sellerId,
           amountMinor: res.amountMinor,
           // Plain numbers, pack currency — never a chart (Constitution §1.3).
-          message: `${formatAmount(pack, res.amountMinor)} is on the way to you today.`,
+          message: say('settlement.payout', { amount: formatAmount(pack, res.amountMinor) }),
         });
       }
       return results;

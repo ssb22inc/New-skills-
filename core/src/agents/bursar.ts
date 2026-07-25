@@ -1,3 +1,7 @@
+import type { Kysely } from 'kysely';
+import type { Database } from '../db/types.js';
+import { emitEvent } from '../db/outbox.js';
+
 /**
  * P29 — the Bursar. Watches what every vendor costs, reports monthly in
  * plain numbers, proposes swaps when a cheaper equivalent exists — and
@@ -96,3 +100,30 @@ export function bursarService(current: VendorPricing[]) {
 }
 
 export type BursarService = ReturnType<typeof bursarService>;
+
+/**
+ * A blocked non-DPA swap is a TRUST event, not a return value that dies
+ * with its caller. The Bursar's review goes on the audit record so the
+ * founder cockpit can show what was proposed and what the DPA rule
+ * stopped — "cheapest applies to compute, never to trust" needs a
+ * receipt (Constitution §5).
+ */
+export async function recordSwapReview(
+  db: Kysely<Database>,
+  marketId: string,
+  review: {
+    proposals: SwapProposal[];
+    blocked: { lane: string; vendorId: string; reason: string }[];
+  },
+): Promise<void> {
+  await emitEvent(db, {
+    marketId,
+    topic: 'bursar.review',
+    payload: {
+      proposed: review.proposals.length,
+      blocked: review.blocked.length,
+      savingMinor: review.proposals.reduce((s, p) => s + p.monthlySavingMinor, 0),
+      blockedLanes: review.blocked.map((b) => b.lane),
+    },
+  });
+}

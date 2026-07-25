@@ -10,6 +10,15 @@ export { flagsRepo, isEnabledFor, type FeatureFlag, type FlagsRepo } from './fla
 export { createLogger } from './observability/logger.js';
 export { MetricsRegistry } from './observability/metrics.js';
 export { ErrorBudget, type AlertSink, type ErrorBudgetOptions } from './observability/alerts.js';
+export {
+  traced,
+  memoryTracer,
+  NOOP_TRACER,
+  type Tracer,
+  type Span,
+  type SpanAttributes,
+  type RecordedSpan,
+} from './observability/tracing.js';
 export { canaryRelease, type CanaryOptions, type CanaryResult } from './canary/canary.js';
 export {
   transition,
@@ -95,7 +104,8 @@ export {
 export { settlementService, type SettlementService } from './settlement/settlement.js';
 export {
   shoeboxService,
-  TAX_DISCLAIMER,
+  TAX_DISCLAIMER_KEY,
+  taxDisclaimer,
   type ShoeboxService,
   type ShoeboxPack,
   type ShoeboxTotals,
@@ -113,6 +123,7 @@ export {
   type RankedSlot,
   type BookingRecord,
 } from './discovery/ranking.js';
+export { fairnessMeter, marketMoney } from './discovery/fairness.js';
 export {
   pulseTick,
   allocateBudget,
@@ -149,8 +160,11 @@ export {
 } from './discovery/overflow.js';
 export {
   reviewsService,
+  originHash,
   ReviewError,
   BURST_THRESHOLD,
+  CLUSTER_THRESHOLD,
+  CLUSTER_WINDOW_MS,
   EARLY_DAYS_UNTIL,
   type ReviewsService,
   type ReviewDisplay,
@@ -209,6 +223,7 @@ export {
 export { scoutService, CLEARANCE, type ScoutService, type RadarProposal } from './agents/scout.js';
 export {
   mentorService,
+  recordMentorMessage,
   type MentorService,
   type MentorMessage,
   type MentorFinding,
@@ -222,6 +237,7 @@ export {
 } from './agents/builder.js';
 export {
   bursarService,
+  recordSwapReview,
   BursarError,
   type BursarService,
   type VendorPricing,
@@ -229,6 +245,7 @@ export {
 } from './agents/bursar.js';
 export {
   heraldService,
+  recordPilot,
   HeraldError,
   type HeraldService,
   type PilotEvent,

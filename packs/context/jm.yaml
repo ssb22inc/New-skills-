@@ -16,6 +16,9 @@ currency:
 
 timezone: America/Jamaica
 
+# Seeded status. Only a flip ceremony changes it after that.
+launch_status: live
+
 calendar:
   holidays:
     - name: New Year's Day
