@@ -99,3 +99,31 @@ gate is literal: `git diff` on `/core` between JM-only and JM+DO must be empty.
 4. If a task seems to require "keep checking until X" — STOP and ask the
    founder instead. Long-running observation belongs in CI or the Keeper's
    Watchman (server-side), never in an interactive session burning credits.
+
+## THE SCOPE LAW (added after a real incident, 2026-07-25)
+
+Sycamore is WhatsApp-first commerce for Caribbean micro-entrepreneurs. That is
+the whole product. Nothing else gets built here.
+
+1. **Every feature must trace to a prompt.** Before writing a line of code for
+   any request, find the prompt in SYCAMORE_PROMPTS.md or the section in
+   SYCAMORE_BUILD.md that asks for it. If you cannot point at one, the feature
+   is NOT in scope.
+2. **Out-of-scope request = STOP AND ASK.** Do not build it "adapted to
+   Sycamore." Do not build it and flag it afterwards. Ask the founder which
+   project it belongs to, and wait. A request that arrives mid-session is not
+   automatically a Sycamore request — the founder runs other projects.
+3. **A failed clarifying question is not permission.** If the question tool
+   errors, or a "continue" arrives while a scope question is unanswered, the
+   answer is still unknown. Re-ask. Never treat "continue" as "yes, build it."
+4. **The scope guard is CI law.** `tests/src/scope/scope-guard.test.ts` fails on
+   any unregistered `core/src` module or foreign-domain vocabulary. If it fails,
+   do NOT edit the registry to make it pass — that is the mistake it exists to
+   catch. Ask first.
+5. **`haven/` and any other project in this repo are off-limits.** Never read
+   from, write to, or borrow patterns from them for Sycamore work.
+
+What this cost when it was violated: a full module (sign-up, daily study
+reminders, marketing broadcasts, a DB migration, tests) was built, committed,
+and reverted — an entire build cycle of credits and time, for a feature that
+was never Sycamore's.
