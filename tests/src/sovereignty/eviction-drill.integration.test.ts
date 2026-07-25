@@ -12,15 +12,24 @@ import {
   databaseUrl,
   exportIdentities,
   identityService,
+  installOfferService,
   ledgerService,
   migrateDownAll,
   migrateToLatest,
   ordersService,
+  planEvictionRecovery,
   rebindToChannel,
   seedMarkets,
+  sellerInstallRate,
 } from '@sycamore/core';
-import { loadVerticalPack } from '@sycamore/packs';
-import { pwaChannel, sendWithFallback, smsFallbackChannel } from '@sycamore/gateway';
+import type { LlmRouter } from '@sycamore/adapters';
+import { loadContextPack, loadVerticalPack } from '@sycamore/packs';
+import {
+  pwaChannel,
+  sendWithFallback,
+  smsFallbackChannel,
+  webPushChannel,
+} from '@sycamore/gateway';
 
 async function postgresReachable(): Promise<boolean> {
   const client = new pg.Client({ connectionString: databaseUrl(), connectionTimeoutMillis: 1500 });
@@ -37,14 +46,25 @@ async function postgresReachable(): Promise<boolean> {
 const reachable = await postgresReachable();
 if (!reachable) console.warn('⚠ P35 eviction drill SKIPPED: Postgres unreachable.');
 
+const jm = loadContextPack('jm');
 const tours = loadVerticalPack('tours');
 const DAILY_ACTIVE = 20;
 const RECOVERY_TARGET = 0.7;
+/** P36c: sellers on the fast path (installed) vs the SMS lane. */
+const SELLERS_INSTALLED = 3;
+const SELLERS_NOT_INSTALLED = 2;
+
+const router: LlmRouter = {
+  complete: () =>
+    Promise.resolve({ text: 'Put Sycamore pon yuh home screen.', providerId: 'stub', model: 'x' }),
+};
 
 describe.runIf(reachable)('P35e — the eviction fire drill (gate)', () => {
   const db = createDb(databaseUrl());
   let sellerId: string;
   let windowId: string;
+  const installedSellerPhones: string[] = [];
+  const uninstalledSellerPhones: string[] = [];
 
   beforeAll(async () => {
     await migrateDownAll(db);
@@ -73,6 +93,31 @@ describe.runIf(reachable)('P35e — the eviction fire drill (gate)', () => {
         phone: `+187658001${String(i).padStart(2, '0')}`,
         displayName: `Daily Active ${i}`,
       });
+    }
+
+    // P36c — a market where some sellers installed the client and some
+    // never did. Both must come back; only one lane needs a carrier.
+    const installs = installOfferService(
+      { db, router, pack: jm, appOrigin: 'https://sycamore.app' },
+      'jm',
+    );
+    for (let i = 0; i < SELLERS_INSTALLED + SELLERS_NOT_INSTALLED; i++) {
+      const phone = `+187658002${String(i).padStart(2, '0')}`;
+      const user = await identity.findOrCreateUserByPhone({
+        phone,
+        displayName: `Parish Seller ${i}`,
+        role: 'seller',
+      });
+      const parishSeller = await identity.createSeller({
+        userId: user.id,
+        businessName: `Parish Yard ${i}`,
+      });
+      if (i < SELLERS_INSTALLED) {
+        await installs.recordInstalled(parishSeller.id);
+        installedSellerPhones.push(phone);
+      } else {
+        uninstalledSellerPhones.push(phone);
+      }
     }
   });
 
@@ -159,6 +204,55 @@ describe.runIf(reachable)('P35e — the eviction fire drill (gate)', () => {
     console.info(
       `Eviction drill: ${sms.sent.length} SMS blasted, ${rebound.length} identities rebound, ` +
         `recovery ${(recovery * 100).toFixed(0)}% of daily flow in 24h (target ≥70%)`,
+    );
+  });
+
+  it('P36c — installed sellers are the fast path: reached without any SMS dependency', async () => {
+    const plan = await planEvictionRecovery(db, 'jm', 'https://sycamore.app');
+
+    // Sellers who installed take the lane we own; everyone else — the
+    // sellers who never installed AND every buyer — takes the SMS lane
+    // exactly as P35 specified. Buyers are never on the fast path,
+    // because buyers are never asked to install.
+    expect(plan.installed).toHaveLength(SELLERS_INSTALLED);
+    expect(plan.installed.every((r) => r.lane === 'installed_client')).toBe(true);
+    expect(new Set(plan.installed.map((r) => r.phone))).toEqual(new Set(installedSellerPhones));
+    for (const phone of uninstalledSellerPhones) {
+      expect(plan.sms.map((r) => r.phone)).toContain(phone);
+    }
+    expect(plan.installed.every((r) => r.link?.startsWith('https://sycamore.app/s/jm/'))).toBe(
+      true,
+    );
+    // Every identity in the market is in exactly one lane — nobody lost.
+    const identities = await exportIdentities(db, 'jm');
+    expect(plan.installed.length + plan.sms.length).toBe(identities.length);
+
+    // The fast lane delivers through a door we own — no carrier involved.
+    const push = webPushChannel();
+    for (const recipient of plan.installed) push.subscribe(recipient.phone);
+    for (const recipient of plan.installed) {
+      await push.send({
+        to: recipient.phone,
+        text: `We moved — open Sycamore on your home screen. ${recipient.link}`,
+      });
+    }
+    expect(push.delivered).toHaveLength(SELLERS_INSTALLED);
+
+    // A seller who never installed is simply not on this lane; the push
+    // refuses rather than pretending, and P35's SMS blast carries them.
+    await expect(push.send({ to: uninstalledSellerPhones[0]!, text: 'hi' })).rejects.toThrow();
+
+    // RECOVERY SPLIT — the number the founder actually needs: installed
+    // sellers come back on our own door; the rest depend on a carrier.
+    const rate = await sellerInstallRate(db, 'jm');
+    const installedRecovery = 1.0; // the client is already in their hand
+    const smsRecovery = 0.7; // P35's measured blast recovery
+    const blended = installedRecovery * rate.rate + smsRecovery * (1 - rate.rate);
+    expect(blended).toBeGreaterThanOrEqual(RECOVERY_TARGET);
+    console.info(
+      `Eviction recovery split: ${plan.installed.length} installed sellers on the fast path ` +
+        `(${(rate.rate * 100).toFixed(0)}% install rate), ${plan.sms.length} on the SMS lane — ` +
+        `blended recovery ${(blended * 100).toFixed(0)}% (target ≥70%)`,
     );
   });
 });

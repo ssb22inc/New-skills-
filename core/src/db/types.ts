@@ -43,6 +43,11 @@ export interface SellersTable {
   completed_orders: Generated<number>;
   /** Geography for co-op pools (P26); Genesis will collect it. */
   parish: string | null;
+  /** P36b: none | offered | declined | installed — sellers only, ever. */
+  install_prompt_state: Generated<string>;
+  /** Hard cap: at most two offers in a seller's lifetime (DB-checked). */
+  install_offers_sent: Generated<number>;
+  installed_at: Date | string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

@@ -15,6 +15,9 @@ export const GOLDEN_VITALS = [
   // P35d — the Bursar's channel hedges are watched vitals, not vibes.
   'per_conversation_cost',
   'channel_quality_rating',
+  // P36d — a falling install rate raises storm risk AND channel-dependency
+  // risk at once. Watched, never acted on by nagging sellers.
+  'seller_install_rate',
 ] as const;
 export type GoldenVital = (typeof GOLDEN_VITALS)[number];
 

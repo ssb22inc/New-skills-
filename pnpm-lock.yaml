@@ -157,6 +157,9 @@ importers:
       '@sycamore/packs':
         specifier: workspace:*
         version: link:../packs
+      '@sycamore/web':
+        specifier: workspace:*
+        version: link:../apps/web
       pg:
         specifier: ^8.22.0
         version: 8.22.0

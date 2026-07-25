@@ -1,6 +1,6 @@
 # BUILD_STATUS.md — Sycamore
 
-**Code-complete: 100% (P0–P35 incl. Survivability Addendum, mock-complete — v1.0-code-complete = commit 1483e10, v1.1-survivability = this HEAD). Production-live requires the HUMAN GATES below.**
+**Code-complete: 100% (P0–P36 incl. Survivability Addendum, mock-complete — v1.0-code-complete = commit 1483e10, v1.1-survivability = commit 6007270, v1.2-asymmetric-clients = this HEAD). Production-live requires the HUMAN GATES below.**
 
 > Note: the annotated tag `v1.0-code-complete` exists locally but this remote
 > only accepts branch pushes; re-run `git tag -a v1.0-code-complete 1483e10 && git push origin v1.0-code-complete`
@@ -50,10 +50,11 @@ human gates implemented up to the boundary and marked, never faked.
 | P33 | Credit Passport v1 | ✅ gate-passed (export matches ledger to the cent; ed25519-signed canonical JSON verifiable by a third party with only the document; tamper = dead signature; human PDF attached) |
 | P34 | Lifeline (offline & low-bandwidth) | ✅ gate-passed (48h blackout drill: SMS lane parses+verifies, orders land dark, PWA queue double-delivery → exactly-once, ledger to the cent, escrow paused during blackout, dispute windows +48h; auto lite mode) |
 | P35 | Channel sovereignty | ✅ gate-passed (channel-blindness is permanent CI law: zero WhatsApp refs in /core code + doors work with WhatsApp absent; sovereign PWA chat door at /c; identity escrow export+rebind; cost & quality-rating Watchman vitals with runbooks; eviction drill: blast → rebind → book on alternate door, 80% recovery vs ≥70% target) |
+| P36 | Asymmetric client strategy | ✅ code gate-passed-mock (installability criteria asserted against the real manifest + real PNGs; service worker precaches shell and network-first caches the seller's day; earned-install offer never fires during Genesis, never to a buyer identity, capped at two offers by code AND a DB check constraint; installed-client drill: 48h dark → cached day readable → 6 completions queued → replayed twice → exactly-once, ledger to the cent; eviction recovery split by lane — 3 installed sellers on the web-push fast path, rest on SMS; seller_install_rate is a Watchman vital and renders per market on /cockpit) · ⏸ HUMAN-GATE: Lighthouse audit against a deployed origin + manual install on Android Chrome and iOS Safari |
 
 ## Test counts
 
-178 tests green (last full run): core 127 · tests 18 (golden 6, markets 2, chaos 3, lifeline 3, sovereignty 3, trivial 1) · packs 11 · adapters 10 · gateway 10 · web 1 · worker 1.
+203 tests green (last full run): core 135 · tests 28 (golden 6, markets 2, chaos 3, lifeline 5, sovereignty 4, pwa 4, scope 3, trivial 1) · packs 11 · adapters 10 · gateway 10 · web 8 · worker 1.
 k6 load profiles (§5.5: normal day, Friday spike 20×, cruise surge 10×, viral seller 100×): tests/src/load/k6-profiles.js.
 Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
 
@@ -66,6 +67,9 @@ Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci
 5. Dummy Panel (5–8 people) + first 10 Genesis sellers → unlocks P13 gate.
 6. 100 real paid orders, zero reconciliation breaks → Phase-2 exit.
 7. Counsel verification per island before any dark market flips live.
+8. Lighthouse PWA installability audit on a deployed origin, plus a manual install on
+   Android Chrome and iOS Safari → unlocks the P36 install gate. A container cannot tap
+   "Add to home screen"; the criteria themselves are asserted in CI (apps/web/src/pwa.test.ts).
 
 ## Phase-7 hardening checklist (scheduled, not vibes — triggers, not dates)
 

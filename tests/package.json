@@ -19,6 +19,7 @@
     "@sycamore/core": "workspace:*",
     "@sycamore/gateway": "workspace:*",
     "@sycamore/packs": "workspace:*",
+    "@sycamore/web": "workspace:*",
     "pg": "^8.22.0"
   },
   "devDependencies": {

@@ -316,3 +316,69 @@ per-conversation cost + quality rating as Watchman vitals); quarterly eviction
 fire drill.
 **✅ GATE:** channel-blindness CI test green; one full eviction drill executed in
 staging with recovery metrics recorded (≥70% of daily flow within 24h by drill #3).
+
+## P36 — Asymmetric Client Strategy
+*(amends P35 Channel Sovereignty and P34 Lifeline)*
+
+**Rationale.** WhatsApp cannot host third-party apps, so the strongest available
+migration insurance is an installed client that WE own. That client is the PWA we
+already have — not a native app: no app store, no 30% cut, no review delay, ~1–2MB,
+silent updates, and it runs on low-end Android. The installed PWA doubles as the
+P34 offline cache, so one move improves storm survivability AND reduces Meta
+dependency.
+
+**Core rule — ASYMMETRIC CLIENTS.**
+- **Sellers** are offered an install. They use Sycamore daily with money at stake.
+- **Buyers are NEVER prompted to install.** They arrive from WhatsApp or a link,
+  book, pay, and leave. Zero friction, forever.
+- The install is always OPTIONAL. Constitution law #1 (one door) still holds: every
+  feature stays fully usable by voice note / chat alone. A seller who never installs
+  loses nothing except offline mode.
+
+**a. Installable PWA (`apps/web`).** Web app manifest (name, short_name "Sycamore",
+icons 192/512, standalone display, theme color per Design Language token INK).
+Service worker precaches the app shell and runtime-caches the seller's day (open
+orders, capacity for the next 7 days, contact list, catalog). The service worker
+cache wires to the P34 offline outbound queue — queued actions replay on reconnect
+using the existing idempotency keys. **No new money logic; reuse P34's queue exactly.**
+
+**b. Earned-install trigger (`core/conversations`).** Do NOT prompt during Genesis
+onboarding — hard rule, with a test. Offer when EITHER (a) the seller's first payout
+settles, or (b) they cross 5 completed orders in a rolling 7 days. Delivery is one
+chat message, localized via the Context Pack, framed as the seller's benefit and
+offline capability — never as our infrastructure need. JM example (en-JM pack):
+"Yuh business getting big now. Put Sycamore pon yuh home screen — it faster, and it
+work even when di internet drop. [link]". Offer **at most twice, ever**; two declines
+means never again. State lives on the seller record as `install_prompt_state`.
+
+**c. Sovereign-door reinforcement (amends P35b).** The PWA chat surface is the
+seller's primary post-install experience: same conversation engine, same dialect,
+same thumbs-up approvals. Installed sellers are the P35 eviction-drill fast path —
+on a channel outage they are reachable via web push and the installed client,
+without depending on SMS.
+
+**d. Survivability metric (Keeper / cockpit).** Track
+`seller_install_rate` = installed sellers / active sellers, per market, on the
+founder cockpit beside the fairness meter. Watchman treats it as a vital: a falling
+install rate raises both storm risk and channel-dependency risk. The Chairman may
+surface it in the weekly memo, but there is **no auto-nagging of sellers** — the
+two-offer cap is absolute. The P35 eviction drill now reports recovery split by
+installed vs non-installed sellers.
+
+**Explicitly out of scope (decisions on the record — build nothing now).**
+- *Native iOS/Android apps.* Revisit ONLY if a platform capability we need becomes
+  unavailable to PWAs. That trigger condition is the whole reason to reopen it.
+- *A standalone Sycamore messaging network.* The PWA chat surface is sufficient.
+  Building our own messaging habit pre-density is a known failure mode.
+- *WhatsApp Flows.* Increases Meta coupling; it is not a sovereignty tool. Usable
+  later purely as a UX enhancement, never as a dependency.
+
+**✅ GATE:** Lighthouse PWA installability audit passes; manual install verified on
+Android Chrome + iOS Safari. Install prompt is NEVER emitted to a buyer identity in
+any flow. Install prompt is NEVER emitted during Genesis onboarding. After two
+declines, no further prompts are ever generated. Offline drill (extends P34): an
+INSTALLED seller client with network fully disabled for 48h simulated time can view
+the cached day and queue order completions; on reconnect the queue replays, the
+ledger reconciles to the cent, zero duplicate side effects. Channel-blindness CI
+test (P35a) still green with the WhatsApp adapter removed. `seller_install_rate`
+renders on the founder cockpit per market.

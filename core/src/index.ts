@@ -271,3 +271,22 @@ export {
   rebindToChannel,
   type EscrowedIdentity,
 } from './sovereignty/identity-escrow.js';
+export {
+  planEvictionRecovery,
+  type EvictionPlan,
+  type EvictionRecipient,
+  type FastPathLane,
+} from './sovereignty/fast-path.js';
+export {
+  installOfferService,
+  sellerInstallRate,
+  assertSellerIdentity,
+  InstallOfferError,
+  MAX_INSTALL_OFFERS,
+  INSTALL_TRIGGER_ORDERS,
+  INSTALL_TRIGGER_WINDOW_DAYS,
+  type InstallOfferService,
+  type InstallOfferDeps,
+  type InstallOfferDecision,
+  type InstallPromptState,
+} from './conversations/install.js';

@@ -1,4 +1,4 @@
-import { chairmanService, createDb, databaseUrl } from '@sycamore/core';
+import { chairmanService, createDb, databaseUrl, sellerInstallRate } from '@sycamore/core';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +30,9 @@ export async function GET(req: Request): Promise<Response> {
     .limit(10)
     .selectAll()
     .execute();
+  // P36d — survivability, not vanity: how much of this market can still
+  // be reached through a door we own.
+  const install = await sellerInstallRate(db, marketId);
   const radar = await db
     .selectFrom('radar_items')
     .where('market_id', '=', marketId)
@@ -64,6 +67,11 @@ table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:4px 8px;
 <tr><td>Fixer</td><td class="${cards.fixer.escalated > 0 ? 'warn' : 'ok'}">${cards.fixer.healed} healed · ${cards.fixer.escalated} escalated · ${cards.fixer.actionsExecuted} runbook actions</td></tr>
 <tr><td>Builder</td><td>${cards.builder.shipped} shipped · ${cards.builder.stopped} stopped at a gate</td></tr>
 </table>
+</section>
+<section data-panel="install-rate">
+<h2>Seller install rate</h2>
+<p data-install-rate="${(install.rate * 100).toFixed(0)}">${install.installed} of ${install.active} active sellers reachable through our own door — <strong>${(install.rate * 100).toFixed(0)}%</strong></p>
+<p class="muted" style="color:#9FB3C0;font-size:13px">Watched, never chased: sellers are offered the install at most twice, ever.</p>
 </section>
 <section data-panel="incidents">
 <h2>Incidents</h2>

@@ -20,6 +20,27 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettier,
   {
+    // The service worker ships to phones, so it is linted like any other
+    // source — it just runs in the worker global scope, not Node's.
+    files: ['apps/web/public/sw.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        caches: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
+  {
+    // Build-time Node scripts (icon generation).
+    files: ['**/scripts/*.mjs'],
+    languageOptions: {
+      globals: { Buffer: 'readonly', console: 'readonly', process: 'readonly' },
+    },
+  },
+  {
     rules: {
       // Underscore prefix marks intentionally unused (mock adapter params).
       '@typescript-eslint/no-unused-vars': [
