@@ -4,6 +4,7 @@
  * by construction — their data cannot exist).
  */
 import {
+  academyService,
   capacityEngine,
   createDb,
   createLogger,
@@ -21,6 +22,10 @@ async function sweepAll(): Promise<void> {
   for (const marketId of await registry.listLive()) {
     const swept = await capacityEngine(db, marketId).sweepExpiredHolds();
     if (swept > 0) log.info({ marketId, swept }, 'expired holds swept');
+    // Daily study reminders: idempotent per learner per day, so running
+    // on the sweep interval costs one indexed query when nothing is due.
+    const reminders = await academyService(db, marketId).reminderTick();
+    if (reminders.sent > 0) log.info({ marketId, ...reminders }, 'study reminders queued');
   }
 }
 
