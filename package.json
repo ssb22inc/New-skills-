@@ -13,7 +13,9 @@
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "rollback": "tsx scripts/rollback.mts",
-    "test:coverage": "pnpm --filter @sycamore/core exec vitest run --coverage"
+    "test:coverage": "pnpm --filter @sycamore/core exec vitest run --coverage",
+    "demo": "tsx scripts/demo.mts",
+    "demo:chat": "tsx scripts/demo-chat.mts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -23,6 +25,8 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@sycamore/core": "workspace:*",
+    "@sycamore/gateway": "workspace:*",
+    "@sycamore/packs": "workspace:*",
     "@types/node": "^26.1.0",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.6.0",

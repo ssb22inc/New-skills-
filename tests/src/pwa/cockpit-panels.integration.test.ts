@@ -180,8 +180,9 @@ describe.runIf(reachable)('P30 — every agent reports to the cockpit (gate)', (
   it("the Bursar's DPA block is visible to the founder, not just returned", async () => {
     const html = await (await cockpitPage(new Request('https://x/cockpit?market=jm'))).text();
     expect(html).toContain('1 blocked on DPA');
-    expect(html).toContain('1 pilots'); // Herald's measured pilot
-    expect(html).toContain('1 weekly messages sent'); // Mentor's delivery
+    // Counts read as English, not as a template: "1 pilot", not "1 pilots".
+    expect(html).toContain('1 pilot ·');
+    expect(html).toContain('1 weekly message sent'); // Mentor's delivery
   });
 
   it('the cockpit is still pure HTML — the founder is on a phone too', async () => {

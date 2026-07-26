@@ -67,6 +67,9 @@ export async function GET(req: Request): Promise<Response> {
     .execute();
 
   const pct = (n: number): string => (n * 100).toFixed(0);
+  /** "1 review", not "1 reviews" — the founder reads this every Monday. */
+  const plural = (n: number, one: string, many = `${one}s`): string =>
+    `${n} ${n === 1 ? one : many}`;
   const cash = (n: number): string => formatAmount(pack, n);
 
   const html = `<!doctype html>
@@ -108,14 +111,14 @@ ${darkTheme()}
 <h2>Agent report cards</h2>
 <table>
 <tr><th>Agent</th><th>Record</th></tr>
-<tr data-agent="watchman"><td>Watchman</td><td>${cards.watchman.incidentsOpened} incidents opened</td></tr>
+<tr data-agent="watchman"><td>Watchman</td><td>${plural(cards.watchman.incidentsOpened, 'incident')} opened</td></tr>
 <tr data-agent="fixer"><td>Fixer</td><td class="${cards.fixer.escalated > 0 ? 'warn' : 'ok'}">${cards.fixer.healed} healed · ${cards.fixer.escalated} escalated · ${cards.fixer.actionsExecuted} runbook actions</td></tr>
-<tr data-agent="listener"><td>Listener</td><td>${cards.listener.surveysSent} surveys · ${cards.listener.thumbsUp} 👍 · ${cards.listener.thumbsDown} 👎</td></tr>
+<tr data-agent="listener"><td>Listener</td><td>${plural(cards.listener.surveysSent, 'survey')} · ${cards.listener.thumbsUp} 👍 · ${cards.listener.thumbsDown} 👎</td></tr>
 <tr data-agent="scout"><td>Scout</td><td>${cards.scout.cleared} cleared · ${cards.scout.parked} parked</td></tr>
-<tr data-agent="mentor"><td>Mentor</td><td>${cards.mentor.messagesSent} weekly messages sent</td></tr>
+<tr data-agent="mentor"><td>Mentor</td><td>${plural(cards.mentor.messagesSent, 'weekly message')} sent</td></tr>
 <tr data-agent="builder"><td>Builder</td><td>${cards.builder.shipped} shipped · ${cards.builder.stopped} stopped at a gate</td></tr>
-<tr data-agent="bursar"><td>Bursar</td><td class="${cards.bursar.blockedOnDpa > 0 ? 'ok' : ''}">${cards.bursar.reviews} reviews · ${cards.bursar.proposed} swaps proposed · ${cards.bursar.blockedOnDpa} blocked on DPA</td></tr>
-<tr data-agent="herald"><td>Herald</td><td>${cards.herald.pilots} pilots · best lift ${(cards.herald.bestLift * 100).toFixed(1)}%</td></tr>
+<tr data-agent="bursar"><td>Bursar</td><td class="${cards.bursar.blockedOnDpa > 0 ? 'ok' : ''}">${plural(cards.bursar.reviews, 'review')} · ${plural(cards.bursar.proposed, 'swap')} proposed · ${cards.bursar.blockedOnDpa} blocked on DPA</td></tr>
+<tr data-agent="herald"><td>Herald</td><td>${plural(cards.herald.pilots, 'pilot')} · best lift ${(cards.herald.bestLift * 100).toFixed(1)}%</td></tr>
 <tr data-agent="chairman"><td>Chairman</td><td>Memo below · zero spend authority</td></tr>
 </table>
 </section>

@@ -14,6 +14,12 @@ importers:
       '@sycamore/core':
         specifier: workspace:*
         version: link:core
+      '@sycamore/gateway':
+        specifier: workspace:*
+        version: link:apps/gateway
+      '@sycamore/packs':
+        specifier: workspace:*
+        version: link:packs
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.0
