@@ -12,10 +12,15 @@ So: deploy once, get an HTTPS URL, and every phone can install from it.
 
 ## Option 1 — Render (no CLI, ~5 minutes)
 
-1. Push this repo to GitHub.
-2. [render.com](https://render.com) → **New** → **Blueprint** → pick the repo.
-3. Render reads `render.yaml`, builds the `Dockerfile`, creates Postgres, wires
-   `DATABASE_URL`, and gives you `https://sycamore-xxxx.onrender.com`.
+1. [render.com](https://render.com) → **New** → **Blueprint** → pick
+   `ssb22inc/New-skills-`.
+2. **Set the branch** to `claude/sycamore-prompts-build-chain-o5rqtu`.
+   Render reads `render.yaml` from the branch you select, and the deploy files
+   are not on `main` yet — pointed at `main`, the Blueprint finds nothing.
+   (Merging that branch into `main` and using `main` works just as well; if you
+   do, change the `branch:` line in `render.yaml` too.)
+3. Render builds the `Dockerfile`, creates Postgres, wires `DATABASE_URL`, and
+   gives you `https://sycamore-xxxx.onrender.com`.
 4. Seed something to look at, from your laptop:
 
    ```bash
