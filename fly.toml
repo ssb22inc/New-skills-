@@ -1,0 +1,39 @@
+# Sycamore on Fly.io.
+#
+#   fly launch --copy-config --no-deploy
+#   fly postgres create --name sycamore-db
+#   fly postgres attach sycamore-db      # sets DATABASE_URL for you
+#   fly deploy
+#
+# Fly terminates TLS for you, so the app is on HTTPS from the first
+# deploy — which is what the PWA install prompt requires.
+
+app = "sycamore"
+primary_region = "mia"   # Miami: the closest region to Jamaica
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Bring the schema up before the first request (idempotent).
+  SYCAMORE_MIGRATE_ON_BOOT = "1"
+  # The demo index at /demo. Turn this OFF for anything real — Sycamore
+  # has no directory by design; buyers arrive from a link.
+  SYCAMORE_DEMO_INDEX = "1"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Scale to zero when idle: a demo should not bill for sitting still.
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

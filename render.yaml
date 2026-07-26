@@ -1,0 +1,34 @@
+# Sycamore on Render — the no-CLI path.
+#
+#   1. Push this repo to GitHub
+#   2. render.com → New → Blueprint → pick the repo
+#   3. Render reads this file, builds the Dockerfile, creates the
+#      database, wires DATABASE_URL, and hands back an HTTPS URL
+#
+# HTTPS is automatic, which is what the PWA install prompt needs.
+
+services:
+  - type: web
+    name: sycamore
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: ohio
+    healthCheckPath: /demo
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sycamore-db
+          property: connectionString
+      # Bring the schema up before the first request (idempotent).
+      - key: SYCAMORE_MIGRATE_ON_BOOT
+        value: '1'
+      # The demo index at /demo. Turn this OFF for anything real —
+      # Sycamore has no directory by design; buyers arrive from a link.
+      - key: SYCAMORE_DEMO_INDEX
+        value: '1'
+
+databases:
+  - name: sycamore-db
+    plan: basic-256mb
+    postgresMajorVersion: '16'
