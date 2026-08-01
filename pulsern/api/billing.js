@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) return res.status(503).json({ error: "Payments are not switched on yet — the owner still needs to connect Stripe." });
 
-    const site = process.env.SITE_URL || "https://pulsern.vercel.app";
+    const site = process.env.SITE_URL || "https://www.pulsern.app";
     const form = new URLSearchParams({
       mode: "payment",
       success_url: `${site}/?checkout=success`,
