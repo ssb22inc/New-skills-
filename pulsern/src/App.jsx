@@ -830,7 +830,7 @@ const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an
 How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness verdict — each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & Contact, Quick tour, Settings, Sign out.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 1-day pass with full study access (no exams). Subscriptions: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). After a subscription: 7-day renewal $45 (content only) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
-Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email ssb22inc@gmail.com or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
+Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
   const [msgs, setMsgs] = useState([]); // {role: "you"|"ai", text}
@@ -857,7 +857,7 @@ function HelpCenter({ open, setOpen, provider }) {
         answered = true;
       } catch (e) { /* retry once */ }
     }
-    if (!answered) setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now — try sending that once more in a few seconds. For anything urgent, email ssb22inc@gmail.com or call 786-408-4357." }]);
+    if (!answered) setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now — try sending that once more in a few seconds. For anything urgent, email sheldon@pulsern.app or call 786-408-4357." }]);
     setBusy(false);
   };
 
@@ -871,7 +871,7 @@ function HelpCenter({ open, setOpen, provider }) {
           <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
         </div>
         <div className="help-contact">
-          <p className="small"><strong>Reach a human:</strong> <a href="mailto:ssb22inc@gmail.com">ssb22inc@gmail.com</a> · <a href="tel:+17864084357">786-408-4357</a></p>
+          <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
         </div>
         <div className="lab-body help-chat" aria-live="polite">
           {!msgs.length && <p className="small">Ask me anything — “how does readiness work?”, “where do I set my exam date?”, “explain preload vs afterload”. Account or billing questions go to the email above.</p>}

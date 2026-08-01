@@ -5,6 +5,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { PLANS, planById, discountedCents, computeEntitlement } from "../src/pricing.js";
 
+// Bumped by hand whenever we need to confirm a deploy actually shipped.
+const BUILD_MARKER = "2026-08-01-diag";
+
 const admin = () => createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
 async function userFromToken(sb, token) {
@@ -27,6 +30,20 @@ export default async function handler(req, res) {
   const sb = admin();
   const user = await userFromToken(sb, token);
   if (!user) return res.status(401).json({ error: "Sign in first" });
+
+  // Launch diagnostic: reports only WHETHER each server env var is present,
+  // never its value, so the owner can confirm a Vercel deploy picked them up.
+  if (action === "diag") {
+    return res.status(200).json({
+      build: BUILD_MARKER,
+      stripeKey: Boolean(process.env.STRIPE_SECRET_KEY),
+      stripeKeyMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live"
+        : process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") ? "test"
+        : process.env.STRIPE_SECRET_KEY ? "unrecognized" : "absent",
+      webhookSecret: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
+      siteUrl: process.env.SITE_URL || "(unset — using default)",
+    });
+  }
 
   if (action === "code-check") {
     const code = await lookupCode(sb, codeRaw);
