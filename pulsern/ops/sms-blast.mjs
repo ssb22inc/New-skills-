@@ -63,7 +63,7 @@ async function reminders() {
   console.log(`${profiles.length} consented · ${due.length} inactive ≥${DAYS}d → texting`);
   for (const p of due) {
     const first = (p.full_name || "").split(" ")[0] || "future RN";
-    const body = `PulseRN: ${first}, your NCLEX prep misses you — even 10 questions today keeps the forgetting curve at bay. pulsern.vercel.app  Reply STOP to opt out.`;
+    const body = `PulseRN: ${first}, your NCLEX prep misses you — even 10 questions today keeps the forgetting curve at bay. pulsern.app  Reply STOP to opt out.`;
     if (DRY) { console.log(`  [dry] ${p.phone}: ${body.slice(0, 70)}…`); continue; }
     try { console.log(`  ✓ ${p.phone} ${await sendSms(p.phone, body)}`); }
     catch (e) { console.log(`  ✗ ${p.phone}: ${e.message}`); }
@@ -76,7 +76,7 @@ async function offer(text) {
     .select("phone, full_name")
     .eq("sms_offers", true).eq("opted_out", false).not("phone", "is", null);
   if (!profiles?.length) { console.log("No offer-consented numbers."); return; }
-  const body = `PulseRN: ${text} pulsern.vercel.app  Reply STOP to opt out.`;
+  const body = `PulseRN: ${text} pulsern.app  Reply STOP to opt out.`;
   if (body.length > 320) { console.error("Offer too long for 2 SMS segments — shorten it."); process.exit(1); }
   console.log(`Sending offer to ${profiles.length} opted-in numbers…`);
   for (const p of profiles) {
