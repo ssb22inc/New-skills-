@@ -3,18 +3,150 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>PulseRN — Adaptive NCLEX-RN Prep</title>
-    <meta name="description" content="Created by a licensed RN, for future RNs. Adaptive NCLEX-RN practice: every item type including Next Gen (bow-tie, matrix, cloze, highlight), spaced-repetition flashcards, case studies, an honest readiness estimate, and an AI tutor. Educational exam prep only." />
+    <title>PulseRN — Adaptive NCLEX-RN Prep, Built by a Licensed RN</title>
+    <meta name="description" content="Adaptive NCLEX-RN practice built by a licensed RN: every Next Gen item type including bow-tie, matrix, cloze and highlight, spaced-repetition flashcards, unfolding case studies, ten 85-question readiness exams, and an AI tutor. Educational exam prep only." />
+    <link rel="canonical" href="https://www.pulsern.app/" />
     <meta name="theme-color" content="#0E7C6B" />
+
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-180.png" />
     <link rel="manifest" href="/manifest.json" />
-    <meta property="og:title" content="PulseRN — Adaptive NCLEX-RN Prep" />
-    <meta property="og:description" content="Practice smarter: adaptive questions, NGN item types, spaced repetition, and an AI tutor." />
-    <meta property="og:image" content="/icon-512.png" />
+
+    <!-- iOS has no install API and ignores most of the manifest. These are what
+         actually make an added-to-home-screen icon open full screen with the
+         right name and status bar on iPhone and iPad. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PulseRN" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="PulseRN" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PulseRN" />
+    <meta property="og:url" content="https://www.pulsern.app/" />
+    <meta property="og:title" content="PulseRN — Adaptive NCLEX-RN Prep, Built by a Licensed RN" />
+    <meta property="og:description" content="Adaptive practice, every Next Gen item type, spaced repetition, unfolding case studies, ten full-length readiness exams, and an AI tutor." />
+    <meta property="og:image" content="https://www.pulsern.app/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="PulseRN — Adaptive NCLEX-RN Prep" />
+    <meta name="twitter:description" content="Built by a licensed RN, for future RNs. Adaptive NCLEX-RN practice with every Next Gen item type." />
+    <meta name="twitter:image" content="https://www.pulsern.app/icon-512.png" />
+
+    <!-- Structured data. Search engines and AI answer engines both read this to
+         describe a product accurately instead of inferring it from page text.
+         The disclaimer is included deliberately so any summary that quotes us
+         also carries the NCSBN non-affiliation. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "@id": "https://www.pulsern.app/#app",
+          "name": "PulseRN",
+          "url": "https://www.pulsern.app/",
+          "applicationCategory": "EducationalApplication",
+          "operatingSystem": "Any (web browser, installable to home screen)",
+          "description": "Adaptive NCLEX-RN exam preparation built by a licensed registered nurse. Adaptive practice across all eight NCSBN client-need categories, every Next Generation NCLEX item type, spaced-repetition flashcards, unfolding case studies, ten standardized 85-question readiness exams, and an AI tutor.",
+          "inLanguage": "en",
+          "isAccessibleForFree": true,
+          "offers": {
+            "@type": "Offer",
+            "category": "subscription",
+            "availability": "https://schema.org/InStock"
+          },
+          "featureList": [
+            "Adaptive difficulty driven by an Elo/Rasch ability engine",
+            "All Next Generation NCLEX item types: bow-tie, matrix, cloze, highlight, drag and drop, multiple response, dosage calculation",
+            "Spaced-repetition flashcards with real calendar scheduling",
+            "Unfolding case studies using the NCSBN clinical judgement model",
+            "Ten standardized 85-question readiness exams",
+            "AI tutor explanations",
+            "Offline-capable, installable to a phone home screen"
+          ],
+          "disclaimer": "Educational exam preparation only. Not medical advice. NCLEX is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product."
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://www.pulsern.app/#org",
+          "name": "PulseRN",
+          "url": "https://www.pulsern.app/",
+          "email": "sheldon@pulsern.app",
+          "logo": "https://www.pulsern.app/icon-512.png",
+          "slogan": "Created by a licensed RN — for future RNs."
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://www.pulsern.app/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is PulseRN?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "PulseRN is an adaptive NCLEX-RN study platform built by a licensed registered nurse. It combines adaptive practice questions across all eight NCSBN client-need categories, every Next Generation NCLEX item type, spaced-repetition flashcards, unfolding case studies, and ten full-length readiness exams."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does PulseRN include Next Generation NCLEX question types?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. PulseRN includes bow-tie, matrix, cloze, highlight, drag-and-drop, multiple response, and dosage calculation items, plus standard multiple choice. Case studies follow the NCSBN clinical judgement measurement model."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Is PulseRN affiliated with the NCSBN?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. NCLEX is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse PulseRN. Practice questions are written to be comparable to real exam items in style and rigour, never identical to or drawn from live exam content."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can PulseRN predict whether I will pass the NCLEX?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. PulseRN reports a deliberately conservative readiness estimate based on your answered questions. It is labelled an estimate, requires a minimum number of answers before it appears, and never promises an exam outcome."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I install PulseRN on my phone?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. PulseRN is an installable web app. On Android and Chrome, use Add to Home screen or Install app. On iPhone and iPad, open pulsern.app in Safari, tap Share, then Add to Home Screen. It then opens full screen like a native app."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- React replaces this on mount. It exists so crawlers, AI answer engines
+         and link unfurlers that do not execute JavaScript receive real content
+         instead of an empty div — a single-page app is otherwise invisible to
+         them. Keep it in sync with the meta description above. -->
+    <div id="root">
+      <main style="font-family: system-ui, -apple-system, sans-serif; max-width: 40rem; margin: 0 auto; padding: 2rem 1.25rem; color: #1c2430; line-height: 1.6">
+        <h1 style="font-size: 1.6rem; letter-spacing: -0.02em; margin: 0 0 0.25rem">PulseRN — Adaptive NCLEX-RN Prep</h1>
+        <p style="font-style: italic; color: #0e6e5c; font-weight: 600; margin: 0 0 1rem">Created by a licensed RN — for future RNs.</p>
+        <p>Adaptive NCLEX-RN practice that adjusts to your level as you answer, covering all eight NCSBN client-need categories.</p>
+        <ul>
+          <li>Every Next Generation NCLEX item type — bow-tie, matrix, cloze, highlight, drag-and-drop, multiple response, and dosage calculation</li>
+          <li>Spaced-repetition flashcards scheduled on real calendar dates, with a type-before-flip recall step</li>
+          <li>Unfolding case studies following the NCSBN clinical judgement model, including pediatric and geriatric populations</li>
+          <li>Ten standardized 85-question readiness exams — the NCLEX-RN's minimum length — timed and never repeated</li>
+          <li>An honest readiness estimate that never promises an outcome</li>
+          <li>An AI tutor that explains why an answer is right or wrong</li>
+        </ul>
+        <p><a href="/about/">About PulseRN</a> · <a href="/legal/">Terms, Privacy and Disclaimer</a></p>
+        <p style="font-size: 0.8rem; color: #5b6472">Educational exam preparation only — not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. Enable JavaScript to use the app.</p>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
