@@ -798,7 +798,7 @@ export default function App() {
                 ? "Confirming your plan — this usually takes a few seconds. Everything unlocks the moment it lands."
                 : "Your payment went through, but the plan hasn't appeared yet. Try Refresh my access below; if it still doesn't show, email sheldon@pulsern.app and it'll be sorted straight away."}
             </p>
-            <InstallCard tone="paid" scope="paid" />
+            <InstallCard />
           </section>
         )}
         {locked && !confirming && <Paywall ent={ent} onRefresh={refreshEnt} />}
