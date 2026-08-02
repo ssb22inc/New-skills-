@@ -102,10 +102,10 @@ export default function InstallCard({ tone = "signup" }) {
         <button className="btn install-btn" type="button" onClick={install}>Add to home screen</button>
       ) : plat === "ios-safari" ? (
         <p className="small install-steps">
-          Tap <strong>Share</strong>
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-2px", margin: "0 3px" }} aria-hidden="true">
+          Tap <strong>Share</strong>{" "}
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-2px" }} aria-hidden="true">
             <path d="M12 16V4M8 8l4-4 4 4" /><path d="M20 14v6H4v-6" />
-          </svg>
+          </svg>{" "}
           at the bottom of Safari, then <strong>Add to Home Screen</strong>.
         </p>
       ) : plat === "ios-other" ? (
