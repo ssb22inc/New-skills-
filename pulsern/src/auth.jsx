@@ -1,7 +1,7 @@
 /* Auth screen + session gate (PULSERN_BUILD.md §5.2).
    No session → auth screen. Signed in → <App> keyed by user id, so an
    auth change remounts the app and reloads the saved blob. */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase.js";
 import App from "./App.jsx";
 
@@ -11,8 +11,20 @@ export function AuthScreen() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  /* Messages render above the form, but the buttons that produce them sit at
+     the bottom of the card. On a phone — especially with the keyboard up — the
+     result can land off-screen, which reads as the button doing nothing at all.
+     Pull it into view whenever it changes. */
+  const msgRef = useRef(null);
+  useEffect(() => {
+    if (!error && !notice) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    msgRef.current?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+  }, [error, notice]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -61,7 +73,7 @@ export function AuthScreen() {
   const sendMagicLink = async () => {
     setError(""); setNotice("");
     if (!email) { setError("Enter your email first, then tap the link button."); return; }
-    setBusy(true);
+    setLinkBusy(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
@@ -70,9 +82,17 @@ export function AuthScreen() {
       if (error) throw error;
       setNotice("Check your email — tap the link and you're in. No password needed.");
     } catch (err) {
-      setError(err.message || "Could not send the link. Try again.");
+      /* GoTrue throttles one email per address per minute. Its raw wording
+         ("For security purposes...") reads like a rejection, so say plainly
+         that the first link is already on its way. */
+      const wait = /only request this after (\d+)/.exec(err.message || "");
+      setError(
+        wait
+          ? `A link was just sent to that address — check your inbox and spam. You can request another in ${wait[1]} seconds.`
+          : err.message || "Could not send the link. Try again."
+      );
     } finally {
-      setBusy(false);
+      setLinkBusy(false);
     }
   };
 
@@ -120,8 +140,10 @@ export function AuthScreen() {
           mode === "signup" ? "Create your account — progress syncs to every device."
           : mode === "forgot" ? "Enter your email and we'll send a reset link."
           : "Sign in to continue studying."}</p>
-        {error && <p className="auth-err">{error}</p>}
-        {notice && <p className="auth-note">{notice}</p>}
+        <div ref={msgRef} role="status" aria-live="polite">
+          {error && <p className="auth-err">{error}</p>}
+          {notice && <p className="auth-note">{notice}</p>}
+        </div>
         <form onSubmit={submit}>
           <input className="auth-field" type="email" required placeholder="Email" autoComplete="email"
             value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -143,8 +165,8 @@ export function AuthScreen() {
         {mode !== "forgot" && (
           <>
             <p className="auth-or"><span>or</span></p>
-            <button className="auth-btn alt" type="button" onClick={sendMagicLink} disabled={busy}>
-              Email me a sign-in link
+            <button className="auth-btn alt" type="button" onClick={sendMagicLink} disabled={busy || linkBusy}>
+              {linkBusy ? "Sending your link…" : "Email me a sign-in link"}
             </button>
           </>
         )}
