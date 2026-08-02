@@ -113,21 +113,6 @@ export function AuthScreen() {
         .auth-err { color: #b42318; font-size: 13px; margin: 0 0 10px; }
         .auth-note { color: #067647; font-size: 13px; margin: 0 0 10px; }
         .auth-foot { color: #8a93a2; font-size: 12px; margin-top: 18px; line-height: 1.5; }
-        .install-card { margin-top: 16px; padding: 14px; border: 1px solid #cfe6df; border-radius: 12px;
-          background: #f2faf7; }
-        .install-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #0e6e5c; }
-        .install-head strong { font-size: 14px; flex: 1; }
-        .install-icon { display: flex; color: #0e7c6b; }
-        .install-x { background: none; border: 0; color: #6d8a83; font-size: 20px; line-height: 1;
-          cursor: pointer; padding: 0 2px; }
-        .install-card .small { font-size: 13px; color: #46605a; margin: 0 0 10px; line-height: 1.5; }
-        .install-card .install-steps { margin-bottom: 0; }
-        .install-btn { display: block; width: 100%; padding: 10px 12px; border-radius: 10px; border: 0;
-          background: #0e7c6b; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
-        @media (prefers-reduced-motion: no-preference) {
-          .install-card { animation: install-in .25s ease-out; }
-        }
-        @keyframes install-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
       `}</style>
       <div className="auth-card">
         <p className="auth-logo">PulseRN</p>

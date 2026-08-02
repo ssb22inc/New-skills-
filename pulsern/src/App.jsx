@@ -266,6 +266,7 @@ import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY } from "./srs.js"
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
 import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
+import InstallCard from "./install.jsx";
 import { ExhibitVisual } from "./exhibits.jsx";
 import { ProfileCard, useProfile } from "./profile.jsx";
 
@@ -462,6 +463,38 @@ export default function App() {
       setEnt({ status: "offline", expiresAt: null, hadPaid: false, examsLeft: 0, attempted: [] });
     }
   };
+  /* Stripe sends a completed checkout back to /?checkout=success. The webhook
+     that writes the subscription row can land a beat after the redirect, so
+     poll briefly rather than showing "no plan yet" to someone who just paid.
+     The param is stripped immediately so a refresh or a copied link cannot
+     replay the confirmation. */
+  const [justPaid, setJustPaid] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("checkout") !== "success") return;
+    setJustPaid(true);
+    setConfirming(true);
+    url.searchParams.delete("checkout");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+
+    let stopped = false;
+    (async () => {
+      for (let i = 0; i < 8 && !stopped; i++) {
+        const e = await fetchEntitlement().catch(() => null);
+        if (e) {
+          setEnt(e);
+          if (e.status === "active") { setConfirming(false); return; }
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      // Ran out of attempts. Stop hiding the paywall so they are not stranded
+      // on a screen with no way forward if the webhook genuinely failed.
+      if (!stopped) setConfirming(false);
+    })();
+    return () => { stopped = true; };
+  }, []);
+
   useEffect(() => {
     refreshEnt();
     (async () => {
@@ -750,7 +783,25 @@ export default function App() {
       </header>
 
       <main className="body">
-        {locked && <Paywall ent={ent} onRefresh={refreshEnt} />}
+        {/* Straight after a purchase or upgrade: the strongest moment to ask
+            for a home-screen icon, because they have just committed. Dismissal
+            is scoped to "paid", so waving it away at signup does not suppress
+            it here. */}
+        {justPaid && (
+          <section className="card" style={{ borderColor: "var(--ok-line)" }}>
+            <p className="eyebrow">Payment received</p>
+            <h2 className="h2">You're in — full access is live.</h2>
+            <p className="small">
+              {ent?.status === "active"
+                ? "Your plan is active. Everything is unlocked: the full QBank, case studies, flashcards, and readiness exams."
+                : confirming
+                ? "Confirming your plan — this usually takes a few seconds. Everything unlocks the moment it lands."
+                : "Your payment went through, but the plan hasn't appeared yet. Try Refresh my access below; if it still doesn't show, email sheldon@pulsern.app and it'll be sorted straight away."}
+            </p>
+            <InstallCard tone="paid" scope="paid" />
+          </section>
+        )}
+        {locked && !confirming && <Paywall ent={ent} onRefresh={refreshEnt} />}
         {!locked && !isOwner && ent?.status === "trial" && tab !== "plans" && (
           <section className="card trial-banner">
             <p className="small"><strong>Free pass</strong> — full study access{ent.expiresAt ? ` until ${new Date(ent.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} tomorrow` : ""}. <button className="auth-switch" onClick={() => setTab("plans")}>See plans →</button></p>

@@ -45,12 +45,15 @@ if (typeof window !== "undefined") {
   });
 }
 
-const DISMISS_KEY = "pulsern.install.dismissed";
+/* Dismissal is scoped per placement on purpose. Someone who waved this away
+   while creating an account has just paid by the time they see it again, which
+   is a different enough moment to be worth asking once more. */
+const dismissKey = (scope) => `pulsern.install.dismissed.${scope}`;
 
-export default function InstallCard({ tone = "signup" }) {
+export default function InstallCard({ tone = "signup", scope = "signup" }) {
   const [canPrompt, setCanPrompt] = useState(Boolean(deferred));
   const [dismissed, setDismissed] = useState(() => {
-    try { return localStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
+    try { return localStorage.getItem(dismissKey(scope)) === "1"; } catch { return false; }
   });
   const [done, setDone] = useState(false);
   const plat = platform();
@@ -67,7 +70,7 @@ export default function InstallCard({ tone = "signup" }) {
 
   const close = () => {
     setDismissed(true);
-    try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* private mode */ }
+    try { localStorage.setItem(dismissKey(scope), "1"); } catch { /* private mode */ }
   };
 
   const install = async () => {
@@ -81,6 +84,29 @@ export default function InstallCard({ tone = "signup" }) {
 
   return (
     <div className="install-card">
+      {/* Styles travel with the component because it renders in two places that
+          do not share a stylesheet: the auth screen and the app shell. The app
+          defines these custom properties per theme; the fallbacks after each
+          comma are what the auth screen uses, where they are not defined. */}
+      <style>{`
+        .install-card { margin-top: 16px; padding: 14px; border-radius: 12px;
+          background: var(--ok-bg, #f2faf7); border: 1px solid var(--ok-line, #cfe6df); }
+        .install-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+          color: var(--accent-ink, #0e6e5c); }
+        .install-head strong { font-size: 14px; flex: 1; }
+        .install-icon { display: flex; color: var(--accent-ink, #0e7c6b); }
+        .install-x { background: none; border: 0; color: var(--muted, #6d8a83); font-size: 20px;
+          line-height: 1; cursor: pointer; padding: 0 2px; }
+        .install-card .small { font-size: 13px; color: var(--muted, #46605a); margin: 0 0 10px; line-height: 1.5; }
+        .install-card .install-steps { margin-bottom: 0; }
+        .install-btn { display: block; width: 100%; padding: 10px 12px; border-radius: 10px; border: 0;
+          background: var(--teal, #0e7c6b); color: var(--btn-ink, #fff); font-size: 14px;
+          font-weight: 600; cursor: pointer; }
+        @media (prefers-reduced-motion: no-preference) {
+          .install-card { animation: install-in .25s ease-out; }
+        }
+        @keyframes install-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+      `}</style>
       <div className="install-head">
         <span className="install-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -93,7 +119,9 @@ export default function InstallCard({ tone = "signup" }) {
       </div>
 
       <p className="small">
-        {tone === "signup"
+        {tone === "paid"
+          ? "You've got full access — keep it one tap away. Opens full screen with no address bar."
+          : tone === "signup"
           ? "Opens full screen with no address bar, and your streak stays one tap away."
           : "Opens full screen with no address bar — one tap from your home screen."}
       </p>
