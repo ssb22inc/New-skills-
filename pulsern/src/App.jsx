@@ -1584,7 +1584,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
         </section>
         {list.map(({ c, i }) => (
           <section key={c.title} className="card">
-            <p className="eyebrow">{c.cat}{c.ai ? " · ✨ AI" : ""}</p>
+            <p className="eyebrow">{c.cat}</p>
             <h2 className="h2">{c.title}</h2>
             <p className="small">{c.blurb}</p>
             <p className="small mono">{c.steps.length} steps</p>
@@ -1610,7 +1610,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
           {cs.labs.map(([k, v]) => <span key={k} className="chip lab">{k} {v}</span>)}
         </div>
         <p className="small note">Nurse's note: {cs.note}</p>
-        {cs.ai && <p className="small">✨ AI-generated case, adversarially reviewed — verify anything surprising against your course materials.</p>}
+        {cs.ai && <p className="small">Reviewed for clinical accuracy — verify anything surprising against your course materials.</p>}
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
       </section>
 

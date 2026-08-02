@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
 import App from "./App.jsx";
+import InstallCard from "./install.jsx";
 
 export function AuthScreen() {
   const [mode, setMode] = useState("signin"); // signin | signup | forgot
@@ -55,6 +56,27 @@ export function AuthScreen() {
     return () => { live = false; };
   }, []);
 
+  /* Passwordless sign-in. One tap from an email link, no password to invent or
+     forget — the lowest-friction way in for a student on a phone. Uses whatever
+     is already typed in the email field so it costs no extra step. */
+  const sendMagicLink = async () => {
+    setError(""); setNotice("");
+    if (!email) { setError("Enter your email first, then tap the link button."); return; }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) throw error;
+      setNotice("Check your email — tap the link and you're in. No password needed.");
+    } catch (err) {
+      setError(err.message || "Could not send the link. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const signInWithGoogle = async () => {
     setError(""); setNotice("");
     const { error } = await supabase.auth.signInWithOAuth({
@@ -91,6 +113,21 @@ export function AuthScreen() {
         .auth-err { color: #b42318; font-size: 13px; margin: 0 0 10px; }
         .auth-note { color: #067647; font-size: 13px; margin: 0 0 10px; }
         .auth-foot { color: #8a93a2; font-size: 12px; margin-top: 18px; line-height: 1.5; }
+        .install-card { margin-top: 16px; padding: 14px; border: 1px solid #cfe6df; border-radius: 12px;
+          background: #f2faf7; }
+        .install-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: #0e6e5c; }
+        .install-head strong { font-size: 14px; flex: 1; }
+        .install-icon { display: flex; color: #0e7c6b; }
+        .install-x { background: none; border: 0; color: #6d8a83; font-size: 20px; line-height: 1;
+          cursor: pointer; padding: 0 2px; }
+        .install-card .small { font-size: 13px; color: #46605a; margin: 0 0 10px; line-height: 1.5; }
+        .install-card .install-steps { margin-bottom: 0; }
+        .install-btn { display: block; width: 100%; padding: 10px 12px; border-radius: 10px; border: 0;
+          background: #0e7c6b; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+        @media (prefers-reduced-motion: no-preference) {
+          .install-card { animation: install-in .25s ease-out; }
+        }
+        @keyframes install-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
       `}</style>
       <div className="auth-card">
         <p className="auth-logo">PulseRN</p>
@@ -119,9 +156,16 @@ export function AuthScreen() {
             {busy ? "One moment…" : mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset link" : "Sign in"}
           </button>
         </form>
-        {googleOn && mode !== "forgot" && (
+        {mode !== "forgot" && (
           <>
             <p className="auth-or"><span>or</span></p>
+            <button className="auth-btn alt" type="button" onClick={sendMagicLink} disabled={busy}>
+              Email me a sign-in link
+            </button>
+          </>
+        )}
+        {googleOn && mode !== "forgot" && (
+          <>
             <button className="auth-btn alt google" type="button" onClick={signInWithGoogle} disabled={busy}>
               <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" focusable="false">
                 <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
@@ -144,6 +188,10 @@ export function AuthScreen() {
             {mode === "signin" ? "Create account" : "Sign in"}
           </button>
         </p>
+        {/* Offered the moment a signup starts: the student is committing to the
+            app right now, which is when a home-screen icon is worth having.
+            Renders nothing if they are already installed or have dismissed it. */}
+        {mode === "signup" && <InstallCard tone="signup" />}
         <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/about/" style={{ color: "#5b6472" }}>About</a> · <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
       </div>
     </div>

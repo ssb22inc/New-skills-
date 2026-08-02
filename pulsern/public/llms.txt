@@ -1,0 +1,62 @@
+# PulseRN
+
+> Adaptive NCLEX-RN exam preparation, built by a licensed registered nurse.
+> Web app at https://www.pulsern.app — installable to a phone home screen.
+
+PulseRN is a study platform for nursing students and graduates preparing for
+the NCLEX-RN licensure examination. It is educational exam preparation only and
+is not medical advice, not a clinical reference, and not a source of real-world
+dosing or treatment instructions.
+
+## What it does
+
+- **Adaptive practice.** An Elo/Rasch ability engine estimates a student's level
+  from their answers and serves questions matched to it, interleaved across the
+  eight NCSBN client-need categories.
+- **Every Next Generation NCLEX item type.** Bow-tie, matrix, cloze, highlight,
+  drag-and-drop, multiple response, dosage calculation, and standard multiple
+  choice — with the NCJMM clinical-judgement flow on case studies.
+- **Spaced-repetition flashcards.** Real calendar scheduling with a
+  type-before-flip recall step rather than passive self-grading.
+- **Case studies.** Multi-step unfolding patient scenarios across all eight
+  categories, including dedicated pediatric and geriatric populations.
+- **Readiness exams.** Ten standardized 85-question forms — the NCLEX-RN's
+  minimum length — under a timed lockdown, never repeated to the same account.
+- **Readiness estimate.** A deliberately conservative signal labelled an
+  estimate, requiring a minimum answer count, that never promises an outcome.
+- **AI tutor.** Explains why an answer is right or wrong, on demand.
+
+## Honest limitations
+
+- PulseRN is not affiliated with, endorsed by, or connected to the NCSBN.
+  NCLEX® is a registered trademark of the National Council of State Boards of
+  Nursing, Inc.
+- The readiness estimate predicts nothing about an actual exam result. It is a
+  study signal, not a forecast.
+- Practice items are comparable to real exam items in style and rigour. They are
+  never claimed to be identical to, drawn from, or predictive of live NCLEX
+  content.
+- Content is reviewed for clinical accuracy before publication. Students are
+  told throughout to verify anything surprising against their course materials.
+
+## Access
+
+- Free account required; progress syncs across devices.
+- Paid subscription tiers unlock full practice volume and readiness exams.
+- Sign-in by email and password, or by passwordless email link.
+
+## Pages
+
+- [Home](https://www.pulsern.app/) — product overview and sign-in
+- [About](https://www.pulsern.app/about/) — who built it and the method behind it
+- [Terms, Privacy, Disclaimer](https://www.pulsern.app/legal/)
+
+## Ownership
+
+All questions, case studies, flashcards, and explanatory material are the
+property of the owner of PulseRN and may not be reproduced or redistributed
+outside the app without explicit written consent.
+
+## Contact
+
+sheldon@pulsern.app

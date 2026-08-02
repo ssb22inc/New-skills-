@@ -1,0 +1,54 @@
+# PulseRN — https://www.pulsern.app
+# Study content itself sits behind auth and is the owner's property; only the
+# public marketing and legal pages are meant to be indexed.
+
+User-agent: *
+Allow: /$
+Allow: /about/
+Allow: /legal/
+Disallow: /review/
+Disallow: /api/
+
+# AI answer engines and research crawlers. Explicitly welcomed on the public
+# pages so PulseRN can be cited accurately rather than guessed at.
+User-agent: GPTBot
+Allow: /$
+Allow: /about/
+Allow: /legal/
+Disallow: /review/
+
+User-agent: OAI-SearchBot
+Allow: /$
+Allow: /about/
+Allow: /legal/
+Disallow: /review/
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /$
+Allow: /about/
+Allow: /legal/
+Disallow: /review/
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /$
+Allow: /about/
+Allow: /legal/
+Disallow: /review/
+
+User-agent: Google-Extended
+Allow: /$
+Allow: /about/
+Allow: /legal/
+
+User-agent: Applebot-Extended
+Allow: /$
+Allow: /about/
+Allow: /legal/
+
+Sitemap: https://www.pulsern.app/sitemap.xml
