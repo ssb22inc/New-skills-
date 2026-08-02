@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { PLANS, planById, discountedCents, computeEntitlement } from "../src/pricing.js";
 
 // Bumped by hand whenever we need to confirm a deploy actually shipped.
-const BUILD_MARKER = "2026-08-01-diag2";
+const BUILD_MARKER = "2026-08-01-diag3";
 
 const admin = () => createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
@@ -51,12 +51,28 @@ export default async function handler(req, res) {
       } catch (e) { hooks = `fetch failed: ${e.message}`; }
     }
 
+    // Recent events + how many webhook deliveries are still pending. A
+    // delivered event (pending_webhooks 0) proves the signing secret matches,
+    // because our handler 400s anything it can't verify. No event `data` is
+    // returned here — only the envelope — so no customer details leak.
+    let events = "not checked";
+    if (k) {
+      try {
+        const r = await fetch("https://api.stripe.com/v1/events?limit=5", { headers: { Authorization: `Bearer ${k}` } });
+        const j = await r.json();
+        events = r.ok
+          ? (j.data ?? []).map((e) => ({ type: e.type, created: e.created, pendingWebhooks: e.pending_webhooks, livemode: e.livemode }))
+          : `stripe error: ${j.error?.type ?? "unknown"} — ${j.error?.message ?? ""}`;
+      } catch (e) { events = `fetch failed: ${e.message}`; }
+    }
+
     return res.status(200).json({
       build: BUILD_MARKER,
       stripeKeyKind: kind,
       webhookSecret: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
       webhookSecretLooksValid: /^whsec_/.test(process.env.STRIPE_WEBHOOK_SECRET ?? ""),
       webhookEndpoints: hooks,
+      recentEvents: events,
       siteUrl: process.env.SITE_URL || "(unset — using default)",
     });
   }
