@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { PLANS, planById, discountedCents, computeEntitlement } from "../src/pricing.js";
 
 // Bumped by hand whenever we need to confirm a deploy actually shipped.
-const BUILD_MARKER = "2026-08-01-diag";
+const BUILD_MARKER = "2026-08-01-diag2";
 
 const admin = () => createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
@@ -34,13 +34,29 @@ export default async function handler(req, res) {
   // Launch diagnostic: reports only WHETHER each server env var is present,
   // never its value, so the owner can confirm a Vercel deploy picked them up.
   if (action === "diag") {
+    const k = process.env.STRIPE_SECRET_KEY;
+    // Key TYPE only (sk/rk + live/test) — never the key itself.
+    const kind = !k ? "absent" : /^(sk|rk)_(live|test)_/.test(k) ? k.slice(0, k.indexOf("_", 3)) : "unrecognized";
+
+    // Ask Stripe which webhook endpoints exist. A live-mode key returns only
+    // live-mode endpoints, so this proves whether purchases will be granted.
+    let hooks = "not checked";
+    if (k) {
+      try {
+        const r = await fetch("https://api.stripe.com/v1/webhook_endpoints?limit=10", { headers: { Authorization: `Bearer ${k}` } });
+        const j = await r.json();
+        hooks = r.ok
+          ? (j.data ?? []).map((h) => ({ url: h.url, livemode: h.livemode, status: h.status, events: h.enabled_events }))
+          : `stripe error: ${j.error?.type ?? "unknown"} — ${j.error?.message ?? ""}`;
+      } catch (e) { hooks = `fetch failed: ${e.message}`; }
+    }
+
     return res.status(200).json({
       build: BUILD_MARKER,
-      stripeKey: Boolean(process.env.STRIPE_SECRET_KEY),
-      stripeKeyMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live"
-        : process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") ? "test"
-        : process.env.STRIPE_SECRET_KEY ? "unrecognized" : "absent",
+      stripeKeyKind: kind,
       webhookSecret: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
+      webhookSecretLooksValid: /^whsec_/.test(process.env.STRIPE_WEBHOOK_SECRET ?? ""),
+      webhookEndpoints: hooks,
       siteUrl: process.env.SITE_URL || "(unset — using default)",
     });
   }
