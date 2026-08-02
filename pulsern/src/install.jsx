@@ -45,12 +45,12 @@ if (typeof window !== "undefined") {
   });
 }
 
-/* Dismissal is scoped per placement on purpose. Someone who waved this away
-   while creating an account has just paid by the time they see it again, which
-   is a different enough moment to be worth asking once more. */
+/* Dismissal is scoped per placement. There is only one placement today — after
+   a purchase — but keeping the key namespaced means adding a second one later
+   cannot have its offer silently suppressed by a dismissal made elsewhere. */
 const dismissKey = (scope) => `pulsern.install.dismissed.${scope}`;
 
-export default function InstallCard({ tone = "signup", scope = "signup" }) {
+export default function InstallCard({ scope = "paid" }) {
   const [canPrompt, setCanPrompt] = useState(Boolean(deferred));
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(dismissKey(scope)) === "1"; } catch { return false; }
@@ -119,11 +119,7 @@ export default function InstallCard({ tone = "signup", scope = "signup" }) {
       </div>
 
       <p className="small">
-        {tone === "paid"
-          ? "You've got full access — keep it one tap away. Opens full screen with no address bar."
-          : tone === "signup"
-          ? "Opens full screen with no address bar, and your streak stays one tap away."
-          : "Opens full screen with no address bar — one tap from your home screen."}
+        You've got full access — keep it one tap away. Opens full screen with no address bar.
       </p>
 
       {canPrompt ? (

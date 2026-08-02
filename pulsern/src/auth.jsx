@@ -4,7 +4,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
 import App from "./App.jsx";
-import InstallCard from "./install.jsx";
 
 export function AuthScreen() {
   const [mode, setMode] = useState("signin"); // signin | signup | forgot
@@ -173,10 +172,6 @@ export function AuthScreen() {
             {mode === "signin" ? "Create account" : "Sign in"}
           </button>
         </p>
-        {/* Offered the moment a signup starts: the student is committing to the
-            app right now, which is when a home-screen icon is worth having.
-            Renders nothing if they are already installed or have dismissed it. */}
-        {mode === "signup" && <InstallCard tone="signup" />}
         <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/about/" style={{ color: "#5b6472" }}>About</a> · <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
       </div>
     </div>
