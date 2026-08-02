@@ -365,6 +365,7 @@ export default function App() {
   const [bestRun, setBestRun] = useState(0);
   const [log, setLog] = useState([]);        // {id, cat, diff, correct}
   const [flagged, setFlagged] = useState([]);
+  const [flaggedCases, setFlaggedCases] = useState([]);
   const [streak, setStreak] = useState({ count: 0, lastDay: null, shield: true }); // real day streak + one-miss shield
   const [daily, setDaily] = useState({ day: todayStr(), answered: 0 });
 
@@ -406,6 +407,7 @@ export default function App() {
           setBestRun(s.bestRun);
           setLog(s.log);
           setFlagged(s.flagged);
+          setFlaggedCases(s.flaggedCases);
           setStreak(s.streak);
           const d = s.daily ?? { day: todayStr(), answered: 0 };
           setDaily(d.day === todayStr() ? d : { day: todayStr(), answered: 0 });
@@ -437,12 +439,12 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips]);
+  }, [loaded, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips]);
 
   /* first visit → run the 30-second tour once */
   useEffect(() => {
@@ -815,11 +817,11 @@ export default function App() {
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
           {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} isOwner={isOwner} />}
-          {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
+          {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} flaggedCases={flaggedCases} setFlaggedCases={setFlaggedCases} />}
           {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} flagged={flagged} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
+          {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} flagged={flagged} flaggedCases={flaggedCases} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
         </>}
       </main>
 
@@ -1391,7 +1393,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
     <div className="stack">
       <section className="card">
         <div className="q-meta mono">
-          <span>{q.cat.toUpperCase()}{q.ai ? " · ✨ AI" : ""}{mode === "review" ? " · RETRY" : ""}</span>
+          <span>{q.cat.toUpperCase()}{mode === "review" ? " · RETRY" : ""}</span>
           <span>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {TYPE_LABEL[q.type] ?? "MULTIPLE CHOICE"}</span>
         </div>
         <ExhibitVisual spec={ext.visual} />
@@ -1567,9 +1569,9 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
               <p className="small"><strong>Should be highlighted:</strong> {q.answer.map((i) => ext.tokens[i]).join(" · ")}</p>
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
-            {q.ai && <p className="small">✨ AI-generated item — solid for practice, but verify anything surprising against your course materials.</p>}
+            {q.ai && <p className="small">Reviewed for clinical accuracy — verify anything surprising against your course materials.</p>}
             <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
-            <ReportIssue key={`r${q.id}`} q={q} isBank={calibration[q.id] !== undefined} />
+            <ReportIssue key={`r${q.id}`} itemId={calibration[q.id] !== undefined ? q.id : null} label="question" />
             <button className="btn" onClick={advance}>Next question →</button>
           </div>
         )}
@@ -1579,7 +1581,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
 }
 /* ================= CASE STUDY ================= */
 
-function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
+function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, flaggedCases = [], setFlaggedCases = () => {} }) {
   const [caseIdx, setCaseIdx] = useState(null); // null = case picker
   const [catFilter, setCatFilter] = useState([]);
   const [step, setStep] = useState(-1);
@@ -1588,6 +1590,10 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
   const [score, setScore] = useState(0);
   const [ok, setOk] = useState(false);
   const cs = caseIdx == null ? null : cases[caseIdx];
+  /* Bank cases carry a dbId; locally-bundled ones don't, so fall back to the
+     title, which carries a unique index in migration 005. */
+  const caseKey = cs ? (cs.dbId ?? cs.title) : null;
+  const isFlaggedCase = caseKey != null && flaggedCases.includes(caseKey);
 
   const openCase = (i) => { setCaseIdx(i); setStep(-1); setPhase("read"); setScore(0); setSel([]); };
   const start = () => { setStep(0); setPhase("answering"); setSel([]); };
@@ -1662,6 +1668,12 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
         </div>
         <p className="small note">Nurse's note: {cs.note}</p>
         {cs.ai && <p className="small">Reviewed for clinical accuracy — verify anything surprising against your course materials.</p>}
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="btn ghost" onClick={() => setFlaggedCases((f) => isFlaggedCase ? f.filter((x) => x !== caseKey) : [...f, caseKey])}>
+            {isFlaggedCase ? "⚑ Flagged" : "⚐ Flag"}
+          </button>
+        </div>
+        <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
       </section>
 
@@ -1863,7 +1875,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
 
 /* ================= STATS ================= */
 
-function Stats({ log, catStats, popStats = [], acc, flagged, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile }) {
+function Stats({ log, catStats, popStats = [], acc, flagged, flaggedCases = [], resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
@@ -1882,7 +1894,7 @@ function Stats({ log, catStats, popStats = [], acc, flagged, resetAll, provider,
       <section className="card">
         <p className="eyebrow">Performance</p>
         <h2 className="h2">{log.length ? `${Math.round(acc * 100)}% overall accuracy` : "No questions answered yet"}</h2>
-        <p className="small">{log.length} answered · {log.filter((l) => l.correct).length} correct · {flagged.length} flagged for review</p>
+        <p className="small">{log.length} answered · {log.filter((l) => l.correct).length} correct · {flagged.length + flaggedCases.length} flagged for review</p>
       </section>
       <section className="card">
         <p className="eyebrow">By client-needs category</p>
@@ -1937,12 +1949,15 @@ function Stats({ log, catStats, popStats = [], acc, flagged, resetAll, provider,
   );
 }
 
-/* ---- report a problem with a question → reviewers' Reports tab ---- */
-function ReportIssue({ q, isBank }) {
+/* ---- report a problem with a question or case → reviewers' Reports tab ----
+   Exactly one of itemId / caseId is set; migration 012 enforces that in the
+   database too. Either being null means the content is local rather than from
+   the shared bank, so there is nothing a reviewer could open. */
+function ReportIssue({ itemId = null, caseId = null, label = "question" }) {
   const [state, setState] = useState("idle"); // idle | open | busy | sent | error
   const [msg, setMsg] = useState("");
 
-  if (!isBank) return null; // local/custom items aren't in the shared bank
+  if (itemId == null && caseId == null) return null;
 
   const send = async () => {
     const message = msg.trim();
@@ -1950,14 +1965,14 @@ function ReportIssue({ q, isBank }) {
     setState("busy");
     const { data: { session } } = await supabase.auth.getSession();
     const { error } = await supabase.from("question_reports").insert({
-      item_id: q.id, user_id: session?.user?.id ?? null, message: message.slice(0, 1000),
+      item_id: itemId, case_id: caseId, user_id: session?.user?.id ?? null, message: message.slice(0, 1000),
     });
     setState(error ? "error" : "sent");
   };
 
   if (state === "sent") return <p className="small tip">✅ Thanks — your report goes straight to our nurse reviewer.</p>;
   if (state === "idle") return (
-    <button className="btn ghost tutor-btn" onClick={() => setState("open")}>⚠ Report a problem with this question</button>
+    <button className="btn ghost tutor-btn" onClick={() => setState("open")}>⚠ Report a problem with this {label}</button>
   );
   return (
     <div className="report-box">

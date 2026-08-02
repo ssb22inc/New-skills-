@@ -36,6 +36,7 @@ describe("state migration", () => {
   it("round-trips a full current blob unchanged", () => {
     const full = {
       ...legacyBlob,
+      flaggedCases: [412, "Postpartum Hemorrhage"], // db-backed and local cases
       ability: { ...emptyAbility(CATS), [CATS[2]]: { theta: 1345.5, n: 17 } },
       plan: { week: "2026-07-06", days: [{ day: "2026-07-06", focusCat: CATS[2], items: 10, note: "drill pharm" }] },
       examDate: "2026-09-15",
@@ -51,7 +52,7 @@ describe("state migration", () => {
   it("gives a completely empty save full defaults", () => {
     const s = migrateBlob({}, CATS);
     expect(s).toEqual({
-      theme: "light", xp: 0, bestRun: 0, log: [], flagged: [],
+      theme: "light", xp: 0, bestRun: 0, log: [], flagged: [], flaggedCases: [],
       streak: { count: 0, lastDay: null, shield: true },
       daily: null, srs: [], customQs: [], provider: "claude",
       ability: emptyAbility(CATS), plan: null, examDate: null, tourSeen: false, srsMap: {}, examResults: {}, profileCardDismissed: false, fcFlips: 0,

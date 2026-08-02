@@ -206,29 +206,38 @@ function showTab(t) {
   if (t === 'reports') loadReports();
 }
 
-/* ---- Reports tab: student-filed problems with live questions ---- */
+/* ---- Reports tab: student-filed problems with live questions and cases ----
+   A report points at exactly one of the two (enforced by migration 012), so
+   both relations are selected and whichever came back is rendered. */
 async function loadReports() {
   const el = document.getElementById('reportsView');
   el.innerHTML = '<div class="card empty"><p class="sub">Loading reports…</p></div>';
   const { data, error } = await sb.from('question_reports')
-    .select('id, item_id, message, created_at, questions(stem, cat, type)')
+    .select('id, item_id, case_id, message, created_at, questions(stem, cat, type), case_studies(title, cat)')
     .is('resolved_at', null).order('created_at', { ascending: true }).limit(100);
   if (error) { el.innerHTML = `<div class="card empty"><p class="sub">Load failed: ${esc(error.message)}</p></div>`; return; }
   if (!data?.length) {
-    el.innerHTML = '<div class="card empty"><p style="font-size:32px">📭</p><p><b>No open reports.</b></p><p class="sub">When a student flags a problem with a question, it lands here.</p></div>';
+    el.innerHTML = '<div class="card empty"><p style="font-size:32px">📭</p><p><b>No open reports.</b></p><p class="sub">When a student flags a problem with a question or a case study, it lands here.</p></div>';
     return;
   }
-  el.innerHTML = data.map((r) => `
+  el.innerHTML = data.map((r) => {
+    const c = r.case_studies;
+    const q = r.questions;
+    const tag = c ? `<span>case #${r.case_id}</span><span>CASE STUDY</span>${c.cat ? `<span>${esc(c.cat)}</span>` : ''}`
+                  : `<span>item #${r.item_id ?? '?'}</span>${q ? `<span>${esc(q.cat)}</span><span>${esc(q.type)}</span>` : ''}`;
+    const body = c ? `<p class="stem">${esc(c.title)}</p>`
+               : q ? `<p class="stem">${esc(q.stem.slice(0, 160))}${q.stem.length > 160 ? '…' : ''}</p>` : '';
+    return `
     <div class="card">
-      <div class="meta"><span>report #${r.id}</span><span>item #${r.item_id ?? '?'}</span>
-        ${r.questions ? `<span>${esc(r.questions.cat)}</span><span>${esc(r.questions.type)}</span>` : ''}
+      <div class="meta"><span>report #${r.id}</span>${tag}
         <span>${esc((r.created_at || '').slice(0, 10))}</span></div>
-      ${r.questions ? `<p class="stem">${esc(r.questions.stem.slice(0, 160))}${r.questions.stem.length > 160 ? '…' : ''}</p>` : ''}
+      ${body}
       <div class="ainotes"><b>Student says:</b> ${esc(r.message)}</div>
       <div class="row">
         <button class="approve" onclick="resolveReport(${r.id})">✓ Mark resolved</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function resolveReport(id) {
