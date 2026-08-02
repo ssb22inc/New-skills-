@@ -18,6 +18,9 @@ export function migrateBlob(s, cats) {
     bestRun: s.bestRun ?? 0,
     log: Array.isArray(s.log) ? s.log : [],
     flagged: Array.isArray(s.flagged) ? s.flagged : [],
+    // New key, not a repurposing of `flagged`: that list holds question ids and
+    // must keep meaning exactly that. Legacy saves default to empty.
+    flaggedCases: Array.isArray(s.flaggedCases) ? s.flaggedCases : [],
     streak: { count: 0, lastDay: null, shield: true, ...(s.streak ?? {}) },
     daily: s.daily ?? null,
     srs: Array.isArray(s.srs) ? s.srs : [],
