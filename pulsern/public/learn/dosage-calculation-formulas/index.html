@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dosage calculation: the formulas that cover it | PulseRN</title>
+<meta name="description" content="The three formulas that cover almost every NCLEX calculation, how to handle weight-based and IV rate problems, and where rounding goes wrong.">
+<link rel="canonical" href="https://www.pulsern.app/learn/dosage-calculation-formulas/">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<meta name="theme-color" content="#0E7C6B">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="PulseRN">
+<meta property="og:url" content="https://www.pulsern.app/learn/dosage-calculation-formulas/">
+<meta property="og:title" content="Dosage calculation: the formulas that cover it | PulseRN">
+<meta property="og:description" content="The three formulas that cover almost every NCLEX calculation, how to handle weight-based and IV rate problems, and where rounding goes wrong.">
+<meta property="og:image" content="https://www.pulsern.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://www.pulsern.app/og.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "@id": "https://www.pulsern.app/learn/dosage-calculation-formulas/#article",
+      "headline": "Dosage calculation: the formulas that cover it",
+      "description": "The three formulas that cover almost every NCLEX calculation, how to handle weight-based and IV rate problems, and where rounding goes wrong.",
+      "url": "https://www.pulsern.app/learn/dosage-calculation-formulas/",
+      "inLanguage": "en",
+      "datePublished": "2026-08-03",
+      "dateModified": "2026-08-03",
+      "author": {
+        "@type": "Organization",
+        "name": "PulseRN",
+        "url": "https://www.pulsern.app"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "PulseRN",
+        "url": "https://www.pulsern.app",
+        "logo": "https://www.pulsern.app/icon-512.png"
+      },
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "PulseRN",
+        "url": "https://www.pulsern.app"
+      },
+      "about": {
+        "@type": "Thing",
+        "name": "NCLEX-RN examination preparation"
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "https://www.pulsern.app/learn/dosage-calculation-formulas/#crumbs",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "PulseRN",
+          "item": "https://www.pulsern.app/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Guides",
+          "item": "https://www.pulsern.app/learn/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Dosage calculation: the formulas that cover it",
+          "item": "https://www.pulsern.app/learn/dosage-calculation-formulas/"
+        }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://www.pulsern.app/learn/dosage-calculation-formulas/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What formula is used for dosage calculation?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Desired over Have times Quantity: divide the dose you want by the dose on hand, then multiply by the quantity that dose comes in. Weight-based problems add a step of converting pounds to kilograms first."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I calculate IV drip rate?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Multiply the volume in millilitres by the drop factor, then divide by the time in minutes. Round drops per minute to a whole number. For a pump in millilitres per hour, divide total volume by total hours."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How many kilograms is a pound?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "There are 2.2 pounds in a kilogram, so divide pounds by 2.2 to get kilograms. Doing this conversion before starting the calculation prevents the most common dosage error."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+<style>
+  :root { --paper:#F3F6F4; --ink:#0F2E29; --card:#FFFFFF; --muted:#3B554F; --line:#D8E2DD; --teal:#0E7C6B; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--paper); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; max-width:720px; margin:0 auto; padding:28px 18px 60px; line-height:1.6; }
+  h1 { font-size:26px; margin-bottom:6px; letter-spacing:-.01em; } h1 b { color:var(--teal); }
+  h2 { font-size:18px; margin:26px 0 8px; color:var(--teal); }
+  h3 { font-size:15px; margin:18px 0 6px; }
+  p, li { font-size:15.5px; color:#2a3833; margin-bottom:10px; }
+  ul, ol { padding-left:22px; margin-bottom:12px; }
+  a { color:var(--teal); }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:14px; }
+  .back { display:inline-block; margin-bottom:14px; font-weight:600; text-decoration:none; }
+  .meta { color:var(--muted); font-size:13px; margin-bottom:16px; }
+  table { width:100%; border-collapse:collapse; margin-bottom:12px; font-size:14.5px; }
+  th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--teal); font-weight:600; }
+  .key { background:#EAF4F0; border-left:3px solid var(--teal); padding:12px 14px; border-radius:0 8px 8px 0; margin-bottom:12px; }
+  .key p:last-child { margin-bottom:0; }
+  .cta { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--teal); border-radius:12px; padding:18px 20px; margin:22px 0 14px; }
+  .cta p { margin-bottom:8px; } .cta p:last-child { margin-bottom:0; }
+  .rel { list-style:none; padding:0; } .rel li { margin-bottom:6px; }
+  .foot { font-size:12.5px; color:var(--muted); margin-top:8px; }
+  .idx { list-style:none; padding:0; } .idx li { margin-bottom:14px; }
+  .idx a { font-weight:600; font-size:15.5px; text-decoration:none; }
+  .idx p { font-size:14px; color:var(--muted); margin:2px 0 0; }
+</style>
+</head>
+<body>
+<a class="back" href="/learn/">&larr; All guides</a>
+<h1>Dosage calculation without the panic</h1>
+<p class="meta">Test-taking skill &middot; updated 2026-08-03 &middot; reviewed by a licensed RN</p>
+
+<div class="card">
+<p>Dosage calculation frightens people out of proportion to its difficulty. There are only a few formulas, the arithmetic is deliberately manageable, and the errors that cost marks are nearly always about setup or units rather than about mathematics.</p>
+
+<h2>The core formula</h2>
+<p><b>Desired over Have, times Quantity.</b></p>
+<p>Amount to give equals the dose you want, divided by the dose you have on hand, multiplied by the quantity that dose comes in.</p>
+<p>If an order is for 500 mg and the supply is 250 mg per tablet, then 500 divided by 250, times 1 tablet, gives 2 tablets.</p>
+
+<h2>Weight-based doses</h2>
+<p>Two steps, in this order:</p>
+<ol>
+  <li>Convert weight to kilograms if it is given in pounds — <b>divide by 2.2</b>.</li>
+  <li>Multiply the prescribed dose per kilogram by the client's weight in kilograms.</li>
+</ol>
+<p>Then, if needed, apply Desired over Have to convert that dose into a volume.</p>
+
+<div class="key">
+<p><b>Convert units before you calculate, never during.</b> The overwhelming majority of dosage errors are unit errors: pounds left unconverted, milligrams treated as grams, an hourly rate confused with a total volume. Write the units next to every number and make sure they cancel.</p>
+</div>
+
+<h2>IV flow rates</h2>
+<p><b>By pump, in millilitres per hour:</b> total volume divided by total hours.</p>
+<p>1,000 mL over 8 hours gives 125 mL/hour.</p>
+<p><b>By gravity, in drops per minute:</b> volume in millilitres, times the drop factor, divided by the time in minutes.</p>
+<p>1,000 mL over 8 hours with a drop factor of 15 becomes 1,000 times 15, divided by 480 minutes, which is about 31 drops per minute.</p>
+<p>Drops per minute are always rounded to a whole number — you cannot deliver a fraction of a drop.</p>
+
+<h2>Conversions worth knowing without thinking</h2>
+<table>
+  <tr><th>From</th><th>To</th></tr>
+  <tr><td>1 kg</td><td>2.2 lb</td></tr>
+  <tr><td>1 g</td><td>1,000 mg</td></tr>
+  <tr><td>1 mg</td><td>1,000 mcg</td></tr>
+  <tr><td>1 L</td><td>1,000 mL</td></tr>
+  <tr><td>1 tsp</td><td>5 mL</td></tr>
+  <tr><td>1 tbsp</td><td>15 mL</td></tr>
+  <tr><td>1 oz</td><td>30 mL</td></tr>
+</table>
+
+<h2>Rounding and format</h2>
+<ul>
+  <li>Follow the rounding the item specifies. If it asks for the nearest tenth, give a tenth.</li>
+  <li>Use a leading zero for values below one — <b>0.5 mg</b>, never .5 mg, which is misread as 5.</li>
+  <li>Never use a trailing zero — <b>5 mg</b>, never 5.0 mg, which is misread as 50.</li>
+  <li>Enter only the number unless the item asks for a unit.</li>
+</ul>
+<p>Those two zero rules are safety conventions, not style preferences, and they are examinable in their own right.</p>
+
+<h2>The sense check that catches disasters</h2>
+<p>Before entering an answer, ask whether it is plausible. Half a tablet, two tablets, 125 mL per hour — these are ordinary. Fourteen tablets, or an infusion at 1,200 mL per hour, is a signal that something was set up upside down. In practice a nurse who calculates an implausible dose stops and rechecks, and the exam rewards the same instinct.</p>
+</div>
+<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>What formula is used for dosage calculation?</h3><p>Desired over Have times Quantity: divide the dose you want by the dose on hand, then multiply by the quantity that dose comes in. Weight-based problems add a step of converting pounds to kilograms first.</p><h3>How do I calculate IV drip rate?</h3><p>Multiply the volume in millilitres by the drop factor, then divide by the time in minutes. Round drops per minute to a whole number. For a pump in millilitres per hour, divide total volume by total hours.</p><h3>How many kilograms is a pound?</h3><p>There are 2.2 pounds in a kilogram, so divide pounds by 2.2 to get kilograms. Doing this conversion before starting the calculation prevents the most common dosage error.</p></div>
+<div class="cta">
+  <p><b>Practise this for real.</b> PulseRN has an on-screen calculator and worked solutions on every dosage item, so you can see where a calculation went wrong.</p>
+  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Keep reading</h2>
+  <ul class="rel"><li><a href="/learn/prioritization-abc-maslow/">Prioritisation: ABC, Maslow and what comes first</a></li><li><a href="/learn/delegation-and-assignment/">Delegation and assignment rules</a></li><li><a href="/learn/therapeutic-communication/">Therapeutic communication: picking the right response</a></li></ul>
+</div>
+
+<p class="foot">Educational exam preparation only — not medical advice and not a clinical reference. Always follow your own institution's policies and your instructors' guidance. NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. <a href="/legal/">Terms &middot; Privacy &middot; Disclaimer</a> &middot; <a href="/about/">About</a></p>
+</body>
+</html>
