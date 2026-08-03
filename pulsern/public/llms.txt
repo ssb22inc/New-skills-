@@ -49,7 +49,38 @@ dosing or treatment instructions.
 
 - [Home](https://www.pulsern.app/) — product overview and sign-in
 - [About](https://www.pulsern.app/about/) — who built it and the method behind it
+- [Guides](https://www.pulsern.app/learn/) — free NCLEX-RN reference articles
 - [Terms, Privacy, Disclaimer](https://www.pulsern.app/legal/)
+
+## Guides
+
+Free, no sign-in required. Written in an exam-preparation register: they explain
+what the NCLEX expects a candidate to recognise and prioritise, and are not
+clinical protocols or a substitute for course materials.
+
+- [ABG interpretation made simple](https://www.pulsern.app/learn/abg-interpretation/)
+- [Bow-tie questions: how to answer them](https://www.pulsern.app/learn/bow-tie-questions/)
+- [Cloze (drop-down) questions: how to answer them](https://www.pulsern.app/learn/cloze-drop-down-questions/)
+- [Delegation and assignment rules](https://www.pulsern.app/learn/delegation-and-assignment/)
+- [Dosage calculation: the formulas that cover it](https://www.pulsern.app/learn/dosage-calculation-formulas/)
+- [Drag-and-drop and ordering questions](https://www.pulsern.app/learn/drag-and-drop-ordering-questions/)
+- [Electrolyte imbalances: signs worth knowing](https://www.pulsern.app/learn/electrolyte-imbalances/)
+- [Failed the NCLEX? What to do next](https://www.pulsern.app/learn/failed-the-nclex-what-now/)
+- [High-alert medications and their antidotes](https://www.pulsern.app/learn/high-alert-medications/)
+- [Highlight questions: how to answer them](https://www.pulsern.app/learn/highlight-questions/)
+- [How is the NCLEX scored?](https://www.pulsern.app/learn/how-is-the-nclex-scored/)
+- [How many questions is the NCLEX?](https://www.pulsern.app/learn/how-many-questions-is-the-nclex/)
+- [Infection control precautions: what goes where](https://www.pulsern.app/learn/infection-control-precautions/)
+- [Insulin types, onset and peak](https://www.pulsern.app/learn/insulin-types-and-timing/)
+- [Lab values to memorise for the NCLEX](https://www.pulsern.app/learn/lab-values-to-memorize/)
+- [Matrix and grid questions: how to answer them](https://www.pulsern.app/learn/matrix-grid-questions/)
+- [Building an NCLEX study plan that holds](https://www.pulsern.app/learn/nclex-study-plan/)
+- [NCLEX test day: what to expect](https://www.pulsern.app/learn/nclex-test-day-what-to-expect/)
+- [Next Generation NCLEX: what actually changed](https://www.pulsern.app/learn/next-generation-nclex-what-changed/)
+- [Prioritisation: ABC, Maslow and what comes first](https://www.pulsern.app/learn/prioritization-abc-maslow/)
+- [Select all that apply: a strategy that works](https://www.pulsern.app/learn/select-all-that-apply-strategy/)
+- [Spaced repetition for nursing students](https://www.pulsern.app/learn/spaced-repetition-for-nursing-students/)
+- [Therapeutic communication: picking the right response](https://www.pulsern.app/learn/therapeutic-communication/)
 
 ## Ownership
 
