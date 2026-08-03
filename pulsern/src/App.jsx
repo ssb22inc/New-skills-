@@ -364,6 +364,10 @@ export default function App() {
   const [run, setRun] = useState(0);        // consecutive correct answers (session)
   const [bestRun, setBestRun] = useState(0);
   const [log, setLog] = useState([]);        // {id, cat, diff, correct}
+  /* Flagging was removed from the UI in favour of Report a problem. These two
+     are still loaded and saved so existing students' flags survive in their
+     blob rather than being silently destroyed by the update. Nothing reads
+     them any more; nothing should, unless flagging comes back. */
   const [flagged, setFlagged] = useState([]);
   const [flaggedCases, setFlaggedCases] = useState([]);
   const [streak, setStreak] = useState({ count: 0, lastDay: null, shield: true }); // real day streak + one-miss shield
@@ -533,6 +537,10 @@ export default function App() {
     if (isOwner) { setShield(false); return; }
     const noCtx = (e) => { if (e.target.closest?.(".body")) e.preventDefault(); };
     const noCopy = (e) => { if (e.target.closest?.(".body") && !e.target.closest("input, textarea")) e.preventDefault(); };
+    /* Bound on keydown as well as keyup: Windows grabs the frame as the key
+       goes down, so a keyup-only handler blurs after the capture already
+       happened. Even on keydown this is a race we do not reliably win — it
+       raises the cost of a casual grab, nothing more. */
     const onKey = (e) => {
       if (e.key === "PrintScreen") {
         try { navigator.clipboard.writeText(""); } catch { /* clipboard may be unavailable */ }
@@ -544,6 +552,7 @@ export default function App() {
     const onFocus = () => setShield(false);
     document.addEventListener("contextmenu", noCtx);
     document.addEventListener("copy", noCopy);
+    window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("blur", onBlur);
@@ -551,6 +560,7 @@ export default function App() {
     return () => {
       document.removeEventListener("contextmenu", noCtx);
       document.removeEventListener("copy", noCopy);
+      window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("blur", onBlur);
@@ -811,17 +821,17 @@ export default function App() {
         )}
         {!locked && <>
           {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
-            record={record} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider}
+            record={record} questions={allQuestions} provider={provider}
             ability={ability} calibration={calibration} plan={plan}
             profile={profile} setProfile={setProfile} profileCardDismissed={profileCardDismissed} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
-          {tab === "qbank" && <QBank record={record} log={log} flagged={flagged} setFlagged={setFlagged} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} isOwner={isOwner} />}
-          {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} flaggedCases={flaggedCases} setFlaggedCases={setFlaggedCases} />}
+          {tab === "qbank" && <QBank record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} isOwner={isOwner} />}
+          {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
           {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} flagged={flagged} flaggedCases={flaggedCases} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
+          {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
         </>}
       </main>
 
@@ -1057,7 +1067,7 @@ function Today(props) {
   if (stage === "quiz") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 2 OF 2 · QUESTIONS</p>
-      <QBank record={props.record} log={props.log} flagged={props.flagged} setFlagged={props.setFlagged} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} auto onDone={() => setStage("done")} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} auto onDone={() => setStage("done")} />
     </div>
   );
 
@@ -1188,7 +1198,7 @@ function Ecg() {
 
 /* ================= QBANK ================= */
 
-function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, isOwner = false }) {
+function QBank({ record, log, auto = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, isOwner = false }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
@@ -1346,7 +1356,6 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
       <button className="btn" onClick={() => setPhase("pick")}>Back to session menu</button></section>
   );
 
-  const isFlagged = flagged.includes(q.id);
   const ext = ngnExt(q); // NGN payloads: rows/columns/actions/conditions/parameters/dropdowns
   const toggleSel = (i) => {
     if (phase !== "answering") return;
@@ -1543,7 +1552,6 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
         {phase === "answering" && (
           <div className="row">
             <button className="btn" disabled={!canSubmit} onClick={submit}>Check answer</button>
-            <button className="btn ghost" onClick={() => setFlagged((f) => isFlagged ? f.filter((x) => x !== q.id) : [...f, q.id])}>{isFlagged ? "⚑ Flagged" : "⚐ Flag"}</button>
           </div>
         )}
 
@@ -1581,7 +1589,7 @@ function QBank({ record, log, flagged, setFlagged, auto = false, onDone, questio
 }
 /* ================= CASE STUDY ================= */
 
-function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, flaggedCases = [], setFlaggedCases = () => {} }) {
+function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
   const [caseIdx, setCaseIdx] = useState(null); // null = case picker
   const [catFilter, setCatFilter] = useState([]);
   const [step, setStep] = useState(-1);
@@ -1593,7 +1601,6 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, flaggedC
   /* Bank cases carry a dbId; locally-bundled ones don't, so fall back to the
      title, which carries a unique index in migration 005. */
   const caseKey = cs ? (cs.dbId ?? cs.title) : null;
-  const isFlaggedCase = caseKey != null && flaggedCases.includes(caseKey);
 
   const openCase = (i) => { setCaseIdx(i); setStep(-1); setPhase("read"); setScore(0); setSel([]); };
   const start = () => { setStep(0); setPhase("answering"); setSel([]); };
@@ -1668,11 +1675,6 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, flaggedC
         </div>
         <p className="small note">Nurse's note: {cs.note}</p>
         {cs.ai && <p className="small">Reviewed for clinical accuracy — verify anything surprising against your course materials.</p>}
-        <div className="row" style={{ marginTop: 8 }}>
-          <button className="btn ghost" onClick={() => setFlaggedCases((f) => isFlaggedCase ? f.filter((x) => x !== caseKey) : [...f, caseKey])}>
-            {isFlaggedCase ? "⚑ Flagged" : "⚐ Flag"}
-          </button>
-        </div>
         <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
       </section>
@@ -1875,7 +1877,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
 
 /* ================= STATS ================= */
 
-function Stats({ log, catStats, popStats = [], acc, flagged, flaggedCases = [], resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile }) {
+function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
@@ -1894,7 +1896,7 @@ function Stats({ log, catStats, popStats = [], acc, flagged, flaggedCases = [], 
       <section className="card">
         <p className="eyebrow">Performance</p>
         <h2 className="h2">{log.length ? `${Math.round(acc * 100)}% overall accuracy` : "No questions answered yet"}</h2>
-        <p className="small">{log.length} answered · {log.filter((l) => l.correct).length} correct · {flagged.length + flaggedCases.length} flagged for review</p>
+        <p className="small">{log.length} answered · {log.filter((l) => l.correct).length} correct</p>
       </section>
       <section className="card">
         <p className="eyebrow">By client-needs category</p>
