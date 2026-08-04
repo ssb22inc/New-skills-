@@ -1,0 +1,19 @@
+# Jamaica copy overrides — patois where it lands naturally, never forced
+# (jm.yaml copy_directives). Anything not overridden here falls through to
+# the en-JM tag catalogue and then to base en. Nothing falls through to code.
+
+shoebox:
+  # TAJ is Jamaica's tax authority; the base catalogue can't know that.
+  disclaimer: 'These are your records, not tax advice — carry them to your accountant or TAJ.'
+  tax_over: >-
+    Heads up: your last 12 months of sales ({rolling}) crossed the GCT
+    registration threshold. Time to talk to your accountant.
+  tax_approaching: >-
+    Heads up: your last 12 months of sales ({rolling}) are getting close to the
+    GCT registration threshold. Nothing due yet — just know it's coming.
+  tax_nothing: 'GCT: nothing to do this month.'
+
+install:
+  offer_fallback: >-
+    Yuh business getting big now. Put Sycamore pon yuh home screen — it faster,
+    and it work even when di internet drop. {link}
