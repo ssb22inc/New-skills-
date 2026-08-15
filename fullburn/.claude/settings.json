@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "changed=$(git status --porcelain 2>/dev/null | grep -c 'fullburn/' || true); report=$(git status --porcelain 2>/dev/null | grep -c 'fullburn/reports/ADVERSARY_REPORT' || true); if [ \"$changed\" -gt 0 ] && [ \"$report\" -eq 0 ]; then echo 'Reminder (ENGINE_BUILD.md Law 9 / §10.3): fullburn/ has uncommitted changes but no adversary report was touched. Nothing is done until the engine-adversary subagent returns a PASS report in reports/ and its deterministic tests are green in CI. The builder never grades its own work.'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
