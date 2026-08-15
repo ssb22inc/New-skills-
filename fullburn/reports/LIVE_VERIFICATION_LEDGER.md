@@ -1,0 +1,23 @@
+# LIVE VERIFICATION LEDGER (adversary finding R7)
+
+Machine-readable list of acceptance criteria whose LIVE halves cannot be
+verified in the build sandbox. Each entry: what is unmet → which human task
+unblocks it → the exact verification to run once unblocked. An entry leaves
+this ledger only when its verification has been executed and recorded by the
+adversary. **While any entry is open, every phase verdict is CONDITIONAL, and
+Phase 1 implementation cannot be adversary-passed (its brief generator needs a
+live LLM path).**
+
+| # | Blocked verification | Phase/AC | Blocking task | Verification when unblocked |
+|---|---|---|---|---|
+| L1 | Hello-world call round-trips through the REAL Cloudflare AI Gateway and the trace appears in the REAL Langfuse project | Phase 0 AC 1 (live half) | H2, H5, H6, H7 | `llm()` with role `hello-world` against production `gatewayBaseUrl` + Langfuse sink; adversary independently confirms the trace in the Langfuse UI |
+| L2 | Genome-tagger golden-set outputs regenerated from LIVE models (current recorded outputs are authored placeholders that exercise the harness only) | Phase 0 AC 2 (live half) | H6 | Re-run `runEval` with fresh transport recordings for each candidate; commit recordings; re-run rebind test |
+| L3 | Eval results pushed to Langfuse (eval harness ↔ Langfuse adapter live) | Phase 0 deliverable (Langfuse eval harness, live half) | H5 | Harness pushes an eval run; adversary confirms it in Langfuse |
+| L4 | Per-client AI spend caps ALSO configured Gateway-side and verified to match `caps.ts` (local enforcement is live in code; Gateway config is defense-in-depth) | Phase 0 (§2.2) | H2 | Configure Gateway caps; adversary attempts an over-cap call with local check bypassed in a test harness — Gateway must refuse |
+| L5 | CI runs on GitHub Actions with secrets in repo settings; leak-check proven against real secret material | Phase 0 (§10.3) | H7 | First real PR exercises all three gates on github.com |
+| L6 | fullburn.ai registered; formal trademark check completed | Phase 0 deliverable | H1 | Registrar + trademark confirmation recorded here |
+| L7 | Workers-runtime test pool (workerd) in CI — engine src is written platform-neutral against the Workers target (wrangler.toml committed), but tests currently execute on Node | Phase 0 (§2.2, R12 partial) | none (buildable; queued behind Phase A findings) | Add @cloudflare/vitest-pool-workers, run suite under workerd, record parity |
+| L8 | Cross-family adversary re-review: this phase's build adversary ran on the SAME model family as the builder (harness limitation) — §2.4 family diversity violated for the review itself | Phase 0 process (R9b) | H6b | Re-run the Phase 0 adversary review on a non-Claude model; record deltas as findings |
+
+Ledger is append-only: cleared entries get a `CLEARED <date> <evidence>` line,
+never deletion.

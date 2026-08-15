@@ -10,6 +10,7 @@ Claude Code executes everything else. Spec references in parentheses. Nothing he
 - H4 · **Airbyte** — Airbyte Cloud account or a small VPS for OSS (§2.2, explicitly not Cloudflare). Claude Code automates connector provisioning after this exists.
 - H5 · **Langfuse** — create the project (§2.3). Every LLM call and agent decision must trace here from the first hello-world (Law 11).
 - H6 · **Model provider keys** — at least one frontier (Claude/GPT/Gemini) and one open-source route (Workers AI / Together / Groq / Fireworks), all wired through AI Gateway (§2.4). The family-diversity rule needs two families from day one (Law 13).
+- H6b · **Cross-family adversary re-review** (adversary finding R9b, Phase 0) — the Phase 0 build adversary ran on the same model family as the builder because the build harness only offers Claude models. Once H6 provides a non-Claude route, re-run the Phase 0 adversary review on that model and record deltas as findings. Tracked as ledger item L8; Phase 0's verdict stays conditional on it.
 - H7 · **Secrets into CI + vault only** — GitHub Actions secrets and the encrypted vault are the only two homes for any key or token (§15). A token in code, logs, or traces is a critical defect the CI leak check must catch.
 - H8 · **Approve `config/caps.ts` values** — per-client daily/total spend caps are yours to set; every future change is a human-approved commit (Law 2).
 - H9 · **Approve initial Grade Registry A-thresholds** (§12) — tuned in Phase 0, human-owned thereafter (Law 14, Class 2).

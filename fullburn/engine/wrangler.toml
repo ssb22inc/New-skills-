@@ -1,0 +1,10 @@
+# Workers runtime target (ENGINE_BUILD.md §2.2 stack pins, adversary finding R12).
+# Engine src is platform-neutral (no Node APIs, config via injected deps) so it
+# runs under workerd unchanged. Deploy requires H2 (Cloudflare account) — this
+# file makes the target explicit now so nothing is written Node-first.
+name = "fullburn-engine"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# Per-client Durable Objects, R2 prefixes, Vectorize namespaces are provisioned
+# per client at onboarding (Law 3) — bindings land with Phase 2.

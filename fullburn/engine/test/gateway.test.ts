@@ -1,0 +1,149 @@
+import { describe, expect, it } from "vitest";
+import { CapError, getCaps } from "@fullburn/config/caps";
+import { ROLE_BINDINGS } from "@fullburn/config/models";
+import { llm } from "../src/gateway.ts";
+import { TraceContext, TraceEmitError } from "../src/tracing.ts";
+import { vaultForClient } from "../src/vault.ts";
+import { CANARY_SECRET, LOW_CAP_TEST_CAPS, TEST_CLIENT, makeDeps } from "./helpers.ts";
+
+const trace = () => new TraceContext("t-1", TEST_CLIENT);
+
+describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
+  it("hello-world round-trips through the gateway URL with client key and traced", async () => {
+    const { deps, transport, sink } = makeDeps();
+    const out = await llm(
+      { ...deps, bindings: ROLE_BINDINGS },
+      { role: "hello-world", clientId: TEST_CLIENT, input: { say: "hi" }, trace: trace() },
+    );
+    expect(out).toEqual({ greeting: "hello from the mock gateway" });
+    const req = transport.requests[0]!;
+    expect(req.url).toBe("https://gateway.ai.cloudflare.com/v1/test-account/fullburn/anthropic/claude-sonnet");
+    expect(req.headers["authorization"]).toBe(`Bearer ${CANARY_SECRET}`);
+    expect(sink.events).toHaveLength(1);
+    expect(sink.events[0]!.role).toBe("hello-world");
+  });
+
+  it("refuses to run without a TraceContext (untraced decisions are bugs)", async () => {
+    const { deps } = makeDeps();
+    await expect(
+      llm({ ...deps, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: null as unknown as TraceContext,
+      }),
+    ).rejects.toThrow(TraceEmitError);
+  });
+
+  it("fails closed when the trace sink is down (R8): the call itself fails", async () => {
+    const { deps, sink } = makeDeps();
+    sink.setFailing(true);
+    await expect(
+      llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() }),
+    ).rejects.toThrow(/refusing to proceed untraced/);
+  });
+
+  it("ATTACK cap breach: the call over the daily AI cap is refused (R3)", async () => {
+    const { deps } = makeDeps();
+    const call = () =>
+      llm({ ...deps, capsTable: LOW_CAP_TEST_CAPS, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
+    await call(); // 0.01
+    await call(); // 0.02
+    await call(); // 0.03
+    await call(); // 0.04
+    await call(); // 0.05 == cap
+    await expect(call()).rejects.toThrow(/cap breach refused/); // 0.06 > 0.05
+  });
+
+  it("unsigned production caps refuse ALL AI spend until H8 (R2)", async () => {
+    const { deps, backend } = makeDeps();
+    const { capsTable: _testCaps, ...prodCapDeps } = deps;
+    await expect(
+      llm({ ...prodCapDeps, vault: vaultForClient(backend, "pulsern"), bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: "pulsern",
+        input: {},
+        trace: new TraceContext("t-p", "pulsern"),
+      }),
+    ).rejects.toThrow(/human sign-off/);
+    expect(() => getCaps("pulsern")).not.toThrow(); // caps exist; they are just unusable
+  });
+
+  it("unavailable spend meter refuses spend (fail closed)", async () => {
+    const { deps, meter } = makeDeps();
+    meter.setAvailable(false);
+    await expect(
+      llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() }),
+    ).rejects.toThrow(/fail closed/);
+  });
+
+  it("ATTACK cross-client: vault scoped to another client is refused (Law 3)", async () => {
+    const { deps, backend } = makeDeps();
+    const wrongVault = vaultForClient(backend, "other-client");
+    await expect(
+      llm({ ...deps, vault: wrongVault, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: trace(),
+      }),
+    ).rejects.toThrow(/cross-client secret access refused/);
+  });
+
+  it("ATTACK cross-client: trace context for another client is refused", async () => {
+    const { deps } = makeDeps();
+    await expect(
+      llm({ ...deps, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: new TraceContext("t-x", "other-client"),
+      }),
+    ).rejects.toThrow(/scoped to a different client/);
+  });
+
+  it("schema-invalid output is rejected (§2.4 structured I/O)", async () => {
+    const { deps, transport } = makeDeps();
+    transport.response = { wrong: 1 };
+    await expect(
+      llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() }),
+    ).rejects.toThrow(/missing required field/);
+  });
+
+  it("no error path leaks the vault secret (§10.2 token invariant)", async () => {
+    const { deps, transport, meter, sink } = makeDeps();
+    const attempts: (() => Promise<unknown>)[] = [
+      () => llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: null as unknown as TraceContext }),
+      async () => {
+        transport.response = { wrong: 1 };
+        return llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
+      },
+      async () => {
+        meter.setAvailable(false);
+        return llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
+      },
+    ];
+    for (const attempt of attempts) {
+      const msg = await attempt().then(
+        () => "",
+        (e: Error) => `${e.name} ${e.message} ${e.stack ?? ""}`,
+      );
+      expect(msg).not.toContain(CANARY_SECRET);
+    }
+    meter.setAvailable(true);
+    // Traces carry no secrets either (Langfuse is a named leak surface):
+    expect(JSON.stringify(sink.events)).not.toContain(CANARY_SECRET);
+  });
+
+  it("throws CapError for a client with no caps at all (no default spend)", async () => {
+    const { deps, backend } = makeDeps();
+    await expect(
+      llm({ ...deps, vault: vaultForClient(backend, "ghost"), bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: "ghost",
+        input: {},
+        trace: new TraceContext("t-g", "ghost"),
+      }),
+    ).rejects.toThrow(CapError);
+  });
+});

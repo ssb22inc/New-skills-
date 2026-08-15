@@ -8,7 +8,7 @@
     "engine"
   ],
   "scripts": {
-    "typecheck": "tsc --build",
+    "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "leak-check": "node engine/scripts/leak-check.mjs",
     "invariants": "vitest run --dir engine/test/invariants"

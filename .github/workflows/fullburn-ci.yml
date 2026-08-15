@@ -1,0 +1,57 @@
+# Fullburn CI gate (ENGINE_BUILD.md §10.3). CLASS 2 — changing this workflow
+# requires an APPROVALS entry (class2-gate).
+name: fullburn-ci
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["fullburn/**", ".github/workflows/fullburn-ci.yml"]
+  pull_request:
+    paths: ["fullburn/**", ".github/workflows/fullburn-ci.yml"]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fullburn
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit + invariant suite
+        run: npm test
+      - name: Leak + structural scan
+        run: node engine/scripts/leak-check.mjs ..
+
+  adversary-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Adversary report present, PASS, fresh, append-only (Law 9)
+        run: node fullburn/engine/scripts/adversary-gate.mjs . "origin/${{ github.base_ref }}"
+
+  class2-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Class-2 changes carry human approvals (Law 2/14/15)
+        run: node fullburn/engine/scripts/class2-gate.mjs . "origin/${{ github.base_ref }}"
