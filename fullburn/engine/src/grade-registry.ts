@@ -36,11 +36,18 @@ function metricPasses(t: MetricThreshold, actual: number | boolean): boolean {
 
 export function computeGrades(snapshot: MetricSnapshot): AreaGrade[] {
   return GRADE_AREAS.map((areaDef) => {
-    const metrics = snapshot[areaDef.area];
+    // Own-property lookups only (adversary finding F6): a polluted prototype
+    // must never supply metrics for an area the snapshot does not contain, or
+    // an empty snapshot could grade itself A.
+    const metrics =
+      snapshot !== null && typeof snapshot === "object" && Object.hasOwn(snapshot, areaDef.area)
+        ? snapshot[areaDef.area]
+        : undefined;
     const failing: string[] = [];
     const missing: string[] = [];
     for (const t of areaDef.metrics) {
-      const actual = metrics?.[t.key];
+      const actual =
+        metrics !== undefined && metrics !== null && Object.hasOwn(metrics, t.key) ? metrics[t.key] : undefined;
       if (actual === undefined) missing.push(t.key);
       else if (!metricPasses(t, actual)) failing.push(t.key);
     }

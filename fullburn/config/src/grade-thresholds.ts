@@ -45,6 +45,30 @@ export const GRADE_AREAS: readonly AreaThresholds[] = deepFreeze([
     metrics: [{ key: "stripe_warehouse_drift_pct", op: "<", value: 2 }],
   },
   {
+    // §12 row "WordPress / SEO" (adversary finding F12 — the area existed in the
+    // spec's table but had no thresholds, so it could never drop below A).
+    area: "wordpress-seo",
+    metrics: [
+      { key: "organic_clicks_vs_baseline_pct", op: ">=", value: 0 },
+      { key: "cwv_pass_rate_pct", op: ">=", value: 75 },
+      { key: "indexation_health_pct", op: ">=", value: 95 },
+      { key: "mutations_reversible_pct", op: "==", value: 100 },
+      { key: "verdicts_before_window_close", op: "==0", value: 0 },
+    ],
+  },
+  {
+    // §12 row "Business health (ours)" (F12). Carries the guarantee-exposure cap
+    // that auto-pauses sales (§14, Law 17) — an ungraded area never pauses it.
+    area: "business-health",
+    metrics: [
+      { key: "per_client_cogs_under_margin_floor", op: "==true", value: true },
+      { key: "human_queue_median_latency_hours", op: "<", value: 72 },
+      { key: "human_queue_shrinking_mom", op: "==true", value: true },
+      { key: "guarantee_exposure_within_cap", op: "==true", value: true },
+      { key: "continuity_drills_passed", op: "==true", value: true },
+    ],
+  },
+  {
     area: "dummy-proof",
     metrics: [
       { key: "red_button_drill_seconds", op: "<", value: 60 },

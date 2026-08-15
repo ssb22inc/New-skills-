@@ -111,6 +111,47 @@ export function ownEntry<T>(table: Readonly<Record<string, T>>, key: string): T 
   return Object.hasOwn(table, key) ? table[key] : undefined;
 }
 
+/** Evidence that the eval harness actually executed a role's golden set against
+ * a candidate model (adversary finding F9). `bindRole` takes this, not a bare
+ * number: a caller-chosen score is not proof an eval ran, and Law 4 says gates
+ * are code, not convention. The engine's `EvalResult` satisfies this shape
+ * structurally, so the harness output is passed straight through. */
+export interface EvalAttestation {
+  readonly role: string;
+  readonly modelId: string;
+  readonly score: number;
+  readonly total: number;
+  readonly passed: number;
+}
+
+/** Validates that an attestation could only have come from a real harness run
+ * for exactly this (role, model): the arithmetic must close. */
+function assertAttestation(att: unknown, role: string, modelId: string): asserts att is EvalAttestation {
+  if (att === null || typeof att !== "object") {
+    throw new BindingError(
+      `bindRole requires the eval harness result for "${role}" — a bare score is not evidence an eval ran (§2.4, Law 13)`,
+    );
+  }
+  const a = att as Partial<EvalAttestation>;
+  if (a.role !== role) throw new BindingError(`eval result is for role "${String(a.role)}", not "${role}"`);
+  if (a.modelId !== modelId) throw new BindingError(`eval result is for model "${String(a.modelId)}", not "${modelId}"`);
+  if (typeof a.total !== "number" || !Number.isInteger(a.total) || a.total <= 0) {
+    throw new BindingError("eval result must cover a non-empty golden set — an eval over nothing proves nothing");
+  }
+  if (typeof a.passed !== "number" || !Number.isInteger(a.passed) || a.passed < 0 || a.passed > a.total) {
+    throw new BindingError("eval result passed-count is not a valid fraction of the golden set");
+  }
+  if (typeof a.score !== "number" || !Number.isFinite(a.score) || a.score < 0 || a.score > 1) {
+    throw new BindingError("eval score must be a finite number in [0,1] — the harness cannot return anything else");
+  }
+  // The score must be the arithmetic the harness would have produced.
+  if (Math.abs(a.score - a.passed / a.total) > 1e-9) {
+    throw new BindingError(
+      `eval score ${a.score} does not match ${a.passed}/${a.total} — the result was not produced by the harness`,
+    );
+  }
+}
+
 function familyOf(bindings: RoleBindings, role: string): ModelFamily {
   const modelId = ownEntry(bindings, role);
   if (modelId === undefined) throw new BindingError(`role "${role}" has no binding`);
@@ -121,8 +162,17 @@ function familyOf(bindings: RoleBindings, role: string): ModelFamily {
 
 /** Law 13 / §2.4: for every domain, builder-side and adversary-side roles must
  * run on different model families. Checked across ALL bindings, not on demand
- * (adversary finding R9a). */
+ * (R9a) — and the check is only meaningful if both sides are actually present,
+ * so completeness is enforced first (adversary finding F11): dropping the
+ * adversary binding must not be a way to satisfy the rule vacuously. */
 export function validateBindings(bindings: RoleBindings, cards: Readonly<Record<string, RoleCard>> = ROLE_CARDS): void {
+  // Completeness: every declared role holds a binding.
+  for (const role of Object.keys(cards)) {
+    if (ownEntry(bindings, role) === undefined) {
+      throw new BindingError(`role "${role}" is declared but unbound — every role card must hold a binding (Law 13)`);
+    }
+  }
+
   const byDomain = new Map<string, { builders: string[]; adversaries: string[] }>();
   for (const role of Object.keys(bindings)) {
     const card = ownEntry(cards, role);
@@ -133,6 +183,17 @@ export function validateBindings(bindings: RoleBindings, cards: Readonly<Record<
     if (card.side === "adversary") entry.adversaries.push(role);
     byDomain.set(card.domain, entry);
   }
+
+  // Pairing: a domain that builds must also be attacked, or "different families"
+  // is a statement about an empty set.
+  for (const [domain, { builders, adversaries }] of byDomain) {
+    if (builders.length > 0 && adversaries.length === 0) {
+      throw new BindingError(
+        `domain "${domain}" binds a builder with no adversary — family diversity would be vacuous (Law 13, §2.4)`,
+      );
+    }
+  }
+
   for (const [domain, { builders, adversaries }] of byDomain) {
     for (const b of builders) {
       for (const a of adversaries) {
@@ -146,25 +207,23 @@ export function validateBindings(bindings: RoleBindings, cards: Readonly<Record<
   }
 }
 
-/** Eval-gated rebind (§2.4): returns NEW bindings; never mutates. The score
- * must come from the eval harness having executed the role's golden set against
- * recorded outputs of the candidate model — callers pass the harness result. */
+/** Eval-gated rebind (§2.4): returns NEW bindings; never mutates. The evidence
+ * must be the eval harness's own result for exactly this (role, model), with
+ * arithmetic that closes — a caller-chosen number binds nothing (F9). */
 export function bindRole(
   bindings: RoleBindings,
   role: string,
   modelId: string,
-  harnessScore: number,
+  evalResult: EvalAttestation,
   cards: Readonly<Record<string, RoleCard>> = ROLE_CARDS,
 ): RoleBindings {
   const card = ownEntry(cards, role);
   if (card === undefined) throw new BindingError(`unknown role "${role}"`);
   if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`unknown model "${modelId}"`);
-  if (typeof harnessScore !== "number" || !Number.isFinite(harnessScore)) {
-    throw new BindingError("harnessScore must be a finite number from the eval harness");
-  }
-  if (harnessScore < card.evalThreshold) {
+  assertAttestation(evalResult, role, modelId);
+  if (evalResult.score < card.evalThreshold) {
     throw new BindingError(
-      `model "${modelId}" scored ${harnessScore} < threshold ${card.evalThreshold} for role "${role}" — no pass, no bind`,
+      `model "${modelId}" scored ${evalResult.score} < threshold ${card.evalThreshold} for role "${role}" — no pass, no bind`,
     );
   }
   const next = deepFreeze({ ...bindings, [role]: modelId });

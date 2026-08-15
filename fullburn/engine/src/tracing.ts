@@ -1,8 +1,12 @@
 /** Tracing (Law 11): every LLM call and every decision emits a trace; untraced
- * decisions are bugs. FAIL CLOSED (adversary finding R8): if the trace sink
- * write fails for a decision-class call, the call fails — the engine never
- * proceeds silently untraced. Langfuse is the production sink (H5); the
- * interface is the contract. */
+ * decisions are bugs. FAIL CLOSED (R8): if the trace sink write fails for a
+ * successful call, the call fails — the engine never proceeds on an untraced
+ * decision. FAILURES ARE TRACED TOO (adversary finding F8): a call that reaches
+ * the provider and then errors is exactly the event an operator needs, and it
+ * carries a real charge. Langfuse is the production sink (H5); the interface is
+ * the contract. */
+
+export type TraceOutcome = "ok" | "error";
 
 export interface TraceEvent {
   readonly traceId: string;
@@ -13,6 +17,9 @@ export interface TraceEvent {
   readonly input: unknown;
   readonly output: unknown;
   readonly costUsd: number;
+  readonly outcome: TraceOutcome;
+  /** Redacted failure summary when outcome is "error". */
+  readonly errorMessage?: string;
 }
 
 export interface TraceSink {
@@ -33,13 +40,15 @@ export class TraceContext {
   }
 }
 
-/** Emit, converting any sink failure into a hard TraceEmitError. */
+/** Emit, converting any sink failure into a hard TraceEmitError. The sink's own
+ * error text is never interpolated verbatim — callers pass already-redacted
+ * detail, and the sink never sees secrets in the first place. */
 export async function emitOrFail(sink: TraceSink, event: TraceEvent): Promise<void> {
   try {
     await sink.emit(event);
   } catch (err) {
     throw new TraceEmitError(
-      `trace emission failed — refusing to proceed untraced (Law 11): ${err instanceof Error ? err.message : "unknown sink error"}`,
+      `trace emission failed — refusing to proceed untraced (Law 11): ${err instanceof Error ? err.name : "unknown sink error"}`,
     );
   }
 }

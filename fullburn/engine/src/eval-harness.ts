@@ -1,4 +1,4 @@
-import { ROLE_CARDS } from "@fullburn/config/models";
+import { ROLE_CARDS, ownEntry } from "@fullburn/config/models";
 import { type LlmDeps, llm, type GatewayTransport } from "./gateway.ts";
 import { TraceContext } from "./tracing.ts";
 
@@ -54,7 +54,9 @@ export async function runEval(
   recorded: RecordedTransport,
   clientId: string,
 ): Promise<EvalResult> {
-  if (ROLE_CARDS[role] === undefined) throw new Error(`unknown role "${role}"`);
+  // Own-property lookup (adversary finding F17) — keeps the codebase-wide
+  // discipline: no guard is defeated by a polluted prototype.
+  if (ownEntry(ROLE_CARDS, role) === undefined) throw new Error(`unknown role "${role}"`);
   if (goldenSet.length === 0) throw new Error("empty golden set — an eval over nothing proves nothing");
 
   const bindings = { [role]: modelId };

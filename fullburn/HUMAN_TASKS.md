@@ -14,6 +14,17 @@ Claude Code executes everything else. Spec references in parentheses. Nothing he
 - H7 · **Secrets into CI + vault only** — GitHub Actions secrets and the encrypted vault are the only two homes for any key or token (§15). A token in code, logs, or traces is a critical defect the CI leak check must catch.
 - H8 · **Approve `config/caps.ts` values** — per-client daily/total spend caps are yours to set; every future change is a human-approved commit (Law 2).
 - H9 · **Approve initial Grade Registry A-thresholds** (§12) — tuned in Phase 0, human-owned thereafter (Law 14, Class 2).
+- H19 · **Repository protection — without this every CI gate is advisory** (adversary finding F14, ledger L11). On GitHub, for the default branch and every phase branch: (1) **required status checks** — `verify`, `adversary-gate`, `class2-gate` — so a red or gate-free PR cannot merge; (2) **no force-push / no branch deletion**; (3) **CODEOWNERS requiring your review on `fullburn/APPROVALS/**` and on every Class-2 path** listed in `engine/scripts/gate-lib.mjs`. Reason this is yours alone: the workflow file lives in the branch under test, so a PR that deletes it runs no gate, and the approval mechanism proves *what* was approved by content hash but never *who* wrote it — only CODEOWNERS makes "human-only" real. (~15 min)
+
+## Class-2 approvals owed for the Phase 0 fix commit
+
+The Phase 0 adversary fixes touch files that are Class 2 by their own rule, so this PR needs approval entries from you before it can merge (format in `APPROVALS/README.md`; `sha256sum <file>` from the repo root gives the hash). Nothing here changes a *value* you own — caps and thresholds keep their pending-sign-off state — but the rule is the rule, and the builder must never write its own approval:
+
+- `fullburn/config/src/caps.ts` — comment only: records that ad-spend caps have no enforcement path before Phase 6.
+- `fullburn/config/src/grade-thresholds.ts` — adds the two §12 areas that were missing (`wordpress-seo`, `business-health`), so they can actually drop below A.
+- `fullburn/engine/src/gateway.ts`, `fullburn/engine/src/spend-meter.ts` — the reserve-then-settle cap path (fixes the concurrency breach).
+- `fullburn/engine/src/grade-registry.ts` — own-property lookups so a polluted prototype cannot forge an A.
+- `fullburn/engine/scripts/gate-lib.mjs`, `adversary-gate.mjs`, `class2-gate.mjs`, `leak-check.mjs`, `scan-lib.mjs`, `fullburn/vitest.config.ts` — gate hardening and the newly protected files.
 
 ## Before client zero spends a dollar (Phase 6)
 

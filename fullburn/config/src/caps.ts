@@ -6,9 +6,13 @@ import { deepFreeze } from "./freeze.ts";
  * default cap — an unknown client has NO cap and therefore may spend NOTHING. */
 
 export interface ClientCaps {
-  /** Max ad spend per client-local day, USD. */
+  /** Max ad spend per client-local day, USD.
+   * NOT YET ENFORCED ANYWHERE: no write path exists before Phase 6. The only
+   * cap consulted today is `dailyAiSpendUsd`. A later phase must not assume a
+   * guard already exists here (adversary spec observation #6). */
   readonly dailyAdSpendUsd: number;
-  /** Max cumulative ad spend for the engagement, USD. */
+  /** Max cumulative ad spend for the engagement, USD. Not yet enforced — see
+   * `dailyAdSpendUsd`; the Phase 6 write adapter owns both. */
   readonly totalAdSpendUsd: number;
   /** Max AI (LLM/render) spend per client-local day, USD. Enforced locally in
    * llm() pre-call (adversary finding R3) — never delegated to Gateway config. */

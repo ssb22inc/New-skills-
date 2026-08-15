@@ -17,17 +17,31 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     expect(res.failures).toEqual(["g5: field mismatch"]);
   });
 
-  it("rebind with a passing harness score serves with ZERO code change", async () => {
+  it("AC 2 — rebinding FRONTIER → OPEN-SOURCE passes evals and serves with zero code change", async () => {
+    // Adversary finding F15: the previous version of this test rebound
+    // qwen-72b → qwen-72b, which demonstrated nothing. Start from a frontier
+    // binding and move the role to an open-source model on the evidence of an
+    // actual harness run.
     const { deps, transport } = makeDeps();
-    const res = await runEval(deps, "genome-tagger", "qwen-72b", GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
-    const rebound = bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", res.score);
-    // Only the bindings object changed; the same llm() call now routes to qwen:
+    const frontier = { ...ROLE_BINDINGS, "genome-tagger": "gpt-5" };
     transport.response = { hook: "pov", angle: "x", emotion: "y", format: "z", offer: "none" };
+    await llm({ ...deps, bindings: frontier }, {
+      role: "genome-tagger",
+      clientId: TEST_CLIENT,
+      input: { ad: "some ad" },
+      trace: new TraceContext("t-frontier", TEST_CLIENT),
+    });
+    expect(transport.requests.at(-1)!.url).toContain("openai/gpt-5");
+
+    const res = await runEval(deps, "genome-tagger", "qwen-72b", GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
+    const rebound = bindRole(frontier, "genome-tagger", "qwen-72b", res);
+
+    // Same call site, same everything — only the bindings object changed.
     await llm({ ...deps, bindings: rebound }, {
       role: "genome-tagger",
       clientId: TEST_CLIENT,
       input: { ad: "some ad" },
-      trace: new TraceContext("t-rebind", TEST_CLIENT),
+      trace: new TraceContext("t-oss", TEST_CLIENT),
     });
     expect(transport.requests.at(-1)!.url).toContain("workers-ai/qwen-72b");
   });
@@ -36,7 +50,7 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     const { deps } = makeDeps();
     const res = await runEval(deps, "genome-tagger", "llama-70b", GOLDEN, new RecordedTransport(RECORDED_LLAMA_70B), TEST_CLIENT);
     expect(res.score).toBeLessThan(ROLE_CARDS["genome-tagger"]!.evalThreshold);
-    expect(() => bindRole(ROLE_BINDINGS, "genome-tagger", "llama-70b", res.score)).toThrow(/no pass, no bind/);
+    expect(() => bindRole(ROLE_BINDINGS, "genome-tagger", "llama-70b", res)).toThrow(/no pass, no bind/);
   });
 
   it("an empty golden set is refused — an eval over nothing proves nothing", async () => {

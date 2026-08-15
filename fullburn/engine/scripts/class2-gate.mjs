@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-/** CI wrapper for the Class-2 change-control gate (Law 2/14/15, §13; R1).
+/** CI wrapper for the Class-2 change-control gate (Law 2/14/15, §13; R1,
+ * hardened per adversary finding F14: only approvals ADDED in this diff count).
  * Usage: node class2-gate.mjs <repo-root> <base-ref> */
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
@@ -23,12 +24,12 @@ const changedFiles = diff
     return { status: status === "A" ? "added" : status === "D" ? "deleted" : "modified", path: rest[rest.length - 1] };
   });
 
-const approvalsDir = join(repoRoot, "fullburn/APPROVALS");
-const approvalDocs = existsSync(approvalsDir)
-  ? readdirSync(approvalsDir)
-      .filter((f) => f.endsWith(".md"))
-      .map((f) => readFileSync(join(approvalsDir, f), "utf8"))
-  : [];
+// Approval entries are only credible if they arrived with the change they
+// approve — a pre-existing entry in the working tree proves nothing about this
+// diff. (Who wrote it is H19's job: CODEOWNERS on APPROVALS/**.)
+const approvalDocs = changedFiles
+  .filter((f) => f.status === "added" && /^fullburn\/APPROVALS\/.*\.md$/.test(f.path) && !f.path.endsWith("README.md"))
+  .map((f) => ({ path: f.path, status: f.status, content: readFileSync(join(repoRoot, f.path), "utf8") }));
 
 const res = checkClass2Approvals({
   changedFiles,

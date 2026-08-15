@@ -7,11 +7,42 @@ const ALL_A: MetricSnapshot = {
   "model-layer": { roles_below_eval_threshold: 0, family_diversity_holds: true },
   "adversary-layer": { decisions_with_verdicts_pct: 100, unreviewed_fails: 0 },
   "data-truth": { stripe_warehouse_drift_pct: 1.3 },
+  "wordpress-seo": {
+    organic_clicks_vs_baseline_pct: 18,
+    cwv_pass_rate_pct: 86,
+    indexation_health_pct: 98,
+    mutations_reversible_pct: 100,
+    verdicts_before_window_close: 0,
+  },
   "dummy-proof": { red_button_drill_seconds: 41, client_screens: 4 },
   "security-isolation": { cross_tenant_events: 0, token_leaks: 0 },
+  "business-health": {
+    per_client_cogs_under_margin_floor: true,
+    human_queue_median_latency_hours: 18,
+    human_queue_shrinking_mom: true,
+    guarantee_exposure_within_cap: true,
+    continuity_drills_passed: true,
+  },
 };
 
 describe("grade registry (AC 3, §12, Law 14)", () => {
+  it("covers every area §12 enumerates", () => {
+    // Adversary finding F12: an area with no thresholds is never computed and
+    // can never drop below A, so its autonomy never freezes.
+    expect(GRADE_AREAS.map((a) => a.area).sort()).toEqual(
+      [
+        "adversary-layer",
+        "business-health",
+        "data-truth",
+        "dummy-proof",
+        "marketing-engine",
+        "model-layer",
+        "security-isolation",
+        "wordpress-seo",
+      ],
+    );
+  });
+
   it("computes and publishes a grade from seeded data", () => {
     const grades = computeGrades(ALL_A);
     expect(grades).toHaveLength(GRADE_AREAS.length);
@@ -31,6 +62,16 @@ describe("grade registry (AC 3, §12, Law 14)", () => {
       { type: "HALT_AUTO_IMPROVEMENTS", area: "data-truth" },
       { type: "ALERT_HUMAN", area: "data-truth" },
     ]);
+  });
+
+  it("guarantee exposure over its cap drops business health below A (§14, Law 17)", () => {
+    const exposed = {
+      ...ALL_A,
+      "business-health": { ...ALL_A["business-health"]!, guarantee_exposure_within_cap: false },
+    };
+    const g = computeGrades(exposed).find((x) => x.area === "business-health")!;
+    expect(g.grade).toBe("BELOW_A");
+    expect(g.failing).toEqual(["guarantee_exposure_within_cap"]);
   });
 
   it("missing metrics are BELOW_A, never assumed fine (fail closed)", () => {
