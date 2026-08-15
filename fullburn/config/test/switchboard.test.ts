@@ -34,9 +34,13 @@ describe("switchboard (Law 18, §2.5, §10.2 'locked flags structurally inert', 
   });
 
   it("staged (built, not live) refuses exactly like locked", () => {
-    expect(() => requireActiveChannel("google")).toThrow(SwitchboardError);
-    expect(() => requireActiveMarket("EU")).toThrow(SwitchboardError);
+    // R2-34: this test used to pair the channel-side staged case with a LOCKED
+    // market, so the market half of the staged refusal was never exercised.
+    expect(() => requireActiveChannel("google")).toThrow(/staged/);
+    expect(() => requireActiveMarket("EU")).toThrow(/locked/);
+    expect(() => requireActiveChannel("tiktok")).toThrow(/locked/);
     expect(() => requireActiveChannel("unknown-channel")).toThrow(SwitchboardError);
+    expect(() => requireActiveMarket("unknown-market")).toThrow(SwitchboardError);
   });
 
   it("market entries carry the §2.5 bundle slots so later phases fill, not reshape", () => {

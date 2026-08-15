@@ -22,11 +22,11 @@ describe("caps (Law 2, AC 5, R2)", () => {
     expect(() => getCaps("")).toThrow(CapError);
   });
 
-  it("malformed caps throw instead of flowing into silent comparisons", () => {
-    const bad = { c: { dailyAdSpendUsd: undefined as unknown as number, totalAdSpendUsd: 1, dailyAiSpendUsd: 1, humanSignoff: "x" } };
-    expect(() => getCaps("c", bad)).toThrow(/finite positive/);
-    const negative = { c: { dailyAdSpendUsd: -5, totalAdSpendUsd: 1, dailyAiSpendUsd: 1, humanSignoff: "x" } };
-    expect(() => getCaps("c", negative)).toThrow(/finite positive/);
+  it("a caller cannot supply its own caps table at all (R2-03)", () => {
+    // getCaps takes exactly one argument: the client id. There is no parameter
+    // by which a caller can hand in a different table, so the malformed-table
+    // case this test used to construct is now unrepresentable.
+    expect(getCaps.length).toBe(1);
   });
 
   it("caps without human sign-off (H8) are structurally unusable", () => {

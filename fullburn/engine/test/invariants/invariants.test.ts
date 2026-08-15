@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CapError, assertCapsUsable, getCaps } from "@fullburn/config/caps";
 import { ROLE_BINDINGS, validateBindings } from "@fullburn/config/models";
@@ -45,6 +46,22 @@ const NOT_YET_APPLICABLE: readonly NotYetApplicable[] = [
 ];
 
 describe("§10.2 standing invariants — enumerated checklist", () => {
+  it("the checklist checks ITSELF against the spec (R2-25)", () => {
+    // Previously the file asserted only its own internal count, so a §10.2
+    // bullet could be deleted from the spec, or an entry dropped here, with the
+    // suite green. This reads the spec and holds the file to it.
+    const spec = readFileSync(new URL("../../../ENGINE_BUILD.md", import.meta.url), "utf8");
+    const section = /### 10\.2 Standing invariants[\s\S]*?\n### /i.exec(spec)?.[0];
+    expect(section, "§10.2 not found in ENGINE_BUILD.md").toBeDefined();
+    const bullets = (section!.match(/^- /gm) ?? []).length;
+    expect(bullets).toBe(12); // if the spec changes, this file must be revisited
+    const self = readFileSync(new URL("./invariants.test.ts", import.meta.url), "utf8");
+    const live = (self.match(/it\("LIVE — /g) ?? []).length;
+    const claimed = Number(/(\d+) are live below/.exec(self)?.[1] ?? -1);
+    expect(claimed).toBe(live);
+    expect(live + NOT_YET_APPLICABLE.length).toBeGreaterThanOrEqual(bullets);
+  });
+
   it("checklist is complete: every §10.2 bullet is either asserted here or explicitly deferred", () => {
     expect(NOT_YET_APPLICABLE).toHaveLength(7);
     for (const n of NOT_YET_APPLICABLE) {

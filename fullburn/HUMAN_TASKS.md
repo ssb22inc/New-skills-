@@ -20,11 +20,16 @@ Claude Code executes everything else. Spec references in parentheses. Nothing he
 
 The Phase 0 adversary fixes touch files that are Class 2 by their own rule, so this PR needs approval entries from you before it can merge (format in `APPROVALS/README.md`; `sha256sum <file>` from the repo root gives the hash). Nothing here changes a *value* you own — caps and thresholds keep their pending-sign-off state — but the rule is the rule, and the builder must never write its own approval:
 
-- `fullburn/config/src/caps.ts` — comment only: records that ad-spend caps have no enforcement path before Phase 6.
-- `fullburn/config/src/grade-thresholds.ts` — adds the two §12 areas that were missing (`wordpress-seo`, `business-health`), so they can actually drop below A.
+- `fullburn/config/src/caps.ts` — removes the runtime cap-widening seam (a caller could hand `llm()` its own table with a forged sign-off), adds the two fixture clients the tests drive, and records that ad-spend caps have no enforcement path before Phase 6.
 - `fullburn/engine/src/gateway.ts`, `fullburn/engine/src/spend-meter.ts` — the reserve-then-settle cap path (fixes the concurrency breach).
 - `fullburn/engine/src/grade-registry.ts` — own-property lookups so a polluted prototype cannot forge an A.
-- `fullburn/engine/scripts/gate-lib.mjs`, `adversary-gate.mjs`, `class2-gate.mjs`, `leak-check.mjs`, `scan-lib.mjs`, `fullburn/vitest.config.ts` — gate hardening and the newly protected files.
+- `fullburn/config/src/grade-thresholds.ts` — adds the nine §12 A-criteria that had no threshold (so an area could hold "A" with CAC 4x baseline and injection drills failing) plus per-metric domain bounds.
+- `fullburn/config/src/models.ts`, `fullburn/engine/src/eval-harness.ts` — binding attestations must now come from an executed run over the role's declared golden set.
+- `fullburn/engine/scripts/gate-lib.mjs`, `adversary-gate.mjs`, `class2-gate.mjs`, `diff-lib.mjs`, `leak-check.mjs`, `scan-lib.mjs`, `fullburn/vitest.config.ts` — gate hardening.
+- `fullburn/engine/src/vault.ts`, `tracing.ts`, `redact.ts` — cross-tenant key collision, failure traces, and redaction of trace payloads.
+- **The package manifests and the test tree are now Class 2** (`package.json` ×3, `tsconfig*.json`, `fullburn/(config|engine)/test/**`, `PHASE`): `config/package.json` could redirect the `@fullburn/config/caps` import to an attacker module without touching `caps.ts`, and `fullburn/package.json` could redefine `npm test` so the entire invariant suite became a no-op — both with no approval required. Expect approval entries for these paths on future PRs; that friction is the point.
+
+**Note on approval format:** entries now name a TRANSITION, not a state — `from-content-hash` (the content at the PR base) as well as `content-hash` (the new content). A superseded approval doc, re-added verbatim, previously re-authorized content you had already revoked. See `APPROVALS/README.md`.
 
 ## Before client zero spends a dollar (Phase 6)
 

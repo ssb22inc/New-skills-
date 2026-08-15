@@ -1,13 +1,15 @@
-import { ROLE_CARDS, ownEntry } from "@fullburn/config/models";
+import { GOLDEN_SET_CASE_IDS, ROLE_CARDS, attestEvalRun, ownEntry, type EvalAttestation } from "@fullburn/config/models";
 import { type LlmDeps, llm, type GatewayTransport } from "./gateway.ts";
 import { TraceContext } from "./tracing.ts";
 
-/** Eval harness (§2.4, §11 Phase 0; adversary finding R6). Scores are COMPUTED
- * here, deterministically, by executing the role's golden set through the same
- * llm() path everything else uses. Fixtures are recorded MODEL OUTPUTS at the
- * transport level — never pre-computed scores. Generating fresh outputs needs
- * live keys (H6, ledger item); the scoring logic does not. Langfuse eval push
- * sits behind the TraceSink adapter (H5). */
+/** Eval harness (§2.4, §11 Phase 0; R6, hardened per R2-23/R2-24). Scores are
+ * COMPUTED here by executing the role's golden set through the same llm() path
+ * everything else uses, and the set is checked against the ids the role card
+ * declares — a caller cannot substitute a friendlier set, and a constant-output
+ * transport cannot manufacture coverage it did not have. Fixtures are recorded
+ * MODEL OUTPUTS at the transport level, never pre-computed scores. Generating
+ * fresh outputs needs live keys (H6, ledger L2); the scoring logic does not.
+ * Langfuse eval push sits behind the TraceSink adapter (H5, ledger L3). */
 
 export interface GoldenCase {
   readonly id: string;
@@ -31,7 +33,9 @@ export class RecordedTransport implements GatewayTransport {
 
   async post(): Promise<unknown> {
     if (this.#currentCase === null) throw new Error("no golden case selected");
-    const out = this.#outputs[this.#currentCase];
+    // Own-property lookup (adversary finding R2-24): a polluted prototype must
+    // not supply a recording for a case the candidate never answered.
+    const out = Object.hasOwn(this.#outputs, this.#currentCase) ? this.#outputs[this.#currentCase] : undefined;
     if (out === undefined) throw new Error(`no recorded output for case "${this.#currentCase}"`);
     return out;
   }
@@ -44,6 +48,8 @@ export interface EvalResult {
   readonly total: number;
   readonly passed: number;
   readonly failures: readonly string[];
+  /** The binding evidence. Only this object binds a model to a role. */
+  readonly attestation: EvalAttestation;
 }
 
 export async function runEval(
@@ -54,13 +60,23 @@ export async function runEval(
   recorded: RecordedTransport,
   clientId: string,
 ): Promise<EvalResult> {
-  // Own-property lookup (adversary finding F17) — keeps the codebase-wide
-  // discipline: no guard is defeated by a polluted prototype.
   if (ownEntry(ROLE_CARDS, role) === undefined) throw new Error(`unknown role "${role}"`);
   if (goldenSet.length === 0) throw new Error("empty golden set — an eval over nothing proves nothing");
 
+  // The set must be the one the role card declares (R2-23). A caller-supplied
+  // set that does not match the declared case ids is refused before any call.
+  const declared = ownEntry(GOLDEN_SET_CASE_IDS, role);
+  if (declared === undefined) throw new Error(`role "${role}" declares no golden set`);
+  const supplied = goldenSet.map((c) => c.id).sort();
+  const expected = [...declared].sort();
+  if (supplied.length !== expected.length || expected.some((id, i) => id !== supplied[i])) {
+    throw new Error(
+      `golden set for "${role}" does not match the ids declared on its role card (expected ${expected.join(",")}; got ${supplied.join(",")})`,
+    );
+  }
+
   const bindings = { [role]: modelId };
-  let passed = 0;
+  const outcomes: { caseId: string; passed: boolean }[] = [];
   const failures: string[] = [];
 
   for (const gcase of goldenSet) {
@@ -72,12 +88,22 @@ export async function runEval(
         { role, clientId, input: gcase.input, trace },
       )) as Record<string, unknown>;
       const ok = Object.entries(gcase.expected).every(([k, v]) => output[k] === v);
-      if (ok) passed += 1;
-      else failures.push(`${gcase.id}: field mismatch`);
+      outcomes.push({ caseId: gcase.id, passed: ok });
+      if (!ok) failures.push(`${gcase.id}: field mismatch`);
     } catch (err) {
+      outcomes.push({ caseId: gcase.id, passed: false });
       failures.push(`${gcase.id}: ${err instanceof Error ? err.message : "error"}`);
     }
   }
 
-  return { role, modelId, score: passed / goldenSet.length, total: goldenSet.length, passed, failures };
+  const attestation = attestEvalRun(role, modelId, outcomes);
+  return {
+    role,
+    modelId,
+    score: attestation.score,
+    total: attestation.total,
+    passed: attestation.passed,
+    failures,
+    attestation,
+  };
 }

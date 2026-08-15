@@ -3,13 +3,19 @@
  * so they can be unit-tested without a filesystem walk (adversary finding F18):
  * importing THIS file is safe — the walk runs only when it is the entry point.
  * Usage: node leak-check.mjs <repo-root> */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanContent } from "./scan-lib.mjs";
 
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git"]);
-const SCANNED = /\.(?:ts|tsx|mjs|js|json|md|toml|ya?ml|txt|env)$/;
+/** Widened per adversary finding R2-29: evidence dumps, logs, CSV extracts and
+ * shell scripts are exactly where a pasted token ends up, and they were not
+ * scanned. */
+const SCANNED = /\.(?:ts|tsx|mjs|cjs|js|jsx|json|jsonl|md|toml|ya?ml|txt|log|csv|tsv|sh|bash|sql|ini|conf|xml|html)$/;
+/** Roots to walk. `.github/` holds the workflow definitions and their secrets
+ * plumbing, and was previously never scanned (R2-29). */
+const ROOTS = ["fullburn", ".github"];
 
 export function* walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -22,8 +28,12 @@ export function* walk(dir) {
 
 export function scanTree(repoRoot) {
   const findings = [];
-  for (const file of walk(join(repoRoot, "fullburn"))) {
-    findings.push(...scanContent(relative(repoRoot, file), readFileSync(file, "utf8")));
+  for (const root of ROOTS) {
+    const dir = join(repoRoot, root);
+    if (!existsSync(dir)) continue;
+    for (const file of walk(dir)) {
+      findings.push(...scanContent(relative(repoRoot, file), readFileSync(file, "utf8")));
+    }
   }
   return findings;
 }

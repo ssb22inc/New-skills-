@@ -3,10 +3,16 @@ import { GRADE_AREAS } from "@fullburn/config/grade-thresholds";
 import { computeGrades, enforcement, publishGradeReport, type MetricSnapshot } from "../src/grade-registry.ts";
 
 const ALL_A: MetricSnapshot = {
-  "marketing-engine": { reconciliation_drift_pct: 1.3, cap_breaches: 0, policy_strikes: 0 },
-  "model-layer": { roles_below_eval_threshold: 0, family_diversity_holds: true },
-  "adversary-layer": { decisions_with_verdicts_pct: 100, unreviewed_fails: 0 },
-  "data-truth": { stripe_warehouse_drift_pct: 1.3 },
+  "marketing-engine": {
+    cac_beats_baseline_by_day_90: true,
+    blended_roas: 5.1,
+    reconciliation_drift_pct: 1.3,
+    cap_breaches: 0,
+    policy_strikes: 0,
+  },
+  "model-layer": { roles_below_eval_threshold: 0, family_diversity_holds: true, monthly_failover_drill_passed: true },
+  "adversary-layer": { decisions_with_verdicts_pct: 100, unreviewed_fails: 0, injection_drills_passed: true },
+  "data-truth": { stripe_warehouse_drift_pct: 1.3, incrementality_gap_stated: true },
   "wordpress-seo": {
     organic_clicks_vs_baseline_pct: 18,
     cwv_pass_rate_pct: 86,
@@ -14,10 +20,17 @@ const ALL_A: MetricSnapshot = {
     mutations_reversible_pct: 100,
     verdicts_before_window_close: 0,
   },
-  "dummy-proof": { red_button_drill_seconds: 41, client_screens: 4 },
-  "security-isolation": { cross_tenant_events: 0, token_leaks: 0 },
+  "dummy-proof": { unassisted_onboarding_completion_pct: 93, red_button_drill_seconds: 41, client_screens: 4 },
+  "security-isolation": {
+    cross_tenant_events: 0,
+    bot_filtration_pct: 98.7,
+    wp_credentials_admin_wide: false,
+    token_leaks: 0,
+  },
   "business-health": {
     per_client_cogs_under_margin_floor: true,
+    our_cac_within_target: true,
+    our_churn_within_target: true,
     human_queue_median_latency_hours: 18,
     human_queue_shrinking_mom: true,
     guarantee_exposure_within_cap: true,
@@ -78,7 +91,40 @@ describe("grade registry (AC 3, §12, Law 14)", () => {
     const partial = { ...ALL_A, "security-isolation": { cross_tenant_events: 0 } };
     const g = computeGrades(partial).find((x) => x.area === "security-isolation")!;
     expect(g.grade).toBe("BELOW_A");
-    expect(g.missing).toEqual(["token_leaks"]);
+    expect(g.missing).toEqual(["bot_filtration_pct", "wp_credentials_admin_wide", "token_leaks"]);
+  });
+
+  it("every §12 A-criterion has a threshold, so none can be silently unenforceable (R2-21)", () => {
+    // Nine criteria the spec states were absent from the table entirely: an
+    // area with no threshold for a criterion can never drop below A on it.
+    const keys = new Set(GRADE_AREAS.flatMap((a) => a.metrics.map((m) => m.key)));
+    for (const required of [
+      "cac_beats_baseline_by_day_90",
+      "blended_roas",
+      "monthly_failover_drill_passed",
+      "injection_drills_passed",
+      "incrementality_gap_stated",
+      "unassisted_onboarding_completion_pct",
+      "bot_filtration_pct",
+      "wp_credentials_admin_wide",
+      "our_cac_within_target",
+      "our_churn_within_target",
+    ]) {
+      expect(keys).toContain(required);
+    }
+  });
+
+  it("out-of-domain readings fail CLOSED, not open (R2-20)", () => {
+    // -Infinity satisfied every "<" threshold and +Infinity every ">=" one, so
+    // an impossible number graded A and suppressed enforcement entirely.
+    for (const bad of [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, Number.NaN]) {
+      const spoofed = { ...ALL_A, "data-truth": { stripe_warehouse_drift_pct: bad, incrementality_gap_stated: true } };
+      const g = computeGrades(spoofed).find((x) => x.area === "data-truth")!;
+      expect(g.grade).toBe("BELOW_A");
+      expect(g.failing).toContain("stripe_warehouse_drift_pct");
+    }
+    const negative = { ...ALL_A, "dummy-proof": { ...ALL_A["dummy-proof"]!, red_button_drill_seconds: -5 } };
+    expect(computeGrades(negative).find((x) => x.area === "dummy-proof")!.grade).toBe("BELOW_A");
   });
 
   it("an entirely absent area is BELOW_A", () => {

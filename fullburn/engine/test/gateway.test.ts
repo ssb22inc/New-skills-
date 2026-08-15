@@ -4,7 +4,7 @@ import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { llm } from "../src/gateway.ts";
 import { TraceContext, TraceEmitError } from "../src/tracing.ts";
 import { vaultForClient } from "../src/vault.ts";
-import { CANARY_SECRET, LOW_CAP_TEST_CAPS, TEST_CLIENT, makeDeps } from "./helpers.ts";
+import { CANARY_SECRET, LOW_CAP_NARROWING, TEST_CLIENT, makeDeps } from "./helpers.ts";
 
 const trace = () => new TraceContext("t-1", TEST_CLIENT);
 
@@ -46,7 +46,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
   it("ATTACK cap breach: the call over the daily AI cap is refused (R3)", async () => {
     const { deps } = makeDeps();
     const call = () =>
-      llm({ ...deps, capsTable: LOW_CAP_TEST_CAPS, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
+      llm({ ...deps, capsTable: LOW_CAP_NARROWING, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
     await call(); // 0.01
     await call(); // 0.02
     await call(); // 0.03
@@ -57,9 +57,8 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
 
   it("unsigned production caps refuse ALL AI spend until H8 (R2)", async () => {
     const { deps, backend } = makeDeps();
-    const { capsTable: _testCaps, ...prodCapDeps } = deps;
     await expect(
-      llm({ ...prodCapDeps, vault: vaultForClient(backend, "pulsern"), bindings: ROLE_BINDINGS }, {
+      llm({ ...deps, vault: vaultForClient(backend, "pulsern"), bindings: ROLE_BINDINGS }, {
         role: "hello-world",
         clientId: "pulsern",
         input: {},

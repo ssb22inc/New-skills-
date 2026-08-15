@@ -1,48 +1,49 @@
 #!/usr/bin/env node
-/** CI wrapper for the adversary-report gate (Law 9, §10.3; hardened per R5 and
- * adversary finding F4).
+/** CI wrapper for the adversary-report gate (Law 9, §10.3; F4, R2-06/09/10/18/19).
  * Usage: node adversary-gate.mjs <repo-root> [base-ref]
  * - a report for the current PHASE must exist, be bound to the current tree,
- *   and read PASS (re-runs add a new report; reports are never edited)
- * - PRs may not modify existing ADVERSARY_REPORT files (append-only) */
+ *   and read PASS; any fresh FAIL blocks regardless
+ * - PRs may not modify, delete or rename existing ADVERSARY_REPORT files */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { checkAdversaryReport, checkReportsAppendOnly } from "./gate-lib.mjs";
+import { parseNameStatus } from "./diff-lib.mjs";
 
 const repoRoot = process.argv[2] ?? ".";
 const baseRef = process.argv[3] ?? null;
 
-/** Tree hash of fullburn/ excluding reports/ and APPROVALS/ (a report cannot
- * invalidate itself by being committed).
- *
- * `git ls-files -s` reports the INDEX, not the working tree, so unstaged edits
- * would leave the hash — and therefore a report's freshness binding — looking
- * valid while the code has already moved. CI checks out clean so index and
- * worktree agree there; locally they need not, so refuse to compute a hash
- * anyone might trust from a dirty tree. */
+/** Everything the adversary's verdict is a statement ABOUT. `.github/` is
+ * included (adversary finding R2-18): a PASS that does not cover the workflow
+ * definition asserts nothing about the CI that enforces it — the jobs could be
+ * deleted after the report was written and the binding would still match.
+ * reports/ and APPROVALS/ are excluded so a report cannot invalidate itself by
+ * being committed. */
+const TREE_SCOPE = ["fullburn/", ".github/", ":!fullburn/reports/", ":!fullburn/APPROVALS/"];
+
+/** `git ls-files -s` reports the INDEX, not the working tree, so unstaged edits
+ * would leave the hash — and a report's freshness binding — looking valid while
+ * the code has already moved. Untracked files are included in the check
+ * (adversary finding R2-19): a brand-new unstaged module is exactly what the
+ * index-based hash cannot see. */
 export function assertCleanTree(root) {
-  const dirty = execSync(
-    `git -C ${JSON.stringify(root)} status --porcelain -- fullburn/ ':!fullburn/reports/' ':!fullburn/APPROVALS/'`,
-    { encoding: "utf8" },
-  )
+  const scope = TREE_SCOPE.map((s) => JSON.stringify(s)).join(" ");
+  const dirty = execSync(`git -C ${JSON.stringify(root)} status --porcelain -- ${scope}`, { encoding: "utf8" })
     .split("\n")
-    // Porcelain "XY path": X is the index state, Y the worktree state. Staged
-    // changes (Y === " ") are already in the index and therefore in the hash;
-    // only an unstaged edit makes the hash lie about the code.
-    .filter((l) => l.length > 1 && l[1] !== " " && !l.startsWith("??"));
+    .filter((l) => l.length > 1)
+    // "XY path": X is the index state, Y the worktree state. Staged changes are
+    // already in the hash; unstaged edits and untracked files are not.
+    .filter((l) => l.startsWith("??") || l[1] !== " ");
   if (dirty.length > 0) {
     throw new Error(
-      `working tree has unstaged changes under fullburn/ — the verified-tree hash reads the git index, so it would not reflect them. Stage them first:\n${dirty.join("\n")}`,
+      `working tree has unstaged or untracked changes in the verified scope — the verified-tree hash reads the git index, so it would not reflect them. Stage them first:\n${dirty.join("\n")}`,
     );
   }
 }
 
 export function currentFullburnTreeHash(root) {
-  const out = execSync(
-    `git -C ${JSON.stringify(root)} ls-files -s -- fullburn/ ':!fullburn/reports/' ':!fullburn/APPROVALS/'`,
-    { encoding: "utf8" },
-  );
+  const scope = TREE_SCOPE.map((s) => JSON.stringify(s)).join(" ");
+  const out = execSync(`git -C ${JSON.stringify(root)} ls-files -s -- ${scope}`, { encoding: "utf8" });
   return execSync(`git -C ${JSON.stringify(root)} hash-object --stdin`, { input: out, encoding: "utf8" }).trim();
 }
 
@@ -70,15 +71,8 @@ if (!res.ok) {
 console.log(`adversary gate: ${res.reason}`);
 
 if (baseRef) {
-  const diff = execSync(`git -C ${JSON.stringify(repoRoot)} diff --name-status ${baseRef}...HEAD`, { encoding: "utf8" });
-  const changed = diff
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const [status, ...rest] = line.split("\t");
-      return { status: status === "A" ? "added" : status === "D" ? "deleted" : "modified", path: rest[rest.length - 1] };
-    });
-  const ao = checkReportsAppendOnly(changed);
+  const diff = execSync(`git -C ${JSON.stringify(repoRoot)} diff --name-status -M ${baseRef}...HEAD`, { encoding: "utf8" });
+  const ao = checkReportsAppendOnly(parseNameStatus(diff));
   if (!ao.ok) {
     console.error(`ADVERSARY GATE FAIL: ${ao.reason}`);
     process.exit(1);

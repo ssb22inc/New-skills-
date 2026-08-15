@@ -27,6 +27,18 @@ describe("secret rules (§10.2, §15) — apply to every file type", () => {
     });
   }
 
+  it("a quoted PEM header without a key body is documentation, not a leak", () => {
+    expect(scanContent("fullburn/reports/r.md", "the rule matches `-----BEGIN RSA PRIVATE KEY-----`")).toHaveLength(0);
+    const real = ["-----BEGIN RSA PRIVATE KEY-----", "MIIEowIBAAKCAQEAx7Vv" + "QmFzZTY0Qm9keUhlcmU".repeat(3)].join("\n");
+    expect(scanContent("fullburn/engine/src/x.ts", real).length).toBeGreaterThan(0);
+  });
+
+  it("the declared test canary is exempt, and only it (R2-14 evidence must be quotable)", () => {
+    expect(scanContent("fullburn/reports/r.md", "Bearer canary-vault-value-do-not-leak-8891")).toHaveLength(0);
+    // A different long bearer literal still fires.
+    expect(scanContent("fullburn/reports/r.md", "Bearer " + "z9y8x7w6v5".repeat(3)).length).toBeGreaterThan(0);
+  });
+
   it("flags tokens in non-code files too — a secret in a report is still a secret", () => {
     expect(scanContent("fullburn/reports/notes.md", fake("sk-ant-", 24)).length).toBeGreaterThan(0);
   });
@@ -67,6 +79,26 @@ describe("structural rules (Law 1, 6, 11, 18) — code only", () => {
   it("does not fire structural rules on prose — a doc may discuss what code may not do", () => {
     const prose = 'The engine never calls https://api.openai.com directly; see CHANNELS["google"].';
     expect(scanContent("fullburn/reports/ADVERSARY_REPORT_phase0.md", prose)).toHaveLength(0);
+  });
+
+  it("catches the NATURAL spellings, not just the literal ones (R2-13)", () => {
+    // Literal-string greps missed the most obvious evasions: a hostname built
+    // from fragments, a subdomain variant, and a differently-named predictor.
+    expect(scanContent(SRC, 'const h = "api." + "openai.com"; fetch(`https://${h}/v1`)').length).toBeGreaterThan(0);
+    expect(scanContent(SRC, 'fetch("https://eu.api.mistral.ai/v1/chat")').length).toBeGreaterThan(0);
+    expect(scanContent(SRC, 'fetch("https://graph.facebook.com/v21.0/act/insights")').length).toBeGreaterThan(0);
+    for (const ident of ["predictedConversion", "forecastRoas", "projectedRevenue", "estimatedCtr", "successProbability"]) {
+      expect(scanContent(SRC, `if (${ident} < 2) return skip;`).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("the test exemption is anchored to the real test roots (R2-15)", () => {
+    const offending = 'fetch("https://api.openai.com/v1")';
+    // A production directory that merely contains a "test" segment is NOT exempt.
+    expect(scanContent("fullburn/engine/src/ab-test/runner.ts", offending).length).toBeGreaterThan(0);
+    expect(scanContent("fullburn/config/src/test/helper.ts", offending).length).toBeGreaterThan(0);
+    // The genuine test roots are.
+    expect(scanContent("fullburn/engine/test/x.test.ts", offending)).toHaveLength(0);
   });
 
   it("is import-safe: importing the rules runs no filesystem walk (F18)", () => {

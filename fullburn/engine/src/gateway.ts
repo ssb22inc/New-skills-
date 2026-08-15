@@ -1,17 +1,20 @@
-import { getCaps, assertCapsUsable, type ClientCaps } from "@fullburn/config/caps";
+import { CapError, effectiveDailyAiCapUsd } from "@fullburn/config/caps";
 import { MODELS, ROLE_CARDS, ownEntry, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
 import { type ClientVault } from "./vault.ts";
 import { MeterUnavailableError, assertUsableAmount, type SpendMeter, type SpendReservation } from "./spend-meter.ts";
-import { redactError } from "./redact.ts";
+import { redactError, redactValue } from "./redact.ts";
 import { TraceContext, TraceEmitError, emitOrFail, type TraceEvent, type TraceSink } from "./tracing.ts";
 
 /** THE only LLM call path (Law 11, §2.4). Everything below is deterministic
  * rule enforcement (Law 4) wrapped around one transport call:
- *   role card → binding → caps (signed?) → trace ctx required → ATOMIC
- *   reserve against the cap → gateway URL only → settle (billable either way)
- *   → schema-validated output → trace emitted or the call fails.
- * Direct provider access anywhere else in the engine fails the structural scan
- * (R4). Every error leaving this function is redacted (F7). */
+ *   role card → binding → caps (signed? within AI cap?) → trace ctx required →
+ *   ATOMIC reserve → gateway URL only → settle (billable) or release (never
+ *   left) → schema-validated output → trace emitted or the call fails.
+ *
+ * Every exit is traced, including refusals (adversary finding R2-28): a decision
+ * to refuse spend is still a decision, and an operator staring at a silent
+ * engine has no way to tell a cap breach from an outage. Every error and every
+ * traced payload is redacted against the vault secret (R2-14, R2-27). */
 
 export interface GatewayTransport {
   /** POST to an AI Gateway URL. Implementations must not know provider hosts. */
@@ -27,7 +30,10 @@ export interface LlmDeps {
   /** e.g. https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/ — env-provided (H2). */
   readonly gatewayBaseUrl: string;
   readonly now: () => number;
-  readonly capsTable?: Readonly<Record<string, ClientCaps>>;
+  /** NARROWING ONLY (R2-03). May lower this client's AI ceiling; can never
+   * raise one, invent a client, or supply a sign-off — those come from the
+   * frozen table in config/caps.ts and nowhere else. */
+  readonly capsTable?: Readonly<Record<string, { readonly dailyAiSpendUsd?: number }>>;
 }
 
 export interface LlmRequest {
@@ -62,7 +68,10 @@ export function validateOutput(schema: OutputSchema, output: unknown): void {
 /** A meter that cannot reserve cannot enforce a cap under concurrency, so it is
  * not usable on a money path at all (F1/F2 fail-closed). */
 function requireReservingMeter(meter: SpendMeter): Required<Pick<SpendMeter, "reserve" | "settle" | "release">> {
-  if (typeof meter.reserve !== "function" || typeof meter.settle !== "function" || typeof meter.release !== "function") {
+  if (
+    typeof meter.reserve !== "function" || typeof meter.settle !== "function" ||
+    typeof meter.release !== "function" || typeof meter.reservedUsd !== "function"
+  ) {
     throw new MeterUnavailableError(
       "spend meter does not support reserve/settle — refusing spend (fail closed): a read-then-write cap check cannot hold under concurrency",
     );
@@ -71,97 +80,141 @@ function requireReservingMeter(meter: SpendMeter): Required<Pick<SpendMeter, "re
 }
 
 export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
-  const card = ownEntry(ROLE_CARDS, req.role);
-  if (card === undefined) throw new BindingError(`unknown role "${req.role}"`);
-  const modelId = ownEntry(deps.bindings, req.role);
-  if (modelId === undefined) throw new BindingError(`role "${req.role}" has no binding`);
-  const model = ownEntry(MODELS, modelId);
-  if (model === undefined) throw new BindingError(`bound model "${modelId}" not in registry`);
-
-  // Tracing is not optional (Law 11): a real TraceContext, scoped to this client.
-  if (!(req.trace instanceof TraceContext)) throw new TraceEmitError("llm() requires a TraceContext");
-  if (req.trace.clientId !== req.clientId) {
-    throw new TraceEmitError("trace context is scoped to a different client (Law 3)");
-  }
-  // Vault least-scope (R11): the vault handle must belong to this client.
-  if (deps.vault.clientId !== req.clientId) {
-    throw new GatewayError("vault scope mismatch — cross-client secret access refused (Law 3)");
-  }
-
-  // Money safety before anything leaves the building (Law 2, R2, R3, F1–F3):
-  const caps = getCaps(req.clientId, deps.capsTable);
-  assertCapsUsable(caps); // unsigned caps (H8 pending) refuse ALL spend
-  assertUsableAmount(card.costBudgetUsdPerCall, "role cost budget");
-  const meter = requireReservingMeter(deps.meter);
-
-  // ATOMIC: read + cap-check + write, no await in between (closes F1).
-  const reservation: SpendReservation = meter.reserve(req.clientId, card.costBudgetUsdPerCall, caps.dailyAiSpendUsd);
-  if (
-    reservation === null || typeof reservation !== "object" ||
-    reservation.clientId !== req.clientId || !Number.isFinite(reservation.amountUsd)
-  ) {
-    throw new MeterUnavailableError("meter returned an invalid reservation — refusing spend (fail closed)");
-  }
-
-  const key = deps.vault.get("ai-gateway-key");
-  const secrets = [key.value];
-  const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
+  const role = typeof req?.role === "string" ? req.role : "(unknown)";
+  const clientId = typeof req?.clientId === "string" ? req.clientId : "(unknown)";
   const startedAtMs = deps.now();
 
-  const traceBase = {
-    traceId: req.trace.traceId,
-    clientId: req.clientId,
-    role: req.role,
-    model: modelId,
-    startedAtMs,
-    input: req.input,
-    costUsd: reservation.amountUsd,
-  } as const;
+  // Traceable identity is established before anything can fail, so a refusal is
+  // never an untraced decision (R2-28). traceId may be absent on a bad request;
+  // that is itself recorded.
+  const traceId = req?.trace instanceof TraceContext ? req.trace.traceId : `untraced-${role}`;
+  let modelId = "(unbound)";
+  let secrets: string[] = [];
+  let reservation: SpendReservation | null = null;
+  let meter: ReturnType<typeof requireReservingMeter> | null = null;
+  let settled = false;
 
-  let output: unknown;
+  const traceFailure = async (message: string, output: unknown = null): Promise<void> => {
+    try {
+      await deps.sink.emit({
+        traceId,
+        clientId,
+        role,
+        model: modelId,
+        startedAtMs,
+        input: redactValue(req?.input, secrets),
+        output: redactValue(output, secrets),
+        costUsd: reservation?.amountUsd ?? 0,
+        outcome: "error",
+        errorMessage: message,
+      });
+    } catch {
+      // The call has already failed; a sink outage must not mask the root cause
+      // the operator actually needs. No decision proceeds untraced.
+    }
+  };
+
   try {
-    output = await deps.transport.post(
-      url,
-      { role: req.role, input: req.input, contextBudgetTokens: card.contextBudgetTokens },
-      { authorization: `Bearer ${key.value}`, "x-fullburn-client": req.clientId },
-    );
-  } catch (err) {
-    // The request left the building: the provider may well have billed it, so
-    // the reservation is SETTLED, not released (F3).
+    const card = ownEntry(ROLE_CARDS, role);
+    if (card === undefined) throw new BindingError(`unknown role "${role}"`);
+    const bound = ownEntry(deps.bindings, role);
+    if (bound === undefined) throw new BindingError(`role "${role}" has no binding`);
+    modelId = bound;
+    const model = ownEntry(MODELS, bound);
+    if (model === undefined) throw new BindingError(`bound model "${bound}" not in registry`);
+
+    // Tracing is not optional (Law 11): a real TraceContext, scoped to this client.
+    if (!(req.trace instanceof TraceContext)) throw new TraceEmitError("llm() requires a TraceContext");
+    if (req.trace.clientId !== req.clientId) {
+      throw new TraceEmitError("trace context is scoped to a different client (Law 3)");
+    }
+    // Vault least-scope (R11): the vault handle must belong to this client.
+    if (deps.vault?.clientId !== req.clientId) {
+      throw new GatewayError("vault scope mismatch — cross-client secret access refused (Law 3)");
+    }
+
+    // Money safety before anything leaves the building (Law 2, R2, R3, F1–F3).
+    // The ceiling comes from the frozen table; a caller may only narrow it.
+    const capUsd = effectiveDailyAiCapUsd(req.clientId, deps.capsTable);
+    assertUsableAmount(card.costBudgetUsdPerCall, "role cost budget");
+    meter = requireReservingMeter(deps.meter);
+
+    // ATOMIC: read + cap-check + write, no await in between.
+    reservation = meter.reserve(req.clientId, card.costBudgetUsdPerCall, capUsd);
+    if (
+      reservation === null || typeof reservation !== "object" ||
+      reservation.clientId !== req.clientId || !Number.isFinite(reservation.amountUsd)
+    ) {
+      throw new MeterUnavailableError("meter returned an invalid reservation — refusing spend (fail closed)");
+    }
+
+    const key = deps.vault.get("ai-gateway-key");
+    secrets = [key.value];
+    const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
+
+    let output: unknown;
+    try {
+      output = await deps.transport.post(
+        url,
+        { role, input: req.input, contextBudgetTokens: card.contextBudgetTokens },
+        { authorization: `Bearer ${key.value}`, "x-fullburn-client": req.clientId },
+      );
+    } catch (err) {
+      // The request left the building: the provider may well have billed it, so
+      // the reservation is SETTLED, not released (F3).
+      meter.settle(reservation);
+      settled = true;
+      throw redactError(err, secrets, GatewayError);
+    }
+
+    // From here the call is billable regardless of what we think of the response.
     meter.settle(reservation);
-    const safe = redactError(err, secrets, GatewayError);
-    await traceFailure(deps.sink, { ...traceBase, output: null, outcome: "error", errorMessage: safe.message });
-    throw safe;
-  }
+    settled = true;
 
-  // From here the call is billable regardless of what we think of the response.
-  meter.settle(reservation);
-
-  try {
     validateOutput(card.outputSchema, output);
+
+    // Fail closed on trace loss (R8): not a success until it is traced.
+    await emitOrFail(deps.sink, {
+      traceId: req.trace.traceId,
+      clientId: req.clientId,
+      role,
+      model: bound,
+      startedAtMs,
+      input: redactValue(req.input, secrets),
+      output: redactValue(output, secrets),
+      costUsd: reservation.amountUsd,
+      outcome: "ok",
+    });
+
+    return output;
   } catch (err) {
-    const safe = redactError(err, secrets, SchemaError);
-    await traceFailure(deps.sink, { ...traceBase, output, outcome: "error", errorMessage: safe.message });
+    // Anything that threw before the request left the building never became
+    // billable, so its headroom returns to the client (R2-02). `release` is
+    // idempotent and never throws for a stale handle.
+    if (reservation !== null && meter !== null && !settled) {
+      try {
+        meter.release(reservation);
+      } catch {
+        // A meter that cannot release is already reporting itself unusable;
+        // the original error is the one worth surfacing.
+      }
+    }
+    const safe = err instanceof CapError || err instanceof MeterUnavailableError
+      ? err
+      : redactError(err, secrets, errorClassFor(err));
+    await traceFailure(safe.message);
     throw safe;
   }
-
-  // Fail closed on trace loss (R8): the call is not a success until it is traced.
-  try {
-    await emitOrFail(deps.sink, { ...traceBase, output, outcome: "ok" });
-  } catch (err) {
-    throw redactError(err, secrets, TraceEmitError);
-  }
-
-  return output;
 }
 
-/** Emit a failure trace on a best-effort basis. The call has already failed, so
- * no decision proceeds untraced (Law 11); a sink outage here must not mask the
- * root cause the operator actually needs. */
-async function traceFailure(sink: TraceSink, event: TraceEvent): Promise<void> {
-  try {
-    await sink.emit(event);
-  } catch {
-    // Swallowed deliberately: the original error is thrown by the caller.
-  }
+/** Preserve the error's identity through redaction so callers can still
+ * discriminate (tests and the incident runbook both rely on the class). */
+function errorClassFor(err: unknown): new (m: string) => Error {
+  if (err instanceof SchemaError) return SchemaError;
+  if (err instanceof TraceEmitError) return TraceEmitError;
+  if (err instanceof BindingError) return BindingError;
+  if (err instanceof GatewayError) return GatewayError;
+  return GatewayError;
 }
+
+export type { TraceEvent };

@@ -23,12 +23,30 @@ export type EnforcementAction =
 
 export type MetricSnapshot = Readonly<Record<string, Readonly<Record<string, number | boolean>>>>;
 
+/** Ordered comparisons are only meaningful against a real, finite reading.
+ * `-Infinity` drift satisfied every `<` threshold and `+Infinity` satisfied
+ * every `>=` one, so an impossible number graded A — the grade failed OPEN,
+ * the opposite of this file's stated contract (adversary finding R2-20).
+ * Out-of-domain readings now fail closed into the enforcement path, exactly as
+ * caps, the meter and the model layer already do. */
+function isUsableReading(actual: unknown): actual is number {
+  return typeof actual === "number" && Number.isFinite(actual);
+}
+
+/** A reading outside the metric's declared domain is corrupt, not good news. */
+function inDomain(t: MetricThreshold, actual: number): boolean {
+  if (t.domainMin !== undefined && actual < t.domainMin) return false;
+  if (t.domainMax !== undefined && actual > t.domainMax) return false;
+  return true;
+}
+
 function metricPasses(t: MetricThreshold, actual: number | boolean): boolean {
   switch (t.op) {
-    case "<": return typeof actual === "number" && actual < (t.value as number);
-    case "<=": return typeof actual === "number" && actual <= (t.value as number);
-    case ">=": return typeof actual === "number" && actual >= (t.value as number);
-    case "==": return actual === t.value;
+    case "<": return isUsableReading(actual) && inDomain(t, actual) && actual < (t.value as number);
+    case "<=": return isUsableReading(actual) && inDomain(t, actual) && actual <= (t.value as number);
+    case ">=": return isUsableReading(actual) && inDomain(t, actual) && actual >= (t.value as number);
+    // Strict equality is immune to the domain problem by construction.
+    case "==": return typeof actual === "number" ? isUsableReading(actual) && inDomain(t, actual) && actual === t.value : actual === t.value;
     case "==0": return actual === 0;
     case "==true": return actual === true;
   }

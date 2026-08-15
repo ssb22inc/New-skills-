@@ -1,19 +1,42 @@
 import { CapError } from "@fullburn/config/caps";
 
-/** Per-client AI spend metering (R3; hardened for adversary findings F1/F2/F3).
+/** Per-client AI spend metering (R3; F1/F2/F3; R2-01, R2-02, R2-16).
  *
  * The cap check and the charge are ONE atomic operation: `reserve()` reads,
- * validates, checks against the cap and writes the reservation with no `await`
- * in between, so concurrent in-flight calls cannot all clear the same stale
- * reading (F1). A reservation is taken BEFORE the request leaves the building
- * and is settled whether or not the response pleases the validator (F3) — the
- * provider bills for the request, not for our satisfaction with it. Any
- * non-finite or negative accounting value refuses spend instead of sliding
- * through a `NaN > cap` comparison that is silently false (F2).
+ * validates, checks against the cap and writes with no `await` in between, so
+ * concurrent in-flight calls cannot all clear the same stale reading. A
+ * reservation is taken BEFORE the request leaves and settled whether or not the
+ * response pleases the validator — the provider bills for the request, not for
+ * our satisfaction with it. Any out-of-domain accounting value refuses spend
+ * rather than sliding through a comparison that is silently false.
  *
- * Production backing is the client's Durable Object (§2.2), which serialises
- * per client; this in-memory implementation has the same contract so the
- * Phase 5/6 ad-spend path can adopt it unchanged. */
+ * ALL INTERNAL ACCOUNTING IS INTEGER MICRO-DOLLARS (adversary finding R2-01).
+ * Repeated float addition and per-reservation float subtraction round
+ * differently: three overlapping $0.01 reservations settled in turn left
+ * `reserved` at -3.47e-18, which the meter's own fail-closed guard then read as
+ * corrupt and refused every subsequent call — a $25 budget bricked after $0.03,
+ * permanently, on a long-lived Durable Object. Integers cannot drift, so the
+ * guard never fires on the meter's own arithmetic.
+ *
+ * Production backing is the client's Durable Object (§2.2), which serialises per
+ * client; this in-memory implementation has the same contract so the Phase 5/6
+ * ad-spend path can adopt it unchanged. */
+
+const MICROS_PER_USD = 1_000_000;
+
+/** USD → integer micro-dollars, rejecting anything that cannot be money. */
+export function toMicros(usd: unknown, label: string): number {
+  assertUsableAmount(usd, label);
+  const micros = Math.round(usd * MICROS_PER_USD);
+  if (!Number.isSafeInteger(micros)) {
+    throw new MeterUnavailableError(`${label} is out of range for micro-dollar accounting — refusing spend (fail closed)`);
+  }
+  return micros;
+}
+
+export function fromMicros(micros: number): number {
+  return micros / MICROS_PER_USD;
+}
 
 export interface SpendReservation {
   readonly id: string;
@@ -24,12 +47,18 @@ export interface SpendReservation {
 export interface SpendMeter {
   /** Committed spend today for the client, USD. Throws if unavailable. */
   todayUsd(clientId: string): number;
+  /** Reserved-but-unsettled spend, USD. Every real implementation must provide
+   * it — an operator staring at `todayUsd() === 0` while every call is refused
+   * needs to see where the headroom went (R2-02) — and `llm()` refuses a meter
+   * that lacks it. Optional in the type only so meters written against the
+   * pre-F1 interface still compile. */
+  reservedUsd?(clientId: string): number;
   /** Legacy direct write. Retained for compatibility; the money path uses
    * reserve/settle. Implementations must keep it consistent with `todayUsd`. */
   record(clientId: string, usd: number): void;
   /** Atomically validate + cap-check + reserve. MUST be synchronous: any await
-   * inside reopens the race in F1. Throws CapError when the reservation would
-   * breach the cap, MeterUnavailableError when accounting is unusable.
+   * inside reopens the concurrency race. Throws CapError when the reservation
+   * would breach the cap, MeterUnavailableError when accounting is unusable.
    *
    * Optional in the type only so that meters written against the pre-F1
    * interface still compile; `llm()` refuses any meter that does not implement
@@ -43,8 +72,8 @@ export interface SpendMeter {
 
 export class MeterUnavailableError extends Error {}
 
-/** A meter reading that is not a finite, non-negative number is unusable —
- * refuse spend rather than compare against it (F2). */
+/** A value that is not a finite, non-negative number is unusable — refuse spend
+ * rather than compare against it (F2). */
 export function assertUsableAmount(n: unknown, label: string): asserts n is number {
   if (typeof n !== "number" || !Number.isFinite(n) || n < 0) {
     throw new MeterUnavailableError(`${label} is not a finite non-negative number — refusing spend (fail closed)`);
@@ -52,9 +81,9 @@ export function assertUsableAmount(n: unknown, label: string): asserts n is numb
 }
 
 export class MemorySpendMeter implements SpendMeter {
-  #committed = new Map<string, number>();
-  #reservedTotal = new Map<string, number>();
-  #open = new Map<string, SpendReservation>();
+  #committedMicros = new Map<string, number>();
+  #reservedMicros = new Map<string, number>();
+  #open = new Map<string, { clientId: string; micros: number }>();
   #available = true;
   #seq = 0;
 
@@ -66,16 +95,22 @@ export class MemorySpendMeter implements SpendMeter {
     if (!this.#available) throw new MeterUnavailableError("spend meter unavailable — refusing spend (fail closed)");
   }
 
-  todayUsd(clientId: string): number {
-    this.#assertAvailable();
-    const v = this.#committed.get(clientId) ?? 0;
-    assertUsableAmount(v, "committed spend");
+  #read(map: Map<string, number>, clientId: string, label: string): number {
+    const v = map.get(clientId) ?? 0;
+    if (!Number.isSafeInteger(v) || v < 0) {
+      throw new MeterUnavailableError(`${label} ledger is corrupt — refusing spend (fail closed)`);
+    }
     return v;
   }
 
-  /** Reserved-but-not-yet-settled spend, USD. Visible for tests/ops. */
+  todayUsd(clientId: string): number {
+    this.#assertAvailable();
+    return fromMicros(this.#read(this.#committedMicros, clientId, "committed spend"));
+  }
+
   reservedUsd(clientId: string): number {
-    return this.#reservedTotal.get(clientId) ?? 0;
+    this.#assertAvailable();
+    return fromMicros(this.#read(this.#reservedMicros, clientId, "reserved spend"));
   }
 
   reserve(clientId: string, amountUsd: number, capUsd: number): SpendReservation {
@@ -83,49 +118,58 @@ export class MemorySpendMeter implements SpendMeter {
     if (typeof clientId !== "string" || clientId.length === 0) {
       throw new MeterUnavailableError("reserve requires a clientId");
     }
-    assertUsableAmount(amountUsd, "reservation amount");
-    assertUsableAmount(capUsd, "cap");
-    if (amountUsd <= 0) throw new MeterUnavailableError("reservation amount must be positive");
+    const amountMicros = toMicros(amountUsd, "reservation amount");
+    const capMicros = toMicros(capUsd, "cap");
+    if (amountMicros <= 0) throw new MeterUnavailableError("reservation amount must be positive");
 
-    const committed = this.#committed.get(clientId) ?? 0;
-    const reserved = this.#reservedTotal.get(clientId) ?? 0;
-    assertUsableAmount(committed, "committed spend");
-    assertUsableAmount(reserved, "reserved spend");
-
-    const projected = committed + reserved + amountUsd;
-    assertUsableAmount(projected, "projected spend");
-    if (projected > capUsd) {
+    const committed = this.#read(this.#committedMicros, clientId, "committed spend");
+    const reserved = this.#read(this.#reservedMicros, clientId, "reserved spend");
+    const projected = committed + reserved + amountMicros;
+    if (!Number.isSafeInteger(projected)) {
+      throw new MeterUnavailableError("projected spend is out of range — refusing spend (fail closed)");
+    }
+    if (projected > capMicros) {
       throw new CapError(
-        `AI spend cap breach refused: projected $${projected.toFixed(4)} > daily cap $${capUsd} for "${clientId}"`,
+        `AI spend cap breach refused: projected $${fromMicros(projected).toFixed(4)} > daily cap $${capUsd} for "${clientId}"`,
       );
     }
 
-    // Single synchronous write completes the read-check-write cycle (F1).
+    // Single synchronous write completes the read-check-write cycle.
     this.#seq += 1;
-    const reservation: SpendReservation = { id: `r${this.#seq}`, clientId, amountUsd };
-    this.#reservedTotal.set(clientId, reserved + amountUsd);
-    this.#open.set(reservation.id, reservation);
-    return reservation;
+    const id = `r${this.#seq}`;
+    this.#reservedMicros.set(clientId, reserved + amountMicros);
+    this.#open.set(id, { clientId, micros: amountMicros });
+    return { id, clientId, amountUsd: fromMicros(amountMicros) };
+  }
+
+  #close(reservation: SpendReservation): { clientId: string; micros: number } | null {
+    if (reservation === null || typeof reservation !== "object") return null;
+    const open = this.#open.get(reservation.id);
+    if (open === undefined) return null; // already settled/released — idempotent
+    // A reservation handle from another meter, or a forged one, must not move
+    // another client's ledger.
+    if (open.clientId !== reservation.clientId) return null;
+    this.#open.delete(reservation.id);
+    const reserved = this.#read(this.#reservedMicros, open.clientId, "reserved spend");
+    this.#reservedMicros.set(open.clientId, Math.max(0, reserved - open.micros));
+    return open;
   }
 
   settle(reservation: SpendReservation): void {
-    const open = this.#open.get(reservation.id);
-    if (open === undefined) return; // already settled/released — idempotent
-    this.#open.delete(reservation.id);
-    this.#reservedTotal.set(open.clientId, (this.#reservedTotal.get(open.clientId) ?? 0) - open.amountUsd);
-    this.#committed.set(open.clientId, (this.#committed.get(open.clientId) ?? 0) + open.amountUsd);
+    const open = this.#close(reservation);
+    if (open === null) return;
+    const committed = this.#read(this.#committedMicros, open.clientId, "committed spend");
+    this.#committedMicros.set(open.clientId, committed + open.micros);
   }
 
   release(reservation: SpendReservation): void {
-    const open = this.#open.get(reservation.id);
-    if (open === undefined) return; // already settled/released — idempotent
-    this.#open.delete(reservation.id);
-    this.#reservedTotal.set(open.clientId, (this.#reservedTotal.get(open.clientId) ?? 0) - open.amountUsd);
+    this.#close(reservation);
   }
 
   record(clientId: string, usd: number): void {
     this.#assertAvailable();
-    assertUsableAmount(usd, "recorded amount");
-    this.#committed.set(clientId, (this.#committed.get(clientId) ?? 0) + usd);
+    const micros = toMicros(usd, "recorded amount");
+    const committed = this.#read(this.#committedMicros, clientId, "committed spend");
+    this.#committedMicros.set(clientId, committed + micros);
   }
 }

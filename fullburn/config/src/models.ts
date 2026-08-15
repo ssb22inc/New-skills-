@@ -111,45 +111,96 @@ export function ownEntry<T>(table: Readonly<Record<string, T>>, key: string): T 
   return Object.hasOwn(table, key) ? table[key] : undefined;
 }
 
+/** The ids of every case in a role's golden set. Declared HERE, next to the
+ * role card, so the harness cannot be pointed at a friendlier set and a
+ * fabricated run cannot invent its own coverage (adversary finding R2-23). */
+export const GOLDEN_SET_CASE_IDS: Readonly<Record<string, readonly string[]>> = deepFreeze({
+  "hello-world": ["h1"],
+  "genome-tagger": ["g1", "g2", "g3", "g4", "g5"],
+  "creative-decision-adversary": ["a1", "a2", "a3"],
+});
+
+/** Per-case outcome from an executed eval run. */
+export interface EvalCaseOutcome {
+  readonly caseId: string;
+  readonly passed: boolean;
+}
+
 /** Evidence that the eval harness actually executed a role's golden set against
- * a candidate model (adversary finding F9). `bindRole` takes this, not a bare
- * number: a caller-chosen score is not proof an eval ran, and Law 4 says gates
- * are code, not convention. The engine's `EvalResult` satisfies this shape
- * structurally, so the harness output is passed straight through. */
-export interface EvalAttestation {
+ * a candidate model (F9; hardened per R2-22).
+ *
+ * This is a branded class, not a plain shape: the only way to obtain one is
+ * `attestEvalRun`, which requires per-case outcomes covering EXACTLY the role's
+ * declared golden set and computes the score itself. A hand-written literal —
+ * even one whose arithmetic closes — is not an instance and does not bind.
+ *
+ * Honest limit: within one process, any module that can import `attestEvalRun`
+ * can call it. What this removes is the ability to assert a pass without
+ * producing a full, correctly-shaped run for the real case ids; it is not
+ * cryptographic provenance. Ledger item L12 records that gap. */
+export class EvalAttestation {
   readonly role: string;
   readonly modelId: string;
   readonly score: number;
   readonly total: number;
   readonly passed: number;
+  readonly outcomes: readonly EvalCaseOutcome[];
+
+  /** @internal — constructed only via attestEvalRun. */
+  constructor(brand: symbol, role: string, modelId: string, outcomes: readonly EvalCaseOutcome[]) {
+    if (brand !== ATTESTATION_BRAND) {
+      throw new BindingError("EvalAttestation is not directly constructible — it must come from an executed eval run");
+    }
+    this.role = role;
+    this.modelId = modelId;
+    this.outcomes = Object.freeze([...outcomes]);
+    this.total = outcomes.length;
+    this.passed = outcomes.filter((o) => o.passed).length;
+    this.score = this.passed / this.total;
+    Object.freeze(this);
+  }
 }
 
-/** Validates that an attestation could only have come from a real harness run
- * for exactly this (role, model): the arithmetic must close. */
+const ATTESTATION_BRAND = Symbol("fullburn.eval-attestation");
+const GENUINE = new WeakSet<EvalAttestation>();
+
+/** The one factory. Verifies the run covers exactly the role's declared golden
+ * set — no substituted set, no partial run, no duplicated case padding a score. */
+export function attestEvalRun(role: string, modelId: string, outcomes: readonly EvalCaseOutcome[]): EvalAttestation {
+  const card = ownEntry(ROLE_CARDS, role);
+  if (card === undefined) throw new BindingError(`unknown role "${role}"`);
+  if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`unknown model "${modelId}"`);
+  const declared = ownEntry(GOLDEN_SET_CASE_IDS, role);
+  if (declared === undefined || declared.length === 0) {
+    throw new BindingError(`role "${role}" declares no golden set — an eval over nothing proves nothing`);
+  }
+  if (!Array.isArray(outcomes)) throw new BindingError("eval outcomes must be an array");
+  const seen = outcomes.map((o) => o?.caseId);
+  if (new Set(seen).size !== seen.length) throw new BindingError("eval run repeats a case id");
+  const expected = [...declared].sort();
+  const actual = [...seen].sort();
+  if (expected.length !== actual.length || expected.some((id, i) => id !== actual[i])) {
+    throw new BindingError(
+      `eval run does not cover role "${role}"'s declared golden set (expected ${expected.join(",")}; got ${actual.join(",")})`,
+    );
+  }
+  for (const o of outcomes) {
+    if (typeof o.passed !== "boolean") throw new BindingError("eval outcome must record a boolean pass/fail per case");
+  }
+  const att = new EvalAttestation(ATTESTATION_BRAND, role, modelId, outcomes);
+  GENUINE.add(att);
+  return att;
+}
+
+/** Only an object minted by attestEvalRun binds. */
 function assertAttestation(att: unknown, role: string, modelId: string): asserts att is EvalAttestation {
-  if (att === null || typeof att !== "object") {
+  if (!(att instanceof EvalAttestation) || !GENUINE.has(att)) {
     throw new BindingError(
-      `bindRole requires the eval harness result for "${role}" — a bare score is not evidence an eval ran (§2.4, Law 13)`,
+      `bindRole requires an attestation from an executed eval run for "${role}" — a literal is not evidence an eval ran (§2.4, Law 13)`,
     );
   }
-  const a = att as Partial<EvalAttestation>;
-  if (a.role !== role) throw new BindingError(`eval result is for role "${String(a.role)}", not "${role}"`);
-  if (a.modelId !== modelId) throw new BindingError(`eval result is for model "${String(a.modelId)}", not "${modelId}"`);
-  if (typeof a.total !== "number" || !Number.isInteger(a.total) || a.total <= 0) {
-    throw new BindingError("eval result must cover a non-empty golden set — an eval over nothing proves nothing");
-  }
-  if (typeof a.passed !== "number" || !Number.isInteger(a.passed) || a.passed < 0 || a.passed > a.total) {
-    throw new BindingError("eval result passed-count is not a valid fraction of the golden set");
-  }
-  if (typeof a.score !== "number" || !Number.isFinite(a.score) || a.score < 0 || a.score > 1) {
-    throw new BindingError("eval score must be a finite number in [0,1] — the harness cannot return anything else");
-  }
-  // The score must be the arithmetic the harness would have produced.
-  if (Math.abs(a.score - a.passed / a.total) > 1e-9) {
-    throw new BindingError(
-      `eval score ${a.score} does not match ${a.passed}/${a.total} — the result was not produced by the harness`,
-    );
-  }
+  if (att.role !== role) throw new BindingError(`eval result is for role "${att.role}", not "${role}"`);
+  if (att.modelId !== modelId) throw new BindingError(`eval result is for model "${att.modelId}", not "${modelId}"`);
 }
 
 function familyOf(bindings: RoleBindings, role: string): ModelFamily {
