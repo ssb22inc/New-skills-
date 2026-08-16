@@ -10,7 +10,7 @@ import { vaultForClient, MemoryVaultBackend, VaultError } from "../../src/vault.
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../../scripts/scan-lib.mjs";
 import { CANARY_SECRET, TEST_CLIENT, makeDeps } from "../helpers.ts";
-import { e2eVarianceHolds } from "../e2e-variance.ts";
+import { e2eVarianceHolds, runnerTargets } from "../e2e-variance.ts";
 
 /** The complete §10.2 standing-invariant checklist, enumerated (R10). Every
  * bullet appears here by name every CI run, and every LIVE entry carries a real
@@ -98,8 +98,9 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const specs = readdirSync(new URL("../e2e/", import.meta.url))
       .filter((n) => n.endsWith(".spec.ts"))
       .map((name) => ({ name, source: readFileSync(new URL(`../e2e/${name}`, import.meta.url), "utf8") }));
+    const runner = readFileSync(new URL("../../../playwright.config.ts", import.meta.url), "utf8");
     expect(
-      e2eVarianceHolds(phase, specs),
+      e2eVarianceHolds(phase, specs, runnerTargets(runner, "engine/test/e2e")),
       phase < 1
         ? "the e2e stage has no smoke spec — the variance required it installed and running"
         : "PHASE is 1 or later and the e2e suite is still smoke-only — the H20 variance has expired. " +
@@ -112,13 +113,34 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
    * widening it was invisible to the mutation harness. */
   it("the expiry rule fires at Phase 1 and not before", () => {
     const smoke = { name: "smoke.spec.ts", source: "// PHASE 1 replaces this with the intake confirm flow\ntest('x', () => {});" };
-    const real = { name: "intake.spec.ts", source: "test('intake confirm flow', async ({ page }) => { await page.click('#confirm'); });" };
+    const real = {
+      name: "intake.spec.ts",
+      source: "test('intake confirm flow', async ({ page }) => { await page.click('#confirm'); });",
+    };
     expect(e2eVarianceHolds(0, [smoke]), "the variance should hold at Phase 0").toBe(true);
     expect(e2eVarianceHolds(1, [smoke]), "a smoke-only suite passed the Phase 1 gate").toBe(false);
     expect(e2eVarianceHolds(1, [smoke, real]), "real e2e coverage was not accepted").toBe(true);
     expect(e2eVarianceHolds(6, [smoke]), "the expiry lapsed at a later phase").toBe(false);
     // The stage being uninstalled fails at every phase — that half was never deferred.
     expect(e2eVarianceHolds(0, []), "an absent e2e stage was accepted").toBe(false);
+
+    // PROSE IS NOT THE THING, at either level. A comment promising the work, a
+    // bare string literal containing the words, and a named test that drives no
+    // browser are all refused.
+    for (const [label, source] of [
+      ["a comment promising it", "// TODO: intake confirm flow\ntest('x', async ({ page }) => { await page.click('#a'); });"],
+      ["a string literal", "const _note = 'intake confirm';\ntest('x', async ({ page }) => { await page.click('#a'); });"],
+      ["a named test that drives nothing", "test('intake confirm flow', () => { expect(1).toBe(1); });"],
+    ] as const) {
+      expect(e2eVarianceHolds(1, [smoke, { name: "intake.spec.ts", source }]), `${label} satisfied the expiry`).toBe(false);
+    }
+
+    // And a runner pointed somewhere else fails at every phase (R5-02).
+    expect(e2eVarianceHolds(0, [smoke], false), "a repointed runner was accepted").toBe(false);
+    expect(e2eVarianceHolds(1, [smoke, real], false), "a repointed runner was accepted at Phase 1").toBe(false);
+    expect(runnerTargets('export default { testDir: "engine/test/e2e" }', "engine/test/e2e")).toBe(true);
+    expect(runnerTargets('export default { testDir: "e2e" }', "engine/test/e2e"), "a repointed testDir passed").toBe(false);
+    expect(runnerTargets('// testDir: "engine/test/e2e"\nexport default {}', "engine/test/e2e")).toBe(false);
   });
 
   it("the checklist checks ITSELF against the spec (R2-25)", () => {

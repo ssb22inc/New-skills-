@@ -146,7 +146,7 @@ export function assertCapsCoherent(caps: ClientCaps, clientId: string): void {
 }
 
 /** Refuses caps that lack human sign-off (H8). Called on every spend path.
- * The marker is always the one in this file — see `effectiveDailyAiCapUsd`. */
+ * The marker is always the one in this file — see `effectiveAiCapsUsd`. */
 export function assertCapsUsable(caps: ClientCaps, clientId?: string): void {
   if (typeof caps.humanSignoff !== "string" || caps.humanSignoff.length === 0) {
     throw new CapError("caps lack human sign-off (H8) — all spend paths refuse");

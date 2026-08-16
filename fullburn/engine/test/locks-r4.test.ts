@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EvalAttestation, ROLE_BINDINGS, attestEvalRun, bindRole } from "@fullburn/config/models";
-import { getCaps } from "@fullburn/config/caps";
+import { CapError, getCaps } from "@fullburn/config/caps";
 import { llm } from "../src/gateway.ts";
-import { MemorySpendMeter, MeterUnavailableError, type SpendCeilings, type SpendReservation } from "../src/spend-meter.ts";
+import { MemorySpendMeter, MeterUnavailableError, SpendReservation, type SpendCeilings } from "../src/spend-meter.ts";
 import { TraceContext } from "../src/tracing.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { checkAdversaryReport, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
@@ -477,6 +477,84 @@ describe("caps — the H8 ceilings are coherent, not merely present", () => {
     expect(c.dailyAiSpendUsd, "daily AI sub-limit").toBe(10);
     expect(c.monthlyAiSpendUsd, "monthly AI ceiling").toBe(200);
     expect(c.humanSignoff, "H8 sign-off").toMatch(/^H8 approved 2026-08-16/);
+  });
+});
+
+describe("money — a reservation handle is an identity, not a shape (R5-01, R5-08)", () => {
+  const CAPS = { dailyUsd: 200, monthlyUsd: 200 };
+  const AUG = () => Date.UTC(2026, 7, 16, 12, 0, 0);
+
+  /** Handles were matched on `id` + `clientId`, and ids count `r1, r2, r3…`
+   * from a per-instance counter — guessable by construction. A literal released
+   * live reservations: 200 forged releases deleted the open records, the 200
+   * genuine settles for departed requests committed nothing, the freed headroom
+   * admitted another $200, and $400 of real spend landed against a $200 ceiling
+   * while `monthUsd()` read exactly $200 throughout — a cap breach and a data
+   * lie in one operation.
+   *
+   * MUTATION: replace the `instanceof` + `#minted.has()` check in #close with
+   * the old `open.clientId !== reservation.clientId` test. */
+  it("a forged literal releases nothing, and the real spend still settles", () => {
+    const m = new MemorySpendMeter(AUG);
+    const real = Array.from({ length: 200 }, () => m.reserve("pulsern", 1, CAPS));
+    expect(m.reservedUsd("pulsern")).toBe(200);
+    for (let i = 1; i <= 200; i++) {
+      m.release({ id: `r${i}`, clientId: "pulsern", amountUsd: 0 } as never);
+    }
+    expect(m.reservedUsd("pulsern"), "forged releases freed headroom").toBe(200);
+    expect(() => m.reserve("pulsern", 1, CAPS), "the ceiling stopped binding").toThrow(CapError);
+    for (const r of real) m.settle(r);
+    expect(m.monthUsd("pulsern"), "$200 of departed billable spend was recorded as $0").toBe(200);
+    expect(() => m.reserve("pulsern", 1, CAPS), "a second $200 was admitted").toThrow(CapError);
+  });
+
+  /** MUTATION: as above. This is the production shape and needs no forgery at
+   * all — ledger L14 documents a restarted meter minting `r1` again. */
+  it("a handle minted by another meter moves nothing here", () => {
+    const a = new MemorySpendMeter(AUG);
+    const b = new MemorySpendMeter(AUG);
+    const live = a.reserve("pulsern", 200, CAPS);
+    const foreign = b.reserve("pulsern", 200, CAPS);
+    a.release(foreign);
+    expect(a.reservedUsd("pulsern"), "a foreign handle released a live reservation").toBe(200);
+    a.settle(foreign);
+    expect(a.todayUsd("pulsern"), "a foreign handle settled against this ledger").toBe(0);
+    a.settle(live);
+    expect(a.todayUsd("pulsern")).toBe(200);
+  });
+
+  /** MUTATION: remove the brand check from the SpendReservation constructor. */
+  it("a reservation cannot be constructed outside a meter", () => {
+    const Ctor = SpendReservation as unknown as new (...a: unknown[]) => SpendReservation;
+    expect(() => new Ctor(Symbol("fake"), "r1", "pulsern", 1)).toThrow(/only be minted by a meter/);
+    expect(() => new Ctor(undefined, "r1", "pulsern", 1)).toThrow(MeterUnavailableError);
+  });
+
+  /** Reading the clock twice split one reservation across two periods: $7 on
+   * the August 31 day and the September month, a tick apart (R5-08).
+   *
+   * MUTATION: call this.#now() separately for each key in #periods. */
+  it("both period keys come from one clock read", () => {
+    const BOUNDARY = Date.UTC(2026, 7, 31, 23, 59, 59, 999);
+    const NEXT = Date.UTC(2026, 8, 1, 0, 0, 0);
+    let pinned: number | null = null;
+    let advanced = false;
+    // Advances across a month boundary between consecutive reads — what a real
+    // clock does at 23:59:59.999 on the last of the month.
+    const clock = () => {
+      if (pinned !== null) return pinned;
+      if (advanced) return NEXT;
+      advanced = true;
+      return BOUNDARY;
+    };
+    const m = new MemorySpendMeter(clock);
+    m.settle(m.reserve("c", 7, { dailyUsd: 10, monthlyUsd: 10 }));
+    // Read from the instant the reservation was taken. One clock read puts the
+    // $7 on the August day AND the August month; two reads split it across
+    // August's day and September's month, so the month ledger loses it.
+    pinned = BOUNDARY;
+    expect(m.todayUsd("c"), "the spend left the day it was made").toBe(7);
+    expect(m.monthUsd("c"), "the day and month ledgers disagree about the same $7").toBe(7);
   });
 });
 

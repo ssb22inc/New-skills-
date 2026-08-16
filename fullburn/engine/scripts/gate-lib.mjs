@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 /** Pure logic for the CI gates — unit-testable without git (R1, R5; hardened
  * for F4, F5, F14 and then for R2-04/05/06/08/09/10/11/12/31/32). The CLI
  * wrappers do the git plumbing. */
@@ -38,8 +39,21 @@ export const CLASS2_PATTERNS = [
   // now ANY config-shaped file at ANY depth whose basename starts with vitest.
   // or vite. — extension-agnostic, because the next runner version decides the
   // extension list, not us.
-  /(?:^|\/)vite(?:st)?[.\-][^/]*$/,
-  /(?:^|\/)vitest\.[^/]*$/,
+  /(?:^|\/)vite(?:st)?[._\-][^/]*$/,
+  // The Playwright runner and everything it points at. Adding the §10.3 e2e
+  // stage without this left BOTH halves Class-1: `playwright.config.ts` chooses
+  // `testDir`, so a two-file Class-1 diff repointed it at a new `fullburn/e2e/`
+  // holding a stub that launches no browser — five stages green, three gates
+  // green, and the invariant suite still asserting the H20 variance held,
+  // because it read the directory and never the runner that executes it
+  // (adversary finding R5-02). Same defect class as R3-CP-03 and N-02, fourth
+  // round, through a filename the H20 commit itself introduced.
+  /(?:^|\/)playwright[._\-][^/]*$/,
+  /(?:^|\/)e2e\//,
+  // `npm ci` reads these; the lockfile was made Class-2 on exactly this
+  // reasoning (N-11).
+  /(?:^|\/)\.npmrc$/,
+  /(?:^|\/)\.nvmrc$/,
   /(?:^|\/)wrangler\.[^/]*$/,
   /(?:^|\/)\.gitignore$/,
   /(?:^|\/)package\.json$/,
@@ -80,6 +94,11 @@ export const CLASS2_WITNESS_PATHS = [
   ".github/workflows/fullburn-ci.yml",
   "fullburn/engine/scripts/gate-lib.mjs",
   "fullburn/vitest.workspace.mts",
+  "fullburn/vitest_workspace.ts",
+  "fullburn/playwright.config.ts",
+  "fullburn/e2e/anything.spec.ts",
+  "fullburn/.npmrc",
+  "fullburn/.nvmrc",
   "fullburn/engine/deploy/wrangler.toml",
   "fullburn/package-lock.json",
   "fullburn/engine/.gitignore",
@@ -114,18 +133,18 @@ function stripHtmlComments(text) {
   return text.replace(/<!--[\s\S]*?-->/g, "");
 }
 
-/** Regions that render collapsed, invisible, or not as prose at all. A verdict
- * inside one of these is not a verdict a reviewer saw. */
-const CONCEALING_BLOCKS = /<(details|script|style|template|iframe)\b[\s\S]*?<\/\1\s*>/gi;
-
+/** THE HEADER IS PURE PROSE. Any raw HTML tag ends it.
+ *
+ * The previous rule was a five-tag list — details, script, style, template,
+ * iframe — and every round found a new member of it: `<details>` in r4,
+ * `<div style="display:none">` in r5. An enumeration of hiding places is not a
+ * rule, it is a scoreboard. A renderer can conceal with any element and any
+ * attribute, so the header simply may not contain markup: the first tag
+ * truncates it, and a binding below that point does not exist as far as the
+ * gate is concerned (which fails closed, per checkAdversaryReport). */
 function stripConcealed(text) {
-  // `<details>` renders collapsed by default in every renderer including
-  // GitHub, so a PASS inside one opened the gate while the visible prose said
-  // "do not merge" (N-05). Unterminated blocks are handled too: an opening tag
-  // with no close conceals everything after it, so the header stops there.
-  const open = /<(details|script|style|template|iframe)\b/i.exec(text.replace(CONCEALING_BLOCKS, ""));
-  const stripped = text.replace(CONCEALING_BLOCKS, "");
-  return open === null ? stripped : stripped.slice(0, open.index);
+  const tag = /<\/?[a-zA-Z][^>]*>/.exec(text);
+  return tag === null ? text : text.slice(0, tag.index);
 }
 
 /** The report's header lines, with everything a renderer would hide removed.
@@ -172,17 +191,46 @@ export function parseVerdict(reportContent) {
   return null;
 }
 
+/** The binding, read through ordinary Markdown decoration.
+ *
+ * The old rule demanded the hash be the only thing on the line, bare. Writing
+ * it in backticks — ordinary Markdown practice — produced "`5f956c…`", which
+ * compared unequal to the tree, so a correctly bound FAIL was judged STALE,
+ * dropped, and silently overridden by a sibling PASS. The gate's own message
+ * printed two identical hashes and said "the code changed" (adversary finding
+ * R5-03). Six variants did it: backticks, bold, a list marker, a trailing
+ * parenthetical.
+ *
+ * Decoration is stripped and the first hash-shaped token is taken. Anything
+ * that yields no such token returns null — and null now BLOCKS rather than
+ * being skipped, which is the other half of the fix. */
 function readTreeBinding(reportContent) {
   for (const line of visibleHeaderLines(reportContent)) {
-    // Any non-empty token binds. Deliberately NOT restricted to hex: a
-    // malformed binding can never equal a real tree hash, so it fails closed on
-    // its own, and over-strict validation silently defanged the F4 lock tests
-    // by short-circuiting them before they reached the verdict parser (R2-17).
-    const m = /^verified-tree\s*:\s*(\S+)\s*$/i.exec(line);
-    if (m) return m[1];
+    const m = /^\s*(?:[-*+]\s+)?(?:\*\*|__)?verified-tree(?:\*\*|__)?\s*:\s*(.+)$/i.exec(line);
+    if (m === null) continue;
+    const token = /[0-9a-f]{7,64}/i.exec(m[1].replace(/[`*_]/g, ""));
+    return token === null ? null : token[0];
   }
   return null;
 }
+
+/** Reports that legitimately carry no tree binding, pinned by content hash.
+ *
+ * An unparseable report now BLOCKS (see below), and exactly one report in
+ * history cannot satisfy that: the r3 review's synthesizer died on a spend
+ * limit, so its findings were preserved mechanically and it was labelled, in
+ * its own text, as not adversary-authored and carrying no binding. Reports are
+ * append-only, so it cannot be edited into shape.
+ *
+ * The hash pins it: this exemption cannot be inherited by new content in the
+ * same filename, which is the only way an exemption like this goes wrong. */
+function shortSha256(text) {
+  return createHash("sha256").update(text, "utf8").digest("hex").slice(0, 8);
+}
+
+const UNBOUND_HISTORICAL_REPORTS = new Map([
+  ["ADVERSARY_REPORT_phase0.r3.md", "38ba0f39"],
+]);
 
 /** Judge one report against the current tree. */
 function judgeReport(reportContent, currentTreeHash) {
@@ -192,23 +240,45 @@ function judgeReport(reportContent, currentTreeHash) {
   // and a sibling PASS opened the gate. Anything bound to the current tree that
   // is not a clean PASS is unresolved business.
   const tree = readTreeBinding(reportContent);
-  if (!tree) return { ok: false, fresh: false, reason: "report has no 'verified-tree:' binding (stale-report protection)" };
+  if (!tree) {
+    // UNPARSEABLE IS NOT STALE. These were the same state, and that was the
+    // defect: a report the gate could not read was filed as "about some other
+    // tree" and skipped, so six ordinary Markdown choices — a hash in
+    // backticks, a trailing parenthetical, a list marker — silently discarded a
+    // correctly bound FAIL while a sibling PASS opened the gate (adversary
+    // finding R5-03). The gate cannot show such a report is stale, so it must
+    // treat it as unresolved. `blocking` says so; `fresh` stays false because
+    // the report is not evidence ABOUT this tree, only an obstacle to it.
+    return {
+      ok: false,
+      fresh: false,
+      blocking: true,
+      reason:
+        "report has no readable 'verified-tree:' binding in its first 10 lines at column 0 — it cannot be shown to be about a different tree, so it blocks (fail closed)",
+    };
+  }
   const fresh = tree === currentTreeHash;
   const verdict = parseVerdict(reportContent);
   if (!verdict) {
-    return { ok: false, fresh, reason: "report has no parseable 'Verdict:' line at column 0 outside a code fence" };
+    return {
+      ok: false,
+      fresh,
+      blocking: true,
+      reason: "report has no parseable 'Verdict:' line at column 0 in the first 10 lines",
+    };
   }
   if (!fresh) {
     return {
       ok: false,
       fresh: false,
+      blocking: false,
       reason: `report verified tree ${tree} but current fullburn tree is ${currentTreeHash} — code changed after the adversary judged it; re-run the adversary`,
     };
   }
   if (verdict.token !== "PASS") {
-    return { ok: false, fresh: true, reason: `verdict is not PASS: "${verdict.line}"` };
+    return { ok: false, fresh: true, blocking: true, reason: `verdict is not PASS: "${verdict.line}"` };
   }
-  return { ok: true, fresh: true, reason: "adversary report PASS and bound to the current tree" };
+  return { ok: true, fresh: true, blocking: false, reason: "adversary report PASS and bound to the current tree" };
 }
 
 /** adversary-gate (R5): a report for this phase must exist, be bound to the
@@ -232,12 +302,26 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
     return { ok: false, reason: `no reports/ADVERSARY_REPORT_phase${phase}*.md found` };
   }
 
-  const judged = docs.map((d) => ({ name: d.name, ...judgeReport(d.content, currentTreeHash) }));
+  const judged = docs
+    .filter((d) => {
+      const pinned = UNBOUND_HISTORICAL_REPORTS.get(d.name);
+      return pinned === undefined || shortSha256(d.content) !== pinned;
+    })
+    .map((d) => ({ name: d.name, ...judgeReport(d.content, currentTreeHash) }));
 
-  // A FAIL bound to this tree is unresolved business — check it FIRST.
-  const freshFail = judged.find((j) => j.fresh && !j.ok);
-  if (freshFail) {
-    return { ok: false, reason: `${freshFail.name}: ${freshFail.reason} (an unresolved FAIL on this tree blocks regardless of any PASS)` };
+  if (judged.length === 0) {
+    return { ok: false, reason: `no reports/ADVERSARY_REPORT_phase${phase}*.md found that makes a claim about any tree` };
+  }
+
+  // Unresolved business blocks, whatever else exists. That is a FAIL bound to
+  // this tree, AND a report the gate cannot read at all — the two were
+  // different states and only the first one blocked (R5-03).
+  const unresolved = judged.find((j) => j.blocking);
+  if (unresolved) {
+    return {
+      ok: false,
+      reason: `${unresolved.name}: ${unresolved.reason} (unresolved business on this tree blocks regardless of any PASS)`,
+    };
   }
 
   const pass = judged.find((j) => j.ok);
@@ -251,15 +335,29 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
  * delete OR RENAME one (adversary finding R2-06 — a rename erased a standing
  * FAIL while the gate certified append-only intact). */
 export function checkReportsAppendOnly(changedFiles) {
-  const isReport = (p) => /fullburn\/reports\/ADVERSARY_REPORT_.*\.md$/.test(p ?? "");
+  // APPROVALS/ is append-only for the same reason and was not covered, though
+  // its own README said it was. A signed approval could be rewritten — the
+  // `Approved-by` line altered, the standing caveat retitled "(RESOLVED)" — with
+  // all three gates green and the verified-tree hash UNCHANGED, because
+  // APPROVALS/ is excluded from the tree scope so a report's PASS cannot see it
+  // (adversary finding R5-05). L11/L13 disclose that an approval cannot prove
+  // WHO signed; nothing disclosed that it did not reliably prove WHAT, after
+  // the fact. The only artifact recording a human decision could be made to
+  // assert the opposite of that decision.
+  const isAppendOnly = (p) =>
+    /fullburn\/reports\/ADVERSARY_REPORT_.*\.md$/.test(p ?? "") ||
+    (/fullburn\/APPROVALS\/.*\.md$/.test(p ?? "") && !/\/README\.md$/.test(p ?? ""));
   const touched = changedFiles.filter(
-    (f) => (isReport(f.path) && f.status !== "added") || (isReport(f.oldPath) && f.status === "renamed"),
+    (f) => (isAppendOnly(f.path) && f.status !== "added") || (isAppendOnly(f.oldPath) && f.status === "renamed"),
   );
   if (touched.length > 0) {
     const names = touched.map((f) => f.oldPath ?? f.path);
-    return { ok: false, reason: `adversary reports are append-only; modified/deleted/renamed: ${names.join(", ")}` };
+    return {
+      ok: false,
+      reason: `adversary reports and approvals are append-only; modified/deleted/renamed: ${names.join(", ")}`,
+    };
   }
-  return { ok: true, reason: "reports append-only holds" };
+  return { ok: true, reason: "reports and approvals append-only holds" };
 }
 
 /** class2-gate (R1): every changed Class-2 path needs an approval entry ADDED

@@ -165,6 +165,60 @@ describe("owed-approvals CLI prints what class2-gate demands (H-17)", () => {
   });
 });
 
+describe("adversary-gate CLI — the tree hash reads the index, so the worktree must be clean", () => {
+  /** `assertCleanTree` had NO test of any kind: deleting the call left the
+   * suite 232/232 green and walked an untracked `engine/src/backdoor.ts` past a
+   * PASS bound to a hash that structurally cannot see it (adversary findings
+   * R2-19, R5-07). It is CLI-only — it shells out to `git status` — so only an
+   * integration test can reach it, which is exactly why it had none.
+   *
+   * MUTATION: delete `assertCleanTree(repoRoot)` from adversary-gate.mjs. */
+  it("an untracked module in the verified scope blocks a PASS bound to the index", () => {
+    write("fullburn/PHASE", "0\n");
+    // A tracked sibling, so git reports the new file by name rather than
+    // collapsing a wholly-untracked directory to "?? fullburn/engine/src/".
+    write("fullburn/engine/src/index.ts", "export const version = 0;\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "declare the phase");
+    const tree = currentTreeHash();
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "add a PASS report");
+    const base = git("rev-parse", "HEAD").trim();
+    expect(gate("adversary-gate.mjs", repo, base).code, "a clean tree with a fresh PASS should open").toBe(0);
+
+    // A brand-new module the index-based hash cannot see.
+    write("fullburn/engine/src/backdoor.ts", "export const unmetered = () => 'no cap check here';\n");
+    const res = gate("adversary-gate.mjs", repo, base);
+    expect(res.code, `an untracked engine module sailed past the gate:\n${res.out}`).toBe(1);
+    expect(res.out).toContain("backdoor.ts");
+
+    // An unstaged EDIT to a tracked file is the same problem.
+    rmSync(join(repo, "fullburn/engine/src/backdoor.ts"));
+    expect(gate("adversary-gate.mjs", repo, base).code).toBe(0);
+    write("fullburn/config/src/caps.ts", "export const CAPS = { dailyAiSpendUsd: 999999 };\n");
+    expect(gate("adversary-gate.mjs", repo, base).code, "an unstaged cap edit sailed past").toBe(1);
+  });
+
+  /** MUTATION: relax the APPROVALS clause in checkReportsAppendOnly. */
+  it("rewriting a signed approval is refused — APPROVALS is append-only too", () => {
+    write("fullburn/PHASE", "0\n");
+    write("fullburn/APPROVALS/2026-08-16-caps.md", "Approved-by: human\napproves: fullburn/config/src/caps.ts\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "sign the caps");
+    const base = git("rev-parse", "HEAD").trim();
+    const tree = currentTreeHash();
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    // Rewrite the signed approval to say something the human never signed.
+    write("fullburn/APPROVALS/2026-08-16-caps.md", "Approved-by: someone else\napproves: everything, forever\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "quietly rewrite the approval");
+    const res = gate("adversary-gate.mjs", repo, base);
+    expect(res.code, `a signed approval was rewritten with the gate green:\n${res.out}`).toBe(1);
+    expect(res.out).toContain("append-only");
+  });
+});
+
 describe("adversary-gate CLI", () => {
   it("a FAIL report bound to the current tree blocks the gate", () => {
     const base = git("rev-parse", "HEAD").trim();

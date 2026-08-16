@@ -38,11 +38,44 @@ export function fromMicros(micros: number): number {
   return micros / MICROS_PER_USD;
 }
 
-export interface SpendReservation {
+/** A reservation handle.
+ *
+ * THIS IS A CLASS, NOT A SHAPE, AND THAT IS THE POINT. The handle used to be a
+ * plain object matched on `id` + `clientId`, with ids counting `r1, r2, r3…`
+ * from a per-instance counter — guessable by construction, and colliding
+ * *deterministically* between two instances serving the same client. A literal
+ * `{ id: "r1", clientId: "pulsern", amountUsd: 0 }` released a live reservation.
+ * Executed, that closed 200 open records: the 200 genuine settles for requests
+ * that had already left the building found nothing and committed nothing, the
+ * freed headroom admitted another $200, and $400 of real spend landed against
+ * the approved $200/month ceiling while `monthUsd()` read exactly $200 the
+ * whole time — a cap breach and a data lie in one operation (adversary finding
+ * R5-01). The same sequence ran with no forgery at all across two meter
+ * instances, which is the shape ledger L14 documents as expected after a
+ * Durable Object restart.
+ *
+ * The meter now accepts only handles it minted itself, proved by membership in
+ * a private WeakSet — the technique `models.ts` already uses to make an
+ * `EvalAttestation` unforgeable. Identity, not resemblance. */
+export class SpendReservation {
   readonly id: string;
   readonly clientId: string;
   readonly amountUsd: number;
+
+  constructor(brand: symbol, id: string, clientId: string, amountUsd: number) {
+    if (brand !== RESERVATION_BRAND) {
+      throw new MeterUnavailableError("a reservation may only be minted by a meter — refusing spend (fail closed)");
+    }
+    this.id = id;
+    this.clientId = clientId;
+    this.amountUsd = amountUsd;
+    Object.freeze(this);
+  }
 }
+
+/** Module-private: not exported, so no other module can pass the constructor
+ * check even with a direct import of the class. */
+const RESERVATION_BRAND = Symbol("fullburn.reservation");
 
 /** The two ceilings every reservation is checked against. */
 export interface SpendCeilings {
@@ -63,8 +96,13 @@ export interface SpendMeter {
    * N-09). Optional in the type only so meters written against the pre-F1
    * interface still compile; `llm()` refuses a meter that lacks it. */
   reservedUsd?(clientId: string): number;
-  /** Legacy direct write. Retained for compatibility; the money path uses
-   * reserve/settle. Implementations must keep it consistent with `todayUsd`. */
+  /** Legacy direct write that performs NO CAP CHECK.
+   *
+   * It has no caller today, but it is on the interface `spend-meter.ts` tells
+   * the Phase 5/6 ad-spend path to "adopt unchanged", and it moves money
+   * (adversary finding R5-09). Stated here rather than left to be discovered:
+   * anything routing real spend through `record()` is bypassing Law 2. Use
+   * reserve/settle. */
   record(clientId: string, usd: number): void;
   /** Committed spend this month for the client, USD. The month is the real
    * exposure ceiling; the day is a sub-limit that stops a runaway loop
@@ -130,6 +168,10 @@ export class MemorySpendMeter implements SpendMeter {
   #available = true;
   #seq = 0;
   #now: () => number;
+  /** Handles THIS meter minted. Per-instance, deliberately: a handle from
+   * another instance must not move this ledger, and `r1` from a restarted
+   * Durable Object is exactly that (R5-01). */
+  #minted = new WeakSet<SpendReservation>();
 
   /** A DAILY cap needs a day (adversary finding M-03). Without one, a client
    * that spent its ceiling was refused forever — a $5/day budget was really
@@ -156,12 +198,21 @@ export class MemorySpendMeter implements SpendMeter {
     this.#available = v;
   }
 
+  /** Both period keys from ONE clock read. Reading the clock twice split the
+   * pair across a month boundary: $7 committed to the August 31 day and the
+   * September month, one tick apart (adversary finding R5-08). The window is a
+   * tick per month, but the month ledger exists precisely to be right across
+   * that boundary. */
+  #periods(clientId: string, nowMs = this.#now()): { day: string; month: string } {
+    return { day: `d:${utcDayKey(nowMs)}|${clientId}`, month: `m:${utcMonthKey(nowMs)}|${clientId}` };
+  }
+
   #key(clientId: string): string {
-    return `d:${utcDayKey(this.#now())}|${clientId}`;
+    return this.#periods(clientId).day;
   }
 
   #monthKey(clientId: string): string {
-    return `m:${utcMonthKey(this.#now())}|${clientId}`;
+    return this.#periods(clientId).month;
   }
 
   #assertAvailable(): void {
@@ -213,8 +264,7 @@ export class MemorySpendMeter implements SpendMeter {
     const monthlyCapMicros = toMicros(caps.monthlyUsd, "monthly cap");
     if (amountMicros <= 0) throw new MeterUnavailableError("reservation amount must be positive");
 
-    const day = this.#key(clientId);
-    const month = this.#monthKey(clientId);
+    const { day, month } = this.#periods(clientId);
 
     // BOTH ceilings are read, checked and written inside one synchronous block.
     // Checking them in sequence with any await between would reopen the race
@@ -249,15 +299,18 @@ export class MemorySpendMeter implements SpendMeter {
     // The reservation remembers the periods it was taken in, so a settle that
     // lands after midnight commits against the day the spend belongs to.
     this.#open.set(id, { clientId, micros: amountMicros, day, month });
-    return { id, clientId, amountUsd: fromMicros(amountMicros) };
+    const handle = new SpendReservation(RESERVATION_BRAND, id, clientId, fromMicros(amountMicros));
+    this.#minted.add(handle);
+    return handle;
   }
 
   #close(reservation: SpendReservation): { clientId: string; micros: number; day: string; month: string } | null {
-    if (reservation === null || typeof reservation !== "object") return null;
+    // IDENTITY FIRST. A handle this meter did not mint moves nothing here,
+    // whatever its fields say — that is the whole guard, and matching on
+    // `id` + `clientId` was not it (R5-01).
+    if (!(reservation instanceof SpendReservation) || !this.#minted.has(reservation)) return null;
     const open = this.#open.get(reservation.id);
     if (open === undefined) return null; // already settled/released — idempotent
-    // A reservation handle from another meter, or a forged one, must not move
-    // another client's ledger.
     if (open.clientId !== reservation.clientId) return null;
     this.#open.delete(reservation.id);
     for (const period of [open.day, open.month]) {
@@ -283,7 +336,8 @@ export class MemorySpendMeter implements SpendMeter {
   record(clientId: string, usd: number): void {
     this.#assertAvailable();
     const micros = toMicros(usd, "recorded amount");
-    for (const period of [this.#key(clientId), this.#monthKey(clientId)]) {
+    const { day, month } = this.#periods(clientId);
+    for (const period of [day, month]) {
       const committed = this.#read(this.#committedMicros, period, "committed spend");
       this.#committedMicros.set(period, committed + micros);
     }

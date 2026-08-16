@@ -33,7 +33,14 @@ export interface LlmDeps {
   /** NARROWING ONLY (R2-03). May lower this client's AI ceiling; can never
    * raise one, invent a client, or supply a sign-off — those come from the
    * frozen table in config/caps.ts and nowhere else. */
-  readonly capsTable?: Readonly<Record<string, { readonly dailyAiSpendUsd?: number }>>;
+  /** Narrowing-only cap overrides. BOTH ceilings, because both are enforced:
+   * typing only the daily one meant an inline literal narrowing the month was a
+   * compile error, so the declared money interface said one cap where two bind
+   * (adversary finding R5-09). It worked at all only because the one test doing
+   * it passed a named `ClientCaps` const. */
+  readonly capsTable?: Readonly<
+    Record<string, { readonly dailyAiSpendUsd?: number; readonly monthlyAiSpendUsd?: number }>
+  >;
 }
 
 export interface LlmRequest {

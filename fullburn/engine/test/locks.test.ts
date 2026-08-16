@@ -347,7 +347,40 @@ describe("secret containment stays wired (C1)", () => {
 });
 
 describe("the meter contract llm() depends on (fail closed)", () => {
-  it("a meter without reserve/settle/release/reservedUsd is refused outright", async () => {
+  /** ONE MISSING METHOD AT A TIME. The fixture used to omit all four, so the
+   * test passed on whichever check ran first and any single clause could be
+   * deleted with the suite green — `spend-meter.ts` promises `llm()` refuses a
+   * meter lacking `reservedUsd`, and that promise was removable in one line
+   * (adversary finding R5-07).
+   *
+   * MUTATION: drop any one of the four typeof checks from requireReservingMeter. */
+  it("a meter missing ANY ONE of reserve/settle/release/reservedUsd is refused", async () => {
+    const complete = {
+      todayUsd: () => 0,
+      monthUsd: () => 0,
+      reservedUsd: () => 0,
+      record: () => {},
+      reserve: () => ({ id: "r1", clientId: TEST_CLIENT, amountUsd: 0 }),
+      settle: () => {},
+      release: () => {},
+    };
+    for (const missing of ["reserve", "settle", "release", "reservedUsd"] as const) {
+      const { deps: d } = makeDeps();
+      const partial = { ...complete };
+      delete (partial as Record<string, unknown>)[missing];
+      await expect(
+        llm({ ...d, meter: partial as unknown as SpendMeter, bindings: ROLE_BINDINGS }, {
+          role: "hello-world",
+          clientId: TEST_CLIENT,
+          input: {},
+          trace: new TraceContext("t", TEST_CLIENT),
+        }),
+        `a meter with no ${missing}() was accepted`,
+      ).rejects.toThrow(MeterUnavailableError);
+    }
+  });
+
+  it("a legacy meter with none of them is refused outright", async () => {
     const { deps } = makeDeps();
     const legacy = { todayUsd: () => 0, record: () => {} } as unknown as SpendMeter;
     await expect(

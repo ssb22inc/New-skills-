@@ -65,7 +65,7 @@ describe("adversary-report gate (AC 4, Law 9, §10.3, R5)", () => {
       const reports = order.map((content, i) => ({ name: `ADVERSARY_REPORT_phase0.${i}.md`, content }));
       const res = checkAdversaryReport({ phase: "0", reports, currentTreeHash: TREE });
       expect(res.ok).toBe(false);
-      expect(res.reason).toMatch(/unresolved FAIL/);
+      expect(res.reason).toMatch(/unresolved business/);
     }
   });
 
@@ -118,6 +118,81 @@ describe("verdict parsing (adversary finding F4)", () => {
 
   it("CRLF reports parse", () => {
     expect(parseVerdict("# r\r\nVerdict: FAIL\r\n")?.token).toBe("FAIL");
+  });
+});
+
+describe("adversary-report gate — a report the gate cannot read blocks it (R5-03, R5-04)", () => {
+  const PASS = { name: "ADVERSARY_REPORT_phase0.pass.md", content: report("PASS") };
+  const judge = (content: string) =>
+    checkAdversaryReport({
+      phase: "0",
+      reports: [{ name: "ADVERSARY_REPORT_phase0.fail.md", content }, PASS],
+      currentTreeHash: TREE,
+    });
+
+  /** Six ordinary Markdown choices silently discarded a correctly bound FAIL:
+   * the binding was read as a bare token, so a hash in backticks compared
+   * unequal to the tree, `judgeReport` called it stale, `checkAdversaryReport`
+   * skipped it, and the sibling PASS opened the gate — with the FAIL report
+   * never named. The gate printed two identical hashes and said "the code
+   * changed".
+   *
+   * MUTATION: read the binding as a bare `(\S+)` token again. */
+  it("a FAIL bound through ordinary Markdown decoration still blocks", () => {
+    for (const [label, line] of [
+      ["backticks", `verified-tree: \`${TREE}\``],
+      ["bold label", `**verified-tree:** ${TREE}`],
+      ["list item", `- verified-tree: ${TREE}`],
+      ["trailing parenthetical", `verified-tree: ${TREE} (tree of this commit)`],
+    ] as const) {
+      const res = judge(["# r", "Verdict: FAIL", line].join("\n"));
+      expect(res.ok, `a FAIL bound with ${label} was discarded`).toBe(false);
+      expect(res.reason, `the gate did not name the FAIL report (${label})`).toContain("fail.md");
+    }
+  });
+
+  /** "Unparseable" and "about a different tree" were the same state, and only
+   * the second is safe to skip. A report the gate cannot read cannot be shown
+   * to be stale, so it is unresolved business.
+   *
+   * MUTATION: filter on `j.fresh && !j.ok` again instead of `j.blocking`. */
+  it("a report the gate cannot read at all blocks, and is named", () => {
+    for (const [label, content] of [
+      ["binding below the header", ["# r", "Verdict: FAIL", "", "a", "b", "c", "d", "e", "f", "g", `verified-tree: ${TREE}`].join("\n")],
+      ["no binding at all", "# r\nVerdict: FAIL\n"],
+      ["binding with no hash-shaped token", "# r\nVerdict: FAIL\nverified-tree: (not computed)\n"],
+      ["unterminated html in the header", ["# r", "Verdict: FAIL", "<details>", `verified-tree: ${TREE}`].join("\n")],
+      ["no verdict line", `# r\nverified-tree: ${TREE}\n`],
+    ] as const) {
+      const res = judge(content);
+      expect(res.ok, `an unreadable report was skipped (${label})`).toBe(false);
+      expect(res.reason, `the unreadable report was not named (${label})`).toContain("fail.md");
+    }
+    // …and an honest PASS on its own still opens the gate.
+    expect(checkAdversaryReport({ phase: "0", reports: [PASS], currentTreeHash: TREE }).ok).toBe(true);
+  });
+
+  /** CONCEALING_BLOCKS was a five-tag list and every round found a new member:
+   * `<details>` in r4, `<div style="display:none">` in r5. The header is now
+   * pure prose — any raw tag ends it.
+   *
+   * MUTATION: return `text` unchanged from stripConcealed. */
+  it("no raw HTML element can hide a PASS in the header", () => {
+    for (const tag of ['<div style="display:none">', "<details>", "<span hidden>", "<template>", "<section>"]) {
+      const hidden = ["# r", "The engine is NOT safe. Do not merge.", tag, "", "Verdict: PASS", "", `verified-tree: ${TREE}`].join("\n");
+      expect(parseVerdict(hidden)?.token, `a PASS behind ${tag} was read`).not.toBe("PASS");
+      expect(
+        checkAdversaryReport({ phase: "0", reports: [{ name: "ADVERSARY_REPORT_phase0.z.md", content: hidden }], currentTreeHash: TREE }).ok,
+        `${tag} opened the gate`,
+      ).toBe(false);
+    }
+  });
+
+  /** A stale report is genuinely different from an unreadable one and must
+   * still be skippable, or history would deadlock the gate forever. */
+  it("a report bound to a DIFFERENT tree is still skipped, not blocking", () => {
+    const stale = { name: "ADVERSARY_REPORT_phase0.old.md", content: report("FAIL", OTHER_TREE) };
+    expect(checkAdversaryReport({ phase: "0", reports: [stale, PASS], currentTreeHash: TREE }).ok).toBe(true);
   });
 });
 
