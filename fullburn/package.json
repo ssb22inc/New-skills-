@@ -13,6 +13,7 @@
     "leak-check": "node engine/scripts/leak-check.mjs",
     "invariants": "vitest run engine/test/invariants",
     "integration": "vitest run engine/test/integration",
+    "mutate": "node engine/scripts/mutate.mjs",
     "owed-approvals": "node engine/scripts/owed-approvals.mjs"
   },
   "devDependencies": {

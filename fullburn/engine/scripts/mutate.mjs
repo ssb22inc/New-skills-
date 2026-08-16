@@ -1,10 +1,23 @@
 #!/usr/bin/env node
-/** Mutation harness: apply one revert, run the suite, restore. A lock that does
- * not turn the suite red is not a lock. */
+/** MUTATION HARNESS — the project's acceptance bar for a fix, made runnable.
+ *
+ * `npm run mutate` applies each listed one-line revert on its own, runs the full
+ * suite, and restores the file. A fix whose revert leaves the suite green is not
+ * protected by anything: three consecutive adversary reviews found fixes in that
+ * state, and every one of them was a defect that could be reopened with a single
+ * line while CI stayed green.
+ *
+ * Each entry is [name, file, original, mutated]. Add one for every fix; a
+ * SURVIVED line means the lock test does not test what it claims.
+ *
+ * PATTERN-NOT-FOUND means the code moved and the entry is now stale — it is a
+ * failure to investigate, not a pass. */
 import { readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const ROOT = "/tmp/claude-0/-home-user-New-skills-/64269547-e557-5483-8b4d-c2147d059962/scratchpad/r5/fullburn";
+/** The fullburn workspace root, two levels up from engine/scripts/. */
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 
 const MUTATIONS = [
   // ---- r4 findings ----
