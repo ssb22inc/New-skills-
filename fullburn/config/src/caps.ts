@@ -29,6 +29,12 @@ export interface ClientCaps {
  * in the real table, deliberately: their ids are not client identifiers, their
  * caps are trivial, and their sign-off marker says what they are. */
 const FIXTURE_SIGNOFF = "TEST FIXTURE — not a real client";
+/** A fixture marker is only a valid sign-off for an id under this prefix
+ * (adversary finding M-06). H8's guarantee is that caps are unusable until a
+ * HUMAN signs them, and `assertCapsUsable` accepted any non-empty string — so
+ * the builder-written fixture constant was, in form, a self-signature that
+ * would work for any client. Now a fixture signature only signs a fixture. */
+export const FIXTURE_CLIENT_PREFIX = "fixture-";
 
 const CAPS_TABLE: Readonly<Record<string, ClientCaps>> = deepFreeze({
   // Client zero (ENGINE_BUILD.md §14): $2,000 sprint at ~$66/day. Values are
@@ -39,7 +45,7 @@ const CAPS_TABLE: Readonly<Record<string, ClientCaps>> = deepFreeze({
     dailyAiSpendUsd: 25,
     humanSignoff: null,
   },
-  testco: {
+  "fixture-testco": {
     dailyAdSpendUsd: 1,
     totalAdSpendUsd: 1,
     dailyAiSpendUsd: 5,
@@ -84,9 +90,14 @@ export function getCaps(clientId: string): ClientCaps {
 
 /** Refuses caps that lack human sign-off (H8). Called on every spend path.
  * The marker is always the one in this file — see `effectiveDailyAiCapUsd`. */
-export function assertCapsUsable(caps: ClientCaps): void {
+export function assertCapsUsable(caps: ClientCaps, clientId?: string): void {
   if (typeof caps.humanSignoff !== "string" || caps.humanSignoff.length === 0) {
     throw new CapError("caps lack human sign-off (H8) — all spend paths refuse");
+  }
+  if (caps.humanSignoff === FIXTURE_SIGNOFF && clientId !== undefined && !clientId.startsWith(FIXTURE_CLIENT_PREFIX)) {
+    throw new CapError(
+      `a test-fixture signature does not sign a real client — "${clientId}" needs a human sign-off (H8)`,
+    );
   }
 }
 
@@ -103,7 +114,7 @@ export function effectiveDailyAiCapUsd(
   narrowing?: Readonly<Record<string, { readonly dailyAiSpendUsd?: number }>>,
 ): number {
   const caps = getCaps(clientId); // throws for unknown clients
-  assertCapsUsable(caps); // sign-off comes from the frozen table, always
+  assertCapsUsable(caps, clientId); // sign-off comes from the frozen table, always
   const ceiling = caps.dailyAiSpendUsd;
   if (narrowing === undefined || narrowing === null) return ceiling;
   const entry = Object.hasOwn(narrowing, clientId) ? narrowing[clientId] : undefined;

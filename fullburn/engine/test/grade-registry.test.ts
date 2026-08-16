@@ -31,6 +31,7 @@ const ALL_A: MetricSnapshot = {
     per_client_cogs_under_margin_floor: true,
     our_cac_within_target: true,
     our_churn_within_target: true,
+    human_queue_sev12_median_latency_hours: 6,
     human_queue_median_latency_hours: 18,
     human_queue_shrinking_mom: true,
     guarantee_exposure_within_cap: true,
@@ -109,6 +110,9 @@ describe("grade registry (AC 3, §12, Law 14)", () => {
       "wp_credentials_admin_wide",
       "our_cac_within_target",
       "our_churn_within_target",
+      // DT-05: §5.1's severity 1–2 same-day SLA needs its own threshold; a
+      // median under 72h is satisfied by a month where every sev-1 breached.
+      "human_queue_sev12_median_latency_hours",
     ]) {
       expect(keys).toContain(required);
     }

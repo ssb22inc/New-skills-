@@ -16,22 +16,32 @@ Claude Code executes everything else. Spec references in parentheses. Nothing he
 - H9 · **Approve initial Grade Registry A-thresholds** (§12) — tuned in Phase 0, human-owned thereafter (Law 14, Class 2).
 - H19 · **Repository protection — without this every CI gate is advisory** (adversary finding F14, ledger L11). On GitHub, for the default branch and every phase branch: (1) **required status checks** — `verify`, `adversary-gate`, `class2-gate` — so a red or gate-free PR cannot merge; (2) **no force-push / no branch deletion**; (3) **CODEOWNERS requiring your review on `fullburn/APPROVALS/**` and on every Class-2 path** listed in `engine/scripts/gate-lib.mjs`. Reason this is yours alone: the workflow file lives in the branch under test, so a PR that deletes it runs no gate, and the approval mechanism proves *what* was approved by content hash but never *who* wrote it — only CODEOWNERS makes "human-only" real. (~15 min)
 
+- H20 · **Decide the §10.3 Playwright e2e stage** (adversary finding H-19, ledger L16). §10.3 names five CI stages; four now run (typecheck → unit → integration → invariants, plus the three gates). Playwright e2e has nothing to drive in Phase 0 — no endpoints, no UI. Either defer it to Phase 1 in writing, or say it is required from Phase 0 onward and the pipeline is incomplete until it exists. The builder must not make this call for you. (~2 min)
+
 ## Class-2 approvals owed for the Phase 0 fix commit
 
-The Phase 0 adversary fixes touch files that are Class 2 by their own rule, so this PR needs approval entries from you before it can merge (format in `APPROVALS/README.md`; `sha256sum <file>` from the repo root gives the hash). Nothing here changes a *value* you own — caps and thresholds keep their pending-sign-off state — but the rule is the rule, and the builder must never write its own approval:
+The Phase 0 adversary fixes touch files that are Class 2 by their own rule, so this PR needs approval entries from you before it can merge. Nothing here changes a *value* you own — caps and thresholds keep their pending-sign-off state — but the rule is the rule, and the builder must never write its own approval.
 
-- `fullburn/config/src/caps.ts` — removes the runtime cap-widening seam (a caller could hand `llm()` its own table with a forged sign-off), adds the two fixture clients the tests drive, and records that ad-spend caps have no enforcement path before Phase 6.
-- `fullburn/engine/src/gateway.ts`, `fullburn/engine/src/spend-meter.ts` — the reserve-then-settle cap path (fixes the concurrency breach).
-- `fullburn/engine/src/grade-registry.ts` — own-property lookups so a polluted prototype cannot forge an A.
-- `fullburn/config/src/grade-thresholds.ts` — adds the nine §12 A-criteria that had no threshold (so an area could hold "A" with CAC 4x baseline and injection drills failing) plus per-metric domain bounds.
-- `fullburn/config/src/models.ts`, `fullburn/engine/src/eval-harness.ts` — binding attestations must now come from an executed run over the role's declared golden set.
-- `fullburn/engine/scripts/gate-lib.mjs`, `adversary-gate.mjs`, `class2-gate.mjs`, `diff-lib.mjs`, `leak-check.mjs`, `scan-lib.mjs`, `fullburn/vitest.config.ts` — gate hardening.
-- `fullburn/engine/src/vault.ts`, `tracing.ts`, `redact.ts` — cross-tenant key collision, failure traces, and redaction of trace payloads.
-- **The package manifests and the test tree are now Class 2** (`package.json` ×3, `tsconfig*.json`, `fullburn/(config|engine)/test/**`, `PHASE`): `config/package.json` could redirect the `@fullburn/config/caps` import to an attacker module without touching `caps.ts`, and `fullburn/package.json` could redefine `npm test` so the entire invariant suite became a no-op — both with no approval required. Expect approval entries for these paths on future PRs; that friction is the point.
+**Get the list by running it, not by reading it:**
 
-**Added by the r3 fix pass:** `fullburn/engine/src/` is now Class 2 in full (a seven-file list left `index.ts`, the deployed Worker entrypoint, free to re-export an unmetered `llm()`), as are `vitest.workspace.ts` and any `wrangler.toml`. Approval entries now also carry `base-commit:` — see below.
+```
+cd fullburn && npm run owed-approvals -- . <the-commit-this-PR-branches-from>
+```
 
-**Note on approval format:** entries now name a TRANSITION **and the pull request it belongs to** — `base-commit:` (the sha this PR branches from), `from-content-hash:` (the content at that base) and `content-hash:` (the new content). Content hashes alone were not enough: once your own revert restored the previous bytes, every approval ever issued from those bytes was re-armed, and copying one back in re-authorized the revoked change with no forgery at all. A base commit occurs once. See `APPROVALS/README.md`.
+That prints one ready-made block per owed path — `approves:`, `base-commit:`, `from-content-hash:`, `content-hash:` — which you paste into a new file under `fullburn/APPROVALS/` in this same PR. It reads the same diff through the same `isClass2()` that `class2-gate.mjs` enforces with, so what it prints is what the gate demands, by construction.
+
+This section used to carry the list by hand and it drifted inside one commit (adversary finding H-17): it named two files the diff never touched and deferred eleven test-tree paths the gate demanded in that very diff. You would have hashed a set that was not the set you changed — signing off on files you had not edited while the gate stayed red on the ones you had. A hand-copied list is the one part of this mechanism that cannot be verified, so it is gone.
+
+**What the Phase 0 fixes changed, and why those paths are Class 2** (context for your review — the authoritative path list comes from the command above):
+
+- **Caps and the money path** (`config/src/caps.ts`, `engine/src/gateway.ts`, `engine/src/spend-meter.ts`) — removes the runtime cap-widening seam, adds reserve-then-settle so concurrent calls cannot breach a ceiling, and records that ad-spend caps have no enforcement path before Phase 6.
+- **The grader** (`engine/src/grade-registry.ts`, `config/src/grade-thresholds.ts`) — own-property lookups so a polluted prototype cannot forge an A; adds the §12 A-criteria that had no threshold, plus per-metric domain bounds so an impossible reading fails closed.
+- **The model layer** (`config/src/models.ts`, `engine/src/eval-harness.ts`) — a binding attestation must now come from an executed run over the role's declared golden set.
+- **The gates** (`engine/scripts/**`, `.github/**`) — a gate that can be edited without approval is not a gate.
+- **Secrets and traces** (`engine/src/vault.ts`, `tracing.ts`, `redact.ts`) — cross-tenant key collision, failure traces, and redaction of trace payloads.
+- **The whole engine and config source trees, the manifests, the runner configs and the test tree** — `config/package.json` could redirect the `@fullburn/config/caps` specifier to an attacker module without touching `caps.ts`; `fullburn/package.json` could redefine `npm test` into a no-op; a seven-file list left `index.ts`, the deployed Worker entrypoint, free to re-export an unmetered `llm()`; `vitest.workspace.ts` overrides `vitest.config.ts` and silenced 145 of 148 tests. Each of those was a real bypass, so the protection is now directory-shaped, not name-shaped.
+
+**Note on approval format:** entries name a TRANSITION **and the pull request it belongs to** — `base-commit:` (the sha this PR branches from), `from-content-hash:` (the content at that base) and `content-hash:` (the new content). Content hashes alone were not enough: once your own revert restored the previous bytes, every approval ever issued from those bytes was re-armed, and copying one back in re-authorized the revoked change with no forgery at all. A base commit occurs once. See `APPROVALS/README.md`.
 
 ## Before client zero spends a dollar (Phase 6)
 

@@ -8,7 +8,7 @@ import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 import { TraceContext } from "../src/tracing.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { checkAdversaryReport, checkClass2Approvals, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock } from "./helpers.ts";
 
 /** LOCK TESTS.
  *
@@ -27,7 +27,7 @@ describe("money — a request that left the building is never released (M-01, M-
   // MUTATION: move `departed = true` back to after `meter.settle(...)`, or drop
   // `!departed` from the release condition in the outer catch.
   it("a settle() that throws must NOT return the headroom for a billed request", async () => {
-    const real = new MemorySpendMeter();
+    const real = new MemorySpendMeter(testClock);
     let released = 0;
     const brittle: SpendMeter = {
       todayUsd: (c) => real.todayUsd(c),
@@ -67,7 +67,7 @@ describe("money — a request that left the building is never released (M-01, M-
 
   // MUTATION: same as above, on the transport-error leg.
   it("a transport error followed by a failing settle also keeps the charge", async () => {
-    const real = new MemorySpendMeter();
+    const real = new MemorySpendMeter(testClock);
     let released = 0;
     const brittle: SpendMeter = {
       todayUsd: (c) => real.todayUsd(c),
@@ -154,7 +154,7 @@ describe("money — a DAILY cap has a day (M-03)", () => {
 describe("money — isolation guards on the ledger (H-14, H-15)", () => {
   // MUTATION: remove the `open.clientId !== reservation.clientId` check in #close.
   it("one tenant cannot close another tenant's reservation", () => {
-    const m = new MemorySpendMeter();
+    const m = new MemorySpendMeter(testClock);
     const a = m.reserve("tenant-a", 1, 5);
     m.settle({ ...a, clientId: "tenant-b" });
     expect(m.reservedUsd("tenant-a")).toBe(1); // still held by A

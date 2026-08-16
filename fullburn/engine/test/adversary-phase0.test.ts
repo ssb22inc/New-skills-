@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 import type { ClientCaps } from "@fullburn/config/caps";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { CLASS2_FILES } from "../scripts/gate-lib.mjs";
+import { isClass2 } from "../scripts/gate-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { checkAdversaryReport } from "../scripts/gate-lib.mjs";
 import { llm, type GatewayTransport } from "../src/gateway.ts";
@@ -12,7 +12,7 @@ import { computeGrades, type MetricSnapshot } from "../src/grade-registry.ts";
 import { MemorySpendMeter, type SpendMeter } from "../src/spend-meter.ts";
 import { MemoryTraceSink, TraceContext } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock } from "./helpers.ts";
 
 /** ADVERSARY PHASE 0 — Phase B lock tests.
  *
@@ -66,7 +66,7 @@ const req = (i: number) => ({
 
 describe("FINDING F1 (money loss) — the AI cap check races the meter", () => {
   it("concurrent calls must not collectively exceed the daily AI cap", async () => {
-    const meter = new MemorySpendMeter();
+    const meter = new MemorySpendMeter(testClock);
     const transport = new YieldingTransport();
     const { deps } = depsWith(meter, transport);
 
@@ -97,7 +97,7 @@ describe("FINDING F2 (money loss) — a non-numeric meter reading fails OPEN", (
 
 describe("FINDING F3 (money loss) — billable calls that fail after the transport are never metered", () => {
   it("a provider call that returns schema-invalid output still consumes the cap", async () => {
-    const meter = new MemorySpendMeter();
+    const meter = new MemorySpendMeter(testClock);
     const transport = new YieldingTransport();
     transport.response = { not_the_schema: true }; // provider billed us; validation rejects
     const { deps } = depsWith(meter, transport);
@@ -147,28 +147,30 @@ describe("FINDING F4 (control plane) — the adversary-report gate accepts a FAI
   });
 });
 
-describe("FINDING F5 (control plane) — CLASS2_FILES omits the grading code and the money paths", () => {
-  const files = CLASS2_FILES as string[];
+describe("FINDING F5 (control plane) — Class-2 protection omits the grading code and the money paths", () => {
+  // Drives isClass2, the enforcement authority. These assertions used to name a
+  // list nothing read (H-03), which is coverage in appearance only.
+  const files = { toContain: (p: string) => expect(isClass2(p), `${p} is not Class 2`).toBe(true) };
 
   it("§12: the grading CODE is Class 2, not only its thresholds", () => {
-    expect(files).toContain("fullburn/engine/src/grade-registry.ts");
+    files.toContain("fullburn/engine/src/grade-registry.ts");
   });
 
   it("Law 15 / H17: money paths are Class 2", () => {
-    expect(files).toContain("fullburn/engine/src/gateway.ts");
-    expect(files).toContain("fullburn/engine/src/spend-meter.ts");
+    files.toContain("fullburn/engine/src/gateway.ts");
+    files.toContain("fullburn/engine/src/spend-meter.ts");
   });
 
   it("the CI leak/structural scanner is a gate and must be protected like the other gates", () => {
-    expect(files).toContain("fullburn/engine/scripts/leak-check.mjs");
+    files.toContain("fullburn/engine/scripts/leak-check.mjs");
   });
 
   it("the immutability primitive behind Law 2 is Class 2", () => {
-    expect(files).toContain("fullburn/config/src/freeze.ts");
+    files.toContain("fullburn/config/src/freeze.ts");
   });
 
   it("the test-runner config can disable the invariant suite, so it is Class 2", () => {
-    expect(files).toContain("fullburn/vitest.config.ts");
+    files.toContain("fullburn/vitest.config.ts");
   });
 });
 
@@ -187,7 +189,7 @@ describe("FINDING F6 (data lies) — grades resolve through the prototype chain"
 
 describe("FINDING F7 (isolation) — the vault secret escapes through a transport error", () => {
   it("no error leaving llm() may carry the secret, whatever the transport puts in its message", async () => {
-    const meter = new MemorySpendMeter();
+    const meter = new MemorySpendMeter(testClock);
     const leakyTransport: GatewayTransport = {
       async post(_url, _body, headers) {
         // Realistic: HTTP clients commonly attach request context to errors.
@@ -205,7 +207,7 @@ describe("FINDING F7 (isolation) — the vault secret escapes through a transpor
 
 describe("FINDING F8 (observability, Law 11) — failed calls emit no trace at all", () => {
   it("a call that reaches the provider and then fails must still be traced", async () => {
-    const { deps, sink } = depsWith(new MemorySpendMeter(), {
+    const { deps, sink } = depsWith(new MemorySpendMeter(testClock), {
       async post() {
         throw new Error("upstream 500");
       },

@@ -33,7 +33,8 @@ export const GRADE_AREAS: readonly AreaThresholds[] = deepFreeze([
     area: "marketing-engine",
     metrics: [
       { key: "cac_beats_baseline_by_day_90", op: "==true", value: true },
-      { key: "blended_roas", op: ">=", value: 4, domainMin: 0 },
+      // §6 states the target in the spec's own words: "$1 in → $5 out".
+      { key: "blended_roas", op: ">=", value: 5, domainMin: 0, domainMax: 1000 },
       { key: "reconciliation_drift_pct", op: "<", value: 2, domainMin: 0 },
       { key: "cap_breaches", op: "==0", value: 0 },
       { key: "policy_strikes", op: "==0", value: 0 },
@@ -67,7 +68,7 @@ export const GRADE_AREAS: readonly AreaThresholds[] = deepFreeze([
     // §12 row "WordPress / SEO".
     area: "wordpress-seo",
     metrics: [
-      { key: "organic_clicks_vs_baseline_pct", op: ">=", value: 0 },
+      { key: "organic_clicks_vs_baseline_pct", op: ">=", value: 0, domainMin: -100, domainMax: 10_000 },
       { key: "cwv_pass_rate_pct", op: ">=", value: 75, domainMin: 0, domainMax: 100 },
       { key: "indexation_health_pct", op: ">=", value: 95, domainMin: 0, domainMax: 100 },
       { key: "mutations_reversible_pct", op: "==", value: 100, domainMin: 0, domainMax: 100 },
@@ -99,7 +100,11 @@ export const GRADE_AREAS: readonly AreaThresholds[] = deepFreeze([
       { key: "per_client_cogs_under_margin_floor", op: "==true", value: true },
       { key: "our_cac_within_target", op: "==true", value: true },
       { key: "our_churn_within_target", op: "==true", value: true },
-      { key: "human_queue_median_latency_hours", op: "<", value: 72, domainMin: 0 },
+      // §5.1 sets severity 1–2 at same-day and 3–5 at 72h. A median under 72h
+      // is satisfied by a month in which every severity-1 item breached its
+      // SLA, so the severities that matter get their own threshold (DT-05).
+      { key: "human_queue_sev12_median_latency_hours", op: "<", value: 24, domainMin: 0, domainMax: 8760 },
+      { key: "human_queue_median_latency_hours", op: "<", value: 72, domainMin: 0, domainMax: 8760 },
       { key: "human_queue_shrinking_mom", op: "==true", value: true },
       { key: "guarantee_exposure_within_cap", op: "==true", value: true },
       { key: "continuity_drills_passed", op: "==true", value: true },

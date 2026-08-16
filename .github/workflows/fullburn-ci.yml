@@ -25,8 +25,17 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
-      - name: Unit + invariant suite
+      - name: Unit suite
         run: npm test
+      # §10.3 names five stages. "integration" had no code and no deferral
+      # record until ledger L16; this is its first half — the gate CLIs executed
+      # against a real git repository, which is where two defects hid from every
+      # unit test (N-03 leg B, R3-CP-08). Playwright e2e stays deferred: Phase 0
+      # ships no endpoints and no UI for it to exercise.
+      - name: Integration suite (gate CLIs against a real repo)
+        run: npm run integration
+      - name: Invariant suite
+        run: npm run invariants
       - name: Leak + structural scan
         run: node engine/scripts/leak-check.mjs ..
 

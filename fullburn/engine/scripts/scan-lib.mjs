@@ -22,7 +22,11 @@ export const SECRET_PATTERNS = [
   { name: "github token", re: /gh[pousr]_[A-Za-z0-9]{20,}/ },
   // Requires an actual key body, not just the header: reports and runbooks
   // legitimately quote the header when describing what this rule catches.
-  { name: "private key block", re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]{0,80}?[A-Za-z0-9+/]{40,}/ },
+  // Armor lines (Proc-Type, DEK-Info, Comment, Bag Attributes) sit between the
+  // header and the body, and a 16-column wrap breaks a 40-char run — both
+  // pushed a REAL key past the old window (adversary finding B2). Match a
+  // header followed by enough base64 anywhere in the block instead.
+  { name: "private key block", re: /-----BEGIN (?:[A-Z0-9 ]*)PRIVATE KEY(?: BLOCK)?-----[\s\S]{0,600}?(?:[A-Za-z0-9+/=]{16,}[\r\n\s]*){3,}/ },
   // Crown jewels this product actually holds (§15; adversary finding F16):
   { name: "meta/facebook access token", re: /\bEAA[A-Za-z0-9]{20,}/ },
   { name: "google oauth access token", re: /\bya29\.[A-Za-z0-9._-]{10,}/ },
@@ -51,16 +55,33 @@ export const PLATFORM_API_HOSTS =
 /** Law 6: no model may block or greenlight creative on predicted performance.
  * Stem-based rather than an enumeration of exact spellings (R2-13): any
  * identifier built from predict/forecast/projected + a performance noun. */
-export const PREDICTION_GATE_IDENTIFIERS =
-  /\b(?:predict|forecast|projected|expected|estimated)[A-Za-z_]*(?:Performance|Ctr|CTR|Roas|ROAS|Winner|Probability|Score|Conversion|Revenue|_ctr|_roas|_winner|_score)\b|\b(?:win|success)Probability\b|\bscoreCreativeForLaunch\b/;
+export const PREDICTION_GATE_IDENTIFIERS = new RegExp(
+  [
+    // A prediction becomes a GATE only where it decides whether creative ships.
+    // Naming alone is not the offence: `expectedRevenue` vs `actualRevenue` is
+    // the reconciliation pairing Law 10 requires, and the counterfactual ledger
+    // is literally projected spend (adversary finding C3). Match the DECISION.
+    "\\b(?:predict|forecast|projected|expected|estimated)[A-Za-z_]*(?:Performance|Ctr|CTR|Roas|ROAS|Winner|Probability)\\b",
+    "\\b(?:win|success)Probability\\b",
+    "\\bscoreCreativeForLaunch\\b",
+    // …and any predicted quantity used as a launch/kill condition.
+    "(?:predicted|forecast|projected|estimated)[A-Za-z_]*\\s*[<>]=?[^;\\n]{0,40}(?:return|continue|skip|veto|reject|block|kill|drop)",
+    "(?:if|while)\\s*\\([^)]*(?:predicted|forecastScore|projectedScore)[A-Za-z_]*[^)]*\\)\\s*\\{?\\s*(?:return|veto|reject|block|kill|skip)",
+  ].join("|"),
+);
 
 export const MODEL_IDS = /["'](?:claude-sonnet|gpt-5|qwen-72b|llama-70b)["']/;
 
 /** Law 18: staged/locked flags must be read through the accessors, never by
  * indexing the registry directly (adversary finding F19). */
-export const REGISTRY_INDEXING = /\b(?:MARKETS|CHANNELS)\s*\[/;
+export const REGISTRY_INDEXING =
+  /\b(?:MARKETS|CHANNELS)\s*\[|\b(?:MARKETS|CHANNELS)\s*\.\s*[A-Za-z_$]|\{[^}]*\}\s*=\s*(?:MARKETS|CHANNELS)\b|Object\s*\.\s*(?:values|entries|keys|assign|freeze|getOwnPropertyNames)\s*\(\s*(?:MARKETS|CHANNELS)\b|\b(?:MARKETS|CHANNELS)\s+as\s+[A-Za-z_$]/;
 
-const CODE_FILE = /\.(?:ts|tsx|mjs|js)$/;
+/** Kept deliberately in step with leak-check's SCANNED list (adversary finding
+ * B1): .cjs and .jsx were READ but got zero structural checking, and .mts/.cts
+ * were not read at all — a module could carry a provider hostname past every
+ * rule by choosing its extension. */
+const CODE_FILE = /\.(?:[cm]?[jt]sx?)$/;
 /** Tests and recorded fixtures must be able to contain the very strings these
  * rules ban — that is how the rules themselves get verified. SECRET rules still
  * apply to them: a real token in a test is still a leak.
@@ -71,10 +92,15 @@ const CODE_FILE = /\.(?:ts|tsx|mjs|js)$/;
  * could sit inside the exemption. */
 const TEST_OR_FIXTURE = [
   /^fullburn\/(?:config|engine)\/test\//,
-  /^fullburn\/engine\/evals\//,
   /^fullburn\/(?:config|engine)\/[^/]*\.test\.ts$/,
+  // engine/evals is NOT here (adversary finding B4): it held a blanket
+  // exemption from all five structural rules while containing nothing that
+  // needed one. Recorded outputs are data; if a fixture ever needs to carry a
+  // banned string, it belongs in a test file where the exemption is earned.
 ];
 const SCANNER_SELF = /engine\/scripts\/scan-lib\.mjs$/;
+/** Where Fullburn's Laws apply. Secret rules apply everywhere. */
+const STRUCTURAL_SCOPE = /^(?:fullburn|\.github)\//;
 const STRUCTURAL_EXEMPT = [SCANNER_SELF, ...TEST_OR_FIXTURE];
 const MODEL_ID_ALLOWLIST = [/config\/src\/models\.ts$/, ...STRUCTURAL_EXEMPT];
 const REGISTRY_ALLOWLIST = [/config\/src\/markets\.ts$/, /config\/src\/channels\.ts$/, ...STRUCTURAL_EXEMPT];
@@ -92,23 +118,59 @@ export const DECLARED_FIXTURES = [
   "sk-ant-ABCDEFGH12345678",
 ];
 
-function withoutFixtures(content) {
-  let out = content;
-  for (const f of DECLARED_FIXTURES) out = out.split(f).join("[test-fixture]");
+/** The allowlist is an exception applied to a MATCH, never a substitution
+ * applied to the text.
+ *
+ * Substituting first made the allowlist a token-splitter: `content.split(f)`
+ * removed the declared string wherever it appeared, so splicing it into a live
+ * token broke the pattern while the material stayed perfectly greppable —
+ * `sk-ant-api0` + `sk-ant-ABCDEFGH12345678` + `3-LIVEKEYMATERIAL…` scanned
+ * clean, as did an AWS key split the same way (adversary finding N-06). Worse,
+ * a real key whose body merely BEGAN with a declared fixture became invisible.
+ *
+ * Matching first and excusing after inverts that: a span is excused only when
+ * the span the rule actually matched IS a declared fixture, in full. A fixture
+ * embedded in something longer no longer excuses the longer thing. */
+function isDeclaredFixture(matched) {
+  if (DECLARED_FIXTURES.includes(matched)) return true;
+  // Some rules match a wrapper around the value (`Bearer <token>`), so the
+  // matched span is legitimately longer than the declared string. Excuse those,
+  // but ONLY when the declared fixture accounts for every token-bearing
+  // character of the match: whatever is left over must be pure punctuation or
+  // the literal word "Bearer". Any spliced-in key material leaves a residue and
+  // the match stands — which is what makes this an exception rather than the
+  // splitter N-06 exploited.
+  let residue = matched;
+  for (const f of DECLARED_FIXTURES) residue = residue.split(f).join("");
+  return /^[^A-Za-z0-9]*(?:Bearer)?[^A-Za-z0-9]*$/i.test(residue);
+}
+
+/** Every match of `re` in `content` that is not itself a declared fixture. */
+function realMatches(re, content) {
+  const global = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
+  const out = [];
+  for (const m of content.matchAll(global)) {
+    if (!isDeclaredFixture(m[0])) out.push(m[0]);
+  }
   return out;
 }
 
 /** Returns a list of finding strings; empty means clean. */
 export function scanContent(path, content) {
   const findings = [];
-  const scannable = withoutFixtures(content);
 
   for (const { name, re } of SECRET_PATTERNS) {
-    if (re.test(scannable)) findings.push(`${path}: possible ${name} (§10.2 — tokens live only in the vault)`);
+    if (realMatches(re, content).length > 0) {
+      findings.push(`${path}: possible ${name} (§10.2 — tokens live only in the vault)`);
+    }
   }
 
   // Structural rules are claims about CODE, not about prose describing code,
-  // and not about the tests that verify the rules.
+  // and not about the tests that verify the rules. They are also claims about
+  // FULLBURN's code: sibling projects in this repo are scanned for secrets
+  // (a leaked token is a leak wherever it sits — adversary finding H-16) but
+  // are not governed by Fullburn's Laws.
+  if (!STRUCTURAL_SCOPE.test(path)) return findings;
   if (!CODE_FILE.test(path) || STRUCTURAL_EXEMPT.some((a) => a.test(path))) return findings;
 
   if (PROVIDER_HOSTS.test(content)) {
