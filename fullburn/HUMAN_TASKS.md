@@ -29,7 +29,9 @@ The Phase 0 adversary fixes touch files that are Class 2 by their own rule, so t
 - `fullburn/engine/src/vault.ts`, `tracing.ts`, `redact.ts` — cross-tenant key collision, failure traces, and redaction of trace payloads.
 - **The package manifests and the test tree are now Class 2** (`package.json` ×3, `tsconfig*.json`, `fullburn/(config|engine)/test/**`, `PHASE`): `config/package.json` could redirect the `@fullburn/config/caps` import to an attacker module without touching `caps.ts`, and `fullburn/package.json` could redefine `npm test` so the entire invariant suite became a no-op — both with no approval required. Expect approval entries for these paths on future PRs; that friction is the point.
 
-**Note on approval format:** entries now name a TRANSITION, not a state — `from-content-hash` (the content at the PR base) as well as `content-hash` (the new content). A superseded approval doc, re-added verbatim, previously re-authorized content you had already revoked. See `APPROVALS/README.md`.
+**Added by the r3 fix pass:** `fullburn/engine/src/` is now Class 2 in full (a seven-file list left `index.ts`, the deployed Worker entrypoint, free to re-export an unmetered `llm()`), as are `vitest.workspace.ts` and any `wrangler.toml`. Approval entries now also carry `base-commit:` — see below.
+
+**Note on approval format:** entries now name a TRANSITION **and the pull request it belongs to** — `base-commit:` (the sha this PR branches from), `from-content-hash:` (the content at that base) and `content-hash:` (the new content). Content hashes alone were not enough: once your own revert restored the previous bytes, every approval ever issued from those bytes was re-armed, and copying one back in re-authorized the revoked change with no forgery at all. A base commit occurs once. See `APPROVALS/README.md`.
 
 ## Before client zero spends a dollar (Phase 6)
 

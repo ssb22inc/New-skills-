@@ -39,6 +39,15 @@ describe("secret rules (§10.2, §15) — apply to every file type", () => {
     expect(scanContent("fullburn/reports/r.md", "Bearer " + "z9y8x7w6v5".repeat(3)).length).toBeGreaterThan(0);
   });
 
+  it("the fixture allowlist is exact strings only — a realistic token still fires beside one", () => {
+    // Guards the allowlist against becoming a hiding place: a real-shaped token
+    // is caught even in the same file as a declared placeholder, and a token
+    // that merely starts with a placeholder prefix is still caught.
+    const withBoth = "sk-ant-ABCDEFGH12345678 and " + fake("sk-ant-", 40);
+    expect(scanContent("fullburn/reports/r.md", withBoth).length).toBeGreaterThan(0);
+    expect(scanContent("fullburn/reports/r.md", "sk-ant-ABCDEFGH12345678")).toHaveLength(0);
+  });
+
   it("flags tokens in non-code files too — a secret in a report is still a secret", () => {
     expect(scanContent("fullburn/reports/notes.md", fake("sk-ant-", 24)).length).toBeGreaterThan(0);
   });

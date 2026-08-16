@@ -83,7 +83,14 @@ const REGISTRY_ALLOWLIST = [/config\/src\/markets\.ts$/, /config\/src\/channels\
  * Narrow by construction — exact strings only, no patterns. The canary exists
  * to prove secrets do not escape, so it turns up in evidence and reports; if it
  * were treated as a live secret the scanner would cry wolf on its own proof. */
-export const DECLARED_FIXTURES = ["canary-vault-value-do-not-leak-8891"];
+export const DECLARED_FIXTURES = [
+  "canary-vault-value-do-not-leak-8891",
+  // Placeholder the r3 adversary planted in a synthetic repo to prove the
+  // scanner fires, then quoted in its own evidence. Reports are append-only, so
+  // the quote cannot be edited out; declaring the exact string keeps the rule
+  // strong while stopping the scanner from failing CI on its own proof.
+  "sk-ant-ABCDEFGH12345678",
+];
 
 function withoutFixtures(content) {
   let out = content;

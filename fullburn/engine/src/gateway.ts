@@ -92,7 +92,17 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
   let secrets: string[] = [];
   let reservation: SpendReservation | null = null;
   let meter: ReturnType<typeof requireReservingMeter> | null = null;
-  let settled = false;
+  /** Set the instant before the request is handed to the transport. From that
+   * moment the provider may bill us, so the reservation is NEVER releasable —
+   * whatever happens next, including a settle() that itself throws.
+   *
+   * This is deliberately NOT "settle succeeded" (adversary findings M-01, M-04).
+   * Ordering settle() before the flag meant a throwing settle left the flag
+   * false, so the outer catch released the headroom for a request the provider
+   * had already served: measured at 2000 billable calls against a $5 cap with
+   * the cap never engaging once. The flag answers "did it leave the building",
+   * which is the only question the release decision may depend on. */
+  let departed = false;
 
   const traceFailure = async (message: string, output: unknown = null): Promise<void> => {
     try {
@@ -153,6 +163,9 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
 
     let output: unknown;
+    // Everything from here is billable. The flag is set BEFORE the await, not
+    // after a successful settle (M-01/M-04).
+    departed = true;
     try {
       output = await deps.transport.post(
         url,
@@ -162,14 +175,12 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     } catch (err) {
       // The request left the building: the provider may well have billed it, so
       // the reservation is SETTLED, not released (F3).
-      meter.settle(reservation);
-      settled = true;
+      settleOrFailClosed(meter, reservation);
       throw redactError(err, secrets, GatewayError);
     }
 
-    // From here the call is billable regardless of what we think of the response.
-    meter.settle(reservation);
-    settled = true;
+    // Billable regardless of what we think of the response.
+    settleOrFailClosed(meter, reservation);
 
     validateOutput(card.outputSchema, output);
 
@@ -191,7 +202,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // Anything that threw before the request left the building never became
     // billable, so its headroom returns to the client (R2-02). `release` is
     // idempotent and never throws for a stale handle.
-    if (reservation !== null && meter !== null && !settled) {
+    if (reservation !== null && meter !== null && !departed) {
       try {
         meter.release(reservation);
       } catch {
@@ -204,6 +215,23 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       : redactError(err, secrets, errorClassFor(err));
     await traceFailure(safe.message);
     throw safe;
+  }
+}
+
+/** A settle that fails leaves the charge unrecorded, which is a data lie about
+ * money — but releasing the reservation instead would be worse, because the
+ * provider already served the request. Fail closed: keep the headroom consumed
+ * and surface the accounting failure (M-01). */
+function settleOrFailClosed(
+  meter: Required<Pick<SpendMeter, "reserve" | "settle" | "release">>,
+  reservation: SpendReservation,
+): void {
+  try {
+    meter.settle(reservation);
+  } catch (err) {
+    throw new MeterUnavailableError(
+      `spend was incurred but could not be recorded — refusing to release the reservation (fail closed): ${err instanceof Error ? err.name : "settle failed"}`,
+    );
   }
 }
 

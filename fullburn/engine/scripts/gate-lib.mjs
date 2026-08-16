@@ -17,13 +17,21 @@ export const CLASS2_PATTERNS = [
   /^fullburn\/CLAUDE\.md$/,
   /^fullburn\/ENGINE_BUILD\.md$/,
   /^fullburn\/\.claude\//,
-  // Money, the grader, and the immutability primitive: values AND enforcing code
+  // Money, the grader, and the immutability primitive: values AND enforcing code.
+  // The WHOLE engine source tree, not an enumeration (adversary finding R2-CP-04):
+  // a list of seven files left index.ts — the deployed Worker entrypoint — free to
+  // re-export an unmetered llm() from a new module, with every gate green.
   /^fullburn\/config\/src\//,
-  /^fullburn\/engine\/src\/(?:gateway|spend-meter|grade-registry|vault|tracing|redact|eval-harness)\.ts$/,
+  /^fullburn\/engine\/src\//,
   // The gates themselves and everything that decides whether they run
   /^\.github\//,
   /^fullburn\/engine\/scripts\//,
-  /^fullburn\/vitest\.config\.ts$/,
+  // Any test-runner or deploy config, by shape rather than by name: vitest
+  // honours vitest.workspace.ts OVER vitest.config.ts, so protecting only the
+  // latter left a sibling filename that silenced 145 of 148 tests (R3-CP-03).
+  /^fullburn\/vitest[^/]*\.(?:ts|js|mjs|json)$/,
+  /^fullburn\/(?:[^/]+\/)?wrangler\.(?:toml|json|jsonc)$/,
+  /^fullburn\/\.gitignore$/,
   /^fullburn\/(?:[^/]+\/)?package\.json$/,
   /^fullburn\/(?:[^/]+\/)?tsconfig(?:\.base)?\.json$/,
   /^fullburn\/PHASE$/,
@@ -85,14 +93,18 @@ function stripHtmlComments(text) {
  * by ~~~ (R2-09). The token must be exactly PASS or FAIL. */
 export function parseVerdict(reportContent) {
   const lines = stripHtmlComments(reportContent).split("\n");
-  let fence = null; // the marker that opened the current fence, or null
+  let fence = null; // {ch,len} of the fence currently open, or null
   for (const raw of lines) {
     const line = raw.replace(/\r$/, "");
     const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
     if (fenceMatch) {
-      const marker = fenceMatch[1][0];
+      // CommonMark: a closing fence must use the same character AND be at least
+      // as long as the opening one. Comparing only the character let a 3-backtick
+      // line close a 4-backtick block, so the parser walked out of a fenced
+      // example and read the PASS inside it (adversary finding R3-CP-02).
+      const marker = { ch: fenceMatch[1][0], len: fenceMatch[1].length };
       if (fence === null) fence = marker;
-      else if (fence === marker) fence = null;
+      else if (fence.ch === marker.ch && marker.len >= fence.len) fence = null;
       continue;
     }
     if (fence !== null) continue;
@@ -133,11 +145,18 @@ function readTreeBinding(reportContent) {
 
 /** Judge one report against the current tree. */
 function judgeReport(reportContent, currentTreeHash) {
-  const verdict = parseVerdict(reportContent);
-  if (!verdict) return { ok: false, fresh: false, reason: "report has no 'Verdict:' line outside a code fence" };
+  // Freshness is established FIRST (adversary finding R3-CP-06). Judging the
+  // verdict first meant an unparseable one — a blockquoted FAIL, a homoglyph —
+  // returned fresh:false, so a report bound to THIS tree was filed as history
+  // and a sibling PASS opened the gate. Anything bound to the current tree that
+  // is not a clean PASS is unresolved business.
   const tree = readTreeBinding(reportContent);
   if (!tree) return { ok: false, fresh: false, reason: "report has no 'verified-tree:' binding (stale-report protection)" };
   const fresh = tree === currentTreeHash;
+  const verdict = parseVerdict(reportContent);
+  if (!verdict) {
+    return { ok: false, fresh, reason: "report has no parseable 'Verdict:' line at column 0 outside a code fence" };
+  }
   if (!fresh) {
     return {
       ok: false,
@@ -225,13 +244,18 @@ function parseApprovalBlocks(content) {
     const approves = /^approves\s*:\s*(\S+)$/i.exec(line);
     if (approves) {
       if (current) blocks.push(current);
-      current = { path: approves[1], from: null, to: null };
+      current = { path: approves[1], from: null, to: null, base: null };
       continue;
     }
     if (!current) continue;
     const from = /^from-content-hash\s*:\s*(\S+)$/i.exec(line);
     if (from) {
       current.from = from[1];
+      continue;
+    }
+    const base = /^base-commit\s*:\s*(\S+)$/i.exec(line);
+    if (base) {
+      current.base = base[1];
       continue;
     }
     const to = /^content-hash\s*:\s*(\S+)$/i.exec(line);
@@ -241,7 +265,7 @@ function parseApprovalBlocks(content) {
   return blocks;
 }
 
-export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseHashOf }) {
+export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseHashOf, baseCommit }) {
   // Every path a change touches, including the source side of a rename.
   const touched = [];
   for (const f of changedFiles) {
@@ -260,7 +284,16 @@ export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseH
     // "deleted"/"renamed-away" have no new content; the transition is to absence.
     const wantTo = f.status === "deleted" || f.status === "renamed-away" ? "deleted" : safeHash(hashOf, f.path);
     const wantFrom = f.status === "added" ? "absent" : safeHash(baseHashOf, f.path);
-    const approved = usable.some((b) => b.path === f.path && b.to === wantTo && b.from === wantFrom);
+    const approved = usable.some(
+      (b) =>
+        b.path === f.path && b.to === wantTo && b.from === wantFrom &&
+        // The approval must name THIS pull request's base (R3-CP-01). Content
+        // hashes alone authorize a content STATE: once a human's revert restored
+        // the previous bytes, every approval ever issued from those bytes was
+        // re-armed, and copying one back in re-authorized the revoked change with
+        // no forgery at all. A base commit occurs once.
+        (baseCommit === undefined || b.base === baseCommit),
+    );
     if (!approved) failures.push(`${f.path} (${f.status})`);
   }
   if (failures.length > 0) {

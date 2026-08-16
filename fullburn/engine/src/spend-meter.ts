@@ -80,15 +80,37 @@ export function assertUsableAmount(n: unknown, label: string): asserts n is numb
   }
 }
 
+/** UTC day key. Client-LOCAL rollover needs the market registry's locale clock
+ * (§2.5), which is per-client and unset until onboarding — tracked as a ledger
+ * item rather than approximated here. */
+export function utcDayKey(nowMs: number): string {
+  return new Date(nowMs).toISOString().slice(0, 10);
+}
+
 export class MemorySpendMeter implements SpendMeter {
   #committedMicros = new Map<string, number>();
   #reservedMicros = new Map<string, number>();
-  #open = new Map<string, { clientId: string; micros: number }>();
+  #open = new Map<string, { clientId: string; micros: number; day: string }>();
   #available = true;
   #seq = 0;
+  #now: () => number;
+
+  /** A DAILY cap needs a day (adversary finding M-03). Without one, a client
+   * that spent its ceiling was refused forever — a $5/day budget was really
+   * $5/lifetime, and the bracket could not kill losing ads on day two. Ledgers
+   * are keyed by (client, UTC day) so the cap rolls over exactly once per day.
+   * Persistence across a restart is a Durable Object concern and is NOT solved
+   * here: a fresh meter still starts a fresh day (ledger L14). */
+  constructor(now: () => number = () => 0) {
+    this.#now = now;
+  }
 
   setAvailable(v: boolean): void {
     this.#available = v;
+  }
+
+  #key(clientId: string): string {
+    return `${utcDayKey(this.#now())}|${clientId}`;
   }
 
   #assertAvailable(): void {
@@ -105,12 +127,12 @@ export class MemorySpendMeter implements SpendMeter {
 
   todayUsd(clientId: string): number {
     this.#assertAvailable();
-    return fromMicros(this.#read(this.#committedMicros, clientId, "committed spend"));
+    return fromMicros(this.#read(this.#committedMicros, this.#key(clientId), "committed spend"));
   }
 
   reservedUsd(clientId: string): number {
     this.#assertAvailable();
-    return fromMicros(this.#read(this.#reservedMicros, clientId, "reserved spend"));
+    return fromMicros(this.#read(this.#reservedMicros, this.#key(clientId), "reserved spend"));
   }
 
   reserve(clientId: string, amountUsd: number, capUsd: number): SpendReservation {
@@ -122,8 +144,9 @@ export class MemorySpendMeter implements SpendMeter {
     const capMicros = toMicros(capUsd, "cap");
     if (amountMicros <= 0) throw new MeterUnavailableError("reservation amount must be positive");
 
-    const committed = this.#read(this.#committedMicros, clientId, "committed spend");
-    const reserved = this.#read(this.#reservedMicros, clientId, "reserved spend");
+    const day = this.#key(clientId);
+    const committed = this.#read(this.#committedMicros, day, "committed spend");
+    const reserved = this.#read(this.#reservedMicros, day, "reserved spend");
     const projected = committed + reserved + amountMicros;
     if (!Number.isSafeInteger(projected)) {
       throw new MeterUnavailableError("projected spend is out of range — refusing spend (fail closed)");
@@ -137,12 +160,14 @@ export class MemorySpendMeter implements SpendMeter {
     // Single synchronous write completes the read-check-write cycle.
     this.#seq += 1;
     const id = `r${this.#seq}`;
-    this.#reservedMicros.set(clientId, reserved + amountMicros);
-    this.#open.set(id, { clientId, micros: amountMicros });
+    this.#reservedMicros.set(day, reserved + amountMicros);
+    // The reservation remembers the day it was taken, so a settle that lands
+    // after midnight commits against the day the spend belongs to.
+    this.#open.set(id, { clientId, micros: amountMicros, day });
     return { id, clientId, amountUsd: fromMicros(amountMicros) };
   }
 
-  #close(reservation: SpendReservation): { clientId: string; micros: number } | null {
+  #close(reservation: SpendReservation): { clientId: string; micros: number; day: string } | null {
     if (reservation === null || typeof reservation !== "object") return null;
     const open = this.#open.get(reservation.id);
     if (open === undefined) return null; // already settled/released — idempotent
@@ -150,16 +175,16 @@ export class MemorySpendMeter implements SpendMeter {
     // another client's ledger.
     if (open.clientId !== reservation.clientId) return null;
     this.#open.delete(reservation.id);
-    const reserved = this.#read(this.#reservedMicros, open.clientId, "reserved spend");
-    this.#reservedMicros.set(open.clientId, Math.max(0, reserved - open.micros));
+    const reserved = this.#read(this.#reservedMicros, open.day, "reserved spend");
+    this.#reservedMicros.set(open.day, Math.max(0, reserved - open.micros));
     return open;
   }
 
   settle(reservation: SpendReservation): void {
     const open = this.#close(reservation);
     if (open === null) return;
-    const committed = this.#read(this.#committedMicros, open.clientId, "committed spend");
-    this.#committedMicros.set(open.clientId, committed + open.micros);
+    const committed = this.#read(this.#committedMicros, open.day, "committed spend");
+    this.#committedMicros.set(open.day, committed + open.micros);
   }
 
   release(reservation: SpendReservation): void {
@@ -169,7 +194,8 @@ export class MemorySpendMeter implements SpendMeter {
   record(clientId: string, usd: number): void {
     this.#assertAvailable();
     const micros = toMicros(usd, "recorded amount");
-    const committed = this.#read(this.#committedMicros, clientId, "committed spend");
-    this.#committedMicros.set(clientId, committed + micros);
+    const day = this.#key(clientId);
+    const committed = this.#read(this.#committedMicros, day, "committed spend");
+    this.#committedMicros.set(day, committed + micros);
   }
 }

@@ -36,6 +36,9 @@ const res = checkClass2Approvals({
   // The content this transition starts FROM, read at the PR base.
   baseHashOf: (p) =>
     sha(execSync(`git -C ${JSON.stringify(repoRoot)} show ${JSON.stringify(`${baseRef}:${p}`)}`, { encoding: "buffer" })),
+  // The commit this PR branches from. An approval names it, so an approval
+  // issued for one PR cannot be replayed into another (R3-CP-01).
+  baseCommit: execSync(`git -C ${JSON.stringify(repoRoot)} rev-parse ${JSON.stringify(baseRef)}`, { encoding: "utf8" }).trim(),
 });
 
 if (!res.ok) {
