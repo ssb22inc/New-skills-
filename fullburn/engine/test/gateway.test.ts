@@ -55,14 +55,19 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
     await expect(call()).rejects.toThrow(/cap breach refused/); // 0.06 > 0.05
   });
 
-  it("unsigned production caps refuse ALL AI spend until H8 (R2)", async () => {
+  it("unsigned caps refuse ALL AI spend (R2, H8)", async () => {
+    // Client zero is signed as of 2026-08-16, so this drives a client that is
+    // genuinely unsigned. The secret is provisioned deliberately: without it the
+    // call would fail on a missing key and the test would pass without the
+    // sign-off check ever running.
     const { deps, backend } = makeDeps();
+    backend.set("fixture-unsigned", "ai-gateway-key", "unused-by-this-path");
     await expect(
-      llm({ ...deps, vault: vaultForClient(backend, "pulsern"), bindings: ROLE_BINDINGS }, {
+      llm({ ...deps, vault: vaultForClient(backend, "fixture-unsigned"), bindings: ROLE_BINDINGS }, {
         role: "hello-world",
-        clientId: "pulsern",
+        clientId: "fixture-unsigned",
         input: {},
-        trace: new TraceContext("t-p", "pulsern"),
+        trace: new TraceContext("t-p", "fixture-unsigned"),
       }),
     ).rejects.toThrow(/human sign-off/);
     expect(() => getCaps("pulsern")).not.toThrow(); // caps exist; they are just unusable

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { EvalAttestation, ROLE_BINDINGS, attestEvalRun, bindRole } from "@fullburn/config/models";
 import { getCaps } from "@fullburn/config/caps";
 import { llm } from "../src/gateway.ts";
-import { MemorySpendMeter, MeterUnavailableError, type SpendReservation } from "../src/spend-meter.ts";
+import { MemorySpendMeter, MeterUnavailableError, type SpendCeilings, type SpendReservation } from "../src/spend-meter.ts";
 import { TraceContext } from "../src/tracing.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { checkAdversaryReport, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
@@ -75,7 +75,7 @@ describe("money — held money is never invisible (N-09)", () => {
   it("an in-flight reservation survives a UTC midnight in reservedUsd()", () => {
     let nowMs = Date.UTC(2026, 7, 15, 23, 59, 0);
     const meter = new MemorySpendMeter(() => nowMs);
-    const held = meter.reserve(TEST_CLIENT, 3, 5);
+    const held = meter.reserve(TEST_CLIENT, 3, { dailyUsd: 5, monthlyUsd: 5 });
     expect(meter.reservedUsd(TEST_CLIENT)).toBeCloseTo(3, 6);
 
     nowMs += 2 * 60_000; // 00:01 the next day
@@ -89,7 +89,7 @@ describe("money — held money is never invisible (N-09)", () => {
 
   it("another client's reservation is not visible on this client's reading", () => {
     const meter = new MemorySpendMeter(testClock);
-    meter.reserve("fixture-other", 2, 5);
+    meter.reserve("fixture-other", 2, { dailyUsd: 5, monthlyUsd: 5 });
     expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
   });
 });
@@ -425,6 +425,61 @@ describe("secrets — a quoted-evidence exemption cannot travel (N-06)", () => {
   });
 });
 
+describe("caps — the H8 ceilings are coherent, not merely present", () => {
+  /** Individually sane, collectively nonsense: a hard ceiling below its own
+   * pacing target means the pacing is never reached, and a daily sub-limit above
+   * its own month means the sub-limit never bites. Nothing errors and nothing
+   * overspends — the engine quietly enforces a figure the human did not approve.
+   *
+   * `getCaps` accepts no caller-supplied table by design (R2-03), so the
+   * relationships are driven through the exported check.
+   *
+   * MUTATION: neuter either branch of assertCapsCoherent, or stop calling it
+   * from getCaps. */
+  it("a hard ceiling below its pacing target, or a day above its month, is refused", async () => {
+    const { assertCapsCoherent, getCaps: get } = await import("@fullburn/config/caps");
+    const ok = get("pulsern");
+    expect(() => assertCapsCoherent(ok, "pulsern")).not.toThrow();
+    expect(() => assertCapsCoherent({ ...ok, hardDailyAdSpendUsd: ok.dailyAdSpendUsd - 1 }, "x")).toThrow(
+      /below the daily pacing target/,
+    );
+    expect(() => assertCapsCoherent({ ...ok, dailyAiSpendUsd: ok.monthlyAiSpendUsd + 1 }, "x")).toThrow(
+      /exceeds the monthly AI ceiling/,
+    );
+    // And getCaps actually runs it — every shipped client is coherent.
+    for (const id of ["pulsern", "fixture-testco", "fixture-unsigned"]) {
+      expect(() => get(id), `${id} has incoherent caps`).not.toThrow();
+    }
+  });
+
+  /** MUTATION: drop the Math.min against monthlyUsd in effectiveAiCapsUsd. */
+  it("narrowing the month tightens the day with it", async () => {
+    const { effectiveAiCapsUsd } = await import("@fullburn/config/caps");
+    const c = effectiveAiCapsUsd(TEST_CLIENT, { [TEST_CLIENT]: { monthlyAiSpendUsd: 0.5 } });
+    expect(c.monthlyUsd).toBe(0.5);
+    expect(c.dailyUsd, "the daily sub-limit outlived its own month").toBeLessThanOrEqual(0.5);
+    // And the pair is never incoherent, whatever combination is narrowed.
+    for (const n of [{ dailyAiSpendUsd: 1 }, { monthlyAiSpendUsd: 2 }, { dailyAiSpendUsd: 9, monthlyAiSpendUsd: 3 }]) {
+      const eff = effectiveAiCapsUsd(TEST_CLIENT, { [TEST_CLIENT]: n });
+      expect(eff.dailyUsd, `daily above month for ${JSON.stringify(n)}`).toBeLessThanOrEqual(eff.monthlyUsd);
+    }
+  });
+
+  /** The values the human approved on 2026-08-16, asserted by number. A cap that
+   * drifts from its approval is the defect the whole Class-2 mechanism exists to
+   * prevent, and a content hash catches that only at review time. */
+  it("client zero carries exactly the approved H8 values", async () => {
+    const { getCaps: get } = await import("@fullburn/config/caps");
+    const c = get("pulsern");
+    expect(c.dailyAdSpendUsd, "daily ad pacing").toBe(66);
+    expect(c.hardDailyAdSpendUsd, "hard daily ad ceiling").toBe(75);
+    expect(c.totalAdSpendUsd, "total ad spend").toBe(2000);
+    expect(c.dailyAiSpendUsd, "daily AI sub-limit").toBe(10);
+    expect(c.monthlyAiSpendUsd, "monthly AI ceiling").toBe(200);
+    expect(c.humanSignoff, "H8 sign-off").toMatch(/^H8 approved 2026-08-16/);
+  });
+});
+
 describe("model layer — a forged attestation cannot bind a model (r4 lock 8 / H-04)", () => {
   /** The r3 lock passed a plain object literal, which `instanceof` alone
    * already rejects — so the WeakSet, which IS the fix, was never exercised.
@@ -470,9 +525,9 @@ function trackOps(meter: MemorySpendMeter, ops: string[]): void {
   const reserve = meter.reserve.bind(meter);
   const settle = meter.settle.bind(meter);
   const release = meter.release.bind(meter);
-  meter.reserve = (c: string, a: number, cap: number) => {
+  meter.reserve = (c: string, a: number, caps: SpendCeilings) => {
     ops.push("reserve");
-    return reserve(c, a, cap);
+    return reserve(c, a, caps);
   };
   meter.settle = (r: SpendReservation) => {
     ops.push("settle");

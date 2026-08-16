@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CapError, effectiveDailyAiCapUsd, getCaps } from "@fullburn/config/caps";
+import { CapError, effectiveAiCapsUsd, getCaps } from "@fullburn/config/caps";
 import { GOLDEN_SET_CASE_IDS, ROLE_BINDINGS, bindRole, attestEvalRun, type EvalAttestation } from "@fullburn/config/models";
 import { llm } from "../src/gateway.ts";
 import { MemorySpendMeter, MeterUnavailableError, type SpendMeter } from "../src/spend-meter.ts";
@@ -102,47 +102,82 @@ describe("money — the narrowing override can only narrow (M-02)", () => {
   // MUTATION: `return Math.min(ceiling, requested)` → `return requested`.
   it("a caller-supplied table cannot raise the frozen ceiling", () => {
     const ceiling = getCaps(TEST_CLIENT).dailyAiSpendUsd;
-    expect(effectiveDailyAiCapUsd(TEST_CLIENT, { [TEST_CLIENT]: { dailyAiSpendUsd: 1e9 } })).toBe(ceiling);
-    expect(effectiveDailyAiCapUsd(TEST_CLIENT, { [TEST_CLIENT]: { dailyAiSpendUsd: 0.05 } })).toBe(0.05);
-    expect(effectiveDailyAiCapUsd(TEST_CLIENT)).toBe(ceiling);
+    expect(effectiveAiCapsUsd(TEST_CLIENT, { [TEST_CLIENT]: { dailyAiSpendUsd: 1e9 } }).dailyUsd).toBe(ceiling);
+    expect(effectiveAiCapsUsd(TEST_CLIENT, { [TEST_CLIENT]: { dailyAiSpendUsd: 0.05 } }).dailyUsd).toBe(0.05);
+    expect(effectiveAiCapsUsd(TEST_CLIENT).dailyUsd).toBe(ceiling);
+    // The monthly ceiling narrows the same way and no other.
+    const monthCeiling = getCaps(TEST_CLIENT).monthlyAiSpendUsd;
+    expect(effectiveAiCapsUsd(TEST_CLIENT, { [TEST_CLIENT]: { monthlyAiSpendUsd: 1e9 } }).monthlyUsd).toBe(monthCeiling);
+    expect(effectiveAiCapsUsd(TEST_CLIENT, { [TEST_CLIENT]: { monthlyAiSpendUsd: 1 } }).monthlyUsd).toBe(1);
   });
 
-  // MUTATION: drop `assertCapsUsable(caps)` from effectiveDailyAiCapUsd.
+  // MUTATION: drop `assertCapsUsable(caps)` from effectiveAiCapsUsd.
   it("a narrowing table cannot manufacture a sign-off for an unsigned client", () => {
     expect(() =>
-      effectiveDailyAiCapUsd("pulsern", { pulsern: { dailyAiSpendUsd: 1 } } as never),
+      // Client zero is signed now (H8, 2026-08-16), so the unsigned path needs
+      // a client that is genuinely unsigned or this test would pass for a
+      // different reason than the one it claims.
+      effectiveAiCapsUsd("fixture-unsigned", { "fixture-unsigned": { dailyAiSpendUsd: 1 } } as never),
     ).toThrow(/human sign-off/);
   });
 
   it("an unknown client cannot be invented by the override", () => {
-    expect(() => effectiveDailyAiCapUsd("ghost", { ghost: { dailyAiSpendUsd: 100 } })).toThrow(CapError);
+    expect(() => effectiveAiCapsUsd("ghost", { ghost: { dailyAiSpendUsd: 100 } })).toThrow(CapError);
   });
 });
 
 describe("money — a DAILY cap has a day (M-03)", () => {
   // MUTATION: drop the day component from MemorySpendMeter's ledger key.
+  //
+  // The month is given room here deliberately. With monthlyUsd equal to the
+  // daily figure the month binds on day one and this test would pass whether or
+  // not the day key exists — green for the wrong reason.
+  const CEILINGS = { dailyUsd: 5, monthlyUsd: 100 };
   it("the ceiling rolls over: a client that spent today can spend tomorrow", () => {
     let now = Date.parse("2026-08-15T12:00:00Z");
     const m = new MemorySpendMeter(() => now);
-    m.settle(m.reserve("c", 5, 5));
-    expect(() => m.reserve("c", 1, 5)).toThrow(CapError); // spent for today
+    m.settle(m.reserve("c", 5, CEILINGS));
+    expect(() => m.reserve("c", 1, CEILINGS)).toThrow(CapError); // spent for today
     now = Date.parse("2026-08-16T00:30:00Z");
-    expect(() => m.reserve("c", 5, 5)).not.toThrow(); // new day, new ceiling
+    expect(() => m.reserve("c", 5, CEILINGS)).not.toThrow(); // new day, new ceiling
     expect(m.todayUsd("c")).toBe(0);
+    // …but the MONTH remembers: the day ceiling resetting is not a fresh month.
+    expect(m.monthUsd("c")).toBe(5);
   });
 
   it("within one day the ceiling still binds", () => {
     let now = Date.parse("2026-08-15T00:10:00Z");
     const m = new MemorySpendMeter(() => now);
-    m.settle(m.reserve("c", 5, 5));
+    m.settle(m.reserve("c", 5, CEILINGS));
     now = Date.parse("2026-08-15T23:50:00Z");
-    expect(() => m.reserve("c", 1, 5)).toThrow(CapError);
+    expect(() => m.reserve("c", 1, CEILINGS)).toThrow(CapError);
+  });
+
+  /** MUTATION: drop the month period from reserve/settle, or check only the day.
+   * The daily sub-limit exists to stop a runaway loop eating the month in an
+   * hour; the MONTH is what bounds exposure. A day-only meter lets a $10/day
+   * client spend $310 against a $200 approval. */
+  it("the monthly ceiling binds across days even when every single day is legal", () => {
+    let now = Date.parse("2026-08-01T12:00:00Z");
+    const m = new MemorySpendMeter(() => now);
+    const caps = { dailyUsd: 10, monthlyUsd: 20 };
+    for (const day of ["01", "02"]) {
+      now = Date.parse(`2026-08-${day}T12:00:00Z`);
+      m.settle(m.reserve("c", 10, caps)); // each day is exactly at its own ceiling
+    }
+    expect(m.monthUsd("c")).toBe(20);
+    now = Date.parse("2026-08-03T12:00:00Z");
+    // A perfectly legal DAY that breaches the MONTH.
+    expect(() => m.reserve("c", 1, caps)).toThrow(/monthly cap/);
+    // And the month rolls over on its own boundary, not the day's.
+    now = Date.parse("2026-09-01T00:30:00Z");
+    expect(() => m.reserve("c", 10, caps)).not.toThrow();
   });
 
   it("a reservation settles against the day it was taken, not the day it lands", () => {
     let now = Date.parse("2026-08-15T23:59:59Z");
     const m = new MemorySpendMeter(() => now);
-    const r = m.reserve("c", 1, 5);
+    const r = m.reserve("c", 1, CEILINGS);
     now = Date.parse("2026-08-16T00:00:01Z");
     m.settle(r);
     expect(m.todayUsd("c")).toBe(0); // the new day is clean
@@ -155,7 +190,7 @@ describe("money — isolation guards on the ledger (H-14, H-15)", () => {
   // MUTATION: remove the `open.clientId !== reservation.clientId` check in #close.
   it("one tenant cannot close another tenant's reservation", () => {
     const m = new MemorySpendMeter(testClock);
-    const a = m.reserve("tenant-a", 1, 5);
+    const a = m.reserve("tenant-a", 1, { dailyUsd: 5, monthlyUsd: 5 });
     m.settle({ ...a, clientId: "tenant-b" });
     expect(m.reservedUsd("tenant-a")).toBe(1); // still held by A
     expect(m.todayUsd("tenant-b")).toBe(0); // and B was not credited

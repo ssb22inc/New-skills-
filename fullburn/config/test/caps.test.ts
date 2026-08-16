@@ -7,7 +7,7 @@ describe("caps (Law 2, AC 5, R2)", () => {
     expect(() => {
       (caps as { dailyAdSpendUsd: number }).dailyAdSpendUsd = 999_999;
     }).toThrow(TypeError);
-    expect(getCaps("pulsern").dailyAdSpendUsd).toBe(70);
+    expect(getCaps("pulsern").dailyAdSpendUsd).toBe(66);
   });
 
   it("adding a new client cap at runtime fails", () => {
@@ -30,6 +30,10 @@ describe("caps (Law 2, AC 5, R2)", () => {
   });
 
   it("caps without human sign-off (H8) are structurally unusable", () => {
-    expect(() => assertCapsUsable(getCaps("pulsern"))).toThrow(/human sign-off/);
+    // Client zero is SIGNED as of H8 (2026-08-16), so this invariant needs a
+    // client that is genuinely unsigned — otherwise it would have to be deleted
+    // the moment the human signed, taking the guard with it.
+    expect(() => assertCapsUsable(getCaps("fixture-unsigned"))).toThrow(/human sign-off/);
+    expect(() => assertCapsUsable(getCaps("pulsern"), "pulsern")).not.toThrow();
   });
 });

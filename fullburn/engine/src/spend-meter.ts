@@ -44,6 +44,12 @@ export interface SpendReservation {
   readonly amountUsd: number;
 }
 
+/** The two ceilings every reservation is checked against. */
+export interface SpendCeilings {
+  readonly dailyUsd: number;
+  readonly monthlyUsd: number;
+}
+
 export interface SpendMeter {
   /** Committed spend today for the client, USD. Throws if unavailable. */
   todayUsd(clientId: string): number;
@@ -60,14 +66,24 @@ export interface SpendMeter {
   /** Legacy direct write. Retained for compatibility; the money path uses
    * reserve/settle. Implementations must keep it consistent with `todayUsd`. */
   record(clientId: string, usd: number): void;
-  /** Atomically validate + cap-check + reserve. MUST be synchronous: any await
-   * inside reopens the concurrency race. Throws CapError when the reservation
-   * would breach the cap, MeterUnavailableError when accounting is unusable.
+  /** Committed spend this month for the client, USD. The month is the real
+   * exposure ceiling; the day is a sub-limit that stops a runaway loop
+   * consuming it in an hour. */
+  monthUsd?(clientId: string): number;
+  /** Atomically validate + cap-check + reserve against BOTH ceilings. MUST be
+   * synchronous: any await inside reopens the concurrency race. Throws CapError
+   * when the reservation would breach either cap, MeterUnavailableError when
+   * accounting is unusable.
+   *
+   * Both ceilings are passed together and checked together, deliberately. Two
+   * separate calls would leave a window in which the daily check passed and the
+   * monthly one had not run yet — the same read-check-write race the reserve
+   * design exists to close.
    *
    * Optional in the type only so that meters written against the pre-F1
    * interface still compile; `llm()` refuses any meter that does not implement
    * it, so absence fails closed rather than silently skipping the cap. */
-  reserve?(clientId: string, amountUsd: number, capUsd: number): SpendReservation;
+  reserve?(clientId: string, amountUsd: number, caps: SpendCeilings): SpendReservation;
   /** Commit a reservation: the request left the building and is billable. */
   settle?(reservation: SpendReservation): void;
   /** Release a reservation for a request that never left the building.
@@ -99,10 +115,18 @@ export function utcDayKey(nowMs: number): string {
   return new Date(nowMs).toISOString().slice(0, 10);
 }
 
+/** UTC month key, same caveat as the day. */
+export function utcMonthKey(nowMs: number): string {
+  return new Date(nowMs).toISOString().slice(0, 7);
+}
+
 export class MemorySpendMeter implements SpendMeter {
+  // Keyed by PERIOD, where a period is "d:<day>|<client>" or "m:<month>|<client>".
+  // One map rather than two so a settle can never update the day and miss the
+  // month.
   #committedMicros = new Map<string, number>();
   #reservedMicros = new Map<string, number>();
-  #open = new Map<string, { clientId: string; micros: number; day: string }>();
+  #open = new Map<string, { clientId: string; micros: number; day: string; month: string }>();
   #available = true;
   #seq = 0;
   #now: () => number;
@@ -133,7 +157,11 @@ export class MemorySpendMeter implements SpendMeter {
   }
 
   #key(clientId: string): string {
-    return `${utcDayKey(this.#now())}|${clientId}`;
+    return `d:${utcDayKey(this.#now())}|${clientId}`;
+  }
+
+  #monthKey(clientId: string): string {
+    return `m:${utcMonthKey(this.#now())}|${clientId}`;
   }
 
   #assertAvailable(): void {
@@ -153,6 +181,11 @@ export class MemorySpendMeter implements SpendMeter {
     return fromMicros(this.#read(this.#committedMicros, this.#key(clientId), "committed spend"));
   }
 
+  monthUsd(clientId: string): number {
+    this.#assertAvailable();
+    return fromMicros(this.#read(this.#committedMicros, this.#monthKey(clientId), "committed spend"));
+  }
+
   /** Every open reservation for this client, whatever day it was taken on
    * (N-09). Held money must never be invisible.  */
   reservedUsd(clientId: string): number {
@@ -167,39 +200,59 @@ export class MemorySpendMeter implements SpendMeter {
     return fromMicros(micros);
   }
 
-  reserve(clientId: string, amountUsd: number, capUsd: number): SpendReservation {
+  reserve(clientId: string, amountUsd: number, caps: SpendCeilings): SpendReservation {
     this.#assertAvailable();
     if (typeof clientId !== "string" || clientId.length === 0) {
       throw new MeterUnavailableError("reserve requires a clientId");
     }
+    if (caps === null || typeof caps !== "object") {
+      throw new MeterUnavailableError("reserve requires both ceilings — refusing spend (fail closed)");
+    }
     const amountMicros = toMicros(amountUsd, "reservation amount");
-    const capMicros = toMicros(capUsd, "cap");
+    const dailyCapMicros = toMicros(caps.dailyUsd, "daily cap");
+    const monthlyCapMicros = toMicros(caps.monthlyUsd, "monthly cap");
     if (amountMicros <= 0) throw new MeterUnavailableError("reservation amount must be positive");
 
     const day = this.#key(clientId);
-    const committed = this.#read(this.#committedMicros, day, "committed spend");
-    const reserved = this.#read(this.#reservedMicros, day, "reserved spend");
-    const projected = committed + reserved + amountMicros;
-    if (!Number.isSafeInteger(projected)) {
-      throw new MeterUnavailableError("projected spend is out of range — refusing spend (fail closed)");
-    }
-    if (projected > capMicros) {
+    const month = this.#monthKey(clientId);
+
+    // BOTH ceilings are read, checked and written inside one synchronous block.
+    // Checking them in sequence with any await between would reopen the race
+    // the reserve design exists to close.
+    const project = (period: string): number => {
+      const committed = this.#read(this.#committedMicros, period, "committed spend");
+      const reserved = this.#read(this.#reservedMicros, period, "reserved spend");
+      const projected = committed + reserved + amountMicros;
+      if (!Number.isSafeInteger(projected)) {
+        throw new MeterUnavailableError("projected spend is out of range — refusing spend (fail closed)");
+      }
+      return projected;
+    };
+    const projectedDay = project(day);
+    const projectedMonth = project(month);
+    if (projectedDay > dailyCapMicros) {
       throw new CapError(
-        `AI spend cap breach refused: projected $${fromMicros(projected).toFixed(4)} > daily cap $${capUsd} for "${clientId}"`,
+        `AI spend cap breach refused: projected $${fromMicros(projectedDay).toFixed(4)} > daily cap $${caps.dailyUsd} for "${clientId}"`,
+      );
+    }
+    if (projectedMonth > monthlyCapMicros) {
+      throw new CapError(
+        `AI spend cap breach refused: projected $${fromMicros(projectedMonth).toFixed(4)} > monthly cap $${caps.monthlyUsd} for "${clientId}"`,
       );
     }
 
     // Single synchronous write completes the read-check-write cycle.
     this.#seq += 1;
     const id = `r${this.#seq}`;
-    this.#reservedMicros.set(day, reserved + amountMicros);
-    // The reservation remembers the day it was taken, so a settle that lands
-    // after midnight commits against the day the spend belongs to.
-    this.#open.set(id, { clientId, micros: amountMicros, day });
+    this.#reservedMicros.set(day, projectedDay - this.#read(this.#committedMicros, day, "committed spend"));
+    this.#reservedMicros.set(month, projectedMonth - this.#read(this.#committedMicros, month, "committed spend"));
+    // The reservation remembers the periods it was taken in, so a settle that
+    // lands after midnight commits against the day the spend belongs to.
+    this.#open.set(id, { clientId, micros: amountMicros, day, month });
     return { id, clientId, amountUsd: fromMicros(amountMicros) };
   }
 
-  #close(reservation: SpendReservation): { clientId: string; micros: number; day: string } | null {
+  #close(reservation: SpendReservation): { clientId: string; micros: number; day: string; month: string } | null {
     if (reservation === null || typeof reservation !== "object") return null;
     const open = this.#open.get(reservation.id);
     if (open === undefined) return null; // already settled/released — idempotent
@@ -207,16 +260,20 @@ export class MemorySpendMeter implements SpendMeter {
     // another client's ledger.
     if (open.clientId !== reservation.clientId) return null;
     this.#open.delete(reservation.id);
-    const reserved = this.#read(this.#reservedMicros, open.day, "reserved spend");
-    this.#reservedMicros.set(open.day, Math.max(0, reserved - open.micros));
+    for (const period of [open.day, open.month]) {
+      const reserved = this.#read(this.#reservedMicros, period, "reserved spend");
+      this.#reservedMicros.set(period, Math.max(0, reserved - open.micros));
+    }
     return open;
   }
 
   settle(reservation: SpendReservation): void {
     const open = this.#close(reservation);
     if (open === null) return;
-    const committed = this.#read(this.#committedMicros, open.day, "committed spend");
-    this.#committedMicros.set(open.day, committed + open.micros);
+    for (const period of [open.day, open.month]) {
+      const committed = this.#read(this.#committedMicros, period, "committed spend");
+      this.#committedMicros.set(period, committed + open.micros);
+    }
   }
 
   release(reservation: SpendReservation): void {
@@ -226,8 +283,9 @@ export class MemorySpendMeter implements SpendMeter {
   record(clientId: string, usd: number): void {
     this.#assertAvailable();
     const micros = toMicros(usd, "recorded amount");
-    const day = this.#key(clientId);
-    const committed = this.#read(this.#committedMicros, day, "committed spend");
-    this.#committedMicros.set(day, committed + micros);
+    for (const period of [this.#key(clientId), this.#monthKey(clientId)]) {
+      const committed = this.#read(this.#committedMicros, period, "committed spend");
+      this.#committedMicros.set(period, committed + micros);
+    }
   }
 }

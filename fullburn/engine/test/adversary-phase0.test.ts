@@ -23,7 +23,7 @@ import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock } from "./helpers.ts";
  * wall-clock or network dependency. */
 
 const LOW_AI_CAP: Readonly<Record<string, ClientCaps>> = {
-  [TEST_CLIENT]: { dailyAdSpendUsd: 70, totalAdSpendUsd: 2000, dailyAiSpendUsd: 0.05, humanSignoff: "test-fixture-signoff" },
+  [TEST_CLIENT]: { dailyAdSpendUsd: 66, hardDailyAdSpendUsd: 75, totalAdSpendUsd: 2000, dailyAiSpendUsd: 0.05, monthlyAiSpendUsd: 0.05, humanSignoff: "test-fixture-signoff" },
 };
 
 /** Deterministic "slow" transport: yields the microtask queue a fixed number of

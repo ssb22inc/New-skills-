@@ -6,17 +6,33 @@ import { deepFreeze } from "./freeze.ts";
  * default cap — an unknown client has NO cap and therefore may spend NOTHING. */
 
 export interface ClientCaps {
-  /** Max ad spend per client-local day, USD.
+  /** PACING TARGET for ad spend per client-local day, USD. The rate the engine
+   * aims at, not the line it refuses at — see `hardDailyAdSpendUsd`.
    * NOT YET ENFORCED ANYWHERE: no write path exists before Phase 6. The only
-   * cap consulted today is `dailyAiSpendUsd`. A later phase must not assume a
+   * caps consulted today are the AI pair. A later phase must not assume a
    * guard already exists here (adversary spec observation #6). */
   readonly dailyAdSpendUsd: number;
+  /** ABSOLUTE daily refusal line for ad spend, USD. A day may run over the
+   * pacing target; it may never cross this. Separate from `dailyAdSpendUsd`
+   * because a target and a ceiling are different decisions and collapsing them
+   * means either the pacing is a hard stop (the engine cannot catch up) or the
+   * ceiling is advisory (there is no stop at all).
+   * NOT YET ENFORCED — Phase 6's write adapter must honour it. */
+  readonly hardDailyAdSpendUsd: number;
   /** Max cumulative ad spend for the engagement, USD. Not yet enforced — see
-   * `dailyAdSpendUsd`; the Phase 6 write adapter owns both. */
+   * `dailyAdSpendUsd`; the Phase 6 write adapter owns all three. */
   readonly totalAdSpendUsd: number;
   /** Max AI (LLM/render) spend per client-local day, USD. Enforced locally in
-   * llm() pre-call (R3) — never delegated to Gateway config. */
+   * llm() pre-call (R3) — never delegated to Gateway config.
+   *
+   * This is a SUB-LIMIT of `monthlyAiSpendUsd`, not a division of it. Its job
+   * is to stop a runaway loop consuming the whole month in an hour; the month
+   * is what bounds total exposure. Both are enforced and whichever binds first
+   * wins. */
   readonly dailyAiSpendUsd: number;
+  /** Max AI spend per client-local MONTH, USD — the real exposure ceiling.
+   * Enforced alongside the daily sub-limit on every call. */
+  readonly monthlyAiSpendUsd: number;
   /** Human sign-off marker (H8). While null, caps are structurally UNUSABLE:
    * every spend path must refuse. Set only via a Class-2 approved commit, and
    * read ONLY from this frozen table — never from a caller-supplied record
@@ -37,18 +53,35 @@ const FIXTURE_SIGNOFF = "TEST FIXTURE — not a real client";
 export const FIXTURE_CLIENT_PREFIX = "fixture-";
 
 const CAPS_TABLE: Readonly<Record<string, ClientCaps>> = deepFreeze({
-  // Client zero (ENGINE_BUILD.md §14): $2,000 sprint at ~$66/day. Values are
-  // conservative placeholders PENDING H8 SIGN-OFF — unusable until signed.
+  // Client zero (ENGINE_BUILD.md §14): the $2,000 / 30-day concentrated sprint.
+  // H8 SIGNED 2026-08-16 — see APPROVALS/2026-08-16-h8-caps.md for the
+  // transition this file's values were approved in.
   pulsern: {
-    dailyAdSpendUsd: 70,
+    dailyAdSpendUsd: 66,
+    hardDailyAdSpendUsd: 75,
     totalAdSpendUsd: 2000,
-    dailyAiSpendUsd: 25,
+    dailyAiSpendUsd: 10,
+    monthlyAiSpendUsd: 200,
+    humanSignoff: "H8 approved 2026-08-16 — $66/day pacing, $75/day hard, $2,000 total, AI $200/mo with a $10/day sub-limit",
+  },
+  // Exists so the "caps lack human sign-off refuses all spend" path (H8) has a
+  // client to prove itself against. Client zero used to serve that purpose by
+  // being unsigned; once it was signed the test would have quietly started
+  // passing for a different reason, or been deleted (adversary finding H8).
+  "fixture-unsigned": {
+    dailyAdSpendUsd: 1,
+    hardDailyAdSpendUsd: 1,
+    totalAdSpendUsd: 1,
+    dailyAiSpendUsd: 1,
+    monthlyAiSpendUsd: 1,
     humanSignoff: null,
   },
   "fixture-testco": {
     dailyAdSpendUsd: 1,
+    hardDailyAdSpendUsd: 1,
     totalAdSpendUsd: 1,
     dailyAiSpendUsd: 5,
+    monthlyAiSpendUsd: 20,
     humanSignoff: FIXTURE_SIGNOFF,
   },
 });
@@ -78,14 +111,38 @@ export function getCaps(clientId: string): ClientCaps {
   }
   const snapshot: ClientCaps = {
     dailyAdSpendUsd: raw.dailyAdSpendUsd,
+    hardDailyAdSpendUsd: raw.hardDailyAdSpendUsd,
     totalAdSpendUsd: raw.totalAdSpendUsd,
     dailyAiSpendUsd: raw.dailyAiSpendUsd,
+    monthlyAiSpendUsd: raw.monthlyAiSpendUsd,
     humanSignoff: raw.humanSignoff,
   };
   assertSaneCap(snapshot.dailyAdSpendUsd, "dailyAdSpendUsd");
+  assertSaneCap(snapshot.hardDailyAdSpendUsd, "hardDailyAdSpendUsd");
   assertSaneCap(snapshot.totalAdSpendUsd, "totalAdSpendUsd");
   assertSaneCap(snapshot.dailyAiSpendUsd, "dailyAiSpendUsd");
+  assertSaneCap(snapshot.monthlyAiSpendUsd, "monthlyAiSpendUsd");
+  assertCapsCoherent(snapshot, clientId);
   return Object.freeze(snapshot);
+}
+
+/** A cap table can be individually sane and collectively nonsense. A hard
+ * ceiling below its own pacing target means the pacing is never reached; a
+ * daily sub-limit above its own month means the sub-limit never bites. Both are
+ * typos that enforce the wrong number in the direction nobody looks, because
+ * nothing errors and nothing overspends — the engine just quietly obeys a
+ * figure the human did not approve.
+ *
+ * Exported so the relationships can be driven directly: `getCaps` deliberately
+ * accepts no caller-supplied table (R2-03), so this is the only way to test the
+ * checks against a bad one without reintroducing that seam. */
+export function assertCapsCoherent(caps: ClientCaps, clientId: string): void {
+  if (caps.hardDailyAdSpendUsd < caps.dailyAdSpendUsd) {
+    throw new CapError(`hardDailyAdSpendUsd is below the daily pacing target for "${clientId}"`);
+  }
+  if (caps.dailyAiSpendUsd > caps.monthlyAiSpendUsd) {
+    throw new CapError(`dailyAiSpendUsd exceeds the monthly AI ceiling for "${clientId}"`);
+  }
 }
 
 /** Refuses caps that lack human sign-off (H8). Called on every spend path.
@@ -101,27 +158,41 @@ export function assertCapsUsable(caps: ClientCaps, clientId?: string): void {
   }
 }
 
-/** The enforced AI cap for a client, in USD.
+/** The enforced AI ceilings for a client, in USD: a daily sub-limit and the
+ * monthly exposure cap. Both are returned and both are enforced — whichever
+ * binds first wins.
  *
- * A caller may pass a narrowing table — a test driving a breach at $0.05
- * instead of the fixture's $5.00 — but it can only ever LOWER the ceiling
- * (adversary finding R2-03). It cannot raise a cap, cannot invent a client, and
+ * A caller may pass a NARROWING table — a test driving a breach at $0.05
+ * instead of the fixture's $5.00 — but it can only ever LOWER a ceiling
+ * (adversary finding R2-03). It cannot raise one, cannot invent a client, and
  * cannot supply a sign-off: unknown clients still throw, and `assertCapsUsable`
  * runs against the frozen record, so an unsigned client refuses all spend no
  * matter what the caller hands in. */
-export function effectiveDailyAiCapUsd(
+export interface AiCaps {
+  readonly dailyUsd: number;
+  readonly monthlyUsd: number;
+}
+
+export function effectiveAiCapsUsd(
   clientId: string,
-  narrowing?: Readonly<Record<string, { readonly dailyAiSpendUsd?: number }>>,
-): number {
+  narrowing?: Readonly<Record<string, { readonly dailyAiSpendUsd?: number; readonly monthlyAiSpendUsd?: number }>>,
+): AiCaps {
   const caps = getCaps(clientId); // throws for unknown clients
   assertCapsUsable(caps, clientId); // sign-off comes from the frozen table, always
-  const ceiling = caps.dailyAiSpendUsd;
-  if (narrowing === undefined || narrowing === null) return ceiling;
-  const entry = Object.hasOwn(narrowing, clientId) ? narrowing[clientId] : undefined;
-  const requested = entry?.dailyAiSpendUsd;
-  if (requested === undefined) return ceiling;
-  assertSaneCap(requested, "narrowed dailyAiSpendUsd");
-  return Math.min(ceiling, requested);
+  const entry =
+    narrowing !== undefined && narrowing !== null && Object.hasOwn(narrowing, clientId) ? narrowing[clientId] : undefined;
+  const narrow = (ceiling: number, requested: number | undefined, label: string): number => {
+    if (requested === undefined) return ceiling;
+    assertSaneCap(requested, label);
+    return Math.min(ceiling, requested);
+  };
+  const monthlyUsd = narrow(caps.monthlyAiSpendUsd, entry?.monthlyAiSpendUsd, "narrowed monthlyAiSpendUsd");
+  // A narrowed MONTH tightens the day with it. Narrowing the month to $1 while
+  // the day stayed at $10 left a sub-limit that could never bite — the pair
+  // became incoherent through a path that only ever tightens, which is exactly
+  // the direction nobody inspects. The tighter of the two always wins.
+  const dailyUsd = Math.min(narrow(caps.dailyAiSpendUsd, entry?.dailyAiSpendUsd, "narrowed dailyAiSpendUsd"), monthlyUsd);
+  return Object.freeze({ dailyUsd, monthlyUsd });
 }
 
 export { CAPS_TABLE };

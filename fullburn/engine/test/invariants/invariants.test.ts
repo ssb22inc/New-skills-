@@ -10,6 +10,7 @@ import { vaultForClient, MemoryVaultBackend, VaultError } from "../../src/vault.
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../../scripts/scan-lib.mjs";
 import { CANARY_SECRET, TEST_CLIENT, makeDeps } from "../helpers.ts";
+import { e2eVarianceHolds } from "../e2e-variance.ts";
 
 /** The complete §10.2 standing-invariant checklist, enumerated (R10). Every
  * bullet appears here by name every CI run, and every LIVE entry carries a real
@@ -94,31 +95,30 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
    * become permanent, which is why L16 exists at all. */
   it("the H20 e2e variance expires at the Phase 1 gate, mechanically", () => {
     const phase = Number(readFileSync(new URL("../../../PHASE", import.meta.url), "utf8").trim());
-    const specs = readdirSync(new URL("../e2e/", import.meta.url));
-    // The stage exists and runs NOW — that half of the variance is not deferred.
-    expect(specs, "the e2e stage has no specs at all — the variance required it installed and running").toContain(
-      "smoke.spec.ts",
-    );
-    if (phase < 1) return;
-    // At Phase 1 the smoke is no longer sufficient: the intake confirm flow
-    // must be genuinely driven end to end.
-    //
-    // COMMENTS ARE STRIPPED FIRST. Written naively this test passed at PHASE=1
-    // against a smoke-only suite, because the smoke spec's own doc-comment says
-    // it will be replaced by "real coverage of the intake confirm flow" — the
-    // check matched the promise instead of the work. Prose about a thing is not
-    // the thing.
-    const code = specs
-      .filter((n) => n.endsWith(".spec.ts") && n !== "smoke.spec.ts")
-      .map((n) => readFileSync(new URL(`../e2e/${n}`, import.meta.url), "utf8"))
-      .join("\n")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
+    const specs = readdirSync(new URL("../e2e/", import.meta.url))
+      .filter((n) => n.endsWith(".spec.ts"))
+      .map((name) => ({ name, source: readFileSync(new URL(`../e2e/${name}`, import.meta.url), "utf8") }));
     expect(
-      /intake/i.test(code) && /confirm/i.test(code),
-      "PHASE is 1 or later and the e2e suite is still smoke-only — the H20 variance has expired. " +
-        "Real e2e coverage of the intake confirm flow is required before the Phase 1 gate can pass.",
+      e2eVarianceHolds(phase, specs),
+      phase < 1
+        ? "the e2e stage has no smoke spec — the variance required it installed and running"
+        : "PHASE is 1 or later and the e2e suite is still smoke-only — the H20 variance has expired. " +
+          "Real e2e coverage of the intake confirm flow is required before the Phase 1 gate can pass.",
     ).toBe(true);
+  });
+
+  /** The expiry rule itself, driven at both phases. Left inline it early-returned
+   * at PHASE 0, so the branch that enforces the expiry never ran in any suite and
+   * widening it was invisible to the mutation harness. */
+  it("the expiry rule fires at Phase 1 and not before", () => {
+    const smoke = { name: "smoke.spec.ts", source: "// PHASE 1 replaces this with the intake confirm flow\ntest('x', () => {});" };
+    const real = { name: "intake.spec.ts", source: "test('intake confirm flow', async ({ page }) => { await page.click('#confirm'); });" };
+    expect(e2eVarianceHolds(0, [smoke]), "the variance should hold at Phase 0").toBe(true);
+    expect(e2eVarianceHolds(1, [smoke]), "a smoke-only suite passed the Phase 1 gate").toBe(false);
+    expect(e2eVarianceHolds(1, [smoke, real]), "real e2e coverage was not accepted").toBe(true);
+    expect(e2eVarianceHolds(6, [smoke]), "the expiry lapsed at a later phase").toBe(false);
+    // The stage being uninstalled fails at every phase — that half was never deferred.
+    expect(e2eVarianceHolds(0, []), "an absent e2e stage was accepted").toBe(false);
   });
 
   it("the checklist checks ITSELF against the spec (R2-25)", () => {
@@ -151,7 +151,14 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       (caps as { dailyAiSpendUsd: number }).dailyAiSpendUsd = 1e9;
     }).toThrow(TypeError);
     expect(() => getCaps("never-onboarded")).toThrow(CapError); // no default cap
-    expect(() => assertCapsUsable(caps)).toThrow(/human sign-off/); // H8 pending
+    // H8 SIGNED 2026-08-16, so the unsigned path is proved against a client that
+    // is genuinely unsigned. Pinning this invariant to client zero would have
+    // meant deleting it the moment the human signed — retiring the guard as a
+    // side effect of the thing it was guarding.
+    expect(() => assertCapsUsable(getCaps("fixture-unsigned"))).toThrow(/human sign-off/);
+    expect(() => assertCapsUsable(caps, "pulsern")).not.toThrow();
+    // And a fixture signature still does not sign a real client (M-06).
+    expect(() => assertCapsUsable(getCaps("fixture-testco"), "pulsern")).toThrow(/does not sign a real client/);
   });
 
   it("LIVE — per-client isolation: cross-tenant secret read fails structurally (Law 3)", () => {
@@ -222,7 +229,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       input: { say: hostile },
       trace: new TraceContext("inv-hostile", TEST_CLIENT),
     });
-    expect(getCaps("pulsern").dailyAiSpendUsd).toBe(25);
+    expect(getCaps("pulsern").dailyAiSpendUsd).toBe(10);
     expect(ROLE_BINDINGS["hello-world"]).toBe("claude-sonnet");
     expect(activeChannels()).toEqual(["meta"]);
   });

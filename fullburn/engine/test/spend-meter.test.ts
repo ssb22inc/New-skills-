@@ -9,33 +9,33 @@ import { MemorySpendMeter, MeterUnavailableError, assertUsableAmount } from "../
 describe("spend meter — reserve/settle (F1, F2, F3)", () => {
   it("reservations accumulate against the cap before any of them settle", () => {
     const m = new MemorySpendMeter(testClock);
-    const r1 = m.reserve("c", 0.01, 0.05);
-    m.reserve("c", 0.01, 0.05);
-    m.reserve("c", 0.01, 0.05);
-    m.reserve("c", 0.01, 0.05);
-    m.reserve("c", 0.01, 0.05);
+    const r1 = m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 });
+    m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 });
+    m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 });
+    m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 });
+    m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 });
     // Five reservations fill the cap even though nothing has settled yet.
     expect(m.reservedUsd("c")).toBeCloseTo(0.05, 10);
     expect(m.todayUsd("c")).toBe(0);
-    expect(() => m.reserve("c", 0.01, 0.05)).toThrow(CapError);
+    expect(() => m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(CapError);
     // Settling moves reserved → committed without changing the total.
     m.settle(r1);
     expect(m.todayUsd("c")).toBeCloseTo(0.01, 10);
     expect(m.reservedUsd("c")).toBeCloseTo(0.04, 10);
-    expect(() => m.reserve("c", 0.01, 0.05)).toThrow(CapError);
+    expect(() => m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(CapError);
   });
 
   it("releasing a reservation frees the headroom again", () => {
     const m = new MemorySpendMeter(testClock);
-    const r = m.reserve("c", 0.05, 0.05);
-    expect(() => m.reserve("c", 0.01, 0.05)).toThrow(CapError);
+    const r = m.reserve("c", 0.05, { dailyUsd: 0.05, monthlyUsd: 0.05 });
+    expect(() => m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(CapError);
     m.release(r);
-    expect(() => m.reserve("c", 0.01, 0.05)).not.toThrow();
+    expect(() => m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).not.toThrow();
   });
 
   it("settle and release are idempotent — a double-settle cannot double-charge", () => {
     const m = new MemorySpendMeter(testClock);
-    const r = m.reserve("c", 0.01, 0.05);
+    const r = m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 });
     m.settle(r);
     m.settle(r);
     m.release(r);
@@ -44,25 +44,30 @@ describe("spend meter — reserve/settle (F1, F2, F3)", () => {
 
   it("caps are per client: one client's spend never consumes another's headroom (Law 3)", () => {
     const m = new MemorySpendMeter(testClock);
-    m.settle(m.reserve("a", 0.05, 0.05));
-    expect(() => m.reserve("a", 0.01, 0.05)).toThrow(CapError);
-    expect(() => m.reserve("b", 0.01, 0.05)).not.toThrow();
+    m.settle(m.reserve("a", 0.05, { dailyUsd: 0.05, monthlyUsd: 0.05 }));
+    expect(() => m.reserve("a", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(CapError);
+    expect(() => m.reserve("b", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).not.toThrow();
   });
 
   it("non-finite accounting refuses spend instead of sliding through a NaN comparison (F2)", () => {
     const m = new MemorySpendMeter(testClock);
-    expect(() => m.reserve("c", Number.NaN, 0.05)).toThrow(MeterUnavailableError);
-    expect(() => m.reserve("c", 0.01, Number.NaN)).toThrow(MeterUnavailableError);
-    expect(() => m.reserve("c", Infinity, 0.05)).toThrow(MeterUnavailableError);
-    expect(() => m.reserve("c", -0.01, 0.05)).toThrow(MeterUnavailableError);
-    expect(() => m.reserve("c", 0, 0.05)).toThrow(MeterUnavailableError);
-    expect(() => m.reserve("", 0.01, 0.05)).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("c", Number.NaN, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("c", 0.01, { dailyUsd: Number.NaN, monthlyUsd: 0.05 })).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: Number.NaN })).toThrow(MeterUnavailableError);
+    // Both ceilings are required: a caller that supplies only one must not get
+    // an unbounded other (N-01's sibling — a missing ceiling is not "no limit").
+    expect(() => m.reserve("c", 0.01, undefined as never)).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("c", 0.01, { dailyUsd: 0.05 } as never)).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("c", Infinity, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("c", -0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("c", 0, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(MeterUnavailableError);
   });
 
   it("an unavailable meter refuses everything (fail closed)", () => {
     const m = new MemorySpendMeter(testClock);
     m.setAvailable(false);
-    expect(() => m.reserve("c", 0.01, 0.05)).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("c", 0.01, { dailyUsd: 0.05, monthlyUsd: 0.05 })).toThrow(MeterUnavailableError);
     expect(() => m.todayUsd("c")).toThrow(MeterUnavailableError);
   });
 

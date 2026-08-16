@@ -1,4 +1,4 @@
-import { CapError, effectiveDailyAiCapUsd } from "@fullburn/config/caps";
+import { CapError, effectiveAiCapsUsd } from "@fullburn/config/caps";
 import { MODELS, ROLE_CARDS, ownEntry, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
 import { type ClientVault } from "./vault.ts";
 import { MeterUnavailableError, assertUsableAmount, type SpendMeter, type SpendReservation } from "./spend-meter.ts";
@@ -161,12 +161,14 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
 
     // Money safety before anything leaves the building (Law 2, R2, R3, F1–F3).
     // The ceiling comes from the frozen table; a caller may only narrow it.
-    const capUsd = effectiveDailyAiCapUsd(req.clientId, deps.capsTable);
+    // Both ceilings, resolved together from the frozen table. A caller may only
+    // narrow either one.
+    const caps = effectiveAiCapsUsd(req.clientId, deps.capsTable);
     assertUsableAmount(card.costBudgetUsdPerCall, "role cost budget");
     meter = requireReservingMeter(deps.meter);
 
     // ATOMIC: read + cap-check + write, no await in between.
-    reservation = meter.reserve(req.clientId, card.costBudgetUsdPerCall, capUsd);
+    reservation = meter.reserve(req.clientId, card.costBudgetUsdPerCall, caps);
     if (
       reservation === null || typeof reservation !== "object" ||
       reservation.clientId !== req.clientId || !Number.isFinite(reservation.amountUsd)

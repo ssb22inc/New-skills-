@@ -48,6 +48,23 @@ const MUTATIONS = [
   ["N-06 file-scoped exemption travels", "engine/scripts/scan-lib.mjs", "  if (QUOTED_EVIDENCE.get(path)?.includes(matched)) return true;", "  if ([...QUOTED_EVIDENCE.values()].flat().includes(matched)) return true;"],
   ["N-06 residue check", "engine/scripts/scan-lib.mjs", "  return /^[^A-Za-z0-9]*(?:Bearer)?[^A-Za-z0-9]*$/i.test(residue);", "  return true;"],
   ["r4-lock8 WeakSet brand", "config/src/models.ts", "!(att instanceof EvalAttestation) || !GENUINE.has(att)", "!(att instanceof EvalAttestation)"],
+  // ---- H8 caps: the approved ceilings and the month-keyed accounting ----
+  ["H8 monthly ceiling unchecked", "engine/src/spend-meter.ts", "    if (projectedMonth > monthlyCapMicros) {", "    if (false) {"],
+  ["H8 month period dropped from settle", "engine/src/spend-meter.ts", "    for (const period of [open.day, open.month]) {\n      const committed = this.#read(this.#committedMicros, period, \"committed spend\");", "    for (const period of [open.day]) {\n      const committed = this.#read(this.#committedMicros, period, \"committed spend\");"],
+  ["H8 month key equals day key", "engine/src/spend-meter.ts", "    return `m:${utcMonthKey(this.#now())}|${clientId}`;", "    return `d:${utcDayKey(this.#now())}|${clientId}`;"],
+  ["H8 ceilings object not required", "engine/src/spend-meter.ts", "    if (caps === null || typeof caps !== \"object\") {", "    if (false) {"],
+  ["H8 monthly narrowing can widen", "config/src/caps.ts", "    return Math.min(ceiling, requested);", "    return requested;"],
+  ["H8 sign-off check dropped", "config/src/caps.ts", "  assertCapsUsable(caps, clientId); // sign-off comes from the frozen table, always", "  void clientId;"],
+  ["H8 hard-ceiling sanity check", "config/src/caps.ts", "  if (caps.hardDailyAdSpendUsd < caps.dailyAdSpendUsd) {", "  if (false) {"],
+  ["H8 day-above-month sanity check", "config/src/caps.ts", "  if (caps.dailyAiSpendUsd > caps.monthlyAiSpendUsd) {", "  if (false) {"],
+  ["H8 narrowed month does not tighten the day", "config/src/caps.ts", "  const dailyUsd = Math.min(narrow(caps.dailyAiSpendUsd, entry?.dailyAiSpendUsd, \"narrowed dailyAiSpendUsd\"), monthlyUsd);", "  const dailyUsd = narrow(caps.dailyAiSpendUsd, entry?.dailyAiSpendUsd, \"narrowed dailyAiSpendUsd\");"],
+  // KNOWN UNGUARDED, disclosed rather than faked (ledger L19): removing the
+  // `assertCapsCoherent(snapshot, clientId)` call from getCaps changes nothing
+  // observable, because every client in the frozen table IS coherent. A guard
+  // with no violating input in the repo cannot be caught by mutation, and
+  // planting an incoherent client to catch it would ship a bad cap table to
+  // make a test go red. The check itself is driven directly and IS caught.
+  ["H20 e2e variance expiry", "engine/test/e2e-variance.ts", "  if (phase < E2E_VARIANCE_EXPIRES_AT_PHASE) return true;", "  return true;"],
   // ---- r3 findings fixed in this pass ----
   ["H-03 constitution pattern", "engine/scripts/gate-lib.mjs", "  /^fullburn\\/\\.claude\\//,", "  /^__never__$/,"],
   ["H-03 engine/src pattern", "engine/scripts/gate-lib.mjs", "  /^fullburn\\/engine\\/src\\//,", "  /^__never__$/,"],
