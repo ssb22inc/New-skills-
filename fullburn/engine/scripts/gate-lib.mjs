@@ -129,7 +129,25 @@ export const CLASS2_WITNESS_PATHS = [
  * before scrolling. Every report ever written already complies. */
 const HEADER_LINES = 10;
 
+/** Closed comments are removed; an UNCLOSED opener conceals everything after
+ * it and therefore ENDS the header.
+ *
+ * This replaced only `<!-- … -->` pairs, and `stripConcealed` matched
+ * `</?[a-zA-Z]`, which a comment opener is not. So `<!--` with no closing
+ * delimiter survived both passes untouched and the concealed lines were read
+ * normally: a report whose rendered form shows nothing was accepted as
+ * `Verdict: PASS` bound to the current tree (adversary finding R7-01, the
+ * cross-family review). That is a manufactured PASS on the mechanism that
+ * gates every other mechanism.
+ *
+ * The r6 rule said "any raw tag ends the header" and was written one round
+ * before this. It was a rule about tags when the problem was about anything a
+ * renderer hides. */
 function stripHtmlComments(text) {
+  // Only closed pairs are removed here. An UNCLOSED opener is left in place on
+  // purpose, so `stripConcealed` truncates the header at it — one guard, not
+  // two. Truncating here as well was redundant, and a redundant guard reads as
+  // coverage without being it.
   return text.replace(/<!--[\s\S]*?-->/g, "");
 }
 
@@ -143,7 +161,10 @@ function stripHtmlComments(text) {
  * truncates it, and a binding below that point does not exist as far as the
  * gate is concerned (which fails closed, per checkAdversaryReport). */
 function stripConcealed(text) {
-  const tag = /<\/?[a-zA-Z][^>]*>/.exec(text);
+  // Any markup-ish opener ends the header, closed or not: a tag, a comment, a
+  // CDATA or doctype opener, or a processing instruction. Enumerating which
+  // ones conceal was the mistake three rounds running (R5-04, R6-05, R7-01).
+  const tag = /<[!/?a-zA-Z]/.exec(text);
   return tag === null ? text : text.slice(0, tag.index);
 }
 
@@ -155,6 +176,12 @@ function stripConcealed(text) {
  * at all (N-04). Two parsers for one grammar is how that happens. */
 function visibleHeaderLines(reportContent) {
   if (typeof reportContent !== "string") return [];
+  // Invisible and direction-flipping characters render as nothing or as
+  // something else entirely, so a header containing them is not a header a
+  // human read. Zero-width, BOM, and the bidi overrides (R7-01's remedy list).
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/.test(reportContent)) {
+    return [];
+  }
   const lines = stripConcealed(stripHtmlComments(reportContent)).split("\n");
   const out = [];
   let fence = null; // {ch,len} of the fence currently open, or null
