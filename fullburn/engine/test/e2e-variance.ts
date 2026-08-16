@@ -20,17 +20,55 @@ function code(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
-/** Does the runner actually point at the directory these specs live in?
+/** Does the runner point at the directory these specs live in — and ONLY there?
  *
- * The check used to read the spec DIRECTORY and never the config that executes
- * it, so repointing `testDir` at a new folder holding a stub left the variance
- * "holding" while no browser ever launched (adversary finding R5-02). A suite
- * the runner does not run is not a suite. */
+ * This took the FIRST `testDir:` string in the comment-stripped config, so a
+ * decoy const before the real one, a decoy inside a template string, or an
+ * ordinary per-project `testDir` override all made it report true while
+ * Playwright ran somewhere else (adversary finding R6-03). Two of those three
+ * need no intent to deceive; `projects: [{ testDir }]` is standard Playwright.
+ *
+ * Every occurrence is now collected and every one must name the spec directory.
+ * A config that mentions two different test directories is refused whichever is
+ * authoritative — the check cannot tell, and guessing is how it was fooled. */
 export function runnerTargets(playwrightConfig: string, specDir: string): boolean {
-  const m = /testDir\s*:\s*["'`]([^"'`]+)["'`]/.exec(code(playwrightConfig));
-  if (m === null) return false;
-  const declared = m[1]!.replace(/^\.\//, "").replace(/\/$/, "");
-  return declared === specDir.replace(/^\.\//, "").replace(/\/$/, "");
+  const want = specDir.replace(/^\.\//, "").replace(/\/$/, "");
+  const found = [...code(playwrightConfig).matchAll(/testDir\s*:\s*["'`]([^"'`]+)["'`]/g)].map((m) =>
+    m[1]!.replace(/^\.\//, "").replace(/\/$/, ""),
+  );
+  return found.length > 0 && found.every((d) => d === want);
+}
+
+/** The body of the first test whose title matches, or null.
+ *
+ * Whole-file regexes were ANDed — a named test anywhere and the substring
+ * `page.` anywhere, unrelated to each other. A two-line file with an empty test
+ * body and `const x = "page."` satisfied the Phase-1 expiry, as did a
+ * commented-out real test beside a literal (adversary finding R6-02). The body
+ * is what does the work, so the body is what gets read. */
+function namedTestBody(source: string, title: RegExp): string | null {
+  const re = /\b(?:test|it)\s*(\.\w+)?\s*\(\s*(["'`])([^"'`]*)\2/g;
+  for (const m of source.matchAll(re)) {
+    // `.skip`, `.todo`, `.fixme` do not run, so they do not count.
+    if (m[1] !== undefined) continue;
+    if (!title.test(m[3]!)) continue;
+    // Start after the arrow, not after the title: `async ({ page }) => {` opens
+    // a destructuring brace first, and matching that returns the parameter list
+    // as the "body".
+    const after = m.index! + m[0].length;
+    const arrow = source.indexOf("=>", after);
+    const open = source.indexOf("{", arrow === -1 ? after : arrow + 2);
+    if (open === -1) continue;
+    let depth = 0;
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === "{") depth += 1;
+      else if (source[i] === "}") {
+        depth -= 1;
+        if (depth === 0) return source.slice(open + 1, i);
+      }
+    }
+  }
+  return null;
 }
 
 export function e2eVarianceHolds(
@@ -45,12 +83,13 @@ export function e2eVarianceHolds(
   if (!specs.some((s) => s.name === "smoke.spec.ts")) return false;
   if (phase < E2E_VARIANCE_EXPIRES_AT_PHASE) return true;
 
-  // A one-line `const _note = "intake confirm";` satisfied a bare keyword match
-  // (adversary finding R5-06), which is the same "prose is not the thing" defect
-  // one level down. Real coverage means a TEST whose name says what it covers
-  // and a browser it actually drives.
-  const real = specs.filter((s) => s.name.endsWith(".spec.ts") && s.name !== "smoke.spec.ts").map((s) => code(s.source));
-  const named = /\b(?:test|it)\s*\(\s*["'`][^"'`]*intake[^"'`]*confirm[^"'`]*["'`]/i;
-  const alt = /\b(?:test|it)\s*\(\s*["'`][^"'`]*confirm[^"'`]*intake[^"'`]*["'`]/i;
-  return real.some((c) => (named.test(c) || alt.test(c)) && /\bpage\s*\./.test(c));
+  const title = /intake[\s\S]*confirm|confirm[\s\S]*intake/i;
+  return specs
+    .filter((s) => s.name.endsWith(".spec.ts") && s.name !== "smoke.spec.ts")
+    .some((s) => {
+      const body = namedTestBody(code(s.source), title);
+      // A named test that drives a page, inside its own body, with something to
+      // await. An empty body satisfies nothing.
+      return body !== null && /\bpage\s*\./.test(body) && /\bawait\b/.test(body) && /\bexpect\s*\(/.test(body);
+    });
 }

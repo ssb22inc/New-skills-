@@ -188,6 +188,65 @@ describe("adversary-report gate — a report the gate cannot read blocks it (R5-
     }
   });
 
+  /** The hash pattern was unanchored, so it took the FIRST hex-shaped run on
+   * the line: `verified-tree: <commit> (commit; tree <hash>)` bound to the
+   * commit. Not a parse failure — a WRONG binding, which landed in the one
+   * non-blocking branch, so the FAIL was skipped, a sibling PASS opened the
+   * gate, and the gate announced "code changed after the adversary judged it"
+   * about a report naming this exact tree (adversary finding R6-01).
+   *
+   * MUTATION: unanchor the hash pattern again. */
+  it("a binding line naming anything besides the hash is unreadable, and blocks", () => {
+    const COMMIT = "b9364e37a83cfb58a881dde52cb4e6e1e94471ae";
+    for (const [label, line] of [
+      ["commit before tree", `verified-tree: ${COMMIT} (commit; tree ${TREE})`],
+      ["prose before tree", `verified-tree: see commit b9364e3 — tree ${TREE}`],
+      ["hex-shaped decoy word", `verified-tree: deadbeef ${TREE}`],
+      ["tree then commit", `verified-tree: ${TREE} (commit ${COMMIT})`],
+    ] as const) {
+      const res = judge(["# r", "Verdict: FAIL", line].join("\n"));
+      expect(res.ok, `${label} let a sibling PASS open the gate`).toBe(false);
+      expect(res.reason, `${label}: the FAIL report was not named`).toContain("fail.md");
+    }
+    // Decoration is still read — and this is where it matters, because a
+    // decorated FAIL blocks either way. A decorated PASS must OPEN the gate, or
+    // the strip is untested and an honest reviewer's backticks fail closed.
+    for (const decorated of [`verified-tree: \`${TREE}\``, `**verified-tree:** ${TREE}`, `- verified-tree: ${TREE}`]) {
+      const only = { name: "ADVERSARY_REPORT_phase0.d.md", content: ["# r", "Verdict: PASS", decorated].join("\n") };
+      expect(
+        checkAdversaryReport({ phase: "0", reports: [only], currentTreeHash: TREE }).ok,
+        `a PASS bound as ${decorated} was refused`,
+      ).toBe(true);
+    }
+    expect(checkAdversaryReport({ phase: "0", reports: [PASS], currentTreeHash: TREE }).ok).toBe(true);
+  });
+
+  /** The pinned-hash exemption's whole justification is that it cannot be
+   * inherited by new content in the same filename. That property was asserted
+   * by nothing (adversary finding R6-05/P1).
+   *
+   * MUTATION: drop the content-hash comparison from the exemption filter. */
+  it("the historical-report exemption is bound to content, not to a filename", () => {
+    const impostor = {
+      name: "ADVERSARY_REPORT_phase0.r3.md",
+      content: "# r3\nVerdict: FAIL\nverified-tree: (not computed)\n",
+    };
+    const res = checkAdversaryReport({ phase: "0", reports: [impostor, PASS], currentTreeHash: TREE });
+    expect(res.ok, "any file named r3.md inherited the exemption").toBe(false);
+    expect(res.reason).toContain("r3.md");
+  });
+
+  /** MUTATION: drop the blockquote skip from visibleHeaderLines. */
+  it("a quoted verdict or binding is prose about a report, not the report", () => {
+    const quoted = ["# r", "> Verdict: PASS", `> verified-tree: ${TREE}`, "Verdict: FAIL", `verified-tree: ${TREE}`].join("\n");
+    expect(parseVerdict(quoted)?.token).toBe("FAIL");
+    const onlyQuoted = ["# r", "> Verdict: PASS", `> verified-tree: ${TREE}`].join("\n");
+    expect(
+      checkAdversaryReport({ phase: "0", reports: [{ name: "ADVERSARY_REPORT_phase0.q.md", content: onlyQuoted }], currentTreeHash: TREE }).ok,
+      "a quoted PASS opened the gate",
+    ).toBe(false);
+  });
+
   /** A stale report is genuinely different from an unreadable one and must
    * still be skippable, or history would deadlock the gate forever. */
   it("a report bound to a DIFFERENT tree is still skipped, not blocking", () => {

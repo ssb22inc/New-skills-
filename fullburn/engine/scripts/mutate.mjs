@@ -47,20 +47,42 @@ const MUTATIONS = [
   ["N-06 file-scoped exemption travels", "engine/scripts/scan-lib.mjs", "  if (QUOTED_EVIDENCE.get(path)?.includes(matched)) return true;", "  if ([...QUOTED_EVIDENCE.values()].flat().includes(matched)) return true;"],
   ["N-06 residue check", "engine/scripts/scan-lib.mjs", "  return /^[^A-Za-z0-9]*(?:Bearer)?[^A-Za-z0-9]*$/i.test(residue);", "  return true;"],
   ["r4-lock8 WeakSet brand", "config/src/models.ts", "!(att instanceof EvalAttestation) || !GENUINE.has(att)", "!(att instanceof EvalAttestation)"],
+  // ---- r6 findings ----
+  ["R6-04 ledger keyed by identity", "engine/src/spend-meter.ts", "    const open = this.#open.get(reservation);", "    const open = [...this.#open.entries()].find(([h]) => h.id === reservation.id)?.[1];"],
+  ["R6-04 handle frozen", "engine/src/spend-meter.ts", "    Object.freeze(this);", "    void 0;"],
+  ["R6-01 anchored tree hash", "engine/scripts/gate-lib.mjs", "    return /^[0-9a-f]{7,64}$/i.test(bare) ? bare : null;", "    const t = /[0-9a-f]{7,64}/i.exec(bare); return t === null ? null : t[0];"],
+  ["R6-02 test body is read", "engine/test/e2e-variance.ts", "      return body !== null && /\\bpage\\s*\\./.test(body) && /\\bawait\\b/.test(body) && /\\bexpect\\s*\\(/.test(body);", "      return /intake/i.test(s.source) && /\\bpage\\s*\\./.test(s.source);"],
+  ["R6-02 skip/todo excluded", "engine/test/e2e-variance.ts", "    if (m[1] !== undefined) continue;", "    void m[1];"],
+  ["R6-03 every testDir checked", "engine/test/e2e-variance.ts", "  return found.length > 0 && found.every((d) => d === want);", "  return found.length > 0 && found[0] === want;"],
+  // R6-05/P3 removed: the blockquote skip was subsumed by the column-0 anchors
+  // and was deleted rather than given an entry it could never fail.
+  ["R6-05/P1 pinned-hash content binding", "engine/scripts/gate-lib.mjs", "      return pinned === undefined || shortSha256(d.content) !== pinned;", "      return pinned === undefined;"],
+  ["R6-05/M8 toMicros range", "engine/src/spend-meter.ts", "  if (!Number.isSafeInteger(micros)) {", "  if (false) {"],
+  ["R6-05/M12 assertSaneCap", "config/src/caps.ts", "  if (typeof n !== \"number\" || !Number.isFinite(n) || n <= 0) {", "  if (false) {"],
+  // R6-05/M6 and M7 are NOT listed: the `open.clientId !== reservation.clientId`
+  // check and the `Math.max(0, …)` clamp were dead code once the ledger became
+  // identity-keyed, and dead code that reads as a guard is the very pattern this
+  // round criticised. They were deleted rather than given a mutation entry.
+  // R6-05/M4 is not listed: the corrupt-ledger guard in #read has no reachable
+  // input. Every value in those maps comes from arithmetic the range guards
+  // above already bound, and #close deletes an entry before decrementing, so a
+  // negative cannot arise. It is a fail-closed backstop against a future
+  // storage backend, disclosed rather than faked — same class as ledger L19.
+  // R6-05/M14 is not listed either: `Object.hasOwn` on the narrowing table is
+  // inert with respect to money, because `narrow()` is Math.min and a polluted
+  // entry can only tighten. Kept as hygiene, disclosed as inert.
   // ---- r5 findings ----
-  ["R5-01 handle identity", "engine/src/spend-meter.ts", "    if (!(reservation instanceof SpendReservation) || !this.#minted.has(reservation)) return null;", "    if (reservation === null || typeof reservation !== \"object\") return null;"],
-  ["R5-01 minted WeakSet only", "engine/src/spend-meter.ts", "!(reservation instanceof SpendReservation) || !this.#minted.has(reservation)", "!(reservation instanceof SpendReservation)"],
   ["R5-01 reservation brand", "engine/src/spend-meter.ts", "    if (brand !== RESERVATION_BRAND) {", "    if (false) {"],
   ["R5-02 playwright pattern", "engine/scripts/gate-lib.mjs", "  /(?:^|\\/)playwright[._\\-][^/]*$/,", "  /^__never__$/,"],
   ["R5-02 e2e dir pattern", "engine/scripts/gate-lib.mjs", "  /(?:^|\\/)e2e\\//,", "  /^__never__$/,"],
   ["R5-02 npmrc pattern", "engine/scripts/gate-lib.mjs", "  /(?:^|\\/)\\.npmrc$/,", "  /^__never__$/,"],
   ["R5-02 runner-targets check", "engine/test/e2e-variance.ts", "  if (!runnerPointsHere) return false;", "  if (false) return false;"],
-  ["R5-02 runnerTargets comment-strip", "engine/test/e2e-variance.ts", "  const m = /testDir\\s*:\\s*[\"'`]([^\"'`]+)[\"'`]/.exec(code(playwrightConfig));", "  const m = /testDir\\s*:\\s*[\"'`]([^\"'`]+)[\"'`]/.exec(playwrightConfig);"],
+  ["R5-02 runnerTargets comment-strip", "engine/test/e2e-variance.ts", "  const found = [...code(playwrightConfig).matchAll(", "  const found = [...(playwrightConfig).matchAll("],
   ["R5-03 unparseable blocks", "engine/scripts/gate-lib.mjs", "  const unresolved = judged.find((j) => j.blocking);", "  const unresolved = judged.find((j) => j.fresh && !j.ok);"],
-  ["R5-03 binding decoration strip", "engine/scripts/gate-lib.mjs", "    const token = /[0-9a-f]{7,64}/i.exec(m[1].replace(/[`*_]/g, \"\"));", "    const token = /^(\\S+)$/.exec(m[1].trim());"],
+  ["R5-03 binding decoration strip", "engine/scripts/gate-lib.mjs", '    const bare = m[1].replace(/[`*_]/g, "").trim();', "    const bare = m[1].trim();"],
   ["R5-04 header is pure prose", "engine/scripts/gate-lib.mjs", "  const tag = /<\\/?[a-zA-Z][^>]*>/.exec(text);\n  return tag === null ? text : text.slice(0, tag.index);", "  return text;"],
   ["R5-05 approvals append-only", "engine/scripts/gate-lib.mjs", "    (/fullburn\\/APPROVALS\\/.*\\.md$/.test(p ?? \"\") && !/\\/README\\.md$/.test(p ?? \"\"));", "    false;"],
-  ["R5-06 expiry needs a real test", "engine/test/e2e-variance.ts", "  return real.some((c) => (named.test(c) || alt.test(c)) && /\\bpage\\s*\\./.test(c));", "  return real.some((c) => /intake/i.test(c) && /confirm/i.test(c));"],
+  ["R5-06 expiry title match", "engine/test/e2e-variance.ts", "  const title = /intake[\\s\\S]*confirm|confirm[\\s\\S]*intake/i;", "  const title = /./;"],
   ["R5-06 expiry comment-strip", "engine/test/e2e-variance.ts", "  return source.replace(/\\/\\*[\\s\\S]*?\\*\\//g, \"\").replace(/^\\s*\\/\\/.*$/gm, \"\");", "  return source;"],
   ["R5-07 assertCleanTree", "engine/scripts/adversary-gate.mjs", "  assertCleanTree(repoRoot);", "  void repoRoot;"],
   ["R5-07 reservedUsd required", "engine/src/gateway.ts", "    typeof meter.release !== \"function\" || typeof meter.reservedUsd !== \"function\"", "    typeof meter.release !== \"function\""],

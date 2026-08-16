@@ -172,7 +172,10 @@ function visibleHeaderLines(reportContent) {
     }
     if (fence !== null) continue;
     if (/^(?: {4,}|\t)/.test(line)) continue; // indented code block
-    if (/^\s*>/.test(line)) continue; // blockquote
+    // No blockquote skip: both readers anchor at column 0, so a "> " prefix
+    // already fails to match. A skip here would be dead code that reads as a
+    // guard (adversary finding R6-05/P3). The behaviour is asserted directly in
+    // gates.test.ts so removing the anchors is still caught.
     out.push(line);
   }
   return out;
@@ -208,8 +211,16 @@ function readTreeBinding(reportContent) {
   for (const line of visibleHeaderLines(reportContent)) {
     const m = /^\s*(?:[-*+]\s+)?(?:\*\*|__)?verified-tree(?:\*\*|__)?\s*:\s*(.+)$/i.exec(line);
     if (m === null) continue;
-    const token = /[0-9a-f]{7,64}/i.exec(m[1].replace(/[`*_]/g, ""));
-    return token === null ? null : token[0];
+    // ANCHORED. The hash pattern was unanchored and took the FIRST hex-shaped
+    // run on the line, so `verified-tree: <commit-sha> (commit; tree <hash>)`
+    // bound to the commit — a WRONG binding, not a parse failure, which landed
+    // in the one non-blocking branch. The FAIL was skipped, a sibling PASS
+    // opened the gate, and the gate's own message printed both hashes and said
+    // "code changed after the adversary judged it", which was false (adversary
+    // finding R6-01). Anything other than exactly one hash, after decoration is
+    // stripped, is now unreadable — and unreadable blocks.
+    const bare = m[1].replace(/[`*_]/g, "").trim();
+    return /^[0-9a-f]{7,64}$/i.test(bare) ? bare : null;
   }
   return null;
 }

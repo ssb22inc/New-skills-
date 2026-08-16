@@ -115,7 +115,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const smoke = { name: "smoke.spec.ts", source: "// PHASE 1 replaces this with the intake confirm flow\ntest('x', () => {});" };
     const real = {
       name: "intake.spec.ts",
-      source: "test('intake confirm flow', async ({ page }) => { await page.click('#confirm'); });",
+      source:
+        "test('intake confirm flow', async ({ page }) => { await page.click('#confirm'); expect(await page.title()).toBe('ok'); });",
     };
     expect(e2eVarianceHolds(0, [smoke]), "the variance should hold at Phase 0").toBe(true);
     expect(e2eVarianceHolds(1, [smoke]), "a smoke-only suite passed the Phase 1 gate").toBe(false);
@@ -131,6 +132,17 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       ["a comment promising it", "// TODO: intake confirm flow\ntest('x', async ({ page }) => { await page.click('#a'); });"],
       ["a string literal", "const _note = 'intake confirm';\ntest('x', async ({ page }) => { await page.click('#a'); });"],
       ["a named test that drives nothing", "test('intake confirm flow', () => { expect(1).toBe(1); });"],
+      // R6-02: the halves must belong to each other. A named test with an empty
+      // body plus `page.` loose in the file satisfied both whole-file regexes.
+      ["an empty body beside a loose page.", "const d = 'page.';\ntest('intake confirm flow', async () => {});"],
+      ["page. outside the matched body", "test('intake confirm flow', async () => {});\ntest('other', async ({ page }) => { await page.click('#a'); expect(1).toBe(1); });"],
+      ["a skipped test", "test.skip('intake confirm flow', async ({ page }) => { await page.click('#a'); expect(1).toBe(1); });"],
+      ["a todo test", "test.todo('intake confirm flow', async ({ page }) => { await page.click('#a'); expect(1).toBe(1); });"],
+      ["a commented-out real test", "// test('intake confirm flow', async ({ page }) => { await page.click('#c'); expect(1).toBe(1); });\nconst d = 'page.';"],
+      ["a body that awaits nothing", "test('intake confirm flow', async ({ page }) => { page.click('#c'); expect(1).toBe(1); });"],
+      // The TITLE has to name the flow. A loosened title regex would let any
+      // real e2e test satisfy an expiry that exists for one specific flow.
+      ["a real test of something else", "test('homepage loads', async ({ page }) => { await page.goto('/'); expect(1).toBe(1); });"],
     ] as const) {
       expect(e2eVarianceHolds(1, [smoke, { name: "intake.spec.ts", source }]), `${label} satisfied the expiry`).toBe(false);
     }
@@ -141,6 +153,16 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     expect(runnerTargets('export default { testDir: "engine/test/e2e" }', "engine/test/e2e")).toBe(true);
     expect(runnerTargets('export default { testDir: "e2e" }', "engine/test/e2e"), "a repointed testDir passed").toBe(false);
     expect(runnerTargets('// testDir: "engine/test/e2e"\nexport default {}', "engine/test/e2e")).toBe(false);
+    // R6-03: EVERY occurrence must name the spec directory. Taking the first
+    // was fooled by a decoy const, a decoy in a template string, and ordinary
+    // per-project overrides — two of which need no intent to deceive.
+    for (const [label, cfg] of [
+      ["a decoy const before the real config", 'const DOC = { testDir: "engine/test/e2e" };\nexport default { testDir: "stub-e2e" };'],
+      ["a decoy in a template string", 'const s = `testDir: "engine/test/e2e"`;\nexport default { testDir: "stub-e2e" };'],
+      ["a per-project override", 'export default { testDir: "engine/test/e2e", projects: [{ name: "p", testDir: "stub" }] };'],
+    ] as const) {
+      expect(runnerTargets(cfg, "engine/test/e2e"), `${label} fooled runnerTargets`).toBe(false);
+    }
   });
 
   it("the checklist checks ITSELF against the spec (R2-25)", () => {

@@ -425,6 +425,28 @@ describe("secrets — a quoted-evidence exemption cannot travel (N-06)", () => {
   });
 });
 
+describe("money — the range guards on the way in (R6-05)", () => {
+  /** MUTATION: drop the safe-integer check from toMicros. */
+  it("an amount too large for micro-dollar accounting refuses spend", () => {
+    const m = new MemorySpendMeter(() => Date.UTC(2026, 7, 16));
+    expect(() => m.reserve("pulsern", 1e15, { dailyUsd: 1e15, monthlyUsd: 1e15 })).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("pulsern", 1, { dailyUsd: 1e15, monthlyUsd: 1e15 })).toThrow(/out of range/);
+    expect(() => m.record("pulsern", 1e15)).toThrow(MeterUnavailableError);
+  });
+
+  /** MUTATION: neuter assertSaneCap's body. A caller-supplied narrowing is the
+   * one number on this path that does not come from the frozen table. */
+  it("a narrowing that is not a positive finite number is refused", async () => {
+    const { effectiveAiCapsUsd } = await import("@fullburn/config/caps");
+    for (const bad of [-1, 0, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => effectiveAiCapsUsd(TEST_CLIENT, { [TEST_CLIENT]: { dailyAiSpendUsd: bad } }), `${bad} was accepted`).toThrow(
+        CapError,
+      );
+      expect(() => effectiveAiCapsUsd(TEST_CLIENT, { [TEST_CLIENT]: { monthlyAiSpendUsd: bad } })).toThrow(CapError);
+    }
+  });
+});
+
 describe("caps — the H8 ceilings are coherent, not merely present", () => {
   /** Individually sane, collectively nonsense: a hard ceiling below its own
    * pacing target means the pacing is never reached, and a daily sub-limit above
@@ -521,6 +543,78 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
     expect(a.todayUsd("pulsern"), "a foreign handle settled against this ledger").toBe(0);
     a.settle(live);
     expect(a.todayUsd("pulsern")).toBe(200);
+  });
+
+  /** R6-04: the ledger was keyed by `id`, so re-pointing that one field on a
+   * GENUINE handle closed other live reservations — $20 against a $10/day
+   * ceiling with `todayUsd()` reading $10, nothing forged, one meter. The only
+   * thing standing in the way was `Object.freeze`, which carried no test and
+   * looked like hygiene rather than cap enforcement.
+   *
+   * MUTATION: key #open by `reservation.id` again instead of the handle. */
+  it("re-pointing id on a genuine handle closes nothing", () => {
+    const m = new MemorySpendMeter(AUG);
+    const caps = { dailyUsd: 10, monthlyUsd: 10 };
+    const live = Array.from({ length: 5 }, () => m.reserve("pulsern", 2, caps));
+    expect(m.reservedUsd("pulsern")).toBe(10);
+    expect(() => m.reserve("pulsern", 1, caps)).toThrow(CapError);
+
+    // The attacker holds one genuine handle and forges nothing.
+    const mine = live[0]! as unknown as { id: string };
+    for (const other of live) {
+      try {
+        mine.id = (other as unknown as { id: string }).id;
+      } catch {
+        // frozen — the write is refused, which is also fine
+      }
+      m.release(live[0]!);
+    }
+    // Exactly one reservation closed: the handle's own, once. Not five.
+    expect(m.reservedUsd("pulsern"), "re-pointed id closed other reservations").toBe(8);
+    // And the ceiling still binds for the rest.
+    expect(() => m.reserve("pulsern", 3, caps)).toThrow(CapError);
+  });
+
+  /** MUTATION: drop `Object.freeze(this)` from the constructor. The freeze is
+   * no longer load-bearing — identity keying is — but a handle is a value and
+   * immutability is asserted directly rather than left to be inferred. */
+  it("a minted handle is frozen", () => {
+    const m = new MemorySpendMeter(AUG);
+    const h = m.reserve("pulsern", 1, { dailyUsd: 10, monthlyUsd: 10 });
+    expect(Object.isFrozen(h), "a handle is mutable").toBe(true);
+  });
+
+  /** MUTATION: key #open by id again. A Proxy forwards every field perfectly
+   * and is still not the key. */
+  it("a Proxy wrapping a genuine handle is not that handle", () => {
+    const m = new MemorySpendMeter(AUG);
+    const caps = { dailyUsd: 10, monthlyUsd: 10 };
+    const real = m.reserve("pulsern", 10, caps);
+    const proxy = new Proxy(real, {}) as SpendReservation;
+    m.release(proxy);
+    expect(m.reservedUsd("pulsern"), "a Proxy released the real reservation").toBe(10);
+    m.settle(proxy);
+    expect(m.todayUsd("pulsern"), "a Proxy settled the real reservation").toBe(0);
+    // The genuine handle still works exactly once.
+    m.settle(real);
+    expect(m.todayUsd("pulsern")).toBe(10);
+    m.settle(real);
+    expect(m.todayUsd("pulsern"), "settling twice charged twice").toBe(10);
+  });
+
+  /** MUTATION: as above. A subclass instance passes `instanceof` and is still
+   * not a key. */
+  it("a subclass instance and a prototype-forged object close nothing", () => {
+    const m = new MemorySpendMeter(AUG);
+    const caps = { dailyUsd: 10, monthlyUsd: 10 };
+    const real = m.reserve("pulsern", 10, caps);
+    const forged = Object.create(Object.getPrototypeOf(real)) as SpendReservation;
+    Object.assign(forged, { id: real.id, clientId: real.clientId, amountUsd: real.amountUsd });
+    expect(forged instanceof SpendReservation, "the forgery no longer clears instanceof").toBe(true);
+    m.release(forged);
+    m.settle(forged);
+    expect(m.reservedUsd("pulsern"), "a prototype forgery moved the ledger").toBe(10);
+    expect(m.todayUsd("pulsern")).toBe(0);
   });
 
   /** MUTATION: remove the brand check from the SpendReservation constructor. */

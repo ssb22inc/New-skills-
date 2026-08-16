@@ -63,12 +63,18 @@ export class SpendReservation {
   readonly amountUsd: number;
 
   constructor(brand: symbol, id: string, clientId: string, amountUsd: number) {
+    // Defence in depth, NOT the primary guard: the ledger is keyed by handle
+    // identity, so an externally constructed handle finds no entry regardless.
+    // Kept because an unbranded constructor invites callers to build things
+    // that look like handles, and refusing that early is cheaper than
+    // explaining later why it does nothing.
     if (brand !== RESERVATION_BRAND) {
       throw new MeterUnavailableError("a reservation may only be minted by a meter — refusing spend (fail closed)");
     }
     this.id = id;
     this.clientId = clientId;
     this.amountUsd = amountUsd;
+    // A handle is a value. `id` is informational only — see #open's keying.
     Object.freeze(this);
   }
 }
@@ -164,14 +170,27 @@ export class MemorySpendMeter implements SpendMeter {
   // month.
   #committedMicros = new Map<string, number>();
   #reservedMicros = new Map<string, number>();
-  #open = new Map<string, { clientId: string; micros: number; day: string; month: string }>();
+  /** Open reservations, KEYED BY THE HANDLE OBJECT ITSELF.
+   *
+   * This was keyed by `id`, with a separate WeakSet proving the handle was
+   * minted here. That proved WHICH OBJECT but not that its `id` still pointed
+   * where it did, so the only thing stopping a caller re-pointing `id` on a
+   * genuine handle was `Object.freeze` in the constructor — a line that looks
+   * like defensive hygiene, carried no test, and could be deleted with all 243
+   * tests green. Removing it let ONE genuine handle close five live
+   * reservations: $20 of spend against the approved $10/day ceiling while
+   * `todayUsd()` read exactly $10, with nothing forged and no second meter
+   * (adversary finding R6-04).
+   *
+   * Keying by identity removes the class rather than the instance. A forged
+   * literal, a foreign meter's handle, a re-pointed `id`, a Proxy and a
+   * subclass all find no entry, because none of them IS the key. The freeze is
+   * now hygiene, not enforcement — which is what the class comment always
+   * claimed the design was. */
+  #open = new Map<SpendReservation, { clientId: string; micros: number; day: string; month: string }>();
   #available = true;
   #seq = 0;
   #now: () => number;
-  /** Handles THIS meter minted. Per-instance, deliberately: a handle from
-   * another instance must not move this ledger, and `r1` from a restarted
-   * Durable Object is exactly that (R5-01). */
-  #minted = new WeakSet<SpendReservation>();
 
   /** A DAILY cap needs a day (adversary finding M-03). Without one, a client
    * that spent its ceiling was refused forever — a $5/day budget was really
@@ -298,24 +317,27 @@ export class MemorySpendMeter implements SpendMeter {
     this.#reservedMicros.set(month, projectedMonth - this.#read(this.#committedMicros, month, "committed spend"));
     // The reservation remembers the periods it was taken in, so a settle that
     // lands after midnight commits against the day the spend belongs to.
-    this.#open.set(id, { clientId, micros: amountMicros, day, month });
     const handle = new SpendReservation(RESERVATION_BRAND, id, clientId, fromMicros(amountMicros));
-    this.#minted.add(handle);
+    this.#open.set(handle, { clientId, micros: amountMicros, day, month });
     return handle;
   }
 
   #close(reservation: SpendReservation): { clientId: string; micros: number; day: string; month: string } | null {
-    // IDENTITY FIRST. A handle this meter did not mint moves nothing here,
-    // whatever its fields say — that is the whole guard, and matching on
-    // `id` + `clientId` was not it (R5-01).
-    if (!(reservation instanceof SpendReservation) || !this.#minted.has(reservation)) return null;
-    const open = this.#open.get(reservation.id);
-    if (open === undefined) return null; // already settled/released — idempotent
-    if (open.clientId !== reservation.clientId) return null;
-    this.#open.delete(reservation.id);
+    // IDENTITY, AND NOTHING ELSE. The lookup IS the guard: only a handle this
+    // meter minted and has not yet closed is a key here. No field is consulted,
+    // so no field can be tampered with (R5-01, R6-04).
+    const open = this.#open.get(reservation);
+    if (open === undefined) return null; // forged, foreign, or already closed
+    this.#open.delete(reservation);
     for (const period of [open.day, open.month]) {
       const reserved = this.#read(this.#reservedMicros, period, "reserved spend");
-      this.#reservedMicros.set(period, Math.max(0, reserved - open.micros));
+      // No Math.max clamp: the entry is deleted above before either period is
+      // decremented, so a reservation cannot be released twice and the
+      // subtraction cannot go negative. A clamp here would be dead code that
+      // reads as a guard, which is how the last four rounds found unprotected
+      // fixes (adversary finding R6-05/M7). If it ever CAN go negative the
+      // ledger is corrupt, and #read refuses on the next call — fail closed.
+      this.#reservedMicros.set(period, reserved - open.micros);
     }
     return open;
   }
