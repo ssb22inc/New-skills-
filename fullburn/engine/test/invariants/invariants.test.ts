@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CapError, assertCapsUsable, getCaps } from "@fullburn/config/caps";
 import { ROLE_BINDINGS, validateBindings } from "@fullburn/config/models";
@@ -78,6 +78,47 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       expect(phases[n.invariant], `undeclared deferral: ${n.invariant}`).toBeDefined();
       expect(n.applicableFromPhase, `wrong phase for: ${n.invariant}`).toBe(phases[n.invariant]);
     }
+  });
+
+  /** H20 RECORDED VARIANCE, approved 2026-08-16 (ledger L16).
+   *
+   * §10.3 mandates a Playwright e2e stage. Phase 0 has no endpoints and no
+   * client screens, so the stage runs a minimal smoke — it is installed and
+   * executing, which is what makes it checkable at all — and substantive e2e is
+   * deferred to Phase 1.
+   *
+   * THE VARIANCE EXPIRES AT PHASE 1'S GATE, in the approver's words: no real
+   * e2e on the intake confirm flow, no Phase 1 pass. This test IS that expiry.
+   * A deferral that depends on someone remembering it is not a deferral, it is
+   * a hope — every one this project wrote down was later found to have quietly
+   * become permanent, which is why L16 exists at all. */
+  it("the H20 e2e variance expires at the Phase 1 gate, mechanically", () => {
+    const phase = Number(readFileSync(new URL("../../../PHASE", import.meta.url), "utf8").trim());
+    const specs = readdirSync(new URL("../e2e/", import.meta.url));
+    // The stage exists and runs NOW — that half of the variance is not deferred.
+    expect(specs, "the e2e stage has no specs at all — the variance required it installed and running").toContain(
+      "smoke.spec.ts",
+    );
+    if (phase < 1) return;
+    // At Phase 1 the smoke is no longer sufficient: the intake confirm flow
+    // must be genuinely driven end to end.
+    //
+    // COMMENTS ARE STRIPPED FIRST. Written naively this test passed at PHASE=1
+    // against a smoke-only suite, because the smoke spec's own doc-comment says
+    // it will be replaced by "real coverage of the intake confirm flow" — the
+    // check matched the promise instead of the work. Prose about a thing is not
+    // the thing.
+    const code = specs
+      .filter((n) => n.endsWith(".spec.ts") && n !== "smoke.spec.ts")
+      .map((n) => readFileSync(new URL(`../e2e/${n}`, import.meta.url), "utf8"))
+      .join("\n")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(
+      /intake/i.test(code) && /confirm/i.test(code),
+      "PHASE is 1 or later and the e2e suite is still smoke-only — the H20 variance has expired. " +
+        "Real e2e coverage of the intake confirm flow is required before the Phase 1 gate can pass.",
+    ).toBe(true);
   });
 
   it("the checklist checks ITSELF against the spec (R2-25)", () => {

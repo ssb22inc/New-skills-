@@ -36,6 +36,16 @@ jobs:
         run: npm run integration
       - name: Invariant suite
         run: npm run invariants
+      # §10.3's fifth stage. H20 RECORDED VARIANCE (approved 2026-08-16, ledger
+      # L16): substantive e2e defers to Phase 1, but the stage is installed and
+      # running a minimal smoke NOW — a stage that does not exist cannot be
+      # checked. The variance expires at Phase 1's gate and the invariant suite
+      # enforces that expiry mechanically, so it cannot outlive its terms by
+      # being forgotten.
+      - name: Install the e2e browser
+        run: npx playwright install --with-deps chromium
+      - name: Playwright e2e (smoke until Phase 1)
+        run: npm run e2e
       - name: Leak + structural scan
         run: node engine/scripts/leak-check.mjs ..
 
