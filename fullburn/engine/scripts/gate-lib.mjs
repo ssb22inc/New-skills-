@@ -29,11 +29,25 @@ export const CLASS2_PATTERNS = [
   // Any test-runner or deploy config, by shape rather than by name: vitest
   // honours vitest.workspace.ts OVER vitest.config.ts, so protecting only the
   // latter left a sibling filename that silenced 145 of 148 tests (R3-CP-03).
-  /^fullburn\/vitest[^/]*\.(?:ts|js|mjs|json)$/,
-  /^fullburn\/(?:[^/]+\/)?wrangler\.(?:toml|json|jsonc)$/,
-  /^fullburn\/\.gitignore$/,
-  /^fullburn\/(?:[^/]+\/)?package\.json$/,
-  /^fullburn\/(?:[^/]+\/)?tsconfig(?:\.base)?\.json$/,
+  //
+  // Enumerating the extensions was still too narrow. vitest resolves a workspace
+  // from WORKSPACES_NAMES × WORKSPACES_EXTENSIONS = {vitest.workspace,
+  // vitest.projects} × {.ts,.mts,.cts,.js,.mjs,.cjs,.json}; the four-extension
+  // list left .mts, .cts and .cjs Class-1, and `vitest.workspace.mts` silenced
+  // 165 of 168 tests with every gate green (adversary finding N-02). The rule is
+  // now ANY config-shaped file at ANY depth whose basename starts with vitest.
+  // or vite. — extension-agnostic, because the next runner version decides the
+  // extension list, not us.
+  /(?:^|\/)vite(?:st)?[.\-][^/]*$/,
+  /(?:^|\/)vitest\.[^/]*$/,
+  /(?:^|\/)wrangler\.[^/]*$/,
+  /(?:^|\/)\.gitignore$/,
+  /(?:^|\/)package\.json$/,
+  // npm ci resolves STRICTLY from the lockfile — `resolved` and `integrity` both
+  // live there — so the lockfile decides what `vitest` actually is. It was the
+  // only executable thing left in the Class-1 surface (adversary finding N-11).
+  /(?:^|\/)package-lock\.json$/,
+  /(?:^|\/)tsconfig[^/]*\.json$/,
   /^fullburn\/PHASE$/,
   // The evidence: tests are the only thing standing between a defect and a
   // green gate, so silencing one is a human decision.
@@ -45,72 +59,110 @@ export function isClass2(path) {
   return CLASS2_PATTERNS.some((re) => re.test(path));
 }
 
-/** Retained for callers/tests that want a concrete list of the paths that exist
- * today. `isClass2` is the authority. */
-export const CLASS2_FILES = [
+/** A concrete path per pattern, so `isClass2` — the authority — is what the
+ * lock tests drive. This replaces the old exported `CLASS2_FILES` array
+ * (adversary finding H-03): once `isClass2` became the authority, that list was
+ * read by nothing, yet two test files still asserted membership in it. Eight of
+ * the thirteen patterns were therefore neuterable with the whole suite green,
+ * including the money-path sources, the gate scripts, `.github/`, the Laws, and
+ * the adversary's own mandate. A dead list that tests point at is worse than no
+ * list at all, because it reads as coverage.
+ *
+ * Every entry here must be matched by some pattern AND every pattern must claim
+ * some entry — `locks-r5.test.ts` asserts both directions, so neutering a
+ * pattern or adding one without a witness turns the suite red. */
+export const CLASS2_WITNESS_PATHS = [
   "fullburn/CLAUDE.md",
   "fullburn/ENGINE_BUILD.md",
   "fullburn/.claude/agents/engine-adversary.md",
-  "fullburn/.claude/settings.json",
   "fullburn/config/src/caps.ts",
-  "fullburn/config/src/grade-thresholds.ts",
-  "fullburn/config/src/models.ts",
-  "fullburn/config/src/markets.ts",
-  "fullburn/config/src/channels.ts",
-  "fullburn/config/src/freeze.ts",
   "fullburn/engine/src/gateway.ts",
-  "fullburn/engine/src/spend-meter.ts",
-  "fullburn/engine/src/grade-registry.ts",
-  "fullburn/engine/src/vault.ts",
-  "fullburn/engine/src/tracing.ts",
-  "fullburn/engine/src/redact.ts",
-  "fullburn/engine/src/eval-harness.ts",
   ".github/workflows/fullburn-ci.yml",
   "fullburn/engine/scripts/gate-lib.mjs",
-  "fullburn/engine/scripts/adversary-gate.mjs",
-  "fullburn/engine/scripts/class2-gate.mjs",
-  "fullburn/engine/scripts/leak-check.mjs",
-  "fullburn/engine/scripts/scan-lib.mjs",
-  "fullburn/vitest.config.ts",
+  "fullburn/vitest.workspace.mts",
+  "fullburn/engine/deploy/wrangler.toml",
+  "fullburn/package-lock.json",
+  "fullburn/engine/.gitignore",
+  "fullburn/wrangler.toml",
+  "fullburn/.gitignore",
   "fullburn/package.json",
-  "fullburn/config/package.json",
-  "fullburn/engine/package.json",
-  "fullburn/tsconfig.json",
   "fullburn/tsconfig.base.json",
   "fullburn/PHASE",
+  "fullburn/engine/test/invariants/invariants.test.ts",
+  "fullburn/engine/evals/hello-world/golden.ts",
 ];
-
 /** Strip HTML comments before any line scanning: a verdict hidden in
  * `<!-- ... -->` renders invisibly to a human but was read by the parser
  * (adversary finding R2-09). */
+/** How far into a report the gate will look for its two machine-read fields.
+ *
+ * Both fields used to be findable anywhere in the file, and every fix since has
+ * been another entry on a list of hiding places: fenced blocks, mismatched
+ * fence markers, fence LENGTH, indented blocks, blockquotes, HTML comments,
+ * `<details>`. The list kept growing because the parser was deciding visibility
+ * from Markdown source while the artifact a human reads is rendered HTML — and
+ * those two disagree in ways nobody enumerates completely (adversary findings
+ * R2-09, R3-CP-02, N-04, N-05).
+ *
+ * A positive schema ends that: the verdict and the tree binding must appear in
+ * the report's HEADER — the first few lines, at column 0. There is no hiding
+ * place in a ten-line header, because a human opening the file sees all of it
+ * before scrolling. Every report ever written already complies. */
+const HEADER_LINES = 10;
+
 function stripHtmlComments(text) {
   return text.replace(/<!--[\s\S]*?-->/g, "");
 }
 
-/** The verdict is the first verdict line that is (a) not inside a fenced code
- * block, (b) not inside an indented code block, (c) not quoted, and (d) starts
- * at column 0. Fences must be closed by the SAME marker — ``` cannot be closed
- * by ~~~ (R2-09). The token must be exactly PASS or FAIL. */
-export function parseVerdict(reportContent) {
-  const lines = stripHtmlComments(reportContent).split("\n");
+/** Regions that render collapsed, invisible, or not as prose at all. A verdict
+ * inside one of these is not a verdict a reviewer saw. */
+const CONCEALING_BLOCKS = /<(details|script|style|template|iframe)\b[\s\S]*?<\/\1\s*>/gi;
+
+function stripConcealed(text) {
+  // `<details>` renders collapsed by default in every renderer including
+  // GitHub, so a PASS inside one opened the gate while the visible prose said
+  // "do not merge" (N-05). Unterminated blocks are handled too: an opening tag
+  // with no close conceals everything after it, so the header stops there.
+  const open = /<(details|script|style|template|iframe)\b/i.exec(text.replace(CONCEALING_BLOCKS, ""));
+  const stripped = text.replace(CONCEALING_BLOCKS, "");
+  return open === null ? stripped : stripped.slice(0, open.index);
+}
+
+/** The report's header lines, with everything a renderer would hide removed.
+ * ONE definition, shared by both readers: `readTreeBinding` was a near-copy of
+ * `parseVerdict` that compared fence CHARACTERS without length, so a correctly
+ * bound `Verdict: FAIL` was read as unbound, filed as history, and silently
+ * overridden by a sibling PASS — the gate's output never naming the FAIL report
+ * at all (N-04). Two parsers for one grammar is how that happens. */
+function visibleHeaderLines(reportContent) {
+  if (typeof reportContent !== "string") return [];
+  const lines = stripConcealed(stripHtmlComments(reportContent)).split("\n");
+  const out = [];
   let fence = null; // {ch,len} of the fence currently open, or null
-  for (const raw of lines) {
+  for (const raw of lines.slice(0, HEADER_LINES)) {
     const line = raw.replace(/\r$/, "");
     const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
     if (fenceMatch) {
       // CommonMark: a closing fence must use the same character AND be at least
-      // as long as the opening one. Comparing only the character let a 3-backtick
-      // line close a 4-backtick block, so the parser walked out of a fenced
-      // example and read the PASS inside it (adversary finding R3-CP-02).
+      // as long as the opening one. Comparing only the character let a
+      // 3-backtick line close a 4-backtick block (R3-CP-02).
       const marker = { ch: fenceMatch[1][0], len: fenceMatch[1].length };
       if (fence === null) fence = marker;
       else if (fence.ch === marker.ch && marker.len >= fence.len) fence = null;
       continue;
     }
     if (fence !== null) continue;
-    // Indented code block (4+ spaces or a tab) renders as code, not prose.
-    if (/^(?: {4,}|\t)/.test(line)) continue;
+    if (/^(?: {4,}|\t)/.test(line)) continue; // indented code block
     if (/^\s*>/.test(line)) continue; // blockquote
+    out.push(line);
+  }
+  return out;
+}
+
+/** The verdict is the first verdict line in the visible header. The token must
+ * be exactly PASS or FAIL — anything else is INVALID, never a pass. */
+export function parseVerdict(reportContent) {
+  for (const line of visibleHeaderLines(reportContent)) {
     const m = /^verdict\s*:\s*(\S+)/i.exec(line);
     if (!m) continue;
     const token = m[1].toUpperCase();
@@ -121,18 +173,7 @@ export function parseVerdict(reportContent) {
 }
 
 function readTreeBinding(reportContent) {
-  const lines = stripHtmlComments(reportContent).split("\n");
-  let fence = null;
-  for (const raw of lines) {
-    const line = raw.replace(/\r$/, "");
-    const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
-    if (fenceMatch) {
-      const marker = fenceMatch[1][0];
-      if (fence === null) fence = marker;
-      else if (fence === marker) fence = null;
-      continue;
-    }
-    if (fence !== null) continue;
+  for (const line of visibleHeaderLines(reportContent)) {
     // Any non-empty token binds. Deliberately NOT restricted to hex: a
     // malformed binding can never equal a real tree hash, so it fails closed on
     // its own, and over-strict validation silently defanged the F4 lock tests
@@ -265,14 +306,51 @@ function parseApprovalBlocks(content) {
   return blocks;
 }
 
-export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseHashOf, baseCommit }) {
-  // Every path a change touches, including the source side of a rename.
+/** Every Class-2 path a diff touches, including the source side of a rename,
+ * tagged with the transition it represents. This is the ONE definition of "what
+ * this PR owes an approval for": `checkClass2Approvals` enforces against it and
+ * `owed-approvals.mjs` prints from it, so the list a human is told to sign can
+ * never be a different list from the one the gate demands (adversary finding
+ * H-17, where a hand-maintained list drifted in both directions at once). */
+export function class2TouchedPaths(changedFiles) {
   const touched = [];
   for (const f of changedFiles) {
-    if (isClass2(f.path)) touched.push({ path: f.path, status: f.status });
+    if (isClass2(f.path)) touched.push({ path: f.path, status: f.status === "renamed" ? "renamed-to" : f.status });
     if (f.oldPath && isClass2(f.oldPath)) touched.push({ path: f.oldPath, status: "renamed-away" });
   }
+  return touched;
+}
+
+/** The transition an approval for `entry` must authorize: which content it
+ * starts from and which it ends at. Shared for the same reason as above — a
+ * printed `from-content-hash` that the gate would not accept is worse than no
+ * printout, because the human believes they have signed. */
+export function approvalTransition(entry, { hashOf, baseHashOf }) {
+  const to = entry.status === "deleted" || entry.status === "renamed-away" ? "deleted" : safeHash(hashOf, entry.path);
+  // A rename destination did not exist at the base, so its transition starts
+  // from absence — the same shape as any newly added file.
+  const from =
+    entry.status === "added" || entry.status === "renamed-to" ? "absent" : safeHash(baseHashOf, entry.path, "unreadable");
+  return { from, to };
+}
+
+export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseHashOf, baseCommit }) {
+  const touched = class2TouchedPaths(changedFiles);
   if (touched.length === 0) return { ok: true, reason: "no Class-2 changes" };
+
+  // FAIL CLOSED ON A MISSING BASE COMMIT. This was `baseCommit === undefined ||
+  // b.base === baseCommit` — an omitted argument disabled the whole
+  // pull-request binding and restored full approval replay. No test imported
+  // class2-gate.mjs, so renaming the property at the single call site left the
+  // suite green with the binding silently gone (adversary finding N-03, legs A
+  // and B). A control-plane check whose default is "skip me" is not a check.
+  if (typeof baseCommit !== "string" || baseCommit.length === 0) {
+    return {
+      ok: false,
+      reason:
+        "Class-2 approval check ran without a base commit, so approvals could not be bound to this pull request — refusing (fail closed)",
+    };
+  }
 
   const usable = approvalDocs
     .map((d) => (typeof d === "string" ? { path: null, content: d, status: "added" } : d))
@@ -281,9 +359,7 @@ export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseH
 
   const failures = [];
   for (const f of touched) {
-    // "deleted"/"renamed-away" have no new content; the transition is to absence.
-    const wantTo = f.status === "deleted" || f.status === "renamed-away" ? "deleted" : safeHash(hashOf, f.path);
-    const wantFrom = f.status === "added" ? "absent" : safeHash(baseHashOf, f.path);
+    const { from: wantFrom, to: wantTo } = approvalTransition(f, { hashOf, baseHashOf });
     const approved = usable.some(
       (b) =>
         b.path === f.path && b.to === wantTo && b.from === wantFrom &&
@@ -292,7 +368,7 @@ export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseH
         // the previous bytes, every approval ever issued from those bytes was
         // re-armed, and copying one back in re-authorized the revoked change with
         // no forgery at all. A base commit occurs once.
-        (baseCommit === undefined || b.base === baseCommit),
+        b.base === baseCommit,
     );
     if (!approved) failures.push(`${f.path} (${f.status})`);
   }
@@ -308,12 +384,16 @@ export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseH
 /** A hash that cannot be computed (deleted file, unreadable base) must not
  * crash the gate — it fails closed to a sentinel no approval will match
  * (adversary finding R2-31). */
-function safeHash(fn, path) {
+function safeHash(fn, path, absentSentinel) {
   if (typeof fn !== "function") return "unavailable";
   try {
     const h = fn(path);
     return typeof h === "string" && h.length > 0 ? h : "unavailable";
   } catch {
-    return "deleted";
+    // "deleted" means "this transition ends in absence" — a DELIBERATE state a
+    // human can approve. An unreadable base is something else entirely, and
+    // reusing the sentinel for it made a rename destination approvable with
+    // `from-content-hash: deleted` on a file being created (R3-CP-09).
+    return absentSentinel ?? "unreadable";
   }
 }

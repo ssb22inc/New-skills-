@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { checkClass2Approvals } from "./gate-lib.mjs";
-import { parseNameStatus } from "./diff-lib.mjs";
+import { parseNameStatusZ } from "./diff-lib.mjs";
 
 const repoRoot = process.argv[2] ?? ".";
 const baseRef = process.argv[3];
@@ -18,8 +18,12 @@ if (!baseRef) {
   process.exit(1);
 }
 
-const diff = execSync(`git -C ${JSON.stringify(repoRoot)} diff --name-status -M ${baseRef}...HEAD`, { encoding: "utf8" });
-const changedFiles = parseNameStatus(diff);
+// -z: NUL-separated, never quoted. With the human-readable form, a Class-2 path
+// containing a space or a non-ASCII byte arrived as `"fullburn/config/src/a b.ts"`
+// and matched no CLASS2_PATTERN, so the file left the protected set entirely
+// (adversary finding R3-CP-08).
+const diff = execSync(`git -C ${JSON.stringify(repoRoot)} diff --name-status -z -M ${baseRef}...HEAD`, { encoding: "utf8" });
+const changedFiles = parseNameStatusZ(diff);
 
 // Approval entries are only credible if they arrived with the change they
 // approve. Who wrote them is H19's job: CODEOWNERS on APPROVALS/**.
@@ -28,6 +32,9 @@ const approvalDocs = changedFiles
   .map((f) => ({ path: f.path, status: f.status, content: readFileSync(join(repoRoot, f.path), "utf8") }));
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
+const resolvedBase = execSync(`git -C ${JSON.stringify(repoRoot)} rev-parse ${JSON.stringify(baseRef)}`, {
+  encoding: "utf8",
+}).trim();
 
 const res = checkClass2Approvals({
   changedFiles,
@@ -38,11 +45,14 @@ const res = checkClass2Approvals({
     sha(execSync(`git -C ${JSON.stringify(repoRoot)} show ${JSON.stringify(`${baseRef}:${p}`)}`, { encoding: "buffer" })),
   // The commit this PR branches from. An approval names it, so an approval
   // issued for one PR cannot be replayed into another (R3-CP-01).
-  baseCommit: execSync(`git -C ${JSON.stringify(repoRoot)} rev-parse ${JSON.stringify(baseRef)}`, { encoding: "utf8" }).trim(),
+  baseCommit: resolvedBase,
 });
 
 if (!res.ok) {
   console.error(`CLASS-2 GATE FAIL: ${res.reason}`);
   process.exit(1);
 }
-console.log(`class2 gate: ${res.reason}`);
+// Name the ref the approval had to be bound to. N-10: the README told humans to
+// write `git merge-base`, CI computed `git rev-parse` of the tip, and an
+// approval written exactly as documented was rejected with no hint why.
+console.log(`class2 gate: ${res.reason} (base ${baseRef} = ${resolvedBase})`);

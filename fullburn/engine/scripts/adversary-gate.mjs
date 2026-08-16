@@ -8,7 +8,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { checkAdversaryReport, checkReportsAppendOnly } from "./gate-lib.mjs";
-import { parseNameStatus } from "./diff-lib.mjs";
+import { parseNameStatusZ } from "./diff-lib.mjs";
 
 const repoRoot = process.argv[2] ?? ".";
 const baseRef = process.argv[3] ?? null;
@@ -71,8 +71,11 @@ if (!res.ok) {
 console.log(`adversary gate: ${res.reason}`);
 
 if (baseRef) {
-  const diff = execSync(`git -C ${JSON.stringify(repoRoot)} diff --name-status -M ${baseRef}...HEAD`, { encoding: "utf8" });
-  const ao = checkReportsAppendOnly(parseNameStatus(diff));
+  // -z: NUL-separated, never quoted. A report path containing a space or a
+  // non-ASCII byte was quoted by git and compared literally, walking out of the
+  // append-only check (adversary finding R3-CP-08).
+  const diff = execSync(`git -C ${JSON.stringify(repoRoot)} diff --name-status -z -M ${baseRef}...HEAD`, { encoding: "utf8" });
+  const ao = checkReportsAppendOnly(parseNameStatusZ(diff));
   if (!ao.ok) {
     console.error(`ADVERSARY GATE FAIL: ${ao.reason}`);
     process.exit(1);

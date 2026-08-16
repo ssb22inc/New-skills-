@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { CLASS2_FILES, checkAdversaryReport, checkClass2Approvals, checkReportsAppendOnly, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
+import { checkAdversaryReport, checkClass2Approvals, checkReportsAppendOnly, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
 
 // Tree bindings must look like git object hashes — the gate rejects anything else.
 const TREE = "abc1234def5678";
@@ -125,6 +125,9 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
   const capsPath = "fullburn/config/src/caps.ts";
   const hashOf = () => "deadbeef";
   const baseHashOf = () => "cafe01";
+  // Every call supplies a base commit: since N-03 the check fails closed
+  // without one, so omitting it no longer silently skips the PR binding.
+  const BASE = "1111111111111111111111111111111111111111";
 
   it("covers the values, the code that enforces them, and the gates (F5)", () => {
     for (const p of [
@@ -139,19 +142,19 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
       "fullburn/vitest.config.ts",
       "fullburn/engine/scripts/gate-lib.mjs",
     ]) {
-      expect(CLASS2_FILES).toContain(p);
+      expect(isClass2(p), `${p} is not Class 2`).toBe(true);
     }
   });
 
   it("ATTACK: changing caps without an approval entry is blocked", () => {
-    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [], hashOf });
+    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [], hashOf, baseHashOf, baseCommit: BASE });
     expect(res.ok).toBe(false);
     expect(res.reason).toMatch(/without a matching human approval/);
   });
 
   it("ATTACK: an approval for different content (wrong hash) does not transfer", () => {
     const doc = { path: "fullburn/APPROVALS/a.md", status: "added", content: `approves: ${capsPath}\ncontent-hash: 0000` };
-    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [doc], hashOf });
+    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [doc], hashOf, baseHashOf, baseCommit: BASE });
     expect(res.ok).toBe(false);
   });
 
@@ -161,7 +164,7 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
       status: "modified", // not added in this diff
       content: `approves: ${capsPath}\ncontent-hash: deadbeef`,
     };
-    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [stale], hashOf });
+    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [stale], hashOf, baseHashOf, baseCommit: BASE });
     expect(res.ok).toBe(false);
   });
 
@@ -169,13 +172,14 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
     const doc = {
       path: "fullburn/APPROVALS/2026-08-15-caps.md",
       status: "added",
-      content: `Approved-by: human\napproves: ${capsPath}\nfrom-content-hash: cafe01\ncontent-hash: deadbeef`,
+      content: `Approved-by: human\napproves: ${capsPath}\nbase-commit: ${BASE}\nfrom-content-hash: cafe01\ncontent-hash: deadbeef`,
     };
     const res = checkClass2Approvals({
       changedFiles: [{ status: "modified", path: capsPath }],
       approvalDocs: [doc],
       hashOf,
       baseHashOf,
+      baseCommit: BASE,
     });
     expect(res.ok).toBe(true);
   });
@@ -195,6 +199,7 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
       approvalDocs: [januaryApproval],
       hashOf,
       baseHashOf,
+      baseCommit: BASE,
     });
     expect(res.ok).toBe(false);
   });
@@ -205,6 +210,7 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
       approvalDocs: [],
       hashOf,
       baseHashOf,
+      baseCommit: BASE,
     });
     expect(res.ok).toBe(false);
     expect(res.reason).toContain("caps.ts");
@@ -218,6 +224,7 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
         throw new Error("ENOENT: no such file");
       },
       baseHashOf,
+      baseCommit: BASE,
     });
     expect(res.ok).toBe(false);
   });
@@ -231,9 +238,11 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
       status: "added",
       content: [
         `approves: ${capsPath}`,
+        `base-commit: ${BASE}`,
         "from-content-hash: cafe01",
         "content-hash: deadbeef",
         "approves: fullburn/config/src/models.ts",
+        `base-commit: ${BASE}`,
         "from-content-hash: beef02",
         "content-hash: feed99",
       ].join("\n"),
@@ -243,6 +252,7 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
       approvalDocs: [doc],
       hashOf: () => "feed99",
       baseHashOf: () => "beef02",
+      baseCommit: BASE,
     });
     expect(res.ok).toBe(false);
   });
@@ -267,6 +277,7 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
       approvalDocs: [],
       hashOf,
       baseHashOf,
+      baseCommit: BASE,
     });
     expect(res.ok).toBe(true);
   });

@@ -47,11 +47,15 @@ export interface SpendReservation {
 export interface SpendMeter {
   /** Committed spend today for the client, USD. Throws if unavailable. */
   todayUsd(clientId: string): number;
-  /** Reserved-but-unsettled spend, USD. Every real implementation must provide
-   * it — an operator staring at `todayUsd() === 0` while every call is refused
-   * needs to see where the headroom went (R2-02) — and `llm()` refuses a meter
-   * that lacks it. Optional in the type only so meters written against the
-   * pre-F1 interface still compile. */
+  /** Reserved-but-unsettled spend, USD, across EVERY day — not just today.
+   * This reading exists so an operator staring at `todayUsd() === 0` while
+   * every call is refused can see where the headroom went (R2-02). Scoping it
+   * to the current day destroyed exactly that property across a rollover: a
+   * reservation taken at 23:59 and still in flight at 00:01 was $0 in
+   * `todayUsd()` AND $0 in `reservedUsd()`, so held money was invisible in both
+   * readings with no interface to ask about another day (adversary finding
+   * N-09). Optional in the type only so meters written against the pre-F1
+   * interface still compile; `llm()` refuses a meter that lacks it. */
   reservedUsd?(clientId: string): number;
   /** Legacy direct write. Retained for compatibility; the money path uses
    * reserve/settle. Implementations must keep it consistent with `todayUsd`. */
@@ -66,7 +70,15 @@ export interface SpendMeter {
   reserve?(clientId: string, amountUsd: number, capUsd: number): SpendReservation;
   /** Commit a reservation: the request left the building and is billable. */
   settle?(reservation: SpendReservation): void;
-  /** Release a reservation for a request that never left the building. */
+  /** Release a reservation for a request that never left the building.
+   *
+   * MUST NOT THROW, and must be idempotent for a stale or foreign handle.
+   * `llm()` calls this from a failure path where there is nothing left to
+   * unwind: a `release()` that threw leaked the reservation silently, and 500
+   * pre-departure failures consumed a $5.00 ceiling with zero provider calls
+   * while `todayUsd()` read $0.00 (adversary finding N-07). The requirement was
+   * asserted in gateway.ts and documented nowhere the implementer would read
+   * it; it is part of the contract now. */
   release?(reservation: SpendReservation): void;
 }
 
@@ -99,9 +111,20 @@ export class MemorySpendMeter implements SpendMeter {
    * that spent its ceiling was refused forever — a $5/day budget was really
    * $5/lifetime, and the bracket could not kill losing ads on day two. Ledgers
    * are keyed by (client, UTC day) so the cap rolls over exactly once per day.
+   *
+   * THE CLOCK IS REQUIRED. It defaulted to `() => 0`, which pinned every day key
+   * to 1970-01-01: thirteen of the sixteen construction sites took the default,
+   * so the fix was opt-in and the default was the original bug, still live, in
+   * the commit that claimed to have closed it (adversary finding N-01). A
+   * missing clock is now a compile error, not a silently frozen day — there is
+   * no default a caller can fall into.
+   *
    * Persistence across a restart is a Durable Object concern and is NOT solved
    * here: a fresh meter still starts a fresh day (ledger L14). */
-  constructor(now: () => number = () => 0) {
+  constructor(now: () => number) {
+    if (typeof now !== "function") {
+      throw new MeterUnavailableError("MemorySpendMeter requires a clock — refusing spend (fail closed)");
+    }
     this.#now = now;
   }
 
@@ -130,9 +153,18 @@ export class MemorySpendMeter implements SpendMeter {
     return fromMicros(this.#read(this.#committedMicros, this.#key(clientId), "committed spend"));
   }
 
+  /** Every open reservation for this client, whatever day it was taken on
+   * (N-09). Held money must never be invisible.  */
   reservedUsd(clientId: string): number {
     this.#assertAvailable();
-    return fromMicros(this.#read(this.#reservedMicros, this.#key(clientId), "reserved spend"));
+    let micros = 0;
+    for (const open of this.#open.values()) {
+      if (open.clientId === clientId) micros += open.micros;
+    }
+    if (!Number.isSafeInteger(micros) || micros < 0) {
+      throw new MeterUnavailableError("reserved spend ledger is corrupt — refusing spend (fail closed)");
+    }
+    return fromMicros(micros);
   }
 
   reserve(clientId: string, amountUsd: number, capUsd: number): SpendReservation {

@@ -46,6 +46,40 @@ const NOT_YET_APPLICABLE: readonly NotYetApplicable[] = [
 ];
 
 describe("§10.2 standing invariants — enumerated checklist", () => {
+  it("every invariant is present BY NAME, not by count (R2-25, H-08)", () => {
+    // Counting was defeatable in one edit: delete the Law 3 cross-tenant
+    // isolation test, add a NOT_YET_APPLICABLE entry, decrement the claimed
+    // number, and the suite stayed green with an invariant silently retired.
+    // Each live invariant is now named, so removing one fails here.
+    const self = readFileSync(new URL("./invariants.test.ts", import.meta.url), "utf8");
+    for (const required of [
+      "LIVE — spend caps present, immutable, and unusable unsigned (Law 2)",
+      "LIVE — per-client isolation: cross-tenant secret read fails structurally (Law 3)",
+      "LIVE — every LLM call routes through AI Gateway and emits a trace (Law 11)",
+      "LIVE — writes-only: no code path may reach a platform API host (Law 1, mass-read half)",
+      "LIVE — no prediction-gate code paths exist (Law 6)",
+      "LIVE — locked and staged market/channel flags are structurally unable to activate (Law 18)",
+      "LIVE — tokens exist only in the vault; code, logs and traces are scanned (§10.2, §15)",
+    ]) {
+      expect(self, `a live invariant was removed: ${required}`).toContain(`it("${required}"`);
+    }
+    // …and a deferral cannot be re-dated to hide it: every deferred invariant
+    // names the phase §11 actually schedules its subject in.
+    const phases: Readonly<Record<string, number>> = {
+      "no write outside publish/pause/promote (Law 1, write-verb half)": 6,
+      "proxies-kill-only enforced in code (Law 5)": 5,
+      "trust-ladder state machine cannot skip rungs (Law 8)": 5,
+      "decisions ledger is append-only and captures every write": 2,
+      "VERDICT.md hash-locked at client-zero launch": 6,
+      "human-queue item past SLA leaves the engine waiting": 6,
+      "hostile external content fails to steer any agent (full crawler drill)": 1,
+    };
+    for (const n of NOT_YET_APPLICABLE) {
+      expect(phases[n.invariant], `undeclared deferral: ${n.invariant}`).toBeDefined();
+      expect(n.applicableFromPhase, `wrong phase for: ${n.invariant}`).toBe(phases[n.invariant]);
+    }
+  });
+
   it("the checklist checks ITSELF against the spec (R2-25)", () => {
     // Previously the file asserted only its own internal count, so a §10.2
     // bullet could be deleted from the spec, or an entry dropped here, with the

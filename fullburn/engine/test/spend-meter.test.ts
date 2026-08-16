@@ -1,3 +1,4 @@
+import { testClock } from "./helpers.ts";
 import { describe, expect, it } from "vitest";
 import { CapError } from "@fullburn/config/caps";
 import { MemorySpendMeter, MeterUnavailableError, assertUsableAmount } from "../src/spend-meter.ts";
@@ -7,7 +8,7 @@ import { MemorySpendMeter, MeterUnavailableError, assertUsableAmount } from "../
 
 describe("spend meter — reserve/settle (F1, F2, F3)", () => {
   it("reservations accumulate against the cap before any of them settle", () => {
-    const m = new MemorySpendMeter();
+    const m = new MemorySpendMeter(testClock);
     const r1 = m.reserve("c", 0.01, 0.05);
     m.reserve("c", 0.01, 0.05);
     m.reserve("c", 0.01, 0.05);
@@ -25,7 +26,7 @@ describe("spend meter — reserve/settle (F1, F2, F3)", () => {
   });
 
   it("releasing a reservation frees the headroom again", () => {
-    const m = new MemorySpendMeter();
+    const m = new MemorySpendMeter(testClock);
     const r = m.reserve("c", 0.05, 0.05);
     expect(() => m.reserve("c", 0.01, 0.05)).toThrow(CapError);
     m.release(r);
@@ -33,7 +34,7 @@ describe("spend meter — reserve/settle (F1, F2, F3)", () => {
   });
 
   it("settle and release are idempotent — a double-settle cannot double-charge", () => {
-    const m = new MemorySpendMeter();
+    const m = new MemorySpendMeter(testClock);
     const r = m.reserve("c", 0.01, 0.05);
     m.settle(r);
     m.settle(r);
@@ -42,14 +43,14 @@ describe("spend meter — reserve/settle (F1, F2, F3)", () => {
   });
 
   it("caps are per client: one client's spend never consumes another's headroom (Law 3)", () => {
-    const m = new MemorySpendMeter();
+    const m = new MemorySpendMeter(testClock);
     m.settle(m.reserve("a", 0.05, 0.05));
     expect(() => m.reserve("a", 0.01, 0.05)).toThrow(CapError);
     expect(() => m.reserve("b", 0.01, 0.05)).not.toThrow();
   });
 
   it("non-finite accounting refuses spend instead of sliding through a NaN comparison (F2)", () => {
-    const m = new MemorySpendMeter();
+    const m = new MemorySpendMeter(testClock);
     expect(() => m.reserve("c", Number.NaN, 0.05)).toThrow(MeterUnavailableError);
     expect(() => m.reserve("c", 0.01, Number.NaN)).toThrow(MeterUnavailableError);
     expect(() => m.reserve("c", Infinity, 0.05)).toThrow(MeterUnavailableError);
@@ -59,7 +60,7 @@ describe("spend meter — reserve/settle (F1, F2, F3)", () => {
   });
 
   it("an unavailable meter refuses everything (fail closed)", () => {
-    const m = new MemorySpendMeter();
+    const m = new MemorySpendMeter(testClock);
     m.setAvailable(false);
     expect(() => m.reserve("c", 0.01, 0.05)).toThrow(MeterUnavailableError);
     expect(() => m.todayUsd("c")).toThrow(MeterUnavailableError);

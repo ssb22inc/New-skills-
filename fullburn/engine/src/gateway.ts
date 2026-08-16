@@ -2,7 +2,7 @@ import { CapError, effectiveDailyAiCapUsd } from "@fullburn/config/caps";
 import { MODELS, ROLE_CARDS, ownEntry, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
 import { type ClientVault } from "./vault.ts";
 import { MeterUnavailableError, assertUsableAmount, type SpendMeter, type SpendReservation } from "./spend-meter.ts";
-import { redactError, redactValue } from "./redact.ts";
+import { redactError, redactInPlace, redactValue } from "./redact.ts";
 import { TraceContext, TraceEmitError, emitOrFail, type TraceEvent, type TraceSink } from "./tracing.ts";
 
 /** THE only LLM call path (Law 11, §2.4). Everything below is deterministic
@@ -82,7 +82,10 @@ function requireReservingMeter(meter: SpendMeter): Required<Pick<SpendMeter, "re
 export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
   const role = typeof req?.role === "string" ? req.role : "(unknown)";
   const clientId = typeof req?.clientId === "string" ? req.clientId : "(unknown)";
-  const startedAtMs = deps.now();
+  // A clock that throws must not be the one exit that escapes tracing and
+  // redaction (adversary findings B3, M-05): every collaborator call belongs
+  // inside the guarded region.
+  let startedAtMs = 0;
 
   // Traceable identity is established before anything can fail, so a refusal is
   // never an untraced decision (R2-28). traceId may be absent on a bad request;
@@ -103,6 +106,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
    * the cap never engaging once. The flag answers "did it leave the building",
    * which is the only question the release decision may depend on. */
   let departed = false;
+  let releaseLeak: unknown = null;
 
   const traceFailure = async (message: string, output: unknown = null): Promise<void> => {
     try {
@@ -125,6 +129,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
   };
 
   try {
+    startedAtMs = deps.now();
     const card = ownEntry(ROLE_CARDS, role);
     if (card === undefined) throw new BindingError(`unknown role "${role}"`);
     const bound = ownEntry(deps.bindings, role);
@@ -141,6 +146,17 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // Vault least-scope (R11): the vault handle must belong to this client.
     if (deps.vault?.clientId !== req.clientId) {
       throw new GatewayError("vault scope mismatch — cross-client secret access refused (Law 3)");
+    }
+
+    // Prime the redaction set before the money checks (adversary finding A1's
+    // residue): a meter or caps error thrown while `secrets` was still empty
+    // went out verbatim, redaction having nothing to redact against. This read
+    // is deliberately non-fatal — a missing key must not mask a cap refusal, so
+    // the authoritative read stays below, in its proper order.
+    try {
+      secrets = [deps.vault.get("ai-gateway-key").value];
+    } catch {
+      // Surfaced in order by the authoritative read below.
     }
 
     // Money safety before anything leaves the building (Law 2, R2, R3, F1–F3).
@@ -163,16 +179,32 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
 
     let output: unknown;
-    // Everything from here is billable. The flag is set BEFORE the await, not
-    // after a successful settle (M-01/M-04).
-    departed = true;
+    // `departed` must mean what it says: the request reached the transport and
+    // may have been billed. Setting it before the call made it true for things
+    // that provably never left — an absent `post`, or a transport that threw
+    // synchronously before any I/O — and both were settled as billable
+    // (adversary finding N-08). Invoking `post` separately from awaiting it
+    // splits those two cases apart: a synchronous throw happens on the first
+    // line and leaves `departed` false; anything after the handoff is billable
+    // whatever the promise does. The flag is still set BEFORE the await, so a
+    // rejection is settled, never released (M-01/M-04).
+    if (typeof deps.transport?.post !== "function") {
+      throw new GatewayError("transport has no post() — refusing spend (fail closed)");
+    }
     try {
-      output = await deps.transport.post(
+      const inFlight = deps.transport.post(
         url,
         { role, input: req.input, contextBudgetTokens: card.contextBudgetTokens },
         { authorization: `Bearer ${key.value}`, "x-fullburn-client": req.clientId },
       );
+      departed = true;
+      output = await inFlight;
     } catch (err) {
+      // Only a request that actually departed is billable. A synchronous throw
+      // from `post` lands here too, with `departed` still false, and settling it
+      // would charge for a call that never happened — so the outer catch's
+      // release path is the correct owner of that case (N-08).
+      if (!departed) throw err;
       // The request left the building: the provider may well have billed it, so
       // the reservation is SETTLED, not released (F3).
       settleOrFailClosed(meter, reservation);
@@ -205,15 +237,31 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     if (reservation !== null && meter !== null && !departed) {
       try {
         meter.release(reservation);
-      } catch {
-        // A meter that cannot release is already reporting itself unusable;
-        // the original error is the one worth surfacing.
+      } catch (releaseErr) {
+        // A release that throws leaks the reservation: the headroom stays
+        // consumed for a request that never left the building, and repeating it
+        // burns a client's whole daily ceiling with zero provider calls while
+        // `todayUsd()` still reads $0.00. This catch used to be silent, so the
+        // leak was invisible in the trace as well as in the meter (adversary
+        // finding N-07). It is still non-fatal — the original error is the one
+        // the caller needs — but it is now on the record.
+        releaseLeak = releaseErr;
       }
     }
+    // The class is preserved so callers can still discriminate a cap breach
+    // from an outage, but the MESSAGE is redacted like any other: a meter or a
+    // caps module is a collaborator whose error text we do not control, and it
+    // was being written verbatim into the trace AND thrown to the caller with
+    // its original stack (adversary finding A1).
     const safe = err instanceof CapError || err instanceof MeterUnavailableError
-      ? err
+      ? redactInPlace(err, secrets)
       : redactError(err, secrets, errorClassFor(err));
-    await traceFailure(safe.message);
+    await traceFailure(
+      releaseLeak === null
+        ? safe.message
+        : `${safe.message} [reservation leaked: meter.release threw ${releaseLeak instanceof Error ? releaseLeak.name : "a non-error"}; ` +
+          `$${reservation?.amountUsd ?? 0} of headroom remains consumed for a request that never departed]`,
+    );
     throw safe;
   }
 }

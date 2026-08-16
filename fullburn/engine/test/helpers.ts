@@ -3,11 +3,11 @@ import { MemorySpendMeter } from "../src/spend-meter.ts";
 import { MemoryTraceSink } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 
-/** `testco` is a fixture CLIENT in the real frozen caps table (config/caps.ts),
+/** `fixture-testco` is a fixture CLIENT in the real frozen caps table (config/caps.ts),
  * not an injected table: llm() reads its ceiling from config and a caller can
  * only narrow it, never widen it (adversary finding R2-03). Its real ceiling is
  * $5.00/day AI spend. */
-export const TEST_CLIENT = "testco";
+export const TEST_CLIENT = "fixture-testco";
 export const CANARY_SECRET = "canary-vault-value-do-not-leak-8891";
 
 /** Narrowing override used by breach tests: lowers testco's ceiling to $0.05.
@@ -26,12 +26,23 @@ export class MockGatewayServer implements GatewayTransport {
   }
 }
 
-export function makeDeps() {
+/** One clock for the whole harness. The meter used to be constructed with the
+ * epoch default while `llm()` was handed Aug 2025 — two clocks on one money
+ * path, which is how N-01's frozen day key stayed invisible. */
+export const TEST_NOW_MS = 1_755_000_000_000;
+export const testClock = () => TEST_NOW_MS;
+
+/** `now` and `transport` are overridable so a test can drive a clock across a
+ * day boundary, or hand `llm()` a transport that fails in a specific way. The
+ * meter and `llm()` always share ONE clock — two clocks on one money path is
+ * how N-01's frozen day key hid in plain sight. */
+export function makeDeps(overrides: { now?: () => number; transport?: unknown } = {}) {
+  const now = overrides.now ?? testClock;
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
-  const meter = new MemorySpendMeter();
+  const meter = new MemorySpendMeter(now);
   const sink = new MemoryTraceSink();
-  const transport = new MockGatewayServer();
+  const transport = (overrides.transport ?? new MockGatewayServer()) as MockGatewayServer;
   return {
     backend,
     meter,
@@ -43,7 +54,7 @@ export function makeDeps() {
       meter,
       sink,
       gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/test-account/fullburn/",
-      now: () => 1_755_000_000_000,
+      now,
     },
   };
 }

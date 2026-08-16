@@ -11,7 +11,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "leak-check": "node engine/scripts/leak-check.mjs",
-    "invariants": "vitest run --dir engine/test/invariants"
+    "invariants": "vitest run engine/test/invariants",
+    "integration": "vitest run engine/test/integration",
+    "owed-approvals": "node engine/scripts/owed-approvals.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

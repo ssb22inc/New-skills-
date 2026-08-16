@@ -60,7 +60,8 @@ export async function runEval(
   recorded: RecordedTransport,
   clientId: string,
 ): Promise<EvalResult> {
-  if (ownEntry(ROLE_CARDS, role) === undefined) throw new Error(`unknown role "${role}"`);
+  const card = ownEntry(ROLE_CARDS, role);
+  if (card === undefined) throw new Error(`unknown role "${role}"`);
   if (goldenSet.length === 0) throw new Error("empty golden set — an eval over nothing proves nothing");
 
   // The set must be the one the role card declares (R2-23). A caller-supplied
@@ -73,6 +74,20 @@ export async function runEval(
     throw new Error(
       `golden set for "${role}" does not match the ids declared on its role card (expected ${expected.join(",")}; got ${supplied.join(",")})`,
     );
+  }
+
+  // Every case must assert EVERY field the role card requires (adversary
+  // finding DT-01). `Object.entries({}).every(...)` is vacuously true, so a
+  // golden set carrying the declared case ids with empty — or narrowed —
+  // expectations scored a model 1.0 that honestly scores 0.2, and it bound.
+  const required = [...card.outputSchema.required].sort();
+  for (const gcase of goldenSet) {
+    const asserted = Object.keys(gcase.expected ?? {}).sort();
+    if (asserted.length !== required.length || required.some((k, i) => k !== asserted[i])) {
+      throw new Error(
+        `golden case "${gcase.id}" for "${role}" must assert exactly the fields the role card requires (${required.join(",")}); it asserts ${asserted.join(",") || "nothing"}`,
+      );
+    }
   }
 
   const bindings = { [role]: modelId };

@@ -13,9 +13,15 @@ const SKIP_DIRS = new Set(["node_modules", "dist", ".git"]);
  * shell scripts are exactly where a pasted token ends up, and they were not
  * scanned. */
 const SCANNED = /\.(?:ts|tsx|mjs|cjs|js|jsx|json|jsonl|md|toml|ya?ml|txt|log|csv|tsv|sh|bash|sql|ini|conf|xml|html)$/;
-/** Roots to walk. `.github/` holds the workflow definitions and their secrets
- * plumbing, and was previously never scanned (R2-29). */
-const ROOTS = ["fullburn", ".github"];
+/** The WHOLE repository is walked (adversary findings R2-29, H-16). Scanning
+ * only fullburn/ + .github/ left the sibling product trees — including client
+ * zero's app and its own workflows — unscanned: 346 files, any of which could
+ * carry a real token. Structural rules still apply only to Fullburn's own code
+ * (see scan-lib's STRUCTURAL_SCOPE); the secret rules apply everywhere.
+ *
+ * A denylist, not an allowlist: a directory nobody thought of fails CLOSED
+ * into being scanned rather than silently skipped. */
+const SKIP_TOP = new Set([]);
 
 export function* walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -28,12 +34,11 @@ export function* walk(dir) {
 
 export function scanTree(repoRoot) {
   const findings = [];
-  for (const root of ROOTS) {
-    const dir = join(repoRoot, root);
-    if (!existsSync(dir)) continue;
-    for (const file of walk(dir)) {
-      findings.push(...scanContent(relative(repoRoot, file), readFileSync(file, "utf8")));
-    }
+  if (!existsSync(repoRoot)) return findings;
+  for (const file of walk(repoRoot)) {
+    const rel = relative(repoRoot, file);
+    if (SKIP_TOP.has(rel.split("/")[0])) continue;
+    findings.push(...scanContent(rel, readFileSync(file, "utf8")));
   }
   return findings;
 }

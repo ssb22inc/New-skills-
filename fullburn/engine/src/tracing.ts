@@ -47,9 +47,11 @@ export async function emitOrFail(sink: TraceSink, event: TraceEvent): Promise<vo
   try {
     await sink.emit(event);
   } catch (err) {
-    throw new TraceEmitError(
-      `trace emission failed — refusing to proceed untraced (Law 11): ${err instanceof Error ? err.name : "unknown sink error"}`,
-    );
+    // Nothing from the sink's error is interpolated (adversary finding A3): a
+    // hostile or careless sink can put anything in `name`, and this message is
+    // thrown to the caller and logged. The sink's own telemetry is where its
+    // detail belongs.
+    throw new TraceEmitError("trace emission failed — refusing to proceed untraced (Law 11)");
   }
 }
 
