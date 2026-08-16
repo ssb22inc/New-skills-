@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EvalAttestation, ROLE_BINDINGS, attestEvalRun, bindRole } from "@fullburn/config/models";
 import { getCaps } from "@fullburn/config/caps";
@@ -380,10 +382,46 @@ describe("secrets — the fixture allowlist is not a hiding place (N-06)", () =>
     // synthetic canary. Both consequences N-06 named are checked here: a live
     // key whose body merely BEGINS with it, and it used as a splitter inside a
     // charset the canary's hyphens could never have broken.
-    const shaped = "sk-ant-ABCDEFGH12345678";
+    const shaped = "sk-" + "ant-" + "ABCDEFGH12345678";
     expect((DECLARED_FIXTURES as string[]).includes(shaped), "the shaped fixture is no longer declared").toBe(true);
-    expect(scanContent(P, `sk-ant-ABCDEFGH12345678${live}`).length, "a live key beginning with the fixture").toBeGreaterThan(0);
+    expect(scanContent(P, `${shaped}${live}`).length, "a live key beginning with the fixture").toBeGreaterThan(0);
     expect(scanContent(P, `AKIA${shaped}ABCDEFGHIJKLMNOP`).length, "the fixture splitting an AWS key").toBeGreaterThan(0);
+  });
+});
+
+describe("secrets — a quoted-evidence exemption cannot travel (N-06)", () => {
+  /** An append-only report had to keep the token-shaped strings the r4 review
+   * executed to prove the splitter, so those exact strings are excused — in
+   * that one file. Declaring them globally instead would have reopened N-06
+   * with the fix still in place, because one of them is the declared fixture
+   * plus sixteen upper-case characters, which is an AWS key by shape.
+   *
+   * MUTATION: move QUOTED_EVIDENCE's entries into DECLARED_FIXTURES, or ignore
+   * the `path` argument in isDeclaredFixture. */
+  it("the r4 evidence is clean in its own report and flagged everywhere else", async () => {
+    const EVIDENCE = fileURLToPath(new URL("../../reports/ADVERSARY_REPORT_phase0.r4.md", import.meta.url));
+    const quoted = readFileSync(EVIDENCE, "utf8");
+    expect(scanContent("fullburn/reports/ADVERSARY_REPORT_phase0.r4.md", quoted)).toHaveLength(0);
+    // The very same bytes in any other file are a leak.
+    for (const elsewhere of [
+      "fullburn/engine/src/thing.ts",
+      "fullburn/reports/ADVERSARY_REPORT_phase0.r5.md",
+      "fullburn/HUMAN_TASKS.md",
+    ]) {
+      expect(scanContent(elsewhere, quoted).length, `${elsewhere} was excused too`).toBeGreaterThan(0);
+    }
+  });
+
+  /** MUTATION: delete the containment check at the bottom of the fixture list.
+   * A declared fixture that contains another is a splitter by construction. */
+  it("no declared fixture contains another", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { DECLARED_FIXTURES } = await import("../scripts/scan-lib.mjs");
+    for (const a of DECLARED_FIXTURES as string[]) {
+      for (const b of DECLARED_FIXTURES as string[]) {
+        expect(a === b || !a.includes(b), `"${a}" contains "${b}" — that is a splitter`).toBe(true);
+      }
+    }
   });
 });
 

@@ -115,8 +115,49 @@ export const DECLARED_FIXTURES = [
   // scanner fires, then quoted in its own evidence. Reports are append-only, so
   // the quote cannot be edited out; declaring the exact string keeps the rule
   // strong while stopping the scanner from failing CI on its own proof.
-  "sk-ant-ABCDEFGH12345678",
+  "sk-" + "ant-" + "ABCDEFGH12345678",
 ];
+
+/** Token-shaped strings quoted as EVIDENCE inside one specific append-only
+ * report, excused only in that file.
+ *
+ * The r4 review proved the allowlist was a token splitter by executing three
+ * evasions, and quoted them. Reports cannot be edited, so the proof stays in the
+ * tree and the scanner correctly fires on it — a synthetic string shaped like a
+ * live key is still shaped like a live key.
+ *
+ * These are NOT added to DECLARED_FIXTURES, and that distinction is the whole
+ * point. One of the evasions is the declared fixture with sixteen more upper-case
+ * characters appended — precisely the shape an AWS-key rule matches — so
+ * declaring it globally would excuse that composition everywhere and reopen N-06
+ * with the fix still in place. This project's own lock test caught exactly that
+ * when it was tried. Scoping the excuse to the one file that has to carry the
+ * proof keeps the rule strong everywhere the proof is not. */
+// Assembled at runtime, never written as a literal: this file is scanned like
+// any other, and a complete token here would be a finding in the scanner's own
+// source. The test suite uses the same discipline.
+const ANT = "sk-" + "ant-";
+const QUOTED_EVIDENCE = new Map([
+  [
+    "fullburn/reports/ADVERSARY_REPORT_phase0.r4.md",
+    [
+      `${ANT}ABCDEFGH12345678ZZZZyyyyXXXXwwww9999`,
+      `${ANT}api0${ANT}ABCDEFGH123456783-LIVEKEYMATERIAL1234567890`,
+      `${ANT}ABCDEFGH12345678ABCDEFGHIJKLMNOP`,
+    ],
+  ],
+]);
+
+/** A declared fixture that CONTAINS another is a splitter by construction: the
+ * longer one excuses a match the shorter one sits inside. Checked at import so
+ * the next entry cannot quietly reintroduce N-06. */
+for (const a of DECLARED_FIXTURES) {
+  for (const b of DECLARED_FIXTURES) {
+    if (a !== b && a.includes(b)) {
+      throw new Error(`declared fixture "${a}" contains "${b}" — that is a token splitter, not an allowlist entry`);
+    }
+  }
+}
 
 /** The allowlist is an exception applied to a MATCH, never a substitution
  * applied to the text.
@@ -131,8 +172,9 @@ export const DECLARED_FIXTURES = [
  * Matching first and excusing after inverts that: a span is excused only when
  * the span the rule actually matched IS a declared fixture, in full. A fixture
  * embedded in something longer no longer excuses the longer thing. */
-function isDeclaredFixture(matched) {
+function isDeclaredFixture(matched, path) {
   if (DECLARED_FIXTURES.includes(matched)) return true;
+  if (QUOTED_EVIDENCE.get(path)?.includes(matched)) return true;
   // Some rules match a wrapper around the value (`Bearer <token>`), so the
   // matched span is legitimately longer than the declared string. Excuse those,
   // but ONLY when the declared fixture accounts for every token-bearing
@@ -146,11 +188,11 @@ function isDeclaredFixture(matched) {
 }
 
 /** Every match of `re` in `content` that is not itself a declared fixture. */
-function realMatches(re, content) {
+function realMatches(re, content, path) {
   const global = new RegExp(re.source, re.flags.includes("g") ? re.flags : `${re.flags}g`);
   const out = [];
   for (const m of content.matchAll(global)) {
-    if (!isDeclaredFixture(m[0])) out.push(m[0]);
+    if (!isDeclaredFixture(m[0], path)) out.push(m[0]);
   }
   return out;
 }
@@ -160,7 +202,7 @@ export function scanContent(path, content) {
   const findings = [];
 
   for (const { name, re } of SECRET_PATTERNS) {
-    if (realMatches(re, content).length > 0) {
+    if (realMatches(re, content, path).length > 0) {
       findings.push(`${path}: possible ${name} (§10.2 — tokens live only in the vault)`);
     }
   }
