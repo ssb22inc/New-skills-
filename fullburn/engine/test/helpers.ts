@@ -1,3 +1,4 @@
+import { effectiveAiCapsUsd } from "@fullburn/config/caps";
 import type { GatewayTransport } from "../src/gateway.ts";
 import { MemorySpendMeter } from "../src/spend-meter.ts";
 import { MemoryTraceSink } from "../src/tracing.ts";
@@ -32,15 +33,33 @@ export class MockGatewayServer implements GatewayTransport {
 export const TEST_NOW_MS = 1_755_000_000_000;
 export const testClock = () => TEST_NOW_MS;
 
+/** A caps resolver for meters built directly in a test. Fixed ceilings and a
+ * fixed accounting zone, so a test says what it means rather than inheriting
+ * the frozen table. Use `capsFrom` when the real table is the point. */
+export const fixedCaps = () => ({ dailyUsd: 200, monthlyUsd: 200, timeZone: "UTC" });
+
+/** A resolver with ceilings a test chooses explicitly. */
+export const capsOf = (dailyUsd: number, monthlyUsd: number, timeZone = "UTC") => () => ({
+  dailyUsd,
+  monthlyUsd,
+  timeZone,
+});
+
+/** The real, frozen ceilings for a client, in that client's accounting zone. */
+export const capsFrom = (clientId: string) => () => effectiveAiCapsUsd(clientId);
+
 /** `now` and `transport` are overridable so a test can drive a clock across a
  * day boundary, or hand `llm()` a transport that fails in a specific way. The
  * meter and `llm()` always share ONE clock — two clocks on one money path is
  * how N-01's frozen day key hid in plain sight. */
-export function makeDeps(overrides: { now?: () => number; transport?: unknown } = {}) {
+export function makeDeps(overrides: { now?: () => number; transport?: unknown; capsTable?: Readonly<Record<string, { readonly dailyAiSpendUsd?: number; readonly monthlyAiSpendUsd?: number }>> } = {}) {
   const now = overrides.now ?? testClock;
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
-  const meter = new MemorySpendMeter(now);
+  // The meter resolves its own ceilings from the frozen table, narrowed by the
+  // same caller-supplied table llm() honours (R7-06).
+  const capsFor = (clientId: string) => effectiveAiCapsUsd(clientId, overrides.capsTable);
+  const meter = new MemorySpendMeter(now, capsFor);
   const sink = new MemoryTraceSink();
   const transport = (overrides.transport ?? new MockGatewayServer()) as MockGatewayServer;
   return {

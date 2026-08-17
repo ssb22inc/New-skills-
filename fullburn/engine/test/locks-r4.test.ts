@@ -10,7 +10,7 @@ import { TraceContext } from "../src/tracing.ts";
 import { checkAdversaryReport, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../scripts/scan-lib.mjs";
-import { TEST_CLIENT, makeDeps, testClock } from "./helpers.ts";
+import { TEST_CLIENT, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
 
 /** LOCK TESTS — r4 findings (N-01 … N-11) plus the one r3 lock the r4 review
  * proved was not load-bearing.
@@ -74,8 +74,8 @@ describe("money — held money is never invisible (N-09)", () => {
    * MUTATION: revert reservedUsd to `#read(this.#reservedMicros, this.#key(id))`. */
   it("an in-flight reservation survives a UTC midnight in reservedUsd()", () => {
     let nowMs = Date.UTC(2026, 7, 15, 23, 59, 0);
-    const meter = new MemorySpendMeter(() => nowMs);
-    const held = meter.reserve(TEST_CLIENT, 3, { dailyUsd: 5, monthlyUsd: 5 });
+    const meter = new MemorySpendMeter(() => nowMs, fixedCaps);
+    const held = meter.reserve(TEST_CLIENT, 3);
     expect(meter.reservedUsd(TEST_CLIENT)).toBeCloseTo(3, 6);
 
     nowMs += 2 * 60_000; // 00:01 the next day
@@ -88,8 +88,8 @@ describe("money — held money is never invisible (N-09)", () => {
   });
 
   it("another client's reservation is not visible on this client's reading", () => {
-    const meter = new MemorySpendMeter(testClock);
-    meter.reserve("fixture-other", 2, { dailyUsd: 5, monthlyUsd: 5 });
+    const meter = new MemorySpendMeter(testClock, fixedCaps);
+    meter.reserve("fixture-other", 2);
     expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
   });
 });
@@ -428,10 +428,9 @@ describe("secrets — a quoted-evidence exemption cannot travel (N-06)", () => {
 describe("money — the range guards on the way in (R6-05)", () => {
   /** MUTATION: drop the safe-integer check from toMicros. */
   it("an amount too large for micro-dollar accounting refuses spend", () => {
-    const m = new MemorySpendMeter(() => Date.UTC(2026, 7, 16));
-    expect(() => m.reserve("pulsern", 1e15, { dailyUsd: 1e15, monthlyUsd: 1e15 })).toThrow(MeterUnavailableError);
-    expect(() => m.reserve("pulsern", 1, { dailyUsd: 1e15, monthlyUsd: 1e15 })).toThrow(/out of range/);
-    expect(() => m.record("pulsern", 1e15)).toThrow(MeterUnavailableError);
+    const m = new MemorySpendMeter(() => Date.UTC(2026, 7, 16), capsOf(1e14, 1e14));
+    expect(() => m.reserve("pulsern", 1e15)).toThrow(MeterUnavailableError);
+    expect(() => m.reserve("pulsern", 1)).toThrow(/out of range/);
   });
 
   /** MUTATION: neuter assertSaneCap's body. A caller-supplied narrowing is the
@@ -503,7 +502,7 @@ describe("caps — the H8 ceilings are coherent, not merely present", () => {
 });
 
 describe("money — a reservation handle is an identity, not a shape (R5-01, R5-08)", () => {
-  const CAPS = { dailyUsd: 200, monthlyUsd: 200 };
+  const CAPS10 = capsOf(10, 10);
   const AUG = () => Date.UTC(2026, 7, 16, 12, 0, 0);
 
   /** Handles were matched on `id` + `clientId`, and ids count `r1, r2, r3…`
@@ -517,26 +516,26 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
    * MUTATION: replace the `instanceof` + `#minted.has()` check in #close with
    * the old `open.clientId !== reservation.clientId` test. */
   it("a forged literal releases nothing, and the real spend still settles", () => {
-    const m = new MemorySpendMeter(AUG);
-    const real = Array.from({ length: 200 }, () => m.reserve("pulsern", 1, CAPS));
+    const m = new MemorySpendMeter(AUG, fixedCaps);
+    const real = Array.from({ length: 200 }, () => m.reserve("pulsern", 1));
     expect(m.reservedUsd("pulsern")).toBe(200);
     for (let i = 1; i <= 200; i++) {
       m.release({ id: `r${i}`, clientId: "pulsern", amountUsd: 0 } as never);
     }
     expect(m.reservedUsd("pulsern"), "forged releases freed headroom").toBe(200);
-    expect(() => m.reserve("pulsern", 1, CAPS), "the ceiling stopped binding").toThrow(CapError);
+    expect(() => m.reserve("pulsern", 1), "the ceiling stopped binding").toThrow(CapError);
     for (const r of real) m.settle(r);
     expect(m.monthUsd("pulsern"), "$200 of departed billable spend was recorded as $0").toBe(200);
-    expect(() => m.reserve("pulsern", 1, CAPS), "a second $200 was admitted").toThrow(CapError);
+    expect(() => m.reserve("pulsern", 1), "a second $200 was admitted").toThrow(CapError);
   });
 
   /** MUTATION: as above. This is the production shape and needs no forgery at
    * all — ledger L14 documents a restarted meter minting `r1` again. */
   it("a handle minted by another meter moves nothing here", () => {
-    const a = new MemorySpendMeter(AUG);
-    const b = new MemorySpendMeter(AUG);
-    const live = a.reserve("pulsern", 200, CAPS);
-    const foreign = b.reserve("pulsern", 200, CAPS);
+    const a = new MemorySpendMeter(AUG, fixedCaps);
+    const b = new MemorySpendMeter(AUG, fixedCaps);
+    const live = a.reserve("pulsern", 200);
+    const foreign = b.reserve("pulsern", 200);
     a.release(foreign);
     expect(a.reservedUsd("pulsern"), "a foreign handle released a live reservation").toBe(200);
     a.settle(foreign);
@@ -553,11 +552,10 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
    *
    * MUTATION: key #open by `reservation.id` again instead of the handle. */
   it("re-pointing id on a genuine handle closes nothing", () => {
-    const m = new MemorySpendMeter(AUG);
-    const caps = { dailyUsd: 10, monthlyUsd: 10 };
-    const live = Array.from({ length: 5 }, () => m.reserve("pulsern", 2, caps));
+    const m = new MemorySpendMeter(AUG, CAPS10);
+    const live = Array.from({ length: 5 }, () => m.reserve("pulsern", 2));
     expect(m.reservedUsd("pulsern")).toBe(10);
-    expect(() => m.reserve("pulsern", 1, caps)).toThrow(CapError);
+    expect(() => m.reserve("pulsern", 1)).toThrow(CapError);
 
     // The attacker holds one genuine handle and forges nothing.
     const mine = live[0]! as unknown as { id: string };
@@ -572,24 +570,23 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
     // Exactly one reservation closed: the handle's own, once. Not five.
     expect(m.reservedUsd("pulsern"), "re-pointed id closed other reservations").toBe(8);
     // And the ceiling still binds for the rest.
-    expect(() => m.reserve("pulsern", 3, caps)).toThrow(CapError);
+    expect(() => m.reserve("pulsern", 3)).toThrow(CapError);
   });
 
   /** MUTATION: drop `Object.freeze(this)` from the constructor. The freeze is
    * no longer load-bearing — identity keying is — but a handle is a value and
    * immutability is asserted directly rather than left to be inferred. */
   it("a minted handle is frozen", () => {
-    const m = new MemorySpendMeter(AUG);
-    const h = m.reserve("pulsern", 1, { dailyUsd: 10, monthlyUsd: 10 });
+    const m = new MemorySpendMeter(AUG, CAPS10);
+    const h = m.reserve("pulsern", 1);
     expect(Object.isFrozen(h), "a handle is mutable").toBe(true);
   });
 
   /** MUTATION: key #open by id again. A Proxy forwards every field perfectly
    * and is still not the key. */
   it("a Proxy wrapping a genuine handle is not that handle", () => {
-    const m = new MemorySpendMeter(AUG);
-    const caps = { dailyUsd: 10, monthlyUsd: 10 };
-    const real = m.reserve("pulsern", 10, caps);
+    const m = new MemorySpendMeter(AUG, CAPS10);
+    const real = m.reserve("pulsern", 10);
     const proxy = new Proxy(real, {}) as SpendReservation;
     m.release(proxy);
     expect(m.reservedUsd("pulsern"), "a Proxy released the real reservation").toBe(10);
@@ -605,9 +602,8 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
   /** MUTATION: as above. A subclass instance passes `instanceof` and is still
    * not a key. */
   it("a subclass instance and a prototype-forged object close nothing", () => {
-    const m = new MemorySpendMeter(AUG);
-    const caps = { dailyUsd: 10, monthlyUsd: 10 };
-    const real = m.reserve("pulsern", 10, caps);
+    const m = new MemorySpendMeter(AUG, CAPS10);
+    const real = m.reserve("pulsern", 10);
     const forged = Object.create(Object.getPrototypeOf(real)) as SpendReservation;
     Object.assign(forged, { id: real.id, clientId: real.clientId, amountUsd: real.amountUsd });
     expect(forged instanceof SpendReservation, "the forgery no longer clears instanceof").toBe(true);
@@ -641,8 +637,8 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
       advanced = true;
       return BOUNDARY;
     };
-    const m = new MemorySpendMeter(clock);
-    m.settle(m.reserve("c", 7, { dailyUsd: 10, monthlyUsd: 10 }));
+    const m = new MemorySpendMeter(clock, fixedCaps);
+    m.settle(m.reserve("c", 7));
     // Read from the instant the reservation was taken. One clock read puts the
     // $7 on the August day AND the August month; two reads split it across
     // August's day and September's month, so the month ledger loses it.
@@ -697,9 +693,9 @@ function trackOps(meter: MemorySpendMeter, ops: string[]): void {
   const reserve = meter.reserve.bind(meter);
   const settle = meter.settle.bind(meter);
   const release = meter.release.bind(meter);
-  meter.reserve = (c: string, a: number, caps: SpendCeilings) => {
+  meter.reserve = (c: string, a: number) => {
     ops.push("reserve");
-    return reserve(c, a, caps);
+    return reserve(c, a);
   };
   meter.settle = (r: SpendReservation) => {
     ops.push("settle");

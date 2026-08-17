@@ -44,9 +44,11 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
   });
 
   it("ATTACK cap breach: the call over the daily AI cap is refused (R3)", async () => {
-    const { deps } = makeDeps();
+    // The narrowing is the METER'S now, supplied at construction — a caller
+    // cannot hand ceilings to reserve() any more (R7-06).
+    const { deps } = makeDeps({ capsTable: LOW_CAP_NARROWING });
     const call = () =>
-      llm({ ...deps, capsTable: LOW_CAP_NARROWING, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
+      llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
     await call(); // 0.01
     await call(); // 0.02
     await call(); // 0.03

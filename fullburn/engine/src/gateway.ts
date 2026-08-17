@@ -168,14 +168,16 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
 
     // Money safety before anything leaves the building (Law 2, R2, R3, F1–F3).
     // The ceiling comes from the frozen table; a caller may only narrow it.
-    // Both ceilings, resolved together from the frozen table. A caller may only
-    // narrow either one.
-    const caps = effectiveAiCapsUsd(req.clientId, deps.capsTable);
+    // The caps still resolve here for the sign-off and narrowing checks — an
+    // unsigned client must refuse before anything else happens — but the
+    // CEILINGS the meter enforces are the meter's own (R7-06). This call is the
+    // gate on usability, not the source of the numbers.
+    effectiveAiCapsUsd(req.clientId, deps.capsTable);
     assertUsableAmount(card.costBudgetUsdPerCall, "role cost budget");
     meter = requireReservingMeter(deps.meter);
 
     // ATOMIC: read + cap-check + write, no await in between.
-    reservation = meter.reserve(req.clientId, card.costBudgetUsdPerCall, caps);
+    reservation = meter.reserve(req.clientId, card.costBudgetUsdPerCall);
     if (
       reservation === null || typeof reservation !== "object" ||
       reservation.clientId !== req.clientId || !Number.isFinite(reservation.amountUsd)

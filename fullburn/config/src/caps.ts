@@ -33,6 +33,23 @@ export interface ClientCaps {
   /** Max AI spend per client-local MONTH, USD — the real exposure ceiling.
    * Enforced alongside the daily sub-limit on every call. */
   readonly monthlyAiSpendUsd: number;
+  /** The client's canonical business timezone, as an IANA zone name.
+   *
+   * THIS IS THE ACCOUNTING ZONE, NOT A DISPLAY ZONE. How a UI, a user account
+   * setting, a device, or a database renders a timestamp is irrelevant to it:
+   * the daily cap buckets here and nowhere else. Conflating the two is how a
+   * cap silently means something other than what was approved.
+   *
+   * An IANA name rather than a fixed offset, deliberately — `UTC-5` is wrong
+   * for half the year in most of the zones we will ever use, and a cap that is
+   * wrong for half the year is a cap nobody can reason about.
+   *
+   * The ledger keyed on UTC while this interface promised a client-local day:
+   * $10 at 23:59Z and $10 at 00:01Z were two ledger days and ONE New York day,
+   * so $20 landed under a $10/day cap (adversary finding R7-02, cross-family).
+   * Ledger L14 had disclosed the mismatch for three rounds. A disclosed wrong
+   * cap is still a wrong cap. */
+  readonly ianaTimeZone: string;
   /** Human sign-off marker (H8). While null, caps are structurally UNUSABLE:
    * every spend path must refuse. Set only via a Class-2 approved commit, and
    * read ONLY from this frozen table — never from a caller-supplied record
@@ -57,6 +74,9 @@ const CAPS_TABLE: Readonly<Record<string, ClientCaps>> = deepFreeze({
   // H8 SIGNED 2026-08-16 — see APPROVALS/2026-08-16-h8-caps.md for the
   // transition this file's values were approved in.
   pulsern: {
+    // Eastern Time, declared by the human on 2026-08-16. IANA rather than an
+    // offset so the EST/EDT transition is handled by the zone, not by us.
+    ianaTimeZone: "America/New_York",
     dailyAdSpendUsd: 66,
     hardDailyAdSpendUsd: 75,
     totalAdSpendUsd: 2000,
@@ -69,6 +89,7 @@ const CAPS_TABLE: Readonly<Record<string, ClientCaps>> = deepFreeze({
   // being unsigned; once it was signed the test would have quietly started
   // passing for a different reason, or been deleted (adversary finding H8).
   "fixture-unsigned": {
+    ianaTimeZone: "UTC",
     dailyAdSpendUsd: 1,
     hardDailyAdSpendUsd: 1,
     totalAdSpendUsd: 1,
@@ -77,6 +98,7 @@ const CAPS_TABLE: Readonly<Record<string, ClientCaps>> = deepFreeze({
     humanSignoff: null,
   },
   "fixture-testco": {
+    ianaTimeZone: "UTC",
     dailyAdSpendUsd: 1,
     hardDailyAdSpendUsd: 1,
     totalAdSpendUsd: 1,
@@ -110,6 +132,7 @@ export function getCaps(clientId: string): ClientCaps {
     throw new CapError(`no caps configured for client "${clientId}" — spend is forbidden`);
   }
   const snapshot: ClientCaps = {
+    ianaTimeZone: raw.ianaTimeZone,
     dailyAdSpendUsd: raw.dailyAdSpendUsd,
     hardDailyAdSpendUsd: raw.hardDailyAdSpendUsd,
     totalAdSpendUsd: raw.totalAdSpendUsd,
@@ -122,6 +145,7 @@ export function getCaps(clientId: string): ClientCaps {
   assertSaneCap(snapshot.totalAdSpendUsd, "totalAdSpendUsd");
   assertSaneCap(snapshot.dailyAiSpendUsd, "dailyAiSpendUsd");
   assertSaneCap(snapshot.monthlyAiSpendUsd, "monthlyAiSpendUsd");
+  assertUsableZone(snapshot.ianaTimeZone, clientId);
   assertCapsCoherent(snapshot, clientId);
   return Object.freeze(snapshot);
 }
@@ -136,6 +160,20 @@ export function getCaps(clientId: string): ClientCaps {
  * Exported so the relationships can be driven directly: `getCaps` deliberately
  * accepts no caller-supplied table (R2-03), so this is the only way to test the
  * checks against a bad one without reintroducing that seam. */
+/** A zone name the runtime cannot resolve is not a zone. Validated on every
+ * lookup rather than once at import, because a cap that cannot be bucketed must
+ * refuse spend at the moment spend is attempted. */
+export function assertUsableZone(zone: unknown, clientId: string): asserts zone is string {
+  if (typeof zone !== "string" || zone.length === 0) {
+    throw new CapError(`no accounting timezone configured for client "${clientId}" — spend is forbidden`);
+  }
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: zone });
+  } catch {
+    throw new CapError(`"${zone}" is not a resolvable IANA timezone for client "${clientId}" — spend is forbidden`);
+  }
+}
+
 export function assertCapsCoherent(caps: ClientCaps, clientId: string): void {
   if (caps.hardDailyAdSpendUsd < caps.dailyAdSpendUsd) {
     throw new CapError(`hardDailyAdSpendUsd is below the daily pacing target for "${clientId}"`);
@@ -171,6 +209,9 @@ export function assertCapsUsable(caps: ClientCaps, clientId?: string): void {
 export interface AiCaps {
   readonly dailyUsd: number;
   readonly monthlyUsd: number;
+  /** The zone the day and month buckets are computed in. Travels WITH the
+   * ceilings so a caller cannot supply one without the other. */
+  readonly timeZone: string;
 }
 
 export function effectiveAiCapsUsd(
@@ -192,7 +233,7 @@ export function effectiveAiCapsUsd(
   // became incoherent through a path that only ever tightens, which is exactly
   // the direction nobody inspects. The tighter of the two always wins.
   const dailyUsd = Math.min(narrow(caps.dailyAiSpendUsd, entry?.dailyAiSpendUsd, "narrowed dailyAiSpendUsd"), monthlyUsd);
-  return Object.freeze({ dailyUsd, monthlyUsd });
+  return Object.freeze({ dailyUsd, monthlyUsd, timeZone: caps.ianaTimeZone });
 }
 
 export { CAPS_TABLE };

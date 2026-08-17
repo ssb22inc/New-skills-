@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
-import type { ClientCaps } from "@fullburn/config/caps";
+import { effectiveAiCapsUsd, type ClientCaps } from "@fullburn/config/caps";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { isClass2 } from "../scripts/gate-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
@@ -12,7 +12,7 @@ import { computeGrades, type MetricSnapshot } from "../src/grade-registry.ts";
 import { MemorySpendMeter, type SpendMeter } from "../src/spend-meter.ts";
 import { MemoryTraceSink, TraceContext } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
 
 /** ADVERSARY PHASE 0 — Phase B lock tests.
  *
@@ -23,7 +23,7 @@ import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock } from "./helpers.ts";
  * wall-clock or network dependency. */
 
 const LOW_AI_CAP: Readonly<Record<string, ClientCaps>> = {
-  [TEST_CLIENT]: { dailyAdSpendUsd: 66, hardDailyAdSpendUsd: 75, totalAdSpendUsd: 2000, dailyAiSpendUsd: 0.05, monthlyAiSpendUsd: 0.05, humanSignoff: "test-fixture-signoff" },
+  [TEST_CLIENT]: { ianaTimeZone: "UTC", dailyAdSpendUsd: 66, hardDailyAdSpendUsd: 75, totalAdSpendUsd: 2000, dailyAiSpendUsd: 0.05, monthlyAiSpendUsd: 0.05, humanSignoff: "test-fixture-signoff" },
 };
 
 /** Deterministic "slow" transport: yields the microtask queue a fixed number of
@@ -50,7 +50,6 @@ function depsWith(meter: SpendMeter, transport: GatewayTransport, sink = new Mem
       sink,
       gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/test-account/fullburn/",
       now: () => 1_755_000_000_000,
-      capsTable: LOW_AI_CAP,
       bindings: ROLE_BINDINGS,
     },
     sink,
@@ -64,9 +63,13 @@ const req = (i: number) => ({
   trace: new TraceContext(`adv-${i}`, TEST_CLIENT),
 });
 
+/** The narrowed ceilings these findings drive, resolved by the METER — a
+ * caller cannot pass ceilings to reserve() any more (R7-06). */
+const lowCaps = () => effectiveAiCapsUsd(TEST_CLIENT, LOW_AI_CAP);
+
 describe("FINDING F1 (money loss) — the AI cap check races the meter", () => {
   it("concurrent calls must not collectively exceed the daily AI cap", async () => {
-    const meter = new MemorySpendMeter(testClock);
+    const meter = new MemorySpendMeter(testClock, lowCaps);
     const transport = new YieldingTransport();
     const { deps } = depsWith(meter, transport);
 
@@ -87,7 +90,7 @@ describe("FINDING F2 (money loss) — a non-numeric meter reading fails OPEN", (
   ];
   for (const [label, reading] of cases) {
     it(`a meter returning ${label} must refuse spend, not permit it`, async () => {
-      const meter: SpendMeter = { todayUsd: () => reading, record: () => {} };
+      const meter: SpendMeter = { todayUsd: () => reading };
       const { deps } = depsWith(meter, new YieldingTransport());
       // `NaN > cap` and `undefined + n > cap` are both false → the guard passes.
       await expect(llm(deps, req(0))).rejects.toThrow();
@@ -97,7 +100,7 @@ describe("FINDING F2 (money loss) — a non-numeric meter reading fails OPEN", (
 
 describe("FINDING F3 (money loss) — billable calls that fail after the transport are never metered", () => {
   it("a provider call that returns schema-invalid output still consumes the cap", async () => {
-    const meter = new MemorySpendMeter(testClock);
+    const meter = new MemorySpendMeter(testClock, lowCaps);
     const transport = new YieldingTransport();
     transport.response = { not_the_schema: true }; // provider billed us; validation rejects
     const { deps } = depsWith(meter, transport);
@@ -189,7 +192,7 @@ describe("FINDING F6 (data lies) — grades resolve through the prototype chain"
 
 describe("FINDING F7 (isolation) — the vault secret escapes through a transport error", () => {
   it("no error leaving llm() may carry the secret, whatever the transport puts in its message", async () => {
-    const meter = new MemorySpendMeter(testClock);
+    const meter = new MemorySpendMeter(testClock, lowCaps);
     const leakyTransport: GatewayTransport = {
       async post(_url, _body, headers) {
         // Realistic: HTTP clients commonly attach request context to errors.
@@ -207,7 +210,7 @@ describe("FINDING F7 (isolation) — the vault secret escapes through a transpor
 
 describe("FINDING F8 (observability, Law 11) — failed calls emit no trace at all", () => {
   it("a call that reaches the provider and then fails must still be traced", async () => {
-    const { deps, sink } = depsWith(new MemorySpendMeter(testClock), {
+    const { deps, sink } = depsWith(new MemorySpendMeter(testClock, lowCaps), {
       async post() {
         throw new Error("upstream 500");
       },
@@ -235,7 +238,7 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
   it("routes to the open-source gateway path after rebinding, same llm() call site", async () => {
     // Encoded because the existing eval-rebind test rebinds qwen-72b → qwen-72b,
     // which is a no-op and does not demonstrate AC 2's frontier → open-source move.
-    const { deps, transport } = makeDeps();
+    const { deps, transport } = makeDeps({ capsTable: LOW_AI_CAP });
     const frontier = { ...ROLE_BINDINGS, "genome-tagger": "gpt-5" };
     transport.response = { hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" };
     await llm({ ...deps, bindings: frontier }, {

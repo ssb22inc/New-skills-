@@ -16,7 +16,7 @@ import { checkClass2Approvals, checkReportsAppendOnly, isClass2 } from "../scrip
 import { parseNameStatus, parseNameStatusZ } from "../scripts/diff-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../scripts/scan-lib.mjs";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
 
 /** LOCK TESTS — r5. Each was written against a specific one-line revert and
  * verified to fail with that revert applied. Covers the r3 findings this pass
@@ -488,11 +488,10 @@ describe("redaction — the shapes that got through (A1, A2, C2)", () => {
   // MUTATION: stop redacting CapError / MeterUnavailableError messages.
   it("a collaborator's error message is redacted before it is thrown or traced (A1)", async () => {
     const { deps } = makeDeps();
-    const leaky = new MemorySpendMeter(testClock);
+    const leaky = new MemorySpendMeter(testClock, capsOf(25, 25));
     const meter = {
       todayUsd: (c: string) => leaky.todayUsd(c),
       reservedUsd: (c: string) => leaky.reservedUsd(c),
-      record: (c: string, u: number) => leaky.record(c, u),
       release: (r: never) => leaky.release(r),
       settle: (r: never) => leaky.settle(r),
       reserve: () => {

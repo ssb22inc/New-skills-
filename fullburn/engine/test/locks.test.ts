@@ -8,7 +8,7 @@ import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 import { TraceContext } from "../src/tracing.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { checkAdversaryReport, checkClass2Approvals, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
 
 /** LOCK TESTS.
  *
@@ -27,13 +27,12 @@ describe("money — a request that left the building is never released (M-01, M-
   // MUTATION: move `departed = true` back to after `meter.settle(...)`, or drop
   // `!departed` from the release condition in the outer catch.
   it("a settle() that throws must NOT return the headroom for a billed request", async () => {
-    const real = new MemorySpendMeter(testClock);
+    const real = new MemorySpendMeter(testClock, fixedCaps);
     let released = 0;
     const brittle: SpendMeter = {
       todayUsd: (c) => real.todayUsd(c),
       reservedUsd: (c) => real.reservedUsd(c),
-      record: (c, u) => real.record(c, u),
-      reserve: (c, a, cap) => real.reserve(c, a, cap),
+      reserve: (c: string, a: number) => real.reserve(c, a),
       settle: () => {
         throw new Error("storage put failed");
       },
@@ -67,13 +66,12 @@ describe("money — a request that left the building is never released (M-01, M-
 
   // MUTATION: same as above, on the transport-error leg.
   it("a transport error followed by a failing settle also keeps the charge", async () => {
-    const real = new MemorySpendMeter(testClock);
+    const real = new MemorySpendMeter(testClock, fixedCaps);
     let released = 0;
     const brittle: SpendMeter = {
       todayUsd: (c) => real.todayUsd(c),
       reservedUsd: (c) => real.reservedUsd(c),
-      record: (c, u) => real.record(c, u),
-      reserve: (c, a, cap) => real.reserve(c, a, cap),
+      reserve: (c: string, a: number) => real.reserve(c, a),
       settle: () => {
         throw new Error("storage put failed");
       },
@@ -132,14 +130,14 @@ describe("money — a DAILY cap has a day (M-03)", () => {
   // The month is given room here deliberately. With monthlyUsd equal to the
   // daily figure the month binds on day one and this test would pass whether or
   // not the day key exists — green for the wrong reason.
-  const CEILINGS = { dailyUsd: 5, monthlyUsd: 100 };
+  const CEILINGS = capsOf(5, 100);
   it("the ceiling rolls over: a client that spent today can spend tomorrow", () => {
     let now = Date.parse("2026-08-15T12:00:00Z");
-    const m = new MemorySpendMeter(() => now);
-    m.settle(m.reserve("c", 5, CEILINGS));
-    expect(() => m.reserve("c", 1, CEILINGS)).toThrow(CapError); // spent for today
+    const m = new MemorySpendMeter(() => now, CEILINGS);
+    m.settle(m.reserve("c", 5));
+    expect(() => m.reserve("c", 1)).toThrow(CapError); // spent for today
     now = Date.parse("2026-08-16T00:30:00Z");
-    expect(() => m.reserve("c", 5, CEILINGS)).not.toThrow(); // new day, new ceiling
+    expect(() => m.reserve("c", 5)).not.toThrow(); // new day, new ceiling
     expect(m.todayUsd("c")).toBe(0);
     // …but the MONTH remembers: the day ceiling resetting is not a fresh month.
     expect(m.monthUsd("c")).toBe(5);
@@ -147,10 +145,10 @@ describe("money — a DAILY cap has a day (M-03)", () => {
 
   it("within one day the ceiling still binds", () => {
     let now = Date.parse("2026-08-15T00:10:00Z");
-    const m = new MemorySpendMeter(() => now);
-    m.settle(m.reserve("c", 5, CEILINGS));
+    const m = new MemorySpendMeter(() => now, CEILINGS);
+    m.settle(m.reserve("c", 5));
     now = Date.parse("2026-08-15T23:50:00Z");
-    expect(() => m.reserve("c", 1, CEILINGS)).toThrow(CapError);
+    expect(() => m.reserve("c", 1)).toThrow(CapError);
   });
 
   /** MUTATION: drop the month period from reserve/settle, or check only the day.
@@ -159,25 +157,24 @@ describe("money — a DAILY cap has a day (M-03)", () => {
    * client spend $310 against a $200 approval. */
   it("the monthly ceiling binds across days even when every single day is legal", () => {
     let now = Date.parse("2026-08-01T12:00:00Z");
-    const m = new MemorySpendMeter(() => now);
-    const caps = { dailyUsd: 10, monthlyUsd: 20 };
+    const m = new MemorySpendMeter(() => now, capsOf(10, 20));
     for (const day of ["01", "02"]) {
       now = Date.parse(`2026-08-${day}T12:00:00Z`);
-      m.settle(m.reserve("c", 10, caps)); // each day is exactly at its own ceiling
+      m.settle(m.reserve("c", 10)); // each day is exactly at its own ceiling
     }
     expect(m.monthUsd("c")).toBe(20);
     now = Date.parse("2026-08-03T12:00:00Z");
     // A perfectly legal DAY that breaches the MONTH.
-    expect(() => m.reserve("c", 1, caps)).toThrow(/monthly cap/);
+    expect(() => m.reserve("c", 1)).toThrow(/monthly cap/);
     // And the month rolls over on its own boundary, not the day's.
     now = Date.parse("2026-09-01T00:30:00Z");
-    expect(() => m.reserve("c", 10, caps)).not.toThrow();
+    expect(() => m.reserve("c", 10)).not.toThrow();
   });
 
   it("a reservation settles against the day it was taken, not the day it lands", () => {
     let now = Date.parse("2026-08-15T23:59:59Z");
-    const m = new MemorySpendMeter(() => now);
-    const r = m.reserve("c", 1, CEILINGS);
+    const m = new MemorySpendMeter(() => now, CEILINGS);
+    const r = m.reserve("c", 1);
     now = Date.parse("2026-08-16T00:00:01Z");
     m.settle(r);
     expect(m.todayUsd("c")).toBe(0); // the new day is clean
@@ -189,8 +186,8 @@ describe("money — a DAILY cap has a day (M-03)", () => {
 describe("money — isolation guards on the ledger (H-14, H-15)", () => {
   // MUTATION: remove the `open.clientId !== reservation.clientId` check in #close.
   it("one tenant cannot close another tenant's reservation", () => {
-    const m = new MemorySpendMeter(testClock);
-    const a = m.reserve("tenant-a", 1, { dailyUsd: 5, monthlyUsd: 5 });
+    const m = new MemorySpendMeter(testClock, fixedCaps);
+    const a = m.reserve("tenant-a", 1);
     m.settle({ ...a, clientId: "tenant-b" });
     expect(m.reservedUsd("tenant-a")).toBe(1); // still held by A
     expect(m.todayUsd("tenant-b")).toBe(0); // and B was not credited
@@ -359,7 +356,6 @@ describe("the meter contract llm() depends on (fail closed)", () => {
       todayUsd: () => 0,
       monthUsd: () => 0,
       reservedUsd: () => 0,
-      record: () => {},
       reserve: () => ({ id: "r1", clientId: TEST_CLIENT, amountUsd: 0 }),
       settle: () => {},
       release: () => {},
@@ -382,7 +378,7 @@ describe("the meter contract llm() depends on (fail closed)", () => {
 
   it("a legacy meter with none of them is refused outright", async () => {
     const { deps } = makeDeps();
-    const legacy = { todayUsd: () => 0, record: () => {} } as unknown as SpendMeter;
+    const legacy = { todayUsd: () => 0 } as unknown as SpendMeter;
     await expect(
       llm({ ...deps, meter: legacy, bindings: ROLE_BINDINGS }, {
         role: "hello-world",

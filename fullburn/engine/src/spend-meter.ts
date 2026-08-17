@@ -83,11 +83,22 @@ export class SpendReservation {
  * check even with a direct import of the class. */
 const RESERVATION_BRAND = Symbol("fullburn.reservation");
 
-/** The two ceilings every reservation is checked against. */
+/** The ceilings and the zone they are bucketed in. Resolved by the meter from
+ * the frozen caps table — NEVER supplied by a money-path caller.
+ *
+ * `reserve()` used to accept these as arguments, so any direct caller could
+ * hand itself $1,000/$1,000 for a real client. The `llm()` path passed narrowed
+ * protected caps, but the meter enforced nothing of its own: "no caller does
+ * that today" is not a safety property (adversary finding R7-06). */
 export interface SpendCeilings {
   readonly dailyUsd: number;
   readonly monthlyUsd: number;
+  readonly timeZone: string;
 }
+
+/** Resolves a client's ceilings. The meter holds one of these; callers do not
+ * get to pass ceilings in. */
+export type CapsResolver = (clientId: string) => SpendCeilings;
 
 export interface SpendMeter {
   /** Committed spend today for the client, USD. Throws if unavailable. */
@@ -102,14 +113,11 @@ export interface SpendMeter {
    * N-09). Optional in the type only so meters written against the pre-F1
    * interface still compile; `llm()` refuses a meter that lacks it. */
   reservedUsd?(clientId: string): number;
-  /** Legacy direct write that performs NO CAP CHECK.
-   *
-   * It has no caller today, but it is on the interface `spend-meter.ts` tells
-   * the Phase 5/6 ad-spend path to "adopt unchanged", and it moves money
-   * (adversary finding R5-09). Stated here rather than left to be discovered:
-   * anything routing real spend through `record()` is bypassing Law 2. Use
-   * reserve/settle. */
-  record(clientId: string, usd: number): void;
+  // `record()` IS GONE. It wrote committed day and month values with no cap
+  // lookup, no sign-off check and no ceiling check — an unrestricted money-write
+  // primitive on the interface this file told the Phase 5/6 ad-spend path to
+  // "adopt unchanged". Incompatible with Law 2 whether or not anything calls it
+  // today (adversary finding R7-06). Spend moves through reserve/settle only.
   /** Committed spend this month for the client, USD. The month is the real
    * exposure ceiling; the day is a sub-limit that stops a runaway loop
    * consuming it in an hour. */
@@ -127,9 +135,16 @@ export interface SpendMeter {
    * Optional in the type only so that meters written against the pre-F1
    * interface still compile; `llm()` refuses any meter that does not implement
    * it, so absence fails closed rather than silently skipping the cap. */
-  reserve?(clientId: string, amountUsd: number, caps: SpendCeilings): SpendReservation;
-  /** Commit a reservation: the request left the building and is billable. */
-  settle?(reservation: SpendReservation): void;
+  reserve?(clientId: string, amountUsd: number): SpendReservation;
+  /** Commit a reservation: the request left the building and is billable.
+   *
+   * `actualUsd` is the provider's real charge when the transport can produce
+   * one. When it cannot, the reserved ESTIMATE is committed and the number is
+   * trued up by daily reconciliation against the provider's usage receipt —
+   * the human's ruling on adversary finding R7-05. The live figure is an
+   * estimate and the ledger says so; it is not, and does not claim to be, a
+   * measured charge. */
+  settle?(reservation: SpendReservation, actualUsd?: number): void;
   /** Release a reservation for a request that never left the building.
    *
    * MUST NOT THROW, and must be idempotent for a stale or foreign handle.
@@ -152,16 +167,28 @@ export function assertUsableAmount(n: unknown, label: string): asserts n is numb
   }
 }
 
-/** UTC day key. Client-LOCAL rollover needs the market registry's locale clock
- * (§2.5), which is per-client and unset until onboarding — tracked as a ledger
- * item rather than approximated here. */
-export function utcDayKey(nowMs: number): string {
-  return new Date(nowMs).toISOString().slice(0, 10);
+/** Day key in the CLIENT'S accounting zone, as YYYY-MM-DD.
+ *
+ * This was UTC while `ClientCaps.dailyAiSpendUsd` promised a client-local day.
+ * $10 at 23:59Z and $10 at 00:01Z were two ledger days and ONE New York day, so
+ * $20 landed under a $10/day cap (adversary finding R7-02). The zone comes from
+ * the frozen caps table; `en-CA` yields ISO-ordered parts, and the IANA zone
+ * handles its own daylight-saving transitions. */
+export function zoneDayKey(nowMs: number, timeZone: string): string {
+  if (!Number.isFinite(nowMs)) {
+    throw new MeterUnavailableError("clock returned a non-finite instant — refusing spend (fail closed)");
+  }
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(nowMs);
 }
 
-/** UTC month key, same caveat as the day. */
-export function utcMonthKey(nowMs: number): string {
-  return new Date(nowMs).toISOString().slice(0, 7);
+/** Month key in the same zone. A month boundary is a local midnight too. */
+export function zoneMonthKey(nowMs: number, timeZone: string): string {
+  return zoneDayKey(nowMs, timeZone).slice(0, 7);
 }
 
 export class MemorySpendMeter implements SpendMeter {
@@ -191,6 +218,14 @@ export class MemorySpendMeter implements SpendMeter {
   #available = true;
   #seq = 0;
   #now: () => number;
+  #capsFor: CapsResolver;
+  /** Highest period key seen per client. The clock is injected, so a caller
+   * that can move it backwards can re-enter an older period that still has
+   * headroom, and one that jumps forward mints a fresh ceiling on demand
+   * (adversary finding R7-03). Backwards movement is refused outright; forward
+   * movement cannot be distinguished from time passing without a trusted time
+   * source, which is disclosed rather than pretended away. */
+  #highWater = new Map<string, string>();
 
   /** A DAILY cap needs a day (adversary finding M-03). Without one, a client
    * that spent its ceiling was refused forever — a $5/day budget was really
@@ -206,11 +241,17 @@ export class MemorySpendMeter implements SpendMeter {
    *
    * Persistence across a restart is a Durable Object concern and is NOT solved
    * here: a fresh meter still starts a fresh day (ledger L14). */
-  constructor(now: () => number) {
+  /** The caps resolver is REQUIRED and is the meter's own, not the caller's.
+   * The clock is required for the same reason it has been since N-01. */
+  constructor(now: () => number, capsFor: CapsResolver) {
     if (typeof now !== "function") {
       throw new MeterUnavailableError("MemorySpendMeter requires a clock — refusing spend (fail closed)");
     }
+    if (typeof capsFor !== "function") {
+      throw new MeterUnavailableError("MemorySpendMeter requires a caps resolver — refusing spend (fail closed)");
+    }
     this.#now = now;
+    this.#capsFor = capsFor;
   }
 
   setAvailable(v: boolean): void {
@@ -222,16 +263,34 @@ export class MemorySpendMeter implements SpendMeter {
    * September month, one tick apart (adversary finding R5-08). The window is a
    * tick per month, but the month ledger exists precisely to be right across
    * that boundary. */
-  #periods(clientId: string, nowMs = this.#now()): { day: string; month: string } {
-    return { day: `d:${utcDayKey(nowMs)}|${clientId}`, month: `m:${utcMonthKey(nowMs)}|${clientId}` };
+  #periods(clientId: string, timeZone: string, nowMs = this.#now()): { day: string; month: string } {
+    return {
+      day: `d:${zoneDayKey(nowMs, timeZone)}|${clientId}`,
+      month: `m:${zoneMonthKey(nowMs, timeZone)}|${clientId}`,
+    };
+  }
+
+  /** Refuses a clock that has moved backwards into an already-closed day. */
+  #assertForward(clientId: string, day: string): void {
+    const seen = this.#highWater.get(clientId);
+    if (seen !== undefined && day < seen) {
+      throw new MeterUnavailableError(
+        `clock moved backwards into a closed accounting day for "${clientId}" — refusing spend (fail closed)`,
+      );
+    }
+    if (seen === undefined || day > seen) this.#highWater.set(clientId, day);
+  }
+
+  #zoneOf(clientId: string): string {
+    return this.#capsFor(clientId).timeZone;
   }
 
   #key(clientId: string): string {
-    return this.#periods(clientId).day;
+    return this.#periods(clientId, this.#zoneOf(clientId)).day;
   }
 
   #monthKey(clientId: string): string {
-    return this.#periods(clientId).month;
+    return this.#periods(clientId, this.#zoneOf(clientId)).month;
   }
 
   #assertAvailable(): void {
@@ -270,20 +329,24 @@ export class MemorySpendMeter implements SpendMeter {
     return fromMicros(micros);
   }
 
-  reserve(clientId: string, amountUsd: number, caps: SpendCeilings): SpendReservation {
+  reserve(clientId: string, amountUsd: number): SpendReservation {
     this.#assertAvailable();
     if (typeof clientId !== "string" || clientId.length === 0) {
       throw new MeterUnavailableError("reserve requires a clientId");
     }
+    // The ceilings are the METER'S, resolved from the frozen table. A caller
+    // cannot supply, widen, or omit them (R7-06).
+    const caps = this.#capsFor(clientId);
     if (caps === null || typeof caps !== "object") {
-      throw new MeterUnavailableError("reserve requires both ceilings — refusing spend (fail closed)");
+      throw new MeterUnavailableError("caps resolver returned no ceilings — refusing spend (fail closed)");
     }
     const amountMicros = toMicros(amountUsd, "reservation amount");
     const dailyCapMicros = toMicros(caps.dailyUsd, "daily cap");
     const monthlyCapMicros = toMicros(caps.monthlyUsd, "monthly cap");
     if (amountMicros <= 0) throw new MeterUnavailableError("reservation amount must be positive");
 
-    const { day, month } = this.#periods(clientId);
+    const { day, month } = this.#periods(clientId, caps.timeZone);
+    this.#assertForward(clientId, day);
 
     // BOTH ceilings are read, checked and written inside one synchronous block.
     // Checking them in sequence with any await between would reopen the race
@@ -342,12 +405,19 @@ export class MemorySpendMeter implements SpendMeter {
     return open;
   }
 
-  settle(reservation: SpendReservation): void {
+  /** Commits the reservation. `actualUsd`, when the transport can produce the
+   * provider's real charge, is committed INSTEAD of the estimate — but never
+   * below the reserved amount is not the rule: the actual is authoritative in
+   * both directions, and the daily reconciliation (R7-05) is what catches a
+   * provider that reports something implausible. When no actual is available
+   * the estimate is committed and the ledger says it is an estimate. */
+  settle(reservation: SpendReservation, actualUsd?: number): void {
     const open = this.#close(reservation);
     if (open === null) return;
+    const micros = actualUsd === undefined ? open.micros : toMicros(actualUsd, "actual provider charge");
     for (const period of [open.day, open.month]) {
       const committed = this.#read(this.#committedMicros, period, "committed spend");
-      this.#committedMicros.set(period, committed + open.micros);
+      this.#committedMicros.set(period, committed + micros);
     }
   }
 
@@ -355,13 +425,4 @@ export class MemorySpendMeter implements SpendMeter {
     this.#close(reservation);
   }
 
-  record(clientId: string, usd: number): void {
-    this.#assertAvailable();
-    const micros = toMicros(usd, "recorded amount");
-    const { day, month } = this.#periods(clientId);
-    for (const period of [day, month]) {
-      const committed = this.#read(this.#committedMicros, period, "committed spend");
-      this.#committedMicros.set(period, committed + micros);
-    }
-  }
 }
