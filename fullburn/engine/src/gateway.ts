@@ -1,7 +1,13 @@
-import { CapError, effectiveAiCapsUsd } from "@fullburn/config/caps";
+import { CapError } from "@fullburn/config/caps";
 import { MODELS, ROLE_CARDS, ownEntry, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
 import { type ClientVault } from "./vault.ts";
-import { MeterUnavailableError, assertUsableAmount, type SpendMeter, type SpendReservation } from "./spend-meter.ts";
+import {
+  MeterUnavailableError,
+  assertUsableAmount,
+  isFrozenCapsMeter,
+  type SpendMeter,
+  type SpendReservation,
+} from "./spend-meter.ts";
 import { redactError, redactInPlace, redactValue } from "./redact.ts";
 import { TraceContext, TraceEmitError, emitOrFail, type TraceEvent, type TraceSink } from "./tracing.ts";
 
@@ -30,17 +36,17 @@ export interface LlmDeps {
   /** e.g. https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/ — env-provided (H2). */
   readonly gatewayBaseUrl: string;
   readonly now: () => number;
-  /** NARROWING ONLY (R2-03). May lower this client's AI ceiling; can never
-   * raise one, invent a client, or supply a sign-off — those come from the
-   * frozen table in config/caps.ts and nowhere else. */
-  /** Narrowing-only cap overrides. BOTH ceilings, because both are enforced:
-   * typing only the daily one meant an inline literal narrowing the month was a
-   * compile error, so the declared money interface said one cap where two bind
-   * (adversary finding R5-09). It worked at all only because the one test doing
-   * it passed a named `ClientCaps` const. */
-  readonly capsTable?: Readonly<
-    Record<string, { readonly dailyAiSpendUsd?: number; readonly monthlyAiSpendUsd?: number }>
-  >;
+  // `capsTable` IS GONE FROM HERE. It was the narrowing-only override, and
+  // `llm()` called `effectiveAiCapsUsd(clientId, capsTable)` with it — then
+  // DISCARDED the result, because R7-06 had moved the ceilings into the meter.
+  // A caller-supplied meter with a wide resolver therefore set the only ceiling
+  // that bound, and the surviving call was a guard nothing could fail: deleting
+  // it left all 277 tests green, because the test that appeared to cover it was
+  // caught by the meter's own duplicate check (adversary finding R8-01).
+  //
+  // The narrowing table now belongs to the meter, which is where the ceiling is
+  // enforced, and `llm()` accepts only a meter whose ceilings provably come
+  // from the frozen table. One place, one owner, no second copy to disagree.
 }
 
 export interface LlmRequest {
@@ -83,8 +89,22 @@ export function validateOutput(schema: OutputSchema, output: unknown): void {
 }
 
 /** A meter that cannot reserve cannot enforce a cap under concurrency, so it is
- * not usable on a money path at all (F1/F2 fail-closed). */
-function requireReservingMeter(meter: SpendMeter): Required<Pick<SpendMeter, "reserve" | "settle" | "release">> {
+ * not usable on a money path at all (F1/F2 fail-closed).
+ *
+ * EXPORTED SO IT CAN BE DRIVEN DIRECTLY, and the reason is a consequence of
+ * R8-01 worth stating. `llm()` now refuses any meter that is not a
+ * `FrozenCapsSpendMeter`, and every such meter inherits all four methods from
+ * `MemorySpendMeter.prototype` — so nothing reaching this function can fail it,
+ * and dropping the `reservedUsd` requirement left the whole suite green where
+ * it had been caught for three rounds. The tests that used to reach it passed
+ * hand-built meter objects, which the brand refuses one line earlier.
+ *
+ * The contract is still real for any future implementation of the interface —
+ * `SpendMeter` declares all four optional so pre-F1 meters compile — so this is
+ * unit-tested rather than deleted. What it is NOT is a live guard on the
+ * `llm()` path; ledger L28 records that honestly instead of letting a mutation
+ * entry imply otherwise. */
+export function requireReservingMeter(meter: SpendMeter): Required<Pick<SpendMeter, "reserve" | "settle" | "release">> {
   if (
     typeof meter.reserve !== "function" || typeof meter.settle !== "function" ||
     typeof meter.release !== "function" || typeof meter.reservedUsd !== "function"
@@ -200,8 +220,19 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // unsigned client must refuse before anything else happens — but the
     // CEILINGS the meter enforces are the meter's own (R7-06). This call is the
     // gate on usability, not the source of the numbers.
-    effectiveAiCapsUsd(req.clientId, deps.capsTable);
     assertUsableAmount(card.costBudgetUsdPerCall, "role cost budget");
+    // LAW 2, STRUCTURALLY. The ceiling this call is checked against must come
+    // from the frozen caps table, and the only way to know that is for the
+    // meter to have no way of getting it from anywhere else. A meter built
+    // with an arbitrary resolver is refused here — not compared against the
+    // frozen table and refused on mismatch, which is a check, and checks on
+    // this money path have now been bypassed twice (R7-06, then R8-01).
+    if (!isFrozenCapsMeter(deps.meter)) {
+      throw new MeterUnavailableError(
+        "spend meter is not bound to the frozen caps table — refusing spend (fail closed): " +
+          "ceilings come from config/caps.ts by construction (Law 2, adversary finding R8-01)",
+      );
+    }
     meter = requireReservingMeter(deps.meter);
 
     // ATOMIC: read + cap-check + write, no await in between.

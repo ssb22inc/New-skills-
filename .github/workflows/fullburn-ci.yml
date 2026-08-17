@@ -5,9 +5,15 @@ name: fullburn-ci
 on:
   push:
     branches: ["**"]
-    paths: ["fullburn/**", ".github/workflows/fullburn-ci.yml"]
+    # EVERY Class-2 path, not just fullburn/**. `.github/**` is a Class-2
+    # pattern, and this filter listed only the workflow file — so a PR touching
+    # only `.github/CODEOWNERS` triggered no workflow, ran no gate, and never
+    # executed the test that guards it. The artifact created to make "human-only"
+    # real could be deleted by a diff that ran nothing (adversary finding
+    # R8-04b). `locks-r7` now holds this filter to CLASS2_PATTERNS.
+    paths: ["fullburn/**", ".github/**"]
   pull_request:
-    paths: ["fullburn/**", ".github/workflows/fullburn-ci.yml"]
+    paths: ["fullburn/**", ".github/**"]
 
 jobs:
   verify:
@@ -48,6 +54,33 @@ jobs:
         run: npm run e2e
       - name: Leak + structural scan
         run: node engine/scripts/leak-check.mjs ..
+
+  # THE ACCEPTANCE BAR, AS A STAGE. `npm run mutate` is how this project
+  # enforces "a fix whose one-line revert leaves the suite green is not
+  # protected by anything" — the lesson of five consecutive rounds — and it
+  # appeared in package.json and in no CI job. It was enforced only when a human
+  # or an adversary ran it by hand, so between rounds a refactor could strand
+  # every entry naming a moved line (adversary finding R8-09).
+  #
+  # Its own limit, stated rather than hidden: it runs `vitest` only, so a fix
+  # protected by typecheck, leak-check, the gate CLIs or Playwright cannot be
+  # represented in it. Those stages above are that half.
+  #
+  # Separate job: it runs the full suite once per entry, so it is slow and
+  # should not delay the fast feedback the verify job gives.
+  mutation-harness:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fullburn
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Mutation harness (every lock must bite)
+        run: npm run mutate
 
   adversary-gate:
     if: github.event_name == 'pull_request'

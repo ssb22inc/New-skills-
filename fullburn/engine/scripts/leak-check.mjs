@@ -41,6 +41,15 @@ export function* walk(dir) {
  * — ran the real scan. The two disagreed, and the local one was the reassuring
  * one. A scan that cannot see its own scope must say so, not pass. */
 function assertScannableRoot(repoRoot) {
+  // A ROOT THAT DOES NOT EXIST IS AN ERROR, NOT AN EMPTY RESULT. This guard was
+  // added one branch too late: `scanTree` returned `[]` for a missing root
+  // before reaching it, so `leak-check /nonexistent-root` printed "clean" and
+  // exited 0 (adversary finding R8-07) — the same class of defect the guard was
+  // written to fix. A typo in a CI argument, a renamed checkout directory or a
+  // changed working-directory all produce a green scan over zero files.
+  if (!existsSync(repoRoot)) {
+    throw new Error(`leak-check was given a root that does not exist: ${resolve(repoRoot)} — refusing (fail closed)`);
+  }
   if (!existsSync(join(repoRoot, "fullburn"))) {
     throw new Error(
       `leak-check must be given the REPOSITORY root (the directory containing fullburn/), not ${resolve(repoRoot)} — ` +
@@ -51,7 +60,6 @@ function assertScannableRoot(repoRoot) {
 
 export function scanTree(repoRoot) {
   const findings = [];
-  if (!existsSync(repoRoot)) return findings;
   assertScannableRoot(repoRoot);
   for (const file of walk(repoRoot)) {
     const rel = relative(repoRoot, file);

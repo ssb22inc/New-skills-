@@ -134,6 +134,12 @@ describe("structural rules (Law 1, 6, 11, 18) — code only", () => {
     // The fullburn/ workspace is NOT the repository root: handed it, every
     // path-scoped rule silently matches nothing.
     expect(() => scanTree(`${repoRoot}/fullburn`)).toThrow(/REPOSITORY root/);
+    // A root that does not exist is an ERROR, not an empty result. The guard
+    // sat one branch too late and `leak-check /nonexistent-root` printed
+    // "clean" — the same defect it was written to fix (R8-07).
+    expect(() => scanTree("/nonexistent-root-r8-07"), "a missing root scanned zero files and passed").toThrow(
+      /does not exist/,
+    );
     // And the documented local command must be the one CI runs.
     const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
     expect(pkg.scripts["leak-check"], "the local scan no longer matches CI's").toContain("leak-check.mjs ..");

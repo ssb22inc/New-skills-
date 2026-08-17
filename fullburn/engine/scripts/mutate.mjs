@@ -15,9 +15,33 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 /** The fullburn workspace root, two levels up from engine/scripts/. */
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
+/** The repository root. Some Class-2 artifacts — CODEOWNERS, the CI workflow —
+ * live outside the workspace, and a fix that lives there needs an entry here
+ * just as much: R8-04 was two of them. */
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
+const resolveEntry = (file) => `${file.startsWith(".github/") ? REPO_ROOT : ROOT}/${file}`;
+
+/** The harness's verdict, as a pure function so it can be driven directly.
+ *
+ * Extracted because a test that greps this file for the guard's source text
+ * matches the harness's OWN mutation entry as readily as the guard — it passed
+ * with the guard reverted. A behaviour is locked by calling it, not by reading
+ * the line that implements it. */
+export function harnessVerdict(survived, notFound) {
+  if (survived > 0 || notFound > 0) {
+    return {
+      ok: false,
+      reason:
+        `MUTATION HARNESS FAIL: ${survived} unprotected fix(es), ${notFound} stale entr(ies). ` +
+        "A fix whose one-line revert leaves the suite green is not protected by anything.",
+    };
+  }
+  return { ok: true, reason: "every lock bites" };
+}
 
 const MUTATIONS = [
   // ---- r4 findings ----
@@ -72,9 +96,9 @@ const MUTATIONS = [
     `    try {
       output = await deps.transport.post(`],
   ["R7-04 only a typed pre-dispatch releases", "engine/src/gateway.ts", "      if (err instanceof PreDispatchError) {", "      if (err instanceof Error) {"],
-  // R7-05: the provider's actual charge is committed when the transport can
-  // produce it; the mutation commits the estimate unconditionally.
-  ["R7-05 actual charge committed", "engine/src/spend-meter.ts", "    const micros = actualUsd === undefined ? open.micros : toMicros(actualUsd, \"actual provider charge\");", "    const micros = open.micros; void actualUsd;"],
+  // R7-05's `actualUsd` parameter was REMOVED by R8-02, so its entry is gone
+  // with it. Its successors are the R8-02 pair below: the mutation now restores
+  // the parameter, which is the direction the defect actually came from.
   // R7-07: the in-repo half of the identity lock. The out-of-repo half —
   // branch protection + CODEOWNERS — is not mutable from here and is disclosed
   // in ledger L27 instead.
@@ -99,6 +123,56 @@ const MUTATIONS = [
     throw new GradeRegistryError(
       "enforcement requires grades from computeGrades`],
   ["R7-10 published report provenance", "engine/src/grade-registry.ts", "    throw new GradeRegistryError(\"publishGradeReport requires grades from computeGrades (§12, Law 10)\");", "    void 0;"],
+  // ---- r8 findings (the round that reviewed r7's fixes) ----
+  // R8-01: R7-06 moved the ceiling seam onto llm()'s public path rather than
+  // closing it. The frozen table must reach the comparison, by construction.
+  ["R8-01 llm() requires a frozen-caps meter", "engine/src/gateway.ts", "    if (!isFrozenCapsMeter(deps.meter)) {", "    if (false) {"],
+  ["R8-01 brand is module-private", "engine/src/spend-meter.ts", "  if (!FROZEN_CAPS_BOUND.has(meter as SpendMeter)) return false;", "  if (false) return false;"],
+  ["R8-01 reserve pinned to the prototype", "engine/src/spend-meter.ts", "  return (meter as MemorySpendMeter).reserve === MemorySpendMeter.prototype.reserve;", "  return true;"],
+  ["R8-01 production meter is final", "engine/src/spend-meter.ts", "    if (new.target !== FrozenCapsSpendMeter) {", "    if (false) {"],
+  ["R8-01 caps come from the frozen table", "engine/src/spend-meter.ts", "    super(now, (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super(now, (clientId) => ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }));"],
+  // R8-02: settle() takes one argument. The mutation restores the override.
+  ["R8-02 settle takes no actual", "engine/src/spend-meter.ts",
+    `  settle(reservation: SpendReservation): void {
+    const open = this.#close(reservation);
+    if (open === null) return;
+    const micros = open.micros;`,
+    `  settle(reservation: SpendReservation, actualUsd?: number): void {
+    const open = this.#close(reservation);
+    if (open === null) return;
+    const micros = actualUsd === undefined ? open.micros : toMicros(actualUsd, "actual provider charge");`],
+  // R8-03: the MONTH key on its own. R7-02 was locked at day granularity only,
+  // and this revert survived the full suite while reopening the $200 ceiling.
+  ["R8-03 zone-bucketed month key", "engine/src/spend-meter.ts", "  return zoneDayKey(nowMs, timeZone).slice(0, 7);", "  void timeZone; return new Date(nowMs).toISOString().slice(0, 7);"],
+  // R8-04: CODEOWNERS coverage, and the CI trigger that decides whether the
+  // gate guarding it runs at all.
+  ["R8-04 CODEOWNERS covers the tests", ".github/CODEOWNERS", "/fullburn/engine/test/              @ssb22inc", "# /fullburn/engine/test/            @ssb22inc"],
+  ["R8-04 CODEOWNERS covers package.json", ".github/CODEOWNERS", "package.json                        @ssb22inc", "# package.json                      @ssb22inc"],
+  ["R8-04 CODEOWNERS covers the runner config", ".github/CODEOWNERS", "vitest*                             @ssb22inc", "# vitest*                           @ssb22inc"],
+  ["R8-04 CODEOWNERS matcher discriminates", "engine/scripts/gate-lib.mjs", "  return rules.some((rule) => {", "  return rules.length >= 0 || rules.some((rule) => {"],
+  ["R8-04b CI runs on .github changes", ".github/workflows/fullburn-ci.yml", `  pull_request:
+    paths: ["fullburn/**", ".github/**"]`, `  pull_request:
+    paths: ["fullburn/**", ".github/workflows/fullburn-ci.yml"]`],
+  // R8-05: identity proved the array was not built by the caller; the freeze is
+  // what stops the caller rewriting what is in it.
+  ["R8-05 grade objects frozen", "engine/src/grade-registry.ts", "    return Object.freeze({ area: areaDef.area, grade, failing: Object.freeze(failing), missing: Object.freeze(missing) });", "    return { area: areaDef.area, grade, failing, missing };"],
+  ["R8-05 grade array frozen", "engine/src/grade-registry.ts", "  Object.freeze(grades);\n  COMPUTED.add(grades);", "  COMPUTED.add(grades);"],
+  // R8-06: the fourth and fifth e2e evasions.
+  ["R8-06 runtime skip refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*(?:skip|fixme)\\s*\\(/.test(real)) return false;", "      void real;"],
+  ["R8-06 run filters refused", "engine/test/e2e-variance.ts", "  if (RUN_FILTER_KEYS.test(src)) return false;", "  if (false) return false;"],
+  ["R8-06 smoke spec cannot satisfy its own deferral", "engine/test/e2e-variance.ts", `    .filter((s) => s.name.endsWith(".spec.ts") && s.name !== "smoke.spec.ts")`, `    .filter((s) => s.name.endsWith(".spec.ts"))`],
+  // R8-07: the root guard sat one branch too late, so a missing root scanned
+  // zero files and reported clean.
+  ["R8-07 missing root is an error", "engine/scripts/leak-check.mjs", "  if (!existsSync(repoRoot)) {\n    throw new Error(", "  if (false) {\n    throw new Error("],
+  // R8-08: the ADVANCING half of the high-water mark.
+  ["R8-08 high-water mark advances", "engine/src/spend-meter.ts", "if (seen === undefined || day > seen) this.#highWater.set(clientId, day);", "if (seen === undefined) this.#highWater.set(clientId, day);"],
+  // R8-09: the acceptance bar must be a stage, and must be able to fail.
+  // ASSEMBLED, NOT WRITTEN WHOLE. An entry that targets this file must not
+  // contain its target as a contiguous literal: `original.replace(from, to)`
+  // takes the FIRST occurrence, which would be the entry itself, and the real
+  // guard would go untouched while the run reported a survivor for the wrong
+  // reason. It reported exactly that once.
+  ["R8-09 harness fails the build", "engine/scripts/mutate.mjs", "  if (survived > 0 || " + "notFound > 0) {", "  if (false) {"],
   // Found while running the R7 gates, not by the review: `npm run leak-check`
   // passed no root, so every path-scoped rule matched nothing and the local
   // scan reported clean on a tree CI would have flagged.
@@ -174,35 +248,60 @@ const MUTATIONS = [
   ["R3-CP-08 -z diff (adversary)", "engine/scripts/adversary-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
 ];
 
-const run = () => {
-  try {
-    execSync("npx vitest run --silent", { cwd: ROOT, encoding: "utf8", stdio: "pipe" });
-    return null;
-  } catch (e) {
-    const out = `${e.stdout ?? ""}${e.stderr ?? ""}`;
-    const m = /Tests\s+(.*)$/m.exec(out);
-    return m ? m[1].trim() : "failed";
-  }
-};
+// ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
+//
+// This module used to execute the whole harness at import. A lock test that
+// imported `harnessVerdict` therefore started a full mutation run inside the
+// test process — which rewrote source files under the suite that was running,
+// left guards mutated when it was killed, and cost an afternoon of forensic
+// repair. `leak-check.mjs` learned this exact lesson as adversary finding F18
+// and carries the same guard; the file that enforces the acceptance bar was the
+// one place it had not been applied.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const run = () => {
+    try {
+      execSync("npx vitest run --silent", { cwd: ROOT, encoding: "utf8", stdio: "pipe" });
+      return null;
+    } catch (e) {
+      const out = `${e.stdout ?? ""}${e.stderr ?? ""}`;
+      const m = /Tests\s+(.*)$/m.exec(out);
+      return m ? m[1].trim() : "failed";
+    }
+  };
 
-let survived = 0;
-let notFound = 0;
-for (const [name, file, from, to] of MUTATIONS) {
-  const path = `${ROOT}/${file}`;
-  const original = readFileSync(path, "utf8");
-  if (!original.includes(from)) {
-    console.log(`PATTERN-NOT-FOUND  ${name}  (${file})`);
-    notFound += 1;
-    continue;
+  let survived = 0;
+  let notFound = 0;
+  for (const [name, file, from, to] of MUTATIONS) {
+    const path = resolveEntry(file);
+    const original = readFileSync(path, "utf8");
+    if (!original.includes(from)) {
+      console.log(`PATTERN-NOT-FOUND  ${name}  (${file})`);
+      notFound += 1;
+      continue;
+    }
+    writeFileSync(path, original.replace(from, to));
+    const failure = run();
+    writeFileSync(path, original);
+    if (failure === null) {
+      console.log(`*** SURVIVED ***   ${name}`);
+      survived += 1;
+    } else {
+      console.log(`CAUGHT             ${name}  |  ${failure}`);
+    }
   }
-  writeFileSync(path, original.replace(from, to));
-  const failure = run();
-  writeFileSync(path, original);
-  if (failure === null) {
-    console.log(`*** SURVIVED ***   ${name}`);
-    survived += 1;
-  } else {
-    console.log(`CAUGHT             ${name}  |  ${failure}`);
+  console.log(`\n${MUTATIONS.length} mutations: ${MUTATIONS.length - survived - notFound} caught, ${survived} survived, ${notFound} not found`);
+
+  // EXIT NON-ZERO, so this can be a CI stage rather than a ritual.
+  //
+  // It printed its findings and exited 0, and it appeared in no CI job — so the
+  // project's stated acceptance bar for a fix was enforced only when a human or
+  // an adversary ran it by hand, and between rounds a refactor could strand every
+  // entry naming a moved line (adversary finding R8-09). A SURVIVED means a fix
+  // nothing protects; a PATTERN-NOT-FOUND means the code moved and the entry no
+  // longer tests what it claims. Both are failures, not notices.
+  const verdict = harnessVerdict(survived, notFound);
+  if (!verdict.ok) {
+    console.error(`\n${verdict.reason}`);
+    process.exit(1);
   }
 }
-console.log(`\n${MUTATIONS.length} mutations: ${MUTATIONS.length - survived - notFound} caught, ${survived} survived, ${notFound} not found`);

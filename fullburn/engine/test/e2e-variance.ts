@@ -31,6 +31,23 @@ function withoutStrings(source: string): string {
     .replace(/'(?:\\.|[^'\\\n])*'/g, "''");
 }
 
+/** Keys by which Playwright decides what actually RUNS, beyond `testDir`.
+ *
+ * `runnerTargets` read `testDir` and nothing else, so a config that pointed at
+ * the spec directory and then excluded the spec from the run reported true four
+ * different ways: `testIgnore`, a narrowing `testMatch`, `grep`, and any of
+ * those inside `projects` (adversary finding R8-06). R6-03's own argument
+ * applies verbatim — `testIgnore` and a per-project `testMatch` need no intent
+ * to deceive, they are ordinary Playwright.
+ *
+ * The static check cannot evaluate them, so it refuses their PRESENCE rather
+ * than guessing their effect. Ledger L24 already concedes this check cannot
+ * verify the test is a good one; refusing what it cannot evaluate is the
+ * honest version of the same limitation. */
+// NOT global: `.test()` on a /g regex advances lastIndex, so alternate calls
+// would return false and the guard would be right half the time.
+const RUN_FILTER_KEYS = /(?:\b(?:testIgnore|testMatch|grep|grepInvert)\s*:|\[\s*["'`](?:testIgnore|testMatch|grep|grepInvert)["'`]\s*\]\s*:)/;
+
 /** Does the runner point at the directory these specs live in — and ONLY there?
  *
  * This took the FIRST `testDir:` string in the comment-stripped config, so a
@@ -45,6 +62,9 @@ function withoutStrings(source: string): string {
 export function runnerTargets(playwrightConfig: string, specDir: string): boolean {
   const want = specDir.replace(/^\.\//, "").replace(/\/$/, "");
   const src = code(playwrightConfig);
+  // A filter the check cannot evaluate is refused, not assumed permissive —
+  // the same rule already applied to a testDir it cannot read statically.
+  if (RUN_FILTER_KEYS.test(src)) return false;
   // Every spelling of the key, including the computed form. `["testDir"]: "x"`
   // overrides a literal `testDir:` and the check returned true anyway, so the
   // runner ran somewhere else while the variance reported as holding
@@ -107,6 +127,9 @@ export function e2eVarianceHolds(
 
   const title = /intake[\s\S]*confirm|confirm[\s\S]*intake/i;
   return specs
+    // The smoke spec is EXCLUDED: it is the thing the variance defers, so
+    // letting it satisfy the expiry would let the deferral satisfy itself.
+    // Removing this filter survived the whole suite (adversary finding R8-06).
     .filter((s) => s.name.endsWith(".spec.ts") && s.name !== "smoke.spec.ts")
     .some((s) => {
       const body = namedTestBody(code(s.source), title);
@@ -115,6 +138,13 @@ export function e2eVarianceHolds(
       // content was `const s = "await page.goto(); expect("` satisfied every
       // check while performing no page action and no assertion (R7-08).
       const real = withoutStrings(body);
+      // A RUNTIME SKIP EXECUTES NOTHING. `.skip` as a MODIFIER was already
+      // refused; the idiomatic Playwright form — `test.skip()` called inside
+      // the body, conditionally or not — was not, so a body containing every
+      // token this check looks for ran none of it (adversary finding R8-06).
+      // Same rule as everywhere else here: what the check cannot evaluate
+      // (which branch a conditional skip takes) is refused, not assumed benign.
+      if (/\b(?:test|it)\s*\.\s*(?:skip|fixme)\s*\(/.test(real)) return false;
       return /\bpage\s*\./.test(real) && /\bawait\b/.test(real) && /\bexpect\s*\(/.test(real);
     });
 }

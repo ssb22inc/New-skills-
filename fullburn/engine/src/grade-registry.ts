@@ -72,11 +72,32 @@ export function computeGrades(snapshot: MetricSnapshot): AreaGrade[] {
       else if (!metricPasses(t, actual)) failing.push(t.key);
     }
     const grade: Grade = failing.length === 0 && missing.length === 0 ? "A" : "BELOW_A";
-    return { area: areaDef.area, grade, failing, missing };
+    // FROZEN, deeply. Identity proved the caller did not build the array; it
+    // said nothing about whether the caller had since rewritten what was in it.
+    // Overwriting each element in place turned 24 enforcement actions into 0
+    // and published an all-A report, with the identity intact and the length
+    // unchanged (adversary finding R8-05). Length is not what a caller mutates.
+    return Object.freeze({ area: areaDef.area, grade, failing: Object.freeze(failing), missing: Object.freeze(missing) });
   });
+  Object.freeze(grades);
   COMPUTED.add(grades);
   return grades;
 }
+
+// THE AREA-COVERAGE CHECK IS GONE, AND ITS ABSENCE IS THE FIX.
+//
+// R7-10 added `grades.length !== GRADE_AREAS.length` "in case a caller mutated
+// the array it was handed". It could not be reached by any input: the identity
+// check refused every short or foreign list before it, so deleting the line
+// left the whole suite green — a guard reading as coverage while covering
+// nothing (adversary finding R8-05). And it did not even hold on its own terms:
+// `real[1] = real[0]` duplicates an area and drops another at unchanged length.
+//
+// Replacing it with a deeper check would have been the same mistake one level
+// down. The array and its elements are frozen at construction instead, so
+// coverage is a property of the value rather than something re-validated at
+// every use: `computeGrades` builds from `GRADE_AREAS` in order, and nothing
+// downstream can rewrite what it built. Structure, not a check.
 
 /** Grades this module computed. `enforcement()` accepts nothing else.
  *
@@ -104,11 +125,6 @@ export function enforcement(grades: readonly AreaGrade[]): EnforcementAction[] {
     throw new GradeRegistryError(
       "enforcement requires grades from computeGrades — a caller-supplied list is not evidence (§12, Law 14)",
     );
-  }
-  // …and it must still cover every configured area, in case a caller mutated
-  // the array it was handed.
-  if (grades.length !== GRADE_AREAS.length) {
-    throw new GradeRegistryError("grade list does not cover every configured area — refusing to enforce (fail closed)");
   }
   const actions: EnforcementAction[] = [];
   for (const g of grades) {

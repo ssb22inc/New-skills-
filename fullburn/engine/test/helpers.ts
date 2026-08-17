@@ -1,6 +1,6 @@
 import { effectiveAiCapsUsd } from "@fullburn/config/caps";
 import type { GatewayTransport } from "../src/gateway.ts";
-import { MemorySpendMeter } from "../src/spend-meter.ts";
+import { FrozenCapsSpendMeter, MemorySpendMeter } from "../src/spend-meter.ts";
 import { MemoryTraceSink } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 
@@ -38,6 +38,34 @@ export const testClock = () => TEST_NOW_MS;
  * the frozen table. Use `capsFrom` when the real table is the point. */
 export const fixedCaps = () => ({ dailyUsd: 200, monthlyUsd: 200, timeZone: "UTC" });
 
+/** A REAL production meter whose `settle()` throws, for the storage-failure
+ * paths (M-01, M-04, N-07).
+ *
+ * `llm()` refuses a hand-built meter object now (R8-01), so fault injection
+ * patches the instance rather than faking the type. It patches `settle` and
+ * `release` and NEVER `reserve`: `reserve` is the method the frozen-caps brand
+ * pins, because it is the only one that reads a ceiling. A settle that throws
+ * cannot mint headroom — the reservation stays open and keeps counting — which
+ * is exactly why it is safe to leave unpinned and exactly what these tests are
+ * about. */
+export function meterWithFailingSettle(now: () => number = testClock) {
+  const meter = new FrozenCapsSpendMeter(now);
+  let released = 0;
+  const realRelease = meter.release.bind(meter);
+  Object.defineProperty(meter, "settle", {
+    value: () => {
+      throw new Error("storage put failed");
+    },
+  });
+  Object.defineProperty(meter, "release", {
+    value: (r: Parameters<typeof realRelease>[0]) => {
+      released += 1;
+      realRelease(r);
+    },
+  });
+  return { meter, releases: () => released };
+}
+
 /** A resolver with ceilings a test chooses explicitly. */
 export const capsOf = (dailyUsd: number, monthlyUsd: number, timeZone = "UTC") => () => ({
   dailyUsd,
@@ -56,10 +84,12 @@ export function makeDeps(overrides: { now?: () => number; transport?: unknown; c
   const now = overrides.now ?? testClock;
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
-  // The meter resolves its own ceilings from the frozen table, narrowed by the
-  // same caller-supplied table llm() honours (R7-06).
-  const capsFor = (clientId: string) => effectiveAiCapsUsd(clientId, overrides.capsTable);
-  const meter = new MemorySpendMeter(now, capsFor);
+  // THE PRODUCTION METER, not a test double with an injected resolver. `llm()`
+  // refuses any other kind, so a test that built a wide meter would fail
+  // closed here rather than quietly proving the cap works against a ceiling
+  // the test itself chose (adversary finding R8-01). The narrowing table is
+  // the only thing a caller may supply, and it cannot widen.
+  const meter = new FrozenCapsSpendMeter(now, overrides.capsTable);
   const sink = new MemoryTraceSink();
   const transport = (overrides.transport ?? new MockGatewayServer()) as MockGatewayServer;
   return {

@@ -1,4 +1,4 @@
-import { CapError } from "@fullburn/config/caps";
+import { CapError, effectiveAiCapsUsd } from "@fullburn/config/caps";
 
 /** Per-client AI spend metering (R3; F1/F2/F3; R2-01, R2-02, R2-16).
  *
@@ -136,15 +136,18 @@ export interface SpendMeter {
    * interface still compile; `llm()` refuses any meter that does not implement
    * it, so absence fails closed rather than silently skipping the cap. */
   reserve?(clientId: string, amountUsd: number): SpendReservation;
-  /** Commit a reservation: the request left the building and is billable.
+  /** Commit a reservation: the request left the building and is billable. The
+   * committed figure is the RESERVED amount — an estimate, trued up by daily
+   * reconciliation against the provider's usage receipt (the human's ruling on
+   * adversary finding R7-05), and ledger L26 records that honestly.
    *
-   * `actualUsd` is the provider's real charge when the transport can produce
-   * one. When it cannot, the reserved ESTIMATE is committed and the number is
-   * trued up by daily reconciliation against the provider's usage receipt —
-   * the human's ruling on adversary finding R7-05. The live figure is an
-   * estimate and the ledger says so; it is not, and does not claim to be, a
-   * measured charge. */
-  settle?(reservation: SpendReservation, actualUsd?: number): void;
+   * IT TAKES NO SECOND ARGUMENT, and the omission is the point. An `actualUsd`
+   * override was `record()` with a handle: an unrestricted money-write with no
+   * cap check and no bound in either direction, on the interface this file
+   * tells the Phase 5/6 ad-spend path to adopt unchanged (adversary finding
+   * R8-02). Reconciliation writes its correction through this same
+   * cap-checked path, not around it. */
+  settle?(reservation: SpendReservation): void;
   /** Release a reservation for a request that never left the building.
    *
    * MUST NOT THROW, and must be idempotent for a stale or foreign handle.
@@ -405,16 +408,26 @@ export class MemorySpendMeter implements SpendMeter {
     return open;
   }
 
-  /** Commits the reservation. `actualUsd`, when the transport can produce the
-   * provider's real charge, is committed INSTEAD of the estimate — but never
-   * below the reserved amount is not the rule: the actual is authoritative in
-   * both directions, and the daily reconciliation (R7-05) is what catches a
-   * provider that reports something implausible. When no actual is available
-   * the estimate is committed and the ledger says it is an estimate. */
-  settle(reservation: SpendReservation, actualUsd?: number): void {
+  /** Commits the reservation: the reserved amount, and only the reserved
+   * amount.
+   *
+   * THERE IS NO `actualUsd` OVERRIDE. One existed for a fortnight to implement
+   * the R7-05 reconciliation ruling, and it was `record()` wearing a handle:
+   * `settle(r, 5000)` committed $5,000 against a $10/day ceiling with no error,
+   * and `settle(r, 0)` left five thousand departed billable calls reading
+   * $0.00 — a cap breach and a data lie in one operation. It had zero
+   * production callers, so it bought nothing on the money path for it
+   * (adversary finding R8-02).
+   *
+   * The reconciliation ruling stands and is unchanged: the committed figure is
+   * an ESTIMATE, trued up daily against the provider's usage receipt, and
+   * ledger L26 says so. What changed is the door it comes through — the
+   * correction goes through the same audited, cap-checked path as every other
+   * money mutation, not through a setter that can write any number. */
+  settle(reservation: SpendReservation): void {
     const open = this.#close(reservation);
     if (open === null) return;
-    const micros = actualUsd === undefined ? open.micros : toMicros(actualUsd, "actual provider charge");
+    const micros = open.micros;
     for (const period of [open.day, open.month]) {
       const committed = this.#read(this.#committedMicros, period, "committed spend");
       this.#committedMicros.set(period, committed + micros);
@@ -425,4 +438,74 @@ export class MemorySpendMeter implements SpendMeter {
     this.#close(reservation);
   }
 
+}
+
+/** Meters whose ceilings provably come from the frozen caps table.
+ *
+ * Module-private, so nothing outside this file can add a member. `instanceof`
+ * alone would not do — `Object.create(FrozenCapsSpendMeter.prototype)` passes
+ * it, and this project has already shipped one identity check that a plain
+ * object literal walked through (R5-01). */
+const FROZEN_CAPS_BOUND = new WeakSet<SpendMeter>();
+
+/** THE PRODUCTION METER. Its ceilings come from `config/caps.ts` by
+ * construction, and there is no resolver to inject.
+ *
+ * R7-06 removed the ceilings ARGUMENT from `reserve()` because a caller could
+ * hand itself $1,000/$1,000 for a real client. That fix moved the seam rather
+ * than closing it: the ceilings became the meter's, the meter became
+ * `deps.meter`, and `llm()` accepted whatever resolver it was handed while
+ * discarding the value it computed from the frozen table itself. Five thousand
+ * calls then committed $50 against a frozen $20/month with no `CapError`
+ * (adversary finding R8-01). Before that fix the attack required bypassing
+ * `llm()`; after it, the injected resolver was the only ceiling `llm()` had.
+ *
+ * Human ruling: close it structurally, not with a mismatch-refusal check —
+ * "remove the injection point entirely". So the only thing a caller may supply
+ * is the same NARROWING table `effectiveAiCapsUsd` already accepts, which
+ * `caps.ts` proves can lower a ceiling and never raise one (R2-03). There is no
+ * argument that widens.
+ *
+ * The class is final. A subclass would inherit the brand and could override
+ * `reserve()`, which is the injection point again wearing a different hat. */
+export class FrozenCapsSpendMeter extends MemorySpendMeter {
+  constructor(now: () => number, narrowing?: CapsNarrowingTable) {
+    if (new.target !== FrozenCapsSpendMeter) {
+      throw new MeterUnavailableError(
+        "FrozenCapsSpendMeter is final — a subclass could override reserve() and reopen the ceiling seam (fail closed)",
+      );
+    }
+    super(now, (clientId) => effectiveAiCapsUsd(clientId, narrowing));
+    FROZEN_CAPS_BOUND.add(this);
+  }
+}
+
+/** A table that may LOWER a client's ceiling and can never raise one, invent a
+ * client, or supply a sign-off — `effectiveAiCapsUsd` narrows with `Math.min`
+ * against the frozen entry. */
+export type CapsNarrowingTable = Readonly<
+  Record<string, { readonly dailyAiSpendUsd?: number; readonly monthlyAiSpendUsd?: number }>
+>;
+
+/** Is this meter's ceiling provably the frozen table's? `llm()` refuses every
+ * meter for which this is false, which is what makes Law 2 structural on the
+ * LLM money path rather than a convention about how to construct a meter.
+ *
+ * The brand alone is not enough: an instance is not frozen, so `reserve` could
+ * be redefined on a genuinely-constructed meter and the ceiling seam would be
+ * open again behind a valid brand. `reserve` must therefore be the prototype's
+ * own method, untouched.
+ *
+ * `settle` and `release` are deliberately NOT pinned, and the asymmetry is the
+ * property this function actually states. `reserve` is where the ceiling is
+ * read and enforced — nothing else compares a projection against a cap. A
+ * `settle` that throws or does nothing cannot mint headroom: the reservation
+ * simply stays open, and `reserve` counts open reservations against the same
+ * ceiling. So pinning `reserve` is exactly Law 2's requirement, and pinning
+ * more would be theatre that also makes the storage-failure paths (M-01, M-04,
+ * N-07) untestable without a production backdoor. */
+export function isFrozenCapsMeter(meter: unknown): meter is MemorySpendMeter {
+  if (typeof meter !== "object" || meter === null) return false;
+  if (!FROZEN_CAPS_BOUND.has(meter as SpendMeter)) return false;
+  return (meter as MemorySpendMeter).reserve === MemorySpendMeter.prototype.reserve;
 }

@@ -8,7 +8,7 @@ import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 import { TraceContext } from "../src/tracing.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { checkAdversaryReport, checkClass2Approvals, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, meterWithFailingSettle, testClock, capsOf, fixedCaps } from "./helpers.ts";
 
 /** LOCK TESTS.
  *
@@ -27,20 +27,11 @@ describe("money — a request that left the building is never released (M-01, M-
   // MUTATION: move `departed = true` back to after `meter.settle(...)`, or drop
   // `!departed` from the release condition in the outer catch.
   it("a settle() that throws must NOT return the headroom for a billed request", async () => {
-    const real = new MemorySpendMeter(testClock, fixedCaps);
-    let released = 0;
-    const brittle: SpendMeter = {
-      todayUsd: (c) => real.todayUsd(c),
-      reservedUsd: (c) => real.reservedUsd(c),
-      reserve: (c: string, a: number) => real.reserve(c, a),
-      settle: () => {
-        throw new Error("storage put failed");
-      },
-      release: (r) => {
-        released += 1;
-        real.release(r);
-      },
-    };
+    // A REAL production meter with a throwing settle. A hand-built meter object
+    // is refused by llm() now (R8-01), and rightly — but the storage-failure
+    // path it was standing in for is real, so it is injected on the genuine
+    // article instead.
+    const { meter: brittle, releases } = meterWithFailingSettle();
     const { deps, backend } = makeDeps();
     let billable = 0;
     const transport = {
@@ -60,26 +51,13 @@ describe("money — a request that left the building is never released (M-01, M-
     // The provider served every one of these. The cap must still bind: with the
     // headroom refunded instead, this loop ran unbounded at 40x the ceiling.
     expect(billable).toBeGreaterThan(0);
-    expect(released).toBe(0);
-    expect(real.reservedUsd(TEST_CLIENT)).toBeGreaterThan(0);
+    expect(releases()).toBe(0);
+    expect(brittle.reservedUsd(TEST_CLIENT)).toBeGreaterThan(0);
   });
 
   // MUTATION: same as above, on the transport-error leg.
   it("a transport error followed by a failing settle also keeps the charge", async () => {
-    const real = new MemorySpendMeter(testClock, fixedCaps);
-    let released = 0;
-    const brittle: SpendMeter = {
-      todayUsd: (c) => real.todayUsd(c),
-      reservedUsd: (c) => real.reservedUsd(c),
-      reserve: (c: string, a: number) => real.reserve(c, a),
-      settle: () => {
-        throw new Error("storage put failed");
-      },
-      release: (r) => {
-        released += 1;
-        real.release(r);
-      },
-    };
+    const { meter: brittle, releases } = meterWithFailingSettle();
     const { deps } = makeDeps();
     const failing = {
       async post() {
@@ -92,7 +70,7 @@ describe("money — a request that left the building is never released (M-01, M-
       input: {},
       trace: trace("m1b"),
     }).catch(() => undefined);
-    expect(released).toBe(0);
+    expect(releases()).toBe(0);
   });
 });
 

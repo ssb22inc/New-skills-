@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { CapError, effectiveAiCapsUsd, getCaps } from "@fullburn/config/caps";
-import { MemorySpendMeter, MeterUnavailableError, zoneDayKey } from "../src/spend-meter.ts";
+import {
+  FrozenCapsSpendMeter,
+  MemorySpendMeter,
+  MeterUnavailableError,
+  type SpendReservation,
+  isFrozenCapsMeter,
+  zoneDayKey,
+  zoneMonthKey,
+} from "../src/spend-meter.ts";
 import { capsOf } from "./helpers.ts";
 
 /** LOCK TESTS — the cross-family review (r7). Each names the one-line revert it
@@ -64,6 +72,60 @@ describe("money — the daily cap buckets on the client's day, not on UTC (R7-02
   it("the approved zone is the one the human declared", () => {
     expect(getCaps("pulsern").ianaTimeZone, "client zero's accounting zone changed").toBe("America/New_York");
   });
+
+  /** THE MONTH KEY, ON ITS OWN. R7-02 was locked at day granularity only: a
+   * revert of `zoneMonthKey` alone to UTC survived the whole suite, because
+   * every test drove a day boundary and nothing drove a client-local month
+   * boundary (adversary finding R8-03). The month is the ceiling `caps.ts`
+   * calls "the real exposure ceiling" — $200 against $10 — so the untested half
+   * was the half that matters.
+   *
+   * Four hours early for New York; up to fourteen for a UTC+14 client.
+   *
+   * MUTATION: `zoneMonthKey` → `new Date(nowMs).toISOString().slice(0, 7)`. */
+  it("a $200 New York month is not reopened by UTC's month boundary", () => {
+    // 20:30 ET on Aug 31 — already September in UTC, still August in New York.
+    let now = Date.parse("2026-08-16T16:00:00Z");
+    const m = new MemorySpendMeter(() => now, pulsern);
+    // Exhaust the month across twenty local days, staying under $10 each.
+    for (let d = 0; d < 20; d++) {
+      now = Date.parse(`2026-08-${String(d + 1).padStart(2, "0")}T16:00:00Z`);
+      m.settle(m.reserve("pulsern", 10));
+    }
+    expect(m.monthUsd("pulsern")).toBeCloseTo(200, 6);
+
+    now = Date.parse("2026-09-01T00:30:00Z"); // 20:30 ET, Aug 31 in New York
+    expect(zoneMonthKey(now, "America/New_York")).toBe("2026-08");
+    expect(() => m.reserve("pulsern", 1), "UTC's month boundary opened a fresh $200").toThrow(CapError);
+  });
+
+  /** The other half, or a meter that simply never rolls the month would pass
+   * the test above. The month must roll on the CLIENT's own boundary. */
+  it("the monthly ceiling does roll over at the client's month boundary", () => {
+    let now = Date.parse("2026-08-16T16:00:00Z");
+    const m = new MemorySpendMeter(() => now, pulsern);
+    for (let d = 0; d < 20; d++) {
+      now = Date.parse(`2026-08-${String(d + 1).padStart(2, "0")}T16:00:00Z`);
+      m.settle(m.reserve("pulsern", 10));
+    }
+    now = Date.parse("2026-09-01T05:00:00Z"); // 01:00 ET on Sep 1
+    expect(zoneMonthKey(now, "America/New_York")).toBe("2026-09");
+    expect(() => m.reserve("pulsern", 1)).not.toThrow();
+  });
+
+  /** A month boundary in a zone whose offset changed mid-month, and a zone far
+   * enough east that UTC and local disagree for most of a day. */
+  it("the month key survives a DST change inside the month, and extreme zones", () => {
+    // US DST ends Nov 1 2026. A Nov 30 evening is still November locally.
+    expect(zoneMonthKey(Date.parse("2026-12-01T04:00:00Z"), "America/New_York")).toBe("2026-11");
+    // …and March's transition, in the other direction.
+    expect(zoneMonthKey(Date.parse("2026-04-01T03:00:00Z"), "America/New_York")).toBe("2026-03");
+    // UTC+14: local is already the next month while UTC is not.
+    expect(zoneMonthKey(Date.parse("2026-08-31T11:00:00Z"), "Pacific/Kiritimati")).toBe("2026-09");
+    // …and a half-hour offset, because whole hours are an assumption.
+    expect(zoneMonthKey(Date.parse("2026-08-31T18:15:00Z"), "Asia/Kolkata")).toBe("2026-08");
+    expect(zoneMonthKey(Date.parse("2026-08-31T18:45:00Z"), "Asia/Kolkata")).toBe("2026-09");
+  });
 });
 
 describe("money — the injected clock cannot mint fresh ceilings (R7-03)", () => {
@@ -88,6 +150,29 @@ describe("money — the injected clock cannot mint fresh ceilings (R7-03)", () =
     expect(() => zoneDayKey(Number.POSITIVE_INFINITY, "UTC")).toThrow(/non-finite/);
     const m = new MemorySpendMeter(() => Number.NaN, pulsern);
     expect(() => m.reserve("pulsern", 1)).toThrow(MeterUnavailableError);
+  });
+
+  /** THE ADVANCING HALF. Deleting `|| day > seen` — so the mark pins only the
+   * FIRST day the meter ever saw — survived the whole suite, because the lock
+   * proved only the two-day case that starts at the mark (adversary finding
+   * R8-08). With that revert a clock may move backwards into any day after the
+   * first. Harmless in the in-memory meter, where every past day is still in
+   * the map; L14 and L21 both say the meter becomes Durable-Object-backed and
+   * day-keyed, where an evicted day IS a fresh ceiling.
+   *
+   * MUTATION: `if (seen === undefined || day > seen)` → `if (seen === undefined)`. */
+  it("the mark advances with the clock — not just on the first day ever seen", () => {
+    let now = Date.parse("2026-08-10T16:00:00Z");
+    const m = new MemorySpendMeter(() => now, pulsern);
+    m.settle(m.reserve("pulsern", 1)); // first day seen: Aug 10
+
+    now = Date.parse("2026-08-20T16:00:00Z");
+    m.settle(m.reserve("pulsern", 1)); // the mark must move to Aug 20
+
+    // Aug 15 is after the first day ever seen and before the current one. A
+    // mark that never advanced would accept it.
+    now = Date.parse("2026-08-15T16:00:00Z");
+    expect(() => m.reserve("pulsern", 1), "a closed day after the first was re-entered").toThrow(/backwards/);
   });
 
   it("the high-water mark is per client — one client's clock is not another's", () => {
@@ -126,43 +211,176 @@ describe("money — ceilings are the meter's, never the caller's (R7-06)", () =>
   });
 });
 
-describe("money — the committed figure is the provider's charge when there is one (R7-05)", () => {
-  /** The ledger committed the RESERVED estimate and called it spend. Human
-   * ruling 2026-08-16: meter the best-available number per call and true it up
-   * by daily reconciliation; do not gate Phase 0 on a real-time provider cost
-   * the API may not expose. So when the transport CAN produce the actual
-   * charge, that is what lands — in both directions — and ledger L26 records
-   * that the live figure is an estimate until reconciliation runs.
+describe("money — llm() takes its ceiling from the frozen table, by construction (R8-01)", () => {
+  /** R7-06 removed the ceilings ARGUMENT from `reserve()`. That moved the seam
+   * instead of closing it: the ceilings became the meter's, the meter became
+   * `deps.meter`, and `llm()` accepted whatever resolver it was handed while
+   * discarding the value it computed from the frozen table itself. Five
+   * thousand calls committed $50 against a frozen $20/month with no CapError,
+   * and deleting the surviving `effectiveAiCapsUsd()` call left all 277 tests
+   * green (adversary finding R8-01).
    *
-   * MUTATION: commit `open.micros` unconditionally and ignore `actualUsd`. */
-  it("an actual charge above the estimate is what consumes the ceiling", () => {
-    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
-    // Reserve $1, but the provider actually billed $9.50.
-    m.settle(m.reserve("pulsern", 1), 9.5);
-    expect(m.todayUsd("pulsern"), "the estimate was committed instead of the real charge").toBe(9.5);
-    // $0.60 more would break the $10 ceiling; the estimate would have left $9.
-    expect(() => m.reserve("pulsern", 0.6), "an under-estimate widened the day").toThrow(CapError);
+   * Human ruling: close it structurally. So this is the attack, run through
+   * the real `llm()`.
+   *
+   * MUTATION: drop the `isFrozenCapsMeter` guard from llm(). */
+  it("a meter built with a wide resolver cannot spend through llm() at all", async () => {
+    const { makeDeps: mk, TEST_CLIENT: C } = await import("./helpers.ts");
+    const { llm } = await import("../src/gateway.ts");
+    const { TraceContext } = await import("../src/tracing.ts");
+    const { ROLE_BINDINGS } = await import("@fullburn/config/models");
+    const { deps } = mk();
+    const frozen = getCaps(C).monthlyAiSpendUsd;
+
+    const wide = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), () => ({
+      dailyUsd: 100_000,
+      monthlyUsd: 100_000,
+      timeZone: "UTC",
+    }));
+    let dispatched = 0;
+    const transport = {
+      async post() {
+        dispatched += 1;
+        return { greeting: "ok" };
+      },
+    };
+    for (let i = 0; i < 50; i++) {
+      await llm({ ...deps, meter: wide, transport, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: C,
+        input: {},
+        trace: new TraceContext(`wide-${i}`, C),
+      }).catch(() => undefined);
+    }
+    expect(dispatched, "a caller-chosen ceiling reached the transport").toBe(0);
+    expect(wide.monthUsd(C), "spend landed against a ceiling nobody approved").toBe(0);
+    expect(frozen).toBeLessThan(100_000); // the attack was worth running
   });
 
-  it("an actual charge below the estimate returns the difference", () => {
-    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
-    m.settle(m.reserve("pulsern", 9), 0.25);
-    expect(m.todayUsd("pulsern")).toBe(0.25);
-    expect(() => m.reserve("pulsern", 9), "headroom the client never spent stayed consumed").not.toThrow();
+  /** The brand cannot be forged, and it cannot be inherited. A subclass would
+   * carry it and could override `reserve()` — the injection point in a hat.
+   *
+   * MUTATION: drop the `new.target` finality check, or the WeakSet membership
+   * test in isFrozenCapsMeter. */
+  it("the frozen-caps brand cannot be forged, subclassed, or patched on", () => {
+    const clock = () => Date.parse("2026-08-17T16:00:00Z");
+    const genuine = new FrozenCapsSpendMeter(clock);
+    expect(isFrozenCapsMeter(genuine)).toBe(true);
+
+    // A plain meter with a wide resolver — the R8-01 attack object.
+    expect(isFrozenCapsMeter(new MemorySpendMeter(clock, capsOf(1e9, 1e9)))).toBe(false);
+    // A literal wearing the shape.
+    expect(isFrozenCapsMeter({ reserve() {}, settle() {}, release() {}, todayUsd: () => 0 })).toBe(false);
+    // The prototype without the constructor — this is what defeats a bare
+    // `instanceof` check, and it has defeated one in this repo before (R5-01).
+    expect(isFrozenCapsMeter(Object.create(FrozenCapsSpendMeter.prototype))).toBe(false);
+    expect(isFrozenCapsMeter(null)).toBe(false);
+    expect(isFrozenCapsMeter(undefined)).toBe(false);
+
+    // A subclass is refused at construction, so it never gets a brand to carry.
+    const Sub = class extends FrozenCapsSpendMeter {};
+    expect(() => new Sub(clock), "a subclass could override reserve()").toThrow(MeterUnavailableError);
+
+    // And a genuine instance whose reserve() was redefined is no longer proof:
+    // the brand is on the object, but the ceiling-reading method is not ours.
+    const patched = new FrozenCapsSpendMeter(clock);
+    Object.defineProperty(patched, "reserve", { value: () => ({}) as never });
+    expect(isFrozenCapsMeter(patched), "a repointed reserve() kept its brand").toBe(false);
   });
 
-  it("with no actual available the estimate stands — and it is the reserved amount", () => {
-    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
-    m.settle(m.reserve("pulsern", 2.5));
-    expect(m.todayUsd("pulsern")).toBe(2.5);
+  /** A CONSEQUENCE OF THE R8-01 FIX, caught by the harness rather than by a
+   * review: the brand check runs before `requireReservingMeter`, and every
+   * branded meter inherits all four methods — so nothing reaching that function
+   * can fail it, and dropping the `reservedUsd` requirement left the suite
+   * green where it had been caught since R5-07. The tests that used to reach it
+   * passed hand-built meter objects, which the brand now refuses one line
+   * earlier.
+   *
+   * The contract is real for any future implementation, so it is driven
+   * directly. It is NOT a live guard on the llm() path, and ledger L28 says so.
+   *
+   * MUTATION: drop any of the four method checks from requireReservingMeter. */
+  it("the reserving-meter contract refuses a meter missing any money method", async () => {
+    const { requireReservingMeter } = await import("../src/gateway.ts");
+    const whole = {
+      todayUsd: () => 0,
+      reservedUsd: () => 0,
+      reserve: () => ({}) as never,
+      settle: () => {},
+      release: () => {},
+    };
+    expect(() => requireReservingMeter(whole)).not.toThrow();
+    for (const missing of ["reserve", "settle", "release", "reservedUsd"] as const) {
+      const partial = { ...whole, [missing]: undefined } as unknown as Parameters<typeof requireReservingMeter>[0];
+      expect(() => requireReservingMeter(partial), `a meter with no ${missing}() was accepted`).toThrow(
+        MeterUnavailableError,
+      );
+    }
   });
 
-  /** An unusable actual must not silently fall back to the estimate: that is a
-   * wrong number presented as a measured one. */
-  it("a non-finite actual is refused rather than rounded away", () => {
+  /** The narrowing table is the ONLY thing a caller may supply, and `caps.ts`
+   * proves it can lower a ceiling and never raise one.
+   *
+   * MUTATION: pass the narrowing table as a full resolver instead. */
+  it("the only caller input is a table that can narrow and never widen", () => {
+    const clock = () => Date.parse("2026-08-17T16:00:00Z");
+    const frozenDay = getCaps("fixture-testco").dailyAiSpendUsd;
+
+    const widened = new FrozenCapsSpendMeter(clock, { "fixture-testco": { dailyAiSpendUsd: 1e9 } });
+    widened.settle(widened.reserve("fixture-testco", frozenDay));
+    expect(() => widened.reserve("fixture-testco", 0.01), "a table widened the frozen day").toThrow(CapError);
+
+    const narrowed = new FrozenCapsSpendMeter(clock, { "fixture-testco": { dailyAiSpendUsd: 0.05 } });
+    narrowed.settle(narrowed.reserve("fixture-testco", 0.05));
+    expect(() => narrowed.reserve("fixture-testco", 0.01), "the narrowing was ignored").toThrow(CapError);
+
+    // An unsigned client cannot be handed a sign-off by the table either.
+    const unsigned = new FrozenCapsSpendMeter(clock, { "fixture-unsigned": { dailyAiSpendUsd: 1 } });
+    expect(() => unsigned.reserve("fixture-unsigned", 0.01)).toThrow(/human sign-off/);
+  });
+});
+
+describe("money — settle() commits the reservation and nothing else (R7-05 as ruled, R8-02)", () => {
+  /** R7-05's fix added `settle(reservation, actualUsd)` so the provider's real
+   * charge could be committed. It was `record()` with a handle: an unrestricted
+   * money-write with no cap check and no bound in either direction, on the
+   * interface the Phase 5/6 ad-spend path is told to adopt unchanged — and it
+   * had zero production callers, so it bought nothing for it (R8-02).
+   *
+   * The human's reconciliation ruling is unchanged: the committed figure is an
+   * ESTIMATE, trued up daily against the provider's usage receipt, and L26 says
+   * so. The correction now goes through the same cap-checked path as every
+   * other money mutation.
+   *
+   * MUTATION: restore the `actualUsd` parameter and the `toMicros` branch. */
+  it("there is no second argument that can write an arbitrary committed value", () => {
     const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
-    expect(() => m.settle(m.reserve("pulsern", 1), Number.NaN)).toThrow();
-    expect(() => m.settle(m.reserve("pulsern", 1), -1)).toThrow();
+    const overreach = m.settle.bind(m) as unknown as (r: SpendReservation, actual?: number) => void;
+
+    // $5,000 against a $10/day ceiling, through a handle the meter itself
+    // minted. This is the exact call that succeeded before R8-02.
+    overreach(m.reserve("pulsern", 0.01), 5000);
+    expect(m.todayUsd("pulsern"), "an arbitrary figure was written to the ledger").toBeCloseTo(0.01, 6);
+
+    // The other direction is the dangerous one: departed, billable calls that
+    // the ledger reports as free.
+    for (let i = 0; i < 50; i++) overreach(m.reserve("pulsern", 0.01), 0);
+    expect(m.todayUsd("pulsern"), "billable calls were settled at zero").toBeCloseTo(0.51, 6);
+
+    // And the signature itself carries the rule, so a future caller cannot be
+    // invited to pass one by the type.
+    expect(m.settle.length, "settle grew a parameter again").toBe(1);
+  });
+
+  /** The ceiling must actually bind through settle — the estimate is committed,
+   * so spend accumulates and the cap engages.
+   *
+   * MUTATION: commit 0 instead of open.micros. */
+  it("what settle commits is the reserved amount, and it consumes the ceiling", () => {
+    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
+    m.settle(m.reserve("pulsern", 9.5));
+    expect(m.todayUsd("pulsern")).toBeCloseTo(9.5, 6);
+    expect(() => m.reserve("pulsern", 0.6), "the committed estimate did not bind").toThrow(CapError);
   });
 
   /** The disclosure is load-bearing (Law 10): the ledger must SAY the live
@@ -215,20 +433,119 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     expect(checkApprovalAuthorship([{ path: "p", content: "" }]).ok).toBe(true);
   });
 
-  /** MUTATION: delete .github/CODEOWNERS. Inert until branch protection is on,
-   * but its absence is what makes the whole mechanism honour-system. */
-  it("CODEOWNERS covers the approval mechanism and everything it protects", async () => {
+  /** EVERY Class-2 FILE, ENUMERATED — not six hard-coded strings.
+   *
+   * The previous version of this test asserted six paths appeared in the file
+   * and was titled "covers the approval mechanism and everything it protects".
+   * It covered 38 of 97 tracked Class-2 files. The unowned remainder was
+   * `package.json` (redefined `npm test` into a no-op, R2-04),
+   * `package-lock.json` ("the only executable thing left in the Class-1
+   * surface", N-11), every `vitest.*` name (one silenced 165 of 168 tests with
+   * every gate green, N-02), `PHASE` (decides whether the H20 expiry fires) and
+   * every test file — the exact paths this project's own history records as
+   * lethal (adversary finding R8-04). That is the `CLASS2_FILES` mistake H-03
+   * already found once, in a new file.
+   *
+   * `isClass2` is the authority, so `isClass2` is what this drives.
+   *
+   * MUTATION: delete any rule from CODEOWNERS, or delete the file. */
+  it("every tracked Class-2 file has a CODEOWNER", async () => {
     const { readFileSync } = await import("node:fs");
-    const owners = readFileSync(new URL("../../../.github/CODEOWNERS", import.meta.url), "utf8");
-    for (const path of [
-      "/fullburn/APPROVALS/",
-      "/fullburn/config/src/caps.ts",
-      "/fullburn/CLAUDE.md",
-      "/fullburn/engine/src/",
-      "/fullburn/engine/scripts/",
-      "/.github/",
-    ]) {
-      expect(owners, `${path} has no CODEOWNER`).toContain(path);
+    const { execFileSync } = await import("node:child_process");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { isClass2, codeownersCovers } = await import("../scripts/gate-lib.mjs");
+    const repoRoot = new URL("../../../", import.meta.url).pathname.replace(/\/$/, "");
+    const owners = readFileSync(`${repoRoot}/.github/CODEOWNERS`, "utf8");
+
+    const tracked = execFileSync("git", ["-C", repoRoot, "ls-files"], { encoding: "utf8" })
+      .split("\n")
+      .filter((p) => p.length > 0);
+    const class2 = tracked.filter((p: string) => isClass2(p));
+    expect(class2.length, "isClass2 matched nothing — this test would pass vacuously").toBeGreaterThan(50);
+
+    const unowned = class2.filter((p: string) => !codeownersCovers(p, owners));
+    expect(unowned, `Class-2 files with no CODEOWNER:\n  ${unowned.join("\n  ")}`).toEqual([]);
+  });
+
+  /** The acceptance bar must be a STAGE, and it must be able to fail.
+   *
+   * `npm run mutate` is how this project enforces "a fix whose one-line revert
+   * leaves the suite green is not protected by anything" — and it appeared in
+   * package.json and in no CI job, and exited 0 whatever it found (adversary
+   * finding R8-09). A bar nothing runs and that cannot fail is a ritual.
+   *
+   * MUTATION: remove the mutation-harness job, or the process.exit(1). */
+  it("the mutation harness runs in CI and exits non-zero on a survivor", async () => {
+    const { readFileSync } = await import("node:fs");
+    const wf = readFileSync(new URL("../../../.github/workflows/fullburn-ci.yml", import.meta.url), "utf8");
+    expect(wf, "the mutation harness is not a CI stage").toMatch(/run:\s*npm run mutate/);
+    // Driven, not grepped: a regex over the harness source matched the
+    // harness's own mutation ENTRY as readily as the guard, so the first
+    // version of this test passed with the guard reverted.
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { harnessVerdict } = await import("../scripts/mutate.mjs");
+    expect(harnessVerdict(0, 0).ok, "a clean run should pass").toBe(true);
+    expect(harnessVerdict(1, 0).ok, "an unprotected fix did not fail the build").toBe(false);
+    expect(harnessVerdict(0, 1).ok, "a stale entry did not fail the build").toBe(false);
+    expect(harnessVerdict(1, 0).reason).toMatch(/unprotected/);
+    const harness = readFileSync(new URL("../scripts/mutate.mjs", import.meta.url), "utf8");
+    expect(harness, "the verdict does not reach an exit code").toMatch(/process\.exit\(1\)/);
+  });
+
+  /** The matcher itself, driven directly — a matcher that returned true for
+   * everything would make the test above pass vacuously, and it is the kind of
+   * helper that gets "simplified" later. */
+  it("the CODEOWNERS matcher distinguishes covered from uncovered", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { codeownersCovers } = await import("../scripts/gate-lib.mjs");
+    const rules = "/fullburn/engine/src/ @o\n/fullburn/PHASE @o\npackage.json @o\nvitest* @o\ne2e/ @o\n";
+    expect(codeownersCovers("fullburn/engine/src/gateway.ts", rules)).toBe(true);
+    expect(codeownersCovers("fullburn/PHASE", rules)).toBe(true);
+    expect(codeownersCovers("fullburn/config/package.json", rules)).toBe(true);
+    expect(codeownersCovers("fullburn/vitest.config.ts", rules)).toBe(true);
+    expect(codeownersCovers("fullburn/engine/test/e2e/smoke.spec.ts", rules)).toBe(true);
+    // …and the negative half, which is what makes the positives mean anything.
+    expect(codeownersCovers("fullburn/engine/test/x.test.ts", rules)).toBe(false);
+    expect(codeownersCovers("fullburn/README.md", rules)).toBe(false);
+    expect(codeownersCovers("fullburn/PHASE.bak", rules)).toBe(false);
+    // A rule inside a comment is not a rule.
+    expect(codeownersCovers("fullburn/README.md", "# fullburn/README.md @o\n")).toBe(false);
+  });
+
+  /** THE GATE MUST RUN WHEN CODEOWNERS CHANGES. `.github/**` is a Class-2
+   * pattern, but the workflow's own `paths:` filter listed only `fullburn/**`
+   * and the workflow file itself — so a PR touching only `.github/CODEOWNERS`
+   * triggered no workflow, ran no gate, and never executed the test above. The
+   * artifact created to make "human-only" real could be deleted by a diff that
+   * ran nothing (adversary finding R8-04b).
+   *
+   * MUTATION: narrow the workflow's `paths:` filters back to fullburn/**. */
+  it("CI runs on every Class-2 path, so no Class-2 diff can arrive ungated", async () => {
+    const { readFileSync } = await import("node:fs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { isClass2 } = await import("../scripts/gate-lib.mjs");
+    const wf = readFileSync(new URL("../../../.github/workflows/fullburn-ci.yml", import.meta.url), "utf8");
+    const filters = [...wf.matchAll(/^\s*paths:\s*(\[.*\]|)\s*$/gm)];
+
+    // Either there is no path filter at all — every PR runs the gate — or every
+    // filter present must admit a witness for each Class-2 pattern.
+    for (const [, rawList] of filters) {
+      const list = rawList ?? "";
+      const globs: string[] = list.startsWith("[")
+        ? (JSON.parse(list.replace(/'/g, '"')) as string[])
+        : [];
+      const admits = (p: string) =>
+        globs.length === 0 ||
+        globs.some((g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, ".*").replace(/(?<!\.)\*/g, "[^/]*")}$`).test(p));
+      for (const witness of [
+        ".github/CODEOWNERS",
+        ".github/workflows/fullburn-ci.yml",
+        "fullburn/config/src/caps.ts",
+        "fullburn/PHASE",
+      ]) {
+        expect(isClass2(witness), `${witness} is not Class-2 — the witness is stale`).toBe(true);
+        expect(admits(witness), `a PR touching ${witness} would run no gate`).toBe(true);
+      }
     }
   });
 });
@@ -319,6 +636,44 @@ describe("grade registry — enforcement acts on evidence, not on assertion (R7-
     expect(() => publishGradeReport(forged, 0), "a full-length fabrication was published").toThrow(GradeRegistryError);
     // Nor does copying a genuine result launder it: the array is the evidence.
     expect(() => enforcement([...real]), "a shallow copy passed as the genuine result").toThrow(GradeRegistryError);
+
+    /** THE ATTACK IDENTITY ALONE DOES NOT STOP: mutate the genuine array in
+     * place. Same object, same length, every freeze gone — 24 actions became 0
+     * and `publishGradeReport` printed all-A (adversary finding R8-05). Identity
+     * proved the caller did not BUILD the array; it said nothing about what the
+     * caller had since written into it.
+     *
+     * MUTATION: drop Object.freeze from computeGrades' elements or its array. */
+    const before = enforcement(real).length;
+    expect(before, "an empty snapshot should freeze every area").toBeGreaterThan(0);
+    for (let i = 0; i < real.length; i++) {
+      // Frozen: in a module without "use strict" this would fail silently, so
+      // the assertion is on the OUTCOME, not on the throw.
+      try {
+        (real as { -readonly [K in number]: unknown })[i] = {
+          area: real[i]!.area,
+          grade: "A",
+          failing: [],
+          missing: [],
+        };
+      } catch {
+        /* frozen arrays throw in strict mode — that is the fix working */
+      }
+    }
+    expect(enforcement(real).length, "an in-place rewrite disarmed every autonomy freeze").toBe(before);
+    expect(publishGradeReport(real, 0), "an in-place rewrite published an all-A report").toContain("BELOW_A");
+
+    /** The freeze is what makes coverage structural, so it is what gets tested.
+     * R7-10's length check was deleted rather than deepened: no input could
+     * reach it, and `real[1] = real[0]` walked through it anyway (R8-05). A
+     * genuine result is frozen at every level a forgery would need to touch. */
+    expect(Object.isFrozen(real), "the grade array is writable").toBe(true);
+    expect(Object.isFrozen(real[0]), "a grade object is writable").toBe(true);
+    expect(Object.isFrozen(real[0]!.failing), "a failing-metric list is writable").toBe(true);
+    // The duplicate-area forgery R8-05 used, refused by construction.
+    expect(() => {
+      Object.defineProperty(real, "1", { value: real[0], writable: true, configurable: true });
+    }, "an area could be duplicated in place").toThrow();
 
     expect(() => enforcement(real)).not.toThrow();
     expect(enforcement(real).length).toBeGreaterThan(0);

@@ -1,5 +1,5 @@
-# CODEOWNERS — R7-07. An approval proves bytes, not identity; this is what makes
-# "human-only" real (Law 15, §13).
+# CODEOWNERS — R7-07, corrected by R8-04. An approval proves bytes, not
+# identity; this is what makes "human-only" real (Law 15, §13).
 #
 # Human ruling 2026-08-16: close this now rather than defer it to H19. Every
 # approval predating the branch-protection lock is UNVERIFIED (ledger L27),
@@ -7,20 +7,60 @@
 #
 # This file is inert on its own. It only bites once branch protection requires
 # CODEOWNER review — see HUMAN_TASKS H19.
+#
+# EVERY RULE BELOW EXISTS TO COVER A `CLASS2_PATTERNS` ENTRY in
+# fullburn/engine/scripts/gate-lib.mjs, and that correspondence is enforced:
+# `locks-r7.test.ts` enumerates every tracked file, asks `isClass2()`, and fails
+# if any of them has no owner here. The first version of this file hand-picked
+# six paths and covered 38 of 97 Class-2 files — it read as coverage of the
+# Class-2 set and was coverage of six directories (adversary finding R8-04).
+# The unowned remainder was not incidental: it was `package.json`, which
+# redefined `npm test` into a no-op (R2-04); `package-lock.json`, "the only
+# executable thing left in the Class-1 surface" (N-11); every `vitest.*` name,
+# one of which silenced 165 of 168 tests with every gate green (N-02); `PHASE`,
+# which decides whether the H20 expiry fires at all; and every test file, of
+# which gate-lib says "silencing one is a human decision".
+#
+# Add a CLASS2_PATTERN, add a rule here, or the lock test fails.
 
-# The approval mechanism itself, and the values it protects.
-/fullburn/APPROVALS/                @ssb22inc
-/fullburn/config/src/caps.ts        @ssb22inc
-
-# The Laws, the spec, and the adversary's own mandate.
+# ── The constitution, and the adversary's own mandate ────────────────────────
 /fullburn/CLAUDE.md                 @ssb22inc
 /fullburn/ENGINE_BUILD.md           @ssb22inc
 /fullburn/.claude/                  @ssb22inc
 
-# The money paths and the grader.
-/fullburn/engine/src/               @ssb22inc
+# ── The approval mechanism itself, and the values it protects ────────────────
+/fullburn/APPROVALS/                @ssb22inc
 /fullburn/config/src/               @ssb22inc
 
-# The gates, and everything that decides whether they run.
+# ── The money paths and the grader ──────────────────────────────────────────
+/fullburn/engine/src/               @ssb22inc
+
+# ── The gates, and everything that decides whether they run ─────────────────
 /fullburn/engine/scripts/           @ssb22inc
 /.github/                           @ssb22inc
+
+# ── The phase marker. It decides whether the H20 expiry fires. ──────────────
+/fullburn/PHASE                     @ssb22inc
+
+# ── Tests and evals. Silencing one is a human decision, not a Class-1 edit. ─
+/fullburn/engine/test/              @ssb22inc
+/fullburn/config/test/              @ssb22inc
+/fullburn/engine/evals/             @ssb22inc
+
+# ── Anything that decides what the test runner IS, or what it runs ──────────
+# Basename rules, at any depth, matching CLASS2_PATTERNS' shape rules: the next
+# runner version chooses the extension list, not us.
+vitest*                             @ssb22inc
+vite.*                              @ssb22inc
+vite-*                              @ssb22inc
+playwright*                         @ssb22inc
+e2e/                                @ssb22inc
+
+# ── Toolchain and deploy config: what runs, on what runtime, where ──────────
+package.json                        @ssb22inc
+package-lock.json                   @ssb22inc
+tsconfig*.json                       @ssb22inc
+wrangler.*                          @ssb22inc
+.npmrc                              @ssb22inc
+.nvmrc                              @ssb22inc
+.gitignore                          @ssb22inc

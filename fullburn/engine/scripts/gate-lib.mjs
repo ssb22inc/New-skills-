@@ -484,6 +484,42 @@ export function approvalTransition(entry, { hashOf, baseHashOf }) {
  * approval predating that lock is unverified. */
 export const AUTOMATION_AUTHORS = [/\bclaude\b/i, /\bgithub-actions\b/i, /\[bot\]/i, /noreply@anthropic\.com/i];
 
+/** Does any CODEOWNERS rule claim this path?
+ *
+ * A deliberately small subset of the CODEOWNERS grammar — leading `/` anchors
+ * to the repository root, a trailing `/` matches a directory and everything
+ * under it, `*` matches within one segment, and a bare pattern matches by
+ * basename at any depth. That is every form this repo's file uses, and a rule
+ * shape it does NOT understand must be added here rather than assumed to work:
+ * a matcher that quietly returns false for a rule GitHub honours would report
+ * missing coverage, and one that quietly returns true would report coverage
+ * that does not exist. The second is the dangerous direction, so unknown
+ * constructs are not silently accepted.
+ *
+ * Exists because the file it checks covered 38 of 97 Class-2 paths while a lock
+ * test asserted six hard-coded strings and read as coverage of the set
+ * (adversary finding R8-04). */
+export function codeownersCovers(path, codeownersText) {
+  const rules = codeownersText
+    .split("\n")
+    .map((l) => l.replace(/#.*$/, "").trim())
+    .filter((l) => l.length > 0)
+    .map((l) => l.split(/\s+/)[0]);
+  const seg = (p) => p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*");
+  return rules.some((rule) => {
+    if (rule.startsWith("/")) {
+      const body = rule.slice(1);
+      return body.endsWith("/")
+        ? new RegExp(`^${seg(body)}`).test(path)
+        : new RegExp(`^${seg(body)}$`).test(path);
+    }
+    if (rule.endsWith("/")) return new RegExp(`(?:^|/)${seg(rule.slice(0, -1))}/`).test(path);
+    // Bare pattern: matches the basename at any depth, which is how GitHub
+    // treats a rule with no slash in it.
+    return new RegExp(`(?:^|/)${seg(rule)}$`).test(path);
+  });
+}
+
 /** Refuses approvals added by a commit the automation principal authored. */
 export function checkApprovalAuthorship(approvalDocs) {
   const forged = approvalDocs.filter(

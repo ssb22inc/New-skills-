@@ -121,7 +121,7 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
-    expect(ops, "a throw that may have dispatched released the headroom").toEqual(["reserve", "settle"]);
+    expect(ops, "a throw that may have dispatched released the headroom").toEqual(["settle"]);
     expect(meter.todayUsd(TEST_CLIENT)).toBeGreaterThan(0);
     expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
   });
@@ -145,7 +145,7 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
-    expect(ops, "a proven-undispatched request was charged").toEqual(["reserve", "release"]);
+    expect(ops, "a proven-undispatched request was charged").toEqual(["release"]);
     expect(meter.todayUsd(TEST_CLIENT)).toBe(0);
     expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
   });
@@ -181,7 +181,7 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
-    expect(ops).toEqual(["reserve", "settle"]);
+    expect(ops).toEqual(["settle"]);
     expect(meter.todayUsd(TEST_CLIENT)).toBeGreaterThan(0);
   });
 
@@ -722,14 +722,16 @@ describe("model layer — a forged attestation cannot bind a model (r4 lock 8 / 
 
 /** Records the terminal meter operations `llm()` performs, so a test can assert
  * that a reservation is settled or released but never both and never neither. */
+/** Records which of settle/release the gateway chose, and in what order.
+ *
+ * `reserve` is deliberately NOT wrapped. `llm()` pins it to the prototype's own
+ * method, because it is the one that reads a ceiling and a replaced `reserve`
+ * is the R8-01 seam wearing a test's clothes. It cost these assertions nothing:
+ * a settle or a release proves a reservation existed to close, so the
+ * "reserve" entry was never carrying information. */
 function trackOps(meter: MemorySpendMeter, ops: string[]): void {
-  const reserve = meter.reserve.bind(meter);
   const settle = meter.settle.bind(meter);
   const release = meter.release.bind(meter);
-  meter.reserve = (c: string, a: number) => {
-    ops.push("reserve");
-    return reserve(c, a);
-  };
   meter.settle = (r: SpendReservation) => {
     ops.push("settle");
     settle(r);

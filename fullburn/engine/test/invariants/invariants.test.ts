@@ -158,9 +158,42 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         "tokens split between a comment and a string",
         "test('intake confirm flow', async () => { /* await page. */ const s = 'expect('; return s; });",
       ],
+      // R8-06: the runtime skip. `.skip` as a MODIFIER was already refused; the
+      // idiomatic Playwright form, called inside the body, was not — and it
+      // executes nothing from that line on.
+      [
+        "a runtime test.skip() in the body",
+        "test('intake confirm flow', async ({ page }) => { test.skip(); await page.click('#confirm'); expect(1).toBe(1); });",
+      ],
+      [
+        "a conditional runtime skip",
+        "test('intake confirm flow', async ({ page }) => { test.skip(process.env.CI === 'true', 'flaky'); await page.click('#c'); expect(1).toBe(1); });",
+      ],
+      [
+        "test.fixme() in the body",
+        "test('intake confirm flow', async ({ page }) => { test.fixme(); await page.click('#c'); expect(1).toBe(1); });",
+      ],
     ] as const) {
       expect(e2eVarianceHolds(1, [smoke, { name: "intake.spec.ts", source }]), `${label} satisfied the expiry`).toBe(false);
     }
+
+    // R8-06(c): the smoke spec cannot satisfy the expiry that defers it. The
+    // exclusion carried no test — removing it survived the whole suite — and
+    // without it the deferral satisfies itself: rename the real work into
+    // smoke.spec.ts and Phase 1 passes on the very file the variance covers.
+    const smokeWithRealWork = {
+      name: "smoke.spec.ts",
+      source:
+        "test('intake confirm flow', async ({ page }) => { await page.click('#confirm'); expect(await page.title()).toBe('ok'); });",
+    };
+    expect(
+      e2eVarianceHolds(1, [smokeWithRealWork]),
+      "the smoke spec satisfied the expiry that exists to replace it",
+    ).toBe(false);
+    // …and it still counts as the stage being INSTALLED, which is the half that
+    // was never deferred — so this is an exclusion, not a rejection.
+    expect(e2eVarianceHolds(0, [smokeWithRealWork])).toBe(true);
+    expect(e2eVarianceHolds(1, [smokeWithRealWork, real])).toBe(true);
 
     // And a runner pointed somewhere else fails at every phase (R5-02).
     expect(e2eVarianceHolds(0, [smoke], false), "a repointed runner was accepted").toBe(false);
@@ -190,6 +223,16 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       ["a correct literal beside a computed unreadable key", 'export default { testDir: "engine/test/e2e", ["testDir"]: elsewhere };'],
       ["a concatenated testDir", 'export default { testDir: "engine/test/" + "e2e" };'],
       ["a computed key with a variable value", 'export default { ["testDir"]: someDir };'],
+      // R8-06: `testDir` is not the only thing that decides what RUNS. Each of
+      // these points the runner at the right directory and then excludes the
+      // spec from the run. testIgnore and a per-project testMatch need no
+      // intent to deceive — they are ordinary Playwright.
+      ["a testIgnore excluding the spec", 'export default { testDir: "engine/test/e2e", testIgnore: "**/intake.spec.ts" };'],
+      ["a narrowing testMatch", 'export default { testDir: "engine/test/e2e", testMatch: "smoke.spec.ts" };'],
+      ["a grep filter", 'export default { testDir: "engine/test/e2e", grep: /smoke/ };'],
+      ["a grepInvert filter", 'export default { testDir: "engine/test/e2e", grepInvert: /intake/ };'],
+      ["a per-project testMatch", 'export default { testDir: "engine/test/e2e", projects: [{ name: "p", testMatch: "smoke.spec.ts" }] };'],
+      ["a computed-key testIgnore", 'export default { testDir: "engine/test/e2e", ["testIgnore"]: "**/intake.spec.ts" };'],
     ] as const) {
       expect(runnerTargets(cfg, "engine/test/e2e"), `${label} fooled runnerTargets`).toBe(false);
     }
