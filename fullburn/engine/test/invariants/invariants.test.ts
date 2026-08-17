@@ -143,6 +143,21 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       // The TITLE has to name the flow. A loosened title regex would let any
       // real e2e test satisfy an expiry that exists for one specific flow.
       ["a real test of something else", "test('homepage loads', async ({ page }) => { await page.goto('/'); expect(1).toBe(1); });"],
+      // R7-08: the cross-family review's evasion. Every token the check looks
+      // for, all of them inside one string literal, performing nothing. Strings
+      // are blanked in the BODY only — the title above is a string too.
+      [
+        "a body whose only content is a string of the tokens",
+        'test(\'intake confirm flow\', async () => { const s = "await page.goto(); expect("; return s; });',
+      ],
+      [
+        "the same evasion in a template literal",
+        "test('intake confirm flow', async () => { const s = `await page.goto(); expect(`; return s; });",
+      ],
+      [
+        "tokens split between a comment and a string",
+        "test('intake confirm flow', async () => { /* await page. */ const s = 'expect('; return s; });",
+      ],
     ] as const) {
       expect(e2eVarianceHolds(1, [smoke, { name: "intake.spec.ts", source }]), `${label} satisfied the expiry`).toBe(false);
     }
@@ -160,9 +175,27 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       ["a decoy const before the real config", 'const DOC = { testDir: "engine/test/e2e" };\nexport default { testDir: "stub-e2e" };'],
       ["a decoy in a template string", 'const s = `testDir: "engine/test/e2e"`;\nexport default { testDir: "stub-e2e" };'],
       ["a per-project override", 'export default { testDir: "engine/test/e2e", projects: [{ name: "p", testDir: "stub" }] };'],
+      // R7-08: the computed key. `["testDir"]: x` is the same property and
+      // overrides the literal one, and the check read only the literal spelling.
+      ["a computed-key override", 'export default { testDir: "engine/test/e2e", ["testDir"]: "stub-e2e" };'],
+      ["a computed key alone", 'export default { ["testDir"]: "stub-e2e" };'],
+      ["a computed key with backticks", 'export default { [`testDir`]: "stub-e2e" };'],
+      // A value the check cannot read statically is refused, not assumed benign:
+      // the answer is unknown, and unknown is not "points here".
+      ["a variable testDir", 'const d = process.env.DIR;\nexport default { testDir: d };'],
+      // The one that needs the key COUNT and not just the value list: a correct
+      // literal beside an unreadable one. The literal alone satisfies "every
+      // value names the spec directory" while the runner may go anywhere.
+      ["a correct literal beside an unreadable override", 'export default { testDir: "engine/test/e2e", projects: [{ testDir: process.env.DIR }] };'],
+      ["a correct literal beside a computed unreadable key", 'export default { testDir: "engine/test/e2e", ["testDir"]: elsewhere };'],
+      ["a concatenated testDir", 'export default { testDir: "engine/test/" + "e2e" };'],
+      ["a computed key with a variable value", 'export default { ["testDir"]: someDir };'],
     ] as const) {
       expect(runnerTargets(cfg, "engine/test/e2e"), `${label} fooled runnerTargets`).toBe(false);
     }
+    // …and the computed spelling is ACCEPTED when it names the right directory:
+    // the rule is "read every spelling", not "reject the unusual one".
+    expect(runnerTargets('export default { ["testDir"]: "engine/test/e2e" };', "engine/test/e2e")).toBe(true);
   });
 
   it("the checklist checks ITSELF against the spec (R2-25)", () => {

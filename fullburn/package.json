@@ -10,7 +10,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "leak-check": "node engine/scripts/leak-check.mjs",
+    "leak-check": "node engine/scripts/leak-check.mjs ..",
     "invariants": "vitest run engine/test/invariants",
     "integration": "vitest run engine/test/integration",
     "e2e": "playwright test",

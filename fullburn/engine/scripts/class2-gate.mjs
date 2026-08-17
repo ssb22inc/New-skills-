@@ -27,9 +27,19 @@ const changedFiles = parseNameStatusZ(diff);
 
 // Approval entries are only credible if they arrived with the change they
 // approve. Who wrote them is H19's job: CODEOWNERS on APPROVALS/**.
+const git = (cmd) => execSync(`git -C ${JSON.stringify(repoRoot)} ${cmd}`, { encoding: "utf8" });
+
 const approvalDocs = changedFiles
   .filter((f) => f.status === "added" && /^fullburn\/APPROVALS\/.*\.md$/.test(f.path) && !f.path.endsWith("README.md"))
-  .map((f) => ({ path: f.path, status: f.status, content: readFileSync(join(repoRoot, f.path), "utf8") }));
+  .map((f) => ({
+    path: f.path,
+    status: f.status,
+    content: readFileSync(join(repoRoot, f.path), "utf8"),
+    // Who committed the approval. Self-asserted and therefore not proof of a
+    // human — but it does refuse the automation principal signing its own work
+    // (R7-07). CODEOWNERS + branch protection is the half that proves identity.
+    authoredBy: git(`log -1 --format=${JSON.stringify("%an <%ae>")} -- ${JSON.stringify(f.path)}`).trim(),
+  }));
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 const resolvedBase = execSync(`git -C ${JSON.stringify(repoRoot)} rev-parse ${JSON.stringify(baseRef)}`, {

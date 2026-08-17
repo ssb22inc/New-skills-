@@ -29,8 +29,9 @@ const MUTATIONS = [
       if (open.clientId === clientId) micros += open.micros;
     }`,
     `    let micros = this.#reservedMicros.get(this.#key(clientId)) ?? 0;`],
-  ["N-08 departed before call", "engine/src/gateway.ts", "      departed = true;\n      output = await inFlight;", "      output = await inFlight;\n      departed = true;"],
-  ["N-08 inner-catch settles regardless", "engine/src/gateway.ts", "      if (!departed) throw err;", "      if (false) throw err;"],
+  // N-08's two entries were REPLACED, not deleted: R7-04 overturned N-08's
+  // conclusion, so the shape they mutated no longer exists. Their successors
+  // are the R7-04 pair below, which mutate the fix back into N-08's shape.
   ["N-07 silent release catch", "engine/src/gateway.ts", "        releaseLeak = releaseErr;", "        void releaseErr;"],
   ["N-02 vitest extension list", "engine/scripts/gate-lib.mjs", "  /(?:^|\\/)vite(?:st)?[._\\-][^/]*$/,", "  /^fullburn\\/vitest[^/]*\\.(?:ts|js|mjs|json)$/,"],
   ["N-02 vite pattern", "engine/scripts/gate-lib.mjs", "  /(?:^|\\/)vite(?:st)?[._\\-][^/]*$/,", "  /^__never__$/,"],
@@ -61,11 +62,55 @@ const MUTATIONS = [
   ["R7-03 non-finite instant refused", "engine/src/spend-meter.ts", "  if (!Number.isFinite(nowMs)) {", "  if (false) {"],
   ["R7-06 meter owns the ceilings", "engine/src/spend-meter.ts", "    const caps = this.#capsFor(clientId);", "    const caps = arguments[2] ?? this.#capsFor(clientId);"],
   ["R7-06 resolver required", "engine/src/spend-meter.ts", "    if (typeof capsFor !== \"function\") {", "    if (false) {"],
+  // R7-04: `departed` set BEFORE the transport call. The mutation restores
+  // exactly N-08's shape — set it after the await — which is what the
+  // cross-family review showed returns headroom for served requests.
+  ["R7-04 departed set before dispatch", "engine/src/gateway.ts",
+    `    departed = true;
+    try {
+      output = await deps.transport.post(`,
+    `    try {
+      output = await deps.transport.post(`],
+  ["R7-04 only a typed pre-dispatch releases", "engine/src/gateway.ts", "      if (err instanceof PreDispatchError) {", "      if (err instanceof Error) {"],
+  // R7-05: the provider's actual charge is committed when the transport can
+  // produce it; the mutation commits the estimate unconditionally.
+  ["R7-05 actual charge committed", "engine/src/spend-meter.ts", "    const micros = actualUsd === undefined ? open.micros : toMicros(actualUsd, \"actual provider charge\");", "    const micros = open.micros; void actualUsd;"],
+  // R7-07: the in-repo half of the identity lock. The out-of-repo half —
+  // branch protection + CODEOWNERS — is not mutable from here and is disclosed
+  // in ledger L27 instead.
+  ["R7-07 agent-authored approval refused", "engine/scripts/gate-lib.mjs", "  if (forged.length > 0) {", "  if (false) {"],
+  ["R7-07 authorship check wired", "engine/scripts/gate-lib.mjs", "  if (!authorship.ok) return authorship;", "  void authorship;"],
+  ["R7-07 CLI supplies the author", "engine/scripts/class2-gate.mjs", "    authoredBy: git(", "    authoredByy: git("],
+  // R7-08: the two evasions the cross-family review demonstrated.
+  ["R7-08 strings blanked in the body", "engine/test/e2e-variance.ts", "      const real = withoutStrings(body);", "      const real = body;"],
+  ["R7-08 computed testDir key read", "engine/test/e2e-variance.ts", "  const keyed = /(?:\\btestDir\\s*:|\\[\\s*[\"'`]testDir[\"'`]\\s*\\]\\s*:)\\s*[\"'`]([^\"'`]+)[\"'`]/g;", "  const keyed = /\\btestDir\\s*:\\s*[\"'`]([^\"'`]+)[\"'`]/g;"],
+  ["R7-08 unreadable testDir refused", "engine/test/e2e-variance.ts", "  if (keys !== found.length) return false;", "  if (false) return false;"],
+  // R7-09: one event must never name two clients, and a lost trace must reach
+  // the caller.
+  ["R7-09 mismatched scope gets its own identity", "engine/src/gateway.ts", "    req?.trace instanceof TraceContext && !scopeMismatch ? req.trace.traceId", "    req?.trace instanceof TraceContext ? req.trace.traceId"],
+  ["R7-09 trace loss surfaced", "engine/src/gateway.ts", "      traceLost = sinkErr instanceof Error ? sinkErr.name : \"a non-error\";", "      void sinkErr;"],
+  ["R7-09 untraced marker reaches the caller", "engine/src/gateway.ts", "    if (traceLost !== null) {", "    if (false) {"],
+  // R7-10: grades are evidence only if this engine computed them.
+  ["R7-10 enforcement provenance", "engine/src/grade-registry.ts",
+    `  if (!COMPUTED.has(grades)) {
+    throw new GradeRegistryError(
+      "enforcement requires grades from computeGrades`,
+    `  if (false) {
+    throw new GradeRegistryError(
+      "enforcement requires grades from computeGrades`],
+  ["R7-10 published report provenance", "engine/src/grade-registry.ts", "    throw new GradeRegistryError(\"publishGradeReport requires grades from computeGrades (§12, Law 10)\");", "    void 0;"],
+  // Found while running the R7 gates, not by the review: `npm run leak-check`
+  // passed no root, so every path-scoped rule matched nothing and the local
+  // scan reported clean on a tree CI would have flagged.
+  ["leak-check scannable root", "engine/scripts/leak-check.mjs", "  assertScannableRoot(repoRoot);", "  void repoRoot;"],
+  ["leak-check local command matches CI", "package.json", "\"leak-check\": \"node engine/scripts/leak-check.mjs ..\"", "\"leak-check\": \"node engine/scripts/leak-check.mjs\""],
   // ---- r6 findings ----
   ["R6-04 ledger keyed by identity", "engine/src/spend-meter.ts", "    const open = this.#open.get(reservation);", "    const open = [...this.#open.entries()].find(([h]) => h.id === reservation.id)?.[1];"],
   ["R6-04 handle frozen", "engine/src/spend-meter.ts", "    Object.freeze(this);", "    void 0;"],
   ["R6-01 anchored tree hash", "engine/scripts/gate-lib.mjs", "    return /^[0-9a-f]{7,64}$/i.test(bare) ? bare : null;", "    const t = /[0-9a-f]{7,64}/i.exec(bare); return t === null ? null : t[0];"],
-  ["R6-02 test body is read", "engine/test/e2e-variance.ts", "      return body !== null && /\\bpage\\s*\\./.test(body) && /\\bawait\\b/.test(body) && /\\bexpect\\s*\\(/.test(body);", "      return /intake/i.test(s.source) && /\\bpage\\s*\\./.test(s.source);"],
+  // Restated after R7-08 split the body extraction from the string blanking:
+  // the mutation still reverts to the whole-file AND that R6-02 found.
+  ["R6-02 test body is read", "engine/test/e2e-variance.ts", "      const body = namedTestBody(code(s.source), title);", "      const body = /intake/i.test(s.source) ? s.source : null;"],
   ["R6-02 skip/todo excluded", "engine/test/e2e-variance.ts", "    if (m[1] !== undefined) continue;", "    void m[1];"],
   ["R6-03 every testDir checked", "engine/test/e2e-variance.ts", "  return found.length > 0 && found.every((d) => d === want);", "  return found.length > 0 && found[0] === want;"],
   // R6-05/P3 removed: the blockquote skip was subsumed by the column-0 anchors
@@ -91,7 +136,7 @@ const MUTATIONS = [
   ["R5-02 e2e dir pattern", "engine/scripts/gate-lib.mjs", "  /(?:^|\\/)e2e\\//,", "  /^__never__$/,"],
   ["R5-02 npmrc pattern", "engine/scripts/gate-lib.mjs", "  /(?:^|\\/)\\.npmrc$/,", "  /^__never__$/,"],
   ["R5-02 runner-targets check", "engine/test/e2e-variance.ts", "  if (!runnerPointsHere) return false;", "  if (false) return false;"],
-  ["R5-02 runnerTargets comment-strip", "engine/test/e2e-variance.ts", "  const found = [...code(playwrightConfig).matchAll(", "  const found = [...(playwrightConfig).matchAll("],
+  ["R5-02 runnerTargets comment-strip", "engine/test/e2e-variance.ts", "  const src = code(playwrightConfig);", "  const src = playwrightConfig;"],
   ["R5-03 unparseable blocks", "engine/scripts/gate-lib.mjs", "  const unresolved = judged.find((j) => j.blocking);", "  const unresolved = judged.find((j) => j.fresh && !j.ok);"],
   ["R5-03 binding decoration strip", "engine/scripts/gate-lib.mjs", '    const bare = m[1].replace(/[`*_]/g, "").trim();', "    const bare = m[1].trim();"],
   ["R5-04 header is pure prose", "engine/scripts/gate-lib.mjs", "  const tag = /<[!/?a-zA-Z]/.exec(text);\n  return tag === null ? text : text.slice(0, tag.index);", "  return text;"],

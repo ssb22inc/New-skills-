@@ -1,0 +1,26 @@
+# CODEOWNERS — R7-07. An approval proves bytes, not identity; this is what makes
+# "human-only" real (Law 15, §13).
+#
+# Human ruling 2026-08-16: close this now rather than defer it to H19. Every
+# approval predating the branch-protection lock is UNVERIFIED (ledger L27),
+# including the signed H8 caps entry.
+#
+# This file is inert on its own. It only bites once branch protection requires
+# CODEOWNER review — see HUMAN_TASKS H19.
+
+# The approval mechanism itself, and the values it protects.
+/fullburn/APPROVALS/                @ssb22inc
+/fullburn/config/src/caps.ts        @ssb22inc
+
+# The Laws, the spec, and the adversary's own mandate.
+/fullburn/CLAUDE.md                 @ssb22inc
+/fullburn/ENGINE_BUILD.md           @ssb22inc
+/fullburn/.claude/                  @ssb22inc
+
+# The money paths and the grader.
+/fullburn/engine/src/               @ssb22inc
+/fullburn/config/src/               @ssb22inc
+
+# The gates, and everything that decides whether they run.
+/fullburn/engine/scripts/           @ssb22inc
+/.github/                           @ssb22inc

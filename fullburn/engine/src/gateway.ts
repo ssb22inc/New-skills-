@@ -53,6 +53,16 @@ export interface LlmRequest {
 export class SchemaError extends Error {}
 export class GatewayError extends Error {}
 
+/** A transport throws this to assert, deliberately and typed, that it did NOT
+ * dispatch the request — no bytes left, nothing can have been billed.
+ *
+ * It is the only way to reach the release path once `post` has been called.
+ * `post` throwing synchronously used to imply the same thing, but the interface
+ * never promised it: a transport may dispatch and then throw during its own
+ * bookkeeping, and inferring "not sent" from that returned headroom for calls
+ * the provider had already served (adversary finding R7-04). */
+export class PreDispatchError extends Error {}
+
 /** Minimal deterministic validator for the §2.4 structured-I/O contract. */
 export function validateOutput(schema: OutputSchema, output: unknown): void {
   if (typeof output !== "object" || output === null || Array.isArray(output)) {
@@ -97,7 +107,17 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
   // Traceable identity is established before anything can fail, so a refusal is
   // never an untraced decision (R2-28). traceId may be absent on a bad request;
   // that is itself recorded.
-  const traceId = req?.trace instanceof TraceContext ? req.trace.traceId : `untraced-${role}`;
+  /** Two client scopes must never share an event identity. When the supplied
+   * trace context belongs to a DIFFERENT client, the refusal used to emit
+   * `traceId` from that context beside `clientId` from the request — one event
+   * naming two clients, into a sink keyed by traceId, where it can misattribute
+   * or overwrite (adversary finding R7-09, Law 3). A mismatch now gets a fresh
+   * identity of its own and is marked, so it lands as a security event rather
+   * than as either client's history. Unusable contexts get a collision-resistant
+   * id too: `untraced-<role>` repeated across every invalid request. */
+  const scopeMismatch = req?.trace instanceof TraceContext && req.trace.clientId !== req?.clientId;
+  const traceId =
+    req?.trace instanceof TraceContext && !scopeMismatch ? req.trace.traceId : `unscoped-${role}-${randomEventId()}`;
   let modelId = "(unbound)";
   let secrets: string[] = [];
   let reservation: SpendReservation | null = null;
@@ -114,6 +134,8 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
    * which is the only question the release decision may depend on. */
   let departed = false;
   let releaseLeak: unknown = null;
+  /** Set when the failure trace itself could not be emitted. */
+  let traceLost: string | null = null;
 
   const traceFailure = async (message: string, output: unknown = null): Promise<void> => {
     try {
@@ -129,9 +151,13 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
         outcome: "error",
         errorMessage: message,
       });
-    } catch {
-      // The call has already failed; a sink outage must not mask the root cause
-      // the operator actually needs. No decision proceeds untraced.
+    } catch (sinkErr) {
+      // A sink outage must not mask the root cause the operator needs, so this
+      // does not throw — but it USED to discard the error silently while the
+      // file claimed every exit is traced. Law 11 calls an untraced decision a
+      // bug, so the loss is recorded on the error that does reach the caller
+      // rather than swallowed (adversary finding R7-09).
+      traceLost = sinkErr instanceof Error ? sinkErr.name : "a non-error";
     }
   };
 
@@ -147,7 +173,9 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
 
     // Tracing is not optional (Law 11): a real TraceContext, scoped to this client.
     if (!(req.trace instanceof TraceContext)) throw new TraceEmitError("llm() requires a TraceContext");
-    if (req.trace.clientId !== req.clientId) {
+    if (scopeMismatch) {
+      // Emitted under the fresh identity assigned above, never under the other
+      // client's traceId (R7-09).
       throw new TraceEmitError("trace context is scoped to a different client (Law 3)");
     }
     // Vault least-scope (R11): the vault handle must belong to this client.
@@ -199,25 +227,45 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // line and leaves `departed` false; anything after the handoff is billable
     // whatever the promise does. The flag is still set BEFORE the await, so a
     // rejection is settled, never released (M-01/M-04).
+    // An absent `post` is the ONLY failure that is provably pre-dispatch
+    // without the transport's cooperation: there is nothing to call, so nothing
+    // can have been sent. Checked before the flag, so it releases.
     if (typeof deps.transport?.post !== "function") {
       throw new GatewayError("transport has no post() — refusing spend (fail closed)");
     }
+
+    // DEPARTED IS SET BEFORE THE CALL, NOT AFTER IT.
+    //
+    // N-08 concluded the opposite: a synchronous throw meant nothing had left
+    // the building, so it should release. The cross-family review showed that
+    // conclusion rests on a promise the interface never makes — a conforming
+    // transport may dispatch the provider request and then throw synchronously
+    // during its own bookkeeping, so `post` throwing proves nothing about
+    // whether bytes went out (adversary finding R7-04). Repeated, that returned
+    // headroom for calls the provider had already served: r3's failure shape at
+    // a different boundary.
+    //
+    // The two errors are not symmetric. Releasing a departed request breaches
+    // the cap; settling an undeparted one overcharges by one call and is caught
+    // by the daily reconciliation L26 describes. Conservative means settle.
+    //
+    // A transport that KNOWS it did not dispatch says so with a typed
+    // PreDispatchError, and only that releases. Proof, not inference.
+    departed = true;
     try {
-      const inFlight = deps.transport.post(
+      output = await deps.transport.post(
         url,
         { role, input: req.input, contextBudgetTokens: card.contextBudgetTokens },
         { authorization: `Bearer ${key.value}`, "x-fullburn-client": req.clientId },
       );
-      departed = true;
-      output = await inFlight;
     } catch (err) {
-      // Only a request that actually departed is billable. A synchronous throw
-      // from `post` lands here too, with `departed` still false, and settling it
-      // would charge for a call that never happened — so the outer catch's
-      // release path is the correct owner of that case (N-08).
-      if (!departed) throw err;
-      // The request left the building: the provider may well have billed it, so
-      // the reservation is SETTLED, not released (F3).
+      if (err instanceof PreDispatchError) {
+        // The transport asserts nothing was sent. Its word, typed and
+        // deliberate, is the only thing that reopens the release path.
+        departed = false;
+        throw err;
+      }
+      // Anything else may have been billed upstream: SETTLE, never release (F3).
       settleOrFailClosed(meter, reservation);
       throw redactError(err, secrets, GatewayError);
     }
@@ -273,8 +321,18 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
         : `${safe.message} [reservation leaked: meter.release threw ${releaseLeak instanceof Error ? releaseLeak.name : "a non-error"}; ` +
           `$${reservation?.amountUsd ?? 0} of headroom remains consumed for a request that never departed]`,
     );
+    if (traceLost !== null) {
+      // The caller learns the decision was not recorded. Silence here is what
+      // makes "untraced = bug" unfalsifiable.
+      safe.message = `${safe.message} [UNTRACED: the failure sink threw ${traceLost}; this refusal is not in the audit record]`;
+    }
     throw safe;
   }
+}
+
+/** Collision-resistant enough for an event id; not a secret. */
+function randomEventId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** A settle that fails leaves the charge unrecorded, which is a data lie about

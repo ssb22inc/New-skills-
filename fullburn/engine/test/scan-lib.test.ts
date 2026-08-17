@@ -115,4 +115,27 @@ describe("structural rules (Law 1, 6, 11, 18) — code only", () => {
     // (and possibly process.exit'd) during import above.
     expect(typeof scanContent).toBe("function");
   });
+
+  /** The scan's rules are all written against repo-root-relative paths, so the
+   * root it is handed decides whether any of them apply. Given the wrong root
+   * it did not fail — `STRUCTURAL_SCOPE` matched nothing and the whole
+   * structural half reported clean. `npm run leak-check` had been doing exactly
+   * that: it passed no root, defaulted to `.` under fullburn/, and disagreed
+   * with the CI invocation that passes `..`. Nothing drove scanTree, so both
+   * the divergence and the disabled rules were invisible.
+   *
+   * MUTATION: drop assertScannableRoot, or revert the npm script's `..`. */
+  it("refuses a root whose paths its rules cannot match", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { scanTree } = await import("../scripts/leak-check.mjs");
+    const { readFileSync } = await import("node:fs");
+    const repoRoot = new URL("../../../", import.meta.url).pathname.replace(/\/$/, "");
+    expect(() => scanTree(repoRoot), "the real repository root was refused").not.toThrow();
+    // The fullburn/ workspace is NOT the repository root: handed it, every
+    // path-scoped rule silently matches nothing.
+    expect(() => scanTree(`${repoRoot}/fullburn`)).toThrow(/REPOSITORY root/);
+    // And the documented local command must be the one CI runs.
+    const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+    expect(pkg.scripts["leak-check"], "the local scan no longer matches CI's").toContain("leak-check.mjs ..");
+  });
 });

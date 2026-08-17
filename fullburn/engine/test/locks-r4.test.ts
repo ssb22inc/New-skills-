@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EvalAttestation, ROLE_BINDINGS, attestEvalRun, bindRole } from "@fullburn/config/models";
 import { CapError, getCaps } from "@fullburn/config/caps";
-import { llm } from "../src/gateway.ts";
+import { PreDispatchError, llm } from "../src/gateway.ts";
 import { MemorySpendMeter, MeterUnavailableError, SpendReservation, type SpendCeilings } from "../src/spend-meter.ts";
 import { TraceContext } from "../src/tracing.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
@@ -95,12 +95,20 @@ describe("money — held money is never invisible (N-09)", () => {
 });
 
 describe("money — a request that never departed is not billable (N-07, N-08)", () => {
-  /** `departed = true` was set before the transport call, so a transport that
-   * threw synchronously — or had no `post` at all — was settled as billable
-   * although it provably never left the building.
+  /** SEMANTICS INVERTED BY R7-04, and the reversal is the point.
    *
-   * MUTATION: move `departed = true` back above the `transport.post(...)` call. */
-  it("a synchronous transport throw is released, not settled", async () => {
+   * N-08 concluded a synchronous throw meant nothing had left the building and
+   * should release. The cross-family review showed that rests on a promise the
+   * `GatewayTransport` interface never makes: a conforming transport may
+   * dispatch and then throw during its own bookkeeping. Repeated, releasing on
+   * that returned headroom for calls the provider had already served.
+   *
+   * Releasing a departed request breaches the cap; settling an undeparted one
+   * overcharges by one call and is caught by daily reconciliation (L26). The
+   * errors are not symmetric, so the conservative direction is settle.
+   *
+   * MUTATION: move `departed = true` back below the post() call. */
+  it("a synchronous transport throw is SETTLED — it may have dispatched", async () => {
     const ops: string[] = [];
     const { deps, meter } = makeDeps({
       transport: {
@@ -113,7 +121,31 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
-    expect(ops).toEqual(["reserve", "release"]);
+    expect(ops, "a throw that may have dispatched released the headroom").toEqual(["reserve", "settle"]);
+    expect(meter.todayUsd(TEST_CLIENT)).toBeGreaterThan(0);
+    expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
+  });
+
+  /** The other half: a transport that KNOWS it did not dispatch says so with a
+   * typed PreDispatchError, and only that reopens the release path. Proof from
+   * the transport, not inference from the shape of the failure.
+   *
+   * MUTATION: drop the `instanceof PreDispatchError` branch, or stop resetting
+   * `departed` inside it. */
+  it("a typed PreDispatchError releases, because the transport asserts nothing was sent", async () => {
+    const ops: string[] = [];
+    const { deps, meter } = makeDeps({
+      transport: {
+        post() {
+          throw new PreDispatchError("url rejected before any socket was opened");
+        },
+      },
+    });
+    trackOps(meter, ops);
+    await expect(
+      llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
+    ).rejects.toThrow();
+    expect(ops, "a proven-undispatched request was charged").toEqual(["reserve", "release"]);
     expect(meter.todayUsd(TEST_CLIENT)).toBe(0);
     expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
   });
@@ -163,7 +195,8 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
     const { deps, sink, meter } = makeDeps({
       transport: {
         post() {
-          throw new Error("never departs");
+          // Typed, so the release path is reached at all (R7-04).
+          throw new PreDispatchError("never departs");
         },
       },
     });

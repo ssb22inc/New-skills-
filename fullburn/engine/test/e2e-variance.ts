@@ -14,10 +14,21 @@ export const E2E_VARIANCE_EXPIRES_AT_PHASE = 1;
 /** Comments are stripped before matching. Written naively this check passed at
  * PHASE 1 against a smoke-only suite, because the smoke spec's own doc-comment
  * promises "real coverage of the intake confirm flow" — it matched the promise
- * instead of the work. Prose about a thing is not the thing. */
-/** Strip comments so prose about the work cannot stand in for the work. */
+ * instead of the work. Prose about a thing is not the thing.
+ *
+ * Strings are NOT stripped here: titles are strings and must stay readable for
+ * the title match. `withoutStrings` handles the body separately (R7-08). */
 function code(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
+
+/** Blanks string literals, keeping their delimiters so structure survives.
+ * Applied to a test BODY only — titles are strings and must stay readable. */
+function withoutStrings(source: string): string {
+  return source
+    .replace(/`(?:\\.|[^`\\])*`/g, "``")
+    .replace(/"(?:\\.|[^"\\\n])*"/g, '""')
+    .replace(/'(?:\\.|[^'\\\n])*'/g, "''");
 }
 
 /** Does the runner point at the directory these specs live in — and ONLY there?
@@ -33,9 +44,20 @@ function code(source: string): string {
  * authoritative — the check cannot tell, and guessing is how it was fooled. */
 export function runnerTargets(playwrightConfig: string, specDir: string): boolean {
   const want = specDir.replace(/^\.\//, "").replace(/\/$/, "");
-  const found = [...code(playwrightConfig).matchAll(/testDir\s*:\s*["'`]([^"'`]+)["'`]/g)].map((m) =>
-    m[1]!.replace(/^\.\//, "").replace(/\/$/, ""),
-  );
+  const src = code(playwrightConfig);
+  // Every spelling of the key, including the computed form. `["testDir"]: "x"`
+  // overrides a literal `testDir:` and the check returned true anyway, so the
+  // runner ran somewhere else while the variance reported as holding
+  // (adversary finding R7-08).
+  const keyed = /(?:\btestDir\s*:|\[\s*["'`]testDir["'`]\s*\]\s*:)\s*["'`]([^"'`]+)["'`]/g;
+  const found = [...src.matchAll(keyed)].map((m) => m[1]!.replace(/^\.\//, "").replace(/\/$/, ""));
+  // Every OCCURRENCE of the key must have yielded a literal. Counting rather
+  // than a negative lookahead, because `\s*(?!["\'`])` backtracks to zero width
+  // and matches the well-formed case too — a check that was wrong in the
+  // direction that reports trouble, but wrong all the same.
+  const keys = [...src.matchAll(/(?:\btestDir\s*:|\[\s*["'`]testDir["'`]\s*\]\s*:)/g)].length;
+  // A value the check cannot read statically is refused, not assumed benign.
+  if (keys !== found.length) return false;
   return found.length > 0 && found.every((d) => d === want);
 }
 
@@ -88,8 +110,11 @@ export function e2eVarianceHolds(
     .filter((s) => s.name.endsWith(".spec.ts") && s.name !== "smoke.spec.ts")
     .some((s) => {
       const body = namedTestBody(code(s.source), title);
-      // A named test that drives a page, inside its own body, with something to
-      // await. An empty body satisfies nothing.
-      return body !== null && /\bpage\s*\./.test(body) && /\bawait\b/.test(body) && /\bexpect\s*\(/.test(body);
+      if (body === null) return false;
+      // Strings are blanked HERE, not before the title match: a body whose only
+      // content was `const s = "await page.goto(); expect("` satisfied every
+      // check while performing no page action and no assertion (R7-08).
+      const real = withoutStrings(body);
+      return /\bpage\s*\./.test(real) && /\bawait\b/.test(real) && /\bexpect\s*\(/.test(real);
     });
 }

@@ -136,6 +136,47 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     expect(honoured.out).toContain(base);
   });
 
+  /** R7-07. The gate verified the approval's BYTES and never its author, so the
+   * same agent raising the cap could commit a conforming approval beside it and
+   * satisfy the rule that exists to restrain it. This is the in-repo half: a
+   * committer name is self-asserted, so it raises the cost without proving a
+   * human — branch protection plus CODEOWNERS is the half that does, and ledger
+   * L27 records that every approval predating that lock is unverified.
+   *
+   * It lives HERE and not in the unit suite because the author comes from
+   * `git log`, at the single CLI call site N-03 already proved is invisible to
+   * every test that drives the library directly.
+   *
+   * MUTATION: drop `authoredBy:` from class2-gate.mjs. */
+  it("an approval the automation principal committed does not open the gate", () => {
+    const base = git("rev-parse", "HEAD").trim();
+    const sha = (path: string) =>
+      execFileSync("sha256sum", [join(repo, path)], { encoding: "utf8" }).split(" ")[0];
+    const fromHash = sha("fullburn/config/src/caps.ts");
+    write("fullburn/config/src/caps.ts", "export const CAPS = { dailyAiSpendUsd: 500 };\n");
+    const toHash = sha("fullburn/config/src/caps.ts");
+    const approval = ["Approved-by: human", "approves: fullburn/config/src/caps.ts", `base-commit: ${base}`,
+      `from-content-hash: ${fromHash}`, `content-hash: ${toHash}`].join("\n") + "\n";
+
+    // The agent raises the cap and signs off on it in the same breath. Note the
+    // approval's own `Approved-by:` line still says "human" — the document
+    // cannot be trusted about who wrote it, which is the entire finding.
+    write("fullburn/APPROVALS/2026-08-17-self-approved.md", approval);
+    git("add", "-A");
+    git("-c", "user.name=Claude", "-c", "user.email=noreply@anthropic.com", "commit", "-q", "-m", "raise the cap");
+    const selfApproved = gate("class2-gate.mjs", repo, base);
+    expect(selfApproved.code, `the agent approved its own Class-2 change:\n${selfApproved.out}`).toBe(1);
+    expect(selfApproved.out).toMatch(/automation principal/);
+
+    // The identical bytes, committed by a human, are honoured.
+    git("rm", "-q", "fullburn/APPROVALS/2026-08-17-self-approved.md");
+    write("fullburn/APPROVALS/2026-08-17-human-approved.md", approval);
+    git("add", "-A");
+    git("-c", "user.name=A Human", "-c", "user.email=human@example.invalid", "commit", "-q", "-m", "approve");
+    const honoured = gate("class2-gate.mjs", repo, base);
+    expect(honoured.code, honoured.out).toBe(0);
+  });
+
   it("refuses to run at all without a base ref", () => {
     expect(gate("class2-gate.mjs", repo).code).toBe(1);
   });

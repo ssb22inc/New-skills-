@@ -32,9 +32,27 @@ export function* walk(dir) {
   }
 }
 
+/** Every path-scoped rule in scan-lib — STRUCTURAL_SCOPE, the per-file evidence
+ * exemptions — is written against repo-root-relative paths (`fullburn/...`).
+ * Handed the WRONG root the scan does not fail: `STRUCTURAL_SCOPE` simply
+ * matches nothing, so the entire structural half turns itself off and reports
+ * "clean". `npm run leak-check` passed no root at all, defaulted to `.`, and
+ * had been silently running with those rules inert while CI — which passes `..`
+ * — ran the real scan. The two disagreed, and the local one was the reassuring
+ * one. A scan that cannot see its own scope must say so, not pass. */
+function assertScannableRoot(repoRoot) {
+  if (!existsSync(join(repoRoot, "fullburn"))) {
+    throw new Error(
+      `leak-check must be given the REPOSITORY root (the directory containing fullburn/), not ${resolve(repoRoot)} — ` +
+        "every path-scoped rule is written against repo-relative paths and would silently match nothing",
+    );
+  }
+}
+
 export function scanTree(repoRoot) {
   const findings = [];
   if (!existsSync(repoRoot)) return findings;
+  assertScannableRoot(repoRoot);
   for (const file of walk(repoRoot)) {
     const rel = relative(repoRoot, file);
     if (SKIP_TOP.has(rel.split("/")[0])) continue;

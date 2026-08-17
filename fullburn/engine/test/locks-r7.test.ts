@@ -125,3 +125,208 @@ describe("money — ceilings are the meter's, never the caller's (R7-06)", () =>
     expect(() => new build(() => 0, "not a function")).toThrow(/caps resolver/);
   });
 });
+
+describe("money — the committed figure is the provider's charge when there is one (R7-05)", () => {
+  /** The ledger committed the RESERVED estimate and called it spend. Human
+   * ruling 2026-08-16: meter the best-available number per call and true it up
+   * by daily reconciliation; do not gate Phase 0 on a real-time provider cost
+   * the API may not expose. So when the transport CAN produce the actual
+   * charge, that is what lands — in both directions — and ledger L26 records
+   * that the live figure is an estimate until reconciliation runs.
+   *
+   * MUTATION: commit `open.micros` unconditionally and ignore `actualUsd`. */
+  it("an actual charge above the estimate is what consumes the ceiling", () => {
+    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
+    // Reserve $1, but the provider actually billed $9.50.
+    m.settle(m.reserve("pulsern", 1), 9.5);
+    expect(m.todayUsd("pulsern"), "the estimate was committed instead of the real charge").toBe(9.5);
+    // $0.60 more would break the $10 ceiling; the estimate would have left $9.
+    expect(() => m.reserve("pulsern", 0.6), "an under-estimate widened the day").toThrow(CapError);
+  });
+
+  it("an actual charge below the estimate returns the difference", () => {
+    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
+    m.settle(m.reserve("pulsern", 9), 0.25);
+    expect(m.todayUsd("pulsern")).toBe(0.25);
+    expect(() => m.reserve("pulsern", 9), "headroom the client never spent stayed consumed").not.toThrow();
+  });
+
+  it("with no actual available the estimate stands — and it is the reserved amount", () => {
+    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
+    m.settle(m.reserve("pulsern", 2.5));
+    expect(m.todayUsd("pulsern")).toBe(2.5);
+  });
+
+  /** An unusable actual must not silently fall back to the estimate: that is a
+   * wrong number presented as a measured one. */
+  it("a non-finite actual is refused rather than rounded away", () => {
+    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
+    expect(() => m.settle(m.reserve("pulsern", 1), Number.NaN)).toThrow();
+    expect(() => m.settle(m.reserve("pulsern", 1), -1)).toThrow();
+  });
+
+  /** The disclosure is load-bearing (Law 10): the ledger must SAY the live
+   * number is an estimate trued up daily, or the reconciliation is folklore.
+   *
+   * MUTATION: delete L26 from the ledger. */
+  it("the ledger records that the live figure is an estimate", async () => {
+    const { readFileSync } = await import("node:fs");
+    const ledger = readFileSync(new URL("../../reports/LIVE_VERIFICATION_LEDGER.md", import.meta.url), "utf8");
+    const l26 = /\|\s*L26\s*\|[\s\S]*?\n\|/.exec(ledger)?.[0] ?? "";
+    expect(l26, "L26 is missing from the ledger").not.toBe("");
+    expect(l26.toLowerCase(), "L26 no longer calls the metered figure an estimate").toContain("estimate");
+    expect(l26.toLowerCase(), "L26 no longer promises daily reconciliation").toContain("reconcil");
+  });
+});
+
+describe("control plane — an approval cannot be minted by the agent it restrains (R7-07)", () => {
+  /** The gate verified the bytes and never the author, so the same agent
+   * changing caps could add a conforming approval file and satisfy the rule
+   * forbidding it. This is the in-repo half only: a committer name is
+   * self-asserted, so it raises the cost without proving a human. Ledger L27
+   * records that every approval predating branch protection is unverified.
+   *
+   * MUTATION: drop the authorship check, or empty AUTOMATION_AUTHORS. */
+  it("an approval committed by the automation principal is refused", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { checkClass2Approvals, checkApprovalAuthorship } = await import("../scripts/gate-lib.mjs");
+    const capsPath = "fullburn/config/src/caps.ts";
+    const doc = (authoredBy: string) => ({
+      path: "fullburn/APPROVALS/x.md",
+      status: "added",
+      authoredBy,
+      content: `approves: ${capsPath}\nbase-commit: b\nfrom-content-hash: old\ncontent-hash: new`,
+    });
+    const args = {
+      changedFiles: [{ status: "modified", path: capsPath }],
+      hashOf: () => "new",
+      baseHashOf: () => "old",
+      baseCommit: "b",
+    };
+    for (const who of ["Claude <noreply@anthropic.com>", "github-actions[bot] <bot@github.com>", "Claude Opus 5 <x@y.z>"]) {
+      const res = checkClass2Approvals({ ...args, approvalDocs: [doc(who)] });
+      expect(res.ok, `${who} minted its own approval`).toBe(false);
+      expect(res.reason).toMatch(/automation principal/);
+    }
+    // A human-authored one is honoured.
+    expect(checkClass2Approvals({ ...args, approvalDocs: [doc("A Human <a@example.com>")] }).ok).toBe(true);
+    // …and an approval with no recorded author is not refused on that ground
+    // alone — the gate has nothing to judge, which L27 is the record of.
+    expect(checkApprovalAuthorship([{ path: "p", content: "" }]).ok).toBe(true);
+  });
+
+  /** MUTATION: delete .github/CODEOWNERS. Inert until branch protection is on,
+   * but its absence is what makes the whole mechanism honour-system. */
+  it("CODEOWNERS covers the approval mechanism and everything it protects", async () => {
+    const { readFileSync } = await import("node:fs");
+    const owners = readFileSync(new URL("../../../.github/CODEOWNERS", import.meta.url), "utf8");
+    for (const path of [
+      "/fullburn/APPROVALS/",
+      "/fullburn/config/src/caps.ts",
+      "/fullburn/CLAUDE.md",
+      "/fullburn/engine/src/",
+      "/fullburn/engine/scripts/",
+      "/.github/",
+    ]) {
+      expect(owners, `${path} has no CODEOWNER`).toContain(path);
+    }
+  });
+});
+
+describe("observability — a refusal that was not recorded says so (R7-09)", () => {
+  /** `traceFailure` swallowed every sink error while the file claimed every
+   * exit is traced. Law 11 calls an untraced decision a bug, so the loss is now
+   * surfaced on the error that reaches the caller.
+   *
+   * MUTATION: restore the bare `catch {}` in traceFailure. */
+  it("a failed trace emission is reported on the thrown error", async () => {
+    const { makeDeps: mk, TEST_CLIENT: C } = await import("./helpers.ts");
+    const { llm } = await import("../src/gateway.ts");
+    const { TraceContext } = await import("../src/tracing.ts");
+    const { ROLE_BINDINGS } = await import("@fullburn/config/models");
+    const { deps, sink } = mk({
+      transport: {
+        async post() {
+          throw new Error("upstream 500");
+        },
+      },
+    });
+    sink.setFailing(true);
+    const message = await llm({ ...deps, bindings: ROLE_BINDINGS }, {
+      role: "hello-world",
+      clientId: C,
+      input: {},
+      trace: new TraceContext("t-untraced", C),
+    }).then(() => "", (e: Error) => e.message);
+    expect(message, "an untraced refusal claimed nothing was wrong").toContain("UNTRACED");
+  });
+
+  /** MUTATION: emit the mismatched context's traceId instead of a fresh id.
+   * One event naming two clients, into a sink keyed by traceId. */
+  it("a cross-scoped trace context never lends its identity to another client", async () => {
+    const { makeDeps: mk, TEST_CLIENT: C } = await import("./helpers.ts");
+    const { llm } = await import("../src/gateway.ts");
+    const { TraceContext } = await import("../src/tracing.ts");
+    const { ROLE_BINDINGS } = await import("@fullburn/config/models");
+    const { deps, sink } = mk();
+    await llm({ ...deps, bindings: ROLE_BINDINGS }, {
+      role: "hello-world",
+      clientId: C,
+      input: {},
+      trace: new TraceContext("other-clients-trace", "someone-else"),
+    }).catch(() => undefined);
+    const emitted = sink.events.map((e) => e.traceId);
+    expect(emitted, "the other client's traceId was reused").not.toContain("other-clients-trace");
+    expect(emitted.every((id) => id.startsWith("unscoped-")), "the refusal kept a borrowed identity").toBe(true);
+    // Two mismatches do not collide with each other.
+    await llm({ ...deps, bindings: ROLE_BINDINGS }, {
+      role: "hello-world",
+      clientId: C,
+      input: {},
+      trace: new TraceContext("other-clients-trace", "someone-else"),
+    }).catch(() => undefined);
+    expect(new Set(sink.events.map((e) => e.traceId)).size, "two refusals shared an event identity").toBe(
+      sink.events.length,
+    );
+  });
+});
+
+describe("grade registry — enforcement acts on evidence, not on assertion (R7-10)", () => {
+  /** `enforcement([])` froze nothing, and a caller could pass an A for a
+   * failing area or hand-build an AreaGrade. The registry did not guarantee
+   * that below-A freezes autonomy; it translated an untrusted list.
+   *
+   * MUTATION: drop the COMPUTED WeakSet check from enforcement. */
+  it("a fabricated or empty grade list cannot be enforced", async () => {
+    const { computeGrades, enforcement, publishGradeReport, GradeRegistryError, gradeAndEnforce } = await import(
+      "../src/grade-registry.ts"
+    );
+    expect(() => enforcement([]), "an empty list froze nothing, silently").toThrow(GradeRegistryError);
+    const fabricated = [{ area: "marketing-engine", grade: "A" as const, failing: [], missing: [] }];
+    expect(() => enforcement(fabricated), "a hand-built A was enforced").toThrow(GradeRegistryError);
+    expect(() => publishGradeReport(fabricated, 0), "a fabricated report was published").toThrow(GradeRegistryError);
+
+    // The genuine article works, and an empty snapshot freezes every area.
+    const real = computeGrades({});
+
+    // THE ATTACK THAT MATTERS: a fabrication of the RIGHT SHAPE. Rejecting the
+    // empty list and the one-element list only proves the length check works —
+    // a full-length hand-built all-A list is what an improver wanting its
+    // autonomy back would actually pass, and only object identity refuses it.
+    const forged = real.map((g: { area: string }) => ({ area: g.area, grade: "A" as const, failing: [], missing: [] }));
+    expect(forged.length, "the forgery is not the same shape as the genuine article").toBe(real.length);
+    expect(() => enforcement(forged), "a full-length fabricated all-A list was enforced").toThrow(GradeRegistryError);
+    expect(() => publishGradeReport(forged, 0), "a full-length fabrication was published").toThrow(GradeRegistryError);
+    // Nor does copying a genuine result launder it: the array is the evidence.
+    expect(() => enforcement([...real]), "a shallow copy passed as the genuine result").toThrow(GradeRegistryError);
+
+    expect(() => enforcement(real)).not.toThrow();
+    expect(enforcement(real).length).toBeGreaterThan(0);
+    expect(publishGradeReport(real, 0)).toContain("BELOW_A");
+
+    // A truncated copy of a genuine result is not the genuine result.
+    expect(() => enforcement(real.slice(0, 1))).toThrow(GradeRegistryError);
+    const { actions } = gradeAndEnforce({});
+    expect(actions.length).toBeGreaterThan(0);
+  });
+});

@@ -470,6 +470,37 @@ export function approvalTransition(entry, { hashOf, baseHashOf }) {
   return { from, to };
 }
 
+/** Principals whose commits cannot carry a Class-2 approval.
+ *
+ * An approval proved the bytes and never the author: a PR author or an
+ * autonomous agent could compute the base commit and both hashes, add a
+ * conforming approval file, and satisfy the gate — so the same agent changing
+ * caps could mint the evidence forbidding it (adversary finding R7-07).
+ *
+ * This is the in-repo half. It refuses an approval whose commit was authored by
+ * the automation principal, which raises the cost of the attack but does not
+ * prove a human either — a committer name is self-asserted. Only branch
+ * protection plus CODEOWNERS makes it real, and ledger L27 records that every
+ * approval predating that lock is unverified. */
+export const AUTOMATION_AUTHORS = [/\bclaude\b/i, /\bgithub-actions\b/i, /\[bot\]/i, /noreply@anthropic\.com/i];
+
+/** Refuses approvals added by a commit the automation principal authored. */
+export function checkApprovalAuthorship(approvalDocs) {
+  const forged = approvalDocs.filter(
+    (d) =>
+      typeof d.authoredBy === "string" && AUTOMATION_AUTHORS.some((re) => re.test(d.authoredBy)),
+  );
+  if (forged.length > 0) {
+    return {
+      ok: false,
+      reason: `Class-2 approvals may not be authored by the automation principal (Law 15): ${forged
+        .map((d) => `${d.path} by ${d.authoredBy}`)
+        .join(", ")}`,
+    };
+  }
+  return { ok: true, reason: "approvals are not agent-authored" };
+}
+
 export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseHashOf, baseCommit }) {
   const touched = class2TouchedPaths(changedFiles);
   if (touched.length === 0) return { ok: true, reason: "no Class-2 changes" };
@@ -487,6 +518,9 @@ export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseH
         "Class-2 approval check ran without a base commit, so approvals could not be bound to this pull request — refusing (fail closed)",
     };
   }
+
+  const authorship = checkApprovalAuthorship(approvalDocs);
+  if (!authorship.ok) return authorship;
 
   const usable = approvalDocs
     .map((d) => (typeof d === "string" ? { path: null, content: d, status: "added" } : d))
