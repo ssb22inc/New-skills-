@@ -483,13 +483,28 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     // harness's own mutation ENTRY as readily as the guard, so the first
     // version of this test passed with the guard reverted.
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
-    const { harnessVerdict } = await import("../scripts/mutate.mjs");
+    const { harnessVerdict } = await import("../scripts/mutate-lib.mjs");
     expect(harnessVerdict(0, 0).ok, "a clean run should pass").toBe(true);
     expect(harnessVerdict(1, 0).ok, "an unprotected fix did not fail the build").toBe(false);
     expect(harnessVerdict(0, 1).ok, "a stale entry did not fail the build").toBe(false);
     expect(harnessVerdict(1, 0).reason).toMatch(/unprotected/);
     const harness = readFileSync(new URL("../scripts/mutate.mjs", import.meta.url), "utf8");
     expect(harness, "the verdict does not reach an exit code").toMatch(/process\.exit\(1\)/);
+    // Imported from the RUNNER-FREE module: importing mutate.mjs for a helper is
+    // what turned this very test into a nested mutation pass once.
+    expect(harness, "the harness no longer delegates its verdict").toMatch(/from "\.\/mutate-lib\.mjs"/);
+
+    /** THE SELF-REFERENCE RULE. An entry targeting the harness contains its own
+     * target as a string, and `String.replace` takes the FIRST occurrence — the
+     * entry, not the code. Three entries reported a survivor for that reason in
+     * one session, each time because a guard had never actually been reverted:
+     * the harness was lying about its own coverage, in the direction that reads
+     * as safety.
+     *
+     * MUTATION: drop `searchFrom`, or apply with `original.replace(from, to)`. */
+    expect(harness, "a self-targeting entry can rewrite the table instead of the code").toMatch(/searchFrom\(path\)/);
+    expect(harness, "the mutation is applied by replace() again").not.toMatch(/original\.replace\(from, to\)/);
+    expect(harness, "the table boundary is not computed").toMatch(/tableEnd/);
   });
 
   /** The matcher itself, driven directly — a matcher that returned true for

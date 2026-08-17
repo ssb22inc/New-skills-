@@ -12,10 +12,11 @@
  *
  * PATTERN-NOT-FOUND means the code moved and the entry is now stale — it is a
  * failure to investigate, not a pass. */
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { MARKER, harnessVerdict, recoverInFlight } from "./mutate-lib.mjs";
 
 /** The fullburn workspace root, two levels up from engine/scripts/. */
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
@@ -24,24 +25,6 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, ""
  * just as much: R8-04 was two of them. */
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
 const resolveEntry = (file) => `${file.startsWith(".github/") ? REPO_ROOT : ROOT}/${file}`;
-
-/** The harness's verdict, as a pure function so it can be driven directly.
- *
- * Extracted because a test that greps this file for the guard's source text
- * matches the harness's OWN mutation entry as readily as the guard — it passed
- * with the guard reverted. A behaviour is locked by calling it, not by reading
- * the line that implements it. */
-export function harnessVerdict(survived, notFound) {
-  if (survived > 0 || notFound > 0) {
-    return {
-      ok: false,
-      reason:
-        `MUTATION HARNESS FAIL: ${survived} unprotected fix(es), ${notFound} stale entr(ies). ` +
-        "A fix whose one-line revert leaves the suite green is not protected by anything.",
-    };
-  }
-  return { ok: true, reason: "every lock bites" };
-}
 
 const MUTATIONS = [
   // ---- r4 findings ----
@@ -167,12 +150,14 @@ const MUTATIONS = [
   // R8-08: the ADVANCING half of the high-water mark.
   ["R8-08 high-water mark advances", "engine/src/spend-meter.ts", "if (seen === undefined || day > seen) this.#highWater.set(clientId, day);", "if (seen === undefined) this.#highWater.set(clientId, day);"],
   // R8-09: the acceptance bar must be a stage, and must be able to fail.
-  // ASSEMBLED, NOT WRITTEN WHOLE. An entry that targets this file must not
-  // contain its target as a contiguous literal: `original.replace(from, to)`
-  // takes the FIRST occurrence, which would be the entry itself, and the real
-  // guard would go untouched while the run reported a survivor for the wrong
-  // reason. It reported exactly that once.
-  ["R8-09 harness fails the build", "engine/scripts/mutate.mjs", "  if (survived > 0 || " + "notFound > 0) {", "  if (false) {"],
+  ["R8-09 harness fails the build", "engine/scripts/mutate-lib.mjs", "  if (survived > 0 || notFound > 0) {", "  if (false) {"],
+  // The standing invariant, 2026-08-17: a tool that writes to the source tree
+  // must be import-safe and must fail closed. Both halves get an entry.
+  ["R8-STANDING harness is import-safe", "engine/scripts/mutate.mjs", "if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {", "if (true) {"],
+  ["R8-STANDING crash marker written first", "engine/scripts/mutate.mjs", "    writeFileSync(MARKER, JSON.stringify({ path, original }));", "    void MARKER;"],
+  ["R8-STANDING crashed run is recovered", "engine/scripts/mutate-lib.mjs", "  if (!fs.existsSync(markerPath)) return null;", "  return null;\n  if (!fs.existsSync(markerPath)) return null;"],
+  ["R8-STANDING recovery is wired into the runner", "engine/scripts/mutate.mjs", "  const recovered = recoverInFlight();", "  const recovered = null;"],
+  ["R8-STANDING self-targeting entries cannot rewrite the table", "engine/scripts/mutate.mjs", "    const at = original.indexOf(from, searchFrom(path));", "    const at = original.indexOf(from);"],
   // Found while running the R7 gates, not by the review: `npm run leak-check`
   // passed no root, so every path-scoped rule matched nothing and the local
   // scan reported clean on a tree CI would have flagged.
@@ -269,19 +254,73 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     }
   };
 
+  // A marker here means the PREVIOUS run died mid-mutation. Repair before
+  // measuring anything, and say so — a silent repair would hide the fact that a
+  // run left the tree weakened.
+  const recovered = recoverInFlight();
+  if (recovered?.repaired) {
+    console.log(`RECOVERED          a previous run left ${recovered.path} mutated; restored before starting`);
+  }
+
+  /** The file currently mutated, restored by every exit path there is. */
+  let inFlight = null;
+  const restoreInFlight = () => {
+    if (inFlight === null) return;
+    writeFileSync(inFlight.path, inFlight.original);
+    rmSync(MARKER, { force: true });
+    inFlight = null;
+  };
+  // Every death a process can observe. SIGKILL is not one of them, which is
+  // what the on-disk marker is for.
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"]) {
+    process.on(sig, () => {
+      restoreInFlight();
+      process.exit(130);
+    });
+  }
+  process.on("uncaughtException", (err) => {
+    restoreInFlight();
+    console.error(`\nMUTATION HARNESS CRASHED: ${err?.message ?? err}`);
+    process.exit(1);
+  });
+  process.on("exit", restoreInFlight);
+
   let survived = 0;
   let notFound = 0;
+  /** Where to start searching for an entry's target text.
+   *
+   * AN ENTRY THAT TARGETS THIS FILE CONTAINS ITS OWN TARGET AS A STRING, and
+   * `String.replace` takes the FIRST occurrence — which is the entry, not the
+   * code. Three separate entries reported a survivor for that reason this
+   * session, each time because a guard had never actually been reverted. So a
+   * self-targeting entry is searched only BEYOND the table it lives in; every
+   * other file is searched from the start. It is the harness's own version of
+   * the rule the invariant suite applies to reading this file: a table entry is
+   * data about code, never the code itself. */
+  const SELF = fileURLToPath(import.meta.url);
+  const tableEnd = readFileSync(SELF, "utf8").indexOf("\n];") + 3;
+  const searchFrom = (path) => (path === SELF ? tableEnd : 0);
+
   for (const [name, file, from, to] of MUTATIONS) {
     const path = resolveEntry(file);
     const original = readFileSync(path, "utf8");
-    if (!original.includes(from)) {
+    const at = original.indexOf(from, searchFrom(path));
+    if (at === -1) {
       console.log(`PATTERN-NOT-FOUND  ${name}  (${file})`);
       notFound += 1;
       continue;
     }
-    writeFileSync(path, original.replace(from, to));
-    const failure = run();
-    writeFileSync(path, original);
+    // MARKER FIRST, then mutate. The other order leaves a window in which the
+    // source is broken and nothing on disk records how to put it back.
+    writeFileSync(MARKER, JSON.stringify({ path, original }));
+    inFlight = { path, original };
+    let failure;
+    try {
+      writeFileSync(path, original.slice(0, at) + to + original.slice(at + from.length));
+      failure = run();
+    } finally {
+      restoreInFlight();
+    }
     if (failure === null) {
       console.log(`*** SURVIVED ***   ${name}`);
       survived += 1;

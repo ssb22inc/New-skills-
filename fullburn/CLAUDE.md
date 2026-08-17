@@ -36,6 +36,7 @@ Read ENGINE_BUILD.md before any work. This file binds every session.
 - `VERDICT.md` is hash-locked after client-zero launch; any edit fails CI.
 - OAuth tokens live only in the vault; one appearing in code, logs, or traces is a critical defect.
 - A human-queue item past SLA leaves the engine waiting, never acting. Locked market/channel flags are structurally inert.
+- **Any tool that can write to the source tree is import-safe and fails closed.** A partial or crashed run must never leave the tree in a weakened state. (Human ruling 2026-08-17, after the mutation harness ran itself inside the test process and left 57 of 100 guards reverted on disk.) Enumerated from the filesystem and checked in `engine/test/invariants/`, so a new writing tool is covered the day it lands.
 
 ## Stack pins
 - Cloudflare stable core only as load-bearing: Workers, Durable Objects, Workflows, AI Gateway, Vectorize, R2, Browser Rendering. Preview features (Project Think, Agent Memory) behind adapters.

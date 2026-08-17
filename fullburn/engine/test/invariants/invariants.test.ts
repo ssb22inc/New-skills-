@@ -241,6 +241,129 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     expect(runnerTargets('export default { ["testDir"]: "engine/test/e2e" };', "engine/test/e2e")).toBe(true);
   });
 
+  /** STANDING INVARIANT — human ruling, 2026-08-17.
+   *
+   * "Any tool that can write to the source tree must be import-safe and must
+   * fail closed — a partial or crashed run must never leave the tree in a
+   * weakened state."
+   *
+   * Written after the mutation harness ran itself inside the test process: a
+   * lock test imported it for one exported function, which started a full
+   * mutation pass across parallel vitest workers, rewriting source under the
+   * running suite. At one point 57 of 100 guards sat reverted on disk, each
+   * looking like ordinary source. `leak-check.mjs` had carried the import-safety
+   * guard since F18; the file that enforces the acceptance bar had not.
+   *
+   * This is deliberately NOT prefixed "LIVE — ": it is not a §10.2 bullet, and
+   * the checklist self-count below must keep meaning what it says.
+   *
+   * It is enumerated from the filesystem, not from a list, so a NEW writing
+   * tool is covered the day it lands rather than the day someone remembers. */
+  it("every tool that can write to the source tree is import-safe and fails closed", async () => {
+    const { readdirSync, existsSync } = await import("node:fs");
+    const dir = new URL("../../scripts/", import.meta.url);
+    const scripts = readdirSync(dir).filter((f) => f.endsWith(".mjs"));
+    expect(scripts.length, "no scripts found — this test would pass vacuously").toBeGreaterThan(5);
+
+    /** Tools that WEAKEN the tree — write a deliberately broken version of
+     * source — not every module that happens to call writeFileSync. The
+     * restoring half (`mutate-lib.mjs`) writes too, and writes only repairs; it
+     * is the direction that matters, and conflating them would demand an
+     * entry-point guard on a module whose whole purpose is to be safely
+     * imported. */
+    const writers = scripts.filter((f) =>
+      // A weakening write is one that writes a TRANSFORMED version of the
+      // content it just read. A restore — `writeFileSync(x.path, x.original)` —
+      // writes the content back unchanged and is the direction that repairs.
+      /writeFileSync\(\s*path\s*,\s*original\s*[.+]/.test(readFileSync(new URL(f, dir), "utf8")),
+    );
+    // The harness is one; if a second ever appears it is covered automatically.
+    expect(writers, "no writing tool found — the enumeration is broken").toContain("mutate.mjs");
+
+    /** Structural checks read only the region AFTER the entry-point guard, and
+     * anchor the guard itself to column 0.
+     *
+     * The mutation harness stores its own targets as string literals, so a grep
+     * for a guard's source text matches the ENTRY that mutates that guard as
+     * readily as the guard — and passes with the guard reverted. That trap has
+     * caught two checks in this repo already (R8-09, and the first version of
+     * this one). Stripping string literals looked like the fix and was worse:
+     * the harness's comments contain unbalanced backticks, so the pairing
+     * swallowed the guard itself.
+     *
+     * Column-0 anchoring is the tool that actually fits — top-level code starts
+     * at column 0 and a table entry is always indented. `gate-lib` reached the
+     * same answer for the report header. */
+    for (const f of writers) {
+      const src = readFileSync(new URL(f, dir), "utf8");
+      // IMPORT-SAFE: the writing must sit behind an entry-point check, so
+      // importing the module for a helper cannot start it.
+      const guardAt = src.search(/^if \(process\.argv\[1\][\s\S]{0,120}import\.meta\.url/m);
+      expect(guardAt, `${f} writes to the tree without an entry-point guard`).toBeGreaterThan(-1);
+      // Everything below is about the RUNNER, so read only the runner.
+      const runner = src.slice(guardAt);
+      // FAILS CLOSED: an interrupted run must restore. Signal handlers cover
+      // the deaths a process can observe…
+      for (const sig of ["SIGINT", "SIGTERM"]) {
+        expect(runner, `${f} does not restore on ${sig}`).toContain(sig);
+      }
+      // …and an on-disk marker covers the ones it cannot (SIGKILL, OOM, power),
+      // WRITTEN BEFORE the source is broken. The other order leaves a window in
+      // which the tree is weakened and nothing on disk says how to repair it.
+      const markerWrite = runner.search(/writeFileSync\(\s*MARKER/);
+      const sourceBreak = runner.search(/writeFileSync\(\s*path\s*,\s*original\s*[.+]/);
+      expect(markerWrite, `${f} has no crash marker; a SIGKILL leaves the tree mutated`).toBeGreaterThan(-1);
+      expect(sourceBreak, `${f} no longer mutates source — this check is stale`).toBeGreaterThan(-1);
+      expect(markerWrite, `${f} breaks source before recording how to repair it`).toBeLessThan(sourceBreak);
+      // …and something must actually restore on the way out.
+      expect(runner, `${f} has no restore-on-exit path`).toMatch(/process\.on\(\s*["'`]?exit/);
+      // …and the recovery of a PREVIOUS run's crash must be wired in, not just
+      // exported for the tests below.
+      expect(runner, `${f} never recovers a previous crashed run`).toMatch(/recoverInFlight\(/);
+    }
+
+    /** WHY THERE IS NO "IMPORT IT AND SEE" CHECK HERE.
+     *
+     * The obvious behavioural test — import the module in a child process and
+     * assert the tree is untouched — was written, run, and removed. Under the
+     * very mutation it guards (the entry-point check reverted), the child
+     * import starts a full mutation pass: the test would CAUSE the damage it
+     * checks for, nested inside a harness run that is already rewriting files.
+     * It did exactly that once, leaving a marker and seven reverted guards.
+     *
+     * A check that can inflict the failure it detects is not worth its risk on
+     * a tree this one writes to. The structural check above is anchored at
+     * column 0 so a string literal cannot satisfy it, and the recovery path
+     * below is driven on a temporary fixture instead — real behaviour, no
+     * blast radius. */
+
+    // And the recovery path is DRIVEN, not just present. A marker left by a
+    // dead run must put the file back and clear itself.
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { recoverInFlight, MARKER } = await import("../../scripts/mutate-lib.mjs");
+    expect(existsSync(MARKER), "a marker is left behind after a clean run").toBe(false);
+
+    const { mkdtempSync, writeFileSync: write } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const tmp = mkdtempSync(join(tmpdir(), "mutate-crash-"));
+    const victim = join(tmp, "guard.ts");
+    const marker = join(tmp, "marker.json");
+    write(victim, "if (false) { /* MUTATED */ }\n");
+    write(marker, JSON.stringify({ path: victim, original: "if (realCheck) { /* ORIGINAL */ }\n" }));
+
+    const result = recoverInFlight(marker);
+    expect(result?.repaired, "a crashed run's mutation was not repaired").toBe(true);
+    expect(readFileSync(victim, "utf8"), "the guard was left reverted on disk").toContain("realCheck");
+    expect(existsSync(marker), "the marker outlived the repair").toBe(false);
+    // A corrupt marker is cleared rather than crashing the next run forever.
+    write(marker, "{ not json");
+    expect(recoverInFlight(marker)?.repaired).toBe(false);
+    expect(existsSync(marker)).toBe(false);
+    // No marker at all is simply nothing to do.
+    expect(recoverInFlight(marker)).toBe(null);
+  });
+
   it("the checklist checks ITSELF against the spec (R2-25)", () => {
     // Previously the file asserted only its own internal count, so a §10.2
     // bullet could be deleted from the spec, or an entry dropped here, with the
