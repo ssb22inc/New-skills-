@@ -49,7 +49,7 @@ export const fixedCaps = () => ({ dailyUsd: 200, monthlyUsd: 200, timeZone: "UTC
  * is exactly why it is safe to leave unpinned and exactly what these tests are
  * about. */
 export function meterWithFailingSettle(now: () => number = testClock) {
-  const meter = new FrozenCapsSpendMeter(now);
+  const meter = new FrozenCapsSpendMeter();
   let released = 0;
   const realRelease = meter.release.bind(meter);
   Object.defineProperty(meter, "settle", {
@@ -89,7 +89,7 @@ export function makeDeps(overrides: { now?: () => number; transport?: unknown; c
   // closed here rather than quietly proving the cap works against a ceiling
   // the test itself chose (adversary finding R8-01). The narrowing table is
   // the only thing a caller may supply, and it cannot widen.
-  const meter = new FrozenCapsSpendMeter(now, overrides.capsTable);
+  const meter = new FrozenCapsSpendMeter(overrides.capsTable);
   const sink = new MemoryTraceSink();
   const transport = (overrides.transport ?? new MockGatewayServer()) as MockGatewayServer;
   return {

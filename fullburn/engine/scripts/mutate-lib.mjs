@@ -11,6 +11,11 @@
  * Nothing here weakens the tree: `recoverInFlight` only ever RESTORES. */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
+
+/** The workspace this harness belongs to. A marker may only name a path inside
+ * it, and only the workspace it was written in. */
+const WORKSPACE = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 
 /** THE IN-FLIGHT MARKER — how a crashed run is made harmless.
  *
@@ -51,6 +56,27 @@ export function recoverInFlight(markerPath = MARKER, fs = { existsSync, readFile
     fs.rmSync(markerPath, { force: true });
     return { path: null, repaired: false };
   }
+  /** THE MARKER NAMES A PATH, AND A PATH IS NOT A CAPABILITY.
+   *
+   * `recoverInFlight` wrote whatever path the marker named, so a marker left by
+   * a run in another checkout — or one an attacker dropped, since the file is
+   * fixed, unowned and outside `.gitignore` — created files that never existed
+   * and overwrote newer content with stale pre-crash bytes (adversary finding
+   * R9-09). A repair that can write anywhere is not a repair.
+   *
+   * Three conditions, all fail-closed: the path must resolve INSIDE this
+   * workspace, the file must already exist (a repair restores, it never
+   * creates), and the marker must name the workspace it was written in. */
+  const inWorkspace = resolve(record.path).startsWith(`${WORKSPACE}/`);
+  const sameWorkspace = record.workspace === undefined || record.workspace === WORKSPACE;
+  if (!inWorkspace || !sameWorkspace || !fs.existsSync(record.path)) {
+    fs.rmSync(markerPath, { force: true });
+    return {
+      path: record.path,
+      repaired: false,
+      refused: !inWorkspace ? "outside the workspace" : !sameWorkspace ? "written by another checkout" : "no such file",
+    };
+  }
   fs.writeFileSync(record.path, record.original);
   fs.rmSync(markerPath, { force: true });
   return { path: record.path, repaired: true };
@@ -74,3 +100,33 @@ export function harnessVerdict(survived, notFound) {
   return { ok: true, reason: "every lock bites" };
 }
 
+/** Where an entry's target text actually is, and what the mutated file becomes.
+ *
+ * PURE, AND DRIVEN BY A TEST, because the rule it implements has now been got
+ * wrong three times and each time the check for it was a grep that the mutation
+ * TABLE satisfied. An entry targeting the harness contains its own target as a
+ * string literal, and `String.replace` takes the FIRST occurrence — the table
+ * row, not the code. The run then reports a survivor for an entry whose guard
+ * was never reverted, which is indistinguishable in the output from a guard
+ * that is genuinely unprotected.
+ *
+ * So a self-targeting entry is searched only BEYOND the table it lives in.
+ * Every other file is searched from the start. `isSelf` and `tableEnd` are
+ * parameters rather than module state precisely so a test can drive the case
+ * where the target appears in both places and assert WHICH one is chosen — a
+ * table entry cannot satisfy that assertion (adversary finding R9-02). */
+export function applyEntry(source, from, to, { isSelf = false, tableEnd = 0 } = {}) {
+  const at = source.indexOf(from, isSelf ? tableEnd : 0);
+  if (at === -1) return { at: -1, next: null };
+  return { at, next: source.slice(0, at) + to + source.slice(at + from.length) };
+}
+
+/** The end of the mutation table in the harness's own source. Everything before
+ * this offset is data ABOUT code and must never be treated as code. */
+export function tableEndOf(harnessSource) {
+  const at = harnessSource.indexOf("\n];");
+  // Fail closed: an unfindable table means we cannot tell data from code, and
+  // guessing zero would silently restore the exact defect this closes.
+  if (at === -1) throw new Error("mutation table not found in harness source — refusing to run (fail closed)");
+  return at + 3;
+}

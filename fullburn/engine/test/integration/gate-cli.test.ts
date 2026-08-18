@@ -290,3 +290,104 @@ describe("adversary-gate CLI", () => {
     expect(res.out).toContain("append-only");
   });
 });
+
+/** THE INTERRUPT DRILL — the "fails closed" half of the standing invariant,
+ * executed rather than grepped.
+ *
+ * The harness carried SIGINT and SIGTERM handlers under the comment "Every
+ * death a process can observe", and they could not run: the runner blocked the
+ * event loop with `execSync` for the whole suite, so a queued handler waited
+ * until every entry was done. Executed against the real harness, a Ctrl-C did
+ * not stop it, restored nothing, and three more source files were rewritten
+ * after the signal (adversary finding R9-03). The strings were present; the
+ * behaviour was absent — and the invariant that claimed to check it was
+ * grepping for the strings "SIGINT" and "SIGTERM".
+ *
+ * Human ruling 2026-08-17: a guard must be proven to block what it claims to
+ * block, BY EXECUTING IT. So this spawns the real harness, waits until it has
+ * genuinely broken a file, interrupts it, and asserts the tree came back.
+ *
+ * It lives in the integration suite because it costs real seconds — the same
+ * reasoning that put the gate CLIs here rather than in the unit suite. */
+describe("mutation harness — an interrupted run restores the tree (R9-03)", () => {
+  it("SIGINT stops it, clears the marker, and leaves no file mutated", async () => {
+    const { spawn } = await import("node:child_process");
+    const { existsSync, readFileSync } = await import("node:fs");
+    const workspace = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
+    const marker = join(workspace, "engine/scripts/.mutate-inflight.json");
+
+    /** THIS DRILL CANNOT RUN INSIDE A MUTATION RUN, and saying so is not the
+     * same as asserting the marker is absent.
+     *
+     * The first version of this test opened with
+     * `expect(existsSync(marker)).toBe(false)` — and the harness runs the whole
+     * suite WHILE holding that marker, so the assertion was false for every
+     * entry. That is adversary finding R9-01 exactly, re-created inside the
+     * drill written to prove R9-03, and the harness's own meta-check is what
+     * caught it: the negative canary reported CAUGHT for a comment-only edit.
+     *
+     * The marker's own record says which process holds it. A live holder means
+     * a harness is running and this drill would be spawning a second one into
+     * the same fixed marker path — so it declines, loudly, instead of measuring
+     * something meaningless. In CI it runs in the `verify` job, where no
+     * harness is running; the `mutation-harness` job is separate. */
+    const holder = existsSync(marker)
+      ? (() => {
+          try {
+            return JSON.parse(readFileSync(marker, "utf8"))?.pid ?? null;
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+    const harnessRunning =
+      holder !== null &&
+      (() => {
+        try {
+          process.kill(holder, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+    if (harnessRunning) {
+      console.warn(
+        `[R9-03 drill] a mutation harness (pid ${holder}) already holds the marker — declining to spawn a second. ` +
+          "This drill is meaningful only outside a harness run; CI runs it in the verify job.",
+      );
+      return;
+    }
+
+    const child = spawn(process.execPath, ["engine/scripts/mutate.mjs"], { cwd: workspace, stdio: "ignore" });
+    try {
+      // Wait until it has ACTUALLY broken a file — interrupting before that
+      // would prove nothing, because there would be nothing to restore.
+      let mutated = null;
+      for (let i = 0; i < 240 && mutated === null; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        if (existsSync(marker)) {
+          try {
+            const rec = JSON.parse(readFileSync(marker, "utf8"));
+            if (typeof rec?.path === "string" && readFileSync(rec.path, "utf8") !== rec.original) mutated = rec;
+          } catch {
+            /* the marker is mid-write; look again */
+          }
+        }
+      }
+      expect(mutated, "the harness never broke a file, so this drill proved nothing").not.toBe(null);
+
+      const exitCode = await new Promise((r) => {
+        child.on("exit", (code, signal) => r(code ?? signal));
+        child.kill("SIGINT");
+        setTimeout(() => r("STILL RUNNING"), 30_000);
+      });
+      expect(exitCode, "SIGINT did not stop the harness — it kept rewriting source").not.toBe("STILL RUNNING");
+      expect(readFileSync(mutated!.path, "utf8"), "an interrupted run left a guard reverted on disk").toBe(
+        mutated!.original,
+      );
+      expect(existsSync(marker), "the marker outlived the interrupted run").toBe(false);
+    } finally {
+      if (child.exitCode === null) child.kill("SIGKILL");
+    }
+  }, 180_000);
+});

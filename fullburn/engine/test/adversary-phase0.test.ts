@@ -68,7 +68,7 @@ const req = (i: number) => ({
 
 describe("FINDING F1 (money loss) — the AI cap check races the meter", () => {
   it("concurrent calls must not collectively exceed the daily AI cap", async () => {
-    const meter = new FrozenCapsSpendMeter(testClock, LOW_AI_CAP);
+    const meter = new FrozenCapsSpendMeter(LOW_AI_CAP);
     const transport = new YieldingTransport();
     const { deps } = depsWith(meter, transport);
 
@@ -99,7 +99,7 @@ describe("FINDING F2 (money loss) — a non-numeric meter reading fails OPEN", (
 
 describe("FINDING F3 (money loss) — billable calls that fail after the transport are never metered", () => {
   it("a provider call that returns schema-invalid output still consumes the cap", async () => {
-    const meter = new FrozenCapsSpendMeter(testClock, LOW_AI_CAP);
+    const meter = new FrozenCapsSpendMeter(LOW_AI_CAP);
     const transport = new YieldingTransport();
     transport.response = { not_the_schema: true }; // provider billed us; validation rejects
     const { deps } = depsWith(meter, transport);
@@ -191,7 +191,7 @@ describe("FINDING F6 (data lies) — grades resolve through the prototype chain"
 
 describe("FINDING F7 (isolation) — the vault secret escapes through a transport error", () => {
   it("no error leaving llm() may carry the secret, whatever the transport puts in its message", async () => {
-    const meter = new FrozenCapsSpendMeter(testClock, LOW_AI_CAP);
+    const meter = new FrozenCapsSpendMeter(LOW_AI_CAP);
     const leakyTransport: GatewayTransport = {
       async post(_url, _body, headers) {
         // Realistic: HTTP clients commonly attach request context to errors.
@@ -209,7 +209,7 @@ describe("FINDING F7 (isolation) — the vault secret escapes through a transpor
 
 describe("FINDING F8 (observability, Law 11) — failed calls emit no trace at all", () => {
   it("a call that reaches the provider and then fails must still be traced", async () => {
-    const { deps, sink } = depsWith(new FrozenCapsSpendMeter(testClock, LOW_AI_CAP), {
+    const { deps, sink } = depsWith(new FrozenCapsSpendMeter(LOW_AI_CAP), {
       async post() {
         throw new Error("upstream 500");
       },

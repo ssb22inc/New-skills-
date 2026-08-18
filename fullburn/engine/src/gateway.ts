@@ -237,12 +237,20 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
 
     // ATOMIC: read + cap-check + write, no await in between.
     reservation = meter.reserve(req.clientId, card.costBudgetUsdPerCall);
-    if (
-      reservation === null || typeof reservation !== "object" ||
-      reservation.clientId !== req.clientId || !Number.isFinite(reservation.amountUsd)
-    ) {
-      throw new MeterUnavailableError("meter returned an invalid reservation — refusing spend (fail closed)");
-    }
+    // THE POST-RESERVE VALIDATION IS GONE, AND ITS ABSENCE IS THE FIX.
+    //
+    // It checked that the returned reservation was an object, for this client,
+    // with a finite amount — written when any meter could be passed in. Since
+    // R8-01, `llm()` accepts only a `FrozenCapsSpendMeter`, whose `reserve` is
+    // pinned to the prototype's own method and returns a branded, frozen
+    // `SpendReservation` or throws. No input can fail these four conditions, so
+    // the check was dead code that read as coverage, with no test and no
+    // mutation entry — the second instance of the class L28 records, created by
+    // the same fix (adversary finding R9-08a).
+    //
+    // Deleted rather than disclosed: L28's guard has a real contract for a
+    // future meter implementation, and this one has none — `reserve` either
+    // returns the branded handle or throws.
 
     const key = deps.vault.get("ai-gateway-key");
     secrets = [key.value];

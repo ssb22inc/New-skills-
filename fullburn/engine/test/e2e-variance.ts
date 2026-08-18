@@ -132,7 +132,13 @@ export function e2eVarianceHolds(
     // Removing this filter survived the whole suite (adversary finding R8-06).
     .filter((s) => s.name.endsWith(".spec.ts") && s.name !== "smoke.spec.ts")
     .some((s) => {
-      const body = namedTestBody(code(s.source), title);
+      const stripped = code(s.source);
+      // A SKIPPED DESCRIBE SKIPS EVERYTHING INSIDE IT, however real the body
+      // looks. `test.describe.skip(...)` anywhere in the file is refused rather
+      // than reasoned about — the check cannot tell which tests it encloses,
+      // and guessing is how the previous four evasions worked (R9-11).
+      if (/\b(?:test|it)\s*\.\s*describe\s*\.\s*(?:skip|fixme)\s*\(/.test(stripped)) return false;
+      const body = namedTestBody(stripped, title);
       if (body === null) return false;
       // Strings are blanked HERE, not before the title match: a body whose only
       // content was `const s = "await page.goto(); expect("` satisfied every
@@ -144,7 +150,16 @@ export function e2eVarianceHolds(
       // token this check looks for ran none of it (adversary finding R8-06).
       // Same rule as everywhere else here: what the check cannot evaluate
       // (which branch a conditional skip takes) is refused, not assumed benign.
-      if (/\b(?:test|it)\s*\.\s*(?:skip|fixme)\s*\(/.test(real)) return false;
+      // A body that does not RUN its work satisfies nothing. `test.skip()` and
+      // `test.fixme()` called inside the body were the fourth evasion; the
+      // fifth through eighth were `test.describe.skip` wrapping it, a bare
+      // `return;` before the work, `test.fail()` (which inverts the verdict, so
+      // the assertions must FAIL for the test to pass), and a guarded early
+      // return (adversary finding R9-11). What the check cannot evaluate —
+      // which branch a conditional takes — it refuses, as everywhere else here.
+      if (/\b(?:test|it)\s*\.\s*(?:skip|fixme|fail)\s*\(/.test(real)) return false;
+      // A `return` anywhere before the end of the body may skip the work.
+      if (/\breturn\b\s*;/.test(real)) return false;
       return /\bpage\s*\./.test(real) && /\bawait\b/.test(real) && /\bexpect\s*\(/.test(real);
     });
 }

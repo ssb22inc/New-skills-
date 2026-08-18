@@ -13,10 +13,10 @@
  * PATTERN-NOT-FOUND means the code moved and the entry is now stale — it is a
  * failure to investigate, not a pass. */
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { MARKER, harnessVerdict, recoverInFlight } from "./mutate-lib.mjs";
+import { MARKER, applyEntry, harnessVerdict, recoverInFlight, tableEndOf } from "./mutate-lib.mjs";
 
 /** The fullburn workspace root, two levels up from engine/scripts/. */
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
@@ -113,7 +113,7 @@ const MUTATIONS = [
   ["R8-01 brand is module-private", "engine/src/spend-meter.ts", "  if (!FROZEN_CAPS_BOUND.has(meter as SpendMeter)) return false;", "  if (false) return false;"],
   ["R8-01 reserve pinned to the prototype", "engine/src/spend-meter.ts", "  return (meter as MemorySpendMeter).reserve === MemorySpendMeter.prototype.reserve;", "  return true;"],
   ["R8-01 production meter is final", "engine/src/spend-meter.ts", "    if (new.target !== FrozenCapsSpendMeter) {", "    if (false) {"],
-  ["R8-01 caps come from the frozen table", "engine/src/spend-meter.ts", "    super(now, (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super(now, (clientId) => ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }));"],
+  ["R8-01 caps come from the frozen table", "engine/src/spend-meter.ts", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super(() => Date.now(), (clientId) => ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }));"],
   // R8-02: settle() takes one argument. The mutation restores the override.
   ["R8-02 settle takes no actual", "engine/src/spend-meter.ts",
     `  settle(reservation: SpendReservation): void {
@@ -132,7 +132,7 @@ const MUTATIONS = [
   ["R8-04 CODEOWNERS covers the tests", ".github/CODEOWNERS", "/fullburn/engine/test/              @ssb22inc", "# /fullburn/engine/test/            @ssb22inc"],
   ["R8-04 CODEOWNERS covers package.json", ".github/CODEOWNERS", "package.json                        @ssb22inc", "# package.json                      @ssb22inc"],
   ["R8-04 CODEOWNERS covers the runner config", ".github/CODEOWNERS", "vitest*                             @ssb22inc", "# vitest*                           @ssb22inc"],
-  ["R8-04 CODEOWNERS matcher discriminates", "engine/scripts/gate-lib.mjs", "  return rules.some((rule) => {", "  return rules.length >= 0 || rules.some((rule) => {"],
+  ["R8-04 CODEOWNERS matcher discriminates", "engine/scripts/gate-lib.mjs", "  let owned = false;", "  let owned = true;"],
   ["R8-04b CI runs on .github changes", ".github/workflows/fullburn-ci.yml", `  pull_request:
     paths: ["fullburn/**", ".github/**"]`, `  pull_request:
     paths: ["fullburn/**", ".github/workflows/fullburn-ci.yml"]`],
@@ -141,7 +141,6 @@ const MUTATIONS = [
   ["R8-05 grade objects frozen", "engine/src/grade-registry.ts", "    return Object.freeze({ area: areaDef.area, grade, failing: Object.freeze(failing), missing: Object.freeze(missing) });", "    return { area: areaDef.area, grade, failing, missing };"],
   ["R8-05 grade array frozen", "engine/src/grade-registry.ts", "  Object.freeze(grades);\n  COMPUTED.add(grades);", "  COMPUTED.add(grades);"],
   // R8-06: the fourth and fifth e2e evasions.
-  ["R8-06 runtime skip refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*(?:skip|fixme)\\s*\\(/.test(real)) return false;", "      void real;"],
   ["R8-06 run filters refused", "engine/test/e2e-variance.ts", "  if (RUN_FILTER_KEYS.test(src)) return false;", "  if (false) return false;"],
   ["R8-06 smoke spec cannot satisfy its own deferral", "engine/test/e2e-variance.ts", `    .filter((s) => s.name.endsWith(".spec.ts") && s.name !== "smoke.spec.ts")`, `    .filter((s) => s.name.endsWith(".spec.ts"))`],
   // R8-07: the root guard sat one branch too late, so a missing root scanned
@@ -154,10 +153,32 @@ const MUTATIONS = [
   // The standing invariant, 2026-08-17: a tool that writes to the source tree
   // must be import-safe and must fail closed. Both halves get an entry.
   ["R8-STANDING harness is import-safe", "engine/scripts/mutate.mjs", "if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {", "if (true) {"],
-  ["R8-STANDING crash marker written first", "engine/scripts/mutate.mjs", "    writeFileSync(MARKER, JSON.stringify({ path, original }));", "    void MARKER;"],
+  ["R8-STANDING crash marker written first", "engine/scripts/mutate.mjs", "    writeFileSync(MARKER, JSON.stringify({ path, original, workspace: ROOT, pid: process.pid }));", "    void MARKER;"],
   ["R8-STANDING crashed run is recovered", "engine/scripts/mutate-lib.mjs", "  if (!fs.existsSync(markerPath)) return null;", "  return null;\n  if (!fs.existsSync(markerPath)) return null;"],
   ["R8-STANDING recovery is wired into the runner", "engine/scripts/mutate.mjs", "  const recovered = recoverInFlight();", "  const recovered = null;"],
-  ["R8-STANDING self-targeting entries cannot rewrite the table", "engine/scripts/mutate.mjs", "    const at = original.indexOf(from, searchFrom(path));", "    const at = original.indexOf(from);"],
+  // ---- r9 findings ----
+  // R9-03's await is NOT listed, and the reason is structural rather than
+  // convenient. Its behaviour — a SIGINT stops the run and restores the tree —
+  // is proven by the drill in engine/test/integration/gate-cli.test.ts, which
+  // spawns the real harness and signals it. That drill DECLINES when a harness
+  // already holds the marker, because it cannot spawn a second one into the
+  // same fixed path; and a mutation run is exactly that case. So no entry here
+  // can ever be caught by it, and an entry that cannot fail is the "reads as
+  // coverage" defect this table exists to expose. Disclosed in ledger L29
+  // instead of faked. The first attempt at this entry SURVIVED, which is how
+  // the property was noticed.
+  ["R9-04 CODEOWNERS rules need an owner", "engine/scripts/gate-lib.mjs", "      return { pattern, owned: owners.length > 0 };", "      return { pattern, owned: true };"],
+  ["R9-04 last match wins", "engine/scripts/gate-lib.mjs", "  for (const rule of rules) if (matches(rule.pattern)) owned = rule.owned;", "  for (const rule of rules) if (matches(rule.pattern)) owned = owned || rule.owned;"],
+  ["R9-06 block-sequence paths are read", "engine/scripts/gate-lib.mjs", "    filters.push(readable ? globs : null);", "    filters.push([]);"],
+  ["R9-06 unreadable filters are refused", "engine/scripts/gate-lib.mjs", "      filters.push(null); // a flow sequence we cannot parse", "      filters.push([]);"],
+  ["R9-05 production meter binds its own clock", "engine/src/spend-meter.ts", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super((narrowing as unknown as () => number) ?? (() => Date.now()), (clientId) => effectiveAiCapsUsd(clientId, undefined));"],
+  ["R9-09 marker cannot write outside the workspace", "engine/scripts/mutate-lib.mjs", "  if (!inWorkspace || !sameWorkspace || !fs.existsSync(record.path)) {", "  if (false) {"],
+  ["R9-10 no Class-2 file is git-binary", "engine/test/hardening.test.ts", "acme\\u0000corp", "acme\u0000corp"],
+  ["R9-11 runtime skip/fail refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*(?:skip|fixme|fail)\\s*\\(/.test(real)) return false;", "      void real;"],
+  ["R9-11 bare return refused", "engine/test/e2e-variance.ts", "      if (/\\breturn\\b\\s*;/.test(real)) return false;", "      void 0;"],
+  ["R9-11 skipped describe refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*describe\\s*\\.\\s*(?:skip|fixme)\\s*\\(/.test(stripped)) return false;", "      void stripped;"],
+  ["R9-02 self-targeting entries cannot rewrite the table", "engine/scripts/mutate-lib.mjs", "  const at = source.indexOf(from, isSelf ? tableEnd : 0);", "  const at = source.indexOf(from);"],
+  ["R9-02 table boundary fails closed", "engine/scripts/mutate-lib.mjs", 'if (at === -1) throw new Error("mutation table not found in harness source — refusing to run (fail closed)");', "if (at === -1) return 0;"],
   // Found while running the R7 gates, not by the review: `npm run leak-check`
   // passed no root, so every path-scoped rule matched nothing and the local
   // scan reported clean on a tree CI would have flagged.
@@ -169,7 +190,7 @@ const MUTATIONS = [
   ["R6-01 anchored tree hash", "engine/scripts/gate-lib.mjs", "    return /^[0-9a-f]{7,64}$/i.test(bare) ? bare : null;", "    const t = /[0-9a-f]{7,64}/i.exec(bare); return t === null ? null : t[0];"],
   // Restated after R7-08 split the body extraction from the string blanking:
   // the mutation still reverts to the whole-file AND that R6-02 found.
-  ["R6-02 test body is read", "engine/test/e2e-variance.ts", "      const body = namedTestBody(code(s.source), title);", "      const body = /intake/i.test(s.source) ? s.source : null;"],
+  ["R6-02 test body is read", "engine/test/e2e-variance.ts", "      const body = namedTestBody(stripped, title);", "      const body = /intake/i.test(s.source) ? s.source : null;"],
   ["R6-02 skip/todo excluded", "engine/test/e2e-variance.ts", "    if (m[1] !== undefined) continue;", "    void m[1];"],
   ["R6-03 every testDir checked", "engine/test/e2e-variance.ts", "  return found.length > 0 && found.every((d) => d === want);", "  return found.length > 0 && found[0] === want;"],
   // R6-05/P3 removed: the blockquote skip was subsumed by the column-0 anchors
@@ -243,16 +264,32 @@ const MUTATIONS = [
 // and carries the same guard; the file that enforces the acceptance bar was the
 // one place it had not been applied.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const run = () => {
-    try {
-      execSync("npx vitest run --silent", { cwd: ROOT, encoding: "utf8", stdio: "pipe" });
-      return null;
-    } catch (e) {
-      const out = `${e.stdout ?? ""}${e.stderr ?? ""}`;
-      const m = /Tests\s+(.*)$/m.exec(out);
-      return m ? m[1].trim() : "failed";
-    }
-  };
+  /** Runs the suite ASYNCHRONOUSLY.
+   *
+   * It used `execSync`, which blocks the event loop for the whole run — so the
+   * SIGINT and SIGTERM handlers below could never be serviced. Executed, a
+   * Ctrl-C did not stop the harness, did not restore anything, and three more
+   * entries were rewritten after the signal (adversary finding R9-03). The
+   * handlers were present, the behaviour was absent, and the invariant that
+   * claimed to check them was grepping for the strings "SIGINT" and "SIGTERM".
+   *
+   * Awaiting a spawned child returns the loop between entries, so a signal is
+   * delivered and the restore actually happens. */
+  const run = () =>
+    new Promise((resolveRun) => {
+      const child = spawn("npx", ["vitest", "run", "--silent"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      child.stdout.on("data", (d) => (out += d));
+      child.stderr.on("data", (d) => (out += d));
+      child.on("close", (code) => {
+        if (code === 0) return resolveRun(null);
+        const m = /Tests\s+(.*)$/m.exec(out);
+        resolveRun(m ? m[1].trim() : "failed");
+      });
+      child.on("error", () => resolveRun("failed to start"));
+      current = child;
+    });
+  let current = null;
 
   // A marker here means the PREVIOUS run died mid-mutation. Repair before
   // measuring anything, and say so — a silent repair would hide the fact that a
@@ -270,11 +307,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     rmSync(MARKER, { force: true });
     inFlight = null;
   };
-  // Every death a process can observe. SIGKILL is not one of them, which is
-  // what the on-disk marker is for.
+  let interrupted = false;
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"]) {
     process.on(sig, () => {
+      interrupted = true;
+      current?.kill("SIGKILL");
       restoreInFlight();
+      console.error(`\nMUTATION HARNESS INTERRUPTED by ${sig} — tree restored, result is void`);
       process.exit(130);
     });
   }
@@ -285,41 +324,103 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   });
   process.on("exit", restoreInFlight);
 
-  let survived = 0;
-  let notFound = 0;
-  /** Where to start searching for an entry's target text.
-   *
-   * AN ENTRY THAT TARGETS THIS FILE CONTAINS ITS OWN TARGET AS A STRING, and
-   * `String.replace` takes the FIRST occurrence — which is the entry, not the
-   * code. Three separate entries reported a survivor for that reason this
-   * session, each time because a guard had never actually been reverted. So a
-   * self-targeting entry is searched only BEYOND the table it lives in; every
-   * other file is searched from the start. It is the harness's own version of
-   * the rule the invariant suite applies to reading this file: a table entry is
-   * data about code, never the code itself. */
   const SELF = fileURLToPath(import.meta.url);
-  const tableEnd = readFileSync(SELF, "utf8").indexOf("\n];") + 3;
-  const searchFrom = (path) => (path === SELF ? tableEnd : 0);
+  const tableEnd = tableEndOf(readFileSync(SELF, "utf8"));
 
-  for (const [name, file, from, to] of MUTATIONS) {
+  /** Apply one entry, run the suite, restore. Returns the failure summary, or
+   * null when the suite stayed green (i.e. the mutation SURVIVED). */
+  const measure = async (file, from, to) => {
     const path = resolveEntry(file);
     const original = readFileSync(path, "utf8");
-    const at = original.indexOf(from, searchFrom(path));
-    if (at === -1) {
-      console.log(`PATTERN-NOT-FOUND  ${name}  (${file})`);
-      notFound += 1;
-      continue;
-    }
+    const { at, next } = applyEntry(original, from, to, { isSelf: path === SELF, tableEnd });
+    if (at === -1) return { found: false };
     // MARKER FIRST, then mutate. The other order leaves a window in which the
     // source is broken and nothing on disk records how to put it back.
-    writeFileSync(MARKER, JSON.stringify({ path, original }));
+    writeFileSync(MARKER, JSON.stringify({ path, original, workspace: ROOT, pid: process.pid }));
     inFlight = { path, original };
     let failure;
     try {
-      writeFileSync(path, original.slice(0, at) + to + original.slice(at + from.length));
-      failure = run();
+      writeFileSync(path, next);
+      failure = await run();
     } finally {
       restoreInFlight();
+    }
+    return { found: true, failure };
+  };
+
+  /** THE META-CHECK. Nothing this harness reports may be believed until it has
+   * demonstrated, on this machine and in this tree, that it can report BOTH
+   * answers.
+   *
+   * Human ruling 2026-08-17, after R9-01: "add a permanent meta-check that runs
+   * before every harness result is trusted: deliberately inject a known-
+   * detectable fault and confirm the harness reports FAIL. A harness that
+   * cannot fail must itself fail the gate. Any harness result not preceded by a
+   * passing meta-check is void."
+   *
+   * R9-01 is why. The crash marker written before each mutation existed on disk
+   * while the suite ran, and the standing-invariant test added in the same
+   * commit asserted that no marker exists — so the suite was red for every
+   * entry, every entry reported CAUGHT, and a run of 105 entries could not have
+   * printed anything else. The number was true and meaningless.
+   *
+   * The NEGATIVE canary is the one that catches that class: a comment-only edit
+   * changes no behaviour, so it MUST survive. If it is reported caught, the
+   * suite is failing for reasons that have nothing to do with mutations and
+   * every CAUGHT in the run is an artifact.
+   *
+   * The POSITIVE canary is the other half: a real guard reverted must be
+   * caught, or the harness is blind rather than merely stuck. */
+  const META = [
+    {
+      name: "negative canary — a comment-only edit must SURVIVE",
+      file: "engine/src/spend-meter.ts",
+      from: "const MICROS_PER_USD = 1_000_000;",
+      to: "const MICROS_PER_USD = 1_000_000; // canary",
+      expect: "SURVIVED",
+    },
+    {
+      name: "positive canary — a reverted guard must be CAUGHT",
+      file: "engine/src/spend-meter.ts",
+      from: "    if (brand !== RESERVATION_BRAND) {",
+      to: "    if (false) {",
+      expect: "CAUGHT",
+    },
+  ];
+
+  console.log("META-CHECK — proving the harness can report both answers\n");
+  for (const c of META) {
+    const { found, failure } = await measure(c.file, c.from, c.to);
+    if (!found) {
+      console.error(`META-CHECK FAILED: ${c.name} — its target text is gone, so the check itself is stale.`);
+      console.error("HARNESS RESULT IS VOID. Investigate before trusting any number below.");
+      process.exit(1);
+    }
+    const got = failure === null ? "SURVIVED" : "CAUGHT";
+    console.log(`  ${got === c.expect ? "ok  " : "FAIL"} ${c.name}  |  got ${got}${failure ? `  (${failure})` : ""}`);
+    if (got !== c.expect) {
+      console.error(
+        `\nMETA-CHECK FAILED: expected ${c.expect}, got ${got}.\n` +
+          (c.expect === "SURVIVED"
+            ? "The suite is red for a change that alters no behaviour, so EVERY entry would report CAUGHT " +
+              "whether or not its lock works. This is adversary finding R9-01 recurring."
+            : "The suite stayed green with a real guard reverted, so the harness cannot see failures at all.") +
+          "\nHARNESS RESULT IS VOID.",
+      );
+      process.exit(1);
+    }
+  }
+  console.log("");
+
+  let survived = 0;
+  let notFound = 0;
+  for (const [name, file, from, to] of MUTATIONS) {
+    if (interrupted) break;
+    const { found, failure } = await measure(file, from, to);
+    if (!found) {
+      console.log(`PATTERN-NOT-FOUND  ${name}  (${file})`);
+      notFound += 1;
+      continue;
     }
     if (failure === null) {
       console.log(`*** SURVIVED ***   ${name}`);
@@ -331,13 +432,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   console.log(`\n${MUTATIONS.length} mutations: ${MUTATIONS.length - survived - notFound} caught, ${survived} survived, ${notFound} not found`);
 
   // EXIT NON-ZERO, so this can be a CI stage rather than a ritual.
-  //
-  // It printed its findings and exited 0, and it appeared in no CI job — so the
-  // project's stated acceptance bar for a fix was enforced only when a human or
-  // an adversary ran it by hand, and between rounds a refactor could strand every
-  // entry naming a moved line (adversary finding R8-09). A SURVIVED means a fix
-  // nothing protects; a PATTERN-NOT-FOUND means the code moved and the entry no
-  // longer tests what it claims. Both are failures, not notices.
   const verdict = harnessVerdict(survived, notFound);
   if (!verdict.ok) {
     console.error(`\n${verdict.reason}`);

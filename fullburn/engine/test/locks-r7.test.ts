@@ -263,12 +263,11 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
    * MUTATION: drop the `new.target` finality check, or the WeakSet membership
    * test in isFrozenCapsMeter. */
   it("the frozen-caps brand cannot be forged, subclassed, or patched on", () => {
-    const clock = () => Date.parse("2026-08-17T16:00:00Z");
-    const genuine = new FrozenCapsSpendMeter(clock);
+    const genuine = new FrozenCapsSpendMeter();
     expect(isFrozenCapsMeter(genuine)).toBe(true);
 
     // A plain meter with a wide resolver — the R8-01 attack object.
-    expect(isFrozenCapsMeter(new MemorySpendMeter(clock, capsOf(1e9, 1e9)))).toBe(false);
+    expect(isFrozenCapsMeter(new MemorySpendMeter(() => Date.now(), capsOf(1e9, 1e9)))).toBe(false);
     // A literal wearing the shape.
     expect(isFrozenCapsMeter({ reserve() {}, settle() {}, release() {}, todayUsd: () => 0 })).toBe(false);
     // The prototype without the constructor — this is what defeats a bare
@@ -279,11 +278,11 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
 
     // A subclass is refused at construction, so it never gets a brand to carry.
     const Sub = class extends FrozenCapsSpendMeter {};
-    expect(() => new Sub(clock), "a subclass could override reserve()").toThrow(MeterUnavailableError);
+    expect(() => new Sub(), "a subclass could override reserve()").toThrow(MeterUnavailableError);
 
     // And a genuine instance whose reserve() was redefined is no longer proof:
     // the brand is on the object, but the ceiling-reading method is not ours.
-    const patched = new FrozenCapsSpendMeter(clock);
+    const patched = new FrozenCapsSpendMeter();
     Object.defineProperty(patched, "reserve", { value: () => ({}) as never });
     expect(isFrozenCapsMeter(patched), "a repointed reserve() kept its brand").toBe(false);
   });
@@ -318,24 +317,79 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
     }
   });
 
+  /** THE CLOCK IS NOT A CALLER'S TO CHOOSE EITHER (R9-05).
+   *
+   * R8-01 closed the ceilings seam and left the clock one open beside it. The
+   * cap is keyed by (client, local day) and (client, local month), so whoever
+   * chooses the clock chooses how many ceilings exist: executed through the
+   * real `llm()`, 12,000 dispatches committed $120 against a frozen $20/month
+   * with no `CapError`.
+   *
+   * Human ruling: bind it by construction, not with a bounded-jump check.
+   *
+   * MUTATION: restore the `now` parameter on FrozenCapsSpendMeter. */
+  it("a caller cannot hand the production meter a clock", async () => {
+    const { makeDeps: mk, TEST_CLIENT: C } = await import("./helpers.ts");
+    const { llm } = await import("../src/gateway.ts");
+    const { TraceContext } = await import("../src/tracing.ts");
+    const { ROLE_BINDINGS } = await import("@fullburn/config/models");
+
+    // The constructor takes ONE argument, and it is the narrowing table.
+    expect(FrozenCapsSpendMeter.length, "the production meter grew a second parameter").toBe(1);
+    // A clock passed positionally is read as a narrowing table, which cannot
+    // widen anything — so even the attempt buys nothing.
+    const smuggled = new FrozenCapsSpendMeter((() => Date.parse("2030-01-01T00:00:00Z")) as never);
+    const frozenMonth = getCaps("fixture-testco").monthlyAiSpendUsd;
+    let committed = 0;
+    for (let i = 0; i < 400; i++) {
+      try {
+        smuggled.settle(smuggled.reserve("fixture-testco", 0.25));
+        committed += 0.25;
+      } catch {
+        break;
+      }
+    }
+    expect(committed, "a smuggled clock minted fresh months").toBeLessThanOrEqual(frozenMonth);
+
+    // And the same attack through the real llm(): a meter whose clock the
+    // caller chose is not a meter llm() will accept at all.
+    const withClock = new MemorySpendMeter(() => Date.parse("2030-01-01T00:00:00Z"), () => effectiveAiCapsUsd(C));
+    const { deps } = mk();
+    let dispatched = 0;
+    const transport = {
+      async post() {
+        dispatched += 1;
+        return { greeting: "ok" };
+      },
+    };
+    for (let i = 0; i < 20; i++) {
+      await llm({ ...deps, meter: withClock, transport, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: C,
+        input: {},
+        trace: new TraceContext(`clock-${i}`, C),
+      }).catch(() => undefined);
+    }
+    expect(dispatched, "a caller-clocked meter reached the transport").toBe(0);
+  });
+
   /** The narrowing table is the ONLY thing a caller may supply, and `caps.ts`
    * proves it can lower a ceiling and never raise one.
    *
    * MUTATION: pass the narrowing table as a full resolver instead. */
   it("the only caller input is a table that can narrow and never widen", () => {
-    const clock = () => Date.parse("2026-08-17T16:00:00Z");
     const frozenDay = getCaps("fixture-testco").dailyAiSpendUsd;
 
-    const widened = new FrozenCapsSpendMeter(clock, { "fixture-testco": { dailyAiSpendUsd: 1e9 } });
+    const widened = new FrozenCapsSpendMeter({ "fixture-testco": { dailyAiSpendUsd: 1e9 } });
     widened.settle(widened.reserve("fixture-testco", frozenDay));
     expect(() => widened.reserve("fixture-testco", 0.01), "a table widened the frozen day").toThrow(CapError);
 
-    const narrowed = new FrozenCapsSpendMeter(clock, { "fixture-testco": { dailyAiSpendUsd: 0.05 } });
+    const narrowed = new FrozenCapsSpendMeter({ "fixture-testco": { dailyAiSpendUsd: 0.05 } });
     narrowed.settle(narrowed.reserve("fixture-testco", 0.05));
     expect(() => narrowed.reserve("fixture-testco", 0.01), "the narrowing was ignored").toThrow(CapError);
 
     // An unsigned client cannot be handed a sign-off by the table either.
-    const unsigned = new FrozenCapsSpendMeter(clock, { "fixture-unsigned": { dailyAiSpendUsd: 1 } });
+    const unsigned = new FrozenCapsSpendMeter({ "fixture-unsigned": { dailyAiSpendUsd: 1 } });
     expect(() => unsigned.reserve("fixture-unsigned", 0.01)).toThrow(/human sign-off/);
   });
 });
@@ -465,6 +519,12 @@ describe("control plane — an approval cannot be minted by the agent it restrai
 
     const unowned = class2.filter((p: string) => !codeownersCovers(p, owners));
     expect(unowned, `Class-2 files with no CODEOWNER:\n  ${unowned.join("\n  ")}`).toEqual([]);
+
+    // …and the same file with every owner stripped must cover NOTHING. Without
+    // this the enumeration passes on a CODEOWNERS that GitHub reads as empty.
+    const ownerless = owners.replace(/@[\w.-]+(?:\/[\w.-]+)?/g, "");
+    const stillOwned = class2.filter((p: string) => codeownersCovers(p, ownerless));
+    expect(stillOwned, "an owner-stripped CODEOWNERS still reported coverage").toEqual([]);
   });
 
   /** The acceptance bar must be a STAGE, and it must be able to fail.
@@ -502,9 +562,79 @@ describe("control plane — an approval cannot be minted by the agent it restrai
      * as safety.
      *
      * MUTATION: drop `searchFrom`, or apply with `original.replace(from, to)`. */
-    expect(harness, "a self-targeting entry can rewrite the table instead of the code").toMatch(/searchFrom\(path\)/);
-    expect(harness, "the mutation is applied by replace() again").not.toMatch(/original\.replace\(from, to\)/);
-    expect(harness, "the table boundary is not computed").toMatch(/tableEnd/);
+    /** DRIVEN, NOT GREPPED. The first version of this asserted
+     * `toMatch(/searchFrom\(path\)/)` — and after the guard was reverted that
+     * text was still in the file, inside the mutation table, as the string
+     * literal of the very entry that reverts it. The grep matched the data and
+     * the lock reported green with the fix removed (adversary finding R9-02):
+     * the third time this repo has made exactly that mistake, in the check
+     * written to prevent it.
+     *
+     * `applyEntry` is pure and takes `isSelf`/`tableEnd` as parameters for this
+     * reason: a test can construct the case where the target appears BOTH in
+     * the table and in the code, and assert which one is chosen. A table entry
+     * cannot satisfy that.
+     *
+     * MUTATION: drop `searchFrom`/`isSelf` from applyEntry. */
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { applyEntry, tableEndOf } = await import("../scripts/mutate-lib.mjs");
+    const TARGET = "if (guard) {";
+    const fake = [
+      "const MUTATIONS = [",
+      `  ["some entry", "mutate.mjs", "${TARGET}", "if (false) {"],`,
+      "];",
+      "",
+      `${TARGET} // the real code`,
+    ].join("\n");
+    const tableEnd = tableEndOf(fake);
+
+    const self = applyEntry(fake, TARGET, "if (false) {", { isSelf: true, tableEnd });
+    expect(self.at, "a self-targeting entry selected the table row, not the code").toBeGreaterThan(tableEnd);
+    expect(self.next, "the table row was rewritten instead of the code").toContain(`"${TARGET}"`);
+    expect(self.next.split("\n").pop(), "the real code was not mutated").toContain("if (false) {");
+
+    // …and without the self flag it takes the first occurrence, which is the
+    // table — that is the defect, reproduced here so the difference is visible.
+    const naive = applyEntry(fake, TARGET, "if (false) {", { isSelf: false, tableEnd });
+    expect(naive.at, "the naive path should hit the table first").toBeLessThan(tableEnd);
+
+    // An unfindable table fails closed rather than guessing zero, which would
+    // silently restore the defect.
+    expect(() => tableEndOf("no table here")).toThrow(/fail closed/);
+  });
+
+  /** A CLASS-2 FILE THE OWNER CANNOT READ IS NOT UNDER REVIEW.
+   *
+   * `hardening.test.ts` carried three raw NUL bytes as test fixtures, so git
+   * classified it as binary and rendered every change to it as "Binary files …
+   * differ" — in the diff, in the PR, everywhere. CODEOWNERS can require the
+   * human's review of a file whose contents they cannot see, which makes the
+   * approval a signature on bytes nobody read (adversary finding R9-10). The
+   * fixtures are now `\u0000` escapes: identical to the compiler, text to git.
+   *
+   * MUTATION: put a raw NUL back into any Class-2 file. */
+  it("no tracked Class-2 file is binary to git", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { execFileSync } = await import("node:child_process");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { isClass2 } = await import("../scripts/gate-lib.mjs");
+    const repoRoot = new URL("../../../", import.meta.url).pathname.replace(/\/$/, "");
+    const tracked = execFileSync("git", ["-C", repoRoot, "ls-files"], { encoding: "utf8" })
+      .split("\n")
+      .filter((p) => p.length > 0);
+    const class2 = tracked.filter((p: string) => isClass2(p));
+    expect(class2.length, "isClass2 matched nothing — this test would pass vacuously").toBeGreaterThan(50);
+
+    // A NUL in the first 8000 bytes is exactly what makes git call a file
+    // binary, so that is what this looks for.
+    const binary = class2.filter((p: string) => {
+      try {
+        return readFileSync(`${repoRoot}/${p}`).subarray(0, 8000).includes(0);
+      } catch {
+        return false;
+      }
+    });
+    expect(binary, `Class-2 files git renders as binary, so a reviewer cannot read the diff:\n  ${binary.join("\n  ")}`).toEqual([]);
   });
 
   /** The matcher itself, driven directly — a matcher that returned true for
@@ -525,6 +655,30 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     expect(codeownersCovers("fullburn/PHASE.bak", rules)).toBe(false);
     // A rule inside a comment is not a rule.
     expect(codeownersCovers("fullburn/README.md", "# fullburn/README.md @o\n")).toBe(false);
+
+    /** A RULE WITH NO OWNER OWNS NOTHING. Stripping every `@ssb22inc` from the
+     * real file left the enumeration reporting 0 unowned of 98 Class-2 paths,
+     * while GitHub considered nobody the owner of anything — the lock validated
+     * patterns and never owners (adversary finding R9-04).
+     *
+     * MUTATION: drop the owner parse, or return `true` from it. */
+    expect(codeownersCovers("fullburn/PHASE", "/fullburn/PHASE\n"), "a rule with no owner covered a path").toBe(false);
+    expect(codeownersCovers("fullburn/PHASE", "/fullburn/PHASE   \n")).toBe(false);
+    // …and a token that is not an owner is not an owner.
+    expect(codeownersCovers("fullburn/PHASE", "/fullburn/PHASE notanowner\n")).toBe(false);
+    expect(codeownersCovers("fullburn/PHASE", "/fullburn/PHASE @team/reviewers\n")).toBe(true);
+    expect(codeownersCovers("fullburn/PHASE", "/fullburn/PHASE a@b.co\n")).toBe(true);
+
+    /** LAST MATCH WINS, which is GitHub's rule — so a later ownerless rule
+     * REVOKES an earlier owned one, and a lock that ORs every match would miss
+     * exactly that revocation. */
+    expect(
+      codeownersCovers("fullburn/engine/src/gateway.ts", "/fullburn/engine/src/ @o\n/fullburn/engine/src/gateway.ts\n"),
+      "a later ownerless rule did not revoke an earlier owner",
+    ).toBe(false);
+    expect(
+      codeownersCovers("fullburn/engine/src/gateway.ts", "/fullburn/engine/src/gateway.ts\n/fullburn/engine/src/ @o\n"),
+    ).toBe(true);
   });
 
   /** THE GATE MUST RUN WHEN CODEOWNERS CHANGES. `.github/**` is a Class-2
@@ -538,30 +692,49 @@ describe("control plane — an approval cannot be minted by the agent it restrai
   it("CI runs on every Class-2 path, so no Class-2 diff can arrive ungated", async () => {
     const { readFileSync } = await import("node:fs");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
-    const { isClass2 } = await import("../scripts/gate-lib.mjs");
+    const { isClass2, workflowPathFilters, globsAdmit } = await import("../scripts/gate-lib.mjs");
     const wf = readFileSync(new URL("../../../.github/workflows/fullburn-ci.yml", import.meta.url), "utf8");
-    const filters = [...wf.matchAll(/^\s*paths:\s*(\[.*\]|)\s*$/gm)];
+    const filters = workflowPathFilters(wf);
+    expect(filters.length, "no paths: filter found — this check is stale").toBeGreaterThan(0);
 
-    // Either there is no path filter at all — every PR runs the gate — or every
-    // filter present must admit a witness for each Class-2 pattern.
-    for (const [, rawList] of filters) {
-      const list = rawList ?? "";
-      const globs: string[] = list.startsWith("[")
-        ? (JSON.parse(list.replace(/'/g, '"')) as string[])
-        : [];
-      const admits = (p: string) =>
-        globs.length === 0 ||
-        globs.some((g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, ".*").replace(/(?<!\.)\*/g, "[^/]*")}$`).test(p));
-      for (const witness of [
-        ".github/CODEOWNERS",
-        ".github/workflows/fullburn-ci.yml",
-        "fullburn/config/src/caps.ts",
-        "fullburn/PHASE",
-      ]) {
+    const WITNESSES = [".github/CODEOWNERS", ".github/workflows/fullburn-ci.yml", "fullburn/config/src/caps.ts", "fullburn/PHASE"];
+    for (const globs of filters) {
+      // UNREADABLE IS REFUSED, not assumed permissive. Reading an unparseable
+      // filter as "everything runs" is exactly how R9-06 worked.
+      expect(globs, "a paths: filter this parser cannot read").not.toBe(null);
+      for (const witness of WITNESSES) {
         expect(isClass2(witness), `${witness} is not Class-2 — the witness is stale`).toBe(true);
-        expect(admits(witness), `a PR touching ${witness} would run no gate`).toBe(true);
+        expect(globsAdmit(globs, witness), `a PR touching ${witness} would run no gate`).toBe(true);
       }
     }
+  });
+
+  /** THE PARSER ITSELF, DRIVEN. The previous version of the check above matched
+   * only `paths: ["a"]`; the ordinary block-sequence spelling captured empty,
+   * became `[]`, and `[]` was read as "no filter, everything runs" — so the
+   * identical narrowing filter defeated the lock (adversary finding R9-06).
+   *
+   * MUTATION: drop the block-sequence branch, or return `[]` for an unreadable
+   * filter instead of null. */
+  it("the workflow paths parser reads both YAML spellings and refuses what it cannot read", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { workflowPathFilters, globsAdmit } = await import("../scripts/gate-lib.mjs");
+    const flow = 'on:\n  pull_request:\n    paths: ["fullburn/**", ".github/**"]\n';
+    const block = 'on:\n  pull_request:\n    paths:\n      - "fullburn/**"\n      - ".github/**"\n';
+    const narrowed = 'on:\n  pull_request:\n    paths:\n      - "fullburn/**"\n';
+    expect(workflowPathFilters(flow)[0]).toEqual(["fullburn/**", ".github/**"]);
+    expect(workflowPathFilters(block)[0], "the block-sequence spelling was not read").toEqual([
+      "fullburn/**",
+      ".github/**",
+    ]);
+    // The narrowing that R9-06 used: block spelling, .github/** dropped.
+    expect(globsAdmit(workflowPathFilters(narrowed)[0]!, ".github/CODEOWNERS")).toBe(false);
+    // Anything unmodelled is null, never an empty permissive list.
+    expect(workflowPathFilters("on:\n  push:\n    paths: *anchor\n")[0]).toBe(null);
+    expect(workflowPathFilters("on:\n  push:\n    paths: [oops\n")[0]).toBe(null);
+    // `**` crosses directories; `*` does not.
+    expect(globsAdmit(["fullburn/**"], "fullburn/engine/src/gateway.ts")).toBe(true);
+    expect(globsAdmit(["fullburn/*"], "fullburn/engine/src/gateway.ts")).toBe(false);
   });
 });
 

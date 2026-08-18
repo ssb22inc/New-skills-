@@ -469,13 +469,28 @@ const FROZEN_CAPS_BOUND = new WeakSet<SpendMeter>();
  * The class is final. A subclass would inherit the brand and could override
  * `reserve()`, which is the injection point again wearing a different hat. */
 export class FrozenCapsSpendMeter extends MemorySpendMeter {
-  constructor(now: () => number, narrowing?: CapsNarrowingTable) {
+  /** NO CLOCK PARAMETER, for the same reason there is no resolver parameter.
+   *
+   * R8-01 closed the ceilings seam and left the clock one open beside it. The
+   * cap is keyed by (client, local day) and (client, local month), so a caller
+   * that chooses the clock chooses how many ceilings exist: a clock advancing a
+   * month per call mints a fresh $200 every time. Executed through the real
+   * `llm()`, 12,000 dispatches committed $120 against a frozen $20/month with
+   * no `CapError` (adversary finding R9-05).
+   *
+   * Human ruling 2026-08-17: bind it by construction, do not bound the jump.
+   * "R9 demonstrated what checks are worth on money paths."
+   *
+   * `MemorySpendMeter` keeps its injectable clock for the tests that need to
+   * drive time, and `llm()` refuses it — so time control lives on the test-only
+   * type, exactly where the ruling put it. */
+  constructor(narrowing?: CapsNarrowingTable) {
     if (new.target !== FrozenCapsSpendMeter) {
       throw new MeterUnavailableError(
         "FrozenCapsSpendMeter is final — a subclass could override reserve() and reopen the ceiling seam (fail closed)",
       );
     }
-    super(now, (clientId) => effectiveAiCapsUsd(clientId, narrowing));
+    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));
     FROZEN_CAPS_BOUND.add(this);
   }
 }

@@ -35,3 +35,8 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# The mutation harness in-flight marker (R9-09). Never committed: it names a
+# path and holds pre-crash bytes, and a committed one would turn every later
+# checkout red until someone deleted it.
+fullburn/engine/scripts/.mutate-inflight.json

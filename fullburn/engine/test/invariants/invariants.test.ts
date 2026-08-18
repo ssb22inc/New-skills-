@@ -173,6 +173,28 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         "test.fixme() in the body",
         "test('intake confirm flow', async ({ page }) => { test.fixme(); await page.click('#c'); expect(1).toBe(1); });",
       ],
+      // R9-11: evasions five through eight. Each names the flow, contains every
+      // token, and runs none of the work.
+      [
+        "a skipped describe wrapping it",
+        "test.describe.skip('e2e', () => { test('intake confirm flow', async ({ page }) => { await page.click('#c'); expect(1).toBe(1); }); });",
+      ],
+      [
+        "a bare return before the work",
+        "test('intake confirm flow', async ({ page }) => { return; await page.click('#c'); expect(1).toBe(1); });",
+      ],
+      [
+        "test.fail(), which inverts the verdict",
+        "test('intake confirm flow', async ({ page }) => { test.fail(); await page.click('#c'); expect(1).toBe(1); });",
+      ],
+      [
+        "a guarded early return",
+        "test('intake confirm flow', async ({ page }) => { if (!process.env.FULL) return; await page.click('#c'); expect(1).toBe(1); });",
+      ],
+      [
+        "a fixme describe",
+        "test.describe.fixme('e2e', () => { test('intake confirm flow', async ({ page }) => { await page.click('#c'); expect(1).toBe(1); }); });",
+      ],
     ] as const) {
       expect(e2eVarianceHolds(1, [smoke, { name: "intake.spec.ts", source }]), `${label} satisfied the expiry`).toBe(false);
     }
@@ -265,61 +287,91 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const scripts = readdirSync(dir).filter((f) => f.endsWith(".mjs"));
     expect(scripts.length, "no scripts found — this test would pass vacuously").toBeGreaterThan(5);
 
-    /** Tools that WEAKEN the tree — write a deliberately broken version of
-     * source — not every module that happens to call writeFileSync. The
-     * restoring half (`mutate-lib.mjs`) writes too, and writes only repairs; it
-     * is the direction that matters, and conflating them would demand an
-     * entry-point guard on a module whose whole purpose is to be safely
-     * imported. */
-    const writers = scripts.filter((f) =>
-      // A weakening write is one that writes a TRANSFORMED version of the
-      // content it just read. A restore — `writeFileSync(x.path, x.original)` —
-      // writes the content back unchanged and is the direction that repairs.
-      /writeFileSync\(\s*path\s*,\s*original\s*[.+]/.test(readFileSync(new URL(f, dir), "utf8")),
-    );
-    // The harness is one; if a second ever appears it is covered automatically.
+    /** EVERY script that can write to the tree — by ANY write API, not one
+     * spelling of one call.
+     *
+     * The previous version matched `writeFileSync(path, original.replace(` and
+     * then `writeFileSync(path, original[.+]`, and went stale BOTH times the
+     * write was rewritten. It failed closed each time, which is the behaviour to
+     * keep, but a definition that narrow makes "enumerated from the filesystem"
+     * a bigger claim than it delivers: a second writing tool spelled any other
+     * way was invisible (adversary finding R9-07). */
+    const WRITE_API = /\b(?:writeFileSync|appendFileSync|rmSync|unlinkSync|renameSync|mkdirSync|cpSync|writeFile|appendFile|createWriteStream|rm|unlink|rename)\s*\(/;
+    const writers = scripts.filter((f) => WRITE_API.test(readFileSync(new URL(f, dir), "utf8")));
     expect(writers, "no writing tool found — the enumeration is broken").toContain("mutate.mjs");
 
-    /** Structural checks read only the region AFTER the entry-point guard, and
-     * anchor the guard itself to column 0.
+    /** A writing script is safe in exactly one of two ways, and which one it
+     * claims is read from its own shape at column 0 — top-level code starts
+     * there, a table entry is always indented, and a string literal therefore
+     * cannot satisfy it. That anchoring is what closes the trap that has now
+     * caught four checks in this repo (R8-09, R9-02, and two versions of this
+     * test): a grep over a file whose data contains its own code.
      *
-     * The mutation harness stores its own targets as string literals, so a grep
-     * for a guard's source text matches the ENTRY that mutates that guard as
-     * readily as the guard — and passes with the guard reverted. That trap has
-     * caught two checks in this repo already (R8-09, and the first version of
-     * this one). Stripping string literals looked like the fix and was worse:
-     * the harness's comments contain unbalanced backticks, so the pairing
-     * swallowed the guard itself.
-     *
-     * Column-0 anchoring is the tool that actually fits — top-level code starts
-     * at column 0 and a table entry is always indented. `gate-lib` reached the
-     * same answer for the report header. */
-    for (const f of writers) {
+     * A RUNNER writes when executed and must be import-safe and fail closed.
+     * A LIBRARY has no runner at all — proven by importing it and watching. */
+    const GUARD = /^if \(process\.argv\[1\][\s\S]{0,120}import\.meta\.url/m;
+    const runners = writers.filter((f) => GUARD.test(readFileSync(new URL(f, dir), "utf8")));
+    const libraries = writers.filter((f) => !GUARD.test(readFileSync(new URL(f, dir), "utf8")));
+    expect(runners, "the harness lost its entry-point guard").toContain("mutate.mjs");
+
+    for (const f of runners) {
       const src = readFileSync(new URL(f, dir), "utf8");
-      // IMPORT-SAFE: the writing must sit behind an entry-point check, so
-      // importing the module for a helper cannot start it.
-      const guardAt = src.search(/^if \(process\.argv\[1\][\s\S]{0,120}import\.meta\.url/m);
-      expect(guardAt, `${f} writes to the tree without an entry-point guard`).toBeGreaterThan(-1);
-      // Everything below is about the RUNNER, so read only the runner.
-      const runner = src.slice(guardAt);
-      // FAILS CLOSED: an interrupted run must restore. Signal handlers cover
-      // the deaths a process can observe…
-      for (const sig of ["SIGINT", "SIGTERM"]) {
-        expect(runner, `${f} does not restore on ${sig}`).toContain(sig);
-      }
-      // …and an on-disk marker covers the ones it cannot (SIGKILL, OOM, power),
-      // WRITTEN BEFORE the source is broken. The other order leaves a window in
-      // which the tree is weakened and nothing on disk says how to repair it.
+      // Read only the RUNNER, so the mutation table cannot satisfy a check.
+      const runner = src.slice(src.search(GUARD));
+      // FAILS CLOSED — an on-disk marker, written BEFORE the source is broken.
+      // The other order leaves a window in which the tree is weakened and
+      // nothing on disk says how to repair it.
       const markerWrite = runner.search(/writeFileSync\(\s*MARKER/);
-      const sourceBreak = runner.search(/writeFileSync\(\s*path\s*,\s*original\s*[.+]/);
+      const sourceBreak = runner.search(/writeFileSync\(\s*path\s*,\s*(?!original\b)\w/);
       expect(markerWrite, `${f} has no crash marker; a SIGKILL leaves the tree mutated`).toBeGreaterThan(-1);
       expect(sourceBreak, `${f} no longer mutates source — this check is stale`).toBeGreaterThan(-1);
       expect(markerWrite, `${f} breaks source before recording how to repair it`).toBeLessThan(sourceBreak);
-      // …and something must actually restore on the way out.
+      /** THESE FOUR ARE SHAPE CHECKS, AND SHAPE CHECKS DO NOT LOCK A GUARD.
+       * They are cheap early detection, nothing more — a grep passes with the
+       * behaviour reverted, which is how R9-03 shipped signal handlers that
+       * could never run under an invariant asserting the strings "SIGINT" and
+       * "SIGTERM" were present.
+       *
+       * THE PROOF IS THE DRILL: `engine/test/integration/gate-cli.test.ts`
+       * spawns the real harness, waits until it has genuinely broken a file,
+       * sends SIGINT, and asserts the file came back and the marker is gone.
+       * Its presence is asserted below so it cannot be quietly deleted, and it
+       * runs in its own CI stage. Read these four as a fast smoke over a
+       * property the drill establishes, never as the establishment of it. */
       expect(runner, `${f} has no restore-on-exit path`).toMatch(/process\.on\(\s*["'`]?exit/);
-      // …and the recovery of a PREVIOUS run's crash must be wired in, not just
-      // exported for the tests below.
       expect(runner, `${f} never recovers a previous crashed run`).toMatch(/recoverInFlight\(/);
+      /** THE SUITE MUST BE AWAITED, NOT BLOCKED ON. `execSync` holds the event
+       * loop for the entire run, so a queued SIGINT handler cannot be serviced
+       * until every entry is done — the handlers were present and the behaviour
+       * was absent, and a Ctrl-C rewrote three more files after the signal
+       * (adversary finding R9-03). */
+      expect(runner, `${f} blocks the event loop, so its signal handlers cannot run`).not.toMatch(/execSync\s*\(/);
+      expect(runner, `${f} does not await the suite, so a signal cannot be serviced`).toMatch(/await\s+\w*[Rr]un\(|await measure\(/);
+    }
+
+    /** …and the drill that actually proves the interrupt behaviour must exist.
+     * Deleting it would leave only the greps above, which is the state R9-03
+     * found. This is a by-name presence check on a TEST — legitimate, because
+     * it guards deletion — as distinct from a shape check on a GUARD, which
+     * would be claiming to guard a revert and would not. */
+    const drill = readFileSync(new URL("../integration/gate-cli.test.ts", import.meta.url), "utf8");
+    expect(drill, "the harness interrupt drill was deleted").toContain(
+      'it("SIGINT stops it, clears the marker, and leaves no file mutated"',
+    );
+
+    /** A LIBRARY claims it has no runner. That is a behaviour, so it is driven:
+     * import it and watch a canary. This is safe in a way the runner's import
+     * is NOT — a library has nothing to start, so a false claim here shows up
+     * as a changed canary rather than as a nested mutation pass. */
+    for (const f of libraries) {
+      const { mkdtempSync, writeFileSync: write, readFileSync: read } = await import("node:fs");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const canaryDir = mkdtempSync(join(tmpdir(), "writer-canary-"));
+      const canary = join(canaryDir, "canary.txt");
+      write(canary, "untouched");
+      await import(new URL(f, dir).href);
+      expect(read(canary, "utf8"), `${f} wrote to disk on import`).toBe("untouched");
     }
 
     /** WHY THERE IS NO "IMPORT IT AND SEE" CHECK HERE.
@@ -340,28 +392,74 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     // And the recovery path is DRIVEN, not just present. A marker left by a
     // dead run must put the file back and clear itself.
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
-    const { recoverInFlight, MARKER } = await import("../../scripts/mutate-lib.mjs");
-    expect(existsSync(MARKER), "a marker is left behind after a clean run").toBe(false);
+    const { recoverInFlight } = await import("../../scripts/mutate-lib.mjs");
+    /** THERE IS DELIBERATELY NO `existsSync(MARKER) === false` ASSERTION HERE.
+     *
+     * There was one, and it is the single most damaging defect this build has
+     * produced. The harness holds its marker on disk WHILE it runs the suite,
+     * so this assertion was false for the entire duration of every mutation —
+     * the suite was red for every entry, every entry reported CAUGHT, and a run
+     * of 105 could not have printed anything else (adversary finding R9-01).
+     * The acceptance bar became incapable of failing, and the number it printed
+     * was true and meaningless.
+     *
+     * A checker must never assert on global state that the tool it checks
+     * legitimately mutates while running. What this test wants to know is that
+     * recovery WORKS, so that is what it drives, on a fixture of its own. */
 
-    const { mkdtempSync, writeFileSync: write } = await import("node:fs");
+    const { writeFileSync: write, rmSync, mkdtempSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const tmp = mkdtempSync(join(tmpdir(), "mutate-crash-"));
-    const victim = join(tmp, "guard.ts");
-    const marker = join(tmp, "marker.json");
-    write(victim, "if (false) { /* MUTATED */ }\n");
-    write(marker, JSON.stringify({ path: victim, original: "if (realCheck) { /* ORIGINAL */ }\n" }));
+    const workspace = new URL("../../../", import.meta.url).pathname.replace(/\/$/, "");
+    // The victim lives INSIDE the workspace, because a marker naming a path
+    // outside it is now refused — see the refusal cases below.
+    const victim = join(workspace, ".recover-fixture.ts");
+    const marker = join(tmpdir(), `marker-${process.pid}.json`);
+    try {
+      write(victim, "if (false) { /* MUTATED */ }\n");
+      write(marker, JSON.stringify({ path: victim, original: "if (realCheck) { /* ORIGINAL */ }\n" }));
 
-    const result = recoverInFlight(marker);
-    expect(result?.repaired, "a crashed run's mutation was not repaired").toBe(true);
-    expect(readFileSync(victim, "utf8"), "the guard was left reverted on disk").toContain("realCheck");
-    expect(existsSync(marker), "the marker outlived the repair").toBe(false);
-    // A corrupt marker is cleared rather than crashing the next run forever.
-    write(marker, "{ not json");
-    expect(recoverInFlight(marker)?.repaired).toBe(false);
-    expect(existsSync(marker)).toBe(false);
-    // No marker at all is simply nothing to do.
-    expect(recoverInFlight(marker)).toBe(null);
+      const result = recoverInFlight(marker);
+      expect(result?.repaired, "a crashed run's mutation was not repaired").toBe(true);
+      expect(readFileSync(victim, "utf8"), "the guard was left reverted on disk").toContain("realCheck");
+      expect(existsSync(marker), "the marker outlived the repair").toBe(false);
+
+      /** A MARKER NAMES A PATH, AND A PATH IS NOT A CAPABILITY. `recoverInFlight`
+       * wrote whatever the marker named, so one left by another checkout — or
+       * dropped by anyone, since the file is fixed and unowned — created files
+       * that never existed and overwrote newer content with stale pre-crash
+       * bytes (adversary finding R9-09).
+       *
+       * MUTATION: drop the in-workspace check, the existence check, or the
+       * workspace-identity check from recoverInFlight. */
+      const outside = join(mkdtempSync(join(tmpdir(), "outside-")), "victim.ts");
+      write(outside, "current content\n");
+      write(marker, JSON.stringify({ path: outside, original: "stale pre-crash bytes\n" }));
+      expect(recoverInFlight(marker)?.repaired, "a marker wrote outside the workspace").toBe(false);
+      expect(readFileSync(outside, "utf8"), "content outside the workspace was overwritten").toBe("current content\n");
+
+      // A repair RESTORES; it never creates. A marker naming a file that does
+      // not exist is refused rather than used to write one.
+      const ghost = join(workspace, ".never-existed.ts");
+      write(marker, JSON.stringify({ path: ghost, original: "invented\n" }));
+      expect(recoverInFlight(marker)?.repaired, "a marker created a file that never existed").toBe(false);
+      expect(existsSync(ghost), "a file was invented from a marker").toBe(false);
+
+      // …and a marker written by another checkout is not this one's to act on.
+      write(victim, "if (false) { /* MUTATED */ }\n");
+      write(marker, JSON.stringify({ path: victim, original: "restored\n", workspace: "/some/other/checkout" }));
+      expect(recoverInFlight(marker)?.repaired, "another checkout's marker was honoured").toBe(false);
+
+      // A corrupt marker is cleared rather than crashing the next run forever.
+      write(marker, "{ not json");
+      expect(recoverInFlight(marker)?.repaired).toBe(false);
+      expect(existsSync(marker)).toBe(false);
+      // No marker at all is simply nothing to do.
+      expect(recoverInFlight(marker)).toBe(null);
+    } finally {
+      rmSync(victim, { force: true });
+      rmSync(marker, { force: true });
+    }
   });
 
   it("the checklist checks ITSELF against the spec (R2-25)", () => {

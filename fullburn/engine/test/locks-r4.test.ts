@@ -10,7 +10,7 @@ import { TraceContext } from "../src/tracing.ts";
 import { checkAdversaryReport, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../scripts/scan-lib.mjs";
-import { TEST_CLIENT, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { TEST_CLIENT, capsFrom, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
 
 /** LOCK TESTS — r4 findings (N-01 … N-11) plus the one r3 lock the r4 review
  * proved was not load-bearing.
@@ -39,17 +39,28 @@ describe("money — a DAILY cap cannot be constructed without a day (N-01)", () 
 
   /** MUTATION: as above — with the epoch default restored, `llm()` built on a
    * default meter never rolls over and the second day is refused. */
-  it("the cap rolls over on the day boundary, driven through the real llm() path", async () => {
+  /** REWRITTEN FOR R9-05. This drove the rollover through `llm()` by moving a
+   * clock the meter took as an argument — and that argument was the seam R9-05
+   * found: 12,000 dispatches committed $120 against a frozen $20/month, because
+   * whoever chooses the clock chooses how many ceilings exist. The production
+   * meter now binds `Date.now` by construction, so time control lives on the
+   * test-only `MemorySpendMeter`, which `llm()` refuses.
+   *
+   * What the test proves is unchanged: the ceiling binds, and it rolls over on
+   * a day boundary rather than becoming a lifetime budget (M-03, N-01).
+   *
+   * MUTATION: restore the epoch clock default on MemorySpendMeter. */
+  it("the cap binds, then rolls over on the day boundary", () => {
     let nowMs = Date.UTC(2026, 7, 15, 12, 0, 0);
-    const { deps, meter } = makeDeps({ now: () => nowMs });
+    const caps = capsFrom(TEST_CLIENT);
+    const meter = new MemorySpendMeter(() => nowMs, caps);
     const cap = getCaps(TEST_CLIENT).dailyAiSpendUsd;
-    const call = () =>
-      llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) });
+    const perCall = 0.01;
 
     let day1 = 0;
     for (;;) {
       try {
-        await call();
+        meter.settle(meter.reserve(TEST_CLIENT, perCall));
         day1 += 1;
       } catch {
         break;
@@ -59,9 +70,32 @@ describe("money — a DAILY cap cannot be constructed without a day (N-01)", () 
     expect(meter.todayUsd(TEST_CLIENT)).toBeCloseTo(cap, 6);
 
     nowMs += DAY;
-    await expect(call()).resolves.toBeDefined();
+    expect(() => meter.settle(meter.reserve(TEST_CLIENT, perCall)), "the day never rolled over").not.toThrow();
     expect(meter.todayUsd(TEST_CLIENT)).toBeGreaterThan(0);
     expect(meter.todayUsd(TEST_CLIENT)).toBeLessThan(cap);
+  });
+
+  /** …and the production path still enforces the SAME frozen ceiling, driven
+   * through the real `llm()`. Splitting the two is the point: time control is
+   * the test-only meter's, the ceiling is the frozen table's, and neither is
+   * the caller's. */
+  it("the frozen ceiling binds through the real llm() path", async () => {
+    const { deps, meter } = makeDeps();
+    const cap = getCaps(TEST_CLIENT).dailyAiSpendUsd;
+    const call = () =>
+      llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) });
+    let permitted = 0;
+    for (;;) {
+      try {
+        await call();
+        permitted += 1;
+      } catch {
+        break;
+      }
+      if (permitted > 10_000) throw new Error("cap never bit through llm() — the ceiling is not enforced");
+    }
+    expect(permitted, "no call was permitted at all").toBeGreaterThan(0);
+    expect(meter.todayUsd(TEST_CLIENT)).toBeCloseTo(cap, 6);
   });
 });
 

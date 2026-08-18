@@ -500,24 +500,40 @@ export const AUTOMATION_AUTHORS = [/\bclaude\b/i, /\bgithub-actions\b/i, /\[bot\
  * test asserted six hard-coded strings and read as coverage of the set
  * (adversary finding R8-04). */
 export function codeownersCovers(path, codeownersText) {
+  // LAST MATCH WINS, and a rule with NO OWNER un-covers what it matches — that
+  // is GitHub's semantics, and the previous version implemented neither. It
+  // read `line.split(/\s+/)[0]` as the pattern and never looked at the rest, so
+  // stripping every `@ssb22inc` from the file left it reporting 0 unowned of 98
+  // Class-2 paths while GitHub considered nobody the owner of anything
+  // (adversary finding R9-04). A lock that validates patterns and never owners
+  // is checking the shape of the control plane, not its effect.
   const rules = codeownersText
     .split("\n")
     .map((l) => l.replace(/#.*$/, "").trim())
     .filter((l) => l.length > 0)
-    .map((l) => l.split(/\s+/)[0]);
+    .map((l) => {
+      const [pattern, ...rest] = l.split(/\s+/);
+      // An owner is a @user, a @org/team, or an email address. Anything else is
+      // not an owner, and a rule without one owns nothing.
+      const owners = rest.filter((t) => /^@[\w.-]+(?:\/[\w.-]+)?$/.test(t) || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t));
+      return { pattern, owned: owners.length > 0 };
+    });
   const seg = (p) => p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*");
-  return rules.some((rule) => {
-    if (rule.startsWith("/")) {
-      const body = rule.slice(1);
+  const matches = (pattern) => {
+    if (pattern.startsWith("/")) {
+      const body = pattern.slice(1);
       return body.endsWith("/")
         ? new RegExp(`^${seg(body)}`).test(path)
         : new RegExp(`^${seg(body)}$`).test(path);
     }
-    if (rule.endsWith("/")) return new RegExp(`(?:^|/)${seg(rule.slice(0, -1))}/`).test(path);
+    if (pattern.endsWith("/")) return new RegExp(`(?:^|/)${seg(pattern.slice(0, -1))}/`).test(path);
     // Bare pattern: matches the basename at any depth, which is how GitHub
     // treats a rule with no slash in it.
-    return new RegExp(`(?:^|/)${seg(rule)}$`).test(path);
-  });
+    return new RegExp(`(?:^|/)${seg(pattern)}$`).test(path);
+  };
+  let owned = false;
+  for (const rule of rules) if (matches(rule.pattern)) owned = rule.owned;
+  return owned;
 }
 
 /** Refuses approvals added by a commit the automation principal authored. */
@@ -602,4 +618,69 @@ function safeHash(fn, path, absentSentinel) {
     // `from-content-hash: deleted` on a file being created (R3-CP-09).
     return absentSentinel ?? "unreadable";
   }
+}
+
+/** Every `paths:` filter in a workflow, as a list of globs — or `null` for a
+ * filter this parser cannot read.
+ *
+ * The lock that held the CI trigger to CLASS2_PATTERNS matched only the FLOW
+ * spelling, `paths: ["a", "b"]`, and captured an empty string for anything
+ * else. An empty capture became `globs = []`, and `[]` was then treated as "no
+ * filter, everything runs" — so rewriting the identical filter in YAML's
+ * ordinary block-sequence form defeated the lock while narrowing the trigger
+ * exactly as before (adversary finding R9-06):
+ *
+ *   paths:
+ *     - "fullburn/**"
+ *
+ * `null` means UNREADABLE and the caller must fail closed on it. Silently
+ * reading an unreadable filter as permissive is how this defect worked. */
+export function workflowPathFilters(workflowYaml) {
+  const lines = workflowYaml.split("\n");
+  const filters = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(\s*)paths(-ignore)?:\s*(.*)$/.exec(lines[i]);
+    if (m === null) continue;
+    const indent = m[1].length;
+    const inline = m[3].trim();
+    if (inline.startsWith("[")) {
+      try {
+        filters.push(JSON.parse(inline.replace(/'/g, '"')));
+      } catch {
+        filters.push(null); // a flow sequence we cannot parse
+      }
+      continue;
+    }
+    if (inline.length > 0) {
+      // `paths: something` — an anchor, a variable, anything we do not model.
+      filters.push(null);
+      continue;
+    }
+    // Block sequence: the following more-indented `- item` lines.
+    const globs = [];
+    let readable = true;
+    for (let j = i + 1; j < lines.length; j++) {
+      const line = lines[j];
+      if (line.trim().length === 0 || /^\s*#/.test(line)) continue;
+      const ind = line.search(/\S/);
+      if (ind <= indent) break;
+      const item = /^\s*-\s*(.*)$/.exec(line);
+      if (item === null) {
+        readable = false;
+        break;
+      }
+      globs.push(item[1].trim().replace(/^["']|["']$/g, "").replace(/\s+#.*$/, ""));
+    }
+    filters.push(readable ? globs : null);
+  }
+  return filters;
+}
+
+/** Does a glob list admit this path? An EMPTY list means the workflow declared
+ * a filter that matches nothing, not "no filter" — the previous version
+ * conflated the two and that conflation was the bug. */
+export function globsAdmit(globs, path) {
+  return globs.some((g) =>
+    new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\u0000/g, ".*")}$`).test(path),
+  );
 }
