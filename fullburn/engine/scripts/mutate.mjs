@@ -16,7 +16,15 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { MARKER, applyEntry, harnessVerdict, recoverInFlight, tableEndOf } from "./mutate-lib.mjs";
+import {
+  MARKER,
+  META_CANARIES,
+  applyEntry,
+  harnessVerdict,
+  metaCheckVerdict,
+  recoverInFlight,
+  tableEndOf,
+} from "./mutate-lib.mjs";
 
 /** The fullburn workspace root, two levels up from engine/scripts/. */
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
@@ -25,6 +33,8 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, ""
  * just as much: R8-04 was two of them. */
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
 const resolveEntry = (file) => `${file.startsWith(".github/") ? REPO_ROOT : ROOT}/${file}`;
+/** vitest's real entry point. Spawned directly so there is no shim to orphan. */
+const VITEST_BIN = `${ROOT}/node_modules/vitest/vitest.mjs`;
 
 const MUTATIONS = [
   // ---- r4 findings ----
@@ -156,6 +166,15 @@ const MUTATIONS = [
   ["R8-STANDING crash marker written first", "engine/scripts/mutate.mjs", "    writeFileSync(MARKER, JSON.stringify({ path, original, workspace: ROOT, pid: process.pid }));", "    void MARKER;"],
   ["R8-STANDING crashed run is recovered", "engine/scripts/mutate-lib.mjs", "  if (!fs.existsSync(markerPath)) return null;", "  return null;\n  if (!fs.existsSync(markerPath)) return null;"],
   ["R8-STANDING recovery is wired into the runner", "engine/scripts/mutate.mjs", "  const recovered = recoverInFlight();", "  const recovered = null;"],
+  // THE HARNESS'S OWN RUNNER AND ITS DRILL HAVE NO ENTRIES, and L29 records
+  // the class. This table measures "does a revert turn THE UNIT SUITE red",
+  // and the runner loop, the interrupt path and the drill are all things the
+  // unit suite does not execute — the drill deliberately so, since R10-05.
+  // Three entries were written for them and all three SURVIVED for that reason
+  // rather than because anything was unprotected; one of them (adding the drill
+  // to vitest.config.ts's include) made the suite spawn harnesses recursively.
+  // They are covered by `npm run drill` and by the invariant that reads the
+  // config, not by this table.
   // ---- r9 findings ----
   // R9-03's await is NOT listed, and the reason is structural rather than
   // convenient. Its behaviour — a SIGINT stops the run and restores the tree —
@@ -169,8 +188,12 @@ const MUTATIONS = [
   // the property was noticed.
   ["R9-04 CODEOWNERS rules need an owner", "engine/scripts/gate-lib.mjs", "      return { pattern, owned: owners.length > 0 };", "      return { pattern, owned: true };"],
   ["R9-04 last match wins", "engine/scripts/gate-lib.mjs", "  for (const rule of rules) if (matches(rule.pattern)) owned = rule.owned;", "  for (const rule of rules) if (matches(rule.pattern)) owned = owned || rule.owned;"],
-  ["R9-06 block-sequence paths are read", "engine/scripts/gate-lib.mjs", "    filters.push(readable ? globs : null);", "    filters.push([]);"],
-  ["R9-06 unreadable filters are refused", "engine/scripts/gate-lib.mjs", "      filters.push(null); // a flow sequence we cannot parse", "      filters.push([]);"],
+  ["R9-06 block-sequence paths are read", "engine/scripts/gate-lib.mjs", "    filters.push({ negated, globs: readable ? globs : null });", "    filters.push({ negated, globs: [] });"],
+  ["R9-06 unreadable filters are refused", "engine/scripts/gate-lib.mjs", "        filters.push({ negated, globs: null }); // a flow sequence we cannot parse", "        filters.push({ negated, globs: [] });"],
+  ["R10-04 paths-ignore is not paths", "engine/scripts/gate-lib.mjs", "    const negated = m[2] !== undefined;", "    const negated = false;"],
+  ["R10-01 meta-check canaries cover both answers", "engine/scripts/mutate-lib.mjs", '    expect: "SURVIVED",', '    expect: "CAUGHT",'],
+  ["R10-01 meta-check refuses a disagreement", "engine/scripts/mutate-lib.mjs", "  const wrong = results.filter((r) => r.got !== r.expect);", "  const wrong = [];"],
+  ["R10-01 an empty meta-check is void", "engine/scripts/mutate-lib.mjs", "  if (!Array.isArray(results) || results.length === 0) {", "  if (false) {"],
   ["R9-05 production meter binds its own clock", "engine/src/spend-meter.ts", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super((narrowing as unknown as () => number) ?? (() => Date.now()), (clientId) => effectiveAiCapsUsd(clientId, undefined));"],
   ["R9-09 marker cannot write outside the workspace", "engine/scripts/mutate-lib.mjs", "  if (!inWorkspace || !sameWorkspace || !fs.existsSync(record.path)) {", "  if (false) {"],
   ["R9-10 no Class-2 file is git-binary", "engine/test/hardening.test.ts", "acme\\u0000corp", "acme\u0000corp"],
@@ -277,13 +300,29 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
    * delivered and the restore actually happens. */
   const run = () =>
     new Promise((resolveRun) => {
-      const child = spawn("npx", ["vitest", "run", "--silent"], { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+      // NODE DIRECTLY ON VITEST'S ENTRY, NOT `npx`, AND ITS OWN PROCESS GROUP.
+      //
+      // `npx` exec-chains to the real vitest process, so killing the child
+      // killed the shim and orphaned vitest and its tinypool workers to init,
+      // never reaped: a CPU-bound worker tree leaked on every interrupted run
+      // (adversary finding R10-05b). `detached` puts the whole tree in one
+      // process group so `kill(-pid)` reaches every descendant.
+      const child = spawn(process.execPath, [VITEST_BIN, "run", "--silent"], {
+        cwd: ROOT,
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: true,
+      });
+      // STDOUT AND STDERR ARE KEPT APART. Merging them put vitest's box-drawing
+      // stderr into the buffer the summary regex reads, so every entry's
+      // evidence column became `1 ⎯⎯⎯⎯⎯⎯⎯` — destroying the per-entry counts
+      // that made R9-01 visible in the first place (adversary finding R10-10).
       let out = "";
+      let err = "";
       child.stdout.on("data", (d) => (out += d));
-      child.stderr.on("data", (d) => (out += d));
+      child.stderr.on("data", (d) => (err += d));
       child.on("close", (code) => {
         if (code === 0) return resolveRun(null);
-        const m = /Tests\s+(.*)$/m.exec(out);
+        const m = /Tests\s+(.*)$/m.exec(out) ?? /Tests\s+(.*)$/m.exec(err);
         resolveRun(m ? m[1].trim() : "failed");
       });
       child.on("error", () => resolveRun("failed to start"));
@@ -307,11 +346,16 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     rmSync(MARKER, { force: true });
     inFlight = null;
   };
-  let interrupted = false;
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"]) {
     process.on(sig, () => {
-      interrupted = true;
-      current?.kill("SIGKILL");
+      // The whole group, not just the leader: see VITEST_BIN above.
+      if (current?.pid !== undefined) {
+        try {
+          process.kill(-current.pid, "SIGKILL");
+        } catch {
+          current.kill("SIGKILL");
+        }
+      }
       restoreInFlight();
       console.error(`\nMUTATION HARNESS INTERRUPTED by ${sig} — tree restored, result is void`);
       process.exit(130);
@@ -350,46 +394,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
   /** THE META-CHECK. Nothing this harness reports may be believed until it has
    * demonstrated, on this machine and in this tree, that it can report BOTH
-   * answers.
+   * answers. The canaries and the verdict live in mutate-lib.mjs so they can be
+   * driven by a test — they were enforced by nothing at all (R10-01).
    *
-   * Human ruling 2026-08-17, after R9-01: "add a permanent meta-check that runs
-   * before every harness result is trusted: deliberately inject a known-
-   * detectable fault and confirm the harness reports FAIL. A harness that
-   * cannot fail must itself fail the gate. Any harness result not preceded by a
-   * passing meta-check is void."
-   *
-   * R9-01 is why. The crash marker written before each mutation existed on disk
-   * while the suite ran, and the standing-invariant test added in the same
-   * commit asserted that no marker exists — so the suite was red for every
-   * entry, every entry reported CAUGHT, and a run of 105 entries could not have
-   * printed anything else. The number was true and meaningless.
-   *
-   * The NEGATIVE canary is the one that catches that class: a comment-only edit
-   * changes no behaviour, so it MUST survive. If it is reported caught, the
-   * suite is failing for reasons that have nothing to do with mutations and
-   * every CAUGHT in the run is an artifact.
-   *
-   * The POSITIVE canary is the other half: a real guard reverted must be
-   * caught, or the harness is blind rather than merely stuck. */
-  const META = [
-    {
-      name: "negative canary — a comment-only edit must SURVIVE",
-      file: "engine/src/spend-meter.ts",
-      from: "const MICROS_PER_USD = 1_000_000;",
-      to: "const MICROS_PER_USD = 1_000_000; // canary",
-      expect: "SURVIVED",
-    },
-    {
-      name: "positive canary — a reverted guard must be CAUGHT",
-      file: "engine/src/spend-meter.ts",
-      from: "    if (brand !== RESERVATION_BRAND) {",
-      to: "    if (false) {",
-      expect: "CAUGHT",
-    },
-  ];
-
+   * Human ruling 2026-08-17: "a harness that cannot fail must itself fail the
+   * gate. Any harness result not preceded by a passing meta-check is void." */
   console.log("META-CHECK — proving the harness can report both answers\n");
-  for (const c of META) {
+  const metaResults = [];
+  for (const c of META_CANARIES) {
     const { found, failure } = await measure(c.file, c.from, c.to);
     if (!found) {
       console.error(`META-CHECK FAILED: ${c.name} — its target text is gone, so the check itself is stale.`);
@@ -397,25 +409,25 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       process.exit(1);
     }
     const got = failure === null ? "SURVIVED" : "CAUGHT";
+    metaResults.push({ name: c.name, expect: c.expect, got });
     console.log(`  ${got === c.expect ? "ok  " : "FAIL"} ${c.name}  |  got ${got}${failure ? `  (${failure})` : ""}`);
-    if (got !== c.expect) {
-      console.error(
-        `\nMETA-CHECK FAILED: expected ${c.expect}, got ${got}.\n` +
-          (c.expect === "SURVIVED"
-            ? "The suite is red for a change that alters no behaviour, so EVERY entry would report CAUGHT " +
-              "whether or not its lock works. This is adversary finding R9-01 recurring."
-            : "The suite stayed green with a real guard reverted, so the harness cannot see failures at all.") +
-          "\nHARNESS RESULT IS VOID.",
-      );
-      process.exit(1);
-    }
+  }
+  const meta = metaCheckVerdict(metaResults);
+  if (!meta.ok) {
+    console.error(`\n${meta.reason}`);
+    process.exit(1);
   }
   console.log("");
 
   let survived = 0;
   let notFound = 0;
+  // NO `interrupted` FLAG AND NO `break`. It was dead — the signal handler
+  // exits the process, so the loop never sees it — and its REACHABLE form would
+  // be worse than dead: breaking out would fall through to the summary and
+  // print "N mutations: N caught" for a run that stopped a third of the way in
+  // (adversary finding R10-07b). An interrupted run has no result, and the
+  // handler saying so and exiting 130 is the whole of the correct behaviour.
   for (const [name, file, from, to] of MUTATIONS) {
-    if (interrupted) break;
     const { found, failure } = await measure(file, from, to);
     if (!found) {
       console.log(`PATTERN-NOT-FOUND  ${name}  (${file})`);

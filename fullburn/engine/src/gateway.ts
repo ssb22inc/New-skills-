@@ -3,7 +3,6 @@ import { MODELS, ROLE_CARDS, ownEntry, type RoleBindings, type OutputSchema, Bin
 import { type ClientVault } from "./vault.ts";
 import {
   MeterUnavailableError,
-  assertUsableAmount,
   isFrozenCapsMeter,
   type SpendMeter,
   type SpendReservation,
@@ -220,7 +219,14 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // unsigned client must refuse before anything else happens — but the
     // CEILINGS the meter enforces are the meter's own (R7-06). This call is the
     // gate on usability, not the source of the numbers.
-    assertUsableAmount(card.costBudgetUsdPerCall, "role cost budget");
+    // THE ROLE-COST CHECK IS GONE. `card` comes from `ROLE_CARDS`, a frozen
+    // table this module owns, and `ownEntry` has already refused an unknown
+    // role above — so `costBudgetUsdPerCall` is always a finite positive number
+    // from a constant, and no input could ever fail this. Third dead guard in
+    // this function of the class L28 records, all three created by fixes that
+    // moved a check upstream of it (adversary finding R10-07a). Deleted rather
+    // than disclosed: unlike L28's it has no future contract, because the value
+    // does not come from a collaborator.
     // LAW 2, STRUCTURALLY. The ceiling this call is checked against must come
     // from the frozen caps table, and the only way to know that is for the
     // meter to have no way of getting it from anywhere else. A meter built

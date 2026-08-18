@@ -637,6 +637,58 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     expect(binary, `Class-2 files git renders as binary, so a reviewer cannot read the diff:\n  ${binary.join("\n  ")}`).toEqual([]);
   });
 
+  /** THE META-CHECK IS WHAT EVERY OTHER NUMBER RESTS ON, AND NOTHING ENFORCED IT.
+   *
+   * Deleting it whole left 292/292 green, typecheck and leak-check clean, and
+   * no mutation entry named it (adversary finding R10-01). The standing rule
+   * says every harness result is void without a passing meta-check; the rule
+   * was prose.
+   *
+   * Driven, not grepped: the canary DEFINITIONS are exported and this asserts
+   * what they are — a negative canary whose edit changes no behaviour, and a
+   * positive canary whose target is a real guard — plus that the runner refuses
+   * to report a number when either disagrees.
+   *
+   * MUTATION: delete a canary, invert an expectation, or drop the exit. */
+  it("the harness cannot report a number without proving it can report both answers", async () => {
+    const { readFileSync } = await import("node:fs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { META_CANARIES, metaCheckVerdict } = await import("../scripts/mutate-lib.mjs");
+
+    // Both directions must be represented, or the check is half a check.
+    expect(META_CANARIES.map((c: { expect: string }) => c.expect).sort()).toEqual(["CAUGHT", "SURVIVED"]);
+
+    const negative = META_CANARIES.find((c: { expect: string }) => c.expect === "SURVIVED");
+    const positive = META_CANARIES.find((c: { expect: string }) => c.expect === "CAUGHT");
+
+    // The negative canary must genuinely change no behaviour — a comment. If it
+    // ever became a real edit, it would be caught, the meta-check would fail,
+    // and the harness would be unusable rather than wrong; but if it became a
+    // no-op that the suite happens to fail on, R9-01 returns undetected.
+    expect(negative.to.startsWith(negative.from), "the negative canary rewrites code rather than appending").toBe(true);
+    expect(negative.to.slice(negative.from.length).trim(), "the negative canary is not a comment").toMatch(/^\/\//);
+
+    // Both targets must still exist, or the meta-check is stale and the run is
+    // void — which the runner reports rather than silently skipping.
+    for (const c of [negative, positive]) {
+      const src = readFileSync(new URL(`../../${c.file}`, import.meta.url), "utf8");
+      expect(src.includes(c.from), `the ${c.expect} canary's target text is gone: ${c.file}`).toBe(true);
+    }
+
+    // And the verdict function refuses every disagreement.
+    expect(metaCheckVerdict([{ name: "n", expect: "SURVIVED", got: "SURVIVED" }, { name: "p", expect: "CAUGHT", got: "CAUGHT" }]).ok).toBe(true);
+    expect(metaCheckVerdict([{ name: "n", expect: "SURVIVED", got: "CAUGHT" }]).ok, "a red suite passed the meta-check").toBe(false);
+    expect(metaCheckVerdict([{ name: "p", expect: "CAUGHT", got: "SURVIVED" }]).ok, "a blind harness passed the meta-check").toBe(false);
+    expect(metaCheckVerdict([]).ok, "an empty meta-check passed").toBe(false);
+    expect(metaCheckVerdict([{ name: "n", expect: "SURVIVED", got: "CAUGHT" }]).reason).toMatch(/VOID/);
+
+    // The runner must actually consult it and stop.
+    const harness = readFileSync(new URL("../scripts/mutate.mjs", import.meta.url), "utf8");
+    const runner = harness.slice(harness.search(/^if \(process\.argv\[1\]/m));
+    expect(runner, "the runner no longer runs the meta-check").toMatch(/metaCheckVerdict\(/);
+    expect(runner, "a failed meta-check no longer stops the run").toMatch(/process\.exit\(1\)/);
+  });
+
   /** The matcher itself, driven directly — a matcher that returned true for
    * everything would make the test above pass vacuously, and it is the kind of
    * helper that gets "simplified" later. */
@@ -698,13 +750,17 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     expect(filters.length, "no paths: filter found — this check is stale").toBeGreaterThan(0);
 
     const WITNESSES = [".github/CODEOWNERS", ".github/workflows/fullburn-ci.yml", "fullburn/config/src/caps.ts", "fullburn/PHASE"];
-    for (const globs of filters) {
-      // UNREADABLE IS REFUSED, not assumed permissive. Reading an unparseable
-      // filter as "everything runs" is exactly how R9-06 worked.
-      expect(globs, "a paths: filter this parser cannot read").not.toBe(null);
+    for (const f of filters) {
+      // UNREADABLE IS REFUSED, not assumed permissive.
+      expect(f.globs, "a paths: filter this parser cannot read").not.toBe(null);
       for (const witness of WITNESSES) {
         expect(isClass2(witness), `${witness} is not Class-2 — the witness is stale`).toBe(true);
-        expect(globsAdmit(globs, witness), `a PR touching ${witness} would run no gate`).toBe(true);
+        // `paths-ignore` is the INVERSE: a witness it MATCHES is a witness the
+        // workflow refuses to run for. Parsed as if it were `paths`, one line
+        // (`paths-ignore: ["**"]`) satisfied this lock while the workflow ran on
+        // no pull request at all (adversary finding R10-04).
+        const admitted = f.negated ? !globsAdmit(f.globs!, witness) : globsAdmit(f.globs!, witness);
+        expect(admitted, `a PR touching ${witness} would run no gate`).toBe(true);
       }
     }
   });
@@ -722,16 +778,28 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     const flow = 'on:\n  pull_request:\n    paths: ["fullburn/**", ".github/**"]\n';
     const block = 'on:\n  pull_request:\n    paths:\n      - "fullburn/**"\n      - ".github/**"\n';
     const narrowed = 'on:\n  pull_request:\n    paths:\n      - "fullburn/**"\n';
-    expect(workflowPathFilters(flow)[0]).toEqual(["fullburn/**", ".github/**"]);
-    expect(workflowPathFilters(block)[0], "the block-sequence spelling was not read").toEqual([
-      "fullburn/**",
-      ".github/**",
-    ]);
+    expect(workflowPathFilters(flow)[0]).toEqual({ negated: false, globs: ["fullburn/**", ".github/**"] });
+    expect(workflowPathFilters(block)[0], "the block-sequence spelling was not read").toEqual({
+      negated: false,
+      globs: ["fullburn/**", ".github/**"],
+    });
+
+    /** `paths-ignore` IS THE INVERSE, and was read as if it were `paths`. One
+     * ordinary line made the lock above pass while the workflow ran on no pull
+     * request at all — adversary-gate and class2-gate never executing
+     * (adversary finding R10-04).
+     *
+     * MUTATION: drop the `negated` flag, or set it to false unconditionally. */
+    const ignoreAll = 'on:\n  pull_request:\n    paths-ignore:\n      - "**"\n';
+    expect(workflowPathFilters(ignoreAll)[0]!.negated, "paths-ignore was read as paths").toBe(true);
+    expect(workflowPathFilters(ignoreAll)[0]!.globs).toEqual(["**"]);
+    // `**` matches every witness, so as a NEGATED filter it admits none of them.
+    expect(globsAdmit(["**"], ".github/CODEOWNERS")).toBe(true);
     // The narrowing that R9-06 used: block spelling, .github/** dropped.
-    expect(globsAdmit(workflowPathFilters(narrowed)[0]!, ".github/CODEOWNERS")).toBe(false);
+    expect(globsAdmit(workflowPathFilters(narrowed)[0]!.globs!, ".github/CODEOWNERS")).toBe(false);
     // Anything unmodelled is null, never an empty permissive list.
-    expect(workflowPathFilters("on:\n  push:\n    paths: *anchor\n")[0]).toBe(null);
-    expect(workflowPathFilters("on:\n  push:\n    paths: [oops\n")[0]).toBe(null);
+    expect(workflowPathFilters("on:\n  push:\n    paths: *anchor\n")[0]!.globs).toBe(null);
+    expect(workflowPathFilters("on:\n  push:\n    paths: [oops\n")[0]!.globs).toBe(null);
     // `**` crosses directories; `*` does not.
     expect(globsAdmit(["fullburn/**"], "fullburn/engine/src/gateway.ts")).toBe(true);
     expect(globsAdmit(["fullburn/*"], "fullburn/engine/src/gateway.ts")).toBe(false);

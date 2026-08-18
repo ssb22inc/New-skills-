@@ -641,19 +641,27 @@ export function workflowPathFilters(workflowYaml) {
   for (let i = 0; i < lines.length; i++) {
     const m = /^(\s*)paths(-ignore)?:\s*(.*)$/.exec(lines[i]);
     if (m === null) continue;
+    // `paths-ignore` is the INVERSE of `paths` and was parsed as if it were the
+    // same key — so one ordinary line, `paths-ignore: ["**"]`, satisfied the
+    // lock that holds the trigger to CLASS2_PATTERNS while the workflow ran on
+    // no pull request at all, and adversary-gate and class2-gate never executed
+    // (adversary finding R10-04). The two are reported distinctly and the
+    // caller decides; a parser that flattens a negation into its positive is
+    // worse than one that cannot read the file.
+    const negated = m[2] !== undefined;
     const indent = m[1].length;
     const inline = m[3].trim();
     if (inline.startsWith("[")) {
       try {
-        filters.push(JSON.parse(inline.replace(/'/g, '"')));
+        filters.push({ negated, globs: JSON.parse(inline.replace(/'/g, '"')) });
       } catch {
-        filters.push(null); // a flow sequence we cannot parse
+        filters.push({ negated, globs: null }); // a flow sequence we cannot parse
       }
       continue;
     }
     if (inline.length > 0) {
       // `paths: something` — an anchor, a variable, anything we do not model.
-      filters.push(null);
+      filters.push({ negated, globs: null });
       continue;
     }
     // Block sequence: the following more-indented `- item` lines.
@@ -671,7 +679,7 @@ export function workflowPathFilters(workflowYaml) {
       }
       globs.push(item[1].trim().replace(/^["']|["']$/g, "").replace(/\s+#.*$/, ""));
     }
-    filters.push(readable ? globs : null);
+    filters.push({ negated, globs: readable ? globs : null });
   }
   return filters;
 }

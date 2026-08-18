@@ -54,6 +54,15 @@ jobs:
         run: npm run e2e
       - name: Leak + structural scan
         run: node engine/scripts/leak-check.mjs ..
+      # THE INTERRUPT DRILL — its own step, never part of `npm test`.
+      #
+      # It spawns the real mutation harness and signals it, so inside the unit
+      # suite it mutated engine/src/spend-meter.ts on every run and orphaned a
+      # CPU-bound worker tree (adversary finding R10-05). Here it runs once,
+      # after the suite, where no harness is running — the mutation-harness job
+      # is a separate job with its own checkout.
+      - name: Harness interrupt drill (the fails-closed half, executed)
+        run: npm run drill
 
   # THE ACCEPTANCE BAR, AS A STAGE. `npm run mutate` is how this project
   # enforces "a fix whose one-line revert leaves the suite green is not

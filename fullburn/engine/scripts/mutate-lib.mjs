@@ -130,3 +130,58 @@ export function tableEndOf(harnessSource) {
   if (at === -1) throw new Error("mutation table not found in harness source — refusing to run (fail closed)");
   return at + 3;
 }
+
+/** THE META-CHECK'S CANARIES, and the verdict over their results.
+ *
+ * Here rather than in the runner so they can be DRIVEN. The meta-check is what
+ * every other number now rests on, and it was enforced by nothing: deleting it
+ * whole left the suite green and no mutation entry named it (adversary finding
+ * R10-01). The standing rule — every harness result is void without a passing
+ * meta-check — was prose.
+ *
+ * The NEGATIVE canary is the half that catches R9-01's class. It appends a
+ * comment, so it changes no behaviour and MUST survive; if it is reported
+ * caught, the suite is red for reasons unrelated to mutations and every CAUGHT
+ * in the run is an artifact. The POSITIVE canary reverts a real guard and MUST
+ * be caught, or the harness is blind rather than merely stuck.
+ *
+ * `to` must begin with `from` and add only a comment — the lock asserts that,
+ * because a negative canary that quietly became a real edit would make the
+ * meta-check fail forever, and one that became an edit the suite happens not to
+ * notice would let R9-01 back in undetected. */
+export const META_CANARIES = Object.freeze([
+  Object.freeze({
+    name: "negative canary — a comment-only edit must SURVIVE",
+    file: "engine/src/spend-meter.ts",
+    from: "const MICROS_PER_USD = 1_000_000;",
+    to: "const MICROS_PER_USD = 1_000_000; // meta-check canary",
+    expect: "SURVIVED",
+  }),
+  Object.freeze({
+    name: "positive canary — a reverted guard must be CAUGHT",
+    file: "engine/src/spend-meter.ts",
+    from: "    if (brand !== RESERVATION_BRAND) {",
+    to: "    if (false) {",
+    expect: "CAUGHT",
+  }),
+]);
+
+/** Did the harness prove it can report BOTH answers? Anything else is void. */
+export function metaCheckVerdict(results) {
+  if (!Array.isArray(results) || results.length === 0) {
+    return { ok: false, reason: "META-CHECK DID NOT RUN — HARNESS RESULT IS VOID." };
+  }
+  const wrong = results.filter((r) => r.got !== r.expect);
+  if (wrong.length === 0) return { ok: true, reason: "the harness can report both answers" };
+  const negativeFailed = wrong.some((r) => r.expect === "SURVIVED");
+  return {
+    ok: false,
+    reason:
+      `META-CHECK FAILED: ${wrong.map((r) => `${r.name} expected ${r.expect}, got ${r.got}`).join("; ")}.\n` +
+      (negativeFailed
+        ? "The suite is red for a change that alters no behaviour, so EVERY entry would report CAUGHT " +
+          "whether or not its lock works. This is adversary finding R9-01 recurring.\n"
+        : "The suite stayed green with a real guard reverted, so the harness cannot see failures at all.\n") +
+      "HARNESS RESULT IS VOID.",
+  };
+}

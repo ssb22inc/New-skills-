@@ -283,32 +283,66 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
    * tool is covered the day it lands rather than the day someone remembers. */
   it("every tool that can write to the source tree is import-safe and fails closed", async () => {
     const { readdirSync, existsSync } = await import("node:fs");
+    const { join: joinPath, relative } = await import("node:path");
+
+    /** EVERY FILE IN THE WORKSPACE, not one directory and one extension.
+     *
+     * The previous version read `engine/scripts/*.mjs`. R10-05 was a `.ts` file
+     * under `engine/test/` that spawned the real harness from inside the unit
+     * suite — it wrote to the source tree on every `npm test` and this
+     * enumeration could not see it, while its own comment claimed a new writing
+     * tool was "covered the day it lands" (adversary finding R10-08). A claim
+     * about "every tool" has to walk the tree. */
+    const wsRoot = new URL("../../../", import.meta.url).pathname.replace(/\/$/, "");
+    const SKIP = new Set(["node_modules", ".git", "dist", "test-results", "reports", "APPROVALS"]);
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+        if (SKIP.has(e.name)) return [];
+        const abs = joinPath(dir, e.name);
+        if (e.isDirectory()) return walk(abs);
+        return /\.(?:ts|mts|cts|js|mjs|cjs)$/.test(e.name) ? [abs] : [];
+      });
+    const files = walk(wsRoot);
+    expect(files.length, "the walk found nothing — this test would pass vacuously").toBeGreaterThan(20);
+
+    /** A tool that can WEAKEN the tree is one that writes to a path it did not
+     * create, or spawns something that does. Both halves matter: R10-05 wrote
+     * nothing itself — it spawned the harness. */
+    const WRITE_API = /\b(?:writeFileSync|appendFileSync|rmSync|unlinkSync|renameSync|cpSync|writeFile|appendFile|createWriteStream)\s*\(/;
+    // SPAWNING, not merely mentioning. This file names `mutate.mjs` in several
+    // reads and imports; what matters is handing it to a process API.
+    const SPAWNS_HARNESS = /(?:spawn|spawnSync|execFile|execFileSync|exec|execSync)\s*\([\s\S]{0,200}?mutate\.mjs/;
+    const candidates = files.filter((f) => {
+      const src = readFileSync(f, "utf8");
+      return SPAWNS_HARNESS.test(src) || (WRITE_API.test(src) && /engine\/(?:src|scripts)|\bpath\b/.test(src));
+    });
+    const rel = (f: string) => relative(wsRoot, f);
+    expect(candidates.map(rel), "the enumeration lost the harness").toContain("engine/scripts/mutate.mjs");
+    // R10-05's file must be visible to this enumeration, wherever it lives.
+    expect(candidates.map(rel), "the enumeration cannot see the drill that spawns a harness").toContain(
+      "engine/test/drill/harness-interrupt.drill.ts",
+    );
+
+    /** Anything that spawns the harness must be OUT of the default suite. That
+     * is the property R10-05 violated, and it is checked against the config
+     * rather than assumed. */
+    const { default: suiteCfg } = await import("../../../vitest.config.ts");
+    const include: string[] = suiteCfg.test?.include ?? [];
+    const matches = (glob: string, path: string) =>
+      new RegExp(`^${glob.replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\u0000/g, ".*")}$`).test(path);
+    for (const f of candidates.filter((c) => SPAWNS_HARNESS.test(readFileSync(c, "utf8")) && rel(c) !== "engine/scripts/mutate.mjs")) {
+      expect(
+        include.some((g) => matches(g, rel(f))),
+        `${rel(f)} spawns the mutation harness AND runs in the default suite — every npm test would rewrite source`,
+      ).toBe(false);
+    }
+
     const dir = new URL("../../scripts/", import.meta.url);
     const scripts = readdirSync(dir).filter((f) => f.endsWith(".mjs"));
     expect(scripts.length, "no scripts found — this test would pass vacuously").toBeGreaterThan(5);
-
-    /** EVERY script that can write to the tree — by ANY write API, not one
-     * spelling of one call.
-     *
-     * The previous version matched `writeFileSync(path, original.replace(` and
-     * then `writeFileSync(path, original[.+]`, and went stale BOTH times the
-     * write was rewritten. It failed closed each time, which is the behaviour to
-     * keep, but a definition that narrow makes "enumerated from the filesystem"
-     * a bigger claim than it delivers: a second writing tool spelled any other
-     * way was invisible (adversary finding R9-07). */
-    const WRITE_API = /\b(?:writeFileSync|appendFileSync|rmSync|unlinkSync|renameSync|mkdirSync|cpSync|writeFile|appendFile|createWriteStream|rm|unlink|rename)\s*\(/;
     const writers = scripts.filter((f) => WRITE_API.test(readFileSync(new URL(f, dir), "utf8")));
     expect(writers, "no writing tool found — the enumeration is broken").toContain("mutate.mjs");
 
-    /** A writing script is safe in exactly one of two ways, and which one it
-     * claims is read from its own shape at column 0 — top-level code starts
-     * there, a table entry is always indented, and a string literal therefore
-     * cannot satisfy it. That anchoring is what closes the trap that has now
-     * caught four checks in this repo (R8-09, R9-02, and two versions of this
-     * test): a grep over a file whose data contains its own code.
-     *
-     * A RUNNER writes when executed and must be import-safe and fail closed.
-     * A LIBRARY has no runner at all — proven by importing it and watching. */
     const GUARD = /^if \(process\.argv\[1\][\s\S]{0,120}import\.meta\.url/m;
     const runners = writers.filter((f) => GUARD.test(readFileSync(new URL(f, dir), "utf8")));
     const libraries = writers.filter((f) => !GUARD.test(readFileSync(new URL(f, dir), "utf8")));
@@ -316,48 +350,29 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
 
     for (const f of runners) {
       const src = readFileSync(new URL(f, dir), "utf8");
-      // Read only the RUNNER, so the mutation table cannot satisfy a check.
       const runner = src.slice(src.search(GUARD));
-      // FAILS CLOSED — an on-disk marker, written BEFORE the source is broken.
-      // The other order leaves a window in which the tree is weakened and
-      // nothing on disk says how to repair it.
+      for (const sig of ["SIGINT", "SIGTERM"]) {
+        expect(runner, `${f} does not restore on ${sig}`).toContain(sig);
+      }
       const markerWrite = runner.search(/writeFileSync\(\s*MARKER/);
       const sourceBreak = runner.search(/writeFileSync\(\s*path\s*,\s*(?!original\b)\w/);
       expect(markerWrite, `${f} has no crash marker; a SIGKILL leaves the tree mutated`).toBeGreaterThan(-1);
       expect(sourceBreak, `${f} no longer mutates source — this check is stale`).toBeGreaterThan(-1);
       expect(markerWrite, `${f} breaks source before recording how to repair it`).toBeLessThan(sourceBreak);
-      /** THESE FOUR ARE SHAPE CHECKS, AND SHAPE CHECKS DO NOT LOCK A GUARD.
-       * They are cheap early detection, nothing more — a grep passes with the
-       * behaviour reverted, which is how R9-03 shipped signal handlers that
-       * could never run under an invariant asserting the strings "SIGINT" and
-       * "SIGTERM" were present.
-       *
-       * THE PROOF IS THE DRILL: `engine/test/integration/gate-cli.test.ts`
-       * spawns the real harness, waits until it has genuinely broken a file,
-       * sends SIGINT, and asserts the file came back and the marker is gone.
-       * Its presence is asserted below so it cannot be quietly deleted, and it
-       * runs in its own CI stage. Read these four as a fast smoke over a
-       * property the drill establishes, never as the establishment of it. */
       expect(runner, `${f} has no restore-on-exit path`).toMatch(/process\.on\(\s*["'`]?exit/);
       expect(runner, `${f} never recovers a previous crashed run`).toMatch(/recoverInFlight\(/);
-      /** THE SUITE MUST BE AWAITED, NOT BLOCKED ON. `execSync` holds the event
-       * loop for the entire run, so a queued SIGINT handler cannot be serviced
-       * until every entry is done — the handlers were present and the behaviour
-       * was absent, and a Ctrl-C rewrote three more files after the signal
-       * (adversary finding R9-03). */
-      expect(runner, `${f} blocks the event loop, so its signal handlers cannot run`).not.toMatch(/execSync\s*\(/);
-      expect(runner, `${f} does not await the suite, so a signal cannot be serviced`).toMatch(/await\s+\w*[Rr]un\(|await measure\(/);
+      /** ANY synchronous process API blocks the loop, not just `execSync`.
+       * Reverting the runner to `spawnSync` restored R9-03 in full with all
+       * four of these green: `spawnSync(` did not match `execSync\s*\(`, and
+       * `await measure(` was satisfied by the META-CHECK's call site even with
+       * every `await` removed from the loop (adversary finding R10-09). */
+      expect(runner, `${f} blocks the event loop, so its signal handlers cannot run`).not.toMatch(
+        /\b(?:execSync|execFileSync|spawnSync)\s*\(/,
+      );
+      // The LOOP's await, not any await — anchored to the loop body.
+      const loop = runner.slice(runner.search(/for \(const \[name, file, from, to\] of MUTATIONS\)/));
+      expect(loop, `${f}'s entry loop does not await, so a signal cannot be serviced`).toMatch(/await measure\(/);
     }
-
-    /** …and the drill that actually proves the interrupt behaviour must exist.
-     * Deleting it would leave only the greps above, which is the state R9-03
-     * found. This is a by-name presence check on a TEST — legitimate, because
-     * it guards deletion — as distinct from a shape check on a GUARD, which
-     * would be claiming to guard a revert and would not. */
-    const drill = readFileSync(new URL("../integration/gate-cli.test.ts", import.meta.url), "utf8");
-    expect(drill, "the harness interrupt drill was deleted").toContain(
-      'it("SIGINT stops it, clears the marker, and leaves no file mutated"',
-    );
 
     /** A LIBRARY claims it has no runner. That is a behaviour, so it is driven:
      * import it and watch a canary. This is safe in a way the runner's import
