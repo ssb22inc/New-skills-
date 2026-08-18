@@ -262,7 +262,7 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
    *
    * MUTATION: drop the `new.target` finality check, or the WeakSet membership
    * test in isFrozenCapsMeter. */
-  it("the frozen-caps brand cannot be forged, subclassed, or patched on", () => {
+  it("the frozen-caps brand cannot be forged, subclassed, or patched on", async () => {
     const genuine = new FrozenCapsSpendMeter();
     expect(isFrozenCapsMeter(genuine)).toBe(true);
 
@@ -280,11 +280,49 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
     const Sub = class extends FrozenCapsSpendMeter {};
     expect(() => new Sub(), "a subclass could override reserve()").toThrow(MeterUnavailableError);
 
-    // And a genuine instance whose reserve() was redefined is no longer proof:
-    // the brand is on the object, but the ceiling-reading method is not ours.
-    const patched = new FrozenCapsSpendMeter();
-    Object.defineProperty(patched, "reserve", { value: () => ({}) as never });
-    expect(isFrozenCapsMeter(patched), "a repointed reserve() kept its brand").toBe(false);
+    /** AND A GENUINE INSTANCE CANNOT BE PATCHED AT ALL.
+     *
+     * The brand used to pin `reserve` to the prototype and deliberately leave
+     * `settle` and `release` open, arguing that only `reserve` reads a ceiling.
+     * A `settle` rewired to RELEASE mints headroom on every call: executed
+     * through the real `llm()`, 5,000 dispatches put $50 through a frozen
+     * $10/day with `todayUsd()` reading $0.00 (adversary finding R10-02). The
+     * enumeration was the defect, so there is no enumeration — production
+     * meters are frozen (human ruling 2026-08-18).
+     *
+     * MUTATION: drop `Object.freeze(this)` from the constructor. */
+    const genuineFrozen = new FrozenCapsSpendMeter();
+    expect(Object.isFrozen(genuineFrozen), "a production meter is mutable").toBe(true);
+    for (const method of ["reserve", "settle", "release", "todayUsd", "monthUsd", "reservedUsd"]) {
+      expect(
+        () => Object.defineProperty(genuineFrozen, method, { value: () => ({}) as never }),
+        `${method} could be redefined on a production meter`,
+      ).toThrow();
+    }
+
+    /** THE ATTACK ITSELF, through the real llm(): settle rewired to release. */
+    const { makeDeps: mk2, TEST_CLIENT: C2 } = await import("./helpers.ts");
+    const { llm: llm2 } = await import("../src/gateway.ts");
+    const { TraceContext: TC2 } = await import("../src/tracing.ts");
+    const { ROLE_BINDINGS: RB2 } = await import("@fullburn/config/models");
+    const { deps: d2, meter: m2 } = mk2();
+    expect(() => {
+      const realRelease = m2.release.bind(m2);
+      Object.defineProperty(m2, "settle", { value: (r: SpendReservation) => realRelease(r) });
+    }, "settle could be rewired to release on a production meter").toThrow();
+    let dispatched2 = 0;
+    const frozenCap = getCaps(C2).dailyAiSpendUsd;
+    for (let i = 0; i < 2000; i++) {
+      const ok = await llm2({ ...d2, transport: { async post() { dispatched2 += 1; return { greeting: "ok" }; } }, bindings: RB2 }, {
+        role: "hello-world",
+        clientId: C2,
+        input: {},
+        trace: new TC2(`r1002-${i}`, C2),
+      }).then(() => true, () => false);
+      if (!ok) break;
+    }
+    expect(m2.todayUsd(C2), "spend ran past the frozen ceiling").toBeLessThanOrEqual(frozenCap + 1e-9);
+    expect(dispatched2 * 0.01, "dispatches exceeded what the ceiling allows").toBeLessThanOrEqual(frozenCap + 1e-9);
   });
 
   /** A CONSEQUENCE OF THE R8-01 FIX, caught by the harness rather than by a
@@ -371,6 +409,112 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
       }).catch(() => undefined);
     }
     expect(dispatched, "a caller-clocked meter reached the transport").toBe(0);
+  });
+
+  /** THE CLOCK IS THE METER'S OWN, AND ITS RESIDUAL IS BOUNDED BY TEST (R10-03).
+   *
+   * R9-05 removed the injectable clock and bound `Date.now` — a mutable
+   * property of a mutable global. Patching it gave 3,000 dispatches against a
+   * frozen $200/month with no `CapError`.
+   *
+   * Human ruling 2026-08-18: a different source entirely, no module-load
+   * capture that a pre-import patch defeats, and any irreducible residual needs
+   * a TEST PROVING ITS BOUNDS — "four rounds running, a disclosed limitation
+   * became the next round's severity-1; I'm not accepting a fifth."
+   *
+   * So this proves the four bounds that remain, by executing each. */
+  it("the production clock cannot be moved, and its residual is bounded", async () => {
+    const { trustedClock } = await import("../src/spend-meter.ts");
+    const { makeDeps: mk3, TEST_CLIENT: C3 } = await import("./helpers.ts");
+    const { llm: llm3 } = await import("../src/gateway.ts");
+    const { TraceContext: TC3 } = await import("../src/tracing.ts");
+    const { ROLE_BINDINGS: RB3 } = await import("@fullburn/config/models");
+
+    /** BOUND 1 — a post-construction patch of `Date.now` is INERT. This is
+     * R10-03's exact attack, executed through the real llm().
+     *
+     * MUTATION: make trustedClock read Date.now on each call. */
+    const { deps: d3, meter: m3 } = mk3();
+    const realNow = Date.now;
+    const frozenMonth = getCaps(C3).monthlyAiSpendUsd;
+    let dispatched = 0;
+    try {
+      let fake = realNow.call(Date);
+      Date.now = () => (fake += 40 * 24 * 3600 * 1000); // a fresh month per call
+      for (let i = 0; i < 3000; i++) {
+        const ok = await llm3({ ...d3, transport: { async post() { dispatched += 1; return { greeting: "ok" }; } }, bindings: RB3 }, {
+          role: "hello-world",
+          clientId: C3,
+          input: {},
+          trace: new TC3(`clk-${i}`, C3),
+        }).then(() => true, () => false);
+        if (!ok) break;
+      }
+    } finally {
+      Date.now = realNow;
+    }
+    expect(dispatched * 0.01, "a patched Date.now minted fresh ceilings").toBeLessThanOrEqual(frozenMonth + 1e-9);
+
+    /** BOUND 2 — the clock ADVANCES MONOTONICALLY and never jumps a period on
+     * its own. Two readings milliseconds apart must stay in the same day. */
+    const clock = trustedClock();
+    const a = clock();
+    const b = clock();
+    expect(b).toBeGreaterThanOrEqual(a);
+    expect(b - a, "the clock jumped more than a second between adjacent reads").toBeLessThan(1000);
+    expect(new Date(a).toISOString().slice(0, 10)).toBe(new Date(b).toISOString().slice(0, 10));
+
+    /** BOUND 3 — the anchor is CROSS-VALIDATED. One tampered wall-clock source
+     * is refused at construction, so moving the ceiling is a loud failure
+     * rather than a quiet win. This is what remains of the residual: an
+     * attacker must patch every independent source CONSISTENTLY, before this
+     * module is imported. One is not enough, and here is the proof.
+     *
+     * MUTATION: drop the spread check from anchorWallMs. */
+    const realPerfNow = performance.now.bind(performance);
+    try {
+      // `Date.now` is captured at module load, so patching it here is already
+      // inert — that IS bound 1. `performance.now()` is read through a fresh
+      // call each time, so it stands in for a source an attacker reached
+      // before import: one source disagreeing must refuse.
+      performance.now = () => realPerfNow() + 3 * 24 * 3600 * 1000; // three days on
+      expect(() => trustedClock(), "one tampered time source was accepted").toThrow(MeterUnavailableError);
+      expect(() => new FrozenCapsSpendMeter(), "a meter was built on a tampered clock").toThrow(/disagree/);
+    } finally {
+      performance.now = realPerfNow;
+    }
+
+    /** BOUND 4 — a MONOTONIC source that goes backwards refuses spend rather
+     * than re-entering a closed accounting period.
+     *
+     * The source is captured at module load, so this patches it BEFORE a fresh
+     * import — which is also the only way the guard is reachable at all. A
+     * guard no input can reach is what this project deletes; this one has an
+     * input, and here it is.
+     *
+     * MUTATION: drop the `mono < lastMono` check from trustedClock. */
+    const realHrtime = process.hrtime.bigint;
+    try {
+      let ticks = 0n;
+      // Advances once, then goes backwards — a source swap, a VM migration, or
+      // a platform whose "monotonic" clock is not.
+      (process.hrtime as unknown as { bigint: () => bigint }).bigint = () => {
+        ticks += 1n;
+        return ticks === 1n ? 1_000_000_000n : 1n;
+      };
+      const { resetModules } = await import("vitest").then((v) => ({ resetModules: v.vi.resetModules }));
+      resetModules();
+      const fresh = await import("../src/spend-meter.ts");
+      const c = fresh.trustedClock();
+      expect(() => c(), "a backwards monotonic source was accepted").toThrow(/backwards/);
+    } finally {
+      (process.hrtime as unknown as { bigint: typeof realHrtime }).bigint = realHrtime;
+    }
+
+    /** BOUND 5 — an agreeing set is accepted, so bounds 3 and 4 are real
+     * discriminations and not checks that refuse everything. */
+    expect(() => trustedClock()).not.toThrow();
+    expect(() => new FrozenCapsSpendMeter()).not.toThrow();
   });
 
   /** The narrowing table is the ONLY thing a caller may supply, and `caps.ts`

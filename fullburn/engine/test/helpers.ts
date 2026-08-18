@@ -39,31 +39,34 @@ export const testClock = () => TEST_NOW_MS;
 export const fixedCaps = () => ({ dailyUsd: 200, monthlyUsd: 200, timeZone: "UTC" });
 
 /** A REAL production meter whose `settle()` throws, for the storage-failure
- * paths (M-01, M-04, N-07).
+ * paths (M-01, M-04, N-07) — driven through a REAL failure mode, not by
+ * reaching into the instance.
  *
- * `llm()` refuses a hand-built meter object now (R8-01), so fault injection
- * patches the instance rather than faking the type. It patches `settle` and
- * `release` and NEVER `reserve`: `reserve` is the method the frozen-caps brand
- * pins, because it is the only one that reads a ceiling. A settle that throws
- * cannot mint headroom — the reservation stays open and keeps counting — which
- * is exactly why it is safe to leave unpinned and exactly what these tests are
- * about. */
-export function meterWithFailingSettle(now: () => number = testClock) {
-  const meter = new FrozenCapsSpendMeter();
-  let released = 0;
-  const realRelease = meter.release.bind(meter);
-  Object.defineProperty(meter, "settle", {
-    value: () => {
-      throw new Error("storage put failed");
-    },
-  });
-  Object.defineProperty(meter, "release", {
-    value: (r: Parameters<typeof realRelease>[0]) => {
-      released += 1;
-      realRelease(r);
-    },
-  });
-  return { meter, releases: () => released };
+ * This used to `Object.defineProperty(meter, "settle", …)`. That technique is
+ * exactly the R10-02 attack: patching `settle` to release on a
+ * genuinely-constructed meter passed the brand and put $50 through a frozen
+ * $10/day with the ledger reading $0.00. Production meters are frozen now
+ * (human ruling 2026-08-18), so the patch throws — and the test was reaching
+ * into production internals, which was the defect rather than the freeze.
+ *
+ * The seam is the one a real outage uses: the transport flips the meter
+ * unavailable BETWEEN reserve and settle, and `settle` refuses. `llm()` then
+ * fails closed exactly as M-01/M-04 require — the reservation stays open and
+ * keeps counting against the ceiling. */
+export function transportThatBreaksStorage(meter: { setAvailable(v: boolean): void }, inner?: GatewayTransport) {
+  let broke = 0;
+  return {
+    breaks: () => broke,
+    transport: {
+      async post(url: string, body: unknown, headers: Readonly<Record<string, string>>): Promise<unknown> {
+        const out = inner ? await inner.post(url, body, headers) : { greeting: "ok" };
+        // The request has left the building; storage dies before the settle.
+        meter.setAvailable(false);
+        broke += 1;
+        return out;
+      },
+    } satisfies GatewayTransport,
+  };
 }
 
 /** A resolver with ceilings a test chooses explicitly. */

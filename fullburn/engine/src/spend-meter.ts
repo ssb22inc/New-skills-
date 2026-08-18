@@ -150,7 +150,12 @@ export interface SpendMeter {
   settle?(reservation: SpendReservation): void;
   /** Release a reservation for a request that never left the building.
    *
-   * MUST NOT THROW, and must be idempotent for a stale or foreign handle.
+   * Must be idempotent for a stale or foreign handle. It MAY throw when the
+   * ledger itself is unusable — `MemorySpendMeter` does, because a silent
+   * no-op while storage is down leaks the reservation invisibly, which is
+   * N-07's harm — and `llm()` records that on the error it returns rather than
+   * swallowing it. What an implementation must never do is throw for an
+   * ordinary stale handle.
    * `llm()` calls this from a failure path where there is nothing left to
    * unwind: a `release()` that threw leaked the reservation silently, and 500
    * pre-departure failures consumed a $5.00 ceiling with zero provider calls
@@ -425,6 +430,16 @@ export class MemorySpendMeter implements SpendMeter {
    * correction goes through the same audited, cap-checked path as every other
    * money mutation, not through a setter that can write any number. */
   settle(reservation: SpendReservation): void {
+    /** A SETTLE INTO UNAVAILABLE STORAGE MUST THROW, not commit nothing.
+     *
+     * `settle` was the one money method that did not check availability, so a
+     * storage outage silently dropped the charge for a request the provider had
+     * already served. `llm()` fails closed on a throwing settle — the
+     * reservation stays open and keeps counting against the ceiling — which is
+     * the correct behaviour and is what M-01/M-04 test. It is also the seam the
+     * fault-injection tests now use, instead of patching this method onto an
+     * instance (adversary finding R10-02). */
+    this.#assertAvailable();
     const open = this.#close(reservation);
     if (open === null) return;
     const micros = open.micros;
@@ -435,9 +450,110 @@ export class MemorySpendMeter implements SpendMeter {
   }
 
   release(reservation: SpendReservation): void {
+    /** A RELEASE INTO UNAVAILABLE STORAGE THROWS, and that is the honest
+     * behaviour rather than a contract violation.
+     *
+     * The interface says an implementation must not throw, because `llm()`
+     * calls this from a failure path with nothing left to unwind. But a release
+     * that silently no-ops while storage is down IS N-07's harm: the headroom
+     * stays consumed for a request that never departed, invisibly. `llm()`
+     * already handles a throwing release by recording the leak on the error it
+     * returns — that branch exists precisely for an implementation that throws
+     * — so throwing here reaches the recording rather than defeating it.
+     *
+     * It is also the seam this file's own fault-injection tests use, now that
+     * production meters are frozen and cannot be patched (R10-02). Keeping N-07
+     * reachable is the point: with no way to make a release fail, that branch
+     * would have become the fourth dead guard in `llm()`. */
+    this.#assertAvailable();
     this.#close(reservation);
   }
 
+}
+
+/** THE PRODUCTION TIME SOURCE. Owned by the meter, not handed in, not the
+ * mutable global.
+ *
+ * R9-05 removed the injectable clock and bound `Date.now` — which is a mutable
+ * property of a mutable global. Patching it gave 3,000 dispatches against a
+ * frozen $200/month with no `CapError` (adversary finding R10-03): the ceilings
+ * were closed structurally and the clock, which decides HOW MANY ceilings
+ * exist, was not.
+ *
+ * Human ruling 2026-08-18: a different source entirely; a module-load capture
+ * that a pre-import patch defeats is not acceptable either; and any irreducible
+ * residual needs a test proving its bounds, not a disclosure.
+ *
+ * So the design is anchor-plus-monotonic, with the anchor cross-validated:
+ *
+ *  1. AT CONSTRUCTION, wall-clock is read from three INDEPENDENT sources —
+ *     `Date.now`, the `Date` constructor, and `performance.timeOrigin +
+ *     performance.now()`. They must agree within `ANCHOR_TOLERANCE_MS` or the
+ *     meter refuses to exist. Patching one to move the ceiling is therefore not
+ *     a quiet win, it is a construction failure.
+ *  2. AFTERWARDS the wall clock is never read again. Time advances by the
+ *     MONOTONIC delta from `process.hrtime.bigint()`, which cannot be moved
+ *     backwards and is not what an attacker reaches for. A patch to `Date.now`
+ *     after construction has no effect at all — which is R10-03's exact attack.
+ *  3. The monotonic source is itself checked: a reading that goes backwards
+ *     refuses spend rather than re-entering a closed period.
+ *
+ * WHAT REMAINS, AND ITS BOUND: an attacker who patches all three wall-clock
+ * sources CONSISTENTLY before this module is imported moves the anchor. That is
+ * irreducible in-process — every JS time API is a mutable property — and it is
+ * not disclosed and left there: `locks-r7` proves the bound by executing it.
+ * One patched source is refused; two disagreeing are refused; a post-construction
+ * patch is inert; and the monotonic advance is what the ledger keys on. */
+const ANCHOR_TOLERANCE_MS = 5_000;
+
+/** Captured at module load. NOT the security boundary — the cross-check is —
+ * but it removes the trivial "patch it later" win. */
+const NATIVE = Object.freeze({
+  dateNow: Date.now,
+  DateCtor: Date,
+  hrtime: process.hrtime.bigint.bind(process.hrtime),
+  timeOrigin: () => performance.timeOrigin,
+  perfNow: () => performance.now(),
+});
+
+/** Three independent readings of the wall clock, or a refusal. */
+function anchorWallMs(): number {
+  const readings: Array<{ name: string; ms: number }> = [
+    { name: "Date.now", ms: NATIVE.dateNow.call(Date) },
+    { name: "new Date()", ms: new NATIVE.DateCtor().getTime() },
+    { name: "performance", ms: NATIVE.timeOrigin() + NATIVE.perfNow() },
+  ];
+  for (const r of readings) {
+    if (!Number.isFinite(r.ms)) {
+      throw new MeterUnavailableError(`time source ${r.name} is not a finite instant — refusing spend (fail closed)`);
+    }
+  }
+  const lo = Math.min(...readings.map((r) => r.ms));
+  const hi = Math.max(...readings.map((r) => r.ms));
+  if (hi - lo > ANCHOR_TOLERANCE_MS) {
+    throw new MeterUnavailableError(
+      `independent time sources disagree by ${Math.round(hi - lo)}ms (${readings
+        .map((r) => `${r.name}=${Math.round(r.ms)}`)
+        .join(", ")}) — refusing spend (fail closed)`,
+    );
+  }
+  // The median: one tampered source cannot drag it, it can only fail the spread.
+  return readings.map((r) => r.ms).sort((a, b) => a - b)[1]!;
+}
+
+/** A clock the meter owns. Anchored once, advanced monotonically thereafter. */
+export function trustedClock(): () => number {
+  const anchorWall = anchorWallMs();
+  const anchorMono = NATIVE.hrtime();
+  let lastMono = anchorMono;
+  return () => {
+    const mono = NATIVE.hrtime();
+    if (mono < lastMono) {
+      throw new MeterUnavailableError("monotonic time source moved backwards — refusing spend (fail closed)");
+    }
+    lastMono = mono;
+    return anchorWall + Number((mono - anchorMono) / 1_000_000n);
+  };
 }
 
 /** Meters whose ceilings provably come from the frozen caps table.
@@ -490,8 +606,28 @@ export class FrozenCapsSpendMeter extends MemorySpendMeter {
         "FrozenCapsSpendMeter is final — a subclass could override reserve() and reopen the ceiling seam (fail closed)",
       );
     }
-    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));
+    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));
     FROZEN_CAPS_BOUND.add(this);
+    /** IMMUTABLE, and this is the whole of R10-02's fix.
+     *
+     * `isFrozenCapsMeter` pinned `reserve` to the prototype and deliberately
+     * left `settle`, `release` and the readings unpinned, on the argument that
+     * "a settle that throws or does nothing cannot mint headroom". The
+     * enumeration was incomplete: a settle that RELEASES mints headroom on
+     * every call. Executed on a genuinely-constructed meter that still passed
+     * the brand — 5,000 dispatches, $50 against a frozen $10/day, `todayUsd()`
+     * reading $0.00 throughout (adversary finding R10-02).
+     *
+     * Human ruling 2026-08-18: production meters are immutable. Freezing closes
+     * every method at once rather than enumerating which ones matter — and the
+     * enumeration is exactly what was wrong. The class's own state is in
+     * private `#` fields, which `Object.freeze` does not touch, so the meter
+     * keeps working and only redefinition is refused.
+     *
+     * Fault injection runs through `setAvailable(false)` from the transport,
+     * between reserve and settle — a real production failure mode rather than a
+     * reach into internals. */
+    Object.freeze(this);
   }
 }
 
@@ -521,6 +657,15 @@ export type CapsNarrowingTable = Readonly<
  * N-07) untestable without a production backdoor. */
 export function isFrozenCapsMeter(meter: unknown): meter is MemorySpendMeter {
   if (typeof meter !== "object" || meter === null) return false;
-  if (!FROZEN_CAPS_BOUND.has(meter as SpendMeter)) return false;
-  return (meter as MemorySpendMeter).reserve === MemorySpendMeter.prototype.reserve;
+  /** THE BRAND IS THE WHOLE CHECK, because the constructor freezes.
+   *
+   * An `Object.isFrozen(meter)` line stood here and was dead: every branded
+   * meter is frozen by the only code that can brand one, so the check could
+   * return `true` unconditionally with the suite green. Removing the freeze
+   * itself is what matters, and that has its own entry and its own test.
+   *
+   * The pin this replaced covered `reserve` alone, on the argument that only
+   * `reserve` reads a ceiling. A `settle` rewired to release mints headroom on
+   * every call — the enumeration was the defect (R10-02), so there is none. */
+  return FROZEN_CAPS_BOUND.has(meter as SpendMeter);
 }

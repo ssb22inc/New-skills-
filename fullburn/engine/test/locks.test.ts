@@ -8,7 +8,7 @@ import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 import { TraceContext } from "../src/tracing.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { checkAdversaryReport, checkClass2Approvals, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps, meterWithFailingSettle, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, transportThatBreaksStorage, testClock, capsOf, fixedCaps } from "./helpers.ts";
 
 /** LOCK TESTS.
  *
@@ -24,53 +24,66 @@ import { CANARY_SECRET, TEST_CLIENT, makeDeps, meterWithFailingSettle, testClock
 const trace = (id: string, client = TEST_CLIENT) => new TraceContext(id, client);
 
 describe("money — a request that left the building is never released (M-01, M-04)", () => {
-  // MUTATION: move `departed = true` back to after `meter.settle(...)`, or drop
-  // `!departed` from the release condition in the outer catch.
+  /** Driven through a REAL storage failure, not by patching the meter.
+   *
+   * These tests used to `Object.defineProperty(meter, "settle", …)` on a
+   * genuine production meter. That technique IS the R10-02 attack — patched to
+   * release, it put $50 through a frozen $10/day with the ledger reading $0.00
+   * — so production meters are frozen and the patch now throws. The failure
+   * being modelled is real all the same: storage dies after the request has
+   * left the building and before the settle lands. The transport flips the
+   * meter unavailable at exactly that instant.
+   *
+   * MUTATION: move `departed = true` back to after `meter.settle(...)`, or drop
+   * `!departed` from the release condition in the outer catch. */
   it("a settle() that throws must NOT return the headroom for a billed request", async () => {
-    // A REAL production meter with a throwing settle. A hand-built meter object
-    // is refused by llm() now (R8-01), and rightly — but the storage-failure
-    // path it was standing in for is real, so it is injected on the genuine
-    // article instead.
-    const { meter: brittle, releases } = meterWithFailingSettle();
-    const { deps, backend } = makeDeps();
+    const { deps, meter, backend } = makeDeps();
     let billable = 0;
-    const transport = {
+    const { transport } = transportThatBreaksStorage(meter, {
       async post() {
         billable += 1;
         return { greeting: "ok" };
       },
-    };
+    });
+    const before = meter.reservedUsd(TEST_CLIENT);
     for (let i = 0; i < 40; i++) {
-      await llm({ ...deps, meter: brittle, transport, vault: vaultForClient(backend, TEST_CLIENT), bindings: ROLE_BINDINGS }, {
+      await llm({ ...deps, transport, vault: vaultForClient(backend, TEST_CLIENT), bindings: ROLE_BINDINGS }, {
         role: "hello-world",
         clientId: TEST_CLIENT,
         input: {},
         trace: trace(`m1-${i}`),
       }).catch(() => undefined);
     }
-    // The provider served every one of these. The cap must still bind: with the
+    // The provider served the first one. The cap must still bind: with the
     // headroom refunded instead, this loop ran unbounded at 40x the ceiling.
-    expect(billable).toBeGreaterThan(0);
-    expect(releases()).toBe(0);
-    expect(brittle.reservedUsd(TEST_CLIENT)).toBeGreaterThan(0);
+    expect(billable, "no request ever left the building").toBeGreaterThan(0);
+    // Storage is down, so every reading throws — which is itself fail-closed.
+    // Bring it back and the held money must STILL be held: the reservation for
+    // the billed request was never released.
+    meter.setAvailable(true);
+    expect(meter.reservedUsd(TEST_CLIENT), "the headroom for a billed request was returned").toBeGreaterThan(before);
   });
 
-  // MUTATION: same as above, on the transport-error leg.
+  /** MUTATION: same as above, on the transport-error leg. */
   it("a transport error followed by a failing settle also keeps the charge", async () => {
-    const { meter: brittle, releases } = meterWithFailingSettle();
-    const { deps } = makeDeps();
+    const { deps, meter } = makeDeps();
     const failing = {
       async post() {
+        // Departed, then storage dies, then the upstream error surfaces: the
+        // settle on the error path must fail and the headroom must stay held.
+        meter.setAvailable(false);
         throw new Error("upstream 504");
       },
     };
-    await llm({ ...deps, meter: brittle, transport: failing, bindings: ROLE_BINDINGS }, {
+    await llm({ ...deps, transport: failing, bindings: ROLE_BINDINGS }, {
       role: "hello-world",
       clientId: TEST_CLIENT,
       input: {},
       trace: trace("m1b"),
     }).catch(() => undefined);
-    expect(releases()).toBe(0);
+    meter.setAvailable(true);
+    expect(meter.reservedUsd(TEST_CLIENT), "a departed request's headroom was released").toBeGreaterThan(0);
+    expect(meter.todayUsd(TEST_CLIENT), "a failed settle committed anyway").toBe(0);
   });
 });
 

@@ -120,20 +120,21 @@ const MUTATIONS = [
   // R8-01: R7-06 moved the ceiling seam onto llm()'s public path rather than
   // closing it. The frozen table must reach the comparison, by construction.
   ["R8-01 llm() requires a frozen-caps meter", "engine/src/gateway.ts", "    if (!isFrozenCapsMeter(deps.meter)) {", "    if (false) {"],
-  ["R8-01 brand is module-private", "engine/src/spend-meter.ts", "  if (!FROZEN_CAPS_BOUND.has(meter as SpendMeter)) return false;", "  if (false) return false;"],
-  ["R8-01 reserve pinned to the prototype", "engine/src/spend-meter.ts", "  return (meter as MemorySpendMeter).reserve === MemorySpendMeter.prototype.reserve;", "  return true;"],
+  ["R8-01 brand is module-private", "engine/src/spend-meter.ts", "  return FROZEN_CAPS_BOUND.has(meter as SpendMeter);", "  return true;"],
+  // R8-01's `reserve` pin was SUPERSEDED, not deleted: R10-02 showed the
+  // enumeration behind it was the defect — a settle rewired to release mints
+  // headroom, and the pin covered only reserve. Its successors are the two
+  // R10-02 entries above, which mutate the freeze and the isFrozen check.
   ["R8-01 production meter is final", "engine/src/spend-meter.ts", "    if (new.target !== FrozenCapsSpendMeter) {", "    if (false) {"],
-  ["R8-01 caps come from the frozen table", "engine/src/spend-meter.ts", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super(() => Date.now(), (clientId) => ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }));"],
+  ["R8-01 caps come from the frozen table", "engine/src/spend-meter.ts", "    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super(trustedClock(), (clientId) => ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }));"],
   // R8-02: settle() takes one argument. The mutation restores the override.
   ["R8-02 settle takes no actual", "engine/src/spend-meter.ts",
-    `  settle(reservation: SpendReservation): void {
-    const open = this.#close(reservation);
+    `    const open = this.#close(reservation);
     if (open === null) return;
     const micros = open.micros;`,
-    `  settle(reservation: SpendReservation, actualUsd?: number): void {
-    const open = this.#close(reservation);
+    `    const open = this.#close(reservation);
     if (open === null) return;
-    const micros = actualUsd === undefined ? open.micros : toMicros(actualUsd, "actual provider charge");`],
+    const micros = arguments[1] === undefined ? open.micros : toMicros(arguments[1], "actual provider charge");`],
   // R8-03: the MONTH key on its own. R7-02 was locked at day granularity only,
   // and this revert survived the full suite while reopening the $200 ceiling.
   ["R8-03 zone-bucketed month key", "engine/src/spend-meter.ts", "  return zoneDayKey(nowMs, timeZone).slice(0, 7);", "  void timeZone; return new Date(nowMs).toISOString().slice(0, 7);"],
@@ -175,6 +176,19 @@ const MUTATIONS = [
   // to vitest.config.ts's include) made the suite spawn harnesses recursively.
   // They are covered by `npm run drill` and by the invariant that reads the
   // config, not by this table.
+  // THE GUARD SWEEP HAS NO ENTRIES, same reason as L29. Deleting an assertion
+  // from a test cannot turn that test red — the checker cannot catch a mutation
+  // of itself. Two were written and both SURVIVED for that reason. The sweep is
+  // held by review and by the standing rule in CLAUDE.md, and what it protects
+  // — the guards themselves — each carry their own entry above.
+  // ---- r10 findings ----
+  ["R10-02 the production meter is frozen", "engine/src/spend-meter.ts", "    Object.freeze(this);\n  }\n}", "  }\n}"],
+  ["R10-02 settle refuses unavailable storage", "engine/src/spend-meter.ts", "    this.#assertAvailable();\n    const open = this.#close(reservation);", "    const open = this.#close(reservation);"],
+  ["R10-02 release refuses unavailable storage", "engine/src/spend-meter.ts", "    this.#assertAvailable();\n    this.#close(reservation);", "    this.#close(reservation);"],
+  ["R10-03 the clock is anchored, not re-read", "engine/src/spend-meter.ts", "    return anchorWall + Number((mono - anchorMono) / 1_000_000n);", "    return Date.now();"],
+  ["R10-03 disagreeing time sources are refused", "engine/src/spend-meter.ts", "  if (hi - lo > ANCHOR_TOLERANCE_MS) {", "  if (false) {"],
+  ["R10-03 the monotonic source cannot go backwards", "engine/src/spend-meter.ts", "    if (mono < lastMono) {", "    if (false) {"],
+  ["R10-03 the production meter uses the trusted clock", "engine/src/spend-meter.ts", "    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));"],
   // ---- r9 findings ----
   // R9-03's await is NOT listed, and the reason is structural rather than
   // convenient. Its behaviour — a SIGINT stops the run and restores the tree —
@@ -194,7 +208,7 @@ const MUTATIONS = [
   ["R10-01 meta-check canaries cover both answers", "engine/scripts/mutate-lib.mjs", '    expect: "SURVIVED",', '    expect: "CAUGHT",'],
   ["R10-01 meta-check refuses a disagreement", "engine/scripts/mutate-lib.mjs", "  const wrong = results.filter((r) => r.got !== r.expect);", "  const wrong = [];"],
   ["R10-01 an empty meta-check is void", "engine/scripts/mutate-lib.mjs", "  if (!Array.isArray(results) || results.length === 0) {", "  if (false) {"],
-  ["R9-05 production meter binds its own clock", "engine/src/spend-meter.ts", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super((narrowing as unknown as () => number) ?? (() => Date.now()), (clientId) => effectiveAiCapsUsd(clientId, undefined));"],
+  ["R9-05 production meter binds its own clock", "engine/src/spend-meter.ts", "  constructor(narrowing?: CapsNarrowingTable) {", "  constructor(now?: () => number, narrowing?: CapsNarrowingTable) {"],
   ["R9-09 marker cannot write outside the workspace", "engine/scripts/mutate-lib.mjs", "  if (!inWorkspace || !sameWorkspace || !fs.existsSync(record.path)) {", "  if (false) {"],
   ["R9-10 no Class-2 file is git-binary", "engine/test/hardening.test.ts", "acme\\u0000corp", "acme\u0000corp"],
   ["R9-11 runtime skip/fail refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*(?:skip|fixme|fail)\\s*\\(/.test(real)) return false;", "      void real;"],

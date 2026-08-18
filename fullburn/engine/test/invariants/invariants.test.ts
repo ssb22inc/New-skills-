@@ -477,6 +477,149 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     }
   });
 
+  /** THE UNREACHABLE-GUARD SWEEP, AS A TEST RATHER THAN A ROUND'S GOOD INTENTION.
+   *
+   * Human ruling 2026-08-18: "the 'fix moved a check upstream of an older
+   * guard' pattern has now produced three dead guards. Make that sweep a
+   * permanent, completed step in every round — not a best-effort one — and add
+   * a test that fails if any guard in the invariant suite becomes unreachable."
+   *
+   * The three were all in `llm()`: `requireReservingMeter` (L28), the
+   * post-reserve reservation validation (R9-08a), and the role-cost check
+   * (R10-07a) — each killed by a later fix that moved a stricter check in front
+   * of it, each leaving a guard that read as coverage and could be deleted with
+   * the suite green.
+   *
+   * A guard is REACHABLE if some input makes it fire. This drives every
+   * fail-closed guard the money path still carries and asserts it can still
+   * refuse. One that cannot is either deleted or disclosed — never left in
+   * place looking like protection. */
+  it("every money-path guard is still reachable — nothing has quietly gone dead", async () => {
+    const {
+      FrozenCapsSpendMeter,
+      MemorySpendMeter,
+      MeterUnavailableError,
+      SpendReservation,
+      toMicros,
+      trustedClock,
+      isFrozenCapsMeter,
+    } = await import("../../src/spend-meter.ts");
+    const { requireReservingMeter } = await import("../../src/gateway.ts");
+    const { effectiveAiCapsUsd, assertUsableZone, CapError } = await import("@fullburn/config/caps");
+
+    /** Each entry: a guard, and an input that MAKES IT FIRE. If no such input
+     * can be written, the guard does not belong here — it belongs in the
+     * ledger as a disclosure, or deleted. */
+    const guards: Array<{ name: string; fire: () => void }> = [
+      { name: "toMicros rejects a non-finite amount", fire: () => toMicros(Number.NaN, "x") },
+      { name: "toMicros rejects an out-of-range amount", fire: () => toMicros(1e15, "x") },
+      { name: "toMicros rejects a negative amount", fire: () => toMicros(-1, "x") },
+      { name: "a reservation cannot be minted outside a meter", fire: () => {
+          new SpendReservation(Symbol("not the brand"), "r1", "pulsern", 1);
+        } },
+      { name: "the meter refuses a missing clock", fire: () => new (MemorySpendMeter as never as new (...a: unknown[]) => unknown)() },
+      { name: "the meter refuses a missing caps resolver", fire: () => new (MemorySpendMeter as never as new (...a: unknown[]) => unknown)(() => 0) },
+      { name: "an unresolvable accounting zone is refused", fire: () => assertUsableZone("Mars/Olympus", "x") },
+      { name: "an unsigned client cannot spend", fire: () => effectiveAiCapsUsd("fixture-unsigned") },
+      { name: "a backwards clock is refused", fire: () => {
+          let t = Date.parse("2026-08-17T16:00:00Z");
+          const m = new MemorySpendMeter(() => t, () => effectiveAiCapsUsd("pulsern"));
+          m.settle(m.reserve("pulsern", 1));
+          t = Date.parse("2026-08-16T16:00:00Z");
+          m.reserve("pulsern", 1);
+        } },
+      { name: "a non-finite instant is refused", fire: () => {
+          const m = new MemorySpendMeter(() => Number.NaN, () => effectiveAiCapsUsd("pulsern"));
+          m.reserve("pulsern", 1);
+        } },
+      { name: "the daily ceiling refuses an overspend", fire: () => {
+          const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), () => effectiveAiCapsUsd("pulsern"));
+          m.settle(m.reserve("pulsern", 10));
+          m.reserve("pulsern", 1);
+        } },
+      { name: "settle refuses unavailable storage", fire: () => {
+          const m = new FrozenCapsSpendMeter();
+          const r = m.reserve("fixture-testco", 0.01);
+          m.setAvailable(false);
+          m.settle(r);
+        } },
+      { name: "release refuses unavailable storage", fire: () => {
+          const m = new FrozenCapsSpendMeter();
+          const r = m.reserve("fixture-testco", 0.01);
+          m.setAvailable(false);
+          m.release(r);
+        } },
+      { name: "requireReservingMeter refuses a meter missing a money method", fire: () =>
+          requireReservingMeter({ todayUsd: () => 0, reserve: () => ({}) as never, settle: () => {}, release: () => {} } as never) },
+      { name: "the production meter is final", fire: () => new (class extends FrozenCapsSpendMeter {})() },
+      { name: "the trusted clock refuses disagreeing sources", fire: () => {
+          const realPerfNow = performance.now.bind(performance);
+          try {
+            performance.now = () => realPerfNow() + 3 * 24 * 3600 * 1000;
+            trustedClock();
+          } finally {
+            performance.now = realPerfNow;
+          }
+        } },
+    ];
+
+    const dead: string[] = [];
+    for (const g of guards) {
+      let fired = false;
+      try {
+        g.fire();
+      } catch (e) {
+        fired = e instanceof MeterUnavailableError || e instanceof CapError || e instanceof TypeError || e instanceof Error;
+      }
+      if (!fired) dead.push(g.name);
+    }
+    expect(
+      dead,
+      `these guards did not fire for the input written to make them fire — each is now UNREACHABLE and reads as ` +
+        `coverage it does not provide. Delete it, or disclose it in the ledger:\n  ${dead.join("\n  ")}`,
+    ).toEqual([]);
+
+    // …and the sweep must not pass vacuously if the list is emptied.
+    expect(guards.length, "the guard list was emptied — the sweep proves nothing").toBeGreaterThan(12);
+
+    /** THE SWEEP COVERS GATEWAY CONTROL FLOW TOO, and it did not at first —
+     * which is how it missed one on the round it was written.
+     *
+     * `llm()`'s `departed` flag was found dead by the mutation harness, not by
+     * this sweep: deleting `departed = true` changes nothing observable on any
+     * path, because the inner catch settles every non-`PreDispatchError` and a
+     * release after a settle is a no-op once the ledger is identity-keyed
+     * (R6-04). The first version of this sweep enumerated spend-meter guards
+     * only, so a dead guard in the gateway's control flow was invisible to it.
+     *
+     * A control-flow guard is reachable when the two branches it chooses
+     * between produce DIFFERENT observable outcomes. That is what this asserts,
+     * per decision point, from the ledger. */
+    const { makeDeps: mkSweep, TEST_CLIENT: CS } = await import("../helpers.ts");
+    const { PreDispatchError } = await import("../../src/gateway.ts");
+    const outcome = async (transport: unknown) => {
+      const { deps, meter } = mkSweep({ transport });
+      await llm({ ...deps, bindings: ROLE_BINDINGS }, {
+        clientId: CS,
+        role: "hello-world",
+        input: {},
+        trace: new TraceContext("sweep", CS),
+      }).catch(() => undefined);
+      return { today: meter.todayUsd(CS), reserved: meter.reservedUsd(CS) };
+    };
+    // A PROVEN pre-dispatch failure must not be charged; anything else must be.
+    const preDispatch = await outcome({ post() { throw new PreDispatchError("no bytes left"); } });
+    const mayHaveDeparted = await outcome({ post() { throw new Error("dns failure"); } });
+    expect(preDispatch.today, "a proven-undispatched request was charged").toBe(0);
+    expect(mayHaveDeparted.today, "a request that may have dispatched was not charged").toBeGreaterThan(0);
+    expect(preDispatch.reserved, "a released reservation stayed held").toBe(0);
+
+    /** The brand still discriminates, which is what makes `llm()`'s refusal a
+     * live guard rather than a formality. */
+    expect(isFrozenCapsMeter(new FrozenCapsSpendMeter())).toBe(true);
+    expect(isFrozenCapsMeter(new MemorySpendMeter(() => 0, () => effectiveAiCapsUsd("pulsern")))).toBe(false);
+  });
+
   it("the checklist checks ITSELF against the spec (R2-25)", () => {
     // Previously the file asserted only its own internal count, so a §10.2
     // bullet could be deleted from the spec, or an entry dropped here, with the

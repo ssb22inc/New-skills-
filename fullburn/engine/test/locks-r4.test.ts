@@ -143,7 +143,6 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
    *
    * MUTATION: move `departed = true` back below the post() call. */
   it("a synchronous transport throw is SETTLED — it may have dispatched", async () => {
-    const ops: string[] = [];
     const { deps, meter } = makeDeps({
       transport: {
         post() {
@@ -151,11 +150,11 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
         },
       },
     });
-    trackOps(meter, ops);
+    const before = ledger(meter, TEST_CLIENT);
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
-    expect(ops, "a throw that may have dispatched released the headroom").toEqual(["settle"]);
+    expect(closedBy(meter, TEST_CLIENT, before), "a throw that may have dispatched released the headroom").toEqual(["settle"]);
     expect(meter.todayUsd(TEST_CLIENT)).toBeGreaterThan(0);
     expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
   });
@@ -167,7 +166,6 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
    * MUTATION: drop the `instanceof PreDispatchError` branch, or stop resetting
    * `departed` inside it. */
   it("a typed PreDispatchError releases, because the transport asserts nothing was sent", async () => {
-    const ops: string[] = [];
     const { deps, meter } = makeDeps({
       transport: {
         post() {
@@ -175,11 +173,11 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
         },
       },
     });
-    trackOps(meter, ops);
+    const before = ledger(meter, TEST_CLIENT);
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
-    expect(ops, "a proven-undispatched request was charged").toEqual(["release"]);
+    expect(closedBy(meter, TEST_CLIENT, before), "a proven-undispatched request was charged").toEqual(["release"]);
     expect(meter.todayUsd(TEST_CLIENT)).toBe(0);
     expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
   });
@@ -187,13 +185,12 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
   /** MUTATION: as above. An absent transport is the same class of never-departed
    * failure and was also charged. */
   it("an absent transport is refused before anything is charged", async () => {
-    const ops: string[] = [];
     const { deps, meter } = makeDeps({ transport: {} });
-    trackOps(meter, ops);
+    const before = ledger(meter, TEST_CLIENT);
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
-    expect(ops).not.toContain("settle");
+    expect(closedBy(meter, TEST_CLIENT, before), "an absent transport was charged").toEqual(["release"]);
     expect(meter.todayUsd(TEST_CLIENT)).toBe(0);
   });
 
@@ -203,7 +200,6 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
    *
    * MUTATION: move `departed = true` below the `await`. */
   it("a rejected in-flight request is still settled — the provider may have billed it", async () => {
-    const ops: string[] = [];
     const { deps, meter } = makeDeps({
       transport: {
         async post() {
@@ -211,11 +207,11 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
         },
       },
     });
-    trackOps(meter, ops);
+    const before = ledger(meter, TEST_CLIENT);
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
-    expect(ops).toEqual(["settle"]);
+    expect(closedBy(meter, TEST_CLIENT, before), "a departed request was released").toEqual(["settle"]);
     expect(meter.todayUsd(TEST_CLIENT)).toBeGreaterThan(0);
   });
 
@@ -226,17 +222,22 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
    *
    * MUTATION: restore the bare `catch {}` in the release branch. */
   it("a release() that throws is recorded in the failure trace, not swallowed", async () => {
+    let m: { setAvailable(v: boolean): void };
     const { deps, sink, meter } = makeDeps({
       transport: {
         post() {
+          // Storage dies AFTER the reservation and before the release lands.
+          // Production meters are frozen, so this is the real failure mode
+          // rather than a patched method (R10-02) — and it keeps N-07's branch
+          // reachable, which is what stops it becoming the fourth dead guard
+          // in llm().
+          m.setAvailable(false);
           // Typed, so the release path is reached at all (R7-04).
           throw new PreDispatchError("never departs");
         },
       },
     });
-    meter.release = () => {
-      throw new Error("durable object write failed");
-    };
+    m = meter;
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();
@@ -763,15 +764,28 @@ describe("model layer — a forged attestation cannot bind a model (r4 lock 8 / 
  * is the R8-01 seam wearing a test's clothes. It cost these assertions nothing:
  * a settle or a release proves a reservation existed to close, so the
  * "reserve" entry was never carrying information. */
-function trackOps(meter: MemorySpendMeter, ops: string[]): void {
-  const settle = meter.settle.bind(meter);
-  const release = meter.release.bind(meter);
-  meter.settle = (r: SpendReservation) => {
-    ops.push("settle");
-    settle(r);
-  };
-  meter.release = (r: SpendReservation) => {
-    ops.push("release");
-    release(r);
-  };
+/** WHICH WAY THE GATEWAY CLOSED A RESERVATION — read from the LEDGER, not by
+ * wrapping the meter's methods.
+ *
+ * This used to patch `settle` and `release` onto the instance. Production
+ * meters are frozen now (human ruling 2026-08-18, adversary finding R10-02):
+ * patching a genuine meter is exactly the attack that put $50 through a frozen
+ * $10/day, so a test that needs it was reaching into production internals.
+ *
+ * The distinction is observable without touching the meter at all. A settle
+ * commits: `todayUsd` rises and `reservedUsd` returns to zero. A release does
+ * not: both stay where they were. That is the property these tests are about —
+ * whether the money was kept or handed back — and reading it from the ledger
+ * says so more directly than counting calls ever did. */
+function closedBy(meter: MemorySpendMeter, clientId: string, before: { today: number; reserved: number }): string[] {
+  const today = meter.todayUsd(clientId);
+  const reserved = meter.reservedUsd(clientId);
+  if (today > before.today) return ["settle"];
+  if (reserved <= before.reserved) return ["release"];
+  return ["held"];
 }
+
+const ledger = (meter: MemorySpendMeter, clientId: string) => ({
+  today: meter.todayUsd(clientId),
+  reserved: meter.reservedUsd(clientId),
+});
