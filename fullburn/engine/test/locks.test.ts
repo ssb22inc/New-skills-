@@ -37,9 +37,9 @@ describe("money — a request that left the building is never released (M-01, M-
    * MUTATION: move `departed = true` back to after `meter.settle(...)`, or drop
    * `!departed` from the release condition in the outer catch. */
   it("a settle() that throws must NOT return the headroom for a billed request", async () => {
-    const { deps, meter, backend } = makeDeps();
+    const { deps, meter, backend, ledger } = makeDeps();
     let billable = 0;
-    const { transport } = transportThatBreaksStorage(meter, {
+    const { transport } = transportThatBreaksStorage(ledger, {
       async post() {
         billable += 1;
         return { greeting: "ok" };
@@ -60,18 +60,18 @@ describe("money — a request that left the building is never released (M-01, M-
     // Storage is down, so every reading throws — which is itself fail-closed.
     // Bring it back and the held money must STILL be held: the reservation for
     // the billed request was never released.
-    meter.setAvailable(true);
+    ledger.setAvailable(true);
     expect(meter.reservedUsd(TEST_CLIENT), "the headroom for a billed request was returned").toBeGreaterThan(before);
   });
 
   /** MUTATION: same as above, on the transport-error leg. */
   it("a transport error followed by a failing settle also keeps the charge", async () => {
-    const { deps, meter } = makeDeps();
+    const { deps, meter, ledger } = makeDeps();
     const failing = {
       async post() {
         // Departed, then storage dies, then the upstream error surfaces: the
         // settle on the error path must fail and the headroom must stay held.
-        meter.setAvailable(false);
+        ledger.setAvailable(false);
         throw new Error("upstream 504");
       },
     };
@@ -81,7 +81,7 @@ describe("money — a request that left the building is never released (M-01, M-
       input: {},
       trace: trace("m1b"),
     }).catch(() => undefined);
-    meter.setAvailable(true);
+    ledger.setAvailable(true);
     expect(meter.reservedUsd(TEST_CLIENT), "a departed request's headroom was released").toBeGreaterThan(0);
     expect(meter.todayUsd(TEST_CLIENT), "a failed settle committed anyway").toBe(0);
   });

@@ -6,11 +6,13 @@ import { requireActiveChannel, activeChannels } from "@fullburn/config/channels"
 import { SwitchboardError } from "@fullburn/config/markets";
 import { llm } from "../../src/gateway.ts";
 import { TraceContext } from "../../src/tracing.ts";
+import { processLedger, resetProcessLedgerForTests } from "../../src/spend-ledger.ts";
 import { vaultForClient, MemoryVaultBackend, VaultError } from "../../src/vault.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../../scripts/scan-lib.mjs";
 import { CANARY_SECRET, TEST_CLIENT, makeDeps } from "../helpers.ts";
 import { e2eVarianceHolds, runnerTargets } from "../e2e-variance.ts";
+import { blockingCalls } from "../blocking-calls.ts";
 
 /** The complete §10.2 standing-invariant checklist, enumerated (R10). Every
  * bullet appears here by name every CI run, and every LIVE entry carries a real
@@ -361,14 +363,17 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       expect(markerWrite, `${f} breaks source before recording how to repair it`).toBeLessThan(sourceBreak);
       expect(runner, `${f} has no restore-on-exit path`).toMatch(/process\.on\(\s*["'`]?exit/);
       expect(runner, `${f} never recovers a previous crashed run`).toMatch(/recoverInFlight\(/);
-      /** ANY synchronous process API blocks the loop, not just `execSync`.
-       * Reverting the runner to `spawnSync` restored R9-03 in full with all
-       * four of these green: `spawnSync(` did not match `execSync\s*\(`, and
-       * `await measure(` was satisfied by the META-CHECK's call site even with
-       * every `await` removed from the loop (adversary finding R10-09). */
-      expect(runner, `${f} blocks the event loop, so its signal handlers cannot run`).not.toMatch(
-        /\b(?:execSync|execFileSync|spawnSync)\s*\(/,
-      );
+      /** ANY synchronous process API blocks the loop, not just `execSync` —
+       * and not just under its own name. Matching call sites by NAME was
+       * defeated twice: `spawnSync(` did not match `execSync\s*\(` (R10-09),
+       * and then `import { spawnSync as runSuiteBlocking }` did not match the
+       * widened list either (R11-04). The BINDING is resolved instead, so the
+       * local name does not matter; see blocking-calls.ts, which also says
+       * plainly that the behavioural lock on R9-03 is the SIGINT drill. */
+      expect(
+        blockingCalls(src, runner),
+        `${f} blocks the event loop, so its signal handlers cannot run`,
+      ).toEqual([]);
       // The LOOP's await, not any await — anchored to the loop body.
       const loop = runner.slice(runner.search(/for \(const \[name, file, from, to\] of MUTATIONS\)/));
       expect(loop, `${f}'s entry loop does not await, so a signal cannot be serviced`).toMatch(/await measure\(/);
@@ -510,49 +515,67 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     /** Each entry: a guard, and an input that MAKES IT FIRE. If no such input
      * can be written, the guard does not belong here — it belongs in the
      * ledger as a disclosure, or deleted. */
-    const guards: Array<{ name: string; fire: () => void }> = [
-      { name: "toMicros rejects a non-finite amount", fire: () => toMicros(Number.NaN, "x") },
-      { name: "toMicros rejects an out-of-range amount", fire: () => toMicros(1e15, "x") },
-      { name: "toMicros rejects a negative amount", fire: () => toMicros(-1, "x") },
-      { name: "a reservation cannot be minted outside a meter", fire: () => {
+    /** `expect` NAMES THE GUARD. The first version of this sweep recorded
+     * `fired = e instanceof Error` — anything thrown counted, so a typo in the
+     * fixture, a constructor argument the guard never reached, or an entirely
+     * DIFFERENT guard upstream all reported the target as alive. Eleven of the
+     * sixteen entries below would have passed with their own guard deleted, so
+     * long as something threw on the way (adversary finding R11-04). A guard's
+     * own refusal message is what says it was that guard and not another. */
+    type Guard = { name: string; fire: () => void; type: new (...a: never[]) => Error; expect: RegExp };
+    const guards: Guard[] = [
+      { name: "toMicros rejects a non-finite amount", fire: () => toMicros(Number.NaN, "x"), type: MeterUnavailableError, expect: /x is not a finite non-negative number/ },
+      { name: "toMicros rejects an out-of-range amount", fire: () => toMicros(1e15, "x"), type: MeterUnavailableError, expect: /x is out of range for micro-dollar accounting/ },
+      { name: "toMicros rejects a negative amount", fire: () => toMicros(-1, "x"), type: MeterUnavailableError, expect: /x is not a finite non-negative number/ },
+      { name: "a reservation cannot be minted outside a meter", type: MeterUnavailableError,
+        expect: /a reservation may only be minted by a meter/, fire: () => {
           new SpendReservation(Symbol("not the brand"), "r1", "pulsern", 1);
         } },
-      { name: "the meter refuses a missing clock", fire: () => new (MemorySpendMeter as never as new (...a: unknown[]) => unknown)() },
-      { name: "the meter refuses a missing caps resolver", fire: () => new (MemorySpendMeter as never as new (...a: unknown[]) => unknown)(() => 0) },
-      { name: "an unresolvable accounting zone is refused", fire: () => assertUsableZone("Mars/Olympus", "x") },
-      { name: "an unsigned client cannot spend", fire: () => effectiveAiCapsUsd("fixture-unsigned") },
-      { name: "a backwards clock is refused", fire: () => {
+      { name: "the meter refuses a missing clock", fire: () => new (MemorySpendMeter as never as new (...a: unknown[]) => unknown)(), type: MeterUnavailableError, expect: /MemorySpendMeter requires a clock/ },
+      { name: "the meter refuses a missing caps resolver", fire: () => new (MemorySpendMeter as never as new (...a: unknown[]) => unknown)(() => 0), type: MeterUnavailableError, expect: /MemorySpendMeter requires a caps resolver/ },
+      { name: "an unresolvable accounting zone is refused", fire: () => assertUsableZone("Mars/Olympus", "x"), type: CapError, expect: /is not a resolvable IANA timezone/ },
+      { name: "an unsigned client cannot spend", fire: () => effectiveAiCapsUsd("fixture-unsigned"), type: CapError, expect: /human sign-off/ },
+      { name: "a backwards clock is refused", type: MeterUnavailableError,
+        expect: /clock moved backwards into a closed accounting day/, fire: () => {
           let t = Date.parse("2026-08-17T16:00:00Z");
           const m = new MemorySpendMeter(() => t, () => effectiveAiCapsUsd("pulsern"));
           m.settle(m.reserve("pulsern", 1));
           t = Date.parse("2026-08-16T16:00:00Z");
           m.reserve("pulsern", 1);
         } },
-      { name: "a non-finite instant is refused", fire: () => {
+      { name: "a non-finite instant is refused", type: MeterUnavailableError,
+        expect: /clock returned a non-finite instant/, fire: () => {
           const m = new MemorySpendMeter(() => Number.NaN, () => effectiveAiCapsUsd("pulsern"));
           m.reserve("pulsern", 1);
         } },
-      { name: "the daily ceiling refuses an overspend", fire: () => {
+      { name: "the daily ceiling refuses an overspend", type: CapError,
+        expect: /AI spend cap breach refused: projected \$11\.0000 > daily cap \$10/, fire: () => {
           const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), () => effectiveAiCapsUsd("pulsern"));
           m.settle(m.reserve("pulsern", 10));
           m.reserve("pulsern", 1);
         } },
-      { name: "settle refuses unavailable storage", fire: () => {
+      { name: "settle refuses unavailable storage", type: MeterUnavailableError,
+        expect: /spend meter unavailable/, fire: () => {
+          resetProcessLedgerForTests();
           const m = new FrozenCapsSpendMeter();
           const r = m.reserve("fixture-testco", 0.01);
-          m.setAvailable(false);
+          processLedger().setAvailable(false);
           m.settle(r);
         } },
-      { name: "release refuses unavailable storage", fire: () => {
+      { name: "release refuses unavailable storage", type: MeterUnavailableError,
+        expect: /spend meter unavailable/, fire: () => {
+          resetProcessLedgerForTests();
           const m = new FrozenCapsSpendMeter();
           const r = m.reserve("fixture-testco", 0.01);
-          m.setAvailable(false);
+          processLedger().setAvailable(false);
           m.release(r);
         } },
-      { name: "requireReservingMeter refuses a meter missing a money method", fire: () =>
+      { name: "requireReservingMeter refuses a meter missing a money method", type: MeterUnavailableError,
+        expect: /spend meter does not support reserve\/settle/, fire: () =>
           requireReservingMeter({ todayUsd: () => 0, reserve: () => ({}) as never, settle: () => {}, release: () => {} } as never) },
-      { name: "the production meter is final", fire: () => new (class extends FrozenCapsSpendMeter {})() },
-      { name: "the trusted clock refuses disagreeing sources", fire: () => {
+      { name: "the production meter is final", fire: () => new (class extends FrozenCapsSpendMeter {})(), type: MeterUnavailableError, expect: /FrozenCapsSpendMeter is final/ },
+      { name: "the trusted clock refuses disagreeing sources", type: MeterUnavailableError,
+        expect: /independent time sources disagree/, fire: () => {
           const realPerfNow = performance.now.bind(performance);
           try {
             performance.now = () => realPerfNow() + 3 * 24 * 3600 * 1000;
@@ -563,16 +586,23 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         } },
     ];
 
-    const dead: string[] = [];
-    for (const g of guards) {
-      let fired = false;
+    /** Did THIS guard refuse, or did something else throw on the way? */
+    const whichFired = (g: Guard): string | null => {
       try {
         g.fire();
       } catch (e) {
-        fired = e instanceof MeterUnavailableError || e instanceof CapError || e instanceof TypeError || e instanceof Error;
+        if (!(e instanceof g.type)) return `threw ${(e as object)?.constructor?.name ?? typeof e} — not ${g.type.name}`;
+        const message = (e as Error).message;
+        if (!g.expect.test(message)) return `a DIFFERENT guard refused: ${message}`;
+        return null;
       }
-      if (!fired) dead.push(g.name);
-    }
+      return "nothing refused";
+    };
+
+    const dead = guards.flatMap((g) => {
+      const why = whichFired(g);
+      return why === null ? [] : [`${g.name} — ${why}`];
+    });
     expect(
       dead,
       `these guards did not fire for the input written to make them fire — each is now UNREACHABLE and reads as ` +
@@ -581,6 +611,22 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
 
     // …and the sweep must not pass vacuously if the list is emptied.
     expect(guards.length, "the guard list was emptied — the sweep proves nothing").toBeGreaterThan(12);
+
+    /** THE SWEEP'S OWN RED-PROOF. A checker that cannot report a dead guard is
+     * the R9-01 defect wearing this file's clothes, so the discrimination is
+     * exercised rather than assumed: each of the three ways a guard can be dead
+     * must be REPORTED by `whichFired`, on inputs constructed to be dead in
+     * exactly that way. */
+    const first = guards[0]!;
+    expect(whichFired({ ...first, fire: () => {} }), "a guard that refuses nothing was reported alive").toBe("nothing refused");
+    expect(
+      whichFired({ ...first, fire: () => { throw new RangeError("unrelated"); } }),
+      "an unrelated error class was reported as this guard firing",
+    ).toMatch(/not MeterUnavailableError/);
+    expect(
+      whichFired({ ...first, expect: /a message this guard never emits/ }),
+      "another guard's refusal was reported as this guard firing",
+    ).toMatch(/a DIFFERENT guard refused/);
 
     /** THE SWEEP COVERS GATEWAY CONTROL FLOW TOO, and it did not at first —
      * which is how it missed one on the round it was written.
@@ -618,6 +664,34 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
      * live guard rather than a formality. */
     expect(isFrozenCapsMeter(new FrozenCapsSpendMeter())).toBe(true);
     expect(isFrozenCapsMeter(new MemorySpendMeter(() => 0, () => effectiveAiCapsUsd("pulsern")))).toBe(false);
+  });
+
+  /** THE TEST SEAM DOES NOT REACH THE MONEY PATH.
+   *
+   * `resetProcessLedgerForTests` wipes the state a cap is enforced against —
+   * R11-07 in a single call. Its primary fence is the runtime (no vitest worker
+   * marker on a Cloudflare Worker, so it cannot complete there), locked in
+   * locks-r11. This is the second fence: no production module may even NAME it.
+   * Enumerated from the filesystem, so a module added tomorrow is covered. */
+  it("no production module reaches the ledger's test-only reset", () => {
+    // spend-ledger.ts DEFINES it; naming it there is the point.
+    const reaches = (name: string, src: string) => name !== "spend-ledger.ts" && src.includes("resetProcessLedgerForTests");
+    const roots = [new URL("../../src/", import.meta.url), new URL("../../../config/src/", import.meta.url)];
+    const offenders: string[] = [];
+    let scanned = 0;
+    for (const root of roots) {
+      for (const f of readdirSync(root).filter((n) => n.endsWith(".ts"))) {
+        scanned += 1;
+        if (reaches(f, readFileSync(new URL(f, root), "utf8"))) offenders.push(`${root.pathname}${f}`);
+      }
+    }
+    expect(scanned, "no production modules found — this test would pass vacuously").toBeGreaterThan(8);
+    expect(offenders, `production code can wipe the spend ledger:\n  ${offenders.join("\n  ")}`).toEqual([]);
+    // THE DETECTOR'S RED-PROOF. An empty offender list means nothing unless the
+    // detector can produce a non-empty one (standing rule, after R9-01).
+    expect(reaches("gateway.ts", "import { resetProcessLedgerForTests } from './spend-ledger.ts';")).toBe(true);
+    expect(reaches("gateway.ts", "import { processLedger } from './spend-ledger.ts';")).toBe(false);
+    expect(reaches("spend-ledger.ts", "export function resetProcessLedgerForTests() {}")).toBe(false);
   });
 
   it("the checklist checks ITSELF against the spec (R2-25)", () => {

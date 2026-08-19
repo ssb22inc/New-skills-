@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { llm } from "../src/gateway.ts";
 import { FrozenCapsSpendMeter, MemorySpendMeter } from "../src/spend-meter.ts";
 import { TraceContext } from "../src/tracing.ts";
@@ -7,6 +7,13 @@ import { ROLE_BINDINGS } from "@fullburn/config/models";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { parseNameStatus } from "../scripts/diff-lib.mjs";
 import { CANARY_SECRET, LOW_CAP_NARROWING, TEST_CLIENT, capsOf, makeDeps, testClock } from "./helpers.ts";
+import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
+
+/** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
+ * one test's spend is the next test's opening balance unless the slate is
+ * wiped. The reset cannot run outside a test runner — see spend-ledger.ts. */
+beforeEach(resetProcessLedgerForTests);
+
 
 /** Regression cover for hardening that previously shipped with none
  * (adversary findings R2-07, R2-19, R2-27, R2-28, R2-30, R2-33). Each test

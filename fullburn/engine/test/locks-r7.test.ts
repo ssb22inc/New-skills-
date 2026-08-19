@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { CapError, effectiveAiCapsUsd, getCaps } from "@fullburn/config/caps";
 import {
   FrozenCapsSpendMeter,
@@ -10,6 +10,13 @@ import {
   zoneMonthKey,
 } from "../src/spend-meter.ts";
 import { capsOf } from "./helpers.ts";
+import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
+
+/** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
+ * one test's spend is the next test's opening balance unless the slate is
+ * wiped. The reset cannot run outside a test runner — see spend-ledger.ts. */
+beforeEach(resetProcessLedgerForTests);
+
 
 /** LOCK TESTS — the cross-family review (r7). Each names the one-line revert it
  * dies on. These findings came from a NON-Claude reviewer reading source that
@@ -528,6 +535,11 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
     widened.settle(widened.reserve("fixture-testco", frozenDay));
     expect(() => widened.reserve("fixture-testco", 0.01), "a table widened the frozen day").toThrow(CapError);
 
+    // A SECOND METER IS A SECOND HANDLE, NOT A SECOND CEILING (R11-07): the
+    // day the `widened` meter just filled is still full. That is the point of
+    // the process ledger, and it is locked on its own in the R11 suite; here
+    // the slate is wiped so this test measures the NARROWING and nothing else.
+    resetProcessLedgerForTests();
     const narrowed = new FrozenCapsSpendMeter({ "fixture-testco": { dailyAiSpendUsd: 0.05 } });
     narrowed.settle(narrowed.reserve("fixture-testco", 0.05));
     expect(() => narrowed.reserve("fixture-testco", 0.01), "the narrowing was ignored").toThrow(CapError);

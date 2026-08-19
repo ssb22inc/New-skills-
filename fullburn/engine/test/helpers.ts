@@ -1,6 +1,7 @@
 import { effectiveAiCapsUsd } from "@fullburn/config/caps";
 import type { GatewayTransport } from "../src/gateway.ts";
 import { FrozenCapsSpendMeter, MemorySpendMeter } from "../src/spend-meter.ts";
+import { processLedger, resetProcessLedgerForTests, type SpendLedger } from "../src/spend-ledger.ts";
 import { MemoryTraceSink } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 
@@ -49,11 +50,16 @@ export const fixedCaps = () => ({ dailyUsd: 200, monthlyUsd: 200, timeZone: "UTC
  * (human ruling 2026-08-18), so the patch throws — and the test was reaching
  * into production internals, which was the defect rather than the freeze.
  *
- * The seam is the one a real outage uses: the transport flips the meter
+ * The seam is the one a real outage uses: the transport flips the LEDGER
  * unavailable BETWEEN reserve and settle, and `settle` refuses. `llm()` then
  * fails closed exactly as M-01/M-04 require — the reservation stays open and
- * keeps counting against the ceiling. */
-export function transportThatBreaksStorage(meter: { setAvailable(v: boolean): void }, inner?: GatewayTransport) {
+ * keeps counting against the ceiling.
+ *
+ * It takes a LEDGER, not a meter. `setAvailable` left the meter entirely in
+ * R11-06 — a public, untraced method that permanently halts a client's spend
+ * has no business on the money path's public face — so storage availability is
+ * now driven where storage lives. */
+export function transportThatBreaksStorage(ledger: SpendLedger, inner?: GatewayTransport) {
   let broke = 0;
   return {
     breaks: () => broke,
@@ -61,7 +67,7 @@ export function transportThatBreaksStorage(meter: { setAvailable(v: boolean): vo
       async post(url: string, body: unknown, headers: Readonly<Record<string, string>>): Promise<unknown> {
         const out = inner ? await inner.post(url, body, headers) : { greeting: "ok" };
         // The request has left the building; storage dies before the settle.
-        meter.setAvailable(false);
+        ledger.setAvailable(false);
         broke += 1;
         return out;
       },
@@ -85,6 +91,12 @@ export const capsFrom = (clientId: string) => () => effectiveAiCapsUsd(clientId)
  * how N-01's frozen day key hid in plain sight. */
 export function makeDeps(overrides: { now?: () => number; transport?: unknown; capsTable?: Readonly<Record<string, { readonly dailyAiSpendUsd?: number; readonly monthlyAiSpendUsd?: number }>> } = {}) {
   const now = overrides.now ?? testClock;
+  // ONE LEDGER PER PROCESS means one test's spend is the next test's opening
+  // balance (R11-07). Each fixture starts from a clean slate, which is what
+  // every test here assumed back when the meter owned its own state. The reset
+  // cannot run outside a test runner — see spend-ledger.ts.
+  resetProcessLedgerForTests();
+  const ledger = processLedger();
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
   // THE PRODUCTION METER, not a test double with an injected resolver. `llm()`
@@ -97,6 +109,7 @@ export function makeDeps(overrides: { now?: () => number; transport?: unknown; c
   const transport = (overrides.transport ?? new MockGatewayServer()) as MockGatewayServer;
   return {
     backend,
+    ledger,
     meter,
     sink,
     transport,

@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { effectiveAiCapsUsd, type ClientCaps } from "@fullburn/config/caps";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
@@ -13,6 +13,13 @@ import { FrozenCapsSpendMeter, type SpendMeter } from "../src/spend-meter.ts";
 import { MemoryTraceSink, TraceContext } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
+
+/** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
+ * one test's spend is the next test's opening balance unless the slate is
+ * wiped. The reset cannot run outside a test runner — see spend-ledger.ts. */
+beforeEach(resetProcessLedgerForTests);
+
 
 /** ADVERSARY PHASE 0 — Phase B lock tests.
  *

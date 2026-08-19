@@ -2,6 +2,7 @@ import { testClock, capsOf, fixedCaps } from "./helpers.ts";
 import { describe, expect, it } from "vitest";
 import { CapError } from "@fullburn/config/caps";
 import { MemorySpendMeter, MeterUnavailableError, assertUsableAmount } from "../src/spend-meter.ts";
+import { InMemorySpendLedger } from "../src/spend-ledger.ts";
 
 /** Reserve-then-settle is the shape every cap check must use, here and in the
  * Phase 5/6 ad-spend path (§2.2 client Durable Object). Findings F1–F3. */
@@ -66,8 +67,10 @@ describe("spend meter — reserve/settle (F1, F2, F3)", () => {
   });
 
   it("an unavailable meter refuses everything (fail closed)", () => {
-    const m = new MemorySpendMeter(testClock, capsOf(0.05, 0.05));
-    m.setAvailable(false);
+    // Availability belongs to STORAGE, not to the meter's public face (R11-06).
+    const ledger = new InMemorySpendLedger();
+    const m = new MemorySpendMeter(testClock, capsOf(0.05, 0.05), ledger);
+    ledger.setAvailable(false);
     expect(() => m.reserve("c", 0.01)).toThrow(MeterUnavailableError);
     expect(() => m.todayUsd("c")).toThrow(MeterUnavailableError);
   });

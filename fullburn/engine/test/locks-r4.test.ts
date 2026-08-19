@@ -222,8 +222,8 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
    *
    * MUTATION: restore the bare `catch {}` in the release branch. */
   it("a release() that throws is recorded in the failure trace, not swallowed", async () => {
-    let m: { setAvailable(v: boolean): void };
-    const { deps, sink, meter } = makeDeps({
+    let storage: { setAvailable(v: boolean): void };
+    const { deps, sink, ledger } = makeDeps({
       transport: {
         post() {
           // Storage dies AFTER the reservation and before the release lands.
@@ -231,13 +231,13 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
           // rather than a patched method (R10-02) — and it keeps N-07's branch
           // reachable, which is what stops it becoming the fourth dead guard
           // in llm().
-          m.setAvailable(false);
+          storage.setAvailable(false);
           // Typed, so the release path is reached at all (R7-04).
           throw new PreDispatchError("never departs");
         },
       },
     });
-    m = meter;
+    storage = ledger;
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { clientId: TEST_CLIENT, role: "hello-world", input: { q: "hi" }, trace: new TraceContext("t", TEST_CLIENT) }),
     ).rejects.toThrow();

@@ -1,4 +1,5 @@
 import { CapError, effectiveAiCapsUsd } from "@fullburn/config/caps";
+import { InMemorySpendLedger, processLedger, type SpendLedger } from "./spend-ledger.ts";
 
 /** Per-client AI spend metering (R3; F1/F2/F3; R2-01, R2-02, R2-16).
  *
@@ -203,8 +204,11 @@ export class MemorySpendMeter implements SpendMeter {
   // Keyed by PERIOD, where a period is "d:<day>|<client>" or "m:<month>|<client>".
   // One map rather than two so a settle can never update the day and miss the
   // month.
-  #committedMicros = new Map<string, number>();
-  #reservedMicros = new Map<string, number>();
+  /** THE LEDGER IS NOT THIS OBJECT'S. It is passed in, and every production
+   * meter is handed the same process-wide one — see spend-ledger.ts. A meter
+   * that owned its ledger could be constructed per call to mint a fresh
+   * ceiling, which is exactly what happened (adversary finding R11-07). */
+  #ledger: SpendLedger;
   /** Open reservations, KEYED BY THE HANDLE OBJECT ITSELF.
    *
    * This was keyed by `id`, with a separate WeakSet proving the handle was
@@ -222,9 +226,6 @@ export class MemorySpendMeter implements SpendMeter {
    * subclass all find no entry, because none of them IS the key. The freeze is
    * now hygiene, not enforcement — which is what the class comment always
    * claimed the design was. */
-  #open = new Map<SpendReservation, { clientId: string; micros: number; day: string; month: string }>();
-  #available = true;
-  #seq = 0;
   #now: () => number;
   #capsFor: CapsResolver;
   /** Highest period key seen per client. The clock is injected, so a caller
@@ -233,7 +234,6 @@ export class MemorySpendMeter implements SpendMeter {
    * (adversary finding R7-03). Backwards movement is refused outright; forward
    * movement cannot be distinguished from time passing without a trusted time
    * source, which is disclosed rather than pretended away. */
-  #highWater = new Map<string, string>();
 
   /** A DAILY cap needs a day (adversary finding M-03). Without one, a client
    * that spent its ceiling was refused forever — a $5/day budget was really
@@ -251,7 +251,7 @@ export class MemorySpendMeter implements SpendMeter {
    * here: a fresh meter still starts a fresh day (ledger L14). */
   /** The caps resolver is REQUIRED and is the meter's own, not the caller's.
    * The clock is required for the same reason it has been since N-01. */
-  constructor(now: () => number, capsFor: CapsResolver) {
+  constructor(now: () => number, capsFor: CapsResolver, ledger: SpendLedger = new InMemorySpendLedger()) {
     if (typeof now !== "function") {
       throw new MeterUnavailableError("MemorySpendMeter requires a clock — refusing spend (fail closed)");
     }
@@ -260,11 +260,15 @@ export class MemorySpendMeter implements SpendMeter {
     }
     this.#now = now;
     this.#capsFor = capsFor;
+    this.#ledger = ledger;
   }
 
-  setAvailable(v: boolean): void {
-    this.#available = v;
-  }
+  // `setAvailable` IS GONE FROM THE METER. It was public and untraced on the
+  // production type, and it permanently halts a client's spend — an operator
+  // action with money consequences, reachable by anyone holding a meter
+  // (adversary finding R11-06). Availability belongs to the storage layer:
+  // `SpendLedger.setAvailable`, whose implementation is the thing that knows
+  // whether storage is up, and whose operator traces the decision.
 
   /** Both period keys from ONE clock read. Reading the clock twice split the
    * pair across a month boundary: $7 committed to the August 31 day and the
@@ -280,13 +284,13 @@ export class MemorySpendMeter implements SpendMeter {
 
   /** Refuses a clock that has moved backwards into an already-closed day. */
   #assertForward(clientId: string, day: string): void {
-    const seen = this.#highWater.get(clientId);
+    const seen = this.#ledger.highWater(clientId);
     if (seen !== undefined && day < seen) {
       throw new MeterUnavailableError(
         `clock moved backwards into a closed accounting day for "${clientId}" — refusing spend (fail closed)`,
       );
     }
-    if (seen === undefined || day > seen) this.#highWater.set(clientId, day);
+    if (seen === undefined || day > seen) this.#ledger.setHighWater(clientId, day);
   }
 
   #zoneOf(clientId: string): string {
@@ -302,11 +306,11 @@ export class MemorySpendMeter implements SpendMeter {
   }
 
   #assertAvailable(): void {
-    if (!this.#available) throw new MeterUnavailableError("spend meter unavailable — refusing spend (fail closed)");
+    if (!this.#ledger.isAvailable()) throw new MeterUnavailableError("spend meter unavailable — refusing spend (fail closed)");
   }
 
-  #read(map: Map<string, number>, clientId: string, label: string): number {
-    const v = map.get(clientId) ?? 0;
+  #read(read: (p: string) => number, period: string, label: string): number {
+    const v = read(period);
     if (!Number.isSafeInteger(v) || v < 0) {
       throw new MeterUnavailableError(`${label} ledger is corrupt — refusing spend (fail closed)`);
     }
@@ -315,12 +319,12 @@ export class MemorySpendMeter implements SpendMeter {
 
   todayUsd(clientId: string): number {
     this.#assertAvailable();
-    return fromMicros(this.#read(this.#committedMicros, this.#key(clientId), "committed spend"));
+    return fromMicros(this.#read((p) => this.#ledger.committedMicros(p), this.#key(clientId), "committed spend"));
   }
 
   monthUsd(clientId: string): number {
     this.#assertAvailable();
-    return fromMicros(this.#read(this.#committedMicros, this.#monthKey(clientId), "committed spend"));
+    return fromMicros(this.#read((p) => this.#ledger.committedMicros(p), this.#monthKey(clientId), "committed spend"));
   }
 
   /** Every open reservation for this client, whatever day it was taken on
@@ -328,7 +332,7 @@ export class MemorySpendMeter implements SpendMeter {
   reservedUsd(clientId: string): number {
     this.#assertAvailable();
     let micros = 0;
-    for (const open of this.#open.values()) {
+    for (const open of this.#ledger.openEntries()) {
       if (open.clientId === clientId) micros += open.micros;
     }
     if (!Number.isSafeInteger(micros) || micros < 0) {
@@ -360,8 +364,8 @@ export class MemorySpendMeter implements SpendMeter {
     // Checking them in sequence with any await between would reopen the race
     // the reserve design exists to close.
     const project = (period: string): number => {
-      const committed = this.#read(this.#committedMicros, period, "committed spend");
-      const reserved = this.#read(this.#reservedMicros, period, "reserved spend");
+      const committed = this.#read((p) => this.#ledger.committedMicros(p), period, "committed spend");
+      const reserved = this.#read((p) => this.#ledger.reservedMicros(p), period, "reserved spend");
       const projected = committed + reserved + amountMicros;
       if (!Number.isSafeInteger(projected)) {
         throw new MeterUnavailableError("projected spend is out of range — refusing spend (fail closed)");
@@ -382,14 +386,14 @@ export class MemorySpendMeter implements SpendMeter {
     }
 
     // Single synchronous write completes the read-check-write cycle.
-    this.#seq += 1;
-    const id = `r${this.#seq}`;
-    this.#reservedMicros.set(day, projectedDay - this.#read(this.#committedMicros, day, "committed spend"));
-    this.#reservedMicros.set(month, projectedMonth - this.#read(this.#committedMicros, month, "committed spend"));
+    
+    const id = `r${this.#ledger.nextSeq()}`;
+    this.#ledger.setReservedMicros(day, projectedDay - this.#read((p) => this.#ledger.committedMicros(p), day, "committed spend"));
+    this.#ledger.setReservedMicros(month, projectedMonth - this.#read((p) => this.#ledger.committedMicros(p), month, "committed spend"));
     // The reservation remembers the periods it was taken in, so a settle that
     // lands after midnight commits against the day the spend belongs to.
     const handle = new SpendReservation(RESERVATION_BRAND, id, clientId, fromMicros(amountMicros));
-    this.#open.set(handle, { clientId, micros: amountMicros, day, month });
+    this.#ledger.setOpen(handle, { clientId, micros: amountMicros, day, month });
     return handle;
   }
 
@@ -397,18 +401,18 @@ export class MemorySpendMeter implements SpendMeter {
     // IDENTITY, AND NOTHING ELSE. The lookup IS the guard: only a handle this
     // meter minted and has not yet closed is a key here. No field is consulted,
     // so no field can be tampered with (R5-01, R6-04).
-    const open = this.#open.get(reservation);
+    const open = this.#ledger.open(reservation);
     if (open === undefined) return null; // forged, foreign, or already closed
-    this.#open.delete(reservation);
+    this.#ledger.deleteOpen(reservation);
     for (const period of [open.day, open.month]) {
-      const reserved = this.#read(this.#reservedMicros, period, "reserved spend");
+      const reserved = this.#read((p) => this.#ledger.reservedMicros(p), period, "reserved spend");
       // No Math.max clamp: the entry is deleted above before either period is
       // decremented, so a reservation cannot be released twice and the
       // subtraction cannot go negative. A clamp here would be dead code that
       // reads as a guard, which is how the last four rounds found unprotected
       // fixes (adversary finding R6-05/M7). If it ever CAN go negative the
       // ledger is corrupt, and #read refuses on the next call — fail closed.
-      this.#reservedMicros.set(period, reserved - open.micros);
+      this.#ledger.setReservedMicros(period, reserved - open.micros);
     }
     return open;
   }
@@ -444,8 +448,8 @@ export class MemorySpendMeter implements SpendMeter {
     if (open === null) return;
     const micros = open.micros;
     for (const period of [open.day, open.month]) {
-      const committed = this.#read(this.#committedMicros, period, "committed spend");
-      this.#committedMicros.set(period, committed + micros);
+      const committed = this.#read((p) => this.#ledger.committedMicros(p), period, "committed spend");
+      this.#ledger.setCommittedMicros(period, committed + micros);
     }
   }
 
@@ -606,7 +610,7 @@ export class FrozenCapsSpendMeter extends MemorySpendMeter {
         "FrozenCapsSpendMeter is final — a subclass could override reserve() and reopen the ceiling seam (fail closed)",
       );
     }
-    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));
+    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());
     FROZEN_CAPS_BOUND.add(this);
     /** IMMUTABLE, and this is the whole of R10-02's fix.
      *

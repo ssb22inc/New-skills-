@@ -76,8 +76,8 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
   });
 
   it("unavailable spend meter refuses spend (fail closed)", async () => {
-    const { deps, meter } = makeDeps();
-    meter.setAvailable(false);
+    const { deps, ledger } = makeDeps();
+    ledger.setAvailable(false);
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() }),
     ).rejects.toThrow(/fail closed/);
@@ -117,7 +117,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
   });
 
   it("no error path leaks the vault secret (§10.2 token invariant)", async () => {
-    const { deps, transport, meter, sink } = makeDeps();
+    const { deps, transport, ledger, sink } = makeDeps();
     const attempts: (() => Promise<unknown>)[] = [
       () => llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: null as unknown as TraceContext }),
       async () => {
@@ -125,7 +125,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
         return llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
       },
       async () => {
-        meter.setAvailable(false);
+        ledger.setAvailable(false);
         return llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
       },
     ];
@@ -136,7 +136,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
       );
       expect(msg).not.toContain(CANARY_SECRET);
     }
-    meter.setAvailable(true);
+    ledger.setAvailable(true);
     // Traces carry no secrets either (Langfuse is a named leak surface):
     expect(JSON.stringify(sink.events)).not.toContain(CANARY_SECRET);
   });

@@ -38,14 +38,14 @@ const VITEST_BIN = `${ROOT}/node_modules/vitest/vitest.mjs`;
 
 const MUTATIONS = [
   // ---- r4 findings ----
-  ["N-01 clock default", "engine/src/spend-meter.ts", "constructor(now: () => number, capsFor: CapsResolver) {", "constructor(now: () => number = () => 0, capsFor: CapsResolver) {"],
+  ["N-01 clock default", "engine/src/spend-meter.ts", "constructor(now: () => number, capsFor: CapsResolver, ledger: SpendLedger = new InMemorySpendLedger()) {", "constructor(now: () => number = () => 0, capsFor: CapsResolver, ledger: SpendLedger = new InMemorySpendLedger()) {"],
   ["N-01 clock type guard", "engine/src/spend-meter.ts", 'if (typeof now !== "function") {', "if (false) {"],
   ["N-09 reservedUsd day-scoped", "engine/src/spend-meter.ts",
     `    let micros = 0;
-    for (const open of this.#open.values()) {
+    for (const open of this.#ledger.openEntries()) {
       if (open.clientId === clientId) micros += open.micros;
     }`,
-    `    let micros = this.#reservedMicros.get(this.#key(clientId)) ?? 0;`],
+    `    let micros = this.#ledger.reservedMicros(this.#key(clientId));`],
   // N-08's two entries were REPLACED, not deleted: R7-04 overturned N-08's
   // conclusion, so the shape they mutated no longer exists. Their successors
   // are the R7-04 pair below, which mutate the fix back into N-08's shape.
@@ -126,7 +126,7 @@ const MUTATIONS = [
   // headroom, and the pin covered only reserve. Its successors are the two
   // R10-02 entries above, which mutate the freeze and the isFrozen check.
   ["R8-01 production meter is final", "engine/src/spend-meter.ts", "    if (new.target !== FrozenCapsSpendMeter) {", "    if (false) {"],
-  ["R8-01 caps come from the frozen table", "engine/src/spend-meter.ts", "    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super(trustedClock(), (clientId) => ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }));"],
+  ["R8-01 caps come from the frozen table", "engine/src/spend-meter.ts", "    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());", "    super(trustedClock(), (clientId) => ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }), processLedger());"],
   // R8-02: settle() takes one argument. The mutation restores the override.
   ["R8-02 settle takes no actual", "engine/src/spend-meter.ts",
     `    const open = this.#close(reservation);
@@ -158,7 +158,7 @@ const MUTATIONS = [
   // zero files and reported clean.
   ["R8-07 missing root is an error", "engine/scripts/leak-check.mjs", "  if (!existsSync(repoRoot)) {\n    throw new Error(", "  if (false) {\n    throw new Error("],
   // R8-08: the ADVANCING half of the high-water mark.
-  ["R8-08 high-water mark advances", "engine/src/spend-meter.ts", "if (seen === undefined || day > seen) this.#highWater.set(clientId, day);", "if (seen === undefined) this.#highWater.set(clientId, day);"],
+  ["R8-08 high-water mark advances", "engine/src/spend-meter.ts", "if (seen === undefined || day > seen) this.#ledger.setHighWater(clientId, day);", "if (seen === undefined) this.#ledger.setHighWater(clientId, day);"],
   // R8-09: the acceptance bar must be a stage, and must be able to fail.
   ["R8-09 harness fails the build", "engine/scripts/mutate-lib.mjs", "  if (survived > 0 || notFound > 0) {", "  if (false) {"],
   // The standing invariant, 2026-08-17: a tool that writes to the source tree
@@ -188,7 +188,7 @@ const MUTATIONS = [
   ["R10-03 the clock is anchored, not re-read", "engine/src/spend-meter.ts", "    return anchorWall + Number((mono - anchorMono) / 1_000_000n);", "    return Date.now();"],
   ["R10-03 disagreeing time sources are refused", "engine/src/spend-meter.ts", "  if (hi - lo > ANCHOR_TOLERANCE_MS) {", "  if (false) {"],
   ["R10-03 the monotonic source cannot go backwards", "engine/src/spend-meter.ts", "    if (mono < lastMono) {", "    if (false) {"],
-  ["R10-03 the production meter uses the trusted clock", "engine/src/spend-meter.ts", "    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing));"],
+  ["R10-03 the production meter uses the trusted clock", "engine/src/spend-meter.ts", "    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());"],
   // ---- r9 findings ----
   // R9-03's await is NOT listed, and the reason is structural rather than
   // convenient. Its behaviour — a SIGINT stops the run and restores the tree —
@@ -222,7 +222,7 @@ const MUTATIONS = [
   ["leak-check scannable root", "engine/scripts/leak-check.mjs", "  assertScannableRoot(repoRoot);", "  void repoRoot;"],
   ["leak-check local command matches CI", "package.json", "\"leak-check\": \"node engine/scripts/leak-check.mjs ..\"", "\"leak-check\": \"node engine/scripts/leak-check.mjs\""],
   // ---- r6 findings ----
-  ["R6-04 ledger keyed by identity", "engine/src/spend-meter.ts", "    const open = this.#open.get(reservation);", "    const open = [...this.#open.entries()].find(([h]) => h.id === reservation.id)?.[1];"],
+  ["R6-04 ledger keyed by identity", "engine/src/spend-meter.ts", "    const open = this.#ledger.open(reservation);", "    const open = [...this.#ledger.openEntries()].find((e) => e.clientId === reservation.clientId);"],
   ["R6-04 handle frozen", "engine/src/spend-meter.ts", "    Object.freeze(this);", "    void 0;"],
   ["R6-01 anchored tree hash", "engine/scripts/gate-lib.mjs", "    return /^[0-9a-f]{7,64}$/i.test(bare) ? bare : null;", "    const t = /[0-9a-f]{7,64}/i.exec(bare); return t === null ? null : t[0];"],
   // Restated after R7-08 split the body extraction from the string blanking:
@@ -265,7 +265,7 @@ const MUTATIONS = [
   ["R5-08 one clock read", "engine/src/spend-meter.ts", "      day: `d:${zoneDayKey(nowMs, timeZone)}|${clientId}`,\n      month: `m:${zoneMonthKey(nowMs, timeZone)}|${clientId}`,", "      day: `d:${zoneDayKey(this.#now(), timeZone)}|${clientId}`,\n      month: `m:${zoneMonthKey(this.#now(), timeZone)}|${clientId}`,"],
   // ---- H8 caps: the approved ceilings and the month-keyed accounting ----
   ["H8 monthly ceiling unchecked", "engine/src/spend-meter.ts", "    if (projectedMonth > monthlyCapMicros) {", "    if (false) {"],
-  ["H8 month period dropped from settle", "engine/src/spend-meter.ts", "    for (const period of [open.day, open.month]) {\n      const committed = this.#read(this.#committedMicros, period, \"committed spend\");", "    for (const period of [open.day]) {\n      const committed = this.#read(this.#committedMicros, period, \"committed spend\");"],
+  ["H8 month period dropped from settle", "engine/src/spend-meter.ts", "    for (const period of [open.day, open.month]) {\n      const committed = this.#read((p) => this.#ledger.committedMicros(p), period, \"committed spend\");", "    for (const period of [open.day]) {\n      const committed = this.#read((p) => this.#ledger.committedMicros(p), period, \"committed spend\");"],
   ["H8 month key equals day key", "engine/src/spend-meter.ts", "    return this.#periods(clientId, this.#zoneOf(clientId)).month;", "    return this.#periods(clientId, this.#zoneOf(clientId)).day;"],
   ["H8 ceilings object not required", "engine/src/spend-meter.ts", "    if (caps === null || typeof caps !== \"object\") {", "    if (false) {"],
   ["H8 monthly narrowing can widen", "config/src/caps.ts", "    return Math.min(ceiling, requested);", "    return requested;"],
@@ -289,6 +289,46 @@ const MUTATIONS = [
   ["H-12 own-property recording", "engine/src/eval-harness.ts", "Object.hasOwn(this.#outputs, this.#currentCase) ? this.#outputs[this.#currentCase] : undefined", "this.#outputs[this.#currentCase]"],
   ["R3-CP-08 -z diff (class2)", "engine/scripts/class2-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
   ["R3-CP-08 -z diff (adversary)", "engine/scripts/adversary-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
+
+  // ---- r11 findings ----
+  // R11-07: the ledger left the instance. Give the production meter its own
+  // ledger back and `new FrozenCapsSpendMeter()` per call mints a fresh $5/day
+  // again — the measured attack, 300 dispatches against a frozen ceiling.
+  ["R11-07 production meter shares the process ledger", "engine/src/spend-meter.ts",
+    "super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());",
+    "super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), new InMemorySpendLedger());"],
+  // The process ledger is module-scoped. Hand out a fresh one per call and it
+  // is the same defect one level down, with `processLedger()` still in place.
+  ["R11-07 the process ledger is one object", "engine/src/spend-ledger.ts",
+    "  return PROCESS_LEDGER;",
+    "  return new InMemorySpendLedger();"],
+  // The reset is R11-07 in a single call. Its fence is the runtime.
+  ["R11-07 reset fenced to a test runner", "engine/src/spend-ledger.ts",
+    "  if (marker === undefined || marker === null) {",
+    "  if (false) {"],
+
+  // R11-04: the sixth shape-assertion trap. The runner's blocking-call check
+  // matched call sites BY NAME, so one aliased import went straight past it and
+  // restored R9-03 with every structural check green. The binding is resolved
+  // now; reverting the resolver to a name match reopens it.
+  ["R11-04 blocking calls resolved by binding", "engine/test/blocking-calls.ts",
+    "      if ((BLOCKING_APIS as readonly string[]).includes(imported)) names.push(local);",
+    "      if ((BLOCKING_APIS as readonly string[]).includes(imported)) names.push(imported);"],
+  ["R11-04 unresolvable imports are refused", "engine/test/blocking-calls.ts",
+    "    unresolvable.push(\"a namespace or default import of child_process cannot be resolved statically\");",
+    "    void 0;"],
+  // R11-05: the unreachable-guard sweep recorded `something threw`, so eleven of
+  // sixteen entries passed with their own guard deleted. It records WHICH guard.
+  ["R11-05 the sweep identifies the guard that fired", "engine/test/invariants/invariants.test.ts",
+    "        if (!g.expect.test(message)) return `a DIFFERENT guard refused: ${message}`;",
+    "        void message;"],
+  ["R11-05 the sweep checks the error class", "engine/test/invariants/invariants.test.ts",
+    "        if (!(e instanceof g.type)) return `threw ${(e as object)?.constructor?.name ?? typeof e} — not ${g.type.name}`;",
+    "        void g.type;"],
+  // R11-06/R11-07: the test-only reset must not be reachable from production.
+  ["R11-07 no production module names the reset", "engine/test/invariants/invariants.test.ts",
+    "    const reaches = (name: string, src: string) => name !== \"spend-ledger.ts\" && src.includes(\"resetProcessLedgerForTests\");",
+    "    const reaches = (name: string, src: string) => { void name; void src; return false; };"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
