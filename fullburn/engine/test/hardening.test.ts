@@ -6,7 +6,7 @@ import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { parseNameStatus } from "../scripts/diff-lib.mjs";
-import { CANARY_SECRET, LOW_CAP_NARROWING, TEST_CLIENT, capsOf, makeDeps, testClock } from "./helpers.ts";
+import { CANARY_SECRET, LOW_CAP_NARROWING, TEST_CLIENT, capsOf, makeDeps, memoryMeter, testClock } from "./helpers.ts";
 import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 
 /** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
@@ -82,7 +82,7 @@ describe("money path — the transport-throw branch (R2-07)", () => {
   it("overlapping reserve/settle cycles never corrupt the ledger (R2-01)", async () => {
     // Float accumulation left `reserved` at -3.47e-18 after three overlapping
     // $0.01 reservations, and the meter's own guard then refused everything.
-    const m = new MemorySpendMeter(testClock, capsOf(25, 25));
+    const m = memoryMeter(testClock, capsOf(25, 25));
     for (let round = 0; round < 40; round++) {
       const held = [m.reserve("c", 0.01), m.reserve("c", 0.01), m.reserve("c", 0.01)];
       for (const r of held) m.settle(r);

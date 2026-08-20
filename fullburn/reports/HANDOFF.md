@@ -1,4 +1,4 @@
-# HANDOFF — Fullburn Phase 0, as of 2026-08-20
+# HANDOFF — Fullburn Phase 0, as of 2026-08-20 (r13 fixes)
 
 Written so the next session resumes on **evidence, not reconstruction** (human
 ruling, R11 round). Read this file, then `CLAUDE.md`, then
@@ -9,9 +9,9 @@ where it summarises, the ledger and the reports are authoritative.
 
 ## 1. Where the build actually is
 
-Phase 0 is **NOT passed**. Twelve adversary rounds have run (`reports/
-ADVERSARY_REPORT_phase0.r2.md` … `.r12.md`); every one returned FAIL, and every
-one found real money-path defects. r12's report is the newest and is the input
+Phase 0 is **NOT passed**. Thirteen adversary rounds have run (`reports/
+ADVERSARY_REPORT_phase0.r2.md` … `.r13.md`); every one returned FAIL, and every
+one found real money-path defects. r13's report is the newest and is the input
 to the current work.
 
 - The PR is **CLOSED**. Do not reopen it and do not open a new one without an
@@ -61,51 +61,52 @@ standing-invariants list; this section says who ruled and why.
    patching → prototype patching → per-call construction. Explicitly ruled: do
    NOT freeze the prototype.
 
-## 3. What R12's work changed (most recent session)
+## 3. What R13's work changed (most recent session)
 
-**R12-01 — the ledger now OWNS the arithmetic (severity 1, money loss).** R11
-moved the ledger out of the meter and stopped there, so it arrived as a public
-money-write primitive: `processLedger().setCommittedMicros(period, 0)` minted a
-fresh ceiling on every call — $30 against a frozen $5/day, one meter, zero
-`CapError`s, `todayUsd()` reading $0.00, no patch and no cast. Both R11-07
-fences guarded the RESET and had nothing to say about writing the balance.
+**R13-01 — the ledger owns the sign, the ceilings, the clock and the periods
+(severity 1, money loss).** R12-01 removed the balance *setters*; the capability
+survived in two contract calls. `reserve({… micros: -N …}, h)` made the
+projection smaller, so `projected > cap` could not fail, and `settle(h)`
+committed the negative — $30 through the real `llm()` against a frozen $5/day,
+zero `CapError`s, `todayUsd()` at $0.00. `ReserveRequest` also carried the
+ceilings (R7-06's seam, one layer down) and the period keys (a fresh ceiling for
+the asking).
 
-Human ruling: move the reserve/settle arithmetic inside the ledger; the meter is
-a caller, not an arithmetic owner. Done —
-- `SpendLedger` exposes `reserve(req, handle)` and `settle(handle)` and **no
-  balance-write primitive at all**. Reserved headroom is DERIVED from the open
-  handles rather than stored, so there is no second number to overwrite.
-- `engine/test/locks-r12.test.ts` FUZZES every method the interface declares,
-  read out of the source, and fails if any of them lowers a committed balance.
-  A setter added tomorrow is fuzzed the day it lands.
-- The prototype is still unfrozen by ruling, so R11-01's in-process patch
-  remains — bounded by a test and disclosed in L31(b), not described away.
+The signature is now `reserve(clientId, micros, handle, narrowing?)`. The ledger
+validates a positive whole number of micro-dollars at the boundary, resolves
+ceilings itself from the frozen table, computes period keys from its own clock
+and the client's zone, and keeps the high-water ratchet internal.
+`committedMicros(clientId, "day"|"month")` names a SPAN, not a key.
+`MemorySpendMeter` is now a thin branded facade: unit conversion and a handle.
 
-**R12-02 — the sweep's POPULATION, not just its predicate.** R11 sharpened the
-predicate on sixteen hand-written entries while the money path carried
-forty-seven guards; twelve were measured blind, including all six in `llm()`,
-while `CLAUDE.md` and L30 claimed full coverage. `engine/test/money-path-guards.ts`
-now reads every `throw new …` out of the four money-path modules and the sweep
-FAILS naming any it did not drive. Undrivable guards must name a ledger row.
+**Capabilities removed** (state them, per the standing rule): choosing the sign
+of a balance change; choosing the ceiling; choosing the period; enumerating
+another tenant's holdings; setting the high-water mark. The narrowing table is
+the one caller input left, and `caps.ts` proves it can only lower.
 
-**The ledger-integrity standing rule.** Three consecutive rounds produced a
-correction that introduced a fresh false claim. New rule (see `CLAUDE.md`): a
-row asserting something about code behaviour carries a test that fails when the
-assertion goes stale; rows that cannot be tested state limitations only. The
-claims check lives in `engine/test/invariants/`. L14, L17, L29, L30 and L31 were
-corrected or rewritten under it; L32 is new.
+**R13-02 — the slot brand.** `Symbol.for` made the ledger globally addressable,
+so anything evaluated first owned it. The slot now refuses an unmarked occupant
+and is defined non-writable/non-configurable (a removal); a registry-marked
+impostor planted before first use is still indistinguishable (a narrowing, said
+plainly in L31(b)). The singleton is frozen.
 
-**Also fixed:** R12-03 (three guards that survived their own deletion — the
-anchor median, the monotonic refusal and `settleOrFailClosed`'s rethrow, all now
-driven and locked); trap #7 (the blocking resolver follows local re-exports
-transitively and counts `.call`/`.apply`/`.bind`/`Reflect.apply` — and the
-signal-string greps are DELETED, with the drill strengthened to assert no source
-file is mutated after the signal); R12-06 (the ledger slot is keyed off
-`Symbol.for` so it survives module resets, the module-reset test moved to its own
-file, and a shuffled-suite CI stage now catches order-dependence); R12-07
-(availability is per client and audited, `openEntries()` is gone); R12-08 (the
-evidence column is anchored and unit-tested); R11-05 (restored as open, its
-identifier un-reassigned, and money-path mocking bounded by an invariant).
+**The lock changed shape.** `locks-r12` runs a SEQUENCE fuzz — seeded random
+walks over every contract method with adversarial arguments and harvested
+handles — asserting the committed balance never falls, never beats the ceiling,
+and is never corrupted. The old lock enumerated method NAMES, so a two-call
+sequence was outside its alphabet by construction. Verified red against R13-01.
+
+**Instruments.** The sweep's population is now DERIVED from the import graph
+(11 modules, 75 guards) instead of a four-name literal list, and coverage is
+one-to-one on (file, refusal message) instead of a substring match (R13-06). The
+ledger-claims bindings that grepped for strings now execute (R13-07); L21, L23
+and L31 were corrected — L23 was outright false. The blocking resolver refuses a
+local module it was not given, and the invariant walks `scripts/` recursively
+(R13-04, trap #8). The drill watches FILE CONTENT after the signal rather than
+the marker's path (R13-05). Both enumeration walks are recursive and cover every
+extension and every workspace test tree (R13-09, R13-10). `isolate: true` is
+explicit in `vitest.config.ts` with `npm run test:noisolate` proving everything
+outside two registry-dependent files is independent of it (R13-08).
 
 ## 4. OPEN — what the next session must pick up
 
@@ -133,7 +134,7 @@ stated as limitations, not conclusions:
 
 ### 4.2 Immediate next step
 
-**Invoke r13** — a fresh same-family adversary round against the committed R12
+**Invoke r14** — a fresh same-family adversary round against the committed R13
 tree. Its brief must carry forward, as explicit attack surface:
 
 1. The `SpendLedger` contract now that it owns the arithmetic: can any caller
@@ -148,7 +149,7 @@ tree. Its brief must carry forward, as explicit attack surface:
 5. The ledger-claims check: does every behavioural row have a binding, and does
    each binding actually go red when its row goes stale?
 
-**Only if r13 is clean** does the cross-family read get regenerated (ledger L8:
+**Only if r14 is clean** does the cross-family read get regenerated (ledger L8:
 every review so far has run on the builder's own model family, which violates
 §2.4's family-diversity rule for the review itself).
 

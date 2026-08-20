@@ -17,7 +17,17 @@ import { describe, expect, it, vi } from "vitest";
  *
  * The guard is ALSO drivable directly, via the exported `assertMonotonic`, and
  * the unreachable-guard sweep uses that. This file proves the WIRING: that
- * `trustedClock()` actually consults it. */
+ * `trustedClock()` actually consults it.
+ *
+ * IT LIVES WITH THE DRILLS, not in the default suite, and that is the fix for
+ * a second finding. `vi.resetModules()` duplicates every class in the registry
+ * it shares, so under `--no-isolate` or a single-fork pool six money-path locks
+ * went red with "expected error to be instance of MeterUnavailableError" when
+ * the error WAS one (adversary finding R13-08). The suite's correctness was
+ * resting on vitest's per-file isolation default, which no test asserted and a
+ * config change would have removed silently. A file that resets the module
+ * registry does not belong in a suite that shares one — so it runs under
+ * `npm run drill`, its own runner, its own CI stage. */
 describe("the trusted clock refuses a backwards monotonic source (R10-03 bound 4)", () => {
   /** MUTATION: drop the `assertMonotonic(mono, lastMono)` call from
    * `trustedClock`, or the comparison inside `assertMonotonic`. */
@@ -32,7 +42,7 @@ describe("the trusted clock refuses a backwards monotonic source (R10-03 bound 4
         return ticks === 1n ? 1_000_000_000n : 1n;
       };
       vi.resetModules();
-      const fresh = await import("../src/spend-meter.ts");
+      const fresh = await import("../../src/spend-meter.ts");
       const clock = fresh.trustedClock();
       expect(() => clock(), "a backwards monotonic source was accepted").toThrow(fresh.MeterUnavailableError);
       expect(() => clock()).toThrow(/backwards/);

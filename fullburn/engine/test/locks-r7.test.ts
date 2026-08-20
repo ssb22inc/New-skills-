@@ -9,8 +9,8 @@ import {
   zoneDayKey,
   zoneMonthKey,
 } from "../src/spend-meter.ts";
-import { capsOf } from "./helpers.ts";
-import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
+import { capsOf, fixedCaps, memoryMeter } from "./helpers.ts";
+import { InMemorySpendLedger, resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { summaryLine } from "../scripts/mutate-lib.mjs";
 
@@ -37,7 +37,7 @@ describe("money — the daily cap buckets on the client's day, not on UTC (R7-02
    * MUTATION: key the periods on UTC again (Date#toISOString slices). */
   it("$20 cannot land in one New York day under a $10 ceiling", () => {
     let now = Date.parse("2026-08-16T23:59:00Z"); // 19:59 ET
-    const m = new MemorySpendMeter(() => now, pulsern);
+    const m = memoryMeter(() => now, pulsern);
     m.settle(m.reserve("pulsern", 10));
     now = Date.parse("2026-08-17T00:01:00Z"); // 20:01 ET — still Aug 16 in New York
     expect(() => m.reserve("pulsern", 10), "UTC midnight opened a second daily ceiling").toThrow(CapError);
@@ -48,7 +48,7 @@ describe("money — the daily cap buckets on the client's day, not on UTC (R7-02
    * simply never rolling over. */
   it("the ceiling does roll over at the client's midnight", () => {
     let now = Date.parse("2026-08-16T23:59:00Z");
-    const m = new MemorySpendMeter(() => now, pulsern);
+    const m = memoryMeter(() => now, pulsern);
     m.settle(m.reserve("pulsern", 10));
     now = Date.parse("2026-08-17T04:01:00Z"); // 00:01 ET on Aug 17
     expect(() => m.reserve("pulsern", 10)).not.toThrow();
@@ -74,7 +74,7 @@ describe("money — the daily cap buckets on the client's day, not on UTC (R7-02
     for (const id of ["pulsern", "fixture-testco", "fixture-unsigned"]) {
       expect(() => getCaps(id), `${id} has no usable zone`).not.toThrow();
     }
-    const meter = new MemorySpendMeter(() => Date.now(), () => ({ dailyUsd: 5, monthlyUsd: 5, timeZone: "Mars/Olympus" }));
+    const meter = memoryMeter(() => Date.now(), () => ({ dailyUsd: 5, monthlyUsd: 5, timeZone: "Mars/Olympus" }));
     expect(() => meter.reserve("x", 1)).toThrow();
   });
 
@@ -95,7 +95,7 @@ describe("money — the daily cap buckets on the client's day, not on UTC (R7-02
   it("a $200 New York month is not reopened by UTC's month boundary", () => {
     // 20:30 ET on Aug 31 — already September in UTC, still August in New York.
     let now = Date.parse("2026-08-16T16:00:00Z");
-    const m = new MemorySpendMeter(() => now, pulsern);
+    const m = memoryMeter(() => now, pulsern);
     // Exhaust the month across twenty local days, staying under $10 each.
     for (let d = 0; d < 20; d++) {
       now = Date.parse(`2026-08-${String(d + 1).padStart(2, "0")}T16:00:00Z`);
@@ -112,7 +112,7 @@ describe("money — the daily cap buckets on the client's day, not on UTC (R7-02
    * the test above. The month must roll on the CLIENT's own boundary. */
   it("the monthly ceiling does roll over at the client's month boundary", () => {
     let now = Date.parse("2026-08-16T16:00:00Z");
-    const m = new MemorySpendMeter(() => now, pulsern);
+    const m = memoryMeter(() => now, pulsern);
     for (let d = 0; d < 20; d++) {
       now = Date.parse(`2026-08-${String(d + 1).padStart(2, "0")}T16:00:00Z`);
       m.settle(m.reserve("pulsern", 10));
@@ -144,7 +144,7 @@ describe("money — the injected clock cannot mint fresh ceilings (R7-03)", () =
    * MUTATION: drop #assertForward, or make it compare with > instead of <. */
   it("a clock moving backwards into a closed day is refused", () => {
     let now = Date.parse("2026-08-17T16:00:00Z");
-    const m = new MemorySpendMeter(() => now, pulsern);
+    const m = memoryMeter(() => now, pulsern);
     m.settle(m.reserve("pulsern", 10));
     now = Date.parse("2026-08-16T16:00:00Z");
     expect(() => m.reserve("pulsern", 10), "an older day was re-entered").toThrow(/backwards/);
@@ -157,7 +157,7 @@ describe("money — the injected clock cannot mint fresh ceilings (R7-03)", () =
   it("a non-finite instant refuses spend rather than throwing somewhere else", () => {
     expect(() => zoneDayKey(Number.NaN, "UTC")).toThrow(MeterUnavailableError);
     expect(() => zoneDayKey(Number.POSITIVE_INFINITY, "UTC")).toThrow(/non-finite/);
-    const m = new MemorySpendMeter(() => Number.NaN, pulsern);
+    const m = memoryMeter(() => Number.NaN, pulsern);
     expect(() => m.reserve("pulsern", 1)).toThrow(MeterUnavailableError);
   });
 
@@ -172,7 +172,7 @@ describe("money — the injected clock cannot mint fresh ceilings (R7-03)", () =
    * MUTATION: `if (seen === undefined || day > seen)` → `if (seen === undefined)`. */
   it("the mark advances with the clock — not just on the first day ever seen", () => {
     let now = Date.parse("2026-08-10T16:00:00Z");
-    const m = new MemorySpendMeter(() => now, pulsern);
+    const m = memoryMeter(() => now, pulsern);
     m.settle(m.reserve("pulsern", 1)); // first day seen: Aug 10
 
     now = Date.parse("2026-08-20T16:00:00Z");
@@ -186,7 +186,7 @@ describe("money — the injected clock cannot mint fresh ceilings (R7-03)", () =
 
   it("the high-water mark is per client — one client's clock is not another's", () => {
     let now = Date.parse("2026-08-17T16:00:00Z");
-    const m = new MemorySpendMeter(() => now, capsOf(10, 10));
+    const m = memoryMeter(() => now, capsOf(10, 10));
     m.settle(m.reserve("a", 1));
     now = Date.parse("2026-08-16T16:00:00Z");
     // "b" has never been seen, so it has no closed day to re-enter.
@@ -203,7 +203,7 @@ describe("money — ceilings are the meter's, never the caller's (R7-06)", () =>
    *
    * MUTATION: restore the ceilings parameter on reserve, or re-add record(). */
   it("a caller cannot widen its own ceiling, and record() does not exist", () => {
-    const meter = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
+    const meter = memoryMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
     expect(typeof (meter as unknown as Record<string, unknown>)["record"], "record() is back").toBe("undefined");
     // A ceilings argument is ignored, not honoured: the $10/day ceiling holds.
     const widen = meter.reserve.bind(meter) as unknown as (c: string, a: number, caps?: unknown) => unknown;
@@ -214,7 +214,10 @@ describe("money — ceilings are the meter's, never the caller's (R7-06)", () =>
 
   /** MUTATION: drop the resolver requirement from the constructor. */
   it("a meter cannot be built without a caps resolver", () => {
-    const build = MemorySpendMeter as unknown as new (...a: unknown[]) => MemorySpendMeter;
+    // THE RESOLVER MOVED INTO THE LEDGER (R13-01): `reserve` no longer takes
+    // ceilings in any form, so the ledger resolves them itself and refuses to
+    // exist without the means to. R7-06's property, one layer down.
+    const build = InMemorySpendLedger as unknown as new (...a: unknown[]) => unknown;
     expect(() => new build(() => 0)).toThrow(MeterUnavailableError);
     expect(() => new build(() => 0, "not a function")).toThrow(/caps resolver/);
   });
@@ -241,7 +244,7 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
     const { deps } = mk();
     const frozen = getCaps(C).monthlyAiSpendUsd;
 
-    const wide = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), () => ({
+    const wide = memoryMeter(() => Date.parse("2026-08-17T16:00:00Z"), () => ({
       dailyUsd: 100_000,
       monthlyUsd: 100_000,
       timeZone: "UTC",
@@ -276,7 +279,7 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
     expect(isFrozenCapsMeter(genuine)).toBe(true);
 
     // A plain meter with a wide resolver — the R8-01 attack object.
-    expect(isFrozenCapsMeter(new MemorySpendMeter(() => Date.now(), capsOf(1e9, 1e9)))).toBe(false);
+    expect(isFrozenCapsMeter(memoryMeter(() => Date.now(), capsOf(1e9, 1e9)))).toBe(false);
     // A literal wearing the shape.
     expect(isFrozenCapsMeter({ reserve() {}, settle() {}, release() {}, todayUsd: () => 0 })).toBe(false);
     // The prototype without the constructor — this is what defeats a bare
@@ -400,7 +403,7 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
 
     // And the same attack through the real llm(): a meter whose clock the
     // caller chose is not a meter llm() will accept at all.
-    const withClock = new MemorySpendMeter(() => Date.parse("2030-01-01T00:00:00Z"), () => effectiveAiCapsUsd(C));
+    const withClock = memoryMeter(() => Date.parse("2030-01-01T00:00:00Z"), () => effectiveAiCapsUsd(C));
     const { deps } = mk();
     let dispatched = 0;
     const transport = {
@@ -488,7 +491,25 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
       // before import: one source disagreeing must refuse.
       performance.now = () => realPerfNow() + 3 * 24 * 3600 * 1000; // three days on
       expect(() => trustedClock(), "one tampered time source was accepted").toThrow(MeterUnavailableError);
-      expect(() => new FrozenCapsSpendMeter(), "a meter was built on a tampered clock").toThrow(/disagree/);
+      /** THE ANCHOR IS NOW PER PROCESS, NOT PER METER, and that is a deliberate
+       * consequence of R13-01 rather than a weakening.
+       *
+       * `new FrozenCapsSpendMeter()` used to call `trustedClock()` itself, so
+       * every construction re-anchored — and this line asserted that a tampered
+       * source made construction fail. The clock lives in the process ledger
+       * now, anchored once at first use and advanced monotonically thereafter,
+       * which is what R10-03's design always said it should be: re-anchoring
+       * per meter was a way for the anchor to DRIFT toward a tampered source,
+       * not a defence against one.
+       *
+       * So the cross-check is asserted where it now runs — at ledger clock
+       * construction — and a post-anchor tamper is inert, which is the stronger
+       * half and is asserted next. */
+      const led = new InMemorySpendLedger(() => Date.now(), () => fixedCaps());
+      expect(() => trustedClock(), "the cross-check stopped discriminating").toThrow(/disagree/);
+      // …and a meter over an ALREADY-ANCHORED ledger keeps working, because a
+      // patch after the anchor cannot move it.
+      expect(() => new MemorySpendMeter(led).todayUsd("fixture-testco"), "a post-anchor patch moved the clock").not.toThrow();
     } finally {
       performance.now = realPerfNow;
     }
@@ -512,6 +533,7 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
      * discriminations and not checks that refuse everything. */
     expect(() => trustedClock()).not.toThrow();
     expect(() => new FrozenCapsSpendMeter()).not.toThrow();
+    expect(() => new InMemorySpendLedger(trustedClock(), () => fixedCaps())).not.toThrow();
   });
 
   /** The narrowing table is the ONLY thing a caller may supply, and `caps.ts`
@@ -554,7 +576,7 @@ describe("money — settle() commits the reservation and nothing else (R7-05 as 
    *
    * MUTATION: restore the `actualUsd` parameter and the `toMicros` branch. */
   it("there is no second argument that can write an arbitrary committed value", () => {
-    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
+    const m = memoryMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
     const overreach = m.settle.bind(m) as unknown as (r: SpendReservation, actual?: number) => void;
 
     // $5,000 against a $10/day ceiling, through a handle the meter itself
@@ -577,7 +599,7 @@ describe("money — settle() commits the reservation and nothing else (R7-05 as 
    *
    * MUTATION: commit 0 instead of open.micros. */
   it("what settle commits is the reserved amount, and it consumes the ceiling", () => {
-    const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
+    const m = memoryMeter(() => Date.parse("2026-08-17T16:00:00Z"), pulsern);
     m.settle(m.reserve("pulsern", 9.5));
     expect(m.todayUsd("pulsern")).toBeCloseTo(9.5, 6);
     expect(() => m.reserve("pulsern", 0.6), "the committed estimate did not bind").toThrow(CapError);

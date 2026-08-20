@@ -10,7 +10,7 @@ import { processLedger, resetProcessLedgerForTests } from "../../src/spend-ledge
 import { vaultForClient, MemoryVaultBackend, VaultError } from "../../src/vault.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../../scripts/scan-lib.mjs";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps } from "../helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, memoryMeter } from "../helpers.ts";
 import { e2eVarianceHolds, runnerTargets } from "../e2e-variance.ts";
 import { blockingCalls } from "../blocking-calls.ts";
 import { moneyPathGuards } from "../money-path-guards.ts";
@@ -384,7 +384,21 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       // THE WHOLE LOCAL GRAPH, not just this file: a one-line helper module
       // re-exporting `spawnSync` restored R9-03 with the direct-import
       // resolver clean (adversary finding R12-04).
-      const graph = new Map(scripts.map((n) => [`./${n}`, readFileSync(new URL(n, dir), "utf8")] as const));
+      // RECURSIVE, AND EVERY EXTENSION. One directory and one extension was
+      // the hole: a helper in `scripts/helpers/` was simply absent from the
+      // graph, and an absent module used to read as clean (R13-04).
+      const graph = new Map<string, string>();
+      const collect = (d: URL, prefix: string) => {
+        for (const e of readdirSync(d, { withFileTypes: true })) {
+          if (e.isDirectory()) {
+            collect(new URL(`${e.name}/`, d), `${prefix}${e.name}/`);
+            continue;
+          }
+          if (!/\.(?:mjs|cjs|js|ts|mts)$/.test(e.name)) continue;
+          graph.set(`./${prefix}${e.name}`, readFileSync(new URL(e.name, d), "utf8"));
+        }
+      };
+      collect(dir, "");
       expect(
         blockingCalls(src, runner, graph),
         `${f} blocks the event loop, so its signal handlers cannot run`,
@@ -520,15 +534,34 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       MemorySpendMeter,
       MeterUnavailableError,
       SpendReservation,
-      assertMonotonic,
       toMicros,
-      trustedClock,
       isFrozenCapsMeter,
     } = await import("../../src/spend-meter.ts");
-    const { SpendLedgerError } = await import("../../src/spend-ledger.ts");
+    const { SpendLedgerError, InMemorySpendLedger } = await import("../../src/spend-ledger.ts");
     const { requireReservingMeter, GatewayError, SchemaError } = await import("../../src/gateway.ts");
     const { BindingError } = await import("@fullburn/config/models");
-    const { TraceEmitError } = await import("../../src/tracing.ts");
+    const { TraceEmitError, TraceContext, MemoryTraceSink, emitOrFail } = await import("../../src/tracing.ts");
+    const { VaultError, MemoryVaultBackend, vaultForClient } = await import("../../src/vault.ts");
+    const { assertMonotonic, trustedClock, zoneDayKey } = await import("../../src/trusted-clock.ts");
+    const {
+      EvalAttestation,
+      GOLDEN_SET_CASE_IDS,
+      MODELS: MODEL_REGISTRY,
+      ROLE_CARDS,
+      attestEvalRun,
+      bindRole,
+      validateBindings,
+    } = await import("@fullburn/config/models");
+    void MODEL_REGISTRY;
+
+    /** A REAL attestation, from the factory, so the entries that test WHICH
+     * role or model it attests are not passing for the literal-refusal reason. */
+    const genuineAttestation = () =>
+      attestEvalRun(
+        "genome-tagger",
+        "qwen-72b",
+        GOLDEN_SET_CASE_IDS["genome-tagger"]!.map((caseId) => ({ caseId, passed: true })),
+      );
     const { effectiveAiCapsUsd, assertUsableZone, assertCapsCoherent, assertCapsUsable, getCaps, CapError } =
       await import("@fullburn/config/caps");
     const { makeDeps: mkDeps, transportThatBreaksStorage: breakStorage, TEST_CLIENT: SWEEP_CLIENT } =
@@ -564,130 +597,106 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
      * sixteen entries below would have passed with their own guard deleted, so
      * long as something threw on the way (adversary finding R11-04). A guard's
      * own refusal message is what says it was that guard and not another. */
-    type Guard = { name: string; fire: () => unknown; type: new (...a: never[]) => Error; expect: RegExp };
+    /** `file` NAMES WHICH MODULE'S GUARD THIS ENTRY CLAIMS. Two modules can refuse
+     * with the same words — `toMicros` and the ledger's ceiling check both say
+     * "is out of range for micro-dollar accounting" — and a signature match
+     * alone then counts one guard as covered by the other's entry. The pair
+     * (file, message) is what identifies a guard. */
+    type Guard = {
+      name: string;
+      file: string;
+      fire: () => unknown;
+      type: new (...a: never[]) => Error;
+      expect: RegExp;
+    };
     const guards: Guard[] = [
       // ---- engine/src/spend-meter.ts ----
-      { name: "toMicros rejects an out-of-range amount", type: MeterUnavailableError,
+      { name: "toMicros rejects an out-of-range amount", file: "engine/src/spend-meter.ts", type: MeterUnavailableError,
         expect: /is out of range for micro-dollar accounting/, fire: () => toMicros(1e15, "x") },
-      { name: "a reservation cannot be minted outside a meter", type: MeterUnavailableError,
+      { name: "a reservation cannot be minted outside a meter", file: "engine/src/spend-meter.ts", type: MeterUnavailableError,
         expect: /a reservation may only be minted by a meter/, fire: () => {
           new SpendReservation(Symbol("not the brand"), "r1", "pulsern", 1);
         } },
-      { name: "toMicros rejects a non-finite amount", type: MeterUnavailableError,
+      { name: "toMicros rejects a non-finite amount", file: "engine/src/spend-meter.ts", type: MeterUnavailableError,
         expect: /is not a finite non-negative number/, fire: () => toMicros(Number.NaN, "x") },
-      { name: "a non-finite instant is refused", type: MeterUnavailableError,
-        expect: /clock returned a non-finite instant/, fire: () => {
-          new MemorySpendMeter(() => Number.NaN, () => effectiveAiCapsUsd("pulsern")).reserve("pulsern", 1);
-        } },
-      { name: "the meter refuses a missing clock", type: MeterUnavailableError,
-        expect: /MemorySpendMeter requires a clock/,
+      { name: "the meter refuses a missing ledger", file: "engine/src/spend-meter.ts", type: MeterUnavailableError,
+        expect: /MemorySpendMeter requires a spend ledger/,
         fire: () => new (MemorySpendMeter as never as new (...a: unknown[]) => unknown)() },
-      { name: "the meter refuses a missing caps resolver", type: MeterUnavailableError,
-        expect: /MemorySpendMeter requires a caps resolver/,
-        fire: () => new (MemorySpendMeter as never as new (...a: unknown[]) => unknown)(() => 0) },
-      { name: "a backwards clock is refused", type: MeterUnavailableError,
-        expect: /clock moved backwards into a closed accounting day/, fire: () => {
-          let t = Date.parse("2026-08-17T16:00:00Z");
-          const m = new MemorySpendMeter(() => t, () => effectiveAiCapsUsd("pulsern"));
-          m.settle(m.reserve("pulsern", 1));
-          t = Date.parse("2026-08-16T16:00:00Z");
-          m.reserve("pulsern", 1);
-        } },
-      { name: "the METER refuses when its client's storage is down", type: MeterUnavailableError,
-        expect: /spend meter unavailable/, fire: () => {
-          resetProcessLedgerForTests();
-          processLedger().setAvailable("fixture-testco", false, "sweep fixture");
-          new FrozenCapsSpendMeter().todayUsd("fixture-testco");
-        } },
-      { name: "reserve refuses an empty clientId", type: MeterUnavailableError,
-        expect: /reserve requires a clientId/, fire: () => {
-          new MemorySpendMeter(() => 0, () => effectiveAiCapsUsd("pulsern")).reserve("", 1);
-        } },
-      { name: "a caps resolver returning nothing refuses spend", type: MeterUnavailableError,
-        expect: /caps resolver returned no ceilings/, fire: () => {
-          new MemorySpendMeter(() => 0, (() => undefined) as never).reserve("pulsern", 1);
-        } },
-      { name: "a non-positive reservation is refused", type: MeterUnavailableError,
-        expect: /reservation amount must be positive/, fire: () => {
-          new MemorySpendMeter(() => 0, () => effectiveAiCapsUsd("pulsern")).reserve("pulsern", 0);
-        } },
-      { name: "a non-finite wall-clock source is refused", type: MeterUnavailableError,
-        expect: /time source .*is not a finite instant/, fire: () => {
-          const realOrigin = performance.timeOrigin;
-          try {
-            Object.defineProperty(performance, "timeOrigin", { value: Number.NaN, configurable: true });
-            trustedClock();
-          } finally {
-            Object.defineProperty(performance, "timeOrigin", { value: realOrigin, configurable: true });
-          }
-        } },
-      { name: "the trusted clock refuses disagreeing sources", type: MeterUnavailableError,
-        expect: /independent time sources disagree/, fire: () => {
-          const realPerfNow = performance.now.bind(performance);
-          try {
-            performance.now = () => realPerfNow() + 3 * 24 * 3600 * 1000;
-            trustedClock();
-          } finally {
-            performance.now = realPerfNow;
-          }
-        } },
-      { name: "a monotonic source that goes backwards is refused", type: MeterUnavailableError,
-        expect: /monotonic time source moved backwards/, fire: () => assertMonotonic(1n, 2n) },
-      { name: "the production meter is final", type: MeterUnavailableError,
+      { name: "the production meter is final", file: "engine/src/spend-meter.ts", type: MeterUnavailableError,
         expect: /FrozenCapsSpendMeter is final/, fire: () => new (class extends FrozenCapsSpendMeter {})() },
 
       // ---- engine/src/spend-ledger.ts ----
-      { name: "a cross-tenant period read is refused", type: MeterUnavailableError,
-        expect: /does not belong to client/,
-        fire: () => processLedger().committedMicros("fixture-testco", "d:2026-08-20|pulsern") },
-      { name: "the LEDGER refuses when the client's storage is down", type: MeterUnavailableError,
+      { name: "a reservation with no clientId is refused", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /reserve requires a clientId/,
+        fire: () => processLedger().reserve("", 1, {}) },
+      { name: "a non-positive reservation is refused at the ledger boundary", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /must be a positive whole number of micro-dollars/, fire: () => {
+          resetProcessLedgerForTests();
+          // THE R13-01 ATTACK, as a guard: a negative amount made the projection
+          // smaller, so `projected > cap` could not fail and `settle` committed
+          // the negative. Driven here so the refusal is executed every round.
+          processLedger().reserve("pulsern", -1_000_000, {});
+        } },
+      { name: "a reservation needs a handle object", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /a reservation needs a handle object/,
+        fire: () => processLedger().reserve("pulsern", 1, null as unknown as object) },
+      { name: "the ledger refuses a missing clock", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /the spend ledger requires a clock/,
+        fire: () => new (InMemorySpendLedger as never as new (...a: unknown[]) => unknown)() },
+      { name: "the ledger refuses a missing caps resolver", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /the spend ledger requires a caps resolver/,
+        fire: () => new (InMemorySpendLedger as never as new (...a: unknown[]) => unknown)(() => 0) },
+      { name: "an unusable ceiling refuses spend", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /is not a usable ceiling/, fire: () => {
+          const led = new InMemorySpendLedger(() => 0, () => ({ dailyUsd: Number.NaN, monthlyUsd: 1, timeZone: "UTC" }));
+          led.reserve("pulsern", 1, {});
+        } },
+      { name: "a ceiling out of micro-dollar range refuses spend", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /is out of range for micro-dollar accounting/, fire: () => {
+          const led = new InMemorySpendLedger(() => 0, () => ({ dailyUsd: 1e12, monthlyUsd: 1e12, timeZone: "UTC" }));
+          led.reserve("pulsern", 1, {});
+        } },
+      { name: "the LEDGER refuses when the client's storage is down", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
         expect: /client storage is unavailable/, fire: () => {
           resetProcessLedgerForTests();
           processLedger().setAvailable("pulsern", false, "sweep fixture");
           processLedger().reservedMicros("pulsern");
         } },
-      { name: "a handle cannot open two reservations", type: MeterUnavailableError,
+      { name: "a handle cannot open two reservations", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
         expect: /reservation handle is already open/, fire: () => {
           resetProcessLedgerForTests();
           const handle = {};
-          const req = {
-            clientId: "pulsern", micros: 1, day: "d:2026-08-20|pulsern", month: "m:2026-08|pulsern",
-            dailyCapMicros: 1_000_000, monthlyCapMicros: 1_000_000, dailyCapUsd: 1, monthlyCapUsd: 1,
-          };
-          processLedger().reserve(req, handle);
-          processLedger().reserve(req, handle);
+          processLedger().reserve("pulsern", 1, handle);
+          processLedger().reserve("pulsern", 1, handle);
         } },
-      { name: "a projection outside safe-integer range is refused", type: MeterUnavailableError,
+      { name: "a projection outside safe-integer range is refused", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
         expect: /projected spend is out of range/, fire: () => {
-          resetProcessLedgerForTests();
-          const huge = Number.MAX_SAFE_INTEGER - 1;
-          const req = (micros: number) => ({
-            clientId: "pulsern", micros, day: "d:2026-08-20|pulsern", month: "m:2026-08|pulsern",
-            dailyCapMicros: Number.MAX_SAFE_INTEGER, monthlyCapMicros: Number.MAX_SAFE_INTEGER,
-            dailyCapUsd: 1e9, monthlyCapUsd: 1e9,
-          });
-          processLedger().reserve(req(huge), {});
-          processLedger().reserve(req(huge), {});
+          // Ceilings big enough that the CAP is not what refuses, but small
+          // enough to pass the micro-dollar range check on the ceiling itself.
+          const led = new InMemorySpendLedger(() => 0, () => ({ dailyUsd: 9e9, monthlyUsd: 9e9, timeZone: "UTC" }));
+          const huge = 4_600_000_000_000_000; // under the ceiling; two exceed MAX_SAFE_INTEGER
+          led.reserve("pulsern", huge, {});
+          led.reserve("pulsern", huge, {});
         } },
-      { name: "the daily ceiling refuses an overspend", type: CapError,
+      { name: "the daily ceiling refuses an overspend", file: "engine/src/spend-ledger.ts", type: CapError,
         expect: /projected \$.* > daily cap/, fire: () => {
-          const m = new MemorySpendMeter(() => Date.parse("2026-08-17T16:00:00Z"), () => effectiveAiCapsUsd("pulsern"));
+          const m = memoryMeter(() => Date.parse("2026-08-17T16:00:00Z"), () => effectiveAiCapsUsd("pulsern"));
           m.settle(m.reserve("pulsern", 10));
           m.reserve("pulsern", 1);
         } },
-      { name: "the monthly ceiling refuses an overspend the day allows", type: CapError,
+      { name: "the monthly ceiling refuses an overspend the day allows", file: "engine/src/spend-ledger.ts", type: CapError,
         expect: /projected \$.* > monthly cap/, fire: () => {
           let t = Date.parse("2026-08-01T12:00:00Z");
-          const m = new MemorySpendMeter(() => t, () => ({ dailyUsd: 10, monthlyUsd: 10, timeZone: "UTC" }));
+          const m = memoryMeter(() => t, () => ({ dailyUsd: 10, monthlyUsd: 10, timeZone: "UTC" }));
           m.settle(m.reserve("sweep-month", 10));
           t = Date.parse("2026-08-02T12:00:00Z"); // a fresh DAY, the same month
           m.reserve("sweep-month", 1);
         } },
-      { name: "a halt with no client is refused", type: MeterUnavailableError,
+      { name: "a halt with no client is refused", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
         expect: /setAvailable requires a clientId/, fire: () => processLedger().setAvailable("", false, "sweep") },
-      { name: "a halt with no reason is refused", type: MeterUnavailableError,
+      { name: "a halt with no reason is refused", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
         expect: /setAvailable requires a reason/, fire: () => processLedger().setAvailable("pulsern", false, "") },
-      { name: "the ledger reset refuses outside a test runner", type: SpendLedgerError,
+      { name: "the ledger reset refuses outside a test runner", file: "engine/src/spend-ledger.ts", type: SpendLedgerError,
         expect: /ran outside a test runner/, fire: () => {
           const g = globalThis as Record<string, unknown>;
           const saved = g["__vitest_worker__"];
@@ -700,36 +709,36 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         } },
 
       // ---- engine/src/gateway.ts ----
-      { name: "requireReservingMeter refuses a meter missing a money method", type: MeterUnavailableError,
+      { name: "requireReservingMeter refuses a meter missing a money method", file: "engine/src/gateway.ts", type: MeterUnavailableError,
         expect: /spend meter does not support reserve\/settle/, fire: () =>
           requireReservingMeter({ todayUsd: () => 0, reserve: () => ({}) as never, settle: () => {}, release: () => {} } as never) },
-      { name: "a non-object provider response is refused", type: SchemaError,
+      { name: "a non-object provider response is refused", file: "engine/src/gateway.ts", type: SchemaError,
         expect: /output is not an object/, fire: () => viaLlm({ transport: { async post() { return "not an object"; } } }) },
-      { name: "a response missing a required field is refused", type: SchemaError,
+      { name: "a response missing a required field is refused", file: "engine/src/gateway.ts", type: SchemaError,
         expect: /output missing required field/, fire: () => viaLlm({ transport: { async post() { return {}; } } }) },
-      { name: "a response field of the wrong type is refused", type: SchemaError,
+      { name: "a response field of the wrong type is refused", file: "engine/src/gateway.ts", type: SchemaError,
         expect: /output field .* is not/, fire: () => viaLlm({ transport: { async post() { return { greeting: 1 }; } } }) },
-      { name: "an unknown role is refused", type: BindingError,
+      { name: "an unknown role is refused", file: "engine/src/gateway.ts", type: BindingError,
         expect: /unknown role/, fire: () => viaLlm({ role: "no-such-role" }) },
-      { name: "a role with no binding is refused", type: BindingError,
+      { name: "a role with no binding is refused", file: "engine/src/gateway.ts", type: BindingError,
         expect: /has no binding/, fire: () => viaLlm({ bindings: {} }) },
-      { name: "a binding to an unregistered model is refused", type: BindingError,
+      { name: "a binding to an unregistered model is refused", file: "engine/src/gateway.ts", type: BindingError,
         expect: /not in registry/, fire: () => viaLlm({ bindings: { "hello-world": "no-such-model" } }) },
-      { name: "a missing TraceContext is refused", type: TraceEmitError,
+      { name: "a missing TraceContext is refused", file: "engine/src/gateway.ts", type: TraceEmitError,
         expect: /llm\(\) requires a TraceContext/, fire: () => viaLlm({ trace: null }) },
-      { name: "a trace scoped to another client is refused", type: TraceEmitError,
+      { name: "a trace scoped to another client is refused", file: "engine/src/gateway.ts", type: TraceEmitError,
         expect: /scoped to a different client/, fire: () => viaLlm({ trace: new TraceContext("sweep", "other-client") }) },
-      { name: "a vault scoped to another client is refused", type: GatewayError,
+      { name: "a vault scoped to another client is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /cross-client secret access refused/, fire: async () => {
           const { MemoryVaultBackend, vaultForClient } = await import("../../src/vault.ts");
           return viaLlm({ vault: vaultForClient(new MemoryVaultBackend(), "other-client") });
         } },
-      { name: "a meter not bound to the frozen caps table is refused", type: MeterUnavailableError,
+      { name: "a meter not bound to the frozen caps table is refused", file: "engine/src/gateway.ts", type: MeterUnavailableError,
         expect: /not bound to the frozen caps table/, fire: () =>
-          viaLlm({ meter: new MemorySpendMeter(() => 0, () => effectiveAiCapsUsd("fixture-testco")) }) },
-      { name: "a transport with no post() is refused", type: GatewayError,
+          viaLlm({ meter: memoryMeter(() => 0, () => effectiveAiCapsUsd("fixture-testco")) }) },
+      { name: "a transport with no post() is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /transport has no post\(\)/, fire: () => viaLlm({ transport: {} }) },
-      { name: "a settle that cannot record refuses to release", type: MeterUnavailableError,
+      { name: "a settle that cannot record refuses to release", file: "engine/src/gateway.ts", type: MeterUnavailableError,
         expect: /spend was incurred but could not be recorded/, fire: async () => {
           const { deps, ledger } = mkDeps();
           const { transport } = breakStorage(ledger, { async post() { return { greeting: "ok" }; } });
@@ -738,27 +747,178 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           });
         } },
 
+      // ---- engine/src/trusted-clock.ts ----
+      { name: "a non-finite wall-clock source is refused", file: "engine/src/trusted-clock.ts", type: MeterUnavailableError,
+        expect: /time source .*is not a finite instant/, fire: () => {
+          const realOrigin = performance.timeOrigin;
+          try {
+            Object.defineProperty(performance, "timeOrigin", { value: Number.NaN, configurable: true });
+            trustedClock();
+          } finally {
+            Object.defineProperty(performance, "timeOrigin", { value: realOrigin, configurable: true });
+          }
+        } },
+      { name: "the trusted clock refuses disagreeing sources", file: "engine/src/trusted-clock.ts", type: MeterUnavailableError,
+        expect: /independent time sources disagree/, fire: () => {
+          const realPerfNow = performance.now.bind(performance);
+          try {
+            performance.now = () => realPerfNow() + 3 * 24 * 3600 * 1000;
+            trustedClock();
+          } finally {
+            performance.now = realPerfNow;
+          }
+        } },
+      { name: "a monotonic source that goes backwards is refused", file: "engine/src/trusted-clock.ts",
+        type: MeterUnavailableError, expect: /monotonic time source moved backwards/,
+        fire: () => assertMonotonic(1n, 2n) },
+      { name: "a non-finite instant has no day key", file: "engine/src/trusted-clock.ts", type: MeterUnavailableError,
+        expect: /clock returned a non-finite instant/, fire: () => zoneDayKey(Number.NaN, "UTC") },
+
+      // ---- engine/src/tracing.ts ----
+      { name: "a trace context needs both ids", file: "engine/src/tracing.ts", type: TraceEmitError,
+        expect: /trace context requires traceId and clientId/, fire: () => new TraceContext("", "c") },
+      { name: "a sink failure refuses to proceed untraced", file: "engine/src/tracing.ts", type: TraceEmitError,
+        expect: /refusing to proceed untraced/, fire: async () => {
+          const sink = new MemoryTraceSink();
+          sink.setFailing(true);
+          return emitOrFail(sink, { name: "sweep", clientId: "pulsern" } as never);
+        } },
+      { name: "the memory sink can simulate an outage", file: "engine/src/tracing.ts", type: Error,
+        expect: /sink outage/, fire: async () => {
+          const sink = new MemoryTraceSink();
+          sink.setFailing(true);
+          return sink.emit({ name: "sweep", clientId: "pulsern" } as never);
+        } },
+
+      // ---- engine/src/vault.ts ----
+      { name: "a vault scope needs a clientId", file: "engine/src/vault.ts", type: VaultError,
+        expect: /vault scope requires a clientId/,
+        fire: () => vaultForClient(new MemoryVaultBackend(), "") },
+      { name: "a missing secret is refused, by name only", file: "engine/src/vault.ts", type: VaultError,
+        expect: /not found for scoped client/,
+        fire: () => vaultForClient(new MemoryVaultBackend(), "pulsern").get("no-such-secret") },
+
+      // ---- config/src/models.ts ----
+      { name: "an attestation cannot be constructed directly", file: "config/src/models.ts", type: BindingError,
+        expect: /not directly constructible/,
+        fire: () => new (EvalAttestation as never as new (...a: unknown[]) => unknown)(Symbol("nope"), "r", "m", []) },
+      { name: "attestEvalRun refuses an unknown role", file: "config/src/models.ts", type: BindingError,
+        expect: /attestEvalRun: unknown role/, fire: () => attestEvalRun("no-such-role", "qwen-72b", []) },
+      { name: "attestEvalRun refuses an unknown model", file: "config/src/models.ts", type: BindingError,
+        expect: /attestEvalRun: unknown model/, fire: () => attestEvalRun("genome-tagger", "no-such-model", []) },
+      { name: "eval outcomes must be an array", file: "config/src/models.ts", type: BindingError,
+        expect: /eval outcomes must be an array/,
+        fire: () => attestEvalRun("genome-tagger", "qwen-72b", null as never) },
+      { name: "an eval run cannot repeat a case id", file: "config/src/models.ts", type: BindingError,
+        expect: /eval run repeats a case id/, fire: () => {
+          const id = GOLDEN_SET_CASE_IDS["genome-tagger"]![0]!;
+          attestEvalRun("genome-tagger", "qwen-72b", [
+            { caseId: id, passed: true },
+            { caseId: id, passed: true },
+          ]);
+        } },
+      { name: "an eval run must cover the declared golden set", file: "config/src/models.ts", type: BindingError,
+        expect: /does not cover role/, fire: () =>
+          attestEvalRun("genome-tagger", "qwen-72b", [
+            { caseId: GOLDEN_SET_CASE_IDS["genome-tagger"]![0]!, passed: true },
+          ]) },
+      { name: "every eval outcome records a boolean", file: "config/src/models.ts", type: BindingError,
+        expect: /boolean pass\/fail per case/, fire: () =>
+          attestEvalRun(
+            "genome-tagger",
+            "qwen-72b",
+            GOLDEN_SET_CASE_IDS["genome-tagger"]!.map((caseId) => ({ caseId, passed: "yes" as never })),
+          ) },
+      { name: "a literal is not evidence an eval ran", file: "config/src/models.ts", type: BindingError,
+        expect: /a literal is not evidence an eval ran/, fire: () =>
+          bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", { role: "genome-tagger", modelId: "qwen-72b" } as never) },
+      { name: "an attestation for another role does not bind", file: "config/src/models.ts", type: BindingError,
+        expect: /eval result is for role/, fire: () =>
+          bindRole(ROLE_BINDINGS, "hello-world", "qwen-72b", genuineAttestation()) },
+      { name: "an attestation for another model does not bind", file: "config/src/models.ts", type: BindingError,
+        expect: /eval result is for model/, fire: () =>
+          bindRole(ROLE_BINDINGS, "genome-tagger", "llama-70b", genuineAttestation()) },
+      { name: "a binding naming an unknown model is refused", file: "config/src/models.ts", type: BindingError,
+        expect: /names unknown model/, fire: () =>
+          validateBindings({ ...ROLE_BINDINGS, "genome-tagger": "no-such-model" } as never) },
+      { name: "a declared role must hold a binding", file: "config/src/models.ts", type: BindingError,
+        expect: /is declared but unbound/, fire: () => {
+          const missing = { ...ROLE_BINDINGS } as Record<string, string>;
+          delete missing["genome-tagger"];
+          validateBindings(missing as never);
+        } },
+      { name: "a binding for an unknown role is refused", file: "config/src/models.ts", type: BindingError,
+        expect: /binding exists for unknown role/, fire: () =>
+          validateBindings({ ...ROLE_BINDINGS, "ghost-role": "qwen-72b" } as never) },
+      { name: "a builder with no adversary is refused", file: "config/src/models.ts", type: BindingError,
+        expect: /binds a builder with no adversary/, fire: () => {
+          const keep = ([role]: [string, unknown]) =>
+            (ROLE_CARDS[role] as { side: string } | undefined)?.side !== "adversary";
+          const cards = Object.fromEntries(Object.entries(ROLE_CARDS).filter(keep));
+          const bindings = Object.fromEntries(Object.entries(ROLE_BINDINGS).filter(keep));
+          validateBindings(bindings as never, cards as never);
+        } },
+      { name: "a builder and adversary sharing a family is refused", file: "config/src/models.ts", type: BindingError,
+        expect: /family-diversity violation/, fire: () => {
+          const sameFamily = { ...ROLE_BINDINGS } as Record<string, string>;
+          for (const [role, card] of Object.entries(ROLE_CARDS)) {
+            if ((card as { side: string }).side === "adversary") sameFamily[role] = sameFamily["genome-tagger"]!;
+          }
+          validateBindings(sameFamily as never);
+        } },
+      { name: "bindRole refuses an unknown role", file: "config/src/models.ts", type: BindingError,
+        expect: /bindRole: unknown role/, fire: () =>
+          bindRole(ROLE_BINDINGS, "no-such-role", "qwen-72b", genuineAttestation()) },
+      { name: "bindRole refuses an unknown model", file: "config/src/models.ts", type: BindingError,
+        expect: /bindRole: unknown model/, fire: () =>
+          bindRole(ROLE_BINDINGS, "genome-tagger", "no-such-model", genuineAttestation()) },
+      { name: "a model below the role threshold does not bind", file: "config/src/models.ts", type: BindingError,
+        expect: /no pass, no bind/, fire: () =>
+          bindRole(
+            ROLE_BINDINGS,
+            "genome-tagger",
+            "qwen-72b",
+            attestEvalRun(
+              "genome-tagger",
+              "qwen-72b",
+              GOLDEN_SET_CASE_IDS["genome-tagger"]!.map((caseId) => ({ caseId, passed: false })),
+            ),
+          ) },
+
+      // ---- engine/src/spend-ledger.ts, reached only through the meter ----
+      { name: "a caps resolver returning nothing refuses spend", file: "engine/src/spend-ledger.ts",
+        type: MeterUnavailableError, expect: /caps resolver returned no ceilings/,
+        fire: () => new InMemorySpendLedger(() => 0, (() => undefined) as never).reserve("pulsern", 1, {}) },
+      { name: "a backwards clock is refused", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /clock moved backwards into a closed accounting day/, fire: () => {
+          let t = Date.parse("2026-08-17T16:00:00Z");
+          const m = memoryMeter(() => t, () => effectiveAiCapsUsd("pulsern"));
+          m.settle(m.reserve("pulsern", 1));
+          t = Date.parse("2026-08-16T16:00:00Z");
+          m.reserve("pulsern", 1);
+        } },
+
       // ---- config/src/caps.ts ----
-      { name: "a malformed narrowed cap is refused", type: CapError,
+      { name: "a malformed narrowed cap is refused", file: "config/src/caps.ts", type: CapError,
         expect: /is not a finite positive number/,
         fire: () => effectiveAiCapsUsd("fixture-testco", { "fixture-testco": { dailyAiSpendUsd: Number.NaN } }) },
-      { name: "a cap lookup with no clientId is refused", type: CapError,
+      { name: "a cap lookup with no clientId is refused", file: "config/src/caps.ts", type: CapError,
         expect: /clientId required for cap lookup/, fire: () => getCaps("") },
-      { name: "an unknown client has no caps", type: CapError,
+      { name: "an unknown client has no caps", file: "config/src/caps.ts", type: CapError,
         expect: /no caps configured for client/, fire: () => getCaps("never-onboarded-sweep") },
-      { name: "a client with no accounting zone is refused", type: CapError,
+      { name: "a client with no accounting zone is refused", file: "config/src/caps.ts", type: CapError,
         expect: /no accounting timezone configured/, fire: () => assertUsableZone(undefined, "x") },
-      { name: "an unresolvable accounting zone is refused", type: CapError,
+      { name: "an unresolvable accounting zone is refused", file: "config/src/caps.ts", type: CapError,
         expect: /is not a resolvable IANA timezone/, fire: () => assertUsableZone("Mars/Olympus", "x") },
-      { name: "a hard ad ceiling below the pacing target is refused", type: CapError,
+      { name: "a hard ad ceiling below the pacing target is refused", file: "config/src/caps.ts", type: CapError,
         expect: /hardDailyAdSpendUsd is below the daily pacing target/,
         fire: () => assertCapsCoherent({ ...getCaps("pulsern"), hardDailyAdSpendUsd: 1, dailyAdSpendUsd: 2 }, "x") },
-      { name: "a daily AI cap above the monthly one is refused", type: CapError,
+      { name: "a daily AI cap above the monthly one is refused", file: "config/src/caps.ts", type: CapError,
         expect: /exceeds the monthly AI ceiling/,
         fire: () => assertCapsCoherent({ ...getCaps("pulsern"), dailyAiSpendUsd: 500, monthlyAiSpendUsd: 100 }, "x") },
-      { name: "an unsigned client cannot spend", type: CapError,
-        expect: /human sign-off/, fire: () => effectiveAiCapsUsd("fixture-unsigned") },
-      { name: "a fixture signature does not sign a real client", type: CapError,
+      { name: "an unsigned client cannot spend", file: "config/src/caps.ts", type: CapError,
+        expect: /caps lack human sign-off/, fire: () => effectiveAiCapsUsd("fixture-unsigned") },
+      { name: "a fixture signature does not sign a real client", file: "config/src/caps.ts", type: CapError,
         expect: /does not sign a real client/,
         fire: () => assertCapsUsable(getCaps("fixture-testco"), "a-real-client") },
     ];
@@ -804,12 +964,37 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
      * `DISCLOSED` with the ledger row that explains why it cannot be driven.
      * A guard added tomorrow fails this the day it lands. */
     const enumerated = moneyPathGuards(new URL("../../../", import.meta.url));
-    expect(enumerated.length, "no guards enumerated — this check would pass vacuously").toBeGreaterThan(40);
+    expect(enumerated.length, "no guards enumerated — this check would pass vacuously").toBeGreaterThan(60);
 
     /** Guards with no reachable input, each pointing at the row that says so.
      * "Deleted or disclosed, never left in place" — this is the disclosed half,
      * and the row is checked to exist rather than taken on trust. */
     const DISCLOSED: ReadonlyArray<{ signature: RegExp; row: string; why: string }> = [
+      {
+        signature: /slot is occupied by an object this module did not create/,
+        row: "L31",
+        why:
+          "reachable only in a process whose ledger slot is still EMPTY. This file fills it (every fixture " +
+          "calls resetProcessLedgerForTests), and the slot is non-configurable once filled, so no input from " +
+          "here can reach it. It is driven for real in engine/test/ledger-slot.test.ts, which imports the " +
+          "module only after planting an occupant — a separate FILE because vitest isolates by file and a " +
+          "fresh process is the input this guard needs",
+      },
+      {
+        signature: /declares no golden set/,
+        row: "L19",
+        why:
+          "every role in ROLE_CARDS declares a golden set, so the call site has no violating input — the same " +
+          "class as L19's assertCapsCoherent call site. Planting a role with no golden set to make it fire " +
+          "would mean shipping a broken registry as test scaffolding",
+      },
+      {
+        signature: /has no binding/,
+        row: "L19",
+        why:
+          "`familyOf` is only ever called with roles taken from the bindings object's OWN keys, so its " +
+          "no-binding branch has no reachable input. Same class as the row above",
+      },
       {
         signature: /ledger is corrupt/,
         row: "L23",
@@ -818,10 +1003,40 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     ];
 
     const ledgerText = readFileSync(new URL("../../../reports/LIVE_VERIFICATION_LEDGER.md", import.meta.url), "utf8");
+    /** COVERAGE IS ONE-TO-ONE. It was `guards.some(entry => entry.expect.test(...))`
+     * — a substring match — so a new guard whose message merely CONTAINED an
+     * existing entry's phrase counted as driven, by an entry that fires a
+     * different guard in a different file (adversary finding R13-06 leg B).
+     * An entry now has to name exactly one guard, and a guard exactly one
+     * entry. Ambiguity in either direction is a failure, not a pass. */
+    const hitsFor = (entry: { file: string; expect: RegExp }) =>
+      enumerated.filter((g) => g.file === entry.file && entry.expect.test(g.signature));
+    const ambiguous: string[] = [];
+    for (const entry of guards) {
+      const hits = hitsFor(entry);
+      if (hits.length > 1) {
+        ambiguous.push(
+          `${entry.name} matches ${hits.length} guards: ${hits.map((h) => `${h.file}:${h.line}`).join(", ")}`,
+        );
+      }
+    }
+    expect(
+      ambiguous,
+      `these sweep entries match more than one guard, so a guard is counted as driven by an entry that fires a ` +
+        `different one — tighten the regex until it names exactly one:\n  ${ambiguous.join("\n  ")}`,
+    ).toEqual([]);
+    /** THE AMBIGUITY DETECTOR'S RED-PROOF. An empty list means nothing unless
+     * the detector can produce a non-empty one: a deliberately loose entry —
+     * one whose regex matches every guard in a file — must be reported. */
+    expect(
+      hitsFor({ file: enumerated[0]!.file, expect: /./ }).length,
+      "the ambiguity detector cannot see an entry that matches many guards",
+    ).toBeGreaterThan(1);
+
     const uncovered: string[] = [];
     const disclosedHits = new Set<string>();
     for (const g of enumerated) {
-      if (guards.some((entry) => entry.expect.test(g.signature))) continue;
+      if (guards.some((entry) => hitsFor(entry).includes(g))) continue;
       const disclosure = DISCLOSED.find((d) => d.signature.test(g.signature));
       if (disclosure !== undefined) {
         expect(ledgerText, `${disclosure.row} is cited as the disclosure for a guard but is not in the ledger`).toContain(
@@ -845,7 +1060,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     ).toEqual([]);
     // …and every entry must correspond to a guard that still exists, or the
     // list drifts into describing code that is gone.
-    const stale = guards.filter((entry) => !enumerated.some((g) => entry.expect.test(g.signature)));
+    const stale = guards.filter((entry) => !enumerated.some((g) => g.file === entry.file && entry.expect.test(g.signature)));
     expect(
       stale.map((e) => e.name),
       "these sweep entries match no guard in the source — the code moved and the entry is now fiction",
@@ -902,7 +1117,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     /** The brand still discriminates, which is what makes `llm()`'s refusal a
      * live guard rather than a formality. */
     expect(isFrozenCapsMeter(new FrozenCapsSpendMeter())).toBe(true);
-    expect(isFrozenCapsMeter(new MemorySpendMeter(() => 0, () => effectiveAiCapsUsd("pulsern")))).toBe(false);
+    expect(isFrozenCapsMeter(memoryMeter(() => 0, () => effectiveAiCapsUsd("pulsern")))).toBe(false);
   });
 
   /** THE TEST SEAM DOES NOT REACH THE MONEY PATH.
@@ -915,19 +1130,75 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
   it("no production module reaches the ledger's test-only reset", () => {
     // spend-ledger.ts DEFINES it; naming it there is the point.
     const reaches = (name: string, src: string) => name !== "spend-ledger.ts" && src.includes("resetProcessLedgerForTests");
+    /** RECURSIVE, AND EVERY MODULE EXTENSION. It walked ONE level and `.ts`
+     * only, under a comment claiming "a module added tomorrow is covered" —
+     * so `engine/src/money/roll.ts` and `engine/src/roll.mjs` were both blind.
+     * r12 reported it with a measured table; it was not fixed, and r13
+     * reproduced it by re-running the same table (adversary findings R12-01
+     * leg B, R13-09). */
     const roots = [new URL("../../src/", import.meta.url), new URL("../../../config/src/", import.meta.url)];
     const offenders: string[] = [];
     let scanned = 0;
-    for (const root of roots) {
-      for (const f of readdirSync(root).filter((n) => n.endsWith(".ts"))) {
-        scanned += 1;
-        if (reaches(f, readFileSync(new URL(f, root), "utf8"))) offenders.push(`${root.pathname}${f}`);
+    /** The walk is a FUNCTION over a directory reader, so its recursion and its
+     * extension set can be driven against a synthetic tree — a mutation that
+     * makes it shallow, or narrows it back to `.ts`, is then caught here
+     * instead of waiting for a real nested offender to exist. */
+    type Entry = { name: string; dir: boolean };
+    const walkWith = (
+      list: (path: string) => Entry[],
+      read: (path: string) => string,
+      dir: string,
+      prefix: string,
+      hit: (rel: string) => void,
+      count: () => void,
+    ): void => {
+      for (const e of list(dir)) {
+        if (e.dir) {
+          walkWith(list, read, `${dir}${e.name}/`, `${prefix}${e.name}/`, hit, count);
+          continue;
+        }
+        if (!/\.(?:ts|mts|cts|js|mjs|cjs)$/.test(e.name)) continue;
+        count();
+        if (reaches(e.name, read(`${dir}${e.name}`))) hit(`${prefix}${e.name}`);
       }
+    };
+    for (const root of roots) {
+      walkWith(
+        (d) => readdirSync(new URL(d), { withFileTypes: true }).map((e) => ({ name: e.name, dir: e.isDirectory() })),
+        (f) => readFileSync(new URL(f), "utf8"),
+        root.href,
+        "",
+        (rel) => offenders.push(rel),
+        () => {
+          scanned += 1;
+        },
+      );
     }
     expect(scanned, "no production modules found — this test would pass vacuously").toBeGreaterThan(8);
     expect(offenders, `production code can wipe the spend ledger:\n  ${offenders.join("\n  ")}`).toEqual([]);
     // THE DETECTOR'S RED-PROOF. An empty offender list means nothing unless the
     // detector can produce a non-empty one (standing rule, after R9-01).
+    /** THE WALK'S RED-PROOF, on a synthetic tree: a nested module and an `.mjs`
+     * module must BOTH be found. Both were blind for two rounds under a comment
+     * claiming "a module added tomorrow is covered" (R12-01 leg B, R13-09). */
+    const fake: Record<string, Entry[]> = {
+      "/": [{ name: "money", dir: true }, { name: "roll.mjs", dir: false }, { name: "notes.md", dir: false }],
+      "/money/": [{ name: "roll.ts", dir: false }],
+    };
+    const found: string[] = [];
+    let counted = 0;
+    walkWith(
+      (d) => fake[d] ?? [],
+      () => "resetProcessLedgerForTests",
+      "/",
+      "",
+      (rel) => found.push(rel),
+      () => {
+        counted += 1;
+      },
+    );
+    expect(found.sort(), "the walk is shallow, or narrowed to one extension").toEqual(["money/roll.ts", "roll.mjs"]);
+    expect(counted, "a non-module file was scanned, or a module was skipped").toBe(2);
     expect(reaches("gateway.ts", "import { resetProcessLedgerForTests } from './spend-ledger.ts';")).toBe(true);
     expect(reaches("gateway.ts", "import { processLedger } from './spend-ledger.ts';")).toBe(false);
     expect(reaches("spend-ledger.ts", "export function resetProcessLedgerForTests() {}")).toBe(false);
@@ -956,7 +1227,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     // a dynamic import has an inferred type.
     const assertUsableZone: (zone: unknown, clientId: string) => asserts zone is string = caps.assertUsableZone;
     const { FrozenCapsSpendMeter, MemorySpendMeter } = await import("../../src/spend-meter.ts");
-    const { processLedger, resetProcessLedgerForTests: reset } = await import("../../src/spend-ledger.ts");
+    const { InMemorySpendLedger, processLedger, resetProcessLedgerForTests: reset } = await import("../../src/spend-ledger.ts");
     const { requireReservingMeter } = await import("../../src/gateway.ts");
 
     const clients = Object.keys(CAPS_TABLE);
@@ -1008,18 +1279,114 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       },
       {
         row: "L30",
-        claim: "the production meter takes no clock argument, so the clock-family guards are unreachable through llm()",
-        holds: () => FrozenCapsSpendMeter.length === 1 && MemorySpendMeter.length >= 2,
+        claim: "the clock-family guards cannot be reached through a production meter, because it takes no clock",
+        /** `Function.length` is ADJACENT to the row's claim, not the claim —
+         * a reader of the ledger would believe reachability had been executed
+         * (adversary finding R13-07 leg C). Reachability is what is tested:
+         * a production meter offers no seam to move time through, and the
+         * guards fire on the ledger a test builds for itself. */
+        holds: () => {
+          if (FrozenCapsSpendMeter.length !== 1) return false;
+          reset();
+          const before = new FrozenCapsSpendMeter().todayUsd("fixture-testco");
+          // A backwards clock is refused — on a ledger a TEST constructs.
+          let t = Date.parse("2026-08-17T16:00:00Z");
+          const led = new InMemorySpendLedger(() => t, () => effectiveAiCapsUsd("pulsern"));
+          const m = new MemorySpendMeter(led);
+          m.settle(m.reserve("pulsern", 1));
+          t = Date.parse("2026-08-16T16:00:00Z");
+          let refused = false;
+          try {
+            m.reserve("pulsern", 1);
+          } catch {
+            refused = true;
+          }
+          // …and the production meter's own reading is untouched by any of it.
+          return refused && new FrozenCapsSpendMeter().todayUsd("fixture-testco") === before;
+        },
       },
       {
         row: "L31",
-        claim: "the SpendLedger contract declares no balance-write primitive",
-        holds: () => !/\bset(?:Committed|Reserved)Micros\s*\(/.test(contract),
+        claim: "the SpendLedger contract declares no way to lower a committed balance",
+        /** THE ROW STATES A CAPABILITY; THIS USED TO TEST A SPELLING. It grepped
+         * the contract for the two method names R12-01 happened to use, and
+         * R13-01 then showed the contract declared a balance-write anyway —
+         * `reserve(-N)` followed by `settle`. The clearest single illustration
+         * in the tree of the recurring root cause (adversary finding R13-07 leg
+         * B). Executed now: fill the day, run the sequence, read the balance. */
+        holds: () => {
+          reset();
+          const meter = new FrozenCapsSpendMeter();
+          meter.settle(meter.reserve("fixture-testco", 0.02));
+          const before = meter.todayUsd("fixture-testco");
+          const handle = {};
+          try {
+            processLedger().reserve("fixture-testco", -20_000, handle);
+            processLedger().settle(handle);
+          } catch {
+            /* the refusal is the property */
+          }
+          const after = new FrozenCapsSpendMeter().todayUsd("fixture-testco");
+          reset();
+          return after === before;
+        },
       },
       {
         row: "L31",
         claim: "the process ledger is keyed process-wide, not per module instance",
-        holds: () => /Symbol\.for\(/.test(ledgerSrc),
+        /** DRIVEN, NOT GREPPED. This was `/Symbol\.for\(/.test(ledgerSrc)` — a
+         * substring test over the file — so reverting the slot to a
+         * module-scoped const while leaving the string in a COMMENT kept the
+         * row green and false (adversary finding R13-07 leg A). The registry
+         * is what the row claims, so the registry is what is read. */
+        holds: () => {
+          const g = globalThis as unknown as Record<symbol, unknown>;
+          return g[Symbol.for("fullburn.spend-ledger.process")] === processLedger();
+        },
+      },
+      {
+        row: "L21",
+        claim: "a reservation handle is honoured by IDENTITY — a forged or foreign handle settles nothing",
+        holds: () => {
+          reset();
+          const meter = new FrozenCapsSpendMeter();
+          const real = meter.reserve("fixture-testco", 0.01);
+          const forged = { ...real };
+          const settledForged = processLedger().settle(forged);
+          const settledReal = processLedger().settle(real);
+          reset();
+          return settledForged === null && settledReal !== null;
+        },
+      },
+      {
+        row: "L23",
+        claim: "the corrupt-ledger guard has no reachable input, because no contract call can store a negative",
+        /** L23 named `#read` and `#close`, neither of which exists, and R13-01
+         * showed a negative COULD arise and the guard DID fire — so the row was
+         * both stale in its reasons and false in its conclusion (R13-07 leg D).
+         * The sign check at the boundary is what makes it true again, and this
+         * is the test that says so. */
+        holds: () => {
+          reset();
+          for (const micros of [-1, -1_000_000, 0, 0.5, Number.NaN, Number.MAX_SAFE_INTEGER + 2]) {
+            try {
+              processLedger().reserve("fixture-testco", micros, {});
+            } catch {
+              continue; // refused at the boundary, which is the point
+            }
+            return false; // accepted an amount that cannot be money
+          }
+          const readable = (() => {
+            try {
+              new FrozenCapsSpendMeter().todayUsd("fixture-testco");
+              return true;
+            } catch {
+              return false;
+            }
+          })();
+          reset();
+          return readable;
+        },
       },
       {
         row: "L14",
@@ -1031,13 +1398,24 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const local = new Intl.DateTimeFormat("en-CA", { timeZone: zone }).format(instant);
           const utc = new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(instant);
           if (local === utc) return false; // the fixture stopped discriminating
-          reset();
-          const m = new MemorySpendMeter(() => instant, () => effectiveAiCapsUsd("pulsern"), processLedger());
+          // Period KEYS are no longer addressable from outside the ledger
+          // (R13-01), so the client-local day is proved by DRIVING the clock
+          // across the two candidate midnights instead of by reading a key.
+          const localMidnightUtc = Date.parse(`${local}T00:00:00Z`);
+          const led = new InMemorySpendLedger(() => instant, () => effectiveAiCapsUsd("pulsern"));
+          const m = new MemorySpendMeter(led);
           m.settle(m.reserve("pulsern", 1));
-          // The spend landed on the CLIENT's day, so reading the UTC day is $0.
-          const onLocalDay = processLedger().committedMicros("pulsern", `d:${local}|pulsern`);
-          const onUtcDay = processLedger().committedMicros("pulsern", `d:${utc}|pulsern`);
-          return onLocalDay === 1_000_000 && onUtcDay === 0;
+          const spentOnClientDay = led.committedMicros("pulsern", "day") === 1_000_000;
+          // The SAME instant read against a UTC-bucketing ledger lands on the
+          // next day, so the two are genuinely different answers.
+          const utcLed = new InMemorySpendLedger(() => instant, () => ({
+            ...effectiveAiCapsUsd("pulsern"),
+            timeZone: "UTC",
+          }));
+          const utcMeter = new MemorySpendMeter(utcLed);
+          utcMeter.settle(utcMeter.reserve("pulsern", 1));
+          const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
+          return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
         },
       },
     ];
@@ -1091,7 +1469,11 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       { file: "departed-contract.test.ts", module: "../src/spend-meter.ts", row: "L32" },
     ];
     const ledgerText = readFileSync(new URL("../../../reports/LIVE_VERIFICATION_LEDGER.md", import.meta.url), "utf8");
-    const testRoot = new URL("../", import.meta.url);
+    /** EVERY TEST TREE IN THE WORKSPACE. L32 said "the whole test tree" and the
+     * walk started at `engine/test/`, so `config/test/` could mock
+     * `config/src/caps.ts` — the Class-2 money file — with no declaration
+     * anywhere (adversary finding R13-10). */
+    const testRoots = [new URL("../", import.meta.url), new URL("../../../config/test/", import.meta.url)];
     const found: Array<{ file: string; module: string }> = [];
     let scanned = 0;
     const walk = (dir: URL, prefix: string) => {
@@ -1117,8 +1499,29 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         }
       }
     };
-    walk(testRoot, "");
+    const perRoot = testRoots.map((r) => {
+      const before = found.length;
+      let seenHere = 0;
+      const countBefore = scanned;
+      walk(r, "");
+      seenHere = scanned - countBefore;
+      void before;
+      return seenHere;
+    });
     expect(scanned, "no test files scanned — this check would pass vacuously").toBeGreaterThan(15);
+    /** BOTH ROOTS, PROVED. L32 said "the whole test tree" while the walk started
+     * at `engine/test/`, so `config/test/` could mock the Class-2 caps file
+     * undeclared (R13-10). Counting files per root is what makes the claim
+     * checkable rather than a sentence. */
+    expect(testRoots.length, "a test root was dropped from the list").toBeGreaterThan(1);
+    // …and every root in the list was actually WALKED. Checking the list alone
+    // let a mutation walk one root while the list still named two.
+    expect(perRoot.length, "the walk visited fewer roots than the list names").toBe(testRoots.length);
+    // Counted BY THE WALK ITSELF, not by a second traversal beside it: a walk
+    // that skips a root reports zero here, which is what R13-10 was.
+    perRoot.forEach((n, i) => {
+      expect(n, `the walk visited no files under ${testRoots[i]!.pathname} — that root is not being scanned`).toBeGreaterThan(0);
+    });
 
     const undeclared = found.filter(
       (f) => !ALLOWED.some((a) => f.file.endsWith(a.file) && a.module === f.module),

@@ -39,8 +39,8 @@ const VITEST_BIN = `${ROOT}/node_modules/vitest/vitest.mjs`;
 
 const MUTATIONS = [
   // ---- r4 findings ----
-  ["N-01 clock default", "engine/src/spend-meter.ts", "constructor(now: () => number, capsFor: CapsResolver, ledger: SpendLedger = new InMemorySpendLedger()) {", "constructor(now: () => number = () => 0, capsFor: CapsResolver, ledger: SpendLedger = new InMemorySpendLedger()) {"],
-  ["N-01 clock type guard", "engine/src/spend-meter.ts", 'if (typeof now !== "function") {', "if (false) {"],
+  ["N-01 clock default", "engine/src/spend-ledger.ts", "  constructor(now: () => number, capsFor: CapsResolver) {", "  constructor(now = () => 0, capsFor) {"],
+  ["N-01 clock type guard", "engine/src/spend-ledger.ts", 'if (typeof now !== "function") {', "if (false) {"],
   // N-09 moved into the ledger with the arithmetic (R12-01): held money must be
   // visible whatever DAY it was reserved on. The mutation scopes it to a single
   // period, which is exactly N-09's defect one layer down.
@@ -75,17 +75,17 @@ const MUTATIONS = [
   // ---- r7 findings (cross-family review) ----
   ["R7-01 opener pattern covers markup", "engine/scripts/gate-lib.mjs", "  const tag = /<[!/?a-zA-Z]/.exec(text);", "  const tag = /<\\/?[a-zA-Z][^>]*>/.exec(text);"],
   ["R7-01 invisible characters refused", "engine/scripts/gate-lib.mjs", "  if (/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ufeff]/.test(reportContent)) {", "  if (false) {"],
-  ["R7-02 zone-bucketed day key", "engine/src/spend-meter.ts", "  return new Intl.DateTimeFormat(\"en-CA\", {", "  void timeZone; return new Date(nowMs).toISOString().slice(0, 10); return new Intl.DateTimeFormat(\"en-CA\", {"],
+  ["R7-02 zone-bucketed day key", "engine/src/trusted-clock.ts", "  return new Intl.DateTimeFormat(\"en-CA\", {", "  void timeZone; return new Date(nowMs).toISOString().slice(0, 10); return new Intl.DateTimeFormat(\"en-CA\", {"],
   ["R7-02 zone travels with the ceilings", "config/src/caps.ts", "  return Object.freeze({ dailyUsd, monthlyUsd, timeZone: caps.ianaTimeZone });", "  return Object.freeze({ dailyUsd, monthlyUsd, timeZone: \"UTC\" });"],
   // R7-02's zone VALIDATION call is not listed, for the reason ledger L19
   // records about assertCapsCoherent: every client in the frozen table declares
   // a resolvable zone, so removing the call from getCaps changes nothing
   // observable. The check itself is driven directly in locks-r7 and a bad zone
   // is refused at reserve() time. Disclosed in L25 rather than faked.
-  ["R7-03 backwards clock refused", "engine/src/spend-meter.ts", "    if (seen !== undefined && day < seen) {", "    if (false) {"],
-  ["R7-03 non-finite instant refused", "engine/src/spend-meter.ts", "  if (!Number.isFinite(nowMs)) {", "  if (false) {"],
-  ["R7-06 meter owns the ceilings", "engine/src/spend-meter.ts", "    const caps = this.#capsFor(clientId);", "    const caps = arguments[2] ?? this.#capsFor(clientId);"],
-  ["R7-06 resolver required", "engine/src/spend-meter.ts", "    if (typeof capsFor !== \"function\") {", "    if (false) {"],
+  ["R7-03 backwards clock refused", "engine/src/spend-ledger.ts", "    if (seen !== undefined && day < seen) {", "    if (false) {"],
+  ["R7-03 non-finite instant refused", "engine/src/trusted-clock.ts", "  if (!Number.isFinite(nowMs)) {", "  if (false) {"],
+  ["R7-06 the ledger owns the ceilings", "engine/src/spend-ledger.ts", "    const caps = this.#capsFor(clientId, narrowing);", "    const caps = narrowing?.[clientId] ?? this.#capsFor(clientId, narrowing);"],
+  ["R7-06 resolver required", "engine/src/spend-ledger.ts", "    if (typeof capsFor !== \"function\") {", "    if (false) {"],
   // R7-04: `departed` set BEFORE the transport call. The mutation restores
   // exactly N-08's shape — set it after the await — which is what the
   // cross-family review showed returns headroom for served requests.
@@ -133,7 +133,7 @@ const MUTATIONS = [
   // headroom, and the pin covered only reserve. Its successors are the two
   // R10-02 entries above, which mutate the freeze and the isFrozen check.
   ["R8-01 production meter is final", "engine/src/spend-meter.ts", "    if (new.target !== FrozenCapsSpendMeter) {", "    if (false) {"],
-  ["R8-01 caps come from the frozen table", "engine/src/spend-meter.ts", "    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());", "    super(trustedClock(), (clientId) => ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }), processLedger());"],
+  ["R8-01 caps come from the frozen table", "engine/src/spend-ledger.ts", "    effectiveAiCapsUsd(clientId, narrowing),", "    ({ ...effectiveAiCapsUsd(clientId, narrowing), dailyUsd: 1e9, monthlyUsd: 1e9 }),"],
   // R8-02: settle() takes one argument. The mutation restores the override.
   // Retargeted after R12-01 moved the arithmetic into the ledger. NOTE the
   // first retarget was itself a bad entry: it added an `arguments[1]` override
@@ -147,7 +147,7 @@ const MUTATIONS = [
     "      this.#committed.set(period, committed + Math.round(open.micros / 2));"],
   // R8-03: the MONTH key on its own. R7-02 was locked at day granularity only,
   // and this revert survived the full suite while reopening the $200 ceiling.
-  ["R8-03 zone-bucketed month key", "engine/src/spend-meter.ts", "  return zoneDayKey(nowMs, timeZone).slice(0, 7);", "  void timeZone; return new Date(nowMs).toISOString().slice(0, 7);"],
+  ["R8-03 zone-bucketed month key", "engine/src/trusted-clock.ts", "  return zoneDayKey(nowMs, timeZone).slice(0, 7);", "  void timeZone; return new Date(nowMs).toISOString().slice(0, 7);"],
   // R8-04: CODEOWNERS coverage, and the CI trigger that decides whether the
   // gate guarding it runs at all.
   ["R8-04 CODEOWNERS covers the tests", ".github/CODEOWNERS", "/fullburn/engine/test/              @ssb22inc", "# /fullburn/engine/test/            @ssb22inc"],
@@ -168,7 +168,7 @@ const MUTATIONS = [
   // zero files and reported clean.
   ["R8-07 missing root is an error", "engine/scripts/leak-check.mjs", "  if (!existsSync(repoRoot)) {\n    throw new Error(", "  if (false) {\n    throw new Error("],
   // R8-08: the ADVANCING half of the high-water mark.
-  ["R8-08 high-water mark advances", "engine/src/spend-meter.ts", "if (seen === undefined || day > seen) this.#ledger.setHighWater(clientId, day);", "if (seen === undefined) this.#ledger.setHighWater(clientId, day);"],
+  ["R8-08 high-water mark advances", "engine/src/spend-ledger.ts", "if (seen === undefined || day > seen) this.#highWater.set(clientId, day);", "if (seen === undefined) this.#highWater.set(clientId, day);"],
   // R8-09: the acceptance bar must be a stage, and must be able to fail.
   ["R8-09 harness fails the build", "engine/scripts/mutate-lib.mjs", "  if (survived > 0 || notFound > 0) {", "  if (false) {"],
   // The standing invariant, 2026-08-17: a tool that writes to the source tree
@@ -195,10 +195,10 @@ const MUTATIONS = [
   ["R10-02 the production meter is frozen", "engine/src/spend-meter.ts", "    Object.freeze(this);\n  }\n}", "  }\n}"],
   ["R10-02 settle refuses unavailable storage", "engine/src/spend-ledger.ts", "    this.#assertAvailable(open.clientId);\n    this.#open.delete(handle);\n    for (const period of", "    this.#open.delete(handle);\n    for (const period of"],
   ["R10-02 release refuses unavailable storage", "engine/src/spend-ledger.ts", "    this.#assertAvailable(open.clientId);\n    this.#open.delete(handle);\n    return open;", "    this.#open.delete(handle);\n    return open;"],
-  ["R10-03 the clock is anchored, not re-read", "engine/src/spend-meter.ts", "    return anchorWall + Number((mono - anchorMono) / 1_000_000n);", "    return Date.now();"],
-  ["R10-03 disagreeing time sources are refused", "engine/src/spend-meter.ts", "  if (hi - lo > ANCHOR_TOLERANCE_MS) {", "  if (false) {"],
-  ["R10-03 the monotonic source cannot go backwards", "engine/src/spend-meter.ts", "  if (mono < last) {", "  if (false) {"],
-  ["R10-03 the production meter uses the trusted clock", "engine/src/spend-meter.ts", "    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());", "    super(() => Date.now(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());"],
+  ["R10-03 the clock is anchored, not re-read", "engine/src/trusted-clock.ts", "    return anchorWall + Number((mono - anchorMono) / 1_000_000n);", "    return Date.now();"],
+  ["R10-03 disagreeing time sources are refused", "engine/src/trusted-clock.ts", "  if (hi - lo > ANCHOR_TOLERANCE_MS) {", "  if (false) {"],
+  ["R10-03 the monotonic source cannot go backwards", "engine/src/trusted-clock.ts", "  if (mono < last) {", "  if (false) {"],
+  ["R10-03 the process ledger uses the trusted clock", "engine/src/spend-ledger.ts", "  PROCESS_CLOCK ??= trustedClock();", "  PROCESS_CLOCK ??= () => Date.now();"],
   // ---- r9 findings ----
   // R9-03's await is NOT listed, and the reason is structural rather than
   // convenient. Its behaviour — a SIGINT stops the run and restores the tree —
@@ -272,12 +272,12 @@ const MUTATIONS = [
   ["R5-06 expiry comment-strip", "engine/test/e2e-variance.ts", "  return source.replace(/\\/\\*[\\s\\S]*?\\*\\//g, \"\").replace(/^\\s*\\/\\/.*$/gm, \"\");", "  return source;"],
   ["R5-07 assertCleanTree", "engine/scripts/adversary-gate.mjs", "  assertCleanTree(repoRoot);", "  void repoRoot;"],
   ["R5-07 reservedUsd required", "engine/src/gateway.ts", "    typeof meter.release !== \"function\" || typeof meter.reservedUsd !== \"function\"", "    typeof meter.release !== \"function\""],
-  ["R5-08 one clock read", "engine/src/spend-meter.ts", "      day: `d:${zoneDayKey(nowMs, timeZone)}|${clientId}`,\n      month: `m:${zoneMonthKey(nowMs, timeZone)}|${clientId}`,", "      day: `d:${zoneDayKey(this.#now(), timeZone)}|${clientId}`,\n      month: `m:${zoneMonthKey(this.#now(), timeZone)}|${clientId}`,"],
+  ["R5-08 one clock read", "engine/src/spend-ledger.ts", "      day: `d:${zoneDayKey(nowMs, caps.timeZone)}|${clientId}`,\n      month: `m:${zoneMonthKey(nowMs, caps.timeZone)}|${clientId}`,", "      day: `d:${zoneDayKey(this.#now(), caps.timeZone)}|${clientId}`,\n      month: `m:${zoneMonthKey(this.#now(), caps.timeZone)}|${clientId}`,"],
   // ---- H8 caps: the approved ceilings and the month-keyed accounting ----
-  ["H8 monthly ceiling unchecked", "engine/src/spend-ledger.ts", "    if (projectedMonth > req.monthlyCapMicros) {", "    if (false) {"],
+  ["H8 monthly ceiling unchecked", "engine/src/spend-ledger.ts", "    if (projectedMonth > monthlyCapMicros) {", "    if (false) {"],
   ["H8 month period dropped from settle", "engine/src/spend-ledger.ts", "    for (const period of [open.day, open.month]) {", "    for (const period of [open.day]) {"],
-  ["H8 month key equals day key", "engine/src/spend-meter.ts", "    return this.#periods(clientId, this.#zoneOf(clientId)).month;", "    return this.#periods(clientId, this.#zoneOf(clientId)).day;"],
-  ["H8 ceilings object not required", "engine/src/spend-meter.ts", "    if (caps === null || typeof caps !== \"object\") {", "    if (false) {"],
+  ["H8 month key equals day key", "engine/src/spend-meter.ts", "    return fromMicros(this.#ledger.committedMicros(clientId, \"month\"));", "    return fromMicros(this.#ledger.committedMicros(clientId, \"day\"));"],
+  ["H8 ceilings object not required", "engine/src/spend-ledger.ts", "    if (caps === null || typeof caps !== \"object\") {", "    if (false) {"],
   ["H8 monthly narrowing can widen", "config/src/caps.ts", "    return Math.min(ceiling, requested);", "    return requested;"],
   ["H8 sign-off check dropped", "config/src/caps.ts", "  assertCapsUsable(caps, clientId); // sign-off comes from the frozen table, always", "  void clientId;"],
   ["H8 hard-ceiling sanity check", "config/src/caps.ts", "  if (caps.hardDailyAdSpendUsd < caps.dailyAdSpendUsd) {", "  if (false) {"],
@@ -305,8 +305,8 @@ const MUTATIONS = [
   // ledger back and `new FrozenCapsSpendMeter()` per call mints a fresh $5/day
   // again — the measured attack, 300 dispatches against a frozen ceiling.
   ["R11-07 production meter shares the process ledger", "engine/src/spend-meter.ts",
-    "super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());",
-    "super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), new InMemorySpendLedger());"],
+    "    super(processLedger(), narrowing);",
+    "    super(new InMemorySpendLedger(() => Date.now(), (c) => effectiveAiCapsUsd(c, narrowing)), narrowing);"],
   // The process ledger is module-scoped. Hand out a fresh one per call and it
   // is the same defect one level down, with `processLedger()` still in place.
   ["R11-07 the process ledger is one object", "engine/src/spend-ledger.ts",
@@ -344,7 +344,7 @@ const MUTATIONS = [
   // R12-01: the ledger arrived as a public money-write primitive. The
   // arithmetic is inside it now, so a balance moves only through a cap check.
   ["R12-01 the ledger enforces the daily ceiling", "engine/src/spend-ledger.ts",
-    "    if (projectedDay > req.dailyCapMicros) {", "    if (false) {"],
+    "    if (projectedDay > dailyCapMicros) {", "    if (false) {"],
   // Reserved headroom is DERIVED from the open handles. Stored, it needed a
   // setter — and a setter is the primitive R12-01 exploited.
   ["R12-01 reserved headroom counts open handles", "engine/src/spend-ledger.ts",
@@ -357,8 +357,7 @@ const MUTATIONS = [
     "const LEDGER_SLOT = Symbol(\"fullburn.spend-ledger.process\");"],
   // R12-07: availability is per client, and a halt is audited.
   ["R12-07 availability is per client", "engine/src/spend-ledger.ts",
-    "  isAvailable(clientId: string): boolean {\n    return !this.#down.has(clientId);",
-    "  isAvailable(clientId: string): boolean {\n    void clientId;\n    return this.#down.size === 0;"],
+    "    if (this.#down.has(clientId)) {", "    if (this.#down.size > 0) {"],
   ["R12-07 a halt requires a reason", "engine/src/spend-ledger.ts",
     "    if (typeof reason !== \"string\" || reason.length === 0) {", "    if (false) {"],
   ["R12-07 a halt requires a client", "engine/src/spend-ledger.ts",
@@ -366,20 +365,23 @@ const MUTATIONS = [
     "    if (false) {\n      throw new MeterUnavailableError(\"setAvailable requires a clientId"],
   ["R12-07 the audit log is a copy", "engine/src/spend-ledger.ts",
     "    return this.#audit.slice();", "    return this.#audit;"],
-  ["R12-07 cross-tenant period reads are refused", "engine/src/spend-ledger.ts",
-    "  if (!period.endsWith(`|${clientId}`)) {", "  if (false) {"],
+  // R12-07's cross-tenant READ is closed by construction now: period keys never
+  // cross the contract at all, so there is no `assertOwnPeriod` left to mutate.
+  // What remains checkable is that a read is scoped to the client asked for.
+  ["R12-07 reads are scoped to their client", "engine/src/spend-ledger.ts",
+    "      if (e.clientId === clientId) micros += e.micros;", "      micros += e.micros;"],
   // R12-03: three guards that survived their own deletion against all 306
   // tests, with no entry and no disclosure.
-  ["R12-03 the anchor takes the median", "engine/src/spend-meter.ts",
+  ["R12-03 the anchor takes the median", "engine/src/trusted-clock.ts",
     "  return [...values].sort((a, b) => a - b)[1]!;", "  return values[0]!;"],
-  ["R12-03 a non-finite time source is refused", "engine/src/spend-meter.ts",
+  ["R12-03 a non-finite time source is refused", "engine/src/trusted-clock.ts",
     "    if (!Number.isFinite(r.ms)) {", "    if (false) {"],
   ["R12-03 a settle that cannot record refuses to release", "engine/src/gateway.ts",
     "    throw new MeterUnavailableError(\n      `spend was incurred but could not be recorded",
     "    void err;\n    return;\n    throw new MeterUnavailableError(\n      `spend was incurred but could not be recorded"],
   // R12-02: the sweep's POPULATION is read from source, not hand-written.
   ["R12-02 the sweep counts every enumerated guard", "engine/test/invariants/invariants.test.ts",
-    "      if (guards.some((entry) => entry.expect.test(g.signature))) continue;",
+    "      if (guards.some((entry) => hitsFor(entry).includes(g))) continue;",
     "      if (true) continue;"],
   ["R12-02 the enumerator reads every throw site", "engine/test/money-path-guards.ts",
     "  for (const m of source.matchAll(/throw new (\\w+)\\s*\\(/g)) {",
@@ -402,6 +404,58 @@ const MUTATIONS = [
   ["R11-05 money-path mocks are declared", "engine/test/invariants/invariants.test.ts",
     "          if (/\\/src\\//.test(target)) found.push({ file: `${prefix}${e.name}`, module: target });",
     "          void target;"],
+
+  // ---- r13 findings ----
+  // FOUR r13 ENTRIES WERE WRITTEN AND REMOVED, and the reason is the project's
+  // own doctrine rather than convenience: a mutation that deletes a single
+  // assertion inside a test, or targets a file the unit suite never runs, can
+  // only ever report SURVIVED. The harness said so. What IS listed below are
+  // mutations on production code and on checker MECHANISM — the loop, the walk,
+  // the resolver — each with a red-proof that exercises the mechanism, so the
+  // revert turns the suite red. (L19/L23's rule: an entry that always survives
+  // is noise, and noise in this table is how R9-01 hid.)
+  // R13-01: `reserve(-N)` + `settle` was a balance setter assembled from two
+  // contract calls. The sign is validated at the boundary now.
+  ["R13-01 the reservation sign is validated", "engine/src/spend-ledger.ts",
+    "    if (!Number.isSafeInteger(micros) || micros <= 0) {", "    if (false) {"],
+  // The ceilings are resolved INSIDE the ledger, from the frozen table.
+  ["R13-01 the ledger resolves its own ceilings", "engine/src/spend-ledger.ts",
+    "    const caps = this.#capsFor(clientId, narrowing);", "    const caps = narrowing?.[clientId] ?? this.#capsFor(clientId, narrowing);"],
+  // The periods are the ledger's, computed from ITS clock and the client zone.
+  ["R13-01 the ledger computes its own periods", "engine/src/spend-ledger.ts",
+    "    const nowMs = this.#now();", "    const nowMs = 0;"],
+  ["R13-01 the high-water ratchet is internal and forward-only", "engine/src/spend-ledger.ts",
+    "    if (seen !== undefined && day < seen) {", "    if (false) {"],
+  // R13-02: the process slot refuses an occupant it did not create.
+  ["R13-02 the ledger slot refuses a foreign occupant", "engine/src/spend-ledger.ts",
+    "    if (!marked) {", "    if (false) {"],
+  ["R13-02 the production ledger is frozen", "engine/src/spend-ledger.ts",
+    "  Object.freeze(fresh);", "  void fresh;"],
+  // R13-03: the disclosed residual carries a measuring test.
+  // R13-04: an unseen local module is unresolvable, not clean — trap #8.
+  ["R13-04 an unseen module is unresolvable", "engine/test/blocking-calls.ts",
+    "      if (child === undefined) {\n        unresolvable.push(`import from \"${spec}\" could not be followed — the module was not supplied`);\n        continue;\n      }",
+    "      if (child === undefined) {\n        continue;\n      }"],
+  // R13-05: the drill watches FILES after the signal, not the marker's path.
+  // R13-06: the population is derived from the import graph, and coverage is
+  // one-to-one rather than a substring match.
+  ["R13-06 the guard population follows imports", "engine/test/money-path-guards.ts",
+    "      const next = resolveSpecifier(m[1]!, file);\n      if (next !== null) stack.push(next);",
+    "      const next = resolveSpecifier(m[1]!, file);\n      void next;"],
+  ["R13-06 coverage is one-to-one", "engine/test/invariants/invariants.test.ts",
+    "      enumerated.filter((g) => g.file === entry.file && entry.expect.test(g.signature));",
+    "      enumerated.filter((g) => g.file === entry.file && entry.expect.test(g.signature)).slice(0, 1);"],
+  // R13-07: ledger claims are DRIVEN, not grepped.
+  // R13-09 / R13-10: both enumeration walks are recursive and cover every
+  // extension / every workspace test tree.
+  ["R13-09 the reset walk is recursive", "engine/test/invariants/invariants.test.ts",
+    "        if (e.dir) {\n          walkWith(list, read, `${dir}${e.name}/`, `${prefix}${e.name}/`, hit, count);\n          continue;\n        }",
+    "        if (e.dir) {\n          continue;\n        }"],
+  ["R13-09 the reset walk covers every module extension", "engine/test/invariants/invariants.test.ts",
+    "        if (!/\\.(?:ts|mts|cts|js|mjs|cjs)$/.test(e.name)) continue;\n        count();",
+    "        if (!/\\.ts$/.test(e.name)) continue;\n        count();"],
+  ["R13-10 the mock walk covers every test tree", "engine/test/invariants/invariants.test.ts",
+    "    const perRoot = testRoots.map((r) => {", "    const perRoot = [testRoots[0]!].map((r) => {"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

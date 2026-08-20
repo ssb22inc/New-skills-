@@ -1,7 +1,24 @@
 import { effectiveAiCapsUsd } from "@fullburn/config/caps";
 import type { GatewayTransport } from "../src/gateway.ts";
 import { FrozenCapsSpendMeter, MemorySpendMeter } from "../src/spend-meter.ts";
-import { processLedger, resetProcessLedgerForTests, type SpendLedger } from "../src/spend-ledger.ts";
+import {
+  InMemorySpendLedger,
+  processLedger,
+  resetProcessLedgerForTests,
+  type CapsResolver,
+  type SpendLedger,
+} from "../src/spend-ledger.ts";
+
+/** A TEST-ONLY METER OVER A TEST-ONLY LEDGER.
+ *
+ * The clock and the caps resolver moved into the ledger (R13-01), because a
+ * caller that supplies either one supplies the answer. Tests still need to
+ * drive time and to choose ceilings, so they build their own ledger and wrap it
+ * — `llm()` refuses any meter that is not a `FrozenCapsSpendMeter`, so this
+ * capability cannot reach the money path. */
+export function memoryMeter(now: () => number, capsFor: CapsResolver): MemorySpendMeter {
+  return new MemorySpendMeter(new InMemorySpendLedger(now, capsFor));
+}
 import { MemoryTraceSink } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 

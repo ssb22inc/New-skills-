@@ -121,8 +121,23 @@ function blockingImports(
     let childBlocking: Set<string> | null = null;
     if (!fromCp) {
       const child = graph.get(spec);
-      // A local module we were not given is not "clean", it is unknown.
-      if (child === undefined || seen.has(spec)) continue;
+      /** A LOCAL MODULE WE WERE NOT GIVEN IS UNKNOWN, NOT CLEAN.
+       *
+       * The comment above this line said exactly that, and the code below it
+       * did the opposite: `continue`. So a helper one directory away —
+       * `engine/scripts/helpers/blocking.mjs`, one line long — restored R9-03's
+       * fully synchronous runner with this check reporting `[]`, the invariant
+       * green and the whole suite green (adversary finding R13-04, the fourth
+       * consecutive round on this file). The graph was built from ONE directory
+       * and ONE extension; the path was the new spelling. */
+      if (child === undefined) {
+        unresolvable.push(`import from "${spec}" could not be followed — the module was not supplied`);
+        continue;
+      }
+      if (seen.has(spec)) {
+        unresolvable.push(`import from "${spec}" is a cycle this check cannot resolve`);
+        continue;
+      }
       childBlocking = blockingExports(child, graph, new Set([...seen, spec]), unresolvable);
       if (childBlocking.size === 0) continue;
     }

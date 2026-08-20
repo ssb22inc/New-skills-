@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 /** THE MONEY PATH'S GUARD POPULATION, ENUMERATED FROM SOURCE.
  *
@@ -19,12 +19,47 @@ import { readFileSync } from "node:fs";
  * tomorrow fails the sweep the day it lands, which is the only way a coverage
  * claim stays true. */
 
-export const MONEY_PATH_SOURCES = [
-  "engine/src/spend-meter.ts",
-  "engine/src/spend-ledger.ts",
-  "engine/src/gateway.ts",
-  "config/src/caps.ts",
-] as const;
+/** WHERE THE MONEY PATH STARTS. Everything reachable from here by static import
+ * is in the population; nothing is listed by hand.
+ *
+ * `MONEY_PATH_SOURCES` used to be a four-element literal array, and nothing
+ * checked that it was complete — so a new money-path module was simply absent
+ * from the population, and a guard inside it could be deleted with the suite
+ * green (adversary finding R13-06). A typed boundary is a boundary that goes
+ * stale on the next file. This one is derived from the import graph, so a
+ * module added tomorrow is in the population the moment `llm()` can reach it. */
+export const MONEY_PATH_ROOTS = ["engine/src/gateway.ts"] as const;
+
+/** Resolve an import specifier to a workspace-relative path, or null for one
+ * that leaves the workspace (`node:*`, `vitest`, bare packages). */
+export function resolveSpecifier(spec: string, fromFile: string): string | null {
+  if (spec.startsWith("@fullburn/config/")) return `config/src/${spec.slice("@fullburn/config/".length)}.ts`;
+  if (!spec.startsWith(".")) return null;
+  const dir = fromFile.split("/").slice(0, -1);
+  for (const part of spec.split("/")) {
+    if (part === "." || part === "") continue;
+    if (part === "..") dir.pop();
+    else dir.push(part);
+  }
+  return dir.join("/");
+}
+
+/** Every module `llm()` can reach by static import, transitively. */
+export function moneyPathModules(root: URL, exists: (f: string) => boolean, read: (f: string) => string): string[] {
+  const seen = new Set<string>();
+  const stack = [...MONEY_PATH_ROOTS] as string[];
+  while (stack.length > 0) {
+    const file = stack.pop()!;
+    if (seen.has(file) || !exists(file)) continue;
+    seen.add(file);
+    for (const m of read(file).matchAll(/from\s+["']([^"']+)["']/g)) {
+      const next = resolveSpecifier(m[1]!, file);
+      if (next !== null) stack.push(next);
+    }
+  }
+  void root;
+  return [...seen].sort();
+}
 
 export interface ThrowGuard {
   /** Workspace-relative source file. */
@@ -142,5 +177,7 @@ export function enumerateThrowGuards(file: string, source: string): ThrowGuard[]
 
 /** Every money-path guard, read from the tree. `root` is the workspace root. */
 export function moneyPathGuards(root: URL): ThrowGuard[] {
-  return MONEY_PATH_SOURCES.flatMap((f) => enumerateThrowGuards(f, readFileSync(new URL(f, root), "utf8")));
+  const exists = (f: string) => existsSync(new URL(f, root));
+  const read = (f: string) => readFileSync(new URL(f, root), "utf8");
+  return moneyPathModules(root, exists, read).flatMap((f) => enumerateThrowGuards(f, read(f)));
 }

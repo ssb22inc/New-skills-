@@ -73,14 +73,30 @@ describe("the resolver follows local re-exports and every call form (R12-04)", (
     }
   });
 
-  it("REFUSES a helper it was not given, and a helper that hides the import", () => {
+  it("REFUSES a helper it was not given — unknown is not clean", () => {
     const runner = 'import { runSync } from "./unknown.mjs";\nrunSync("x");';
-    // An unseen module contributes no binding, so the runner name is not
-    // flagged — but a helper that IS given and hides child_process behind a
-    // namespace import is refused rather than read as clean.
-    expect(blockingCalls(runner, runner)).toEqual([]);
+    /** THE COMMENT SAID THIS AND THE CODE DID THE OPPOSITE. `blockingImports`
+     * `continue`d on a module absent from the graph, so a one-line helper one
+     * directory away restored R9-03's synchronous runner with this check
+     * reporting `[]` and every gate green (adversary finding R13-04, the fourth
+     * consecutive round on this file). */
+    expect(blockingBindings(runner).unresolvable.length, "an unseen module was read as clean").toBeGreaterThan(0);
+    expect(blockingCalls(runner, runner).length).toBeGreaterThan(0);
+    // …and a helper that IS given but hides child_process behind a namespace
+    // import is refused too, rather than read as clean.
     const hiding = 'import * as cp from "node:child_process";\nexport const runSync = cp.spawnSync;';
     expect(blockingCalls(runner, runner, new Map([["./unknown.mjs", hiding]])).length).toBeGreaterThan(0);
+    // A module that IS given and genuinely imports nothing blocking stays clean,
+    // so this is a discrimination and not a refusal of everything.
+    const innocent = 'export const runSync = () => {};';
+    expect(blockingCalls(runner, runner, new Map([["./unknown.mjs", innocent]]))).toEqual([]);
+  });
+
+  it("follows a helper in a SUBDIRECTORY, which is how trap #8 was spelled", () => {
+    const helperSrc = 'export { spawnSync as runSync } from "node:child_process";';
+    const runner = 'import { runSync as runSuiteBlocking } from "./helpers/blocking.mjs";\nrunSuiteBlocking("x");';
+    const graph = new Map([["./helpers/blocking.mjs", helperSrc]]);
+    expect(blockingCalls(runner, runner, graph)).toEqual(["runSuiteBlocking"]);
   });
 
   it("still does not fire on the async APIs, so it discriminates", () => {

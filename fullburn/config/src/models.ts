@@ -168,8 +168,8 @@ const GENUINE = new WeakSet<EvalAttestation>();
  * set — no substituted set, no partial run, no duplicated case padding a score. */
 export function attestEvalRun(role: string, modelId: string, outcomes: readonly EvalCaseOutcome[]): EvalAttestation {
   const card = ownEntry(ROLE_CARDS, role);
-  if (card === undefined) throw new BindingError(`unknown role "${role}"`);
-  if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`unknown model "${modelId}"`);
+  if (card === undefined) throw new BindingError(`attestEvalRun: unknown role "${role}"`);
+  if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`attestEvalRun: unknown model "${modelId}"`);
   const declared = ownEntry(GOLDEN_SET_CASE_IDS, role);
   if (declared === undefined || declared.length === 0) {
     throw new BindingError(`role "${role}" declares no golden set — an eval over nothing proves nothing`);
@@ -269,8 +269,8 @@ export function bindRole(
   cards: Readonly<Record<string, RoleCard>> = ROLE_CARDS,
 ): RoleBindings {
   const card = ownEntry(cards, role);
-  if (card === undefined) throw new BindingError(`unknown role "${role}"`);
-  if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`unknown model "${modelId}"`);
+  if (card === undefined) throw new BindingError(`bindRole: unknown role "${role}"`);
+  if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`bindRole: unknown model "${modelId}"`);
   assertAttestation(evalResult, role, modelId);
   if (evalResult.score < card.evalThreshold) {
     throw new BindingError(

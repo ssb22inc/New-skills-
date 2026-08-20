@@ -10,8 +10,9 @@ import { TraceContext } from "../src/tracing.ts";
 import { checkAdversaryReport, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../scripts/scan-lib.mjs";
-import { TEST_CLIENT, capsFrom, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { TEST_CLIENT, capsFrom, capsOf, fixedCaps, makeDeps, memoryMeter, testClock } from "./helpers.ts";
 import type { SpendLedger } from "../src/spend-ledger.ts";
+import { InMemorySpendLedger } from "../src/spend-ledger.ts";
 
 /** LOCK TESTS — r4 findings (N-01 … N-11) plus the one r3 lock the r4 review
  * proved was not load-bearing.
@@ -32,10 +33,18 @@ describe("money — a DAILY cap cannot be constructed without a day (N-01)", () 
    *
    * MUTATION: restore `constructor(now: () => number = () => 0)`. */
   it("a meter cannot be built with no clock at all", () => {
-    const build = MemorySpendMeter as unknown as new (...a: unknown[]) => MemorySpendMeter;
-    expect(() => new build()).toThrow(MeterUnavailableError);
-    expect(() => new build(undefined)).toThrow(/requires a clock/);
-    expect(() => new build(12345)).toThrow(/requires a clock/);
+    // THE CLOCK MOVED INTO THE LEDGER (R13-01), because whoever supplies it
+    // decides how many ceilings exist — so this is where the guard lives now.
+    // The meter still refuses to exist without a ledger, which is the same
+    // property one layer out: there is no way to construct a metering object
+    // that has no day boundary.
+    const buildLedger = InMemorySpendLedger as unknown as new (...a: unknown[]) => unknown;
+    expect(() => new buildLedger()).toThrow(MeterUnavailableError);
+    expect(() => new buildLedger(undefined, () => fixedCaps())).toThrow(/requires a clock/);
+    expect(() => new buildLedger(12345, () => fixedCaps())).toThrow(/requires a clock/);
+    const buildMeter = MemorySpendMeter as unknown as new (...a: unknown[]) => MemorySpendMeter;
+    expect(() => new buildMeter()).toThrow(/requires a spend ledger/);
+    expect(() => new buildMeter(12345)).toThrow(/requires a spend ledger/);
   });
 
   /** MUTATION: as above — with the epoch default restored, `llm()` built on a
@@ -54,7 +63,7 @@ describe("money — a DAILY cap cannot be constructed without a day (N-01)", () 
   it("the cap binds, then rolls over on the day boundary", () => {
     let nowMs = Date.UTC(2026, 7, 15, 12, 0, 0);
     const caps = capsFrom(TEST_CLIENT);
-    const meter = new MemorySpendMeter(() => nowMs, caps);
+    const meter = memoryMeter(() => nowMs, caps);
     const cap = getCaps(TEST_CLIENT).dailyAiSpendUsd;
     const perCall = 0.01;
 
@@ -109,7 +118,7 @@ describe("money — held money is never invisible (N-09)", () => {
    * MUTATION: revert reservedUsd to `#read(this.#reservedMicros, this.#key(id))`. */
   it("an in-flight reservation survives a UTC midnight in reservedUsd()", () => {
     let nowMs = Date.UTC(2026, 7, 15, 23, 59, 0);
-    const meter = new MemorySpendMeter(() => nowMs, fixedCaps);
+    const meter = memoryMeter(() => nowMs, fixedCaps);
     const held = meter.reserve(TEST_CLIENT, 3);
     expect(meter.reservedUsd(TEST_CLIENT)).toBeCloseTo(3, 6);
 
@@ -123,7 +132,7 @@ describe("money — held money is never invisible (N-09)", () => {
   });
 
   it("another client's reservation is not visible on this client's reading", () => {
-    const meter = new MemorySpendMeter(testClock, fixedCaps);
+    const meter = memoryMeter(testClock, fixedCaps);
     meter.reserve("fixture-other", 2);
     expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
   });
@@ -497,7 +506,7 @@ describe("secrets — a quoted-evidence exemption cannot travel (N-06)", () => {
 describe("money — the range guards on the way in (R6-05)", () => {
   /** MUTATION: drop the safe-integer check from toMicros. */
   it("an amount too large for micro-dollar accounting refuses spend", () => {
-    const m = new MemorySpendMeter(() => Date.UTC(2026, 7, 16), capsOf(1e14, 1e14));
+    const m = memoryMeter(() => Date.UTC(2026, 7, 16), capsOf(1e14, 1e14));
     expect(() => m.reserve("pulsern", 1e15)).toThrow(MeterUnavailableError);
     expect(() => m.reserve("pulsern", 1)).toThrow(/out of range/);
   });
@@ -585,7 +594,7 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
    * MUTATION: replace the `instanceof` + `#minted.has()` check in #close with
    * the old `open.clientId !== reservation.clientId` test. */
   it("a forged literal releases nothing, and the real spend still settles", () => {
-    const m = new MemorySpendMeter(AUG, fixedCaps);
+    const m = memoryMeter(AUG, fixedCaps);
     const real = Array.from({ length: 200 }, () => m.reserve("pulsern", 1));
     expect(m.reservedUsd("pulsern")).toBe(200);
     for (let i = 1; i <= 200; i++) {
@@ -601,8 +610,8 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
   /** MUTATION: as above. This is the production shape and needs no forgery at
    * all — ledger L14 documents a restarted meter minting `r1` again. */
   it("a handle minted by another meter moves nothing here", () => {
-    const a = new MemorySpendMeter(AUG, fixedCaps);
-    const b = new MemorySpendMeter(AUG, fixedCaps);
+    const a = memoryMeter(AUG, fixedCaps);
+    const b = memoryMeter(AUG, fixedCaps);
     const live = a.reserve("pulsern", 200);
     const foreign = b.reserve("pulsern", 200);
     a.release(foreign);
@@ -621,7 +630,7 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
    *
    * MUTATION: key #open by `reservation.id` again instead of the handle. */
   it("re-pointing id on a genuine handle closes nothing", () => {
-    const m = new MemorySpendMeter(AUG, CAPS10);
+    const m = memoryMeter(AUG, CAPS10);
     const live = Array.from({ length: 5 }, () => m.reserve("pulsern", 2));
     expect(m.reservedUsd("pulsern")).toBe(10);
     expect(() => m.reserve("pulsern", 1)).toThrow(CapError);
@@ -646,7 +655,7 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
    * no longer load-bearing — identity keying is — but a handle is a value and
    * immutability is asserted directly rather than left to be inferred. */
   it("a minted handle is frozen", () => {
-    const m = new MemorySpendMeter(AUG, CAPS10);
+    const m = memoryMeter(AUG, CAPS10);
     const h = m.reserve("pulsern", 1);
     expect(Object.isFrozen(h), "a handle is mutable").toBe(true);
   });
@@ -654,7 +663,7 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
   /** MUTATION: key #open by id again. A Proxy forwards every field perfectly
    * and is still not the key. */
   it("a Proxy wrapping a genuine handle is not that handle", () => {
-    const m = new MemorySpendMeter(AUG, CAPS10);
+    const m = memoryMeter(AUG, CAPS10);
     const real = m.reserve("pulsern", 10);
     const proxy = new Proxy(real, {}) as SpendReservation;
     m.release(proxy);
@@ -671,7 +680,7 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
   /** MUTATION: as above. A subclass instance passes `instanceof` and is still
    * not a key. */
   it("a subclass instance and a prototype-forged object close nothing", () => {
-    const m = new MemorySpendMeter(AUG, CAPS10);
+    const m = memoryMeter(AUG, CAPS10);
     const real = m.reserve("pulsern", 10);
     const forged = Object.create(Object.getPrototypeOf(real)) as SpendReservation;
     Object.assign(forged, { id: real.id, clientId: real.clientId, amountUsd: real.amountUsd });
@@ -706,7 +715,7 @@ describe("money — a reservation handle is an identity, not a shape (R5-01, R5-
       advanced = true;
       return BOUNDARY;
     };
-    const m = new MemorySpendMeter(clock, fixedCaps);
+    const m = memoryMeter(clock, fixedCaps);
     m.settle(m.reserve("c", 7));
     // Read from the instant the reservation was taken. One clock read puts the
     // $7 on the August day AND the August month; two reads split it across

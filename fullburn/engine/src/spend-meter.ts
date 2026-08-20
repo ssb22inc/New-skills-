@@ -1,10 +1,19 @@
 import { CapError, effectiveAiCapsUsd } from "@fullburn/config/caps";
-import { InMemorySpendLedger, MeterUnavailableError, processLedger, type SpendLedger } from "./spend-ledger.ts";
+import { MeterUnavailableError } from "./money-errors.ts";
+import {
+  processLedger,
+  type CapsNarrowingTable,
+  type SpendCeilings,
+  type SpendLedger,
+} from "./spend-ledger.ts";
 
-/** Re-exported so every existing importer keeps ONE error identity. It is
- * DEFINED in spend-ledger.ts because the ledger now owns the refusals — the
- * arithmetic moved there in R12-01 and the error has to move with it. */
-export { MeterUnavailableError } from "./spend-ledger.ts";
+/** Re-exported so every existing importer keeps ONE error identity, and so the
+ * money path has one obvious place to import it from. It is DEFINED in
+ * `money-errors.ts`, which depends on nothing — three rounds of moving it to
+ * follow the arithmetic left a re-export chain behind each time. */
+export { MeterUnavailableError } from "./money-errors.ts";
+export { medianOfThree, assertMonotonic, trustedClock, zoneDayKey, zoneMonthKey } from "./trusted-clock.ts";
+export { InMemorySpendLedger, processLedger, type CapsNarrowingTable, type SpendCeilings, type SpendLedger } from "./spend-ledger.ts";
 
 /** Per-client AI spend metering (R3; F1/F2/F3; R2-01, R2-02, R2-16).
  *
@@ -89,23 +98,6 @@ export class SpendReservation {
  * check even with a direct import of the class. */
 const RESERVATION_BRAND = Symbol("fullburn.reservation");
 
-/** The ceilings and the zone they are bucketed in. Resolved by the meter from
- * the frozen caps table — NEVER supplied by a money-path caller.
- *
- * `reserve()` used to accept these as arguments, so any direct caller could
- * hand itself $1,000/$1,000 for a real client. The `llm()` path passed narrowed
- * protected caps, but the meter enforced nothing of its own: "no caller does
- * that today" is not a safety property (adversary finding R7-06). */
-export interface SpendCeilings {
-  readonly dailyUsd: number;
-  readonly monthlyUsd: number;
-  readonly timeZone: string;
-}
-
-/** Resolves a client's ceilings. The meter holds one of these; callers do not
- * get to pass ceilings in. */
-export type CapsResolver = (clientId: string) => SpendCeilings;
-
 export interface SpendMeter {
   /** Committed spend today for the client, USD. Throws if unavailable. */
   todayUsd(clientId: string): number;
@@ -180,206 +172,56 @@ export function assertUsableAmount(n: unknown, label: string): asserts n is numb
   }
 }
 
-/** Day key in the CLIENT'S accounting zone, as YYYY-MM-DD.
- *
- * This was UTC while `ClientCaps.dailyAiSpendUsd` promised a client-local day.
- * $10 at 23:59Z and $10 at 00:01Z were two ledger days and ONE New York day, so
- * $20 landed under a $10/day cap (adversary finding R7-02). The zone comes from
- * the frozen caps table; `en-CA` yields ISO-ordered parts, and the IANA zone
- * handles its own daylight-saving transitions. */
-export function zoneDayKey(nowMs: number, timeZone: string): string {
-  if (!Number.isFinite(nowMs)) {
-    throw new MeterUnavailableError("clock returned a non-finite instant — refusing spend (fail closed)");
-  }
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(nowMs);
-}
-
-/** Month key in the same zone. A month boundary is a local midnight too. */
-export function zoneMonthKey(nowMs: number, timeZone: string): string {
-  return zoneDayKey(nowMs, timeZone).slice(0, 7);
-}
-
 export class MemorySpendMeter implements SpendMeter {
-  // Keyed by PERIOD, where a period is "d:<day>|<client>" or "m:<month>|<client>".
-  // One map rather than two so a settle can never update the day and miss the
-  // month.
-  /** THE LEDGER IS NOT THIS OBJECT'S. It is passed in, and every production
-   * meter is handed the same process-wide one — see spend-ledger.ts. A meter
-   * that owned its ledger could be constructed per call to mint a fresh
-   * ceiling, which is exactly what happened (adversary finding R11-07). */
+  /** A HANDLE, AND ONLY A HANDLE.
+   *
+   * This class used to own the clock, the caps resolver, the period keys and
+   * the arithmetic. Each of those was, at some round, the thing a caller
+   * supplied to choose its own answer — the list is in `spend-ledger.ts`. They
+   * all live behind the storage contract now, so what is left here is what a
+   * meter is actually for: unit conversion (USD ↔ integer micro-dollars),
+   * minting a branded handle, and being the type `llm()` will accept.
+   *
+   * WHICH CAPABILITY THIS REMOVED: none on its own — this is a move, and the
+   * removal is on the ledger's side. Said plainly because "the meter is
+   * simpler now" is not a security property. */
   #ledger: SpendLedger;
-  /** Open reservations, KEYED BY THE HANDLE OBJECT ITSELF.
-   *
-   * This was keyed by `id`, with a separate WeakSet proving the handle was
-   * minted here. That proved WHICH OBJECT but not that its `id` still pointed
-   * where it did, so the only thing stopping a caller re-pointing `id` on a
-   * genuine handle was `Object.freeze` in the constructor — a line that looks
-   * like defensive hygiene, carried no test, and could be deleted with all 243
-   * tests green. Removing it let ONE genuine handle close five live
-   * reservations: $20 of spend against the approved $10/day ceiling while
-   * `todayUsd()` read exactly $10, with nothing forged and no second meter
-   * (adversary finding R6-04).
-   *
-   * Keying by identity removes the class rather than the instance. A forged
-   * literal, a foreign meter's handle, a re-pointed `id`, a Proxy and a
-   * subclass all find no entry, because none of them IS the key. The freeze is
-   * now hygiene, not enforcement — which is what the class comment always
-   * claimed the design was. */
-  #now: () => number;
-  #capsFor: CapsResolver;
-  /** Highest period key seen per client. The clock is injected, so a caller
-   * that can move it backwards can re-enter an older period that still has
-   * headroom, and one that jumps forward mints a fresh ceiling on demand
-   * (adversary finding R7-03). Backwards movement is refused outright; forward
-   * movement cannot be distinguished from time passing without a trusted time
-   * source, which is disclosed rather than pretended away. */
+  #narrowing: CapsNarrowingTable | undefined;
 
-  /** A DAILY cap needs a day (adversary finding M-03). Without one, a client
-   * that spent its ceiling was refused forever — a $5/day budget was really
-   * $5/lifetime, and the bracket could not kill losing ads on day two. Ledgers
-   * are keyed by (client, UTC day) so the cap rolls over exactly once per day.
-   *
-   * THE CLOCK IS REQUIRED. It defaulted to `() => 0`, which pinned every day key
-   * to 1970-01-01: thirteen of the sixteen construction sites took the default,
-   * so the fix was opt-in and the default was the original bug, still live, in
-   * the commit that claimed to have closed it (adversary finding N-01). A
-   * missing clock is now a compile error, not a silently frozen day — there is
-   * no default a caller can fall into.
-   *
-   * Persistence across a restart is a Durable Object concern and is NOT solved
-   * here: a fresh meter still starts a fresh day (ledger L14). */
-  /** The caps resolver is REQUIRED and is the meter's own, not the caller's.
-   * The clock is required for the same reason it has been since N-01. */
-  constructor(now: () => number, capsFor: CapsResolver, ledger: SpendLedger = new InMemorySpendLedger()) {
-    if (typeof now !== "function") {
-      throw new MeterUnavailableError("MemorySpendMeter requires a clock — refusing spend (fail closed)");
+  constructor(ledger: SpendLedger, narrowing?: CapsNarrowingTable) {
+    if (ledger === null || typeof ledger !== "object" || typeof ledger.reserve !== "function") {
+      throw new MeterUnavailableError("MemorySpendMeter requires a spend ledger — refusing spend (fail closed)");
     }
-    if (typeof capsFor !== "function") {
-      throw new MeterUnavailableError("MemorySpendMeter requires a caps resolver — refusing spend (fail closed)");
-    }
-    this.#now = now;
-    this.#capsFor = capsFor;
     this.#ledger = ledger;
-  }
-
-  // `setAvailable` IS GONE FROM THE METER. It was public and untraced on the
-  // production type, and it permanently halts a client's spend — an operator
-  // action with money consequences, reachable by anyone holding a meter
-  // (adversary finding R11-06). Availability belongs to the storage layer:
-  // `SpendLedger.setAvailable`, whose implementation is the thing that knows
-  // whether storage is up, and whose operator traces the decision.
-
-  /** Both period keys from ONE clock read. Reading the clock twice split the
-   * pair across a month boundary: $7 committed to the August 31 day and the
-   * September month, one tick apart (adversary finding R5-08). The window is a
-   * tick per month, but the month ledger exists precisely to be right across
-   * that boundary. */
-  #periods(clientId: string, timeZone: string, nowMs = this.#now()): { day: string; month: string } {
-    return {
-      day: `d:${zoneDayKey(nowMs, timeZone)}|${clientId}`,
-      month: `m:${zoneMonthKey(nowMs, timeZone)}|${clientId}`,
-    };
-  }
-
-  /** Refuses a clock that has moved backwards into an already-closed day. */
-  #assertForward(clientId: string, day: string): void {
-    const seen = this.#ledger.highWater(clientId);
-    if (seen !== undefined && day < seen) {
-      throw new MeterUnavailableError(
-        `clock moved backwards into a closed accounting day for "${clientId}" — refusing spend (fail closed)`,
-      );
-    }
-    if (seen === undefined || day > seen) this.#ledger.setHighWater(clientId, day);
-  }
-
-  #zoneOf(clientId: string): string {
-    return this.#capsFor(clientId).timeZone;
-  }
-
-  #key(clientId: string): string {
-    return this.#periods(clientId, this.#zoneOf(clientId)).day;
-  }
-
-  #monthKey(clientId: string): string {
-    return this.#periods(clientId, this.#zoneOf(clientId)).month;
-  }
-
-  /** Availability is PER CLIENT. It was one process-wide flag, so halting one
-   * tenant's storage halted every tenant's spend (adversary finding R12-07). */
-  #assertAvailable(clientId: string): void {
-    if (!this.#ledger.isAvailable(clientId)) {
-      throw new MeterUnavailableError("spend meter unavailable — refusing spend (fail closed)");
-    }
+    this.#narrowing = narrowing;
   }
 
   todayUsd(clientId: string): number {
-    this.#assertAvailable(clientId);
-    return fromMicros(this.#ledger.committedMicros(clientId, this.#key(clientId)));
+    return fromMicros(this.#ledger.committedMicros(clientId, "day"));
   }
 
   monthUsd(clientId: string): number {
-    this.#assertAvailable(clientId);
-    return fromMicros(this.#ledger.committedMicros(clientId, this.#monthKey(clientId)));
+    return fromMicros(this.#ledger.committedMicros(clientId, "month"));
   }
 
   /** Every open reservation for this client, whatever day it was taken on
-   * (N-09). Held money must never be invisible.  */
+   * (N-09). Held money must never be invisible. */
   reservedUsd(clientId: string): number {
-    this.#assertAvailable(clientId);
-    // The ledger sums its OWN open handles for this client. It used to hand out
-    // every tenant's entries and let the caller filter (adversary finding
-    // R12-07); a contract that can enumerate other tenants' holdings is a
-    // cross-tenant read whether or not today's caller abuses it.
     return fromMicros(this.#ledger.reservedMicros(clientId));
   }
 
   reserve(clientId: string, amountUsd: number): SpendReservation {
-    this.#assertAvailable(clientId);
-    if (typeof clientId !== "string" || clientId.length === 0) {
-      throw new MeterUnavailableError("reserve requires a clientId");
-    }
-    // The ceilings are the METER'S, resolved from the frozen table. A caller
-    // cannot supply, widen, or omit them (R7-06).
-    const caps = this.#capsFor(clientId);
-    if (caps === null || typeof caps !== "object") {
-      throw new MeterUnavailableError("caps resolver returned no ceilings — refusing spend (fail closed)");
-    }
+    // USD in, micro-dollars out, refusing anything that cannot be money. The
+    // LEDGER independently refuses a non-positive integer, so this conversion
+    // is a convenience rather than the guard (R13-01).
     const amountMicros = toMicros(amountUsd, "reservation amount");
-    const dailyCapMicros = toMicros(caps.dailyUsd, "daily cap");
-    const monthlyCapMicros = toMicros(caps.monthlyUsd, "monthly cap");
-    if (amountMicros <= 0) throw new MeterUnavailableError("reservation amount must be positive");
-
-    const { day, month } = this.#periods(clientId, caps.timeZone);
-    this.#assertForward(clientId, day);
-
-    /** THE ARITHMETIC IS THE LEDGER'S, NOT THIS OBJECT'S.
-     *
-     * It used to live here, with the ledger holding public setters underneath —
-     * so the cap check was something a caller could simply not call:
-     * `processLedger().setCommittedMicros(period, 0)` put $30 through a frozen
-     * $5/day with `todayUsd()` reading $0.00 (adversary finding R12-01). The
-     * meter computes the period keys and reads the frozen ceilings; the LEDGER
-     * reads, checks and writes in one synchronous block and owns the refusal.
-     * There is no longer any way to move a balance that is not a cap check. */
-    const handle = new SpendReservation(RESERVATION_BRAND, `r${this.#ledger.nextSeq()}`, clientId, fromMicros(amountMicros));
-    this.#ledger.reserve(
-      {
-        clientId,
-        micros: amountMicros,
-        day,
-        month,
-        dailyCapMicros,
-        monthlyCapMicros,
-        dailyCapUsd: caps.dailyUsd,
-        monthlyCapUsd: caps.monthlyUsd,
-      },
-      handle,
+    const handle = new SpendReservation(
+      RESERVATION_BRAND,
+      `r${this.#ledger.nextSeq()}`,
+      clientId,
+      fromMicros(amountMicros),
     );
+    this.#ledger.reserve(clientId, amountMicros, handle, this.#narrowing);
     return handle;
   }
 
@@ -388,157 +230,21 @@ export class MemorySpendMeter implements SpendMeter {
    *
    * THERE IS NO `actualUsd` OVERRIDE. One existed for a fortnight to implement
    * the R7-05 reconciliation ruling, and it was `record()` wearing a handle:
-   * `settle(r, 5000)` committed $5,000 against a $10/day ceiling with no error,
-   * and `settle(r, 0)` left five thousand departed billable calls reading
-   * $0.00 — a cap breach and a data lie in one operation. It had zero
-   * production callers, so it bought nothing on the money path for it
-   * (adversary finding R8-02).
-   *
-   * The reconciliation ruling stands and is unchanged: the committed figure is
-   * an ESTIMATE, trued up daily against the provider's usage receipt, and
-   * ledger L26 says so. What changed is the door it comes through — the
-   * correction goes through the same audited, cap-checked path as every other
-   * money mutation, not through a setter that can write any number. */
+   * `settle(r, 5000)` committed $5,000 against a $10/day ceiling with no error
+   * (adversary finding R8-02). The reconciliation ruling stands and is
+   * unchanged — the committed figure is an ESTIMATE, trued up daily against the
+   * provider's receipt (ledger L26). What changed is the door it comes through. */
   settle(reservation: SpendReservation): void {
-    /** A SETTLE INTO UNAVAILABLE STORAGE MUST THROW, not commit nothing.
-     *
-     * `settle` was the one money method that did not check availability, so a
-     * storage outage silently dropped the charge for a request the provider had
-     * already served. `llm()` fails closed on a throwing settle — the
-     * reservation stays open and keeps counting against the ceiling — which is
-     * the correct behaviour and is what M-01/M-04 test. It is also the seam the
-     * fault-injection tests now use, instead of patching this method onto an
-     * instance (adversary finding R10-02). */
     this.#ledger.settle(reservation);
   }
 
+  /** A RELEASE INTO UNAVAILABLE STORAGE THROWS, and that is the honest
+   * behaviour rather than a contract violation. `llm()` records the leak on the
+   * error it returns — that branch exists precisely for an implementation that
+   * throws, so throwing reaches the recording rather than defeating it (N-07). */
   release(reservation: SpendReservation): void {
-    /** A RELEASE INTO UNAVAILABLE STORAGE THROWS, and that is the honest
-     * behaviour rather than a contract violation.
-     *
-     * The interface says an implementation must not throw, because `llm()`
-     * calls this from a failure path with nothing left to unwind. But a release
-     * that silently no-ops while storage is down IS N-07's harm: the headroom
-     * stays consumed for a request that never departed, invisibly. `llm()`
-     * already handles a throwing release by recording the leak on the error it
-     * returns — that branch exists precisely for an implementation that throws
-     * — so throwing here reaches the recording rather than defeating it.
-     *
-     * It is also the seam this file's own fault-injection tests use, now that
-     * production meters are frozen and cannot be patched (R10-02). Keeping N-07
-     * reachable is the point: with no way to make a release fail, that branch
-     * would have become the fourth dead guard in `llm()`. */
     this.#ledger.release(reservation);
   }
-
-}
-
-/** THE PRODUCTION TIME SOURCE. Owned by the meter, not handed in, not the
- * mutable global.
- *
- * R9-05 removed the injectable clock and bound `Date.now` — which is a mutable
- * property of a mutable global. Patching it gave 3,000 dispatches against a
- * frozen $200/month with no `CapError` (adversary finding R10-03): the ceilings
- * were closed structurally and the clock, which decides HOW MANY ceilings
- * exist, was not.
- *
- * Human ruling 2026-08-18: a different source entirely; a module-load capture
- * that a pre-import patch defeats is not acceptable either; and any irreducible
- * residual needs a test proving its bounds, not a disclosure.
- *
- * So the design is anchor-plus-monotonic, with the anchor cross-validated:
- *
- *  1. AT CONSTRUCTION, wall-clock is read from three INDEPENDENT sources —
- *     `Date.now`, the `Date` constructor, and `performance.timeOrigin +
- *     performance.now()`. They must agree within `ANCHOR_TOLERANCE_MS` or the
- *     meter refuses to exist. Patching one to move the ceiling is therefore not
- *     a quiet win, it is a construction failure.
- *  2. AFTERWARDS the wall clock is never read again. Time advances by the
- *     MONOTONIC delta from `process.hrtime.bigint()`, which cannot be moved
- *     backwards and is not what an attacker reaches for. A patch to `Date.now`
- *     after construction has no effect at all — which is R10-03's exact attack.
- *  3. The monotonic source is itself checked: a reading that goes backwards
- *     refuses spend rather than re-entering a closed period.
- *
- * WHAT REMAINS, AND ITS BOUND: an attacker who patches all three wall-clock
- * sources CONSISTENTLY before this module is imported moves the anchor. That is
- * irreducible in-process — every JS time API is a mutable property — and it is
- * not disclosed and left there: `locks-r7` proves the bound by executing it.
- * One patched source is refused; two disagreeing are refused; a post-construction
- * patch is inert; and the monotonic advance is what the ledger keys on. */
-const ANCHOR_TOLERANCE_MS = 5_000;
-
-/** Captured at module load. NOT the security boundary — the cross-check is —
- * but it removes the trivial "patch it later" win. */
-const NATIVE = Object.freeze({
-  dateNow: Date.now,
-  DateCtor: Date,
-  hrtime: process.hrtime.bigint.bind(process.hrtime),
-  timeOrigin: () => performance.timeOrigin,
-  perfNow: () => performance.now(),
-});
-
-/** Three independent readings of the wall clock, or a refusal. */
-function anchorWallMs(): number {
-  const readings: Array<{ name: string; ms: number }> = [
-    { name: "Date.now", ms: NATIVE.dateNow.call(Date) },
-    { name: "new Date()", ms: new NATIVE.DateCtor().getTime() },
-    { name: "performance", ms: NATIVE.timeOrigin() + NATIVE.perfNow() },
-  ];
-  for (const r of readings) {
-    if (!Number.isFinite(r.ms)) {
-      throw new MeterUnavailableError(`time source ${r.name} is not a finite instant — refusing spend (fail closed)`);
-    }
-  }
-  const lo = Math.min(...readings.map((r) => r.ms));
-  const hi = Math.max(...readings.map((r) => r.ms));
-  if (hi - lo > ANCHOR_TOLERANCE_MS) {
-    throw new MeterUnavailableError(
-      `independent time sources disagree by ${Math.round(hi - lo)}ms (${readings
-        .map((r) => `${r.name}=${Math.round(r.ms)}`)
-        .join(", ")}) — refusing spend (fail closed)`,
-    );
-  }
-  return medianOfThree(readings.map((r) => r.ms));
-}
-
-/** THE MEDIAN, AS A FUNCTION, BECAUSE IT IS A GUARD AND GUARDS GET DRIVEN.
- *
- * Inline, `readings.map(...).sort(...)[1]` could be replaced with
- * `readings[0]` and the whole 306-test suite stayed green (adversary findings
- * R11-03, R12-03) — while the attack narrowed from "move two sources
- * consistently" back to "move `Date.now`", which is R10-03's original target.
- * It is the load-bearing half of this file's claim that one tampered source
- * "can only fail the spread", and it had no test at all. */
-export function medianOfThree(values: readonly number[]): number {
-  return [...values].sort((a, b) => a - b)[1]!;
-}
-
-/** A monotonic source that has gone backwards refuses spend rather than
- * re-entering a closed period.
- *
- * Pulled out for the same reason as `medianOfThree`: `NATIVE.hrtime` is bound
- * at module load, so the guard could only be reached by re-importing the whole
- * module — which is why it was invisible to the sweep and to the harness. It
- * takes no injectable state; production still calls it with the native
- * readings, so this is a testable shape rather than a seam. */
-export function assertMonotonic(mono: bigint, last: bigint): void {
-  if (mono < last) {
-    throw new MeterUnavailableError("monotonic time source moved backwards — refusing spend (fail closed)");
-  }
-}
-
-/** A clock the meter owns. Anchored once, advanced monotonically thereafter. */
-export function trustedClock(): () => number {
-  const anchorWall = anchorWallMs();
-  const anchorMono = NATIVE.hrtime();
-  let lastMono = anchorMono;
-  return () => {
-    const mono = NATIVE.hrtime();
-    assertMonotonic(mono, lastMono);
-    lastMono = mono;
-    return anchorWall + Number((mono - anchorMono) / 1_000_000n);
-  };
 }
 
 /** Meters whose ceilings provably come from the frozen caps table.
@@ -570,28 +276,27 @@ const FROZEN_CAPS_BOUND = new WeakSet<SpendMeter>();
  * The class is final. A subclass would inherit the brand and could override
  * `reserve()`, which is the injection point again wearing a different hat. */
 export class FrozenCapsSpendMeter extends MemorySpendMeter {
-  /** NO CLOCK PARAMETER, for the same reason there is no resolver parameter.
+  /** NO CLOCK PARAMETER, NO RESOLVER PARAMETER, NO LEDGER PARAMETER.
    *
-   * R8-01 closed the ceilings seam and left the clock one open beside it. The
-   * cap is keyed by (client, local day) and (client, local month), so a caller
-   * that chooses the clock chooses how many ceilings exist: a clock advancing a
-   * month per call mints a fresh $200 every time. Executed through the real
-   * `llm()`, 12,000 dispatches committed $120 against a frozen $20/month with
-   * no `CapError` (adversary finding R9-05).
+   * R8-01 closed the ceilings seam and left the clock one open beside it: a
+   * caller that chooses the clock chooses how many ceilings exist, and 12,000
+   * dispatches committed $120 against a frozen $20/month with no `CapError`
+   * (adversary finding R9-05). Human ruling 2026-08-17: bind it by
+   * construction, do not bound the jump.
    *
-   * Human ruling 2026-08-17: bind it by construction, do not bound the jump.
-   * "R9 demonstrated what checks are worth on money paths."
-   *
-   * `MemorySpendMeter` keeps its injectable clock for the tests that need to
-   * drive time, and `llm()` refuses it — so time control lives on the test-only
-   * type, exactly where the ruling put it. */
+   * All three now live inside the process ledger, which this constructor
+   * reaches by calling `processLedger()` — there is no argument here to hand
+   * one in. A test that needs to drive time constructs its own
+   * `InMemorySpendLedger` with its own clock and wraps it in a plain
+   * `MemorySpendMeter`, which `llm()` refuses. Time control stays on the
+   * test-only path, exactly where the ruling put it. */
   constructor(narrowing?: CapsNarrowingTable) {
     if (new.target !== FrozenCapsSpendMeter) {
       throw new MeterUnavailableError(
         "FrozenCapsSpendMeter is final — a subclass could override reserve() and reopen the ceiling seam (fail closed)",
       );
     }
-    super(trustedClock(), (clientId) => effectiveAiCapsUsd(clientId, narrowing), processLedger());
+    super(processLedger(), narrowing);
     FROZEN_CAPS_BOUND.add(this);
     /** IMMUTABLE, and this is the whole of R10-02's fix.
      *
@@ -616,12 +321,6 @@ export class FrozenCapsSpendMeter extends MemorySpendMeter {
   }
 }
 
-/** A table that may LOWER a client's ceiling and can never raise one, invent a
- * client, or supply a sign-off — `effectiveAiCapsUsd` narrows with `Math.min`
- * against the frozen entry. */
-export type CapsNarrowingTable = Readonly<
-  Record<string, { readonly dailyAiSpendUsd?: number; readonly monthlyAiSpendUsd?: number }>
->;
 
 /** Is this meter's ceiling provably the frozen table's? `llm()` refuses every
  * meter for which this is false, which is what makes Law 2 structural on the

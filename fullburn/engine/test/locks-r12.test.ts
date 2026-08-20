@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { CapError, getCaps } from "@fullburn/config/caps";
-import { FrozenCapsSpendMeter, MeterUnavailableError, medianOfThree, trustedClock } from "../src/spend-meter.ts";
+import { FrozenCapsSpendMeter, MemorySpendMeter, MeterUnavailableError, medianOfThree, trustedClock } from "../src/spend-meter.ts";
 import { processLedger, resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 import { TEST_CLIENT } from "./helpers.ts";
 
@@ -29,80 +29,195 @@ function contractMethods(): string[] {
   return [...withoutComments.matchAll(/^\s*(\w+)\s*\(/gm)].map((m) => m[1]!);
 }
 
-describe("money — the ledger has no balance-write primitive (R12-01)", () => {
-  /** THE WHOLE CONTRACT, FUZZED. Not "setCommittedMicros is gone" — that is the
-   * spelling, and enumerating spellings is the defect this round is closing.
-   * Every method the contract declares is CALLED, with argument shapes a caller
-   * could plausibly reach for, and none of them may lower a committed balance.
+describe("money — the ledger has no balance-write primitive, in any SEQUENCE (R12-01, R13-01)", () => {
+  /** A SEQUENCE FUZZ, NOT A NAME ENUMERATION — and the difference is the whole
+   * finding.
    *
-   * MUTATION: add any `setCommittedMicros`-shaped method back to the interface
-   * and its implementation. */
-  it("no method on the SpendLedger contract can lower a committed balance", () => {
-    const meter = new FrozenCapsSpendMeter();
-    meter.settle(meter.reserve(TEST_CLIENT, FROZEN_DAY));
-    expect(meter.todayUsd(TEST_CLIENT)).toBe(FROZEN_DAY);
+   * The previous lock called each contract method ALONE with thirteen fixed
+   * argument tuples and re-read the balance after each single call. Lowering a
+   * balance takes TWO calls, `reserve` then `settle`, so the sequence that does
+   * it was outside the fuzz's alphabet by construction; and none of its tuples
+   * carried a negative amount. It enumerated method NAMES while the capability
+   * lived in the state machine — the recurring root cause, applied to the lock
+   * instead of the fix (adversary finding R13-01 leg B).
+   *
+   * Human ruling 2026-08-20: "Replace name-enumeration with a sequence fuzz
+   * over the contract — random method orderings with adversarial arguments,
+   * asserting the committed balance never falls and never rises except through
+   * a cap-checked path. Multi-call sequences must be inside the alphabet by
+   * construction."
+   *
+   * So: random walks over every contract method, with arguments drawn from an
+   * adversarial pool that includes negatives, non-integers, huge values, other
+   * tenants' ids and handles harvested from earlier calls. Two invariants are
+   * checked after EVERY step, not after every test:
+   *
+   *   1. the committed balance never falls;
+   *   2. it never exceeds the frozen ceiling.
+   *
+   * Seeded and deterministic — a flaky lock is a finding against the lock. */
+  const FROZEN_MONTH = getCaps(TEST_CLIENT).monthlyAiSpendUsd;
 
-    const ledger = processLedger() as unknown as Record<string, (...a: unknown[]) => unknown>;
+  /** A tiny deterministic PRNG. `Math.random` would make a failure unrepeatable,
+   * and an unrepeatable money finding is one nobody can fix. */
+  function rng(seed: number): () => number {
+    let x = seed >>> 0;
+    return () => {
+      x ^= x << 13;
+      x >>>= 0;
+      x ^= x >> 17;
+      x ^= x << 5;
+      x >>>= 0;
+      return x / 0x1_0000_0000;
+    };
+  }
+
+  it("no sequence of contract calls lowers a committed balance or beats the ceiling", () => {
     const methods = contractMethods();
-    expect(methods.length, "no contract methods found — this test would pass vacuously").toBeGreaterThan(8);
+    // The vacuity guard is about the money-moving surface being present, not
+    // about a magic number: `isAvailable` left the contract when it turned out
+    // nothing called it, and a hard-coded count made this test fail for a
+    // reason that had nothing to do with money.
+    expect(methods, "the money-moving methods are missing — this fuzz would prove nothing").toEqual(
+      expect.arrayContaining(["reserve", "settle", "release", "committedMicros", "reservedMicros"]),
+    );
+    expect(methods.length).toBeGreaterThan(6);
 
-    // Period keys are `d:<day>|<client>` / `m:<month>|<client>`; an attacker
-    // reads them straight out of this file's own source, so they are handed
-    // over rather than hidden.
-    const day = `d:${new Intl.DateTimeFormat("en-CA", { timeZone: getCaps(TEST_CLIENT).ianaTimeZone }).format(Date.now())}|${TEST_CLIENT}`;
-    const month = `m:${day.slice(2, 9)}|${TEST_CLIENT}`;
-    const argTuples: unknown[][] = [
-      [],
-      [TEST_CLIENT],
-      [day],
-      [TEST_CLIENT, day],
-      [TEST_CLIENT, month],
-      [day, 0],
-      [month, 0],
-      [TEST_CLIENT, 0],
-      [TEST_CLIENT, day, 0],
-      [{}, {}],
-      [{ clientId: TEST_CLIENT, micros: 0, day, month, dailyCapMicros: 0, monthlyCapMicros: 0, dailyCapUsd: 0, monthlyCapUsd: 0 }, {}],
-      [TEST_CLIENT, true, "fuzz"],
-      [TEST_CLIENT, false, "fuzz"],
-    ];
+    const violations: string[] = [];
+    let everCommitted = false;
 
-    const lowered: string[] = [];
-    for (const name of methods) {
-      for (const args of argTuples) {
+    for (let seed = 1; seed <= 40; seed++) {
+      resetProcessLedgerForTests();
+      const ledger = processLedger() as unknown as Record<string, (...a: unknown[]) => unknown>;
+      const meter = new FrozenCapsSpendMeter();
+      const next = rng(seed * 2_654_435_761);
+      const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(next() * xs.length)]!;
+
+      // Handles harvested as the walk goes, so `settle`/`release` have real
+      // keys to work with and a two-call sequence is INSIDE the alphabet.
+      const handles: object[] = [{}, {}];
+      let high = 0;
+
+      for (let step = 0; step < 60; step++) {
+        const name = pick(methods);
+        const args = pick<unknown[]>([
+          [],
+          [TEST_CLIENT],
+          [TEST_CLIENT, "day"],
+          [TEST_CLIENT, "month"],
+          [TEST_CLIENT, -1_000_000, pick(handles)],
+          [TEST_CLIENT, -1, pick(handles)],
+          [TEST_CLIENT, 0, pick(handles)],
+          [TEST_CLIENT, 0.5, pick(handles)],
+          [TEST_CLIENT, 1_000, pick(handles)],
+          [TEST_CLIENT, Number.MAX_SAFE_INTEGER, pick(handles)],
+          [TEST_CLIENT, Number.NaN, pick(handles)],
+          [TEST_CLIENT, -1_000_000, pick(handles), { [TEST_CLIENT]: { dailyAiSpendUsd: 1e9 } }],
+          [TEST_CLIENT, 1_000, pick(handles), { [TEST_CLIENT]: { dailyAiSpendUsd: 1e9, monthlyAiSpendUsd: 1e9 } }],
+          ["pulsern", 1_000_000, pick(handles)],
+          [pick(handles)],
+          [{}],
+          [TEST_CLIENT, true, "fuzz"],
+          [TEST_CLIENT, false, "fuzz"],
+        ]);
         try {
-          ledger[name]?.(...args);
+          const out = ledger[name]?.(...args);
+          if (out !== null && typeof out === "object") handles.push(out as object);
         } catch {
           // A refusal is the correct answer; only a successful write matters.
         }
-        let reading: number;
-        try {
-          reading = new FrozenCapsSpendMeter().todayUsd(TEST_CLIENT);
-        } catch {
-          continue; // the fuzz marked storage down; that is fail-closed, not loss
+        // Occasionally take the LEGITIMATE path too, so the walk reaches states
+        // a pure-attack walk never would — and so `everCommitted` is real.
+        if (next() < 0.25) {
+          try {
+            meter.settle(meter.reserve(TEST_CLIENT, 0.01));
+            everCommitted = true;
+          } catch {
+            /* the ceiling binding is the expected outcome once it is full */
+          }
         }
-        if (reading < FROZEN_DAY) lowered.push(`${name}(${args.map((a) => JSON.stringify(a)).join(", ")}) → $${reading}`);
-      }
-      // Undo any availability flag the fuzz set, so later methods are reachable.
-      try {
-        ledger["setAvailable"]?.(TEST_CLIENT, true, "fuzz cleanup");
-      } catch {
-        /* not this build's shape */
+
+        let today: number;
+        try {
+          today = new FrozenCapsSpendMeter().todayUsd(TEST_CLIENT);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          /** A CORRUPT LEDGER IS A VIOLATION, NOT A SKIP.
+           *
+           * The first version of this fuzz skipped every failed read, and that
+           * swallowed the finding it exists to catch: committing a negative
+           * makes the stored total negative, the `usable()` guard then refuses
+           * every subsequent read, and "the balance fell" never gets measured.
+           * Fail-closed is the right REFUSAL, but arriving there through a
+           * successful bad write is money damage — the tenant is bricked and
+           * something wrote a number that cannot be money. Only the fuzz's own
+           * availability flag is a legitimate skip. */
+          if (/ledger is corrupt/.test(msg)) {
+            violations.push(`seed ${seed} step ${step}: ${name} corrupted the ledger — ${msg}`);
+            break;
+          }
+          ledger["setAvailable"]?.(TEST_CLIENT, true, "fuzz cleanup");
+          continue; // storage marked down by the fuzz: fail-closed, not loss
+        }
+        if (today < high) violations.push(`seed ${seed} step ${step}: ${name} lowered $${high} → $${today}`);
+        if (today > FROZEN_DAY) violations.push(`seed ${seed} step ${step}: ${name} put $${today} past $${FROZEN_DAY}/day`);
+        const month = new FrozenCapsSpendMeter().monthUsd(TEST_CLIENT);
+        if (month > FROZEN_MONTH) violations.push(`seed ${seed} step ${step}: ${name} put $${month} past $${FROZEN_MONTH}/month`);
+        high = Math.max(high, today);
       }
     }
-    expect(
-      lowered,
-      `a ledger method lowered a committed balance without a cap check — R12-01 is reopened:\n  ${lowered.join("\n  ")}`,
-    ).toEqual([]);
 
-    // …and the ceiling still binds after all of that.
-    expect(() => new FrozenCapsSpendMeter().reserve(TEST_CLIENT, 0.01)).toThrow(CapError);
+    expect(everCommitted, "the fuzz never committed anything — it would pass against a ledger that does nothing").toBe(true);
+    expect(
+      violations.slice(0, 10),
+      `a SEQUENCE of contract calls moved money without a cap check — R12-01/R13-01 are reopened:\n  ` +
+        violations.slice(0, 10).join("\n  "),
+    ).toEqual([]);
+  });
+
+  /** The single call R13-01 used, stated on its own so the finding has a name
+   * of its own in the suite.
+   *
+   * MUTATION: drop the sign check from `InMemorySpendLedger.reserve`. */
+  it("a negative reservation is refused at the boundary, not projected", () => {
+    const meter = new FrozenCapsSpendMeter();
+    meter.settle(meter.reserve(TEST_CLIENT, FROZEN_DAY));
+    const handle = {};
+    expect(
+      () => processLedger().reserve(TEST_CLIENT, -5_000_000, handle),
+      "a negative amount was accepted, so `projected > cap` cannot fail",
+    ).toThrow(/must be a positive whole number/);
+    // The handle was never opened, so there is nothing for settle to commit.
+    expect(processLedger().settle(handle), "a refused reservation still opened a handle").toBeNull();
+    expect(meter.todayUsd(TEST_CLIENT), "the balance moved anyway").toBe(FROZEN_DAY);
+  });
+
+  /** Ceilings are not a parameter in any form, so there is nothing to hand
+   * yourself. The narrowing table is the one permitted input and it clamps.
+   *
+   * MUTATION: give `reserve` a ceiling argument again. */
+  it("a caller cannot supply the ceiling it is measured against", () => {
+    const wide = new FrozenCapsSpendMeter({ [TEST_CLIENT]: { dailyAiSpendUsd: 1e9, monthlyAiSpendUsd: 1e9 } });
+    let spent = 0;
+    for (let i = 0; i < 2_000; i++) {
+      try {
+        wide.settle(wide.reserve(TEST_CLIENT, 0.01));
+        spent += 0.01;
+      } catch {
+        break;
+      }
+    }
+    expect(spent, `a widening table put $${spent} through a frozen $${FROZEN_DAY}/day`).toBeLessThanOrEqual(FROZEN_DAY);
+    // …and it can still NARROW, so the table is not simply ignored.
+    resetProcessLedgerForTests();
+    const narrow = new FrozenCapsSpendMeter({ [TEST_CLIENT]: { dailyAiSpendUsd: 0.05 } });
+    narrow.settle(narrow.reserve(TEST_CLIENT, 0.05));
+    expect(() => narrow.reserve(TEST_CLIENT, 0.01), "the narrowing was ignored").toThrow(CapError);
   });
 
   /** The runtime object may carry more than the contract. Anything extra is a
-   * capability Phase 2's Durable Object will not implement and nothing on the
-   * money path may depend on — today that is exactly `clear()`, which ledger
-   * L31 discloses and `resetProcessLedgerForTests` fences.
+   * capability Phase 2's Durable Object will not implement — today that is
+   * exactly `clear()`, which ledger L31 discloses and the reset fences.
    *
    * MUTATION: add a method to `InMemorySpendLedger` without adding it to the
    * interface. */
@@ -115,10 +230,18 @@ describe("money — the ledger has no balance-write primitive (R12-01)", () => {
     expect(extra, "an undeclared capability appeared on the production ledger").toEqual(["clear"]);
   });
 
-  /** The measured R12-01 attack, end to end: spend the frozen day, then try to
-   * carry on. It is the same shape as R11-07's lock, one level down.
+  /** The production ledger is frozen, so a method cannot be replaced on it.
    *
-   * MUTATION: any of the above. */
+   * MUTATION: drop `Object.freeze(fresh)` from `slot()`. */
+  it("the production ledger cannot be patched", () => {
+    const ledger = processLedger() as unknown as Record<string, unknown>;
+    expect(Object.isFrozen(ledger), "the production ledger is mutable").toBe(true);
+    expect(() => {
+      ledger["settle"] = () => null;
+    }, "settle was replaced on the production ledger").toThrow();
+  });
+
+  /** The measured R12-01 attack, end to end. */
   it("a caller holding the process ledger cannot spend past the frozen day", () => {
     const meter = new FrozenCapsSpendMeter();
     let spent = 0;
@@ -175,12 +298,18 @@ describe("storage availability is per client and audited (R12-07)", () => {
   it("one tenant cannot read another tenant's ledger through the contract", () => {
     const meter = new FrozenCapsSpendMeter();
     meter.settle(meter.reserve("pulsern", 1));
-    const day = `d:${new Intl.DateTimeFormat("en-CA", { timeZone: getCaps("pulsern").ianaTimeZone }).format(Date.now())}|pulsern`;
-    expect(
-      () => processLedger().committedMicros(TEST_CLIENT, day),
-      "a client read another client's period",
-    ).toThrow(/cross-tenant/);
+    meter.reserve("pulsern", 1); // held open, not settled
+    // THERE IS NO PERIOD-KEY PARAMETER ANY MORE (R13-01): a caller names the
+    // SPAN of its OWN calendar, so there is nothing to point at another tenant.
+    // The previous version of this test forged `d:<day>|pulsern` and asserted a
+    // refusal; the refusal is gone because the capability is.
+    expect(processLedger().committedMicros(TEST_CLIENT, "day"), "another tenant's spend leaked into this client's day").toBe(0);
+    expect(processLedger().committedMicros(TEST_CLIENT, "month"), "another tenant's spend leaked into this client's month").toBe(0);
     expect(processLedger().reservedMicros(TEST_CLIENT), "another tenant's holdings leaked into this client's total").toBe(0);
+    // …and the other tenant's own readings are intact, so this is isolation
+    // rather than a ledger that reports zero for everyone.
+    expect(processLedger().committedMicros("pulsern", "day")).toBe(1_000_000);
+    expect(processLedger().reservedMicros("pulsern")).toBe(1_000_000);
   });
 });
 
@@ -242,5 +371,62 @@ describe("the trusted clock's median is a guard, and guards get driven (R12-03)"
     } finally {
       performance.now = realPerfNow;
     }
+  });
+});
+
+describe("the disclosed in-process residual, MEASURED (L31(b), R13-03)", () => {
+  /** L31(b) claimed this file "carries the BOUNDING test the standing ruling
+   * requires: it executes the patch and records exactly how far it gets". It
+   * did not exist — the row described what was intended and the test was never
+   * written, in the very commit that adopted the rule requiring behavioural
+   * rows to carry one (adversary finding R13-03). Here it is.
+   *
+   * The prototype stays unfrozen by human ruling — freezing it is another
+   * spelling, and two rounds proved what that is worth. So the residual is
+   * real, and the point of this test is to state its SIZE in executable form:
+   * the day the bound changes, this goes red and the ledger row has to be
+   * rewritten rather than quietly outliving its facts. */
+  it("an in-process prototype patch spends unmetered — and this is how far it gets", () => {
+    const proto = MemorySpendMeter.prototype as unknown as Record<string, unknown>;
+    const realSettle = proto["settle"];
+    const realReserve = proto["reserve"];
+    try {
+      // R10-02's payload, one layer down: settle releases instead of committing.
+      proto["settle"] = function (this: { release(r: unknown): void }, r: unknown) {
+        this.release(r);
+      };
+      const meter = new FrozenCapsSpendMeter();
+      let spent = 0;
+      for (let i = 0; i < 500; i++) {
+        try {
+          meter.settle(meter.reserve(TEST_CLIENT, 0.01));
+          spent += 0.01;
+        } catch {
+          break;
+        }
+      }
+      /** THE BOUND, STATED: unbounded. The patch spends the full loop and the
+       * ledger reads $0.00, because `settle` never reaches the ledger's commit.
+       * Written as an assertion rather than a comment so it cannot go stale. */
+      expect(spent, "the prototype-patch residual has NARROWED — L31(b) now overstates it").toBeCloseTo(5, 10);
+      expect(meter.todayUsd(TEST_CLIENT), "the ledger recorded the patched spend").toBe(0);
+    } finally {
+      proto["settle"] = realSettle;
+      proto["reserve"] = realReserve;
+    }
+    // …and with the prototype restored, the ceiling binds again, so the test
+    // measured the patch rather than a broken fixture.
+    resetProcessLedgerForTests();
+    const clean = new FrozenCapsSpendMeter();
+    let honest = 0;
+    for (let i = 0; i < 3_000; i++) {
+      try {
+        clean.settle(clean.reserve(TEST_CLIENT, 0.01));
+        honest += 0.01;
+      } catch {
+        break;
+      }
+    }
+    expect(honest).toBeLessThanOrEqual(FROZEN_DAY);
   });
 });

@@ -8,7 +8,7 @@ import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 import { TraceContext } from "../src/tracing.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { checkAdversaryReport, checkClass2Approvals, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps, transportThatBreaksStorage, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, capsOf, fixedCaps, makeDeps, memoryMeter, testClock, transportThatBreaksStorage } from "./helpers.ts";
 
 /** LOCK TESTS.
  *
@@ -124,7 +124,7 @@ describe("money — a DAILY cap has a day (M-03)", () => {
   const CEILINGS = capsOf(5, 100);
   it("the ceiling rolls over: a client that spent today can spend tomorrow", () => {
     let now = Date.parse("2026-08-15T12:00:00Z");
-    const m = new MemorySpendMeter(() => now, CEILINGS);
+    const m = memoryMeter(() => now, CEILINGS);
     m.settle(m.reserve("c", 5));
     expect(() => m.reserve("c", 1)).toThrow(CapError); // spent for today
     now = Date.parse("2026-08-16T00:30:00Z");
@@ -136,7 +136,7 @@ describe("money — a DAILY cap has a day (M-03)", () => {
 
   it("within one day the ceiling still binds", () => {
     let now = Date.parse("2026-08-15T00:10:00Z");
-    const m = new MemorySpendMeter(() => now, CEILINGS);
+    const m = memoryMeter(() => now, CEILINGS);
     m.settle(m.reserve("c", 5));
     now = Date.parse("2026-08-15T23:50:00Z");
     expect(() => m.reserve("c", 1)).toThrow(CapError);
@@ -148,7 +148,7 @@ describe("money — a DAILY cap has a day (M-03)", () => {
    * client spend $310 against a $200 approval. */
   it("the monthly ceiling binds across days even when every single day is legal", () => {
     let now = Date.parse("2026-08-01T12:00:00Z");
-    const m = new MemorySpendMeter(() => now, capsOf(10, 20));
+    const m = memoryMeter(() => now, capsOf(10, 20));
     for (const day of ["01", "02"]) {
       now = Date.parse(`2026-08-${day}T12:00:00Z`);
       m.settle(m.reserve("c", 10)); // each day is exactly at its own ceiling
@@ -164,7 +164,7 @@ describe("money — a DAILY cap has a day (M-03)", () => {
 
   it("a reservation settles against the day it was taken, not the day it lands", () => {
     let now = Date.parse("2026-08-15T23:59:59Z");
-    const m = new MemorySpendMeter(() => now, CEILINGS);
+    const m = memoryMeter(() => now, CEILINGS);
     const r = m.reserve("c", 1);
     now = Date.parse("2026-08-16T00:00:01Z");
     m.settle(r);
@@ -177,7 +177,7 @@ describe("money — a DAILY cap has a day (M-03)", () => {
 describe("money — isolation guards on the ledger (H-14, H-15)", () => {
   // MUTATION: remove the `open.clientId !== reservation.clientId` check in #close.
   it("one tenant cannot close another tenant's reservation", () => {
-    const m = new MemorySpendMeter(testClock, fixedCaps);
+    const m = memoryMeter(testClock, fixedCaps);
     const a = m.reserve("tenant-a", 1);
     m.settle({ ...a, clientId: "tenant-b" });
     expect(m.reservedUsd("tenant-a")).toBe(1); // still held by A

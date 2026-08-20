@@ -100,8 +100,48 @@ describe("mutation harness — an interrupted run restores the tree (R9-03)", ()
        * recorded harm is "three more source files were rewritten after the
        * signal", so that is what is measured: the marker names the file being
        * mutated, and it must not name a DIFFERENT one once the signal is in. */
+      /** WHAT HAPPENS *AFTER* THE SIGNAL IS THE PROPERTY.
+       *
+       * The 30-second deadline is a DURATION, and anything that services the
+       * signal inside it passes — including a runner that blocks for three
+       * whole suite runs first. The previous version tried to measure the real
+       * property and did not: it only recorded whether the marker named a
+       * DIFFERENT path, and the harness mutates `spend-meter.ts` for its first
+       * four entries, so there was a three-entry window it could not see —
+       * R9-03's recorded harm is exactly three (adversary finding R13-05).
+       *
+       * So the FILES are watched, not the marker's path. A snapshot is taken at
+       * the instant of the signal; after that, the only content any watched file
+       * may take is what it had then, or its pre-mutation original (that is the
+       * restore). Anything else is a write that happened after the signal. */
+      const watchList = new Set<string>([mutated!.path]);
+      for (const rel of ["engine/src/spend-meter.ts", "engine/src/spend-ledger.ts", "engine/src/gateway.ts"]) {
+        watchList.add(join(workspace, rel));
+      }
+      const atSignal = new Map<string, string>();
+      const originals = new Map<string, string>([[mutated!.path, mutated!.original]]);
+      for (const f of watchList) {
+        try {
+          atSignal.set(f, readFileSync(f, "utf8"));
+        } catch {
+          /* not present; nothing to watch */
+        }
+      }
       const afterSignal = new Set<string>();
       const watch = setInterval(() => {
+        for (const f of watchList) {
+          let now: string;
+          try {
+            now = readFileSync(f, "utf8");
+          } catch {
+            continue;
+          }
+          if (now === atSignal.get(f)) continue;
+          if (now === originals.get(f)) continue; // the restore, which is the point
+          afterSignal.add(f);
+        }
+        // A marker naming a file we were not watching is also a post-signal
+        // write, and it tells us which one.
         try {
           const rec = JSON.parse(readFileSync(marker, "utf8"));
           if (typeof rec?.path === "string" && rec.path !== mutated!.path) afterSignal.add(rec.path);
@@ -116,10 +156,19 @@ describe("mutation harness — an interrupted run restores the tree (R9-03)", ()
       });
       clearInterval(watch);
       expect(exitCode, "SIGINT did not stop the harness — it kept rewriting source").not.toBe("STILL RUNNING");
+      // One last look after exit, in case the final write landed between polls.
+      for (const f of watchList) {
+        try {
+          const now = readFileSync(f, "utf8");
+          if (now !== atSignal.get(f) && now !== originals.get(f)) afterSignal.add(f);
+        } catch {
+          /* gone; nothing to compare */
+        }
+      }
       expect(
         [...afterSignal],
-        "the harness mutated further source files AFTER the signal was delivered — the loop is blocking, " +
-          "so the handler waited behind it (R9-03's recorded harm, R12-04's measurement)",
+        "the harness wrote to source files AFTER the signal was delivered — the loop is blocking, so the " +
+          "handler waited behind it (R9-03's recorded harm; R12-04 and R13-05 measured it past the old check)",
       ).toEqual([]);
       expect(readFileSync(mutated!.path, "utf8"), "an interrupted run left a guard reverted on disk").toBe(
         mutated!.original,
