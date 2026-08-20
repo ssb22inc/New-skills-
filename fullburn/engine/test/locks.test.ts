@@ -60,7 +60,7 @@ describe("money — a request that left the building is never released (M-01, M-
     // Storage is down, so every reading throws — which is itself fail-closed.
     // Bring it back and the held money must STILL be held: the reservation for
     // the billed request was never released.
-    ledger.setAvailable(true);
+    ledger.setAvailable(TEST_CLIENT, true, "fixture restored");
     expect(meter.reservedUsd(TEST_CLIENT), "the headroom for a billed request was returned").toBeGreaterThan(before);
   });
 
@@ -71,7 +71,7 @@ describe("money — a request that left the building is never released (M-01, M-
       async post() {
         // Departed, then storage dies, then the upstream error surfaces: the
         // settle on the error path must fail and the headroom must stay held.
-        ledger.setAvailable(false);
+        ledger.setAvailable(TEST_CLIENT, false, "storage outage fixture (M-01)");
         throw new Error("upstream 504");
       },
     };
@@ -81,7 +81,7 @@ describe("money — a request that left the building is never released (M-01, M-
       input: {},
       trace: trace("m1b"),
     }).catch(() => undefined);
-    ledger.setAvailable(true);
+    ledger.setAvailable(TEST_CLIENT, true, "fixture restored");
     expect(meter.reservedUsd(TEST_CLIENT), "a departed request's headroom was released").toBeGreaterThan(0);
     expect(meter.todayUsd(TEST_CLIENT), "a failed settle committed anyway").toBe(0);
   });

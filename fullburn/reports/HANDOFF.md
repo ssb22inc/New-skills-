@@ -1,4 +1,4 @@
-# HANDOFF — Fullburn Phase 0, as of 2026-08-19
+# HANDOFF — Fullburn Phase 0, as of 2026-08-20
 
 Written so the next session resumes on **evidence, not reconstruction** (human
 ruling, R11 round). Read this file, then `CLAUDE.md`, then
@@ -9,9 +9,9 @@ where it summarises, the ledger and the reports are authoritative.
 
 ## 1. Where the build actually is
 
-Phase 0 is **NOT passed**. Eleven adversary rounds have run (`reports/
-ADVERSARY_REPORT_phase0.r2.md` … `.r11.md`); every one returned FAIL, and every
-one found real money-path defects. r11's report is the newest and is the input
+Phase 0 is **NOT passed**. Twelve adversary rounds have run (`reports/
+ADVERSARY_REPORT_phase0.r2.md` … `.r12.md`); every one returned FAIL, and every
+one found real money-path defects. r12's report is the newest and is the input
 to the current work.
 
 - The PR is **CLOSED**. Do not reopen it and do not open a new one without an
@@ -61,71 +61,94 @@ standing-invariants list; this section says who ruled and why.
    patching → prototype patching → per-call construction. Explicitly ruled: do
    NOT freeze the prototype.
 
-## 3. What R11's work changed (this session)
+## 3. What R12's work changed (most recent session)
 
-**R11-01 / R11-07 — the ledger left the meter.** The root cause behind four
-rounds of fixes was that the ledger lived in the meter's own fields, so
-`new FrozenCapsSpendMeter()` per call minted a fresh ceiling — no mock, no
-forgery, just constructing the object the API asks you to construct. Measured
-at 3,000 dispatches, $30 against a frozen $5/day.
+**R12-01 — the ledger now OWNS the arithmetic (severity 1, money loss).** R11
+moved the ledger out of the meter and stopped there, so it arrived as a public
+money-write primitive: `processLedger().setCommittedMicros(period, 0)` minted a
+fresh ceiling on every call — $30 against a frozen $5/day, one meter, zero
+`CapError`s, `todayUsd()` reading $0.00, no patch and no cast. Both R11-07
+fences guarded the RESET and had nothing to say about writing the balance.
 
-- `engine/src/spend-ledger.ts` (**new**): the `SpendLedger` storage interface,
-  `InMemorySpendLedger`, and one module-scoped `PROCESS_LEDGER` returned by
-  `processLedger()`. The meter is now a **handle** onto shared state.
-- `engine/src/spend-meter.ts`: holds `#ledger: SpendLedger` instead of owning
-  the maps. `FrozenCapsSpendMeter` passes `processLedger()` and takes no ledger
-  argument, so production cannot inject one.
-- **R11-06**: `setAvailable` is gone from the meter entirely. A public, untraced
-  method that permanently halts a client's spend does not belong on the money
-  path's public face; it lives on the ledger, where storage lives.
-- Test isolation: `resetProcessLedgerForTests()`, fenced by the **runtime** (it
-  refuses without a vitest worker marker, and the deployed Worker surface has
-  neither `process` nor that marker) and by an invariant that no module under
-  `engine/src` or `config/src` may name it. Both fences locked behaviourally.
-- **R11-04** (the sixth shape-assertion trap): the runner's blocking-call check
-  matched call sites by NAME, so `import { spawnSync as runSuiteBlocking }`
-  restored R9-03 with every check green. `engine/test/blocking-calls.ts`
-  resolves the **binding** instead and refuses what it cannot resolve
-  statically. Its red-proof is `engine/test/blocking-calls.test.ts`.
-- **R11-05**: the unreachable-guard sweep recorded `e instanceof Error`, so
-  eleven of sixteen entries would have passed with their own guard deleted. It
-  now matches the guard's own refusal message and error class, and carries its
-  own red-proof for all three ways a guard can be dead.
-- Ledger: **L29 and L30 corrected** (both carried false claims — see the
-  rows), **L31 added** for the process-ledger residuals.
+Human ruling: move the reserve/settle arithmetic inside the ledger; the meter is
+a caller, not an arithmetic owner. Done —
+- `SpendLedger` exposes `reserve(req, handle)` and `settle(handle)` and **no
+  balance-write primitive at all**. Reserved headroom is DERIVED from the open
+  handles rather than stored, so there is no second number to overwrite.
+- `engine/test/locks-r12.test.ts` FUZZES every method the interface declares,
+  read out of the source, and fails if any of them lowers a committed balance.
+  A setter added tomorrow is fuzzed the day it lands.
+- The prototype is still unfrozen by ruling, so R11-01's in-process patch
+  remains — bounded by a test and disclosed in L31(b), not described away.
+
+**R12-02 — the sweep's POPULATION, not just its predicate.** R11 sharpened the
+predicate on sixteen hand-written entries while the money path carried
+forty-seven guards; twelve were measured blind, including all six in `llm()`,
+while `CLAUDE.md` and L30 claimed full coverage. `engine/test/money-path-guards.ts`
+now reads every `throw new …` out of the four money-path modules and the sweep
+FAILS naming any it did not drive. Undrivable guards must name a ledger row.
+
+**The ledger-integrity standing rule.** Three consecutive rounds produced a
+correction that introduced a fresh false claim. New rule (see `CLAUDE.md`): a
+row asserting something about code behaviour carries a test that fails when the
+assertion goes stale; rows that cannot be tested state limitations only. The
+claims check lives in `engine/test/invariants/`. L14, L17, L29, L30 and L31 were
+corrected or rewritten under it; L32 is new.
+
+**Also fixed:** R12-03 (three guards that survived their own deletion — the
+anchor median, the monotonic refusal and `settleOrFailClosed`'s rethrow, all now
+driven and locked); trap #7 (the blocking resolver follows local re-exports
+transitively and counts `.call`/`.apply`/`.bind`/`Reflect.apply` — and the
+signal-string greps are DELETED, with the drill strengthened to assert no source
+file is mutated after the signal); R12-06 (the ledger slot is keyed off
+`Symbol.for` so it survives module resets, the module-reset test moved to its own
+file, and a shuffled-suite CI stage now catches order-dependence); R12-07
+(availability is per client and audited, `openEntries()` is gone); R12-08 (the
+evidence column is anchored and unit-tested); R11-05 (restored as open, its
+identifier un-reassigned, and money-path mocking bounded by an invariant).
 
 ## 4. OPEN — what the next session must pick up
 
 ### 4.1 The Phase 2 dependency that must not be forgotten (ledger L31)
 
 The in-process ledger is a stand-in. **Phase 2 lands the client's Durable Object
-behind the same `SpendLedger` interface** (§2.2). Three residuals are open and
-disclosed, not closed:
+behind the same `SpendLedger` interface** (§2.2). Three limitations are open and
+stated as limitations, not conclusions:
 
-- **(a) Per-process, not per-client.** Two Workers hold two ledgers and
-  therefore two ceilings — the same defect at a coarser grain. Only the DO
-  closes it.
-- **(b) The ceiling is enforced by the METER, not the ledger.** The interface
-  stores; `reserve()` does the cap arithmetic. So an in-process patch of
-  `MemorySpendMeter.prototype.reserve` still spends past the ceiling
-  (**R11-01 is NOT structurally closed**). The architectural close is to move
-  the reserve arithmetic INSIDE the ledger when the DO lands, so the cap is
-  enforced at the storage boundary. **`SpendLedger` is therefore not final** —
-  it will need a reserve-shaped method.
-- **(c) The test-reset seam exists** and is fenced twice; typing is not one of
-  the fences and is not claimed as one.
+- **(a) Per PROCESS.** Two Workers, or one after an eviction, hold two ledgers
+  and therefore two ceilings; nothing survives a restart. It was worse until
+  R12: the unit was the MODULE INSTANCE, so `vi.resetModules()` plus a
+  re-import minted a full second ceiling inside one process. The slot is keyed
+  off `Symbol.for` now and a test drives the re-import.
+- **(b) An in-process patch of `MemorySpendMeter.prototype` still spends
+  unmetered** — `reserve` AND `settle`, not just `reserve`. The prototype stays
+  unfrozen by ruling (freezing is another spelling). `locks-r12` carries the
+  bounding test that measures how far the patch gets. **R11-01 is bounded, not
+  closed.** The DO closes it: with the arithmetic already inside the ledger,
+  enforcement happens outside the process.
+- **(c) `resetProcessLedgerForTests()` exists**, fenced by the runtime and by an
+  invariant that no production module may name it. Typing is not a fence:
+  `clear()` is off-interface and reachable by a cast, and a test asserts it is
+  the ONLY thing on the implementation the contract does not declare.
 
 ### 4.2 Immediate next step
 
-**Invoke r12** — a fresh same-family adversary round against the committed R11
+**Invoke r13** — a fresh same-family adversary round against the committed R12
 tree. Its brief must carry forward, as explicit attack surface:
 
-1. The new `SpendLedger` seam and everything in L31(a)–(c), R11-01 especially.
-2. The unreachable-guard sweep, **re-run to completion** (standing ruling 3).
+1. The `SpendLedger` contract now that it owns the arithmetic: can any caller
+   move a balance without a cap check, by any route? L31(a)–(c) especially
+   R11-01's prototype patch, which is bounded and disclosed, NOT closed.
+2. The unreachable-guard sweep, **re-run to completion** (standing ruling 3) —
+   including its new completeness check: is the enumeration itself complete?
+   It reads `throw new …` only; control-flow guards are outside its count.
 3. `mutate.mjs` as an adversarial target, not a trusted tool.
-4. The shape-assertion class — this is the seventh look for it.
+4. The shape-assertion class — this is the EIGHTH look for it. Three of the last
+   four rounds found one on the same line of the same file.
+5. The ledger-claims check: does every behavioural row have a binding, and does
+   each binding actually go red when its row goes stale?
 
-**Only if r12 is clean** does the cross-family read get regenerated (ledger L8:
+**Only if r13 is clean** does the cross-family read get regenerated (ledger L8:
 every review so far has run on the builder's own model family, which violates
 §2.4's family-diversity rule for the review itself).
 

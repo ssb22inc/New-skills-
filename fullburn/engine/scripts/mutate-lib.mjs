@@ -185,3 +185,22 @@ export function metaCheckVerdict(results) {
       "HARNESS RESULT IS VOID.",
   };
 }
+
+/** THE PER-ENTRY EVIDENCE COLUMN, as a function so it can be driven.
+ *
+ * It was `/Tests\s+(.*)$/m` inline in the runner, which matches inside a TEST
+ * NAME as readily as in vitest's summary: `resetProcessLedgerForTests refuses
+ * when no test runner is present` contains `Tests ` followed by text, so three
+ * entries — the three locking that round's headline money fix — printed a test
+ * title where their counts belonged (adversary finding R12-08, R10-10
+ * recurring). The verdict was never wrong; the DIAGNOSTIC was lost, and the
+ * per-entry counts are what made R9-01 visible in the first place.
+ *
+ * The summary line is indented and its capture starts with a DIGIT. A test
+ * name cannot satisfy that, whatever it is called.
+ */
+export function summaryLine(out, err) {
+  const SUMMARY = /^[ \t]+Tests[ \t]+(\d[^\n]*)$/m;
+  const m = SUMMARY.exec(out ?? "") ?? SUMMARY.exec(err ?? "");
+  return m ? m[1].trim() : "failed";
+}

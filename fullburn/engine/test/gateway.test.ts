@@ -77,7 +77,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
 
   it("unavailable spend meter refuses spend (fail closed)", async () => {
     const { deps, ledger } = makeDeps();
-    ledger.setAvailable(false);
+    ledger.setAvailable(TEST_CLIENT, false, "storage outage fixture");
     await expect(
       llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() }),
     ).rejects.toThrow(/fail closed/);
@@ -125,7 +125,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
         return llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
       },
       async () => {
-        ledger.setAvailable(false);
+        ledger.setAvailable(TEST_CLIENT, false, "storage outage fixture");
         return llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace() });
       },
     ];
@@ -136,7 +136,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
       );
       expect(msg).not.toContain(CANARY_SECRET);
     }
-    ledger.setAvailable(true);
+    ledger.setAvailable(TEST_CLIENT, true, "fixture restored");
     // Traces carry no secrets either (Langfuse is a named leak surface):
     expect(JSON.stringify(sink.events)).not.toContain(CANARY_SECRET);
   });

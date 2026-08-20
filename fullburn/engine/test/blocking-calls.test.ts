@@ -43,3 +43,48 @@ describe("blocking child_process bindings are resolved, not name-matched (R11-04
     expect(blockingCalls(held, "await measure(entry);")).toEqual([]);
   });
 });
+
+describe("the resolver follows local re-exports and every call form (R12-04)", () => {
+  /** The three evasions r12 measured, each of which restored a blocking runner
+   * with the previous resolver reporting clean. */
+  const helper = 'export { spawnSync as runSync } from "node:child_process";';
+
+  it("follows a one-line re-export helper", () => {
+    const runner = 'import { runSync as runSuiteBlocking } from "./cp-util.mjs";\nrunSuiteBlocking(process.execPath, []);';
+    const graph = new Map([["./cp-util.mjs", helper]]);
+    expect(blockingBindings(runner, graph).names).toEqual(["runSuiteBlocking"]);
+    expect(blockingCalls(runner, runner, graph)).toEqual(["runSuiteBlocking"]);
+  });
+
+  it("follows a re-export chain, and a star re-export", () => {
+    const mid = 'export * from "./cp-util.mjs";';
+    const runner = 'import { runSync } from "./mid.mjs";\nrunSync("x");';
+    const graph = new Map([["./cp-util.mjs", helper], ["./mid.mjs", mid]]);
+    expect(blockingCalls(runner, runner, graph)).toEqual(["runSync"]);
+    const star = 'export * from "node:child_process";';
+    const direct = 'import { spawnSync } from "./all.mjs";\nspawnSync("x");';
+    expect(blockingCalls(direct, direct, new Map([["./all.mjs", star]]))).toEqual(["spawnSync"]);
+  });
+
+  it("counts .call, .apply, .bind and Reflect.apply as calls", () => {
+    const src = 'import { spawnSync as rb } from "node:child_process";';
+    for (const call of ["rb.call(null, 'x')", "rb.apply(null, ['x'])", "rb.bind(null)('x')", "Reflect.apply(rb, null, ['x'])"]) {
+      expect(blockingCalls(src, call), `${call} was not counted as a call`).toEqual(["rb"]);
+    }
+  });
+
+  it("REFUSES a helper it was not given, and a helper that hides the import", () => {
+    const runner = 'import { runSync } from "./unknown.mjs";\nrunSync("x");';
+    // An unseen module contributes no binding, so the runner name is not
+    // flagged — but a helper that IS given and hides child_process behind a
+    // namespace import is refused rather than read as clean.
+    expect(blockingCalls(runner, runner)).toEqual([]);
+    const hiding = 'import * as cp from "node:child_process";\nexport const runSync = cp.spawnSync;';
+    expect(blockingCalls(runner, runner, new Map([["./unknown.mjs", hiding]])).length).toBeGreaterThan(0);
+  });
+
+  it("still does not fire on the async APIs, so it discriminates", () => {
+    const src = 'import { spawn } from "node:child_process";\nspawn(process.execPath, []);';
+    expect(blockingCalls(src, src, new Map([["./cp-util.mjs", helper]]))).toEqual([]);
+  });
+});

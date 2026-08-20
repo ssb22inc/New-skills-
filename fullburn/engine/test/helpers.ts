@@ -59,7 +59,7 @@ export const fixedCaps = () => ({ dailyUsd: 200, monthlyUsd: 200, timeZone: "UTC
  * R11-06 — a public, untraced method that permanently halts a client's spend
  * has no business on the money path's public face — so storage availability is
  * now driven where storage lives. */
-export function transportThatBreaksStorage(ledger: SpendLedger, inner?: GatewayTransport) {
+export function transportThatBreaksStorage(ledger: SpendLedger, inner?: GatewayTransport, clientId = TEST_CLIENT) {
   let broke = 0;
   return {
     breaks: () => broke,
@@ -67,7 +67,7 @@ export function transportThatBreaksStorage(ledger: SpendLedger, inner?: GatewayT
       async post(url: string, body: unknown, headers: Readonly<Record<string, string>>): Promise<unknown> {
         const out = inner ? await inner.post(url, body, headers) : { greeting: "ok" };
         // The request has left the building; storage dies before the settle.
-        ledger.setAvailable(false);
+        ledger.setAvailable(clientId, false, "storage outage fixture (M-01/M-04)");
         broke += 1;
         return out;
       },

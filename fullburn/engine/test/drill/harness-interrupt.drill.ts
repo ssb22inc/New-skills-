@@ -90,12 +90,37 @@ describe("mutation harness — an interrupted run restores the tree (R9-03)", ()
       }
       expect(mutated, "the harness never broke a file, so this drill proved nothing").not.toBe(null);
 
+      /** WHAT HAPPENS *AFTER* THE SIGNAL IS THE PROPERTY, not merely how fast
+       * the process dies.
+       *
+       * The 30-second deadline is a DURATION, and anything that services the
+       * signal inside it passes — including a runner that blocks for three
+       * whole suite runs first and rewrites two more source files on the way
+       * (adversary finding R12-04, measured with every gate green). R9-03's
+       * recorded harm is "three more source files were rewritten after the
+       * signal", so that is what is measured: the marker names the file being
+       * mutated, and it must not name a DIFFERENT one once the signal is in. */
+      const afterSignal = new Set<string>();
+      const watch = setInterval(() => {
+        try {
+          const rec = JSON.parse(readFileSync(marker, "utf8"));
+          if (typeof rec?.path === "string" && rec.path !== mutated!.path) afterSignal.add(rec.path);
+        } catch {
+          /* no marker, or mid-write */
+        }
+      }, 25);
       const exitCode = await new Promise((r) => {
         child.on("exit", (code, signal) => r(code ?? signal));
         child.kill("SIGINT");
         setTimeout(() => r("STILL RUNNING"), 30_000);
       });
+      clearInterval(watch);
       expect(exitCode, "SIGINT did not stop the harness — it kept rewriting source").not.toBe("STILL RUNNING");
+      expect(
+        [...afterSignal],
+        "the harness mutated further source files AFTER the signal was delivered — the loop is blocking, " +
+          "so the handler waited behind it (R9-03's recorded harm, R12-04's measurement)",
+      ).toEqual([]);
       expect(readFileSync(mutated!.path, "utf8"), "an interrupted run left a guard reverted on disk").toBe(
         mutated!.original,
       );

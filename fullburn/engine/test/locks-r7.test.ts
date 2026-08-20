@@ -11,6 +11,8 @@ import {
 } from "../src/spend-meter.ts";
 import { capsOf } from "./helpers.ts";
 import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
+// @ts-expect-error — plain .mjs module, typed loosely on purpose
+import { summaryLine } from "../scripts/mutate-lib.mjs";
 
 /** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
  * one test's spend is the next test's opening balance unless the slate is
@@ -491,32 +493,20 @@ describe("money — llm() takes its ceiling from the frozen table, by constructi
       performance.now = realPerfNow;
     }
 
-    /** BOUND 4 — a MONOTONIC source that goes backwards refuses spend rather
-     * than re-entering a closed accounting period.
+    /** BOUND 4 lives in its own file now — `engine/test/clock-rebind.test.ts`.
      *
-     * The source is captured at module load, so this patches it BEFORE a fresh
-     * import — which is also the only way the guard is reachable at all. A
-     * guard no input can reach is what this project deletes; this one has an
-     * input, and here it is.
+     * It needs `vi.resetModules()` and a re-import, because the monotonic
+     * source is captured at module load. Run in THIS file it split the module
+     * graph in two: every later dynamic import got a different
+     * `MeterUnavailableError` class and a different module instance, so four of
+     * six shuffle seeds went red with `expected error to be instance of
+     * MeterUnavailableError` when the error WAS one (adversary finding R12-06).
+     * Vitest isolates by file, so a file that resets modules and imports
+     * nothing else afterwards cannot contaminate anything.
      *
-     * MUTATION: drop the `mono < lastMono` check from trustedClock. */
-    const realHrtime = process.hrtime.bigint;
-    try {
-      let ticks = 0n;
-      // Advances once, then goes backwards — a source swap, a VM migration, or
-      // a platform whose "monotonic" clock is not.
-      (process.hrtime as unknown as { bigint: () => bigint }).bigint = () => {
-        ticks += 1n;
-        return ticks === 1n ? 1_000_000_000n : 1n;
-      };
-      const { resetModules } = await import("vitest").then((v) => ({ resetModules: v.vi.resetModules }));
-      resetModules();
-      const fresh = await import("../src/spend-meter.ts");
-      const c = fresh.trustedClock();
-      expect(() => c(), "a backwards monotonic source was accepted").toThrow(/backwards/);
-    } finally {
-      (process.hrtime as unknown as { bigint: typeof realHrtime }).bigint = realHrtime;
-    }
+     * The guard itself is also directly drivable now: `assertMonotonic` is an
+     * exported pure function, so the sweep fires it without re-importing
+     * anything (R12-03). */
 
     /** BOUND 5 — an agreeing set is accepted, so bounds 3 and 4 are real
      * discriminations and not checks that refuse everything. */
@@ -1095,5 +1085,31 @@ describe("grade registry — enforcement acts on evidence, not on assertion (R7-
     expect(() => enforcement(real.slice(0, 1))).toThrow(GradeRegistryError);
     const { actions } = gradeAndEnforce({});
     expect(actions.length).toBeGreaterThan(0);
+  });
+});
+
+describe("harness — the per-entry evidence column survives a test name (R12-08)", () => {
+  /** R10-10 lost this column to vitest's box-drawing stderr; R12-08 lost it
+   * again to a TEST NAME containing `Tests `, for exactly the three entries
+   * locking that round's headline money fix. The verdict was never wrong — it
+   * comes from the child's exit code — but the counts are the diagnostic that
+   * made R9-01 visible, and losing them silently is how a harness stops being
+   * readable.
+   *
+   * MUTATION: loosen the anchor back to a bare /Tests\s+(.*)$/m. */
+  it("reads the summary line, not a test title that happens to contain the word", () => {
+    const hijacking = [
+      " \u276f engine/test/locks-r11.test.ts (5 tests | 1 failed) 92ms",
+      "   \u00d7 the reset > resetProcessLedgerForTests refuses when no test runner is present 1ms",
+      "     \u2192 expected [Function] to throw",
+      "",
+      "      Tests  1 failed | 305 passed (306)",
+      "   Start at  18:04:47",
+    ].join("\n");
+    expect(summaryLine(hijacking, "")).toBe("1 failed | 305 passed (306)");
+    // stderr is read only when stdout carries no summary…
+    expect(summaryLine("", "      Tests  2 failed | 304 passed (306)")).toBe("2 failed | 304 passed (306)");
+    // …and a run with no summary at all says so rather than inventing one.
+    expect(summaryLine("   \u00d7 a test called Tests and more Tests here", "")).toBe("failed");
   });
 });

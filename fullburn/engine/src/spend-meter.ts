@@ -1,5 +1,10 @@
 import { CapError, effectiveAiCapsUsd } from "@fullburn/config/caps";
-import { InMemorySpendLedger, processLedger, type SpendLedger } from "./spend-ledger.ts";
+import { InMemorySpendLedger, MeterUnavailableError, processLedger, type SpendLedger } from "./spend-ledger.ts";
+
+/** Re-exported so every existing importer keeps ONE error identity. It is
+ * DEFINED in spend-ledger.ts because the ledger now owns the refusals — the
+ * arithmetic moved there in R12-01 and the error has to move with it. */
+export { MeterUnavailableError } from "./spend-ledger.ts";
 
 /** Per-client AI spend metering (R3; F1/F2/F3; R2-01, R2-02, R2-16).
  *
@@ -166,7 +171,6 @@ export interface SpendMeter {
   release?(reservation: SpendReservation): void;
 }
 
-export class MeterUnavailableError extends Error {}
 
 /** A value that is not a finite, non-negative number is unusable — refuse spend
  * rather than compare against it (F2). */
@@ -305,44 +309,37 @@ export class MemorySpendMeter implements SpendMeter {
     return this.#periods(clientId, this.#zoneOf(clientId)).month;
   }
 
-  #assertAvailable(): void {
-    if (!this.#ledger.isAvailable()) throw new MeterUnavailableError("spend meter unavailable — refusing spend (fail closed)");
-  }
-
-  #read(read: (p: string) => number, period: string, label: string): number {
-    const v = read(period);
-    if (!Number.isSafeInteger(v) || v < 0) {
-      throw new MeterUnavailableError(`${label} ledger is corrupt — refusing spend (fail closed)`);
+  /** Availability is PER CLIENT. It was one process-wide flag, so halting one
+   * tenant's storage halted every tenant's spend (adversary finding R12-07). */
+  #assertAvailable(clientId: string): void {
+    if (!this.#ledger.isAvailable(clientId)) {
+      throw new MeterUnavailableError("spend meter unavailable — refusing spend (fail closed)");
     }
-    return v;
   }
 
   todayUsd(clientId: string): number {
-    this.#assertAvailable();
-    return fromMicros(this.#read((p) => this.#ledger.committedMicros(p), this.#key(clientId), "committed spend"));
+    this.#assertAvailable(clientId);
+    return fromMicros(this.#ledger.committedMicros(clientId, this.#key(clientId)));
   }
 
   monthUsd(clientId: string): number {
-    this.#assertAvailable();
-    return fromMicros(this.#read((p) => this.#ledger.committedMicros(p), this.#monthKey(clientId), "committed spend"));
+    this.#assertAvailable(clientId);
+    return fromMicros(this.#ledger.committedMicros(clientId, this.#monthKey(clientId)));
   }
 
   /** Every open reservation for this client, whatever day it was taken on
    * (N-09). Held money must never be invisible.  */
   reservedUsd(clientId: string): number {
-    this.#assertAvailable();
-    let micros = 0;
-    for (const open of this.#ledger.openEntries()) {
-      if (open.clientId === clientId) micros += open.micros;
-    }
-    if (!Number.isSafeInteger(micros) || micros < 0) {
-      throw new MeterUnavailableError("reserved spend ledger is corrupt — refusing spend (fail closed)");
-    }
-    return fromMicros(micros);
+    this.#assertAvailable(clientId);
+    // The ledger sums its OWN open handles for this client. It used to hand out
+    // every tenant's entries and let the caller filter (adversary finding
+    // R12-07); a contract that can enumerate other tenants' holdings is a
+    // cross-tenant read whether or not today's caller abuses it.
+    return fromMicros(this.#ledger.reservedMicros(clientId));
   }
 
   reserve(clientId: string, amountUsd: number): SpendReservation {
-    this.#assertAvailable();
+    this.#assertAvailable(clientId);
     if (typeof clientId !== "string" || clientId.length === 0) {
       throw new MeterUnavailableError("reserve requires a clientId");
     }
@@ -360,61 +357,30 @@ export class MemorySpendMeter implements SpendMeter {
     const { day, month } = this.#periods(clientId, caps.timeZone);
     this.#assertForward(clientId, day);
 
-    // BOTH ceilings are read, checked and written inside one synchronous block.
-    // Checking them in sequence with any await between would reopen the race
-    // the reserve design exists to close.
-    const project = (period: string): number => {
-      const committed = this.#read((p) => this.#ledger.committedMicros(p), period, "committed spend");
-      const reserved = this.#read((p) => this.#ledger.reservedMicros(p), period, "reserved spend");
-      const projected = committed + reserved + amountMicros;
-      if (!Number.isSafeInteger(projected)) {
-        throw new MeterUnavailableError("projected spend is out of range — refusing spend (fail closed)");
-      }
-      return projected;
-    };
-    const projectedDay = project(day);
-    const projectedMonth = project(month);
-    if (projectedDay > dailyCapMicros) {
-      throw new CapError(
-        `AI spend cap breach refused: projected $${fromMicros(projectedDay).toFixed(4)} > daily cap $${caps.dailyUsd} for "${clientId}"`,
-      );
-    }
-    if (projectedMonth > monthlyCapMicros) {
-      throw new CapError(
-        `AI spend cap breach refused: projected $${fromMicros(projectedMonth).toFixed(4)} > monthly cap $${caps.monthlyUsd} for "${clientId}"`,
-      );
-    }
-
-    // Single synchronous write completes the read-check-write cycle.
-    
-    const id = `r${this.#ledger.nextSeq()}`;
-    this.#ledger.setReservedMicros(day, projectedDay - this.#read((p) => this.#ledger.committedMicros(p), day, "committed spend"));
-    this.#ledger.setReservedMicros(month, projectedMonth - this.#read((p) => this.#ledger.committedMicros(p), month, "committed spend"));
-    // The reservation remembers the periods it was taken in, so a settle that
-    // lands after midnight commits against the day the spend belongs to.
-    const handle = new SpendReservation(RESERVATION_BRAND, id, clientId, fromMicros(amountMicros));
-    this.#ledger.setOpen(handle, { clientId, micros: amountMicros, day, month });
+    /** THE ARITHMETIC IS THE LEDGER'S, NOT THIS OBJECT'S.
+     *
+     * It used to live here, with the ledger holding public setters underneath —
+     * so the cap check was something a caller could simply not call:
+     * `processLedger().setCommittedMicros(period, 0)` put $30 through a frozen
+     * $5/day with `todayUsd()` reading $0.00 (adversary finding R12-01). The
+     * meter computes the period keys and reads the frozen ceilings; the LEDGER
+     * reads, checks and writes in one synchronous block and owns the refusal.
+     * There is no longer any way to move a balance that is not a cap check. */
+    const handle = new SpendReservation(RESERVATION_BRAND, `r${this.#ledger.nextSeq()}`, clientId, fromMicros(amountMicros));
+    this.#ledger.reserve(
+      {
+        clientId,
+        micros: amountMicros,
+        day,
+        month,
+        dailyCapMicros,
+        monthlyCapMicros,
+        dailyCapUsd: caps.dailyUsd,
+        monthlyCapUsd: caps.monthlyUsd,
+      },
+      handle,
+    );
     return handle;
-  }
-
-  #close(reservation: SpendReservation): { clientId: string; micros: number; day: string; month: string } | null {
-    // IDENTITY, AND NOTHING ELSE. The lookup IS the guard: only a handle this
-    // meter minted and has not yet closed is a key here. No field is consulted,
-    // so no field can be tampered with (R5-01, R6-04).
-    const open = this.#ledger.open(reservation);
-    if (open === undefined) return null; // forged, foreign, or already closed
-    this.#ledger.deleteOpen(reservation);
-    for (const period of [open.day, open.month]) {
-      const reserved = this.#read((p) => this.#ledger.reservedMicros(p), period, "reserved spend");
-      // No Math.max clamp: the entry is deleted above before either period is
-      // decremented, so a reservation cannot be released twice and the
-      // subtraction cannot go negative. A clamp here would be dead code that
-      // reads as a guard, which is how the last four rounds found unprotected
-      // fixes (adversary finding R6-05/M7). If it ever CAN go negative the
-      // ledger is corrupt, and #read refuses on the next call — fail closed.
-      this.#ledger.setReservedMicros(period, reserved - open.micros);
-    }
-    return open;
   }
 
   /** Commits the reservation: the reserved amount, and only the reserved
@@ -443,14 +409,7 @@ export class MemorySpendMeter implements SpendMeter {
      * the correct behaviour and is what M-01/M-04 test. It is also the seam the
      * fault-injection tests now use, instead of patching this method onto an
      * instance (adversary finding R10-02). */
-    this.#assertAvailable();
-    const open = this.#close(reservation);
-    if (open === null) return;
-    const micros = open.micros;
-    for (const period of [open.day, open.month]) {
-      const committed = this.#read((p) => this.#ledger.committedMicros(p), period, "committed spend");
-      this.#ledger.setCommittedMicros(period, committed + micros);
-    }
+    this.#ledger.settle(reservation);
   }
 
   release(reservation: SpendReservation): void {
@@ -469,8 +428,7 @@ export class MemorySpendMeter implements SpendMeter {
      * production meters are frozen and cannot be patched (R10-02). Keeping N-07
      * reachable is the point: with no way to make a release fail, that branch
      * would have become the fourth dead guard in `llm()`. */
-    this.#assertAvailable();
-    this.#close(reservation);
+    this.#ledger.release(reservation);
   }
 
 }
@@ -541,8 +499,33 @@ function anchorWallMs(): number {
         .join(", ")}) — refusing spend (fail closed)`,
     );
   }
-  // The median: one tampered source cannot drag it, it can only fail the spread.
-  return readings.map((r) => r.ms).sort((a, b) => a - b)[1]!;
+  return medianOfThree(readings.map((r) => r.ms));
+}
+
+/** THE MEDIAN, AS A FUNCTION, BECAUSE IT IS A GUARD AND GUARDS GET DRIVEN.
+ *
+ * Inline, `readings.map(...).sort(...)[1]` could be replaced with
+ * `readings[0]` and the whole 306-test suite stayed green (adversary findings
+ * R11-03, R12-03) — while the attack narrowed from "move two sources
+ * consistently" back to "move `Date.now`", which is R10-03's original target.
+ * It is the load-bearing half of this file's claim that one tampered source
+ * "can only fail the spread", and it had no test at all. */
+export function medianOfThree(values: readonly number[]): number {
+  return [...values].sort((a, b) => a - b)[1]!;
+}
+
+/** A monotonic source that has gone backwards refuses spend rather than
+ * re-entering a closed period.
+ *
+ * Pulled out for the same reason as `medianOfThree`: `NATIVE.hrtime` is bound
+ * at module load, so the guard could only be reached by re-importing the whole
+ * module — which is why it was invisible to the sweep and to the harness. It
+ * takes no injectable state; production still calls it with the native
+ * readings, so this is a testable shape rather than a seam. */
+export function assertMonotonic(mono: bigint, last: bigint): void {
+  if (mono < last) {
+    throw new MeterUnavailableError("monotonic time source moved backwards — refusing spend (fail closed)");
+  }
 }
 
 /** A clock the meter owns. Anchored once, advanced monotonically thereafter. */
@@ -552,9 +535,7 @@ export function trustedClock(): () => number {
   let lastMono = anchorMono;
   return () => {
     const mono = NATIVE.hrtime();
-    if (mono < lastMono) {
-      throw new MeterUnavailableError("monotonic time source moved backwards — refusing spend (fail closed)");
-    }
+    assertMonotonic(mono, lastMono);
     lastMono = mono;
     return anchorWall + Number((mono - anchorMono) / 1_000_000n);
   };

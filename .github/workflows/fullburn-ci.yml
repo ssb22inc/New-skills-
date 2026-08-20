@@ -64,6 +64,14 @@ jobs:
       - name: Harness interrupt drill (the fails-closed half, executed)
         run: npm run drill
 
+      # ORDER-DEPENDENCE IS A MONEY BUG HERE, NOT A TEST-HYGIENE ONE. Four of
+      # six shuffle seeds went red because `vi.resetModules()` inside a
+      # money-path lock file split the one process ledger in two — the property
+      # R11-07's whole fix rests on, violated inside the project's own suite
+      # (adversary finding R12-06). Declaration order hid it; the seeds do not.
+      - name: Suite is order-independent (three shuffled seeds)
+        run: npm run test:shuffle
+
   # THE ACCEPTANCE BAR, AS A STAGE. `npm run mutate` is how this project
   # enforces "a fix whose one-line revert leaves the suite green is not
   # protected by anything" — the lesson of five consecutive rounds — and it

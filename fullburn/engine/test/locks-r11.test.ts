@@ -104,7 +104,7 @@ describe("storage availability belongs to storage (R11-06)", () => {
       (m as unknown as Record<string, unknown>)["setAvailable"] = () => {};
     }).toThrow();
     const r = m.reserve(TEST_CLIENT, 0.01);
-    processLedger().setAvailable(false);
+    processLedger().setAvailable(TEST_CLIENT, false, "R11-06 fixture");
     expect(() => m.settle(r)).toThrow(MeterUnavailableError);
   });
 });

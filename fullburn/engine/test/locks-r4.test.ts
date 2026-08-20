@@ -11,6 +11,7 @@ import { checkAdversaryReport, isClass2, parseVerdict } from "../scripts/gate-li
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../scripts/scan-lib.mjs";
 import { TEST_CLIENT, capsFrom, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import type { SpendLedger } from "../src/spend-ledger.ts";
 
 /** LOCK TESTS — r4 findings (N-01 … N-11) plus the one r3 lock the r4 review
  * proved was not load-bearing.
@@ -222,7 +223,7 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
    *
    * MUTATION: restore the bare `catch {}` in the release branch. */
   it("a release() that throws is recorded in the failure trace, not swallowed", async () => {
-    let storage: { setAvailable(v: boolean): void };
+    let storage: SpendLedger;
     const { deps, sink, ledger } = makeDeps({
       transport: {
         post() {
@@ -231,7 +232,7 @@ describe("money — a request that never departed is not billable (N-07, N-08)",
           // rather than a patched method (R10-02) — and it keeps N-07's branch
           // reachable, which is what stops it becoming the fourth dead guard
           // in llm().
-          storage.setAvailable(false);
+          storage.setAvailable(TEST_CLIENT, false, "storage outage fixture (N-07)");
           // Typed, so the release path is reached at all (R7-04).
           throw new PreDispatchError("never departs");
         },

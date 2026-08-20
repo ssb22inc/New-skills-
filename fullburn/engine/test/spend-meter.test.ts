@@ -70,7 +70,7 @@ describe("spend meter — reserve/settle (F1, F2, F3)", () => {
     // Availability belongs to STORAGE, not to the meter's public face (R11-06).
     const ledger = new InMemorySpendLedger();
     const m = new MemorySpendMeter(testClock, capsOf(0.05, 0.05), ledger);
-    ledger.setAvailable(false);
+    ledger.setAvailable("c", false, "storage outage fixture");
     expect(() => m.reserve("c", 0.01)).toThrow(MeterUnavailableError);
     expect(() => m.todayUsd("c")).toThrow(MeterUnavailableError);
   });
