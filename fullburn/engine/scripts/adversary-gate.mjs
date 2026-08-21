@@ -7,19 +7,22 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { checkAdversaryReport, checkReportsAppendOnly } from "./gate-lib.mjs";
+import {
+  VERIFIED_TREE_SCOPE,
+  checkAdversaryReport,
+  checkReportsAppendOnly,
+  dirtyWorktreeLines,
+  selectPhaseReports,
+} from "./gate-lib.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 
 const repoRoot = process.argv[2] ?? ".";
 const baseRef = process.argv[3] ?? null;
 
-/** Everything the adversary's verdict is a statement ABOUT. `.github/` is
- * included (adversary finding R2-18): a PASS that does not cover the workflow
- * definition asserts nothing about the CI that enforces it — the jobs could be
- * deleted after the report was written and the binding would still match.
- * reports/ and APPROVALS/ are excluded so a report cannot invalidate itself by
- * being committed. */
-const TREE_SCOPE = ["fullburn/", ".github/", ":!fullburn/reports/", ":!fullburn/APPROVALS/"];
+/** THE SCOPE IS gate-lib's, NOT THIS FILE'S. It was a const literal here, and
+ * dropping `.github/` from it restored adversary finding R2-18 in one line with
+ * the whole default suite green. See `VERIFIED_TREE_SCOPE`. */
+const TREE_SCOPE = VERIFIED_TREE_SCOPE;
 
 /** `git ls-files -s` reports the INDEX, not the working tree, so unstaged edits
  * would leave the hash — and a report's freshness binding — looking valid while
@@ -28,12 +31,11 @@ const TREE_SCOPE = ["fullburn/", ".github/", ":!fullburn/reports/", ":!fullburn/
  * index-based hash cannot see. */
 export function assertCleanTree(root) {
   const scope = TREE_SCOPE.map((s) => JSON.stringify(s)).join(" ");
-  const dirty = execSync(`git -C ${JSON.stringify(root)} status --porcelain -- ${scope}`, { encoding: "utf8" })
-    .split("\n")
-    .filter((l) => l.length > 1)
-    // "XY path": X is the index state, Y the worktree state. Staged changes are
-    // already in the hash; unstaged edits and untracked files are not.
-    .filter((l) => l.startsWith("??") || l[1] !== " ");
+  // Reading git is this file's job; deciding which lines mean "moved ahead of
+  // the index" is `dirtyWorktreeLines`', where a test can drive it.
+  const dirty = dirtyWorktreeLines(
+    execSync(`git -C ${JSON.stringify(root)} status --porcelain -- ${scope}`, { encoding: "utf8" }),
+  );
   if (dirty.length > 0) {
     throw new Error(
       `working tree has unstaged or untracked changes in the verified scope — the verified-tree hash reads the git index, so it would not reflect them. Stage them first:\n${dirty.join("\n")}`,
@@ -49,11 +51,14 @@ export function currentFullburnTreeHash(root) {
 
 const phase = readFileSync(join(repoRoot, "fullburn/PHASE"), "utf8").trim();
 const reportsDir = join(repoRoot, "fullburn/reports");
+// WHICH reports speak for this phase is `selectPhaseReports`' decision, driven
+// by the default suite. Widened here to `/^ADVERSARY_REPORT_phase/`, a phase-1
+// PASS opened the phase-0 gate with the suite green.
 const reports = existsSync(reportsDir)
-  ? readdirSync(reportsDir)
-      .filter((n) => new RegExp(`^ADVERSARY_REPORT_phase${phase}(?:[._-].*)?\\.md$`).test(n))
-      .sort()
-      .map((n) => ({ name: n, content: readFileSync(join(reportsDir, n), "utf8") }))
+  ? selectPhaseReports(phase, readdirSync(reportsDir)).map((n) => ({
+      name: n,
+      content: readFileSync(join(reportsDir, n), "utf8"),
+    }))
   : [];
 
 try {

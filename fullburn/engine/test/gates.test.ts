@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { checkAdversaryReport, checkClass2Approvals, checkReportsAppendOnly, isClass2, parseVerdict } from "../scripts/gate-lib.mjs";
+import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkClass2Approvals, checkReportsAppendOnly, dirtyWorktreeLines, isClass2, parseVerdict, selectApprovalDocs, selectPhaseReports } from "../scripts/gate-lib.mjs";
 
 // Tree bindings must look like git object hashes — the gate rejects anything else.
 const TREE = "abc1234def5678";
@@ -455,5 +455,149 @@ describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
       baseCommit: BASE,
     });
     expect(res.ok).toBe(true);
+  });
+});
+
+/** THE FOUR DECISIONS THAT LIVED IN THE GATE CLIs.
+ *
+ * `adversary-gate.mjs` and `class2-gate.mjs` have no entry-point guard: they
+ * execute their whole gate at import, so a unit test cannot reach anything
+ * inside them. Everything they decided privately was therefore provable only
+ * through `gate-cli.test.ts`, and only for the cases that file happens to set
+ * up. A runner audit against the R14-06 rule mutated each of them and ran the
+ * full default suite: three survived at 354/354 green.
+ *
+ * They are gate-lib decisions now. These are their red-proofs. */
+describe("gate-CLI decisions, extracted so the default suite can drive them (runner audit)", () => {
+  /** MUTATION: widen the phase pattern in selectPhaseReports.
+   *
+   * SURVIVED as `/^ADVERSARY_REPORT_phase/`: a PASS written for phase 1 was
+   * handed to the phase-0 gate and opened it. */
+  describe("which reports answer for a phase", () => {
+    const names = [
+      "ADVERSARY_REPORT_phase0.md",
+      "ADVERSARY_REPORT_phase0.r14.md",
+      "ADVERSARY_REPORT_phase0-cross.md",
+      "ADVERSARY_REPORT_phase0_2026-08-21.md",
+      "ADVERSARY_REPORT_phase1.md",
+      "ADVERSARY_REPORT_phase10.md",
+      "README.md",
+      "LIVE_VERIFICATION_LEDGER.md",
+    ];
+
+    it("takes every suffix form of its own phase", () => {
+      expect(selectPhaseReports(0, names)).toEqual([
+        "ADVERSARY_REPORT_phase0-cross.md",
+        "ADVERSARY_REPORT_phase0.md",
+        "ADVERSARY_REPORT_phase0.r14.md",
+        "ADVERSARY_REPORT_phase0_2026-08-21.md",
+      ]);
+    });
+
+    it("ATTACK: another phase's PASS does not answer for this one", () => {
+      expect(selectPhaseReports(0, names), "a phase-1 report spoke for phase 0").not.toContain(
+        "ADVERSARY_REPORT_phase1.md",
+      );
+      // …and a digit may not extend the phase number into a different phase.
+      expect(selectPhaseReports(1, names), "phase 10's report spoke for phase 1").toEqual([
+        "ADVERSARY_REPORT_phase1.md",
+      ]);
+    });
+
+    it("takes nothing that is not a report", () => {
+      expect(selectPhaseReports(0, ["README.md", "notes.txt", "ADVERSARY_REPORT_phase0.md.bak"])).toEqual([]);
+    });
+
+    /** The whole point of the selection: an empty set must reach
+     * `checkAdversaryReport` as "no report", which is a FAIL. */
+    it("an empty selection blocks the gate rather than passing it", () => {
+      const picked = selectPhaseReports(0, ["ADVERSARY_REPORT_phase1.md"]);
+      expect(checkAdversaryReport({ phase: "0", reports: picked, currentTreeHash: TREE }).ok).toBe(false);
+    });
+  });
+
+  /** MUTATION: drop the `status === "added"` clause from selectApprovalDocs.
+   *
+   * SURVIVED: a PR could rewrite an approval file that already existed at the
+   * base and have the rewrite authorize a fresh Class-2 transition. */
+  describe("which files are credible approval documents", () => {
+    it("only a document this PR ADDED", () => {
+      const picked = selectApprovalDocs([
+        { status: "added", path: "fullburn/APPROVALS/2026-08-21-caps.md" },
+        { status: "modified", path: "fullburn/APPROVALS/2026-08-16-caps.md" },
+        { status: "renamed", path: "fullburn/APPROVALS/moved.md", oldPath: "fullburn/APPROVALS/old.md" },
+        { status: "deleted", path: "fullburn/APPROVALS/gone.md" },
+      ]);
+      expect(picked.map((f: { path: string }) => f.path)).toEqual(["fullburn/APPROVALS/2026-08-21-caps.md"]);
+    });
+
+    it("only under APPROVALS/, and never a README", () => {
+      const picked = selectApprovalDocs([
+        { status: "added", path: "fullburn/APPROVALS/README.md" },
+        { status: "added", path: "fullburn/APPROVALS/2026/nested.md" },
+        { status: "added", path: "fullburn/reports/looks-like-one.md" },
+        { status: "added", path: "fullburn/APPROVALS/notes.txt" },
+      ]);
+      expect(picked.map((f: { path: string }) => f.path)).toEqual(["fullburn/APPROVALS/2026/nested.md"]);
+    });
+
+    /** The consequence, driven end to end: a MODIFIED approval carrying a
+     * perfectly-formed transition must not open the gate. */
+    it("ATTACK: rewriting an existing approval does not authorize a new transition", () => {
+      const changed = [
+        { status: "modified", path: "fullburn/config/src/caps.ts" },
+        { status: "modified", path: "fullburn/APPROVALS/2026-08-16-caps.md" },
+      ];
+      const body =
+        "Approved-by: someone\n" +
+        "approves: fullburn/config/src/caps.ts\n" +
+        "base-commit: BASE\n" +
+        "from-content-hash: OLD\n" +
+        "content-hash: NEW\n";
+      const res = checkClass2Approvals({
+        changedFiles: changed,
+        // What the CLI would hand over AFTER selection — which is nothing.
+        approvalDocs: selectApprovalDocs(changed).map((f: { path: string; status: string }) => ({
+          ...f,
+          content: body,
+          authoredBy: "A Human <human@example.invalid>",
+        })),
+        hashOf: () => "NEW",
+        baseHashOf: () => "OLD",
+        baseCommit: "BASE",
+      });
+      expect(res.ok, "a rewritten approval authorized a Class-2 change").toBe(false);
+    });
+  });
+
+  /** MUTATION: drop the unstaged half of dirtyWorktreeLines.
+   *
+   * Already caught by gate-cli.test.ts; driven here too so the decision has a
+   * unit-level red-proof that does not depend on spawning git. */
+  describe("which git status lines mean the worktree moved ahead of the index", () => {
+    it("untracked files and unstaged edits are dirty; staged changes are not", () => {
+      expect(
+        dirtyWorktreeLines(["?? fullburn/engine/src/backdoor.ts", " M fullburn/config/src/caps.ts", "MM a.ts", "M  b.ts", "A  c.ts", ""].join("\n")),
+      ).toEqual(["?? fullburn/engine/src/backdoor.ts", " M fullburn/config/src/caps.ts", "MM a.ts"]);
+    });
+
+    it("a clean tree has no dirty lines", () => {
+      expect(dirtyWorktreeLines("")).toEqual([]);
+      expect(dirtyWorktreeLines("\n\n")).toEqual([]);
+    });
+  });
+
+  /** MUTATION: remove ".github/" from VERIFIED_TREE_SCOPE.
+   *
+   * SURVIVED: adversary finding R2-18 back in one line — a PASS that says
+   * nothing about the CI that enforces it. The behavioural proof is in
+   * gate-cli.test.ts, which commits a workflow change and watches the binding
+   * go stale; this states the requirement where the constant lives. */
+  it("the verified tree covers the CI that enforces the gate, and excludes the record", () => {
+    expect(VERIFIED_TREE_SCOPE, "the workflow definition left the adversary's scope (R2-18)").toContain(".github/");
+    expect(VERIFIED_TREE_SCOPE).toContain("fullburn/");
+    // Excluded so a report cannot invalidate itself by being committed.
+    expect(VERIFIED_TREE_SCOPE).toContain(":!fullburn/reports/");
+    expect(VERIFIED_TREE_SCOPE).toContain(":!fullburn/APPROVALS/");
   });
 });

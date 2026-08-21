@@ -857,6 +857,51 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     expect(runner, "a failed meta-check no longer stops the run").toMatch(/process\.exit\(1\)/);
   });
 
+  /** THE META-CHECK VALIDATED A CLASSIFICATION THE ENTRY LOOP DID NOT USE.
+   *
+   * The meta loop read `const got = failure === null ? "SURVIVED" : "CAUGHT"`.
+   * The entry loop, three hundred lines down, had its OWN `if (failure ===
+   * null)`. Two expressions; the canaries exercised one of them. Inverting the
+   * entry loop's copy made every surviving mutation print CAUGHT, the harness
+   * exit 0, and the meta-check pass — with the default suite green at 354/354.
+   * That is adversary finding R9-01's shape one layer down: the instrument
+   * reporting a true-looking number it is structurally unable to check.
+   *
+   * Both loops call `classifyRun` now, so the canaries validate the same code
+   * the entry loop runs. These are its red-proofs; the canaries are its lock at
+   * run time.
+   *
+   * MUTATION: invert classifyRun. */
+  it("caught and survived are one expression, and the meta-check drives it", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { classifyRun } = await import("../scripts/mutate-lib.mjs");
+
+    // A GREEN SUITE UNDER A MUTATION MEANS NOTHING CAUGHT IT. This direction is
+    // the dangerous one: it is what an unprotected fix looks like.
+    expect(classifyRun(null), "a green suite under a mutation was reported as CAUGHT").toBe("SURVIVED");
+    // Any failure summary at all means the suite noticed.
+    expect(classifyRun("2 failed | 352 passed")).toBe("CAUGHT");
+    expect(classifyRun("failed")).toBe("CAUGHT");
+    expect(classifyRun("")).toBe("CAUGHT");
+
+    // And the meta-check's own expectations are stated in the same vocabulary,
+    // so a classification that drifted would fail the canaries rather than
+    // silently relabelling every entry.
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { META_CANARIES: canaries } = await import("../scripts/mutate-lib.mjs");
+    for (const c of canaries) {
+      expect(["SURVIVED", "CAUGHT"], `${c.name} expects a value classifyRun cannot produce`).toContain(c.expect);
+    }
+    expect(
+      canaries.map((c: { expect: string }) => c.expect),
+      "no canary expects SURVIVED, so an always-CAUGHT classification would pass the meta-check",
+    ).toContain("SURVIVED");
+    expect(
+      canaries.map((c: { expect: string }) => c.expect),
+      "no canary expects CAUGHT, so an always-SURVIVED classification would pass the meta-check",
+    ).toContain("CAUGHT");
+  });
+
   /** The matcher itself, driven directly — a matcher that returned true for
    * everything would make the test above pass vacuously, and it is the kind of
    * helper that gets "simplified" later. */

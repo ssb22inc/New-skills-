@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { checkClass2Approvals } from "./gate-lib.mjs";
+import { checkClass2Approvals, selectApprovalDocs } from "./gate-lib.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 
 const repoRoot = process.argv[2] ?? ".";
@@ -29,8 +29,11 @@ const changedFiles = parseNameStatusZ(diff);
 // approve. Who wrote them is H19's job: CODEOWNERS on APPROVALS/**.
 const git = (cmd) => execSync(`git -C ${JSON.stringify(repoRoot)} ${cmd}`, { encoding: "utf8" });
 
-const approvalDocs = changedFiles
-  .filter((f) => f.status === "added" && /^fullburn\/APPROVALS\/.*\.md$/.test(f.path) && !f.path.endsWith("README.md"))
+// WHICH files are credible approval documents is `selectApprovalDocs`'
+// decision, driven by the default suite. Inline here, dropping the "added"
+// clause let a PR rewrite an approval that existed at the base and have the
+// rewrite authorize a fresh transition, with the suite green.
+const approvalDocs = selectApprovalDocs(changedFiles)
   .map((f) => ({
     path: f.path,
     status: f.status,

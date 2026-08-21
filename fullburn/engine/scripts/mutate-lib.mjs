@@ -181,6 +181,28 @@ export const META_CANARIES = Object.freeze([
   }),
 ]);
 
+/** CAUGHT OR SURVIVED — THE ONE EXPRESSION, USED BY BOTH LOOPS.
+ *
+ * The meta-check exists to prove the harness can report both answers before any
+ * number it prints may be believed (R9-01). It proved that about ITS OWN
+ * classification: `const got = failure === null ? "SURVIVED" : "CAUGHT"` in the
+ * meta loop, and a SECOND, separate `if (failure === null)` in the entry loop.
+ * Two expressions, one of them validated. Inverting the entry loop's copy made
+ * every surviving mutation print CAUGHT, the run exit 0, and the meta-check
+ * pass — measured, with the default suite green at 354/354 (runner audit
+ * finding, R14-06 rule applied to the harness itself).
+ *
+ * CAPABILITY REMOVED: the harness can no longer classify an entry through an
+ * expression the meta-check does not exercise, because there is no second
+ * expression. Both loops call this, so the canaries validate the same code the
+ * entry loop runs, and its unit red-proofs live in the default suite.
+ *
+ * `failure` is the suite's failure summary, or null when the suite stayed
+ * green. A green suite under a mutation means nothing caught it. */
+export function classifyRun(failure) {
+  return failure === null ? "SURVIVED" : "CAUGHT";
+}
+
 /** Did the harness prove it can report BOTH answers? Anything else is void. */
 export function metaCheckVerdict(results) {
   if (!Array.isArray(results) || results.length === 0) {

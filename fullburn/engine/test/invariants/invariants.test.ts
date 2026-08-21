@@ -1246,6 +1246,12 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const { FrozenCapsSpendMeter, MemorySpendMeter } = await import("../../src/spend-meter.ts");
     const { InMemorySpendLedger, processLedger, resetProcessLedgerForTests: reset } = await import("../../src/spend-ledger.ts");
     const { requireReservingMeter } = await import("../../src/gateway.ts");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const gateLib = await import("../../scripts/gate-lib.mjs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const scanLib = await import("../../scripts/scan-lib.mjs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const mutateLib = await import("../../scripts/mutate-lib.mjs");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1287,6 +1293,30 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           } catch {
             return false;
           }
+        },
+      },
+      {
+        row: "L34",
+        claim:
+          "the seven decisions the runner audit extracted are exported from a library and answer correctly — " +
+          "reverting any of them back into its runner fails this row rather than waiting for a review",
+        holds: () => {
+          // Every one of these was measured SURVIVING a one-line revert while
+          // it lived in a runner. Driving them here binds the ledger row to the
+          // behaviour rather than to a description of it.
+          const phaseOk = gateLib.selectPhaseReports(1, ["ADVERSARY_REPORT_phase10.md", "ADVERSARY_REPORT_phase1.md"]).length === 1;
+          const approvalOk =
+            gateLib.selectApprovalDocs([{ status: "modified", path: "fullburn/APPROVALS/x.md" }]).length === 0 &&
+            gateLib.selectApprovalDocs([{ status: "added", path: "fullburn/APPROVALS/x.md" }]).length === 1;
+          const scopeOk = gateLib.VERIFIED_TREE_SCOPE.includes(".github/");
+          const dirtyOk =
+            gateLib.dirtyWorktreeLines(" M fullburn/config/src/caps.ts").length === 1 &&
+            gateLib.dirtyWorktreeLines("M  fullburn/config/src/caps.ts").length === 0;
+          const extOk = scanLib.isScannedFile("main.tf") && scanLib.isScannedFile("Dockerfile.dev");
+          const dirOk = !scanLib.isSkippedDir("src") && scanLib.isSkippedDir("node_modules");
+          const verdictOk = scanLib.leakVerdict(["x"]).ok === false && scanLib.leakVerdict([]).ok === true;
+          const classifyOk = mutateLib.classifyRun(null) === "SURVIVED" && mutateLib.classifyRun("1 failed") === "CAUGHT";
+          return phaseOk && approvalOk && scopeOk && dirtyOk && extOk && dirOk && verdictOk && classifyOk;
         },
       },
       {
@@ -1674,5 +1704,285 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     expect(getCaps("pulsern").dailyAiSpendUsd).toBe(10);
     expect(ROLE_BINDINGS["hello-world"]).toBe("claude-sonnet");
     expect(activeChannels()).toEqual(["meta"]);
+  });
+});
+
+/** ─── THE RUNNER-DECISION SWEEP ────────────────────────────────────────────
+ *
+ * R14-06's rule, made a population rather than a habit: "a checker that runs
+ * under its own runner is unprovable by the default suite — extract the
+ * decision as a pure function with red-proofs in `npm test`."
+ *
+ * It was issued after the SIGINT drill was found to be deciding, inside its own
+ * vitest config, a thing nothing else could check. The rule was then applied to
+ * that one drill and to nothing else. Auditing the rest — every `.mjs` CLI and
+ * every drill — turned up SEVEN decisions living in a runner, each measured
+ * surviving a one-line revert with the whole default suite green:
+ *
+ *   the leak scan's CLI verdict, its extension allowlist and its skipped
+ *   directories; the adversary gate's phase-report selection and its verified
+ *   tree scope; the class-2 gate's approval-document selection; and the
+ *   mutation harness's own CAUGHT/SURVIVED classification — a second copy of
+ *   the comparison the meta-check validates, which the meta-check therefore did
+ *   not validate.
+ *
+ * A rule applied by hand to one file is not a rule. This binds every runner in
+ * the tree to the module its decisions live in and to the default-suite test
+ * that drives them, and DERIVES the runner set from the filesystem so a new
+ * runner fails the day it lands rather than the round after someone thinks to
+ * look. */
+
+interface RunnerBinding {
+  /** Workspace-relative path of the runner. */
+  readonly runner: string;
+  /** Where its decisions live. Must be imported by the runner AND by a prover. */
+  readonly decisions: readonly string[];
+  /** Default-suite files that drive those decisions. */
+  readonly provenBy: readonly string[];
+  /** Module-level data literals the runner may keep, and why they are data
+   * rather than decisions. Anything else fails. */
+  readonly literalsDisclosed?: readonly { readonly name: string; readonly why: string }[];
+}
+
+const RUNNER_BINDINGS: readonly RunnerBinding[] = [
+  {
+    runner: "engine/scripts/leak-check.mjs",
+    decisions: ["./scan-lib.mjs"],
+    provenBy: ["engine/test/scan-lib.test.ts", "engine/test/integration/leak-cli.test.ts"],
+  },
+  {
+    runner: "engine/scripts/adversary-gate.mjs",
+    decisions: ["./gate-lib.mjs", "./diff-lib.mjs"],
+    provenBy: [
+      "engine/test/gates.test.ts",
+      "engine/test/locks-r5.test.ts",
+      "engine/test/integration/gate-cli.test.ts",
+    ],
+  },
+  {
+    runner: "engine/scripts/class2-gate.mjs",
+    decisions: ["./gate-lib.mjs", "./diff-lib.mjs"],
+    provenBy: [
+      "engine/test/gates.test.ts",
+      "engine/test/locks-r5.test.ts",
+      "engine/test/integration/gate-cli.test.ts",
+    ],
+  },
+  {
+    runner: "engine/scripts/owed-approvals.mjs",
+    decisions: ["./gate-lib.mjs", "./diff-lib.mjs"],
+    provenBy: ["engine/test/locks-r5.test.ts", "engine/test/integration/gate-cli.test.ts"],
+  },
+  {
+    runner: "engine/scripts/mutate.mjs",
+    decisions: ["./mutate-lib.mjs"],
+    provenBy: ["engine/test/locks-r7.test.ts"],
+    literalsDisclosed: [
+      {
+        name: "MUTATIONS",
+        why: "the mutation table itself — DATA about code, never a decision. It is the harness's input, and `applyEntry`/`tableEndOf` (both in mutate-lib, both driven) are what decide anything about it.",
+      },
+      {
+        name: "BLOCKING",
+        why: "documentation of forms this runner may not use; asserted by blocking-calls.ts, not by the runner",
+      },
+    ],
+  },
+  {
+    runner: "engine/test/drill/harness-interrupt.drill.ts",
+    decisions: ["../post-signal-writes.ts"],
+    provenBy: ["engine/test/post-signal-writes.test.ts"],
+  },
+  {
+    runner: "engine/test/drill/clock-rebind.drill.ts",
+    // The drill proves the WIRING — that `trustedClock()` consults the guard.
+    // The guard itself is `assertMonotonic`, exported from the clock module and
+    // driven by the unreachable-guard sweep in the default suite.
+    decisions: ["../../src/spend-meter.ts"],
+    provenBy: ["engine/test/invariants/invariants.test.ts", "engine/test/locks.test.ts"],
+  },
+];
+
+describe("runner-decision sweep — no verdict is reached where the default suite cannot see it (R14-06)", () => {
+  const wsRoot = new URL("../../../", import.meta.url);
+  const readWs = (rel: string) => readFileSync(new URL(rel, wsRoot), "utf8");
+
+  /** Every runner in the tree, derived. A `.mjs` script is a runner if any
+   * npm script or CI step invokes it; a drill is a runner because it has its
+   * own vitest config. Nothing is listed by hand — that is the property. */
+  const enumerateRunners = (): string[] => {
+    const pkg = JSON.parse(readWs("package.json")) as { scripts: Record<string, string> };
+    const ci = readFileSync(new URL("../../../../.github/workflows/fullburn-ci.yml", import.meta.url), "utf8");
+    const invoked = `${Object.values(pkg.scripts).join("\n")}\n${ci}`;
+    const scripts = readdirSync(new URL("engine/scripts/", wsRoot))
+      .filter((f) => f.endsWith(".mjs"))
+      .filter((f) => new RegExp(String.raw`(?:^|[\s/])(?:[\w./-]*/)?${f.replace(/\./g, "\\.")}(?:\s|$)`, "m").test(invoked))
+      .map((f) => `engine/scripts/${f}`);
+    const drills = readdirSync(new URL("engine/test/drill/", wsRoot))
+      .filter((f) => f.endsWith(".drill.ts"))
+      .map((f) => `engine/test/drill/${f}`);
+    return [...scripts, ...drills].sort();
+  };
+
+  it("every runner in the tree is bound to a decision module and a prover", () => {
+    const found = enumerateRunners();
+    // Vacuity guard: an enumeration that finds nothing passes everything.
+    expect(found.length, "the runner enumeration found nothing — this sweep would pass vacuously").toBeGreaterThan(5);
+    expect(
+      found.filter((r) => !RUNNER_BINDINGS.some((b) => b.runner === r)),
+      "these runners reach a verdict and nothing declares where that verdict is proven",
+    ).toEqual([]);
+    // …and the reverse, so a binding cannot outlive the runner it describes.
+    expect(
+      RUNNER_BINDINGS.map((b) => b.runner).filter((r) => !found.includes(r)),
+      "these bindings name a runner that is no longer invoked by anything",
+    ).toEqual([]);
+  });
+
+  /** IS THIS FILE IN `npm test`? — the question the whole sweep turns on, as a
+   * function, so it can be driven with an answer that must be NO.
+   *
+   * Written inline, this check could only ever be exercised with paths that are
+   * in the suite, so every mutation of it stayed green: there was no negative
+   * input among the bindings to fail on. A checker with no reachable negative
+   * case is the shape this project keeps re-finding — so the negative case is
+   * supplied here instead, and it is the exact file R14-06 came from.
+   *
+   * A doubled star followed by a slash spans ZERO or more segments, so
+   * `engine/test/[**][/]*.test.ts` must match `engine/test/x.test.ts`. Reading
+   * the doubled star as `.*` left the slash mandatory, and a file sitting
+   * directly in `engine/test/` read as outside the default suite. */
+  const inDefaultSuite = (include: readonly string[], path: string): boolean =>
+    include.some((glob) =>
+      new RegExp(
+        `^${glob
+          .replace(/\*\*\//g, "\u0000")
+          .replace(/\*\*/g, "\u0001")
+          .replace(/\./g, "\\.")
+          .replace(/\*/g, "[^/]*")
+          .replace(/\u0000/g, "(?:[^/]+/)*")
+          .replace(/\u0001/g, ".*")}$`,
+      ).test(path),
+    );
+
+  it("each declared prover really is in the DEFAULT suite", async () => {
+    const { default: suiteCfg } = await import("../../../vitest.config.ts");
+    const include: string[] = suiteCfg.test?.include ?? [];
+    expect(include.length, "the suite config declares no includes — this check would pass vacuously").toBeGreaterThan(0);
+
+    /** THE NEGATIVE HALF, AND IT IS WHAT MAKES THE POSITIVES MEAN ANYTHING.
+     * A drill is the canonical file that is NOT in `npm test` — that is why
+     * R14-06 exists — so an `inDefaultSuite` that answered true for everything
+     * fails here rather than certifying every binding. */
+    for (const outside of [
+      "engine/test/drill/harness-interrupt.drill.ts",
+      "engine/test/drill/clock-rebind.drill.ts",
+      "engine/scripts/gate-lib.mjs",
+      "engine/src/spend-ledger.ts",
+      "engine/test/helpers.ts",
+    ]) {
+      expect(inDefaultSuite(include, outside), `${outside} is not run by npm test and this check says it is`).toBe(false);
+    }
+    // …and the positive half, including a file sitting directly in engine/test/
+    // and one a directory down, which is where the glob reading went wrong.
+    for (const inside of [
+      "engine/test/gates.test.ts",
+      "engine/test/integration/gate-cli.test.ts",
+      "engine/test/invariants/invariants.test.ts",
+      "config/test/caps.test.ts",
+    ]) {
+      expect(inDefaultSuite(include, inside), `${inside} IS run by npm test and this check says it is not`).toBe(true);
+    }
+
+    for (const b of RUNNER_BINDINGS) {
+      expect(b.provenBy.length, `${b.runner} declares no prover`).toBeGreaterThan(0);
+      for (const p of b.provenBy) {
+        expect(() => readWs(p), `${b.runner}'s prover ${p} does not exist`).not.toThrow();
+        expect(
+          inDefaultSuite(include, p),
+          `${b.runner}'s prover ${p} is NOT in the default suite — that is the whole of R14-06`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  /** A DECLARATION IS A CLAIM, SO IT IS CHECKED. The runner must actually
+   * import the module it says holds its decisions, and a prover must actually
+   * import it too — otherwise the binding is prose and the chain is broken at
+   * whichever end nobody looked at. */
+  it("each decision module is imported by its runner and by a prover", () => {
+    for (const b of RUNNER_BINDINGS) {
+      const runnerSrc = readWs(b.runner);
+      for (const d of b.decisions) {
+        expect(runnerSrc.includes(`"${d}"`), `${b.runner} does not import its declared decision module ${d}`).toBe(true);
+        const base = d.split("/").pop()!;
+        const provers = b.provenBy.filter((p) => new RegExp(`["'][^"']*${base.replace(/\./g, "\\.")}["']`).test(readWs(p)));
+        expect(
+          provers.length,
+          `nothing in ${b.runner}'s declared provers imports ${base} — the decision is declared proven and is not driven`,
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  /** The harness proves red-proofs BITE; this proves they exist. A decision
+   * module with no mutation entry has never had its locks tested. */
+  it("each decision module carries at least one mutation entry", () => {
+    const harness = readWs("engine/scripts/mutate.mjs");
+    const table = harness.slice(harness.indexOf("const MUTATIONS = ["), harness.indexOf("\n];"));
+    const targets = new Set(
+      [...table.matchAll(/^\s*\[\s*"(?:[^"\\]|\\.)*"\s*,\s*"((?:[^"\\]|\\.)*)"/gm)].map((m) => m[1]!),
+    );
+    expect(targets.size, "no mutation entries parsed — this check would pass vacuously").toBeGreaterThan(10);
+    for (const b of RUNNER_BINDINGS) {
+      for (const d of b.decisions) {
+        const base = d.split("/").pop()!;
+        expect(
+          [...targets].some((t) => t.endsWith(`/${base}`) || t === base),
+          `${base} holds ${b.runner}'s decisions and has no mutation entry — nothing proves its red-proofs bite`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  /** THE SHAPE THE SEVEN SURVIVORS ACTUALLY HAD.
+   *
+   * Six of the seven were module-level `const` literals sitting in a runner: a
+   * regex, a `Set`, an array of git pathspecs. A literal in a runner is a
+   * decision nothing outside that process can drive, and it reads as
+   * configuration rather than as logic, which is why six of them sat there for
+   * fourteen rounds. So a runner may hold a data literal only if it says why
+   * that literal is data.
+   *
+   * `[LIMITATION]` This catches literals, not every undelegated decision. A
+   * comparison written inline in a runner's control flow is still invisible to
+   * it — the seventh survivor, the harness's classification, was exactly that
+   * shape. Finding those takes a measurement round (mutate the line, run the
+   * suite), which is what turned up all seven. Said plainly rather than left to
+   * read as full coverage. */
+  it("a runner holds no undisclosed decision literal", () => {
+    const LITERAL = /^(?:export\s+)?const\s+([A-Z][A-Z0-9_]*)\s*=\s*(.*)$/gm;
+    const IS_DATA = /^(?:\/|new (?:Set|Map|RegExp)\b|\[|Object\.freeze\(\[)/;
+    for (const b of RUNNER_BINDINGS) {
+      const src = readWs(b.runner);
+      const disclosed = new Set((b.literalsDisclosed ?? []).map((l) => l.name));
+      const offenders: string[] = [];
+      for (const m of src.matchAll(LITERAL)) {
+        const [, name, init] = m as unknown as [string, string, string];
+        if (disclosed.has(name)) continue;
+        if (IS_DATA.test(init.trim())) offenders.push(`${name} = ${init.trim().slice(0, 60)}`);
+      }
+      expect(
+        offenders,
+        `${b.runner} decides these from a literal of its own — extract them to ${b.decisions.join(", ")} ` +
+          "or disclose why they are data (R14-06)",
+      ).toEqual([]);
+    }
+    // Each disclosure must carry a reason: an empty "why" is a hole with a name.
+    for (const b of RUNNER_BINDINGS) {
+      for (const l of b.literalsDisclosed ?? []) {
+        expect(l.why.length, `${b.runner}'s ${l.name} is disclosed with no reason`).toBeGreaterThan(30);
+      }
+    }
   });
 });

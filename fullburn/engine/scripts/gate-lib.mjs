@@ -328,6 +328,87 @@ function judgeReport(reportContent, currentTreeHash) {
  * and the second, cross-family adversary that H6b requires would be unable to
  * stop a merge no matter what it found. §12 requires 0 unreviewed FAILs;
  * "someone else passed it" is not a review. */
+/** WHICH REPORT FILES SPEAK FOR THIS PHASE — and, crucially, which do not.
+ *
+ * This regex lived inline in `adversary-gate.mjs`, between the CLI's `readdir`
+ * and `checkAdversaryReport`, so no unit test could reach it and the integration
+ * tests only ever exercised the phase they wrote. Widened to
+ * `/^ADVERSARY_REPORT_phase/`, a PASS written for phase 1 opened the phase 0
+ * gate — measured, with the default suite green at 354/354 (runner audit,
+ * R14-06 rule).
+ *
+ * CAPABILITY REMOVED: the gate can no longer choose which reports answer for
+ * the current phase from inside a process the default suite never starts. The
+ * phase binding is here, and it is driven directly.
+ *
+ * The suffix rule is deliberate: `_phase0.md`, `_phase0.r14.md` and
+ * `_phase0-cross.md` all speak for phase 0, and `_phase10.md` does NOT speak
+ * for phase 1 — a suffix must begin with `.`, `_` or `-`, so a digit cannot
+ * extend the phase number into a different one. */
+export function selectPhaseReports(phase, names) {
+  const re = new RegExp(`^ADVERSARY_REPORT_phase${String(phase).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:[._-].*)?\\.md$`);
+  return [...names].filter((n) => re.test(n)).sort();
+}
+
+/** WHICH FILES IN A DIFF ARE CREDIBLE APPROVAL DOCUMENTS.
+ *
+ * Inline in `class2-gate.mjs`, and unreachable from any unit test for the same
+ * reason. Dropping the `status === "added"` clause let a PR REWRITE an approval
+ * file that already existed at the base and have the rewrite authorize a fresh
+ * Class-2 transition — measured surviving with the default suite green. The
+ * append-only check in `adversary-gate.mjs` refuses that too, which is why the
+ * tree was never actually open; but the gate that AUTHORIZES Class-2 changes
+ * must not be relying on a different gate to notice.
+ *
+ * CAPABILITY REMOVED: approval-document selection is no longer a decision the
+ * class2 CLI makes privately. An approval is credible only if this PR ADDED it.
+ *
+ * Rules, each with its reason:
+ *  - `added` only — an approval must arrive WITH the change it approves.
+ *  - under `fullburn/APPROVALS/` — nowhere else is an approval directory.
+ *  - `.md` only, and never a README: the directory's own instructions are not
+ *    an approval, and a modified README is not a signature. */
+export function selectApprovalDocs(changedFiles) {
+  return changedFiles.filter(
+    (f) =>
+      f.status === "added" &&
+      /^fullburn\/APPROVALS\/.*\.md$/.test(f.path) &&
+      !/(?:^|\/)README\.md$/.test(f.path),
+  );
+}
+
+/** EVERYTHING THE ADVERSARY'S VERDICT IS A STATEMENT ABOUT.
+ *
+ * `.github/` is in scope per adversary finding R2-18: a PASS that does not cover
+ * the workflow definition asserts nothing about the CI that enforces it — the
+ * jobs could be deleted after the report was written and the binding would still
+ * match. `reports/` and `APPROVALS/` are excluded so a report cannot invalidate
+ * itself by being committed.
+ *
+ * It lived in `adversary-gate.mjs` as a const literal. Removing `.github/`
+ * restored R2-18 in one line with the default suite green, because the only
+ * tests that drove the scope wrote nothing under `.github/`. It is exported
+ * from here so the CLI, the tree hash and the integration test all read ONE
+ * definition, and `gate-cli.test.ts` drives it through git: it commits a
+ * workflow change and watches a standing PASS go stale. */
+export const VERIFIED_TREE_SCOPE = Object.freeze([
+  "fullburn/",
+  ".github/",
+  ":!fullburn/reports/",
+  ":!fullburn/APPROVALS/",
+]);
+
+/** `git status --porcelain` lines that mean the worktree has moved ahead of the
+ * index. "XY path": X is the index state, Y the worktree state — staged changes
+ * are already in the verified-tree hash, unstaged edits and untracked files are
+ * not (adversary findings R2-19, R5-07). */
+export function dirtyWorktreeLines(porcelain) {
+  return porcelain
+    .split("\n")
+    .filter((l) => l.length > 1)
+    .filter((l) => l.startsWith("??") || l[1] !== " ");
+}
+
 export function checkAdversaryReport({ phase, reportContent, reports, currentTreeHash }) {
   const docs =
     Array.isArray(reports) && reports.length > 0

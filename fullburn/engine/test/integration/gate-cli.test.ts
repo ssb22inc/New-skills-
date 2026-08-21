@@ -260,6 +260,115 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
   });
 });
 
+/** THE VERIFIED TREE COVERS THE CI THAT ENFORCES THE GATE (R2-18).
+ *
+ * `TREE_SCOPE` was a const literal inside `adversary-gate.mjs`. Removing
+ * `.github/` from it restored R2-18 in one line with the whole default suite
+ * green at 354/354 — the workflow jobs could be deleted after a PASS was
+ * written and the binding would still match, because no test drove the scope
+ * through a change under `.github/` (runner audit, R14-06 rule).
+ *
+ * The constant moved to gate-lib, and this is the behavioural half: the scope
+ * is proven by making a `.github/` change and watching the gate refuse.
+ *
+ * MUTATION: drop ".github/" from VERIFIED_TREE_SCOPE. */
+describe("adversary-gate CLI — a PASS is a statement about the workflow too (R2-18)", () => {
+  it("a committed workflow change makes a standing PASS stale", () => {
+    write("fullburn/PHASE", "0\n");
+    write(".github/workflows/fullburn-ci.yml", "name: ci\non: [pull_request]\njobs: {}\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "declare the phase and the CI");
+    const tree = currentTreeHash();
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "add a PASS report");
+    const base = git("rev-parse", "HEAD").trim();
+    expect(gate("adversary-gate.mjs", repo, base).code, "a clean tree with a fresh PASS should open").toBe(0);
+
+    // Gut the CI that enforces the gate, AFTER the adversary signed off.
+    write(".github/workflows/fullburn-ci.yml", "name: ci\non: [pull_request]\njobs:\n  # every gate removed\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "quietly remove the gates");
+    const res = gate("adversary-gate.mjs", repo, base);
+    expect(res.code, `the workflow was gutted and the PASS still stood:\n${res.out}`).toBe(1);
+  });
+
+  it("an unstaged workflow edit is refused like any other unstaged change", () => {
+    write("fullburn/PHASE", "0\n");
+    write(".github/workflows/fullburn-ci.yml", "name: ci\non: [pull_request]\njobs: {}\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "declare the phase and the CI");
+    const tree = currentTreeHash();
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "add a PASS report");
+    const base = git("rev-parse", "HEAD").trim();
+    expect(gate("adversary-gate.mjs", repo, base).code).toBe(0);
+
+    write(".github/workflows/fullburn-ci.yml", "name: ci\non: [pull_request]\njobs:\n  # gone\n");
+    expect(gate("adversary-gate.mjs", repo, base).code, "an unstaged workflow edit sailed past").toBe(1);
+  });
+});
+
+/** WHICH REPORTS ANSWER FOR THIS PHASE (runner audit).
+ *
+ * The selection regex lived between the CLI's readdir and the library. Widened
+ * to `/^ADVERSARY_REPORT_phase/` it survived the whole default suite, and a
+ * PASS written for a different phase opened this one.
+ *
+ * MUTATION: widen the pattern in selectPhaseReports. */
+describe("adversary-gate CLI — a PASS for another phase is not a PASS for this one", () => {
+  it("phase 1's report does not open the phase 0 gate", () => {
+    write("fullburn/PHASE", "0\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "declare the phase");
+    const tree = currentTreeHash();
+    // Bound to the CURRENT tree and reading PASS: only the phase binding can
+    // stop it, so a pass here would be for the wrong reason.
+    write("fullburn/reports/ADVERSARY_REPORT_phase1.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "add a phase-1 PASS");
+    const base = git("rev-parse", "HEAD").trim();
+    const res = gate("adversary-gate.mjs", repo, base);
+    expect(res.code, `a phase-1 PASS opened the phase-0 gate:\n${res.out}`).toBe(1);
+    expect(res.out).toMatch(/phase0/);
+  });
+});
+
+/** A REWRITTEN APPROVAL IS NOT AN APPROVAL (runner audit).
+ *
+ * The approval-document filter lived inline in `class2-gate.mjs`. Dropping its
+ * `status === "added"` clause survived the default suite: the append-only check
+ * in the OTHER gate refuses a rewritten approval, so the tree was never open —
+ * but the gate that authorizes Class-2 changes was relying on a different gate
+ * to notice, and nothing tested that it did not.
+ *
+ * MUTATION: drop the `status === "added"` clause from selectApprovalDocs. */
+describe("class2-gate CLI — an approval must ARRIVE with the change it approves", () => {
+  it("rewriting an approval that existed at the base does not open the gate", () => {
+    // An approval committed in an earlier PR, for an earlier transition.
+    write("fullburn/APPROVALS/2026-08-16-caps.md", "Approved-by: human\napproves: nothing yet\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "an old approval");
+    const base = git("rev-parse", "HEAD").trim();
+
+    write("fullburn/config/src/caps.ts", "export const CAPS = { dailyAiSpendUsd: 500 };\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "raise the cap");
+
+    // Ask the tool what a valid approval for THIS transition looks like, then
+    // put that text into the file that already existed instead of adding one.
+    const printed = gate("owed-approvals.mjs", repo, base);
+    expect(printed.code, printed.out).toBe(0);
+    write("fullburn/APPROVALS/2026-08-16-caps.md", `Approved-by: human\n${printed.out}`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "rewrite the old approval to cover the new change");
+
+    const res = gate("class2-gate.mjs", repo, base);
+    expect(res.code, `a rewritten approval authorized a Class-2 change:\n${res.out}`).toBe(1);
+  });
+});
+
 describe("adversary-gate CLI", () => {
   it("a FAIL report bound to the current tree blocks the gate", () => {
     const base = git("rev-parse", "HEAD").trim();

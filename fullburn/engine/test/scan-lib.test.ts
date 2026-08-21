@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { scanContent } from "../scripts/scan-lib.mjs";
+import { NOT_SCANNED_EXTENSIONS, isScannedFile, isSkippedDir, leakVerdict, looksBinary, scanContent } from "../scripts/scan-lib.mjs";
 
 /** Verifies the scanner actually detects what it claims (adversary findings
  * F16, F18, F19). Every sample "secret" is assembled at runtime so this file
@@ -143,5 +143,89 @@ describe("structural rules (Law 1, 6, 11, 18) — code only", () => {
     // And the documented local command must be the one CI runs.
     const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
     expect(pkg.scripts["leak-check"], "the local scan no longer matches CI's").toContain("leak-check.mjs ..");
+  });
+});
+
+/** THE THREE DECISIONS THAT USED TO LIVE IN THE CLI.
+ *
+ * `SCANNED`, `SKIP_DIRS` and the CLI's `if (findings.length > 0)` were const
+ * literals and control flow inside `leak-check.mjs`. All three were measured
+ * surviving a one-line revert with `npm test` green at 354/354, because nothing
+ * in the default suite drove them and nothing executed the CLI at all. They are
+ * `scan-lib` decisions now, and these are their red-proofs. */
+describe("what the scan reads, and what it does with what it finds (runner audit, R14-06)", () => {
+  /** THE POPULATION IS DERIVED, AND SO IS THE EXEMPTION. A hand-written
+   * extension list in a test is the same defect as a hand-written one in the
+   * code — it just moves which file goes stale. So this drives the real
+   * decision over the real tree and lets the BYTES adjudicate: a tracked file
+   * the scan does not read must actually be binary.
+   *
+   * Run against the previous allowlist it named eleven files, among them
+   * `haven/terraform/aws/variables.tf` and `haven/Dockerfile.dev` — plain-text
+   * formats, both of them classic homes for a pasted credential, neither ever
+   * read by the leak scan.
+   *
+   * MUTATION: put a text extension into NOT_SCANNED_EXTENSIONS. */
+  it("every tracked text file is read by the scan — exemptions must actually be binary", async () => {
+    const { execFileSync } = await import("node:child_process");
+    const { readFileSync: readBytes, statSync, existsSync } = await import("node:fs");
+    const repoRoot = new URL("../../../", import.meta.url).pathname.replace(/\/$/, "");
+    const tracked = execFileSync("git", ["-C", repoRoot, "ls-files", "-z"], { encoding: "utf8" })
+      .split("\0")
+      .filter((f) => f !== "");
+    expect(tracked.length, "git listed no files — this test would pass vacuously").toBeGreaterThan(100);
+
+    const unread: string[] = [];
+    for (const f of tracked) {
+      const abs = `${repoRoot}/${f}`;
+      if (!existsSync(abs) || !statSync(abs).isFile()) continue;
+      if (isScannedFile(f.split("/").pop()!)) continue;
+      // Excluded. That is only defensible if the file is genuinely not text.
+      if (!looksBinary(readBytes(abs))) unread.push(f);
+    }
+    expect(
+      unread,
+      "these tracked files are TEXT and the leak scan does not read them — a token pasted into one would never be found",
+    ).toEqual([]);
+
+    // …and the exemption list may only name binary formats. A text type here
+    // would switch the scan off for that type across the whole tree.
+    for (const [ext, why] of Object.entries(NOT_SCANNED_EXTENSIONS)) {
+      expect(String(why), `.${ext} is exempted without saying it is binary`).toMatch(/binary/i);
+    }
+  });
+
+  it("a dotenv file is scanned whatever its suffix", () => {
+    expect(isScannedFile(".env")).toBe(true);
+    expect(isScannedFile(".env.local")).toBe(true);
+    expect(isScannedFile(".env.production")).toBe(true);
+  });
+
+  /** MUTATION: add a source directory to SKIP_DIRS. */
+  it("only build output and vendored trees are skipped", () => {
+    expect(isSkippedDir("node_modules")).toBe(true);
+    expect(isSkippedDir("dist")).toBe(true);
+    expect(isSkippedDir(".git")).toBe(true);
+    // The engine's own tree, the config workspace, the reports and the
+    // workflows must all be walked. Adding any of them to SKIP_DIRS switched
+    // off the scan over exactly the code the Laws govern.
+    for (const d of ["src", "scripts", "test", "engine", "config", "reports", "fullburn", ".github", "workflows"]) {
+      expect(isSkippedDir(d), `${d} is no longer walked by the leak scan`).toBe(false);
+    }
+  });
+
+  /** MUTATION: `if (!verdict.ok)` → `if (false)` in leak-check.mjs, or invert
+   * the emptiness test here. */
+  it("findings are a FAIL and an empty result is clean — and a non-result is neither", () => {
+    expect(leakVerdict([]).ok).toBe(true);
+    const bad = leakVerdict(["fullburn/engine/src/x.ts: possible anthropic key"]);
+    expect(bad.ok, "a finding did not fail the scan").toBe(false);
+    // The reason must NAME the finding: a verdict that fails without saying
+    // what it found sends a human to read the whole tree.
+    expect(bad.reason).toContain("fullburn/engine/src/x.ts");
+    // Fail closed on a non-result: a scan that returned nothing at all has not
+    // proved the tree is clean.
+    expect(leakVerdict(undefined as unknown as string[]).ok).toBe(false);
+    expect(leakVerdict(null as unknown as string[]).ok).toBe(false);
   });
 });

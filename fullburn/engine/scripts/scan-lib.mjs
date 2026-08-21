@@ -236,3 +236,105 @@ export function scanContent(path, content) {
 
   return findings;
 }
+
+/** ─── WHAT THE WALK LOOKS AT, AND WHAT THE CLI DOES WITH THE RESULT ────────
+ *
+ * These three decisions lived in `leak-check.mjs`, above and below its
+ * entry-point guard, where nothing in the default suite could reach them. All
+ * three were measured SURVIVING a one-line revert with `npm test` green at
+ * 354/354 (runner audit against the R14-06 rule):
+ *
+ *   - narrowing `SCANNED` to `/\.(?:mjs)$/` — every TypeScript file, every
+ *     report, every workflow silently stopped being scanned for tokens;
+ *   - adding `src` and `scripts` to `SKIP_DIRS` — the engine's own source tree
+ *     dropped out of the walk;
+ *   - `if (findings.length > 0)` → `if (false)` — the CLI printed nothing and
+ *     exited 0 with findings in hand. That is N-03 leg B, the CLI-wiring gap
+ *     `gate-cli.test.ts` was built to close for the gates, still open on the
+ *     leak scan because no test had ever executed this CLI.
+ *
+ * CAPABILITY REMOVED: the leak scan can no longer decide what to read or what
+ * to report from inside a process the default suite never starts. The decisions
+ * are here, driven directly by `scan-lib.test.ts`, and the CLI that consumes
+ * them is executed end-to-end by `engine/test/integration/leak-cli.test.ts`. */
+
+/** Directories never walked. A denylist: a directory nobody thought of falls
+ * INTO the scan rather than out of it. */
+export const SKIP_DIRS = new Set(["node_modules", "dist", ".git"]);
+
+/** WHAT IS NOT READ — a DENYLIST, for the same reason `SKIP_DIRS` is one.
+ *
+ * This was an ALLOWLIST of 24 extensions, and the file it lived in said, three
+ * lines above it, that a directory nobody thought of must fall INTO the scan
+ * rather than out of it. The same argument was never applied to file types.
+ * Driving the decision against the tracked tree found eleven files the leak
+ * scan had never read, including `haven/terraform/aws/variables.tf` and
+ * `haven/Dockerfile.dev` — the two formats where a real credential is most
+ * likely to be sitting in plain text (runner audit, R14-06 rule).
+ *
+ * So the polarity is inverted. Every file is read unless its bytes are binary
+ * or its extension is named here, and each entry names why. A file type nobody
+ * thought of is scanned. */
+export const NOT_SCANNED_EXTENSIONS = Object.freeze({
+  png: "binary raster image",
+  jpg: "binary raster image",
+  jpeg: "binary raster image",
+  gif: "binary raster image",
+  webp: "binary raster image",
+  avif: "binary raster image",
+  ico: "binary icon",
+  woff: "binary font",
+  woff2: "binary font",
+  ttf: "binary font",
+  otf: "binary font",
+  eot: "binary font",
+  pdf: "binary document",
+  zip: "binary archive",
+  gz: "binary archive",
+  tgz: "binary archive",
+  bz2: "binary archive",
+  xz: "binary archive",
+  wasm: "binary module",
+  mp4: "binary video",
+  webm: "binary video",
+  mov: "binary video",
+  mp3: "binary audio",
+  wav: "binary audio",
+});
+
+/** Is this file read by the scan? Everything is, except the binary types above.
+ * Extensionless files (`Dockerfile`, `Makefile`, `Procfile`) and dotfiles
+ * (`.env`, `.gitignore`, `.nvmrc`) are read: all three are places a token is
+ * pasted, and all three were outside the old allowlist. */
+export function isScannedFile(name) {
+  const dot = name.lastIndexOf(".");
+  // A leading dot is the file's NAME, not an extension: `.env` is a dotfile.
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  return !Object.hasOwn(NOT_SCANNED_EXTENSIONS, ext);
+}
+
+/** A NUL byte in the head of a file means it is not text, whatever it is
+ * called. The extension denylist covers the formats we know; this covers the
+ * ones we do not, so an unnamed binary type is skipped by MEASUREMENT rather
+ * than by being absent from a list. */
+export function looksBinary(bytes) {
+  const head = bytes.subarray(0, Math.min(bytes.length, 8192));
+  return head.includes(0);
+}
+
+export function isSkippedDir(name) {
+  return SKIP_DIRS.has(name);
+}
+
+/** The CLI's verdict, as a value rather than as control flow — the same shape
+ * `harnessVerdict` uses, and for the same reason. */
+export function leakVerdict(findings) {
+  if (!Array.isArray(findings)) {
+    return { ok: false, reason: "LEAK/STRUCTURAL SCAN FAIL: the scan returned no result at all (fail closed)" };
+  }
+  if (findings.length === 0) return { ok: true, reason: "leak/structural scan: clean" };
+  return {
+    ok: false,
+    reason: `LEAK/STRUCTURAL SCAN FAIL:\n${findings.map((f) => `  - ${f}`).join("\n")}`,
+  };
+}

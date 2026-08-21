@@ -6,29 +6,25 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanContent } from "./scan-lib.mjs";
+import { isScannedFile, isSkippedDir, leakVerdict, looksBinary, scanContent } from "./scan-lib.mjs";
 
-const SKIP_DIRS = new Set(["node_modules", "dist", ".git"]);
-/** Widened per adversary finding R2-29: evidence dumps, logs, CSV extracts and
- * shell scripts are exactly where a pasted token ends up, and they were not
- * scanned. */
-const SCANNED = /\.(?:ts|tsx|mjs|cjs|js|jsx|json|jsonl|md|toml|ya?ml|txt|log|csv|tsv|sh|bash|sql|ini|conf|xml|html)$/;
-/** The WHOLE repository is walked (adversary findings R2-29, H-16). Scanning
+/** THE WALK IS WIRING; WHAT IT LOOKS AT IS A DECISION, AND DECISIONS LIVE IN
+ * scan-lib.mjs. `SCANNED` and `SKIP_DIRS` were const literals in this file, on
+ * the import side of the entry-point guard, and both were measured surviving a
+ * one-line revert with the whole default suite green — see the block above
+ * `SKIP_DIRS` in scan-lib.mjs for what each revert switched off.
+ *
+ * The WHOLE repository is walked (adversary findings R2-29, H-16). Scanning
  * only fullburn/ + .github/ left the sibling product trees — including client
  * zero's app and its own workflows — unscanned: 346 files, any of which could
  * carry a real token. Structural rules still apply only to Fullburn's own code
- * (see scan-lib's STRUCTURAL_SCOPE); the secret rules apply everywhere.
- *
- * A denylist, not an allowlist: a directory nobody thought of fails CLOSED
- * into being scanned rather than silently skipped. */
-const SKIP_TOP = new Set([]);
-
+ * (see scan-lib's STRUCTURAL_SCOPE); the secret rules apply everywhere. */
 export function* walk(dir) {
   for (const name of readdirSync(dir)) {
-    if (SKIP_DIRS.has(name)) continue;
+    if (isSkippedDir(name)) continue;
     const p = join(dir, name);
     if (statSync(p).isDirectory()) yield* walk(p);
-    else if (SCANNED.test(name) || name.startsWith(".env")) yield p;
+    else if (isScannedFile(name)) yield p;
   }
 }
 
@@ -62,20 +58,26 @@ export function scanTree(repoRoot) {
   const findings = [];
   assertScannableRoot(repoRoot);
   for (const file of walk(repoRoot)) {
-    const rel = relative(repoRoot, file);
-    if (SKIP_TOP.has(rel.split("/")[0])) continue;
-    findings.push(...scanContent(rel, readFileSync(file, "utf8")));
+    // READ THE BYTES, THEN DECIDE. A binary type the denylist does not name is
+    // skipped by measurement rather than by being absent from a list.
+    const bytes = readFileSync(file);
+    if (looksBinary(bytes)) continue;
+    findings.push(...scanContent(relative(repoRoot, file), bytes.toString("utf8")));
   }
   return findings;
 }
 
 // Run the walk only as a CLI, never on import.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const findings = scanTree(process.argv[2] ?? ".");
-  if (findings.length > 0) {
-    console.error("LEAK/STRUCTURAL SCAN FAIL:");
-    for (const f of findings) console.error(`  - ${f}`);
+  // The verdict is `leakVerdict`'s, not this block's. Inverting the comparison
+  // that used to stand here printed nothing and exited 0 with findings in hand,
+  // and the default suite stayed green because nothing had ever executed this
+  // CLI — the N-03 leg B gap, on the leak scan. It is executed now:
+  // engine/test/integration/leak-cli.test.ts.
+  const verdict = leakVerdict(scanTree(process.argv[2] ?? "."));
+  if (!verdict.ok) {
+    console.error(verdict.reason);
     process.exit(1);
   }
-  console.log("leak/structural scan: clean");
+  console.log(verdict.reason);
 }

@@ -377,6 +377,39 @@ describe("gates — the halves that shipped untested (H-09, H-10, H-11, R3-CP-08
       { status: "renamed", oldPath: "fullburn/config/src/caps.ts", path: "fullburn/config/src/caps v2.ts" },
     ]);
   });
+
+  /** EVERY STATUS THE NUL PARSER CAN EMIT, DRIVEN.
+   *
+   * Only the rename branch had a test. A mutation turning a NUL-separated
+   * DELETE into a "modified" survived the whole default suite (runner audit
+   * entry RA-12) — and a delete read as a modification sends the Class-2 gate
+   * to hash a file that is no longer there, and tells the append-only check the
+   * wrong thing about what a PR did to a standing report.
+   *
+   * MUTATION: change any status this maps to. */
+  it("every status the NUL-separated parser emits is the status git reported", () => {
+    const z = (...fields: string[]) => parseNameStatusZ(fields.join(" ") + " ");
+    expect(z("A", "fullburn/config/src/new.ts")).toEqual([{ status: "added", path: "fullburn/config/src/new.ts" }]);
+    expect(z("D", "fullburn/reports/ADVERSARY_REPORT_phase0.md")).toEqual([
+      { status: "deleted", path: "fullburn/reports/ADVERSARY_REPORT_phase0.md" },
+    ]);
+    expect(z("M", "fullburn/config/src/caps.ts")).toEqual([{ status: "modified", path: "fullburn/config/src/caps.ts" }]);
+    // A COPY adds a new path and leaves the source untouched — so the source is
+    // NOT reported as changed, and the copy is an addition.
+    expect(z("C085", "fullburn/config/src/caps.ts", "fullburn/config/src/copy.ts")).toEqual([
+      { status: "added", path: "fullburn/config/src/copy.ts" },
+    ]);
+    // Several entries in one stream, each keeping its own status and its own
+    // field count — a rename consumes two paths, the others one.
+    expect(z("D", "a.ts", "R100", "b.ts", "c.ts", "A", "d.ts")).toEqual([
+      { status: "deleted", path: "a.ts" },
+      { status: "renamed", oldPath: "b.ts", path: "c.ts" },
+      { status: "added", path: "d.ts" },
+    ]);
+    // The consequence, driven: a deleted report is refused as a deletion.
+    const deleted = checkReportsAppendOnly(z("D", "fullburn/reports/ADVERSARY_REPORT_phase0.md"));
+    expect(deleted.ok, "a deleted adversary report was not refused").toBe(false);
+  });
 });
 
 describe("scanner — the rules the r3 review found blind or noisy (H-02, B1, B2, B4, C3)", () => {

@@ -49,7 +49,8 @@ from inference. Re-derive or ask.
 `eb0775f` (Class-2 base) → `b9364e3` → `6f10a99d` → `e586f0e2` (retired
 cross-family brief, superseded) → `0877861` (r8 clean, 100/100) → `7516cd4` →
 `d73df4c` (binds `trustedClock()`, retires `Date.now`) → `cb48c05` (r13 fixes) →
-`a236e8f` (r14 report) → `0466154` (r14 fixes) → this commit (R14-01 ruling).
+`a236e8f` (r14 report) → `0466154` (r14 fixes) → `34437d6` (R14-01 ruling) →
+this commit (runner audit, HANDOFF §7.2).
 
 ---
 
@@ -168,8 +169,13 @@ the index with the reason each exists.
 
 - **A checker that runs under its own runner is unprovable by the default
   suite** (R14-06). Extract the decision as a pure function with red-proofs in
-  `npm test`. **Applies to every drill, gate script and harness that shells
-  out — the SIGINT drill was found by accident and the others are unaudited.**
+  `npm test`. **Audited across every runner 2026-08-21** — seven survivors, all
+  extracted; the runner-decision sweep now derives the runner set from the
+  filesystem so a new runner fails the day it lands.
+- **NEW: the meta-check only validates the expression it runs.** The harness had
+  two copies of its CAUGHT/SURVIVED comparison and the canaries exercised one.
+  Any instrument with a self-check must run the self-check through the SAME
+  code the reported result comes from.
 - **A bounding test patches the prototype the live object resolves through**
   (R14-02), not the one the test file imported.
 - **A blocking binding must not be referenceable**, not merely un-invocable in
@@ -186,15 +192,22 @@ the index with the reason each exists.
 Meta-check passed first, so the harness figures are trustworthy rather than
 decorative.
 
-- Mutations: **173 / 173 caught, 0 survived, 0 stale** (population re-measured
-  after this commit's entries land — see §7)
-- Suite: **354 / 354** across 28 files
-- Three shuffled seeds: **354 / 354**
-- `--no-isolate`: **351 / 351** across 26 files
-- Single fork: **351 / 351**
+- Mutations: **190 / 190 caught, 0 survived, 0 stale**
+- Suite: **386 / 386** across 29 files
+- Three shuffled seeds: **386 / 386**
+- `--no-isolate`: **383 / 383** across 27 files
+- Single fork: **383 / 383**
 - Drill green. Typecheck clean. Leak-check clean.
 
-Prior high-water marks, for trend: r8 100/100 at `0877861` · r10 119/119 ·
+The runner audit added 16 entries (RA-01…RA-16) and 32 tests. Two of its own
+entries SURVIVED on the first run and were fixed before this commit: RA-12
+(nothing drove the NUL parser's delete branch) and RA-16 (the entry was a
+semantic no-op — replaced with a real revert, and the check it targets was
+given the negative case it never had). Both are CAUGHT now. Recording that the
+first run failed is the point: a harness that only ever prints a clean number
+is the instrument this project distrusts.
+
+Prior high-water marks, for trend: r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
 r11 124/125 (`departed`) · r13 151/151 across eleven shuffle seeds, with 47/47
 guards individually disabled.
 
@@ -250,11 +263,15 @@ account, never agent-authored.
 
 1. **L4/H2 — configure the Gateway caps.** This is now the Phase 0 blocker. Until
    it lands, the primary spend control is designed and unprovisioned.
-2. **Audit every drill, gate script and harness that runs under its own runner**
-   against the R14-06 rule. The SIGINT drill was found by accident; `npm run
-   drill`'s other file, the gate CLIs in `engine/test/integration/`, and
-   `scripts/*.mjs` have not been checked. Each one's decision must be a pure
-   function with red-proofs in the default suite, or it is unprovable.
+2. ~~**Audit every drill, gate script and harness that runs under its own
+   runner** against the R14-06 rule.~~ **DONE 2026-08-21.** Seven decisions were
+   living inside a runner, each measured surviving a one-line revert with the
+   default suite green at 354/354, plus two more found by driving the
+   extractions. Full record: `reports/RUNNER_AUDIT_2026-08-21.md`; ledger L34.
+   `[VERIFIED engine/test/invariants/invariants.test.ts — runner-decision sweep]`
+   `[LIMITATION]` the sweep catches decision LITERALS in a runner, not every
+   undelegated decision; the seventh survivor was an inline comparison and was
+   found by measurement, not by the sweep.
 3. **The `--no-isolate` / single-fork exclusions are spend-relevant, and that is
    not comfortable.** The two excluded files hold three tests:
    `departed-contract.test.ts` (2 — the `departed` double-refund contract) and

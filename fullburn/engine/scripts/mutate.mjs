@@ -20,6 +20,7 @@ import {
   MARKER,
   META_CANARIES,
   applyEntry,
+  classifyRun,
   harnessVerdict,
   metaCheckVerdict,
   recoverInFlight,
@@ -519,6 +520,61 @@ const MUTATIONS = [
 
   // R14-01's ruling: the out-of-process cap is the PRIMARY control, and its
   // proof is that a refusal survives an absent ledger and reaches the caller.
+  // ---- runner audit (HANDOFF §7.2, the R14-06 rule applied to every runner) ----
+  //
+  // Seven decisions were living inside a runner, where the default suite could
+  // not reach them. Every one was MEASURED surviving a one-line revert with
+  // `npm test` green at 354/354 before it was extracted. These entries are what
+  // keep the extractions honest.
+  ["RA-01 leak-check CLI verdict wiring", "engine/scripts/leak-check.mjs", "  if (!verdict.ok) {", "  if (false) {"],
+  ["RA-02 leak scan reads every text type", "engine/scripts/scan-lib.mjs",
+    "  png: \"binary raster image\",",
+    "  ts: \"binary raster image\",\n  png: \"binary raster image\","],
+  ["RA-03 leak scan walks the source tree", "engine/scripts/scan-lib.mjs",
+    "export const SKIP_DIRS = new Set([\"node_modules\", \"dist\", \".git\"]);",
+    "export const SKIP_DIRS = new Set([\"node_modules\", \"dist\", \".git\", \"src\", \"scripts\"]);"],
+  ["RA-04 leakVerdict fails closed on a non-result", "engine/scripts/scan-lib.mjs", "  if (!Array.isArray(findings)) {", "  if (false) {"],
+  ["RA-05 binary is decided by bytes", "engine/scripts/scan-lib.mjs", "  return head.includes(0);", "  return true;"],
+  ["RA-06 a report answers only for its own phase", "engine/scripts/gate-lib.mjs",
+    "  const re = new RegExp(`^ADVERSARY_REPORT_phase${String(phase).replace(/[.*+?^${}()|[\\]\\\\]/g, \"\\\\$&\")}(?:[._-].*)?\\\\.md$`);",
+    "  const re = /^ADVERSARY_REPORT_phase/;"],
+  ["RA-07 an approval must ARRIVE with its change", "engine/scripts/gate-lib.mjs", "      f.status === \"added\" &&\n", "      true &&\n"],
+  ["RA-08 the verified tree covers the CI", "engine/scripts/gate-lib.mjs", "  \"fullburn/\",\n  \".github/\",", "  \"fullburn/\","],
+  ["RA-09 an unstaged edit is dirty", "engine/scripts/gate-lib.mjs",
+    "    .filter((l) => l.startsWith(\"??\") || l[1] !== \" \");",
+    "    .filter((l) => l.startsWith(\"??\"));"],
+  ["RA-10 caught and survived are one expression", "engine/scripts/mutate-lib.mjs",
+    "  return failure === null ? \"SURVIVED\" : \"CAUGHT\";",
+    "  return failure === null ? \"CAUGHT\" : \"SURVIVED\";"],
+  // `diff-lib.mjs` turns a git diff into the protected-path set — R3-CP-08's
+  // fix — and carried NO entry at all. The runner sweep found that on its first
+  // run, which is the sweep working as intended.
+  ["RA-11 a rename keeps both of its paths", "engine/scripts/diff-lib.mjs",
+    "      out.push(code.startsWith(\"R\") ? { status: \"renamed\", oldPath, path } : { status: \"added\", path });",
+    "      out.push({ status: code.startsWith(\"R\") ? \"renamed\" : \"added\", path });"],
+  ["RA-12 a NUL-separated delete is a delete", "engine/scripts/diff-lib.mjs",
+    "    const path = f[i++];\n    if (code === \"A\") out.push({ status: \"added\", path });\n    else if (code === \"D\") out.push({ status: \"deleted\", path });",
+    "    const path = f[i++];\n    if (code === \"A\") out.push({ status: \"added\", path });\n    else if (code === \"D\") out.push({ status: \"modified\", path });"],
+  // The CLI wiring itself: the library can be right and the runner still not
+  // call it. That is N-03 leg B, and it is why each extraction gets two entries.
+  ["RA-13 adversary-gate consults the phase selection", "engine/scripts/adversary-gate.mjs",
+    "  ? selectPhaseReports(phase, readdirSync(reportsDir)).map((n) => ({",
+    "  ? readdirSync(reportsDir).map((n) => ({"],
+  ["RA-14 class2-gate consults the approval selection", "engine/scripts/class2-gate.mjs",
+    "const approvalDocs = selectApprovalDocs(changedFiles)",
+    "const approvalDocs = changedFiles"],
+  // The sweep itself must be able to go red, or it is decoration.
+  ["RA-15 the runner sweep enumerates from the filesystem", "engine/test/invariants/invariants.test.ts",
+    "    return [...scripts, ...drills].sort();",
+    "    return [...drills].sort();"],
+  // REPLACED, NOT DELETED. The first spelling of this entry mutated the
+  // assertion to `.toBe(matches !== undefined)` — which is `true`, a semantic
+  // no-op — and SURVIVED for a harness reason rather than an unprotected one.
+  // A no-op entry is a broken entry: it is replaced with a real revert, and the
+  // check it targets was given the negative case it never had.
+  ["RA-16 the runner sweep can answer NO", "engine/test/invariants/invariants.test.ts",
+    "  const inDefaultSuite = (include: readonly string[], path: string): boolean =>\n    include.some((glob) =>",
+    "  const inDefaultSuite = (include: readonly string[], path: string): boolean =>\n    true || include.some((glob) =>"],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],
@@ -667,7 +723,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.error("HARNESS RESULT IS VOID. Investigate before trusting any number below.");
       process.exit(1);
     }
-    const got = failure === null ? "SURVIVED" : "CAUGHT";
+    const got = classifyRun(failure);
     metaResults.push({ name: c.name, expect: c.expect, got });
     console.log(`  ${got === c.expect ? "ok  " : "FAIL"} ${c.name}  |  got ${got}${failure ? `  (${failure})` : ""}`);
   }
@@ -693,7 +749,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       notFound += 1;
       continue;
     }
-    if (failure === null) {
+    // THE SAME CALL THE META-CHECK MAKES. A second copy of this comparison is
+    // a second thing to get wrong, and the meta-check validates only the copy
+    // it runs — see `classifyRun`.
+    if (classifyRun(failure) === "SURVIVED") {
       console.log(`*** SURVIVED ***   ${name}`);
       survived += 1;
     } else {
