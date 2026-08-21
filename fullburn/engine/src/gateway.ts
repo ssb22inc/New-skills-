@@ -152,6 +152,15 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
    * the cap never engaging once. The flag answers "did it leave the building",
    * which is the only question the release decision may depend on. */
   let departed = false;
+  /** WHAT WAS ACTUALLY CHARGED, for the trace. Not what was reserved.
+   *
+   * `costUsd` reported `reservation?.amountUsd ?? 0` on every failure path —
+   * including the ones whose reservation was RELEASED and never charged. Five
+   * hundred released failures traced $5.00 of cost against a ledger reading
+   * $0.00 (adversary finding R14-12). Law 10 makes every client-visible number
+   * answerable to the warehouse; a cost the ledger does not hold is a data lie
+   * whichever direction it points. This is set where the money actually moves. */
+  let committedUsd = 0;
   let releaseLeak: unknown = null;
   /** Set when the failure trace itself could not be emitted. */
   let traceLost: string | null = null;
@@ -166,7 +175,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
         startedAtMs,
         input: redactValue(req?.input, secrets),
         output: redactValue(output, secrets),
-        costUsd: reservation?.amountUsd ?? 0,
+        costUsd: committedUsd,
         outcome: "error",
         errorMessage: message,
       });
@@ -312,11 +321,13 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       }
       // Anything else may have been billed upstream: SETTLE, never release (F3).
       settleOrFailClosed(meter, reservation);
+      committedUsd = reservation.amountUsd;
       throw redactError(err, secrets, GatewayError);
     }
 
     // Billable regardless of what we think of the response.
     settleOrFailClosed(meter, reservation);
+    committedUsd = reservation.amountUsd;
 
     validateOutput(card.outputSchema, output);
 

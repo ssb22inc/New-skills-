@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { CapError, getCaps } from "@fullburn/config/caps";
 import { FrozenCapsSpendMeter, MemorySpendMeter, MeterUnavailableError, medianOfThree, trustedClock } from "../src/spend-meter.ts";
-import { processLedger, resetProcessLedgerForTests } from "../src/spend-ledger.ts";
+import { InMemorySpendLedger, processLedger, resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 import { TEST_CLIENT } from "./helpers.ts";
 
 /** R12 LOCKS — the ledger enforces the ceiling, and exposes no way around it.
@@ -386,7 +386,59 @@ describe("the disclosed in-process residual, MEASURED (L31(b), R13-03)", () => {
    * real, and the point of this test is to state its SIZE in executable form:
    * the day the bound changes, this goes red and the ledger row has to be
    * rewritten rather than quietly outliving its facts. */
-  it("an in-process prototype patch spends unmetered — and this is how far it gets", () => {
+  /** BOTH PROTOTYPES. The row named only `MemorySpendMeter.prototype`, and
+   * R13-01 is the fix that moved every enforcement decision onto
+   * `InMemorySpendLedger.prototype` — unfrozen, exported, and re-exported a
+   * second time from `spend-meter.ts` (adversary finding R14-02). A disclosure
+   * that names one of two members of its own residual class is a disclosure
+   * that will be read as covering both. */
+  it("an in-process LEDGER prototype patch spends unmetered — and this is how far it gets", () => {
+    /** THE PROTOTYPE THE PRODUCTION LEDGER ACTUALLY RESOLVES THROUGH, not the
+     * one this file imported. A second module instance has its own class, so
+     * patching the import missed the live object entirely under a single-fork
+     * pool — and an attacker would reach for the live one anyway. */
+    const proto = Object.getPrototypeOf(processLedger()) as Record<string, unknown>;
+    // The vacuity guard is that the prototype carries the method being patched
+    // — NOT that it is the class this file imported. Under a shared registry a
+    // second module instance has its own class, and the live object is the one
+    // that matters; asserting identity there fails for a reason that has
+    // nothing to do with the residual being measured.
+    expect(typeof proto["reserve"], "the ledger prototype carries no reserve — the fixture is broken").toBe("function");
+    const realReserve = proto["reserve"];
+    try {
+      proto["reserve"] = function () {
+        /* the cap check, deleted */
+      };
+      const meter = new FrozenCapsSpendMeter();
+      let spent = 0;
+      for (let i = 0; i < 800; i++) {
+        try {
+          meter.settle(meter.reserve(TEST_CLIENT, 0.01));
+          spent += 0.01;
+        } catch {
+          break;
+        }
+      }
+      expect(spent, "the ledger-prototype residual has NARROWED — L31(c) now overstates it").toBeCloseTo(8, 10);
+      expect(meter.todayUsd(TEST_CLIENT), "the ledger recorded the patched spend").toBe(0);
+    } finally {
+      proto["reserve"] = realReserve;
+    }
+    resetProcessLedgerForTests();
+    const clean = new FrozenCapsSpendMeter();
+    let honest = 0;
+    for (let i = 0; i < 3_000; i++) {
+      try {
+        clean.settle(clean.reserve(TEST_CLIENT, 0.01));
+        honest += 0.01;
+      } catch {
+        break;
+      }
+    }
+    expect(honest, "the fixture did not restore the prototype").toBeLessThanOrEqual(FROZEN_DAY);
+  });
+
+  it("an in-process METER prototype patch spends unmetered — and this is how far it gets", () => {
     const proto = MemorySpendMeter.prototype as unknown as Record<string, unknown>;
     const realSettle = proto["settle"];
     const realReserve = proto["reserve"];

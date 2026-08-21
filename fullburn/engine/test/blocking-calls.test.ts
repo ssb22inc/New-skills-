@@ -104,3 +104,40 @@ describe("the resolver follows local re-exports and every call form (R12-04)", (
     expect(blockingCalls(src, src, new Map([["./cp-util.mjs", helper]]))).toEqual([]);
   });
 });
+
+describe("value flow and the braced default import (R14-04, trap #9)", () => {
+  /** The five spellings that walked past the form list, each measured clean by
+   * the adversary and each caught here. */
+  it("REFUSES a braced default import — it is a default import wearing braces", () => {
+    for (const spec of ["node:child_process", "child_process"]) {
+      const src = `import { default as cp } from "${spec}";\ncp.spawnSync("x");`;
+      expect(blockingBindings(src).unresolvable.length, `${spec} braced default read as clean`).toBeGreaterThan(0);
+      expect(blockingCalls(src, src).length).toBeGreaterThan(0);
+    }
+    // …and through a helper module, which is where it would actually hide.
+    const helper = 'import { default as cp } from "node:child_process";\nexport const runSync = cp.spawnSync;';
+    const runner = 'import { runSync } from "./h.mjs";\nrunSync("x");';
+    expect(blockingCalls(runner, runner, new Map([["./h.mjs", helper]])).length).toBeGreaterThan(0);
+  });
+
+  it("catches a bound value moved through a variable, an object or an array", () => {
+    const src = 'import { spawnSync } from "node:child_process";';
+    for (const slice of [
+      "const run = spawnSync; run(process.execPath, []);",
+      "const t = { go: spawnSync }; t.go(process.execPath, []);",
+      "const fns = [spawnSync]; fns[0](process.execPath, []);",
+      "queueMicrotask(spawnSync);",
+    ]) {
+      expect(blockingCalls(src, slice), `${slice} walked past`).toEqual(["spawnSync"]);
+    }
+  });
+
+  it("still does not fire when the runner never names the binding", () => {
+    // The module may import it for a path outside the runner; the SLICE is what
+    // is judged, so this stays a discrimination rather than a blanket refusal.
+    const src = 'import { spawnSync } from "node:child_process";\nvoid spawnSync;';
+    expect(blockingCalls(src, "await measure(entry);")).toEqual([]);
+    const async_ = 'import { spawn } from "node:child_process";';
+    expect(blockingCalls(async_, "spawn(process.execPath, []);")).toEqual([]);
+  });
+});

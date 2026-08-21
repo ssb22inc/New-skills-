@@ -12,7 +12,7 @@ import {
 import { capsOf, fixedCaps, memoryMeter } from "./helpers.ts";
 import { InMemorySpendLedger, resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { summaryLine } from "../scripts/mutate-lib.mjs";
+import { applyEntry, summaryLine } from "../scripts/mutate-lib.mjs";
 
 /** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
  * one test's spend is the next test's opening balance unless the slate is
@@ -1133,5 +1133,28 @@ describe("harness — the per-entry evidence column survives a test name (R12-08
     expect(summaryLine("", "      Tests  2 failed | 304 passed (306)")).toBe("2 failed | 304 passed (306)");
     // …and a run with no summary at all says so rather than inventing one.
     expect(summaryLine("   \u00d7 a test called Tests and more Tests here", "")).toBe("failed");
+  });
+});
+
+describe("the mutation table cannot silently name the wrong line (R14-07)", () => {
+  /** `applyEntry` took the first match, so an entry whose `from` occurs twice in
+   * its target file reverted whichever came first — and a DIFFERENT fix's entry
+   * reverted the same line, printing CAUGHT for a guard it never touched.
+   *
+   * MUTATION: drop the ambiguity check from `applyEntry`. */
+  it("an ambiguous target is refused, not guessed", () => {
+    const src = "a();\nGUARD;\nb();\nGUARD;\n";
+    const ambiguous = applyEntry(src, "GUARD;", "void 0;");
+    expect(ambiguous.at, "an ambiguous target was applied to the first match").toBe(-1);
+    expect(ambiguous.next).toBeNull();
+    expect(ambiguous.ambiguous).toBe(true);
+    // A unique target still applies, so this is a discrimination.
+    const unique = applyEntry(src, "a();", "void 0;");
+    expect(unique.at).toBeGreaterThan(-1);
+    expect(unique.next).toContain("void 0;");
+    // …and enough context makes an ambiguous target unique again, which is how
+    // the two `Object.freeze(this)` entries were repaired.
+    const disambiguated = applyEntry(src, "b();\nGUARD;", "b();\nvoid 0;");
+    expect(disambiguated.at).toBeGreaterThan(-1);
   });
 });

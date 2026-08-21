@@ -168,6 +168,21 @@ export function blockingBindings(source: string, graph: ReadonlyMap<string, stri
   if (new RegExp(String.raw`import\s+(?:\*\s+as\s+\w+|\w+)\s*(?:,\s*\{[^}]*\}\s*)?from\s+${CP}`).test(source)) {
     unresolvable.push("a namespace or default import of child_process cannot be resolved statically");
   }
+  /** THE BRACED DEFAULT IMPORT. `import { default as cp } from "node:child_process"`
+   * is a default import wearing braces, so it never reached the branch above —
+   * and then `blockingImports` saw the imported name `"default"`, found it
+   * absent from the API list, and recorded nothing. `names=[]`,
+   * `unresolvable=[]`: the file's own fail-closed principle was not reached
+   * because the check believed it had resolved the module (adversary finding
+   * R14-04). One line, no helper, no alias. */
+  if (new RegExp(String.raw`import\s*\{[^}]*\bdefault\b[^}]*\}\s*from\s+${CP}`).test(source)) {
+    unresolvable.push("a braced default import of child_process cannot be resolved statically");
+  }
+  for (const [spec, child] of graph) {
+    if (new RegExp(String.raw`import\s*\{[^}]*\bdefault\b[^}]*\}\s*from\s+${CP}`).test(child)) {
+      unresolvable.push(`"${spec}" takes a braced default import of child_process`);
+    }
+  }
   if (new RegExp(String.raw`require\s*\(\s*${CP}`).test(source)) {
     unresolvable.push("require() of child_process cannot be resolved statically");
   }
@@ -186,16 +201,26 @@ export function blockingBindings(source: string, graph: ReadonlyMap<string, stri
   return { names: [...new Set(names)], unresolvable };
 }
 
-/** EVERY WAY OF INVOKING A VALUE COUNTS AS A CALL. `f(…)` was the only form
- * matched, so `f.call(null, …)` and `Reflect.apply(f, …)` reached the same
- * blocking API with the check clean (adversary finding R12-04). */
-function isCalled(name: string, slice: string): boolean {
+/** A BLOCKING BINDING MAY NOT BE REFERENCED AT ALL. Not "may not be called".
+ *
+ * This asked "is it called?", and answered it by enumerating invocation FORMS:
+ * `f(…)`, then `f.call`/`f.apply`/`f.bind`/`Reflect.apply` after R12-04. The
+ * value does not have to be invoked under its own name. Measured, all three
+ * clean against the form list while the binding itself resolved correctly:
+ *
+ *     const run = spawnSync;      run(…)
+ *     const t = { go: spawnSync }; t.go(…)
+ *     const fns = [spawnSync];     fns[0](…)
+ *
+ * (adversary finding R14-04, the fifth consecutive round on this file). There
+ * is no finite list of ways to move a value in JavaScript, so the question
+ * changes: a runner that MENTIONS a blocking binding is refused, called or not.
+ * That removes the capability — you cannot use what you cannot name — instead
+ * of enumerating one more spelling of using it. A runner that genuinely needs
+ * a synchronous child process is a design conversation, not a regex. */
+function isReferenced(name: string, slice: string): boolean {
   const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return (
-    new RegExp(String.raw`\b${n}\s*\(`).test(slice) ||
-    new RegExp(String.raw`\b${n}\s*\.\s*(?:call|apply|bind)\s*\(`).test(slice) ||
-    new RegExp(String.raw`\bReflect\s*\.\s*(?:apply|construct)\s*\(\s*${n}\b`).test(slice)
-  );
+  return new RegExp(String.raw`\b${n}\b`).test(slice);
 }
 
 /** Blocking bindings CALLED in this slice of source, or the unresolvable
@@ -207,5 +232,5 @@ export function blockingCalls(
 ): readonly string[] {
   const scan = blockingBindings(moduleSource, graph);
   if (scan.unresolvable.length > 0) return scan.unresolvable;
-  return scan.names.filter((n) => isCalled(n, slice));
+  return scan.names.filter((n) => isReferenced(n, slice));
 }

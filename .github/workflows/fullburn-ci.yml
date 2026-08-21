@@ -72,6 +72,17 @@ jobs:
       - name: Suite is order-independent (three shuffled seeds)
         run: npm run test:shuffle
 
+      # R13-08 named TWO conditions — `--no-isolate` OR a single-fork pool — and
+      # only the first was ever run, so `test:noisolate`'s green did not prove
+      # what the config claimed. Forced, eight money-path locks were red, all of
+      # them module-identity artifacts of an object shared across registries
+      # (adversary finding R14-05). Both conditions are stages now.
+      - name: Suite survives a shared module registry (--no-isolate)
+        run: npm run test:noisolate
+
+      - name: Suite survives a single fork (R13-08's other condition)
+        run: npm run test:singlefork
+
   # THE ACCEPTANCE BAR, AS A STAGE. `npm run mutate` is how this project
   # enforces "a fix whose one-line revert leaves the suite green is not
   # protected by anything" — the lesson of five consecutive rounds — and it

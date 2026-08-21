@@ -192,7 +192,7 @@ const MUTATIONS = [
   // held by review and by the standing rule in CLAUDE.md, and what it protects
   // — the guards themselves — each carry their own entry above.
   // ---- r10 findings ----
-  ["R10-02 the production meter is frozen", "engine/src/spend-meter.ts", "    Object.freeze(this);\n  }\n}", "  }\n}"],
+  ["R10-02 the production meter is frozen", "engine/src/spend-meter.ts", "     * reach into internals. */\n    Object.freeze(this);", "     * reach into internals. */\n    void 0;"],
   ["R10-02 settle refuses unavailable storage", "engine/src/spend-ledger.ts", "    this.#assertAvailable(open.clientId);\n    this.#open.delete(handle);\n    for (const period of", "    this.#open.delete(handle);\n    for (const period of"],
   ["R10-02 release refuses unavailable storage", "engine/src/spend-ledger.ts", "    this.#assertAvailable(open.clientId);\n    this.#open.delete(handle);\n    return open;", "    this.#open.delete(handle);\n    return open;"],
   ["R10-03 the clock is anchored, not re-read", "engine/src/trusted-clock.ts", "    return anchorWall + Number((mono - anchorMono) / 1_000_000n);", "    return Date.now();"],
@@ -220,11 +220,11 @@ const MUTATIONS = [
   ["R10-01 an empty meta-check is void", "engine/scripts/mutate-lib.mjs", "  if (!Array.isArray(results) || results.length === 0) {", "  if (false) {"],
   ["R9-05 production meter binds its own clock", "engine/src/spend-meter.ts", "  constructor(narrowing?: CapsNarrowingTable) {", "  constructor(now?: () => number, narrowing?: CapsNarrowingTable) {"],
   ["R9-09 marker cannot write outside the workspace", "engine/scripts/mutate-lib.mjs", "  if (!inWorkspace || !sameWorkspace || !fs.existsSync(record.path)) {", "  if (false) {"],
-  ["R9-10 no Class-2 file is git-binary", "engine/test/hardening.test.ts", "acme\\u0000corp", "acme\u0000corp"],
+  ["R9-10 no Class-2 file is git-binary", "engine/test/hardening.test.ts", "backend.set(\"acme\\u0000corp\", \"meta-oauth\", \"nul-secret\");", "backend.set(\"acme\u0000corp\", \"meta-oauth\", \"nul-secret\");"],
   ["R9-11 runtime skip/fail refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*(?:skip|fixme|fail)\\s*\\(/.test(real)) return false;", "      void real;"],
   ["R9-11 bare return refused", "engine/test/e2e-variance.ts", "      if (/\\breturn\\b\\s*;/.test(real)) return false;", "      void 0;"],
   ["R9-11 skipped describe refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*describe\\s*\\.\\s*(?:skip|fixme)\\s*\\(/.test(stripped)) return false;", "      void stripped;"],
-  ["R9-02 self-targeting entries cannot rewrite the table", "engine/scripts/mutate-lib.mjs", "  const at = source.indexOf(from, isSelf ? tableEnd : 0);", "  const at = source.indexOf(from);"],
+  ["R9-02 self-targeting entries cannot rewrite the table", "engine/scripts/mutate-lib.mjs", "  const start = isSelf ? tableEnd : 0;\n  const at = source.indexOf(from, start);", "  const start = 0;\n  const at = source.indexOf(from, start);"],
   ["R9-02 table boundary fails closed", "engine/scripts/mutate-lib.mjs", 'if (at === -1) throw new Error("mutation table not found in harness source — refusing to run (fail closed)");', "if (at === -1) return 0;"],
   // Found while running the R7 gates, not by the review: `npm run leak-check`
   // passed no root, so every path-scoped rule matched nothing and the local
@@ -233,7 +233,16 @@ const MUTATIONS = [
   ["leak-check local command matches CI", "package.json", "\"leak-check\": \"node engine/scripts/leak-check.mjs ..\"", "\"leak-check\": \"node engine/scripts/leak-check.mjs\""],
   // ---- r6 findings ----
   ["R6-04 ledger keyed by identity", "engine/src/spend-ledger.ts", "    const open = this.#open.get(handle);\n    if (open === undefined) return null; // forged, foreign, or already closed", "    const open = [...this.#open.values()].find((e) => e.clientId === (handle as { clientId?: string }).clientId);\n    if (open === undefined) return null;"],
-  ["R6-04 handle frozen", "engine/src/spend-meter.ts", "    Object.freeze(this);", "    void 0;"],
+  // TARGET AMBIGUITY IS A SILENT MISS. `Object.freeze(this);` occurs twice in
+  // spend-meter.ts — once in SpendReservation (R6-04) and once in
+  // FrozenCapsSpendMeter (R10-02) — and `String.replace` takes the FIRST. So
+  // both entries reverted the reservation's freeze, R10-02's fix had no entry
+  // touching it, and the harness printed CAUGHT for a line it never changed
+  // (adversary finding R14-07). Each target now carries enough context to be
+  // unique, which `applyEntry` refuses to apply if it is not.
+  ["R6-04 handle frozen", "engine/src/spend-meter.ts",
+    "    // A handle is a value. `id` is informational only — see #open's keying.\n    Object.freeze(this);",
+    "    // A handle is a value. `id` is informational only — see #open's keying.\n    void 0;"],
   ["R6-01 anchored tree hash", "engine/scripts/gate-lib.mjs", "    return /^[0-9a-f]{7,64}$/i.test(bare) ? bare : null;", "    const t = /[0-9a-f]{7,64}/i.exec(bare); return t === null ? null : t[0];"],
   // Restated after R7-08 split the body extraction from the string blanking:
   // the mutation still reverts to the whole-file AND that R6-02 found.
@@ -390,9 +399,9 @@ const MUTATIONS = [
   ["R12-04 the resolver follows local re-exports", "engine/test/blocking-calls.ts",
     "      childBlocking = blockingExports(child, graph, new Set([...seen, spec]), unresolvable);\n      if (childBlocking.size === 0) continue;",
     "      void child;\n      continue;"],
-  ["R12-04 indirect call forms count as calls", "engine/test/blocking-calls.ts",
-    "    new RegExp(String.raw`\\b${n}\\s*\\.\\s*(?:call|apply|bind)\\s*\\(`).test(slice) ||",
-    "    false ||"],
+  // R12-04's entry targeted `isCalled`, which R14-04 replaced entirely: the
+  // question is no longer "is it called" but "is it named", because there is no
+  // finite list of ways to move a value. Its successor is the R14-04 entry.
   // R12-08: the evidence column reads the summary, not a test title.
   ["R12-08 the evidence column is anchored", "engine/scripts/mutate-lib.mjs",
     "  const SUMMARY = /^[ \\t]+Tests[ \\t]+(\\d[^\\n]*)$/m;", "  const SUMMARY = /Tests\\s+(.*)$/m;"],
@@ -440,8 +449,8 @@ const MUTATIONS = [
   // R13-06: the population is derived from the import graph, and coverage is
   // one-to-one rather than a substring match.
   ["R13-06 the guard population follows imports", "engine/test/money-path-guards.ts",
-    "      const next = resolveSpecifier(m[1]!, file);\n      if (next !== null) stack.push(next);",
-    "      const next = resolveSpecifier(m[1]!, file);\n      void next;"],
+    "      const next0 = resolveSpecifier(spec, file);\n      if (next0 !== null) stack.push(next0);",
+    "      const next0 = resolveSpecifier(spec, file);\n      void next0;"],
   ["R13-06 coverage is one-to-one", "engine/test/invariants/invariants.test.ts",
     "      enumerated.filter((g) => g.file === entry.file && entry.expect.test(g.signature));",
     "      enumerated.filter((g) => g.file === entry.file && entry.expect.test(g.signature)).slice(0, 1);"],
@@ -456,6 +465,47 @@ const MUTATIONS = [
     "        if (!/\\.ts$/.test(e.name)) continue;\n        count();"],
   ["R13-10 the mock walk covers every test tree", "engine/test/invariants/invariants.test.ts",
     "    const perRoot = testRoots.map((r) => {", "    const perRoot = [testRoots[0]!].map((r) => {"],
+
+  // ---- r14 findings ----
+  // R14-12: a refusal traced the RESERVED amount as costUsd, including
+  // refusals whose reservation was released and never charged.
+  ["R14-12 the trace reports what was committed", "engine/src/gateway.ts",
+    "        costUsd: committedUsd,", "        costUsd: reservation?.amountUsd ?? 0,"],
+  // R14-04 (trap #9): value flow, not invocation form; and the braced default.
+  ["R14-04 a blocking binding may not be referenced", "engine/test/blocking-calls.ts",
+    "  return scan.names.filter((n) => isReferenced(n, slice));",
+    "  return scan.names.filter((n) => new RegExp(String.raw`\\b${n}\\s*\\(`).test(slice));"],
+  ["R14-04 a braced default import is refused", "engine/test/blocking-calls.ts",
+    "    unresolvable.push(\"a braced default import of child_process cannot be resolved statically\");",
+    "    void 0;"],
+  // R14-07: an ambiguous mutation target is refused, not applied to the first
+  // match — two entries were reverting the same line.
+  ["R14-07 an ambiguous target fails closed", "engine/scripts/mutate-lib.mjs",
+    "  if (source.indexOf(from, at + 1) !== -1) {", "  if (false) {"],
+  // R14-08: a resume must name the halt it lifts.
+  ["R14-08 a resume names the halt it lifts", "engine/src/spend-ledger.ts",
+    "      if (halt !== undefined && !reason.includes(halt)) {", "      if (false) {"],
+  // R14-03: the population refuses what it cannot follow, reads side-effect
+  // imports, and does not invent modules from prose.
+  ["R14-03 unfollowable constructs are refused", "engine/test/money-path-guards.ts",
+    "    if (NOT_A_GUARD.some((f) => f.pattern.test(after))) continue;",
+    "    if (true) continue;"],
+  ["R14-03 the import scan is anchored to a statement", "engine/test/money-path-guards.ts",
+    "      /^[ \\t]*(?:import|export)\\b[^;]*?from[ \\t]+[\"']([^\"']+)[\"']|^[ \\t]*import[ \\t]+[\"']([^\"']+)[\"']/gm,",
+    "      /from[ \\t]+[\"']([^\"']+)[\"']|^[ \\t]*import[ \\t]+[\"']([^\"']+)[\"']/gm,"],
+  ["R14-03 comments are blanked, not deleted", "engine/test/money-path-guards.ts",
+    "  // so a refusal can name the line a reader will find in the file.\n  const blank = (t: string) => t.replace(/[^\\n]/g, \" \");",
+    "  // so a refusal can name the line a reader will find in the file.\n  const blank = () => \"\";"],
+  // R14-06: the drill's decision is a tested pure function now.
+  ["R14-06 a post-signal write is reported", "engine/test/post-signal-writes.ts",
+    "    if (now === inputs.originals.get(file)) continue;\n    offenders.push(file);",
+    "    if (now === inputs.originals.get(file)) continue;\n    void file;"],
+  ["R14-06 a restore is not a violation", "engine/test/post-signal-writes.ts",
+    "    if (now === inputs.originals.get(file)) continue;", "    if (false) continue;"],
+  // R14-05: money-path error identities are stable across module instances.
+  ["R14-05 the error identity is registry-stable", "engine/src/money-errors.ts",
+    "  const existing = g[slot];\n  if (existing !== undefined) return existing;",
+    "  const existing = g[slot];\n  void existing;"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

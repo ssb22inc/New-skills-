@@ -13,7 +13,7 @@ import { scanContent } from "../../scripts/scan-lib.mjs";
 import { CANARY_SECRET, TEST_CLIENT, makeDeps, memoryMeter } from "../helpers.ts";
 import { e2eVarianceHolds, runnerTargets } from "../e2e-variance.ts";
 import { blockingCalls } from "../blocking-calls.ts";
-import { moneyPathGuards } from "../money-path-guards.ts";
+import { moneyPathGuards, moneyPathRefusals } from "../money-path-guards.ts";
 
 /** The complete §10.2 standing-invariant checklist, enumerated (R10). Every
  * bullet appears here by name every CI run, and every LIVE entry carries a real
@@ -694,6 +694,12 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         } },
       { name: "a halt with no client is refused", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
         expect: /setAvailable requires a clientId/, fire: () => processLedger().setAvailable("", false, "sweep") },
+      { name: "a resume must name the halt it lifts", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /must name the halt it lifts/, fire: () => {
+          resetProcessLedgerForTests();
+          processLedger().setAvailable("pulsern", false, "operator halt: suspected runaway");
+          processLedger().setAvailable("pulsern", true, "anyone can say anything");
+        } },
       { name: "a halt with no reason is refused", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
         expect: /setAvailable requires a reason/, fire: () => processLedger().setAvailable("pulsern", false, "") },
       { name: "the ledger reset refuses outside a test runner", file: "engine/src/spend-ledger.ts", type: SpendLedgerError,
@@ -963,6 +969,17 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
      * money path must be matched by an entry that DROVE it, or named in
      * `DISCLOSED` with the ledger row that explains why it cannot be driven.
      * A guard added tomorrow fails this the day it lands. */
+    /** THE DERIVATION REFUSES WHAT IT CANNOT FOLLOW. A dynamic import hides a
+     * module from the population and a `throw` the scan cannot read hides a
+     * guard inside one — neither exists on the money path today, which is
+     * exactly where `MONEY_PATH_SOURCES` was when R12-02 called it fine
+     * (adversary finding R14-03). Refused by name and line instead. */
+    const refusals = moneyPathRefusals(new URL("../../../", import.meta.url));
+    expect(
+      refusals,
+      `the money path contains constructs the guard population cannot follow, so its completeness is not ` +
+        `provable. Extend the derivation or restructure the code — do not leave it unseen:\n  ${refusals.join("\n  ")}`,
+    ).toEqual([]);
     const enumerated = moneyPathGuards(new URL("../../../", import.meta.url));
     expect(enumerated.length, "no guards enumerated — this check would pass vacuously").toBeGreaterThan(60);
 

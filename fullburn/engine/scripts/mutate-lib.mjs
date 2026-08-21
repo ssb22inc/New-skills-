@@ -116,8 +116,23 @@ export function harnessVerdict(survived, notFound) {
  * where the target appears in both places and assert WHICH one is chosen — a
  * table entry cannot satisfy that assertion (adversary finding R9-02). */
 export function applyEntry(source, from, to, { isSelf = false, tableEnd = 0 } = {}) {
-  const at = source.indexOf(from, isSelf ? tableEnd : 0);
+  const start = isSelf ? tableEnd : 0;
+  const at = source.indexOf(from, start);
   if (at === -1) return { at: -1, next: null };
+  /** AN AMBIGUOUS TARGET IS A SILENT MISS, NOT A COIN FLIP.
+   *
+   * This took the FIRST match. `Object.freeze(this);` occurs twice in
+   * `spend-meter.ts` — the reservation handle's (R6-04) and the production
+   * meter's (R10-02) — so two entries both reverted the first one, R10-02's fix
+   * had no entry that touched it, and the harness printed CAUGHT for a line it
+   * had never changed (adversary finding R14-07). A table whose entries can
+   * silently name the wrong line is the R9-02 defect in a source file.
+   *
+   * Fail closed: an ambiguous target is reported like a missing one, so it
+   * shows up as PATTERN-NOT-FOUND and gets investigated rather than guessed. */
+  if (source.indexOf(from, at + 1) !== -1) {
+    return { at: -1, next: null, ambiguous: true };
+  }
   return { at, next: source.slice(0, at) + to + source.slice(at + from.length) };
 }
 

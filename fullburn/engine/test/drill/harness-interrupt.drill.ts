@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
+import { postSignalWrites } from "../post-signal-writes.ts";
 
 /** THE HARNESS INTERRUPT DRILL — DELIBERATELY OUTSIDE THE DEFAULT SUITE.
  *
@@ -128,16 +129,22 @@ describe("mutation harness — an interrupted run restores the tree (R9-03)", ()
         }
       }
       const afterSignal = new Set<string>();
-      const watch = setInterval(() => {
-        for (const f of watchList) {
-          let now: string;
+      /** THE DECISION LIVES IN `post-signal-writes.ts`, NOT HERE.
+       *
+       * All three detection paths used to be inline in this file, and deleting
+       * every one of them left this drill reporting PASS — because nothing in
+       * the default suite runs this file, so nothing could prove its detector
+       * worked (adversary finding R14-06). The comparison is now a pure
+       * function with its own red-proof in `npm test`; this file supplies the
+       * real files and the real signal. */
+      const sample = () => {
+        for (const f of postSignalWrites({ watch: watchList, atSignal, originals, read: (x) => {
           try {
-            now = readFileSync(f, "utf8");
+            return readFileSync(x, "utf8");
           } catch {
-            continue;
+            return null;
           }
-          if (now === atSignal.get(f)) continue;
-          if (now === originals.get(f)) continue; // the restore, which is the point
+        } })) {
           afterSignal.add(f);
         }
         // A marker naming a file we were not watching is also a post-signal
@@ -148,7 +155,8 @@ describe("mutation harness — an interrupted run restores the tree (R9-03)", ()
         } catch {
           /* no marker, or mid-write */
         }
-      }, 25);
+      };
+      const watch = setInterval(sample, 25);
       const exitCode = await new Promise((r) => {
         child.on("exit", (code, signal) => r(code ?? signal));
         child.kill("SIGINT");
@@ -157,14 +165,11 @@ describe("mutation harness — an interrupted run restores the tree (R9-03)", ()
       clearInterval(watch);
       expect(exitCode, "SIGINT did not stop the harness — it kept rewriting source").not.toBe("STILL RUNNING");
       // One last look after exit, in case the final write landed between polls.
-      for (const f of watchList) {
-        try {
-          const now = readFileSync(f, "utf8");
-          if (now !== atSignal.get(f) && now !== originals.get(f)) afterSignal.add(f);
-        } catch {
-          /* gone; nothing to compare */
-        }
-      }
+      sample();
+      // …and the watch list actually contained the file that was mutated, so an
+      // empty result means "nothing was written" rather than "nothing was
+      // watched" — the vacuity the detector's own tests cannot rule out.
+      expect(watchList.has(mutated!.path), "the drill watched nothing it had seen mutated").toBe(true);
       expect(
         [...afterSignal],
         "the harness wrote to source files AFTER the signal was delivered — the loop is blocking, so the " +

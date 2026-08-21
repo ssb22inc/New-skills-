@@ -46,10 +46,20 @@ import { trustedClock, zoneDayKey, zoneMonthKey } from "./trusted-clock.ts";
  *
  * PHASE 2 DEPENDENCY, recorded so it cannot be forgotten: the production
  * implementation is the client's Durable Object (§2.2), which serialises per
- * client and survives a restart. It implements THIS interface. Because the
- * clock, the caps and the arithmetic are all on this side of it, the DO enforces
- * the ceiling out of process — which is what closes R11-01's in-process
- * prototype patch. Ledger L31 records the residuals. */
+ * client and survives a restart. It implements THIS interface, and that closes
+ * the PER-PROCESS bound — two Workers stop holding two ceilings.
+ *
+ * IT DOES NOT CLOSE THE IN-PROCESS PROTOTYPE PATCH, and this file said for one
+ * commit that it did. The patch does not attack the STATE, it attacks the CALL:
+ * `llm()` reaches storage through one expression, and patching the method that
+ * expression resolves to means no request is ever issued. A Durable Object
+ * enforces the calls it receives; it has no opinion about a call never made.
+ * Executed against a DO-shaped ledger enforcing out of process: $30 through a
+ * $5/day ceiling with the store's own counters at zero (adversary finding
+ * R14-01). What bounds an in-process patch is a control OUTSIDE the process
+ * that does not depend on this process calling it — ledger L4's Gateway-side
+ * cap is the candidate, and choosing it is a human decision recorded in L31.
+ * Ledger L31 records the residuals; do not restate the closure claim here. */
 
 export { MeterUnavailableError } from "./money-errors.ts";
 
@@ -320,8 +330,29 @@ export class InMemorySpendLedger implements SpendLedger {
     if (typeof reason !== "string" || reason.length === 0) {
       throw new MeterUnavailableError("setAvailable requires a reason — an unaudited halt of a client's spend is refused");
     }
-    if (available) this.#down.delete(clientId);
-    else this.#down.set(clientId, reason);
+    /** UN-HALTING IS NOT THE INVERSE OF HALTING.
+     *
+     * `setAvailable(c, true, "anything")` cleared an operator's halt with no
+     * authority check, through the same contract that set it — so a halt placed
+     * because spend was suspected of running away could be lifted by the module
+     * that caused it (adversary finding R14-08). Halting is fail-closed and
+     * anyone may do it; RESUMING moves money again, so it carries the same bar
+     * as any other money mutation: the reason must name the halt it lifts.
+     *
+     * This is a NARROWING, not a removal, and the distinction matters (standing
+     * rule 2026-08-20): an in-process caller that can read the audit log can
+     * still quote the halt reason back. Real authority needs an operator
+     * identity the process does not have — Phase 2, with the Durable Object,
+     * where the halt lives outside the process that spends. Ledger L33. */
+    if (available) {
+      const halt = this.#down.get(clientId);
+      if (halt !== undefined && !reason.includes(halt)) {
+        throw new MeterUnavailableError(
+          `resuming "${clientId}" must name the halt it lifts — "${halt}" — refusing to resume (fail closed)`,
+        );
+      }
+      this.#down.delete(clientId);
+    } else this.#down.set(clientId, reason);
     this.#audit.push({ clientId, available, reason, seq: this.nextSeq() });
   }
 
@@ -384,7 +415,13 @@ const LEDGER_MARK = Symbol.for("fullburn.spend-ledger.v1");
  * all. The marker is the fallback for a second module instance. */
 const OURS = new WeakSet<object>();
 
-export class SpendLedgerError extends Error {}
+/** Registry-stable for the same reason as `MeterUnavailableError`: this class is
+ * thrown by an object shared across module instances (R14-05). */
+const LEDGER_ERROR_SLOT = Symbol.for("fullburn.money-errors.SpendLedgerError");
+const LEDGER_ERROR_REGISTRY = globalThis as unknown as Record<symbol, (new (message?: string) => Error) | undefined>;
+LEDGER_ERROR_REGISTRY[LEDGER_ERROR_SLOT] ??= class SpendLedgerError extends Error {};
+export const SpendLedgerError = LEDGER_ERROR_REGISTRY[LEDGER_ERROR_SLOT]!;
+export type SpendLedgerError = InstanceType<typeof SpendLedgerError>;
 
 function slot(): InMemorySpendLedger {
   const g = globalThis as unknown as Record<symbol, unknown>;
@@ -457,9 +494,7 @@ export function resetProcessLedgerForTests(): void {
 }
 
 
-function frozenCeilings(clientId: string, narrowing?: CapsNarrowingTable): SpendCeilings {
-  return effectiveAiCapsUsd(clientId, narrowing);
-}
+
 
 /** One clock per process, built on first use. `trustedClock()` cross-validates
  * three independent wall-clock sources and then advances monotonically. */

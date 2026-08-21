@@ -136,7 +136,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
       );
       expect(msg).not.toContain(CANARY_SECRET);
     }
-    ledger.setAvailable(TEST_CLIENT, true, "fixture restored");
+    ledger.setAvailable(TEST_CLIENT, true, "storage outage fixture — resolved, resuming");
     // Traces carry no secrets either (Langfuse is a named leak surface):
     expect(JSON.stringify(sink.events)).not.toContain(CANARY_SECRET);
   });

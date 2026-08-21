@@ -108,7 +108,16 @@ const CAPS_TABLE: Readonly<Record<string, ClientCaps>> = deepFreeze({
   },
 });
 
-export class CapError extends Error {}
+/** REGISTRY-STABLE, for the reason `engine/src/money-errors.ts` sets out:
+ * `gateway.ts` classifies refusals with `instanceof CapError`, and a second
+ * module instance of this file would make that false for the same conceptual
+ * error — a money-path misclassification, not only a test artifact (adversary
+ * finding R14-05). */
+const CAP_ERROR_SLOT = Symbol.for("fullburn.money-errors.CapError");
+const CAP_ERROR_REGISTRY = globalThis as unknown as Record<symbol, (new (message?: string) => Error) | undefined>;
+CAP_ERROR_REGISTRY[CAP_ERROR_SLOT] ??= class CapError extends Error {};
+export const CapError = CAP_ERROR_REGISTRY[CAP_ERROR_SLOT]!;
+export type CapError = InstanceType<typeof CapError>;
 
 function assertSaneCap(n: unknown, label: string): asserts n is number {
   // Fail-closed guard (R2): a malformed cap must throw here, never flow into a

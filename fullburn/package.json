@@ -18,6 +18,7 @@
     "owed-approvals": "node engine/scripts/owed-approvals.mjs",
     "drill": "vitest run --config vitest.drill.config.ts",
     "test:noisolate": "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts'",
+    "test:singlefork": "vitest run --pool=forks --poolOptions.forks.singleFork --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts'",
     "test:shuffle": "vitest run --sequence.shuffle --sequence.seed=7 && vitest run --sequence.shuffle --sequence.seed=42 && vitest run --sequence.shuffle --sequence.seed=1234"
   },
   "devDependencies": {

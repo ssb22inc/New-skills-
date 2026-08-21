@@ -121,12 +121,17 @@ stated as limitations, not conclusions:
   R12: the unit was the MODULE INSTANCE, so `vi.resetModules()` plus a
   re-import minted a full second ceiling inside one process. The slot is keyed
   off `Symbol.for` now and a test drives the re-import.
-- **(b) An in-process patch of `MemorySpendMeter.prototype` still spends
-  unmetered** — `reserve` AND `settle`, not just `reserve`. The prototype stays
-  unfrozen by ruling (freezing is another spelling). `locks-r12` carries the
-  bounding test that measures how far the patch gets. **R11-01 is bounded, not
-  closed.** The DO closes it: with the arithmetic already inside the ledger,
-  enforcement happens outside the process.
+- **(b) An in-process prototype patch still spends unmetered** — on
+  `MemorySpendMeter.prototype` AND `InMemorySpendLedger.prototype`, which is
+  where R13-01 put every enforcement decision. The prototypes stay unfrozen by
+  ruling (freezing is another spelling). `locks-r12` carries a bounding test for
+  each. **THE DURABLE OBJECT DOES NOT CLOSE THIS**, and this file said for one
+  commit that it did: the patch attacks the CALL, not the state, so a store that
+  is never called cannot refuse. Measured at $30 through a $5/day DO-enforced
+  ceiling with the store's counters at zero (R14-01). An in-process patch can
+  only be bounded from outside the process — L4's Gateway-side cap is the
+  candidate. **That is an OPEN HUMAN DECISION in the queue**, and it changes
+  what Phase 2 is for.
 - **(c) `resetProcessLedgerForTests()` exists**, fenced by the runtime and by an
   invariant that no production module may name it. Typing is not a fence:
   `clear()` is off-interface and reachable by a cast, and a test asserts it is
