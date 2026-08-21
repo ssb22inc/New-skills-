@@ -415,14 +415,24 @@ const MUTATIONS = [
     "          void target;"],
 
   // ---- r13 findings ----
-  // FOUR r13 ENTRIES WERE WRITTEN AND REMOVED, and the reason is the project's
-  // own doctrine rather than convenience: a mutation that deletes a single
-  // assertion inside a test, or targets a file the unit suite never runs, can
-  // only ever report SURVIVED. The harness said so. What IS listed below are
-  // mutations on production code and on checker MECHANISM — the loop, the walk,
-  // the resolver — each with a red-proof that exercises the mechanism, so the
-  // revert turns the suite red. (L19/L23's rule: an entry that always survives
-  // is noise, and noise in this table is how R9-01 hid.)
+  // FOUR r13 ENTRIES WERE REMOVED, AND THE RATIONALE WAS HALF WRONG — recorded
+  // here because a rationale nobody revisits is how a coverage gap survives.
+  //
+  // The stated reason was that a mutation deleting a single assertion inside a
+  // test, or targeting a file the unit suite never runs, can only report
+  // SURVIVED. The first half stands. The SECOND half was the defect: R14-06
+  // deleted all three of the SIGINT drill's detection paths and `npm run drill`
+  // still reported PASS, which means the drill file was not merely un-mutatable
+  // — it was UNPROVEN. The right move was never "drop the entry", it was
+  // "extract the decision so it can be tested".
+  //
+  // Done: `engine/test/post-signal-writes.ts` holds the drill's decision, with
+  // six red-proofs in the default suite and two entries below. The two removed
+  // drill entries are therefore restored in substance, on a surface the suite
+  // can actually reach. The two that deleted a lone assertion inside a test stay
+  // out, and that half of the rationale is still right. (L19/L23's rule: an
+  // entry that always survives is noise, and noise in this table is how R9-01
+  // hid.)
   // R13-01: `reserve(-N)` + `settle` was a balance setter assembled from two
   // contract calls. The sign is validated at the boundary now.
   ["R13-01 the reservation sign is validated", "engine/src/spend-ledger.ts",
@@ -506,6 +516,12 @@ const MUTATIONS = [
   ["R14-05 the error identity is registry-stable", "engine/src/money-errors.ts",
     "  const existing = g[slot];\n  if (existing !== undefined) return existing;",
     "  const existing = g[slot];\n  void existing;"],
+
+  // R14-01's ruling: the out-of-process cap is the PRIMARY control, and its
+  // proof is that a refusal survives an absent ledger and reaches the caller.
+  ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
+    "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
+    "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

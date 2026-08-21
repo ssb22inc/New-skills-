@@ -1,180 +1,333 @@
-# HANDOFF — Fullburn Phase 0, as of 2026-08-20 (r13 fixes)
+# HANDOFF.md — Fullburn Phase 0
 
-Written so the next session resumes on **evidence, not reconstruction** (human
-ruling, R11 round). Read this file, then `CLAUDE.md`, then
-`reports/LIVE_VERIFICATION_LEDGER.md`. This file is a pointer, not a substitute:
-where it summarises, the ledger and the reports are authoritative.
+**Status: Phase 0 OPEN. Gate RED. No PR. No dollar has ever been live.**
+
+Rebuilt 2026-08-21 after R14-01 found that the previous version of this file
+asserted a property that had never been tested. Updated the same day with the
+R14-01 ruling implemented and its §4 proof executed.
 
 ---
 
-## 1. Where the build actually is
+## 0. The rule that governs this file
 
-Phase 0 is **NOT passed**. Thirteen adversary rounds have run (`reports/
-ADVERSARY_REPORT_phase0.r2.md` … `.r13.md`); every one returned FAIL, and every
-one found real money-path defects. r13's report is the newest and is the input
-to the current work.
+R14-01: `spend-ledger.ts`, ledger row L31, and this file all stated that the
+Durable Object closes the in-process prototype residual. None of the three had
+ever been tested. The claim was false.
 
-- The PR is **CLOSED**. Do not reopen it and do not open a new one without an
-  explicit human instruction.
-- **Five Class-2 approval sets are owed and are deliberately UNCOMMITTED**
-  (ledger L27). They stay uncommitted until R7-07's identity lock exists —
-  branch protection plus CODEOWNERS requiring an authenticated human approval.
-  `npm run owed-approvals` prints exactly what is owed. A sixth set is now owed
-  for the R11 work (`engine/src/spend-ledger.ts` is new engine source, and
-  engine source is Class 2).
-- **Never grade your own work** (§10.1, `CLAUDE.md`). A round is closed by the
-  adversary, not by the builder.
+Therefore, from this commit forward:
 
-## 2. The standing human rulings that bind every future round
+> **Every line in this file that asserts something about code behavior carries a
+> `[VERIFIED <path>]` tag naming the test that proves it, or a `[LIMITATION]`
+> tag stating the measured bound with no remedy implied. A line with neither tag
+> is a defect in this file and a severity-2 finding.**
 
-These are decisions, not suggestions. They are also mirrored in `CLAUDE.md`'s
-standing-invariants list; this section says who ruled and why.
+This is the r12 ledger rule applied to the handoff. Rows that cannot be tested
+state limitations only, never conclusions.
 
-1. **Guard + checker never ship in the same commit** without a test proving the
-   checker can still go red. (After R9-01: a crash marker and an invariant
-   asserting no marker exists landed together, so every mutation reported
-   CAUGHT and the acceptance bar became incapable of failing while printing a
-   true number. It was the most serious finding of the build.)
-2. **Every harness result is void unless preceded by a passing meta-check.**
-   `npm run mutate` injects a known-undetectable fault (a comment, must
-   SURVIVE) and a known-detectable one (a real guard reverted, must be CAUGHT)
-   before it reports any number. Enforced in code, in `mutate-lib.mjs`.
-3. **The unreachable-guard sweep is a COMPLETED step in every round.** A fix
-   that moves a check upstream can kill an older guard; it has happened three
-   times in `llm()` alone (L28, R9-08a, R10-07a). `engine/test/invariants/`
-   drives every money-path guard with an input written to make it fire. Since
-   R11-05 it records **which guard refused**, not merely that something threw.
-4. **A guard is locked by EXECUTING it, never by asserting its shape.** Six
-   checks have now been defeated by this (R8-09, R9-02, R9-03, R9-04, R10-09,
-   R11-04). The mutation table contains its own targets as string literals, so
-   a grep over source passes with the guard reverted.
-5. **Any tool that can write to the source tree is import-safe and fails
-   closed.** (After the harness ran itself inside the test process and left 57
-   of 100 guards reverted on disk.) Enumerated from the filesystem in
-   `engine/test/invariants/`, so a new writing tool is covered the day it lands.
-6. **No disclosure standing in for a fix.** "Four rounds running, a disclosed
-   limitation became the next round's severity-1; I'm not accepting a fifth."
-   An irreducible residual needs a test proving its bounds, not a note.
-7. **Take the architectural fix, not another spelling.** The recurring root
-   cause across R7–R11 is fixes that enumerate the attack's *spelling* rather
-   than removing the *capability*: resolver seam → clock seam → instance
-   patching → prototype patching → per-call construction. Explicitly ruled: do
-   NOT freeze the prototype.
+`[UNKNOWN]` means the next session must re-derive it. Do not fill an `[UNKNOWN]`
+from inference. Re-derive or ask.
 
-## 3. What R13's work changed (most recent session)
+---
 
-**R13-01 — the ledger owns the sign, the ceilings, the clock and the periods
-(severity 1, money loss).** R12-01 removed the balance *setters*; the capability
-survived in two contract calls. `reserve({… micros: -N …}, h)` made the
-projection smaller, so `projected > cap` could not fail, and `settle(h)`
-committed the negative — $30 through the real `llm()` against a frozen $5/day,
-zero `CapError`s, `todayUsd()` at $0.00. `ReserveRequest` also carried the
-ceilings (R7-06's seam, one layer down) and the period keys (a fresh ceiling for
-the asking).
+## 1. Where the build is
 
-The signature is now `reserve(clientId, micros, handle, narrowing?)`. The ledger
-validates a positive whole number of micro-dollars at the boundary, resolves
-ceilings itself from the frozen table, computes period keys from its own clock
-and the client's zone, and keeps the high-water ratchet internal.
-`committedMicros(clientId, "day"|"month")` names a SPAN, not a key.
-`MemorySpendMeter` is now a thin branded facade: unit conversion and a handle.
+| Item | Value | Provenance |
+|---|---|---|
+| Phase | 0 — Foundation | ENGINE_BUILD.md §11 |
+| Adversary rounds spent | 14 | round reports |
+| Gate | RED | r14 not clean; R14-01 ruling implemented but its primary control is unprovisioned (L4/H2) |
+| PR | Not opened. **Do not open.** | standing instruction, every round since r5 |
+| Latest commit | see `git log -1` | — |
+| Base for current Class-2 accounting | `eb0775f` | re-derived 2026-08-21 |
+| Class-2 approval entries owed | **47** | `node engine/scripts/owed-approvals.mjs . eb0775f` |
+| Tracked files / Class-2 by `isClass2()` | **488 / 115** | re-derived 2026-08-21 |
+| Live dollars exposed to date | 0 | no write path exists before Phase 6 |
+| Clients exposed to date | 0 | — |
 
-**Capabilities removed** (state them, per the standing rule): choosing the sign
-of a balance change; choosing the ceiling; choosing the period; enumerating
-another tenant's holdings; setting the high-water mark. The narrowing table is
-the one caller input left, and `caps.ts` proves it can only lower.
+### Commit trail
 
-**R13-02 — the slot brand.** `Symbol.for` made the ledger globally addressable,
-so anything evaluated first owned it. The slot now refuses an unmarked occupant
-and is defined non-writable/non-configurable (a removal); a registry-marked
-impostor planted before first use is still indistinguishable (a narrowing, said
-plainly in L31(b)). The singleton is frozen.
+`eb0775f` (Class-2 base) → `b9364e3` → `6f10a99d` → `e586f0e2` (retired
+cross-family brief, superseded) → `0877861` (r8 clean, 100/100) → `7516cd4` →
+`d73df4c` (binds `trustedClock()`, retires `Date.now`) → `cb48c05` (r13 fixes) →
+`a236e8f` (r14 report) → `0466154` (r14 fixes) → this commit (R14-01 ruling).
 
-**The lock changed shape.** `locks-r12` runs a SEQUENCE fuzz — seeded random
-walks over every contract method with adversarial arguments and harvested
-handles — asserting the committed balance never falls, never beats the ceiling,
-and is never corrupted. The old lock enumerated method NAMES, so a two-call
-sequence was outside its alphabet by construction. Verified red against R13-01.
+---
 
-**Instruments.** The sweep's population is now DERIVED from the import graph
-(11 modules, 75 guards) instead of a four-name literal list, and coverage is
-one-to-one on (file, refusal message) instead of a substring match (R13-06). The
-ledger-claims bindings that grepped for strings now execute (R13-07); L21, L23
-and L31 were corrected — L23 was outright false. The blocking resolver refuses a
-local module it was not given, and the invariant walks `scripts/` recursively
-(R13-04, trap #8). The drill watches FILE CONTENT after the signal rather than
-the marker's path (R13-05). Both enumeration walks are recursive and cover every
-extension and every workspace test tree (R13-09, R13-10). `isolate: true` is
-explicit in `vitest.config.ts` with `npm run test:noisolate` proving everything
-outside two registry-dependent files is independent of it (R13-08).
+## 2. R14-01 — RULED, IMPLEMENTED, AND STILL BLOCKING
 
-## 4. OPEN — what the next session must pick up
+**The finding.** The in-process spend ledger cannot bound its own process. The
+patch attacks *the call*, so a store that is never called cannot refuse. The
+residual is prototype mutability, a property of JavaScript.
 
-### 4.1 The Phase 2 dependency that must not be forgotten (ledger L31)
+**Human ruling issued 2026-08-21. Implemented in this commit.**
 
-The in-process ledger is a stand-in. **Phase 2 lands the client's Durable Object
-behind the same `SpendLedger` interface** (§2.2). Three limitations are open and
-stated as limitations, not conclusions:
+| § | Ruling | State |
+|---|---|---|
+| 1 | Residual accepted as irreducible; stop hardening in-process | Done — no new in-process fence was added |
+| 2 | L4's Gateway cap promoted to **PRIMARY**; ledger demoted to **advisory fast-refuse** | Done — L4 and L31 rewritten, `spend-ledger.ts` header rewritten |
+| 3 | Phase 2's goal becomes "correct when the ledger is absent, patched, or never called" | Done — stated in L31 and in `spend-ledger.ts` |
+| 4 | Conditional on a red-proof: spend with **no ledger call at all**, out-of-process cap refusing | **Done and executed** `[VERIFIED engine/test/gateway-cap-primary.test.ts]` |
+| 5 | Layer split disclosed in `spend-ledger.ts`, L31 and this file, each carrying a test | Done |
 
-- **(a) Per PROCESS.** Two Workers, or one after an eviction, hold two ledgers
-  and therefore two ceilings; nothing survives a restart. It was worse until
-  R12: the unit was the MODULE INSTANCE, so `vi.resetModules()` plus a
-  re-import minted a full second ceiling inside one process. The slot is keyed
-  off `Symbol.for` now and a test drives the re-import.
-- **(b) An in-process prototype patch still spends unmetered** — on
-  `MemorySpendMeter.prototype` AND `InMemorySpendLedger.prototype`, which is
-  where R13-01 put every enforcement decision. The prototypes stay unfrozen by
-  ruling (freezing is another spelling). `locks-r12` carries a bounding test for
-  each. **THE DURABLE OBJECT DOES NOT CLOSE THIS**, and this file said for one
-  commit that it did: the patch attacks the CALL, not the state, so a store that
-  is never called cannot refuse. Measured at $30 through a $5/day DO-enforced
-  ceiling with the store's counters at zero (R14-01). An in-process patch can
-  only be bounded from outside the process — L4's Gateway-side cap is the
-  candidate. **That is an OPEN HUMAN DECISION in the queue**, and it changes
-  what Phase 2 is for.
-- **(c) `resetProcessLedgerForTests()` exists**, fenced by the runtime and by an
-  invariant that no production module may name it. Typing is not a fence:
-  `clear()` is off-interface and reachable by a cast, and a test asserts it is
-  the ONLY thing on the implementation the contract does not declare.
+### 2.1 What §4's proof does and does not establish
 
-### 4.2 Immediate next step
+`[VERIFIED engine/test/gateway-cap-primary.test.ts]` — it runs the **disclosed
+attack**, not a simulation of it: `reserve` and `settle` are neutered on the
+prototype the live ledger actually resolves through, so the ledger records
+nothing and refuses nothing. Then:
 
-**Invoke r14** — a fresh same-family adversary round against the committed R13
-tree. Its brief must carry forward, as explicit attack surface:
+- the out-of-process cap still binds the spend to the frozen ceiling;
+- the refusal reaches the caller — never swallowed, never returned as output;
+- the ledger reads `$0.00` throughout, so it is provably not what stopped it;
+- with both layers live, the Gateway is never asked past the ledger's ceiling,
+  which is what earns the advisory layer its place rather than deletion.
 
-1. The `SpendLedger` contract now that it owns the arithmetic: can any caller
-   move a balance without a cap check, by any route? L31(a)–(c) especially
-   R11-01's prototype patch, which is bounded and disclosed, NOT closed.
-2. The unreachable-guard sweep, **re-run to completion** (standing ruling 3) —
-   including its new completeness check: is the enumeration itself complete?
-   It reads `throw new …` only; control-flow guards are outside its count.
-3. `mutate.mjs` as an adversarial target, not a trusted tool.
-4. The shape-assertion class — this is the EIGHTH look for it. Three of the last
-   four rounds found one on the same line of the same file.
-5. The ledger-claims check: does every behavioural row have a binding, and does
-   each binding actually go red when its row goes stale?
+Verified red by making `llm()` swallow a transport rejection: two of the four
+tests go red.
 
-**Only if r14 is clean** does the cross-family read get regenerated (ledger L8:
-every review so far has run on the builder's own model family, which violates
-§2.4's family-diversity rule for the review itself).
+**`[LIMITATION]` It proves the ENGINE is correct against a Gateway that refuses.
+It cannot prove the real Gateway is CONFIGURED with these ceilings.** That is
+ledger L4, blocked on H2. Per the ruling's own §4 logic the control must be
+real, and it is — but it is **designed and unprovisioned**. No in-process test
+can substitute for provisioning it.
 
-### 4.3 Not started / carried
+### 2.2 Consequence — H2 is now a Phase 0 blocker
 
-- Ledger rows L1–L31: all open. L8, L14, L27 and L31 are the ones that gate
-  the most.
-- The five (now six) owed Class-2 approval sets, held per L27.
+L4 was recorded as defence-in-depth behind a local check. The roles are
+reversed, so the item that was "nice to have before Phase 2" is now the only
+authoritative spend control in the design. **Phase 0 cannot close until the
+Gateway caps are configured and verified against `caps.ts`.** This is a change
+in what H2 gates, and it is the single most important line in this file.
 
-## 5. How to verify the tree yourself, in order
+**Money scope — resolved, do not re-litigate.** The ledger meters **AI/LLM
+spend**, and L4's AI Gateway cap bounds the same money. Confirmed by the
+denominations across the finding history: R9-05 $120 against a frozen $20/month,
+R10-02 $50 against a frozen $10/day, R13-01 $30 through a frozen $5/day. All
+`effectiveAiCapsUsd`. Ad spend is a separate surface with no write path until
+Phase 6.
 
-```
-npm run typecheck      # tsc, strict, noEmit
-npm test               # the unit + invariant suite
-npm run drill          # the SIGINT drill — its own runner, outside the suite
-npm run mutate         # THE ACCEPTANCE BAR. Meta-check first, then the table.
-```
+---
 
-`npm run mutate` is the bar this project accepts a fix against: it applies each
-one-line revert on its own and requires the suite to go red. A SURVIVED line
-means the fix is unprotected. A PATTERN-NOT-FOUND line means the entry is stale
-because the code moved — that is a failure to investigate, not a pass. **Any
-number the harness prints without a passing meta-check above it is void.**
+## 3. Approved caps — the only five human-set numbers
+
+`fullburn/config/src/caps.ts` must read exactly these. All five were set by
+Sheldon Bennett. None were derived by an agent.
+
+| Constant | Value | Enforcement status |
+|---|---|---|
+| Daily ad spend (pacing target) | **$66** | `[LIMITATION]` recorded only; no write path before Phase 6 |
+| Hard daily ad ceiling, per client | **$75** | `[LIMITATION]` same; Phase 6 adversary must attempt breach before that gate opens |
+| Sprint total (PulseRN 30 days) | **$2,000** | `[LIMITATION]` same |
+| AI spend, monthly | **$200** | `[LIMITATION]` primary bound is the L4 Gateway cap, which is unprovisioned; the in-process ledger is advisory only |
+| AI spend, daily | **$10** | `[LIMITATION]` same |
+
+**Any digit that differs from this table is unapproved and must revert.** A cap
+change is a Class-2 act requiring a human-approved commit (Law 2).
+
+`dailyAiSpendUsd: 25` was an unsigned scaffold value and was rejected. It is not
+approved and must not reappear.
+
+---
+
+## 4. Standing rulings — immutable, carry into every future round
+
+Issued across r7–r14. Not suggestions, and not re-openable by the builder or the
+adversary. The full text lives in `CLAUDE.md`'s standing-invariant list; this is
+the index with the reason each exists.
+
+**On money paths**
+
+- **Structure, never checks.** Remove the capability; do not fence the setter.
+- **A fix is not complete until you can state which capability it removed.**
+  "Removed a spelling" is not a fix. If a fix only narrows access, say so.
+- **No disclosure stands in for a fix.** A residual may be documented only with
+  a test proving its bounds.
+- **Production types carry no seams.** No injectable resolver (R8-01), clock
+  (R9-05), caller-supplied ceiling or raw signed amount (R13-01). Production
+  meters are frozen; fault injection runs through storage availability.
+- **Ceilings resolve from the frozen table**, by the ledger itself.
+- **NEW (R14-01): the in-process layer is advisory.** Do not add in-process
+  fences to bound spend. Enumeration loses — trap #9 was the fifth consecutive
+  round on one file. Authority lives out of process.
+
+**On instruments**
+
+- **Meta-check before trust.** A harness result not preceded by a passing
+  meta-check is void.
+- **Never ship a guard and its checker in the same commit** without a red-proof.
+- **Behavior, never shape.** Nine checks have been defeated by shape assertion.
+- **Coverage is proven, not asserted** — the population is derived from the
+  import graph and the sweep fails if any guard is undriven.
+- **The unreachable-guard sweep is permanent and completed.**
+- **Any tool that writes to the source tree is import-safe and fails closed.**
+- **Sequence fuzz, not name enumeration.**
+- **NEW (R14-07): an ambiguous mutation target fails closed.** Two entries were
+  reverting the same line while a real fix had none.
+
+**On the record**
+
+- **A checker that runs under its own runner is unprovable by the default
+  suite** (R14-06). Extract the decision as a pure function with red-proofs in
+  `npm test`. **Applies to every drill, gate script and harness that shells
+  out — the SIGINT drill was found by accident and the others are unaudited.**
+- **A bounding test patches the prototype the live object resolves through**
+  (R14-02), not the one the test file imported.
+- **A blocking binding must not be referenceable**, not merely un-invocable in
+  known forms (R14-04).
+- **Every ledger row asserting code behavior carries a test.**
+- **Finding-IDs are immutable once issued.**
+- **`departed` is kept as defence-in-depth**, made provably live via a
+  deliberately non-conforming meter.
+
+---
+
+## 5. Verified numbers as of this commit
+
+Meta-check passed first, so the harness figures are trustworthy rather than
+decorative.
+
+- Mutations: **173 / 173 caught, 0 survived, 0 stale** (population re-measured
+  after this commit's entries land — see §7)
+- Suite: **354 / 354** across 28 files
+- Three shuffled seeds: **354 / 354**
+- `--no-isolate`: **351 / 351** across 26 files
+- Single fork: **351 / 351**
+- Drill green. Typecheck clean. Leak-check clean.
+
+Prior high-water marks, for trend: r8 100/100 at `0877861` · r10 119/119 ·
+r11 124/125 (`departed`) · r13 151/151 across eleven shuffle seeds, with 47/47
+guards individually disabled.
+
+### 5.1 r14 finding dispositions — the count corrected
+
+r14 raised **twelve** findings, R14-01 through R14-12. The previous handoff and
+the `0466154` commit message both said "ten fixed", and asked what the twelfth
+was. **There is no unaccounted finding: eleven were fixed and one is open.** The
+"ten" was my own miscount, and it is exactly the kind of record error this
+project treats as a defect.
+
+| ID | Disposition |
+|---|---|
+| R14-01 | Ruled and implemented this commit; **still blocking on L4/H2**. See §2. |
+| R14-02 | Fixed — both prototypes carry bounding tests; the ledger one patches the live resolution path |
+| R14-03 | Fixed — population derived from imports, refuses what it cannot follow |
+| R14-04 | Fixed — reference-level check, verified end-to-end against the real runner |
+| R14-05 | Fixed — error identities registry-stable; both isolation conditions are CI stages |
+| R14-06 | Fixed — drill decision extracted as a pure function with six red-proofs |
+| R14-07 | Fixed — ambiguous mutation targets fail closed; three latent collisions surfaced |
+| R14-08 | Fixed as a **narrowing, not a closure** — a resume must name the halt it lifts (L33) |
+| R14-09 | Fixed — dead resolver deleted, truncated comment removed |
+| R14-10 | Fixed — L29's stated reason corrected (third correction to that row) |
+| R14-11 | Fixed — `CLAUDE.md` no longer claims its own count is checked |
+| R14-12 | Fixed — a refusal traces what was committed, not what was reserved |
+
+---
+
+## 6. Class-2 approval state — ALL SETS UNCOMMITTED
+
+No Class-2 approval is currently valid. This is deliberate.
+
+R7-07 established that an approval file proves **what** by content hash and never
+**who**. The honor system is closed and replaced by branch protection +
+CODEOWNERS: a Class-2 approval must arrive via a PR approved by Sheldon's
+authenticated GitHub identity, and the approval commit must be pushed under that
+account, never agent-authored.
+
+- **47 approval entries owed** against base `eb0775f`, re-derived 2026-08-21 via
+  `node engine/scripts/owed-approvals.mjs . eb0775f`. Note the script takes
+  `<repoRoot> <baseRef>` as positional arguments; `npm run owed-approvals` with
+  no arguments refuses, which is correct fail-closed behaviour and not a bug.
+- **488 tracked files, 115 Class-2** by `isClass2()`. CODEOWNERS is 66 lines.
+  `[LIMITATION]` the invariant asserts every Class-2 file is covered and that CI
+  fails closed if CODEOWNERS is deleted or altered; whether 115 is the *right*
+  Class-2 set is the §8 tightening item, not a coverage question.
+- **Never author the human's signature.** The agent may print a file body for
+  copying; it may not create or commit an approval.
+
+---
+
+## 7. Open items for the next session
+
+1. **L4/H2 — configure the Gateway caps.** This is now the Phase 0 blocker. Until
+   it lands, the primary spend control is designed and unprovisioned.
+2. **Audit every drill, gate script and harness that runs under its own runner**
+   against the R14-06 rule. The SIGINT drill was found by accident; `npm run
+   drill`'s other file, the gate CLIs in `engine/test/integration/`, and
+   `scripts/*.mjs` have not been checked. Each one's decision must be a pure
+   function with red-proofs in the default suite, or it is unprovable.
+3. **The `--no-isolate` / single-fork exclusions are spend-relevant, and that is
+   not comfortable.** The two excluded files hold three tests:
+   `departed-contract.test.ts` (2 — the `departed` double-refund contract) and
+   `ledger-slot.test.ts` (1 — the process-slot brand). **Both are money-path.**
+   They need a private module registry by nature, so the exclusion is honest,
+   but "347/347 under a shared registry" does not cover them. `[LIMITATION]`
+4. **Re-run the harness** after this commit's entries and confirm the population
+   count. The four r13-removed entries were re-examined per R14-06: the two that
+   targeted the drill are restored in substance as entries on
+   `post-signal-writes.ts`; the two that deleted a lone assertion inside a test
+   stay out, and that half of the original rationale was correct.
+5. **Then r15.** Only if r15 is clean does a fresh cross-family read get
+   regenerated — never spend a cross-family round on a tree with known findings.
+6. **Then** CODEOWNERS-locked approvals → gate ack → and only then the PR.
+
+**Sequence that counts:** fix → fresh same-family adversary → fresh cross-family
+read **on the same tree** → CODEOWNERS approvals → human gate ack. "Fixes are in"
+never means "Phase 0 is done."
+
+---
+
+## 8. Inherited by Phase 2 — do not lose
+
+- **The shared ledger interface**, now explicitly ADVISORY. The Durable Object
+  swaps in behind it and closes the per-process bound — two Workers holding two
+  advisory ledgers. It does **not** close the prototype patch; that is what the
+  Gateway cap is for. Hard Phase 2 dependency, with its goal restated per §2.
+- **The globally-addressable slot.**
+  `globalThis[Symbol.for("fullburn.spend-ledger.process")]` is brand-checked,
+  refuses an occupant it did not create, and the singleton is frozen. L31
+  discloses it as a capability the process boundary exposes.
+  `[VERIFIED engine/test/ledger-slot.test.ts]`
+- **The real e2e requirement.** R6-06 showed the e2e expiry was weaker than the
+  ledger claimed, three corrections running. Phase 1's gate must enforce
+  real-e2e-on-the-intake-confirm-flow **in code**. The H20 variance expires there.
+- **Tighten `isClass2()`** to genuinely law-bearing surfaces so approvals stay
+  meaningful acts rather than fatigue. Its own reviewed Class-2 change, after
+  Phase 0 closes.
+
+---
+
+## 9. Scope lock — the build stays untouched
+
+Nothing new until the Phase 0 gate is green. Recorded, not built:
+
+- **SEO split** — day-one read-only baseline + audit running alongside Meta;
+  write access unlocks only after the site-mutation safety layer passes its
+  adversary on live data.
+- **Channel roadmap placeholders** — Meta (live) → Google (staged) → TikTok →
+  Reddit → open-web / Realize·Taboola, each subject to the same
+  warehouse-verified kill bracket.
+- **B2B market bundle** — CRM-as-truth-source, pipeline baselines, a
+  lead-quality adversary, LinkedIn as primary *within that bundle only*.
+- **Build-protocol additions** — finding-ID immutability, and the
+  ledger-row-carries-a-test rule.
+- **Preserve the artifacts.** Every adversary report, cross-family finding and
+  human ruling is the sales asset for the verification-layer business.
+
+---
+
+## 10. What must not happen
+
+- Do not open or merge the PR.
+- Do not accept "bounded, not closed" as a fix on a money path.
+- Do not describe the in-process ledger as bounding spend. It is advisory.
+- Do not approve a Class-2 set outside the CODEOWNERS flow.
+- Do not delete a mutation entry to buy a clean score.
+- Do not run a cross-family read against a tree with known findings.
+- Do not let the agent author a signature.
+
+The schedule risk at this point is fatigue, not engineering.
+
+---
+
+*Fourteen rounds. Zero dollars live. Zero clients exposed. Every defect caught in
+a Phase 0 sandbox.*

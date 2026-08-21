@@ -44,22 +44,42 @@ import { trustedClock, zoneDayKey, zoneMonthKey } from "./trusted-clock.ts";
  * NARROWING table, which `caps.ts` proves can only lower a ceiling — R7-06's
  * one permitted input, unchanged.
  *
- * PHASE 2 DEPENDENCY, recorded so it cannot be forgotten: the production
- * implementation is the client's Durable Object (§2.2), which serialises per
- * client and survives a restart. It implements THIS interface, and that closes
- * the PER-PROCESS bound — two Workers stop holding two ceilings.
+ * THIS LEDGER IS ADVISORY. IT DOES NOT BOUND SPEND, and nothing in this file
+ * may say otherwise.
  *
- * IT DOES NOT CLOSE THE IN-PROCESS PROTOTYPE PATCH, and this file said for one
- * commit that it did. The patch does not attack the STATE, it attacks the CALL:
- * `llm()` reaches storage through one expression, and patching the method that
- * expression resolves to means no request is ever issued. A Durable Object
- * enforces the calls it receives; it has no opinion about a call never made.
- * Executed against a DO-shaped ledger enforcing out of process: $30 through a
- * $5/day ceiling with the store's own counters at zero (adversary finding
- * R14-01). What bounds an in-process patch is a control OUTSIDE the process
- * that does not depend on this process calling it — ledger L4's Gateway-side
- * cap is the candidate, and choosing it is a human decision recorded in L31.
- * Ledger L31 records the residuals; do not restate the closure claim here. */
+ * Human ruling 2026-08-21, on adversary finding R14-01. An in-process ledger
+ * cannot bound its own process: a prototype patch attacks the CALL, not the
+ * state, so a store that is never called cannot refuse — measured at $30
+ * through a $5/day ceiling with a DO-shaped store's own counters at zero.
+ * Prototype mutability is a property of JavaScript, not a defect here, and four
+ * rounds of hardening it lost. The ruling: stop hardening in-process.
+ *
+ * THE LAYER SPLIT, which is the thing to carry forward:
+ *
+ *   PRIMARY, authoritative   the AI Gateway's own per-client cap (ledger L4),
+ *                            enforced out of process, on the far side of
+ *                            `transport.post`. Nothing in this process can
+ *                            patch its way out of it.
+ *   ADVISORY, fast-refuse    this file. It refuses a breach BEFORE an upstream
+ *                            call is made, which saves the money and the round
+ *                            trip — and it is worth keeping for exactly that,
+ *                            measured in `gateway-cap-primary.test.ts`. It is
+ *                            not the authority and must never be described as
+ *                            one.
+ *
+ * PHASE 2's DESIGN GOAL CHANGES WITH IT: not "a ledger that cannot be
+ * bypassed", which is unachievable, but "correct when the in-process ledger is
+ * absent, patched, or never called". The Durable Object still closes the
+ * PER-PROCESS bound — two Workers holding two ceilings — and that is what it is
+ * for. It does not close the prototype patch; this file claimed for one commit
+ * that it did, and the claim had never been tested.
+ *
+ * PROVEN, NOT ASSERTED: `engine/test/gateway-cap-primary.test.ts` runs the
+ * disclosed attack — neutering `reserve` and `settle` on the prototype the live
+ * ledger resolves through — and shows the out-of-process cap still binding, the
+ * refusal reaching the caller, and this ledger recording nothing. Ledger L31
+ * records what remains open, including the one thing that file cannot prove:
+ * that the real Gateway is CONFIGURED with these ceilings (L4, blocked on H2). */
 
 export { MeterUnavailableError } from "./money-errors.ts";
 

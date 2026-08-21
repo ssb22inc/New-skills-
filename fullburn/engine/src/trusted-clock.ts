@@ -108,9 +108,6 @@ export function trustedClock(): () => number {
   };
 }
 
-/** Meters whose ceilings provably come from the frozen caps table.
- *
-
 /** Day key in the CLIENT'S accounting zone, as YYYY-MM-DD.
  *
  * This was UTC while `ClientCaps.dailyAiSpendUsd` promised a client-local day.
