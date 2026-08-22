@@ -156,36 +156,110 @@ describe("structural rules (Law 1, 6, 11, 18) — code only", () => {
 describe("what the scan reads, and what it does with what it finds (runner audit, R14-06)", () => {
   /** THE POPULATION IS DERIVED, AND SO IS THE EXEMPTION. A hand-written
    * extension list in a test is the same defect as a hand-written one in the
-   * code — it just moves which file goes stale. So this drives the real
-   * decision over the real tree and lets the BYTES adjudicate: a tracked file
-   * the scan does not read must actually be binary.
+   * code — it just moves which file goes stale. So this drives the real scan
+   * over the real tree and lets the BYTES adjudicate: a tracked file the scan
+   * does not read must actually be binary. There is no other exemption.
    *
-   * Run against the previous allowlist it named eleven files, among them
-   * `haven/terraform/aws/variables.tf` and `haven/Dockerfile.dev` — plain-text
-   * formats, both of them classic homes for a pasted credential, neither ever
-   * read by the leak scan.
+   * TWO SKIP CLAUSES WERE REMOVED FROM THIS TEST, and each was hiding a class
+   * of unread file (human ruling 2026-08-22, after the haven investigation):
    *
-   * MUTATION: put a text extension into NOT_SCANNED_EXTENSIONS. */
-  it("every tracked text file is read by the scan — exemptions must actually be binary", async () => {
+   *   (a) It asked `isScannedFile`, which answers about a FILENAME. A tracked
+   *       file inside a skipped DIRECTORY answers "yes, scanned" and is never
+   *       walked. Zero files are in that position today, which is exactly why
+   *       the test could not see the hole: a check with no reachable negative
+   *       case is this project's recurring defect. It now asks the WALK.
+   *   (b) `if (!existsSync(abs) || !statSync(abs).isFile()) continue` silently
+   *       dropped anything that was not a readable regular file — a symlink, a
+   *       gitlink, a tracked path missing from the checkout. Those are now
+   *       reported, not skipped.
+   *
+   * The earlier version also skipped extensionless files and its own disclosed
+   * `svg` entry, so it reported ELEVEN newly-read files when the true widening
+   * was TWENTY-ONE — and never named `.github/CODEOWNERS` or `fullburn/PHASE`,
+   * the two the gate depends on. That understatement is corrected in
+   * RUNNER_AUDIT_2026-08-21.md §4 and ledger L34.
+   *
+   * MUTATION: put a text extension into NOT_SCANNED_EXTENSIONS; add a source
+   * directory to SKIP_DIRS; or revert this to ask the filename again. */
+
+  /** The decision, as a function, so it can be driven with inputs the real tree
+   * does not contain — an unread text file, a missing path, a directory. On the
+   * real tree every one of those lists is empty, which is why they have to be
+   * driven separately to mean anything. */
+  interface ReadReport {
+    readonly unread: readonly string[];
+    readonly unreadable: readonly string[];
+  }
+  const auditReadCoverage = (
+    tracked: readonly string[],
+    visited: ReadonlySet<string>,
+    read: (f: string) => Buffer,
+  ): ReadReport => {
+    const unread: string[] = [];
+    const unreadable: string[] = [];
+    for (const f of tracked) {
+      let bytes: Buffer;
+      try {
+        bytes = read(f);
+      } catch (e) {
+        // NOT A SKIP. A tracked path the scan cannot even open is an unknown,
+        // and an unknown is reported.
+        unreadable.push(`${f} — tracked but not a readable regular file: ${(e as Error).message}`);
+        continue;
+      }
+      if (visited.has(f)) continue;
+      if (!looksBinary(bytes)) unread.push(f);
+    }
+    return { unread, unreadable };
+  };
+
+  it("the coverage audit reports an unread text file, and refuses to skip what it cannot open", () => {
+    const read = (f: string) => {
+      if (f === "gone.ts") throw new Error("ENOENT: no such file or directory");
+      if (f === "a-submodule") throw new Error("EISDIR: illegal operation on a directory");
+      return Buffer.from(f === "logo.png" ? [0x89, 0x50, 0x4e, 0x47, 0x00] : "plain text");
+    };
+    const r = auditReadCoverage(
+      ["seen.ts", "unwalked.tf", "logo.png", "gone.ts", "a-submodule"],
+      new Set(["seen.ts"]),
+      read,
+    );
+    // Walked → fine. Not walked and TEXT → unread. Not walked and BINARY → fine.
+    expect(r.unread, "an unwalked text file was not reported").toEqual(["unwalked.tf"]);
+    // Neither of the two unopenable paths may vanish quietly.
+    expect(r.unreadable.length, "a tracked path the scan cannot open was skipped").toBe(2);
+    expect(r.unreadable.join(" ")).toContain("gone.ts");
+    expect(r.unreadable.join(" ")).toContain("a-submodule");
+    // And the positive half: a fully-walked tree reports nothing.
+    expect(auditReadCoverage(["seen.ts"], new Set(["seen.ts"]), read)).toEqual({ unread: [], unreadable: [] });
+  });
+
+  it("every tracked text file is READ BY THE WALK — exemptions must actually be binary", async () => {
     const { execFileSync } = await import("node:child_process");
-    const { readFileSync: readBytes, statSync, existsSync } = await import("node:fs");
+    const { readFileSync: readBytes } = await import("node:fs");
+    const { relative } = await import("node:path");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { walk } = await import("../scripts/leak-check.mjs");
     const repoRoot = new URL("../../../", import.meta.url).pathname.replace(/\/$/, "");
     const tracked = execFileSync("git", ["-C", repoRoot, "ls-files", "-z"], { encoding: "utf8" })
       .split("\0")
       .filter((f) => f !== "");
     expect(tracked.length, "git listed no files — this test would pass vacuously").toBeGreaterThan(100);
 
-    const unread: string[] = [];
-    for (const f of tracked) {
-      const abs = `${repoRoot}/${f}`;
-      if (!existsSync(abs) || !statSync(abs).isFile()) continue;
-      if (isScannedFile(f.split("/").pop()!)) continue;
-      // Excluded. That is only defensible if the file is genuinely not text.
-      if (!looksBinary(readBytes(abs))) unread.push(f);
-    }
+    /** WHAT THE SCAN ACTUALLY OPENS, not what a filename predicate says about
+     * it. This is the half that makes SKIP_DIRS reachable by this test. */
+    const visited = new Set<string>();
+    for (const abs of walk(repoRoot) as Iterable<string>) visited.add(relative(repoRoot, abs));
+    expect(visited.size, "the walk visited nothing — this test would pass vacuously").toBeGreaterThan(100);
+
+    const { unread, unreadable } = auditReadCoverage(tracked, visited, (f) => readBytes(`${repoRoot}/${f}`));
+    expect(
+      unreadable,
+      "these tracked paths could not be opened, so nothing can be said about their contents",
+    ).toEqual([]);
     expect(
       unread,
-      "these tracked files are TEXT and the leak scan does not read them — a token pasted into one would never be found",
+      "these tracked files are TEXT and the leak scan never opens them — a token pasted into one would never be found",
     ).toEqual([]);
 
     // …and the exemption list may only name binary formats. A text type here

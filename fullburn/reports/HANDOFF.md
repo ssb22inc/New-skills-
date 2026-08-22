@@ -50,7 +50,7 @@ from inference. Re-derive or ask.
 cross-family brief, superseded) → `0877861` (r8 clean, 100/100) → `7516cd4` →
 `d73df4c` (binds `trustedClock()`, retires `Date.now`) → `cb48c05` (r13 fixes) →
 `a236e8f` (r14 report) → `0466154` (r14 fixes) → `34437d6` (R14-01 ruling) →
-this commit (runner audit, HANDOFF §7.2).
+`b42d6ba` (runner audit, §7.2) → this commit (haven-investigation rulings).
 
 ---
 
@@ -192,11 +192,11 @@ the index with the reason each exists.
 Meta-check passed first, so the harness figures are trustworthy rather than
 decorative.
 
-- Mutations: **190 / 190 caught, 0 survived, 0 stale**
-- Suite: **386 / 386** across 29 files
-- Three shuffled seeds: **386 / 386**
-- `--no-isolate`: **383 / 383** across 27 files
-- Single fork: **383 / 383**
+- Mutations: **194 / 194 caught, 0 survived, 0 stale**
+- Suite: **387 / 387** across 29 files
+- Three shuffled seeds: **387 / 387**
+- `--no-isolate`: **384 / 384** across 27 files
+- Single fork: **384 / 384**
 - Drill green. Typecheck clean. Leak-check clean.
 
 The runner audit added 16 entries (RA-01…RA-16) and 32 tests. Two of its own
@@ -207,7 +207,7 @@ given the negative case it never had). Both are CAUGHT now. Recording that the
 first run failed is the point: a harness that only ever prints a clean number
 is the instrument this project distrusts.
 
-Prior high-water marks, for trend: r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
+Prior high-water marks, for trend: runner audit 190/190 · r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
 r11 124/125 (`departed`) · r13 151/151 across eleven shuffle seeds, with 47/47
 guards individually disabled.
 
@@ -283,9 +283,23 @@ account, never agent-authored.
    targeted the drill are restored in substance as entries on
    `post-signal-writes.ts`; the two that deleted a lone assertion inside a test
    stay out, and that half of the original rationale was correct.
-5. **Then r15.** Only if r15 is clean does a fresh cross-family read get
+5. **OPEN — the leak scan's rule list, escalated 2026-08-22.** The files are
+   read; the credentials are not matched. `.npmrc` npm tokens, `.netrc` and
+   `.pgpass` password fields and `PGPASSWORD=` assignments scan clean. Proven by
+   execution both ways in `RUNNER_AUDIT_2026-08-21.md` §6b. `scan-lib.mjs` is
+   Class-2, so no rule was added — this needs a ruling.
+6. **OPEN — root `.github/workflows/`, reported not deleted** (§6c of the same
+   report). The five exercise-template workflows are inside the branch-protection
+   trust boundary; four are `disabled_manually` and the two PR-triggered ones are
+   among them, so **they do not block the fullburn PR** — measured against the
+   Actions API, not inferred from YAML. What is still true regardless: `actions:
+   write` is the power to disable `fullburn-ci`; `1-create-a-branch.yml` is
+   ACTIVE and holds it; every one pins third-party reusable workflows to MUTABLE
+   tags; and `fullburn-ci.yml` itself declares no `permissions:` block. Deletion
+   awaits a ruling.
+7. **Then r15.** Only if r15 is clean does a fresh cross-family read get
    regenerated — never spend a cross-family round on a tree with known findings.
-6. **Then** CODEOWNERS-locked approvals → gate ack → and only then the PR.
+8. **Then** CODEOWNERS-locked approvals → gate ack → and only then the PR.
 
 **Sequence that counts:** fix → fresh same-family adversary → fresh cross-family
 read **on the same tree** → CODEOWNERS approvals → human gate ack. "Fixes are in"

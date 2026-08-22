@@ -1252,6 +1252,10 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const scanLib = await import("../../scripts/scan-lib.mjs");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const mutateLib = await import("../../scripts/mutate-lib.mjs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { walk: walkTree } = await import("../../scripts/leak-check.mjs");
+    const { execFileSync } = await import("node:child_process");
+    const { relative: relPath } = await import("node:path");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1317,6 +1321,40 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const verdictOk = scanLib.leakVerdict(["x"]).ok === false && scanLib.leakVerdict([]).ok === true;
           const classifyOk = mutateLib.classifyRun(null) === "SURVIVED" && mutateLib.classifyRun("1 failed") === "CAUGHT";
           return phaseOk && approvalOk && scopeOk && dirtyOk && extOk && dirOk && verdictOk && classifyOk;
+        },
+      },
+      {
+        row: "L35",
+        claim:
+          "the leak scan reads every sibling product tree while the adversary's verified tree covers only " +
+          "fullburn/ and .github/ — and the sibling set is exactly {haven, pulsern}",
+        holds: () => {
+          const repoRoot = new URL("../../../../", import.meta.url).pathname.replace(/\/$/, "");
+          const gitOut = (args: string[]) =>
+            execFileSync("git", ["-C", repoRoot, ...args], { encoding: "utf8" }).split("\0").filter((x) => x !== "");
+          /** TOP-LEVEL DIRECTORIES ONLY. A root-level FILE is not a product
+           * tree, and counting `LICENSE` as one made this row's sibling set
+           * four instead of two. */
+          const dirOf = (f: string) => (f.includes("/") ? f.split("/")[0]! : null);
+          const dirs = (files: string[]) => new Set(files.map(dirOf).filter((d): d is string => d !== null));
+
+          const allTops = dirs(gitOut(["ls-files", "-z"]));
+          // What the adversary's verified-tree pathspec actually covers.
+          const verifiedTops = dirs(gitOut(["ls-files", "-z", "--", ...gateLib.VERIFIED_TREE_SCOPE]));
+          // What the leak scan actually opens.
+          const scannedTops = new Set<string>();
+          for (const abs of walkTree(repoRoot) as Iterable<string>) {
+            const d = dirOf(relPath(repoRoot, abs));
+            if (d !== null) scannedTops.add(d);
+          }
+
+          const siblings = [...allTops].filter((t) => !verifiedTops.has(t) && t !== ".github").sort();
+          // (a) the asymmetry is real: siblings exist, none is verified, all are scanned
+          if (siblings.length === 0) return false;
+          if (siblings.some((t) => !scannedTops.has(t))) return false;
+          if (verifiedTops.has("haven") || verifiedTops.has("pulsern")) return false;
+          // (b) the row names the sibling set, so a NEW product tree fails it
+          return siblings.filter((t) => t === "haven" || t === "pulsern").length === 2 && siblings.length === 2;
         },
       },
       {

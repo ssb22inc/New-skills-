@@ -65,12 +65,37 @@ What each one buys an attacker, stated plainly:
 ## 4. Two more found by driving the extracted decisions
 
 **Leak-scan coverage.** Once the extension decision was a function, the test
-derived its population from `git ls-files` instead of asserting a list. Eleven
-tracked files had never been read by the leak scan:
+derived its population from `git ls-files` instead of asserting a list.
+
+> **CORRECTED 2026-08-22 (human ruling, haven investigation). This section said
+> ELEVEN. The true widening is TWENTY-ONE**, and the eleven omitted the two
+> files that matter most to the gate.
+
+The paragraph that stood here named eleven files —
 `haven/terraform/aws/{main,outputs,variables}.tf`, `haven/Dockerfile.dev`,
-`haven/prisma/schema.prisma`, `haven/src/app/globals.css`, `haven/.nvmrc`, and
-four `.gitignore` files. Terraform variables and Dockerfile `ENV` lines are two
-of the likeliest places a real credential sits in plain text.
+`haven/prisma/schema.prisma`, `haven/src/app/globals.css`, `haven/.nvmrc` and
+four `.gitignore` files. Those eleven are real, and the point about terraform
+variables and Dockerfile `ENV` lines being classic homes for a pasted credential
+stands. But eleven was the number **the test could see**, not the number of
+files the change newly covered: its first draft carried
+`if (ext === "" || disclosed.has(ext)) continue`, which dropped every
+extensionless file and its own `svg` entry before counting.
+
+Measured against the tracked tree, the allowlist read 464 files and the denylist
+reads 485 — **+21**. The ten never named were:
+
+| Newly read, omitted from the original count | Why it matters |
+|---|---|
+| **`.github/CODEOWNERS`** | the file that makes Class-2 "human-only" real |
+| **`fullburn/PHASE`** | what the adversary gate binds its report to |
+| `LICENSE`, `haven/Dockerfile` | extensionless, dropped by the skip clause |
+| 6 x `.svg` (`haven/public/*`, `pulsern/public/icon.svg`) | text, dropped by the `svg` entry |
+
+The two in bold are the interesting ones and the report missed them: **the leak
+scan had never read the Class-2 ownership file or the phase declaration.** A
+count produced by a check with a skip clause is a count of what the check
+looked at. That is a guard population enumerated by hand, one layer out, and it
+is why the test was rebuilt — see §6a.
 
 **`diff-lib.mjs` had no mutation entry at all.** The runner sweep found it on
 its first run. It is the parser that turns a git diff into the protected-path
@@ -111,6 +136,170 @@ the run is void — that is the run-time lock — and its unit red-proofs are in
   directions exist so neither an always-CAUGHT nor an always-SURVIVED
   classification can pass the meta-check.
 
+## 6a. Follow-up 2026-08-22 — the derived test had skip clauses of its own
+
+Human ruling after the haven investigation: *"Fix the derived test. No skip
+clause except measured-binary. It must FAIL if any tracked file goes unread."*
+
+Two skips were removed, and each hid a class of unread file:
+
+**(a) It asked the FILENAME, not the WALK.** `isScannedFile` answers about a
+name. A tracked file inside a skipped *directory* answers "scanned" and is never
+opened. Zero files sit in that position today — which is precisely why the test
+could not see the hole: a check with no reachable negative case is this
+project's recurring defect, and it had reproduced it. The test now derives the
+set the walk actually visits and requires every tracked file to be in it.
+
+**(b) `if (!existsSync(abs) || !statSync(abs).isFile()) continue`.** A symlink,
+a gitlink, or a tracked path missing from the checkout vanished silently. Those
+are now REPORTED — a path the scan cannot open is an unknown, and an unknown is
+not an exemption.
+
+Measured binary content is the only remaining exemption, and the exemption list
+may name only formats whose stated reason says "binary".
+
+Red-proofs, all three verified CAUGHT against the full suite:
+
+| Revert | Caught by |
+|---|---|
+| add a source directory to `SKIP_DIRS` (the directory hole) | the walk-based check — **it could not see this before** |
+| restore `isScannedFile` in place of `visited.has(f)` | the fixture-driven coverage audit |
+| drop the `unreadable.push(...)` so an unopenable path is skipped | the fixture-driven coverage audit |
+
+The decision is a pure function (`auditReadCoverage`) driven by fixtures the
+real tree does not contain — an unwalked text file, an `ENOENT` path, an
+`EISDIR` path — because on the real tree all three lists are empty and a check
+that is only ever exercised with passing inputs proves nothing.
+
+## 6b. Follow-up — dotfiles proven by execution, and a rule-coverage gap found
+
+Human ruling: *"PROVE BY EXECUTION, do not read the code: does the SCANNER read
+extensionless dotfiles?"* Canary planted in a temp `.npmrc`, `.netrc` and
+`.pgpass`; the real CLI run as CI runs it:
+
+```
+LEAK/STRUCTURAL SCAN FAIL:
+  - .netrc:  possible anthropic key
+  - .npmrc:  possible anthropic key
+  - .pgpass: possible anthropic key
+exit=1
+```
+
+**All three read. No severity-1.**
+
+**But the same rig surfaced a separate gap, and it is a real one.** Re-run with
+*realistic* credentials instead of a canary the rules are written to match —
+an `npm_…` automation token in `.npmrc`, a plaintext `password` in `.netrc`, a
+password field in `.pgpass`, and `PGPASSWORD=` in an env file:
+
+```
+leak/structural scan: clean
+exit=0
+```
+
+The files are **read**; the credentials are **not matched**. `SECRET_PATTERNS`
+has no rule for npm tokens, `.netrc`/`.pgpass` password fields, or
+`PGPASSWORD`/`PGPASS` assignments. This is a rule-coverage gap, not a
+readability gap — a different defect from the one the ruling asked about, and
+it is open. `scan-lib.mjs` is Class-2; **no rule was added.** Escalated for a
+ruling rather than fixed.
+
+## 6c. Root `.github/workflows/` audit — triggers, permissions, live state
+
+Human ruling: *"Audit root `.github/workflows/` — triggers and permissions:
+blocks on every exercise-template workflow. Report before deleting."*
+
+Five exercise-template workflows sit at the repository root, inside the
+branch-protection trust boundary. Their **declared** triggers and permissions:
+
+| Workflow | Trigger | Permissions | Live state |
+|---|---|---|---|
+| `0-start-exercise.yml` | `push` → `main` | **contents: write**, actions: write, issues: write | `disabled_manually` |
+| `1-create-a-branch.yml` | `push` → `my-first-branch` | contents: read, **actions: write**, issues: write | **`active`** |
+| `2-commit-a-file.yml` | `push` → `my-first-branch` | contents: read, **actions: write**, issues: write | `disabled_manually` |
+| `3-open-a-pull-request.yml` | **`pull_request` → `main`** (opened/synchronize/reopened/edited) | contents: read, **actions: write**, issues: write | `disabled_manually` |
+| `4-merge-your-pull-request.yml` | **`pull_request` → `main`** (closed) | **contents: write**, actions: write, issues: write | `disabled_manually` |
+
+**Do they block the fullburn PR? No — measured, not inferred.** Live state read
+from the Actions API: the two `pull_request` workflows are `disabled_manually`,
+so they will not run on a PR to `main` even though their files are present on
+`main` and their triggers match. Zero `pull_request` runs exist in this
+repository's history; all 81 recorded runs are `push`, and every one of the most
+recent 30 is `fullburn-ci`.
+
+**What is worth reporting anyway, because "disabled" is a setting and not a
+structure:**
+
+1. **`actions: write` is the power to enable and disable workflows** — including
+   `fullburn-ci`. The gate that enforces Phase 0 is disable-able by a workflow
+   that holds it.
+2. **`1-create-a-branch.yml` is `active` and holds `actions: write`.** Its
+   trigger is a push to `my-first-branch`, which does not exist today. Anyone
+   who can push a branch by that name starts a run holding that permission.
+3. **Every one of them calls third-party reusable workflows and actions pinned
+   to MUTABLE tags** — `skills/exercise-toolkit/.github/workflows/*@v0.1.0` and
+   `skills/action-text-variables@v1`. A tag can be moved. That is third-party
+   code executing inside this repository's trust boundary with `issues: write`,
+   `actions: write`, and in two cases `contents: write`.
+4. **In workflows 3 and 4 the `find_exercise` job carries no `if` guard.** The
+   `github.head_ref == 'my-first-branch'` condition guards only `check_step_work`.
+   If either workflow were re-enabled, the third-party reusable workflow would
+   run on every PR to `main` — the fullburn PR included.
+
+**Two further findings from the same audit, neither ruled on:**
+
+- **`fullburn-ci.yml` declares no `permissions:` block at all**, so it inherits
+  the repository default rather than least privilege. It is Class-2; not changed.
+- **A workflow registered `active` on GitHub does not exist on `main` or on this
+  branch.** `.github/workflows/ci.yml` (id 308264483, created 2026-07-06) lives
+  only on `origin/claude/sycamore-prompts-build-chain-o5rqtu` — a different
+  product's branch — and its trigger is `pull_request:` with **no branch
+  filter**. For `pull_request` events GitHub evaluates the workflow files on the
+  PR ref, so it cannot fire on a fullburn PR whose head lacks the file. It is
+  reported because "the repository's active workflow list" and "the workflows on
+  `main`" are not the same set, and only the second is what anyone reviews.
+
+**Nothing was deleted.** Per the ruling, this is the report that precedes it.
+
+## 6d. AGAINST HAVEN, NOT FULLBURN — six workflows that never execute
+
+Human ruling: *"Record against HAVEN, not fullburn: security-scan.yml and five
+sibling workflows never execute."* Recorded here under haven's name, and
+deliberately **not** entered in fullburn's verification ledger — it is not a
+fullburn defect and a fullburn row asserting it would be the scope confusion
+L35 exists to prevent.
+
+**Finding — owner: `haven/` (secondary: `pulsern/`).** GitHub Actions reads
+workflows only from the repository root `.github/workflows/`. These eight files
+sit in sibling trees and are therefore **inert — they have never run and cannot
+run while they live where they are**:
+
+| File | What it is believed to do |
+|---|---|
+| `haven/.github/workflows/security-scan.yml` | **security scanning** |
+| `haven/.github/workflows/ci.yml` | build/test gate |
+| `haven/.github/workflows/test.yml` | test gate |
+| `haven/.github/workflows/aws-deploy.yml` | deploy |
+| `haven/.github/workflows/vercel-preview.yml` | preview deploy |
+| `haven/.github/workflows/vercel-production.yml` | production deploy |
+| `pulsern/.github/workflows/content-factory.yml` | scheduled content job |
+| `pulsern/.github/workflows/sms-reminders.yml` | scheduled SMS job |
+
+Confirmed against the live Actions API: the repository registers seven
+workflows, and not one of these eight is among them. The registered set is the
+five exercise-template files, `fullburn-ci`, and the stray `ci.yml` described in
+§6c.
+
+**The part that matters:** haven believes it has CI, tests, deploys and a
+security scan. It has none of them in this repository. `security-scan.yml` in
+particular is the kind of file whose mere presence is taken as assurance — a
+green-looking artifact asserting nothing, which is the same defect class this
+project spent fourteen rounds removing from its own instruments.
+
+**Not remediated.** Moving or deleting them is a haven decision and touches the
+tracked file set. If the preferred home for this record is haven's own tree
+rather than this report, that is a one-file follow-up — say so and it will move.
+
 ## 7. What keeps it true — the runner-decision sweep
 
 `engine/test/invariants/invariants.test.ts`. Runners are **derived from the
@@ -149,10 +338,16 @@ Phase 0 gate remains **RED**. This audit closes HANDOFF §7.2 and changes nothin
 about §7.1: **L4/H2 — the Gateway caps — is still the Phase 0 blocker**, and the
 primary spend control is still designed and unprovisioned.
 
-**Numbers at this commit**, meta-check passed first: mutations **190/190
-caught, 0 survived, 0 stale**; suite **386/386** across 29 files; three shuffled
-seeds 386/386; `--no-isolate` and single-fork 383/383; drill green; typecheck
-and leak-check clean.
+**Numbers after the 2026-08-22 rulings**, meta-check passed first: mutations
+**194/194 caught, 0 survived, 0 stale**; suite **387/387** across 29 files;
+three shuffled seeds 387/387; `--no-isolate` and single-fork 384/384; drill
+green; typecheck and leak-check clean. (At `b42d6ba`, before §6a–§6d: 190/190
+and 386/386.)
+
+Full history re-scanned after `git gc --prune=now`: **1,818 blobs, 1,804 read
+as text, 0 findings.** The one prior finding was unreachable blob `cbbb9f50`,
+a draft of `ADVERSARY_REPORT_phase0.r4.md` carrying that report's synthetic
+splice fixtures; it is now collected.
 
 **The first harness run of this work FAILED, and that is recorded rather than
 tidied away.** Two of the audit's own entries survived: RA-12 — nothing drove

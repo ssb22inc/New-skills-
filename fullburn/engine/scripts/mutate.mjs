@@ -575,6 +575,24 @@ const MUTATIONS = [
   ["RA-16 the runner sweep can answer NO", "engine/test/invariants/invariants.test.ts",
     "  const inDefaultSuite = (include: readonly string[], path: string): boolean =>\n    include.some((glob) =>",
     "  const inDefaultSuite = (include: readonly string[], path: string): boolean =>\n    true || include.some((glob) =>"],
+  // ---- haven investigation follow-up (human rulings 2026-08-22) ----
+  //
+  // The derived coverage test had skip clauses of its own. It asked a FILENAME
+  // predicate, so a tracked file inside a skipped DIRECTORY read as covered and
+  // was never opened — and it silently dropped anything it could not stat. Both
+  // are removed; these keep them removed.
+  ["RA-17 coverage is measured by the WALK, not by a filename", "engine/test/scan-lib.test.ts",
+    "      if (visited.has(f)) continue;",
+    "      if (isScannedFile(f.split(\"/\").pop()!)) continue;"],
+  ["RA-18 a path the scan cannot open is reported, not skipped", "engine/test/scan-lib.test.ts",
+    "        unreadable.push(`${f} — tracked but not a readable regular file: ${(e as Error).message}`);",
+    "        void e;"],
+  ["RA-19 the L35 scope claim derives the verified set", "engine/test/invariants/invariants.test.ts",
+    "          const verifiedTops = dirs(gitOut([\"ls-files\", \"-z\", \"--\", ...gateLib.VERIFIED_TREE_SCOPE]));",
+    "          const verifiedTops = allTops;"],
+  ["RA-20 the L35 scope claim derives the scanned set", "engine/test/invariants/invariants.test.ts",
+    "            if (d !== null) scannedTops.add(d);",
+    "            if (d === \"fullburn\") scannedTops.add(d);"],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],
