@@ -957,25 +957,50 @@ describe("control plane — an approval cannot be minted by the agent it restrai
   it("CI runs on every Class-2 path, so no Class-2 diff can arrive ungated", async () => {
     const { readFileSync } = await import("node:fs");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
-    const { isClass2, workflowPathFilters, globsAdmit } = await import("../scripts/gate-lib.mjs");
+    const { isClass2, workflowPathFilters, CLASS2_WITNESS_PATHS } = await import("../scripts/gate-lib.mjs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { inScope, CI_SCOPE_GLOBS } = await import("../scripts/ci-scope.mjs");
     const wf = readFileSync(new URL("../../../.github/workflows/fullburn-ci.yml", import.meta.url), "utf8");
-    const filters = workflowPathFilters(wf);
-    expect(filters.length, "no paths: filter found — this check is stale").toBeGreaterThan(0);
 
-    const WITNESSES = [".github/CODEOWNERS", ".github/workflows/fullburn-ci.yml", "fullburn/config/src/caps.ts", "fullburn/PHASE"];
-    for (const f of filters) {
-      // UNREADABLE IS REFUSED, not assumed permissive.
-      expect(f.globs, "a paths: filter this parser cannot read").not.toBe(null);
-      for (const witness of WITNESSES) {
-        expect(isClass2(witness), `${witness} is not Class-2 — the witness is stale`).toBe(true);
-        // `paths-ignore` is the INVERSE: a witness it MATCHES is a witness the
-        // workflow refuses to run for. Parsed as if it were `paths`, one line
-        // (`paths-ignore: ["**"]`) satisfied this lock while the workflow ran on
-        // no pull request at all (adversary finding R10-04).
-        const admitted = f.negated ? !globsAdmit(f.globs!, witness) : globsAdmit(f.globs!, witness);
-        expect(admitted, `a PR touching ${witness} would run no gate`).toBe(true);
-      }
+    /** THE SCOPE DECISION MOVED, SO THIS LOCK MOVED WITH IT (human ruling
+     * 2026-08-23, §7.0 item 2).
+     *
+     * R8-04b's property is unchanged: a change touching a Class-2 path must run
+     * the gate. What changed is WHERE that is decided. A `paths:` filter on the
+     * trigger means a skipped workflow creates NO CHECK RUNS, so the moment
+     * `fullburn-ci` becomes a required check a path-skip pins the pull request
+     * at "Expected — waiting for status" forever — fail-open traded for
+     * permanently stuck. The filter is gone from the trigger and the decision
+     * is `ci-scope.mjs`, which every job consults while still reporting success.
+     *
+     * So this now enforces BOTH halves:
+     *   (a) the trigger carries no path filter of any kind — its reappearance
+     *       is what would re-break a required check;
+     *   (b) the in-job scope admits every Class-2 path, which is R8-04b intact.
+     *
+     * MUTATION: re-add a `paths:` filter to the trigger, or narrow
+     * CI_SCOPE_GLOBS. */
+    expect(
+      workflowPathFilters(wf),
+      "the trigger has a path filter again — a required check that never runs never reports, and the PR " +
+        "sits at 'Expected — waiting for status' forever. Filter inside the job instead.",
+    ).toEqual([]);
+
+    // Every Class-2 path this project knows about, not four hand-picked ones.
+    expect(CLASS2_WITNESS_PATHS.length, "the witness list is empty — this check is stale").toBeGreaterThan(10);
+    for (const witness of CLASS2_WITNESS_PATHS) {
+      expect(isClass2(witness), `${witness} is not Class-2 — the witness is stale`).toBe(true);
+      expect(inScope([witness]), `a change touching ${witness} would run no gate`).toBe(true);
     }
+    // …and the negative half, which is what makes the positives mean anything:
+    // a change touching nothing fullburn cares about must NOT be in scope, or
+    // the filter admits everything and the job never skips.
+    expect(inScope(["haven/README.md"]), "an out-of-scope change still runs the whole gate").toBe(false);
+    expect(inScope(["pulsern/src/app/page.tsx"])).toBe(false);
+    // UNKNOWN IS IN SCOPE — fail-safe, never fail-quiet.
+    expect(inScope(null as unknown as string[]), "an undeterminable diff skipped the gate").toBe(true);
+    expect(inScope([]), "an empty diff skipped the gate").toBe(true);
+    expect(CI_SCOPE_GLOBS, "the .github tree left the gate's scope (R8-04b)").toContain(".github/**");
   });
 
   /** THE PARSER ITSELF, DRIVEN. The previous version of the check above matched

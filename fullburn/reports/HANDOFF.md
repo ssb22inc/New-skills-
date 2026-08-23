@@ -39,7 +39,7 @@ from inference. Re-derive or ask.
 | PR | Not opened. **Do not open.** | standing instruction, every round since r5 |
 | Latest commit | see `git log -1` | — |
 | Base for current Class-2 accounting | `eb0775f` | re-derived 2026-08-21 |
-| Class-2 approval entries owed | **51** | `node engine/scripts/owed-approvals.mjs . eb0775f` |
+| Class-2 approval entries owed | **63** | `node engine/scripts/owed-approvals.mjs . eb0775f` |
 | Tracked files / Class-2 by `isClass2()` | **488 / 115** | re-derived 2026-08-21 |
 | Live dollars exposed to date | 0 | no write path exists before Phase 6 |
 | Clients exposed to date | 0 | — |
@@ -50,8 +50,8 @@ from inference. Re-derive or ask.
 cross-family brief, superseded) → `0877861` (r8 clean, 100/100) → `7516cd4` →
 `d73df4c` (binds `trustedClock()`, retires `Date.now`) → `cb48c05` (r13 fixes) →
 `a236e8f` (r14 report) → `0466154` (r14 fixes) → `34437d6` (R14-01 ruling) →
-`b42d6ba` (runner audit, §7.2) → `e9cd2ad` (haven-investigation rulings) →
-this commit (§7.5/§7.6 rulings).
+`b42d6ba` (runner audit) → `e9cd2ad` (haven rulings) → `a3ddc1d` (§7.5/§7.6
+rulings) → this commit (§7.0 item 2 + the isolation exclusions named).
 
 ---
 
@@ -193,11 +193,11 @@ the index with the reason each exists.
 Meta-check passed first, so the harness figures are trustworthy rather than
 decorative.
 
-- Mutations: **202 / 202 caught, 0 survived, 0 stale**
-- Suite: **396 / 396** across 30 files
-- Three shuffled seeds: **396 / 396**
-- `--no-isolate`: **393 / 393** across 28 files
-- Single fork: **393 / 393**
+- Mutations: **209 / 209 caught, 0 survived, 0 stale**
+- Suite: **405 / 405** across 32 files
+- Three shuffled seeds: **405 / 405**
+- `--no-isolate`: **402 / 402** — the three it skips are NAMED in L38
+- Single fork: **402 / 402** — same three
 
 **Read the row above against L37.** Every one of these numbers says what CI
 *computed*. None of them says what CI *prevented* — `main` is unprotected, so a
@@ -212,7 +212,7 @@ given the negative case it never had). Both are CAUGHT now. Recording that the
 first run failed is the point: a harness that only ever prints a clean number
 is the instrument this project distrusts.
 
-Prior high-water marks, for trend: 194/194 · runner audit 190/190 · r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
+Prior high-water marks, for trend: 202/202 · 194/194 · runner audit 190/190 · r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
 r11 124/125 (`departed`) · r13 151/151 across eleven shuffle seeds, with 47/47
 guards individually disabled.
 
@@ -251,7 +251,7 @@ CODEOWNERS: a Class-2 approval must arrive via a PR approved by Sheldon's
 authenticated GitHub identity, and the approval commit must be pushed under that
 account, never agent-authored.
 
-- **51 approval entries owed** against base `eb0775f`, re-derived 2026-08-23 via
+- **63 approval entries owed** against base `eb0775f`, re-derived 2026-08-23 via
   `node engine/scripts/owed-approvals.mjs . eb0775f`. Note the script takes
   `<repoRoot> <baseRef>` as positional arguments; `npm run owed-approvals` with
   no arguments refuses, which is correct fail-closed behaviour and not a bug.
@@ -273,6 +273,26 @@ account, never agent-authored.
    green**. Human ruling: severity-1, ahead of L4. Ledger L37. It cannot be
    fixed from the build sandbox — repository settings have no API surface here
    and the proxy refuses even a branch deletion (HTTP 403).
+
+   **AGENT-SIDE PREREQUISITE — LANDED, and it must be on `main` before the
+   requirement is enabled.** Ruling item 2: the `paths:` filter is gone from
+   `fullburn-ci`'s trigger and the scope decision moved inside the jobs
+   (`engine/scripts/ci-scope.mjs`). A path-filtered workflow creates NO check
+   runs when it skips, so a required check would have pinned every out-of-scope
+   PR at *Expected — waiting for status* forever — fail-open traded for
+   permanently stuck. Every job now runs to completion and reports SUCCESS under
+   the same check name when there is nothing to check. The two gate jobs also
+   lost their job-level `if:`, because a skipped job reports the conclusion
+   "skipped" and a push run's skip can land on the same head SHA as the PR run's
+   success. Fail-safe direction is RUN THE GATE: any undeterminable diff is in
+   scope. `[VERIFIED engine/test/ci-scope.test.ts, engine/test/locks-r7.test.ts]`
+
+   **Re-measurement protocol, for when the settings land:** identical
+   experiment — a PR touching only a path outside `fullburn/**` and
+   `.github/**`. Required result: `mergeable_state: "blocked"`. Also confirm
+   `fullburn-ci` REPORTED (success, not pending) on that PR, because the new
+   failure mode to watch for is a required check that never reports. If it still
+   reads `clean`, that is r15's headline.
 1. **L4/H2 — configure the Gateway caps.** The Phase 0 blocker *for spend*.
    Until it lands, the primary spend control is designed and unprovisioned.
 2. ~~**Audit every drill, gate script and harness that runs under its own
@@ -284,12 +304,23 @@ account, never agent-authored.
    `[LIMITATION]` the sweep catches decision LITERALS in a runner, not every
    undelegated decision; the seventh survivor was an inline comparison and was
    found by measurement, not by the sweep.
-3. **The `--no-isolate` / single-fork exclusions are spend-relevant, and that is
-   not comfortable.** The two excluded files hold three tests:
-   `departed-contract.test.ts` (2 — the `departed` double-refund contract) and
-   `ledger-slot.test.ts` (1 — the process-slot brand). **Both are money-path.**
-   They need a private module registry by nature, so the exclusion is honest,
-   but "347/347 under a shared registry" does not cover them. `[LIMITATION]`
+3. ~~**The `--no-isolate` / single-fork exclusions are spend-relevant.**~~
+   **NAMED AND BOUNDED 2026-08-23, ledger L38.** Measured by removing the
+   exclusions and running: `ledger-slot.test.ts` (1) and
+   `departed-contract.test.ts` (2). **All three are money-path.** One structural
+   cause: neither can establish its precondition inside a shared module
+   registry — the slot test needs the process slot EMPTY (and fails saying "it
+   proves nothing" rather than passing vacuously), and the `departed` pair
+   `vi.mock`s a production module, which is registry-scoped by construction.
+   The isolation stages prove everything ELSE is independent of per-file
+   isolation; they do not prove it for these three and cannot. The three are
+   driven by `npm test`, whose `isolate: true` is itself asserted.
+   `[LIMITATION]` structural, not removable. What was removed is the ambiguity:
+   an invariant reads the exclusion list from `package.json`, requires it to be
+   exactly those two files, requires both stages to exclude the same set, and
+   counts exactly 3 — so a fourth exclusion fails the build.
+   `[VERIFIED engine/test/invariants/invariants.test.ts]`
+
 4. **Re-run the harness** after this commit's entries and confirm the population
    count. The four r13-removed entries were re-examined per R14-06: the two that
    targeted the drill are restored in substance as entries on

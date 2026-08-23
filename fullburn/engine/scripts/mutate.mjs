@@ -160,9 +160,18 @@ const MUTATIONS = [
   ["R8-04 CODEOWNERS covers package.json", ".github/CODEOWNERS", "package.json                        @ssb22inc", "# package.json                      @ssb22inc"],
   ["R8-04 CODEOWNERS covers the runner config", ".github/CODEOWNERS", "vitest*                             @ssb22inc", "# vitest*                           @ssb22inc"],
   ["R8-04 CODEOWNERS matcher discriminates", "engine/scripts/gate-lib.mjs", "  let owned = false;", "  let owned = true;"],
-  ["R8-04b CI runs on .github changes", ".github/workflows/fullburn-ci.yml", `  pull_request:
-    paths: ["fullburn/**", ".github/**"]`, `  pull_request:
-    paths: ["fullburn/**", ".github/workflows/fullburn-ci.yml"]`],
+  // REPOINTED 2026-08-23, not deleted. R8-04b's property — a `.github` change
+  // must run the gate — is unchanged; the MECHANISM moved out of the trigger's
+  // `paths:` filter and into `ci-scope.mjs` (§7.0 item 2), so the old target
+  // text no longer exists. Its two halves are now CS-02 (the scope covers
+  // .github) and CS-05 (the trigger carries no filter at all). What THIS entry
+  // now targets is the half neither of those covers: the gating expression
+  // failing SAFE. `== 'true'` would mean a deleted scope step skips every step
+  // and reports a green job that ran nothing.
+  ["R8-04b the scope gate fails safe, so a missing scope step still runs the gate",
+    ".github/workflows/fullburn-ci.yml",
+    "      - name: Typecheck\n        if: steps.scope.outputs.relevant != 'false'",
+    "      - name: Typecheck\n        if: steps.scope.outputs.relevant == 'true'"],
   // R8-05: identity proved the array was not built by the caller; the freeze is
   // what stops the caller rewriting what is in it.
   ["R8-05 grade objects frozen", "engine/src/grade-registry.ts", "    return Object.freeze({ area: areaDef.area, grade, failing: Object.freeze(failing), missing: Object.freeze(missing) });", "    return { area: areaDef.area, grade, failing, missing };"],
@@ -631,9 +640,37 @@ const MUTATIONS = [
   // Anchored on the ONE checkout in this file that is not followed by `with:`.
   // The first spelling matched three sites and `applyEntry` refused it as
   // ambiguous — which is R14-07's fail-closed behaviour working as designed.
+  // Anchored on the ONE action reference in this file that is unique. Every
+  // checkout and setup-node line is now byte-identical, so any anchor built
+  // from them is ambiguous and `applyEntry` refuses it — R14-07 working.
   ["RA-28 the gate's actions stay SHA-pinned", ".github/workflows/fullburn-ci.yml",
-    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4",
-    "      - uses: actions/checkout@v4\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4"],
+    "        uses: gitleaks/gitleaks-action@cb7149a9b57195b609c63e8518d2c6056677d2d0 # v2.3.3",
+    "        uses: gitleaks/gitleaks-action@v2"],
+  // ---- §7.0 item 2: the trigger's paths filter moved inside the job ----
+  ["CS-01 an undeterminable diff runs the gate", "engine/scripts/ci-scope.mjs",
+    "  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return true;",
+    "  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return false;"],
+  ["CS-02 the gate's scope covers .github", "engine/scripts/ci-scope.mjs",
+    'export const CI_SCOPE_GLOBS = Object.freeze(["fullburn/**", ".github/**"]);',
+    'export const CI_SCOPE_GLOBS = Object.freeze(["fullburn/**"]);'],
+  ["CS-03 a failed diff is null, not empty", "engine/scripts/ci-scope.mjs",
+    "  } catch {\n    return null;\n  }",
+    "  } catch {\n    return [];\n  }"],
+  ["CS-04 a rename is in scope by both paths", "engine/scripts/ci-scope.mjs",
+    "      e.oldPath === undefined ? [e.path] : [e.oldPath, e.path],",
+    "      [e.path],"],
+  ["CS-05 the trigger carries no paths filter", ".github/workflows/fullburn-ci.yml",
+    "on:\n  push:\n    branches: [\"**\"]\n  pull_request:",
+    "on:\n  push:\n    branches: [\"**\"]\n    paths: [\"fullburn/**\"]\n  pull_request:"],
+  // SURVIVED on its first run: nothing asserted the absence of a job-level
+  // `if:`, so reinstating one left the suite green. The workflow-hygiene
+  // checker now reports it, with a fixture negative case.
+  ["CS-06 the gate jobs report rather than skip", ".github/workflows/fullburn-ci.yml",
+    "  adversary-gate:\n    # NO JOB-LEVEL `if:`.",
+    "  adversary-gate:\n    if: github.event_name == 'pull_request'\n    # NO JOB-LEVEL `if:`."],
+  ["CS-07 the isolation exclusions cannot grow quietly", "package.json",
+    "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts'",
+    "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts' --exclude '**/locks-r12.test.ts'"],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],

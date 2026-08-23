@@ -1812,6 +1812,26 @@ const RUNNER_BINDINGS: readonly RunnerBinding[] = [
     provenBy: ["engine/test/locks-r5.test.ts", "engine/test/integration/gate-cli.test.ts"],
   },
   {
+    // The trigger's `paths:` filter, moved inside the job so a required check
+    // always reports (human ruling 2026-08-23, §7.0 item 2).
+    runner: "engine/scripts/ci-scope.mjs",
+    decisions: ["./gate-lib.mjs", "./diff-lib.mjs"],
+    provenBy: [
+      "engine/test/locks-r7.test.ts",
+      "engine/test/ci-scope.test.ts",
+      "engine/test/locks-r5.test.ts",
+    ],
+    literalsDisclosed: [
+      {
+        name: "CI_SCOPE_GLOBS",
+        why:
+          "the scope itself, and it is DRIVEN rather than merely declared: it is exported, `inScope` takes " +
+          "the globs as a parameter, and locks-r7 asserts it admits every CLASS2_WITNESS_PATH and refuses a " +
+          "sibling tree. A literal is only a hidden decision when nothing outside the runner can reach it.",
+      },
+    ],
+  },
+  {
     runner: "engine/scripts/mutate.mjs",
     decisions: ["./mutate-lib.mjs"],
     provenBy: ["engine/test/locks-r7.test.ts"],
@@ -2074,6 +2094,26 @@ describe("workflow hygiene — nothing executes with a credential on a promise (
       if (/^permissions:\s*(?:read-all|write-all)\s*$/m.test(src)) {
         out.push(`${name}: uses a blanket permissions value instead of naming what it needs`);
       }
+      /** RULE 3 — A JOB MAY NOT CARRY A JOB-LEVEL `if:`.
+       *
+       * A skipped job reports the conclusion "skipped", not "success". Both a
+       * push run and a pull_request run land on the SAME head SHA, so a push
+       * run whose job skipped can overwrite the PR run's success on a required
+       * check. Both gate jobs carried `if: github.event_name == 'pull_request'`
+       * until 2026-08-23; the condition moved onto their steps so the job
+       * always runs and always reports. Measured: reinstating the job-level
+       * `if:` survived the whole suite (mutation CS-06). */
+      for (const m of src.matchAll(/^  [a-z][a-z0-9-]*:\n(?:    [^\n]*\n)*?    if:\s*(\S[^\n]*)$/gm)) {
+        out.push(`${name}: a job carries a job-level \`if: ${m[1]}\` — a skipped job reports "skipped", which can overwrite a required check's success`);
+      }
+      /** RULE 4 — a step gated on the scope output must fail SAFE.
+       *
+       * `== 'true'` means a deleted or renamed scope step yields the empty
+       * string, every gated step skips, and the job reports GREEN having run
+       * nothing. `!= 'false'` runs the gate instead. */
+      for (const m of src.matchAll(/if:[^\n]*steps\.\w+\.outputs\.relevant\s*==\s*'true'/g)) {
+        out.push(`${name}: \`${m[0].slice(0, 60)}\` fails OPEN — a missing scope step would skip every gated step and report green`);
+      }
     }
     return out;
   };
@@ -2083,11 +2123,15 @@ describe("workflow hygiene — nothing executes with a credential on a promise (
       { name: "tagged.yml", src: "jobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n" },
       { name: "gate-killer.yml", src: "permissions:\n  contents: read\n  actions: write\n" },
       { name: "blanket.yml", src: "permissions: write-all\n" },
+      { name: "skipper.yml", src: "jobs:\n  gate:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest\n" },
+      { name: "failopen.yml", src: "jobs:\n  a:\n    steps:\n      - run: x\n        if: steps.scope.outputs.relevant == 'true'\n" },
     ]);
-    expect(bad.length, "the hygiene checker found nothing in deliberately bad input").toBe(3);
+    expect(bad.length, "the hygiene checker found nothing in deliberately bad input").toBe(5);
     expect(bad.join(" ")).toContain("not pinned to a commit SHA");
     expect(bad.join(" ")).toContain("power to disable");
     expect(bad.join(" ")).toContain("blanket permissions");
+    expect(bad.join(" "), "a job-level if: was not reported").toContain('job-level `if:');
+    expect(bad.join(" "), "a fail-open scope gate was not reported").toContain("fails OPEN");
     // Clean input, including the forms that legitimately take no SHA.
     expect(
       hygieneFailures([
@@ -2096,6 +2140,7 @@ describe("workflow hygiene — nothing executes with a credential on a promise (
           src:
             "permissions:\n  contents: read\njobs:\n  a:\n    steps:\n" +
             "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n" +
+            "        if: steps.scope.outputs.relevant != 'false'\n" +
             "      - uses: ./.github/actions/local\n",
         },
       ]),
@@ -2118,5 +2163,98 @@ describe("workflow hygiene — nothing executes with a credential on a promise (
         true,
       );
     }
+  });
+});
+
+/** ─── THE ISOLATION-VARIANT EXCLUSIONS, NAMED AND BOUNDED ──────────────────
+ *
+ * `npm run test:noisolate` and `npm run test:singlefork` have reported three
+ * fewer tests than `npm test` for four rounds (350/347 → 386/383 → 387/384 →
+ * 396/393), and across those four rounds nobody said which three. A CI stage
+ * that quietly runs a smaller suite than the one it is compared against is a
+ * green whose scope nobody can state.
+ *
+ * MEASURED 2026-08-23 by removing the exclusions and running. All three fail,
+ * and all three fail for the SAME structural reason — they cannot establish
+ * their preconditions inside a shared module registry:
+ *
+ *   ledger-slot.test.ts (1) — needs `globalThis[Symbol.for("fullburn.spend-
+ *     ledger.process")]` EMPTY so it can plant a foreign occupant. Under a
+ *     shared registry another file has already filled it. Note what the test
+ *     does about that: it fails with "this file's ledger slot was already
+ *     filled — it proves nothing". It refuses to pass vacuously, which is the
+ *     behaviour this project spent fourteen rounds installing everywhere else.
+ *
+ *   departed-contract.test.ts (2) — `vi.mock`s a production module for the
+ *     whole file to drive a deliberately non-conforming meter (ledger L32,
+ *     the only way `departed` can be made live). File-scoped mocking is
+ *     registry-scoped by construction; with the registry shared, the mock does
+ *     not take and the non-conforming meter is never installed.
+ *
+ * ALL THREE ARE MONEY-PATH, and that is stated rather than softened. What the
+ * isolation stages prove is that EVERYTHING ELSE is independent of vitest's
+ * per-file isolation — they were added after R13-08, where six money-path locks
+ * went red under a shared registry because a duplicated registry duplicates
+ * every error class. They do not prove it for these three, and cannot: the
+ * three are tested by `npm test`, whose `isolate: true` is itself asserted.
+ *
+ * `[LIMITATION]` The exclusion is structural, not incidental, and it is not
+ * removable without changing what the three tests prove. What IS removable is
+ * the ambiguity: this binds the exclusion list to exactly those two files and
+ * the gap to exactly three tests, so a fourth exclusion fails the build instead
+ * of widening a number nobody reads. */
+describe("isolation-variant stages — the excluded set is named, and cannot grow quietly", () => {
+  const pkg = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+
+  /** The files a script excludes, read out of the script itself. */
+  const excludedBy = (script: string): string[] =>
+    [...(pkg.scripts[script] ?? "").matchAll(/--exclude\s+'([^']+)'/g)].map((m) => m[1]!).sort();
+
+  const EXPECTED = ["**/departed-contract.test.ts", "**/ledger-slot.test.ts"];
+
+  it("both isolation stages exclude exactly the two files this project has justified", () => {
+    for (const script of ["test:noisolate", "test:singlefork"]) {
+      expect(pkg.scripts[script], `${script} is gone — the isolation stage is not running at all`).toBeDefined();
+      expect(
+        excludedBy(script),
+        `${script} excludes a different set than the two files ledger L32 and L31(c) account for. ` +
+          "A new exclusion needs a ledger row saying what it stops proving.",
+      ).toEqual(EXPECTED);
+    }
+    // The two stages must exclude the SAME set, or one of them silently covers
+    // less than the other while both report a number.
+    expect(excludedBy("test:noisolate")).toEqual(excludedBy("test:singlefork"));
+  });
+
+  /** The excluded files are excluded from the VARIANT stages only. If one ever
+   * left the default suite too, these three money-path tests would run nowhere
+   * and the exclusion would become a deletion. */
+  it("every excluded file is still driven by the default suite", async () => {
+    const { default: suiteCfg } = await import("../../../vitest.config.ts");
+    const include: string[] = suiteCfg.test?.include ?? [];
+    expect(suiteCfg.test?.isolate, "the default suite stopped isolating — then nothing drives these three").toBe(true);
+    for (const glob of EXPECTED) {
+      const file = `engine/test/${glob.replace("**/", "")}`;
+      expect(() => readFileSync(new URL(`../../../${file}`, import.meta.url), "utf8"), `${file} is gone`).not.toThrow();
+      expect(
+        include.some((g) => g.includes("engine/test")),
+        "the default suite no longer includes engine/test",
+      ).toBe(true);
+    }
+  });
+
+  /** The gap is THREE. Counted from the files, so it cannot drift. */
+  it("the excluded set is exactly three tests, all of them money-path", () => {
+    const countTests = (file: string) => {
+      const src = readFileSync(new URL(`../../../engine/test/${file}`, import.meta.url), "utf8");
+      return [...src.matchAll(/^\s*it\(/gm)].length;
+    };
+    const total = countTests("departed-contract.test.ts") + countTests("ledger-slot.test.ts");
+    expect(
+      total,
+      "the isolation stages now skip a different number of tests than the three this project has accounted for",
+    ).toBe(3);
   });
 });

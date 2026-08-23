@@ -2,18 +2,23 @@
 # requires an APPROVALS entry (class2-gate).
 name: fullburn-ci
 
+# NO `paths:` FILTER. THAT IS DELIBERATE AND IT IS LOAD-BEARING.
+#
+# A workflow skipped by path filtering never creates its check runs, so the
+# moment `fullburn-ci` becomes a REQUIRED status check a path-filtered skip
+# leaves the pull request at "Expected — waiting for status" forever. Fail-open
+# would become permanently stuck (human ruling 2026-08-23, §7.0 item 2).
+#
+# The scope decision moved INSIDE the jobs: `engine/scripts/ci-scope.mjs` says
+# whether the diff touches anything a fullburn verdict is about, every job runs
+# to completion either way, and a job with nothing to check reports SUCCESS
+# under the same check name. `locks-r7` holds those globs to CLASS2_PATTERNS —
+# the scope is unchanged from the filter this replaced (R8-04b), only its
+# location — and the invariant suite fails if a `paths:` filter reappears here.
 on:
   push:
     branches: ["**"]
-    # EVERY Class-2 path, not just fullburn/**. `.github/**` is a Class-2
-    # pattern, and this filter listed only the workflow file — so a PR touching
-    # only `.github/CODEOWNERS` triggered no workflow, ran no gate, and never
-    # executed the test that guards it. The artifact created to make "human-only"
-    # real could be deleted by a diff that ran nothing (adversary finding
-    # R8-04b). `locks-r7` now holds this filter to CLASS2_PATTERNS.
-    paths: ["fullburn/**", ".github/**"]
   pull_request:
-    paths: ["fullburn/**", ".github/**"]
 
 # DEFAULT DENY. This workflow declared NO permissions block, so its token took
 # the repository default — a setting nobody in this project had ever read, and
@@ -37,13 +42,33 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+      # ── IS THIS CHANGE IN SCOPE AT ALL? ──────────────────────────────────
+      #
+      # The trigger has no `paths:` filter, because a path-skipped workflow
+      # never creates its check runs and a REQUIRED check that never reports
+      # pins the pull request at "Expected — waiting for status" forever. So
+      # the scope decision lives here, the job always runs, and a job with
+      # nothing to check still reports SUCCESS under the same check name.
+      #
+      # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
+      # true. See engine/scripts/ci-scope.mjs.
+      # NOTE the gating expression on every step below is `!= 'false'`, not
+      # `== 'true'`. If this step is deleted or its id renamed, the output is
+      # the empty string: `== 'true'` would skip every gated step and report a
+      # GREEN job that executed nothing. `!= 'false'` runs the gate instead.
+      - id: scope
+        run: node engine/scripts/ci-scope.mjs .. "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.scope.outputs.relevant != 'false'
         with:
           node-version: 22
       - run: npm ci
+        if: steps.scope.outputs.relevant != 'false'
       - name: Typecheck
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run typecheck
       - name: Unit suite
+        if: steps.scope.outputs.relevant != 'false'
         run: npm test
       # §10.3 names five stages. "integration" had no code and no deferral
       # record until ledger L16; this is its first half — the gate CLIs executed
@@ -51,8 +76,10 @@ jobs:
       # unit test (N-03 leg B, R3-CP-08). Playwright e2e stays deferred: Phase 0
       # ships no endpoints and no UI for it to exercise.
       - name: Integration suite (gate CLIs against a real repo)
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run integration
       - name: Invariant suite
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run invariants
       # §10.3's fifth stage. H20 RECORDED VARIANCE (approved 2026-08-16, ledger
       # L16): substantive e2e defers to Phase 1, but the stage is installed and
@@ -61,8 +88,10 @@ jobs:
       # enforces that expiry mechanically, so it cannot outlive its terms by
       # being forgotten.
       - name: Install the e2e browser
+        if: steps.scope.outputs.relevant != 'false'
         run: npx playwright install --with-deps chromium
       - name: Playwright e2e (smoke until Phase 1)
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run e2e
       # ── PRIMARY SECRET DETECTION — a ruleset we do not own ────────────────
       #
@@ -80,6 +109,7 @@ jobs:
       #
       # `--redact` so a finding never puts the secret into a public CI log.
       - name: Secret scan — PRIMARY (gitleaks, third-party ruleset)
+        if: steps.scope.outputs.relevant != 'false'
         uses: gitleaks/gitleaks-action@cb7149a9b57195b609c63e8518d2c6056677d2d0 # v2.3.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -87,6 +117,7 @@ jobs:
           GITLEAKS_ENABLE_SUMMARY: "true"
 
       - name: Leak + structural scan
+        if: steps.scope.outputs.relevant != 'false'
         run: node engine/scripts/leak-check.mjs ..
       # THE INTERRUPT DRILL — its own step, never part of `npm test`.
       #
@@ -96,6 +127,7 @@ jobs:
       # after the suite, where no harness is running — the mutation-harness job
       # is a separate job with its own checkout.
       - name: Harness interrupt drill (the fails-closed half, executed)
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run drill
 
       # ORDER-DEPENDENCE IS A MONEY BUG HERE, NOT A TEST-HYGIENE ONE. Four of
@@ -104,6 +136,7 @@ jobs:
       # R11-07's whole fix rests on, violated inside the project's own suite
       # (adversary finding R12-06). Declaration order hid it; the seeds do not.
       - name: Suite is order-independent (three shuffled seeds)
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run test:shuffle
 
       # R13-08 named TWO conditions — `--no-isolate` OR a single-fork pool — and
@@ -112,9 +145,11 @@ jobs:
       # them module-identity artifacts of an object shared across registries
       # (adversary finding R14-05). Both conditions are stages now.
       - name: Suite survives a shared module registry (--no-isolate)
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run test:noisolate
 
       - name: Suite survives a single fork (R13-08's other condition)
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run test:singlefork
 
   # THE ACCEPTANCE BAR, AS A STAGE. `npm run mutate` is how this project
@@ -137,35 +172,83 @@ jobs:
         working-directory: fullburn
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      # ── IS THIS CHANGE IN SCOPE AT ALL? ──────────────────────────────────
+      #
+      # The trigger has no `paths:` filter, because a path-skipped workflow
+      # never creates its check runs and a REQUIRED check that never reports
+      # pins the pull request at "Expected — waiting for status" forever. So
+      # the scope decision lives here, the job always runs, and a job with
+      # nothing to check still reports SUCCESS under the same check name.
+      #
+      # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
+      # true. See engine/scripts/ci-scope.mjs.
+      - id: scope
+        run: node engine/scripts/ci-scope.mjs .. "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.scope.outputs.relevant != 'false'
         with:
           node-version: 22
       - run: npm ci
+        if: steps.scope.outputs.relevant != 'false'
       - name: Mutation harness (every lock must bite)
+        if: steps.scope.outputs.relevant != 'false'
         run: npm run mutate
 
   adversary-gate:
-    if: github.event_name == 'pull_request'
+    # NO JOB-LEVEL `if:`. A skipped job reports the conclusion "skipped", and
+    # both a push run and a pull_request run land on the same head SHA — so a
+    # skipped push run can overwrite the PR run's success on a REQUIRED check.
+    # The condition moved onto the steps: the job always runs, always reports.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+      # ── IS THIS CHANGE IN SCOPE AT ALL? ──────────────────────────────────
+      #
+      # The trigger has no `paths:` filter, because a path-skipped workflow
+      # never creates its check runs and a REQUIRED check that never reports
+      # pins the pull request at "Expected — waiting for status" forever. So
+      # the scope decision lives here, the job always runs, and a job with
+      # nothing to check still reports SUCCESS under the same check name.
+      #
+      # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
+      # true. See engine/scripts/ci-scope.mjs.
+      - id: scope
+        run: node fullburn/engine/scripts/ci-scope.mjs . "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.scope.outputs.relevant != 'false'
         with:
           node-version: 22
       - name: Adversary report present, PASS, fresh, append-only (Law 9)
+        if: steps.scope.outputs.relevant != 'false' && github.event_name == 'pull_request'
         run: node fullburn/engine/scripts/adversary-gate.mjs . "origin/${{ github.base_ref }}"
 
   class2-gate:
-    if: github.event_name == 'pull_request'
+    # Same reason as adversary-gate: no job-level `if:`.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+      # ── IS THIS CHANGE IN SCOPE AT ALL? ──────────────────────────────────
+      #
+      # The trigger has no `paths:` filter, because a path-skipped workflow
+      # never creates its check runs and a REQUIRED check that never reports
+      # pins the pull request at "Expected — waiting for status" forever. So
+      # the scope decision lives here, the job always runs, and a job with
+      # nothing to check still reports SUCCESS under the same check name.
+      #
+      # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
+      # true. See engine/scripts/ci-scope.mjs.
+      - id: scope
+        run: node fullburn/engine/scripts/ci-scope.mjs . "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.scope.outputs.relevant != 'false'
         with:
           node-version: 22
       - name: Class-2 changes carry human approvals (Law 2/14/15)
+        if: steps.scope.outputs.relevant != 'false' && github.event_name == 'pull_request'
         run: node fullburn/engine/scripts/class2-gate.mjs . "origin/${{ github.base_ref }}"
