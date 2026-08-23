@@ -2024,3 +2024,99 @@ describe("runner-decision sweep — no verdict is reached where the default suit
     }
   });
 });
+
+/** ─── WORKFLOW HYGIENE — the two standing rules of 2026-08-22 ──────────────
+ *
+ * A workflow file is the only artifact in this repository that executes with a
+ * credential, and until this commit five of them did so with permissions nobody
+ * had read, calling third-party code pinned to tags that can be moved.
+ *
+ * RULE 1 — no third-party action by mutable tag. Commit SHA only. `@v4` is a
+ * pointer the action's owner can repoint at any commit, and the five exercise
+ * workflows carried nine such references. `@v4` is not a version; it is a
+ * promise by someone else.
+ *
+ * RULE 2 — `actions: write` is a Class-2 surface wherever it appears. It is the
+ * power to DISABLE A WORKFLOW, which means the power to turn off the gate. Four
+ * of the five deleted workflows held it and one of them was `active`.
+ *
+ * Both are checked against every workflow file found on disk, so a new one is
+ * covered the day it lands rather than the round after someone thinks to look. */
+describe("workflow hygiene — nothing executes with a credential on a promise (2026-08-22)", () => {
+  const wfDir = new URL("../../../../.github/workflows/", import.meta.url);
+  const workflows = (): { name: string; src: string }[] =>
+    readdirSync(wfDir)
+      .filter((f) => /\.ya?ml$/.test(f))
+      .map((f) => ({ name: f, src: readFileSync(new URL(f, wfDir), "utf8") }));
+
+  /** `uses:` values that are not third-party code and so take no SHA: a local
+   * path (`./…`) and a Docker image reference, neither of which resolves
+   * through a git tag. */
+  const NEEDS_NO_SHA = /^(?:\.\/|\.\.\/|docker:\/\/)/;
+  const SHA_PINNED = /^[^@\s]+@[0-9a-f]{40}\b/;
+
+  /** The decision, as a function, so the negative case can be supplied — no
+   * workflow in the tree violates either rule now, and a check only ever run
+   * against passing input proves nothing (the R14-06 lesson, applied here). */
+  const hygieneFailures = (files: { name: string; src: string }[]): string[] => {
+    const out: string[] = [];
+    for (const { name, src } of files) {
+      for (const m of src.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)/gm)) {
+        const ref = m[1]!;
+        if (NEEDS_NO_SHA.test(ref)) continue;
+        if (!SHA_PINNED.test(ref)) {
+          out.push(`${name}: \`uses: ${ref}\` is not pinned to a commit SHA — a tag can be moved`);
+        }
+      }
+      for (const m of src.matchAll(/^\s*actions:\s*(write|read-all|write-all)\s*$/gm)) {
+        out.push(`${name}: grants \`actions: ${m[1]}\` — the power to disable this repository's gate`);
+      }
+      if (/^permissions:\s*(?:read-all|write-all)\s*$/m.test(src)) {
+        out.push(`${name}: uses a blanket permissions value instead of naming what it needs`);
+      }
+    }
+    return out;
+  };
+
+  it("the hygiene checker reports both violations, and passes clean input", () => {
+    const bad = hygieneFailures([
+      { name: "tagged.yml", src: "jobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n" },
+      { name: "gate-killer.yml", src: "permissions:\n  contents: read\n  actions: write\n" },
+      { name: "blanket.yml", src: "permissions: write-all\n" },
+    ]);
+    expect(bad.length, "the hygiene checker found nothing in deliberately bad input").toBe(3);
+    expect(bad.join(" ")).toContain("not pinned to a commit SHA");
+    expect(bad.join(" ")).toContain("power to disable");
+    expect(bad.join(" ")).toContain("blanket permissions");
+    // Clean input, including the forms that legitimately take no SHA.
+    expect(
+      hygieneFailures([
+        {
+          name: "ok.yml",
+          src:
+            "permissions:\n  contents: read\njobs:\n  a:\n    steps:\n" +
+            "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n" +
+            "      - uses: ./.github/actions/local\n",
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("every workflow in the tree pins by SHA and grants no actions: write", () => {
+    const files = workflows();
+    expect(files.length, "no workflows found — this check would pass vacuously").toBeGreaterThan(0);
+    expect(hygieneFailures(files), "workflow hygiene violations").toEqual([]);
+  });
+
+  /** A workflow with no `permissions:` block takes the REPOSITORY DEFAULT — a
+   * setting this project had never read, and which cannot be read from the
+   * build sandbox. Least privilege has to be stated in the file, where it is
+   * reviewable, not inherited from a console toggle. */
+  it("every workflow states its own permissions rather than inheriting a setting", () => {
+    for (const { name, src } of workflows()) {
+      expect(/^permissions:/m.test(src), `${name} declares no permissions block, so it inherits the repo default`).toBe(
+        true,
+      );
+    }
+  });
+});

@@ -300,6 +300,74 @@ project spent fourteen rounds removing from its own instruments.
 tracked file set. If the preferred home for this record is haven's own tree
 rather than this report, that is a one-file follow-up — say so and it will move.
 
+## 6e. MEASURED — the repository cannot block a merge (§7.6 item 2)
+
+Human ruling: *"MEASURE FIRST, before deleting… report whether branch protection
+BLOCKS the merge or the check simply never reports. If it fails open, that is a
+severity-1 and it outranks everything in Phase 0 including L4."*
+
+**It fails open.**
+
+| Measurement | Result |
+|---|---|
+| `main` branch protection | **`"protected": false`** |
+| Throwaway PR touching only a path outside `fullburn/**` and `.github/**` | `fullburn-ci` produced **no run at all** — the exact "check never reports" condition |
+| That PR's `mergeable_state` | **`"clean"`** — immediately mergeable, zero gates run |
+| `pull_request`-triggered runs in the repository's entire history | **zero** |
+
+The PR was opened as a draft, marked ready so `draft` could not be mistaken for
+the blocker, read, then **closed without ever being merged**; its file was
+deleted from the branch.
+
+**How this was measured, and why not the way the ruling described it.** The
+ruling said to disable `fullburn-ci` via the Actions API first. That was not
+needed and was not done: `fullburn-ci` carries `paths: ["fullburn/**",
+".github/**"]`, so a PR touching a root-level file produces the identical
+observable — no run — without changing repository-wide state that a mid-session
+failure would leave switched off. The disable step was a means to a condition
+the paths filter provides for free. Stated plainly because it is a deviation.
+
+**What this confirms, and what it adds.** L11 and H19 have said since r2 that
+"until then the CI gates are advisory", so the *condition* is disclosed, not
+discovered. What the measurement adds is scope and evidence: it is not only
+Class-2 approvals that are unenforced. `verify`, `adversary-gate`,
+`class2-gate`, the mutation harness and the leak scan are all advisory, and
+**every "green" this project has recorded describes what CI computed, never
+what CI prevented.** Ledger **L37**.
+
+**It cannot be fixed from here.** Branch protection, required checks, CODEOWNERS
+enforcement and the default workflow-permission setting are repository settings
+with no API surface in this session; the agent proxy refuses even a branch
+deletion (HTTP 403 — the throwaway branch is closed but still present and needs
+one manual click). H19, human-only, and now ahead of L4.
+
+## 6f. §7.5 executed — the ruleset no longer grades itself
+
+| Ruling | State |
+|---|---|
+| 1. Add rules for the four measured formats + `.git-credentials`, `aws_secret_access_key`, docker `auth`, `MYSQL_PWD`, `.htpasswd` | Done — **9 rules added, 11 → 20** |
+| 2. Independently authored corpus, every entry flags, removing any one rule turns it red | Done — `engine/test/credential-corpus.ts`, **24 credentials + 8 placeholders** |
+| 3. Demote to advisory; `gitleaks` PRIMARY in CI; limitation + covered-format list in the ledger | Done — ledger **L36** |
+
+The corpus was written **before** the rules and from the credential formats —
+npm's `_authToken`, PostgreSQL's `.pgpass` field order, Docker's base64 `auth`,
+Apache's htpasswd hashes — never from the expressions. That direction is the
+whole ruling: the previous round validated the rules against a canary built
+from the rules.
+
+**The red-proof found three defects on its first run, before the rules were
+accepted:** `aws access key id` and `aws secret access key` each covered only
+by the other (one file held both halves — split into two entries);
+`git-credentials entry` carried by the `github token` rule (its password was a
+`ghp_` token — changed to a plain password, which is what non-GitHub hosts
+actually store); and five rules with no corpus entry at all. All 20 rules are
+now individually load-bearing: removing any one leaves a credential undetected.
+
+The negative half is not decoration — without it a rule matching `.*` satisfies
+the corpus. It includes the real `haven/.env.local.example` placeholders,
+`process.env` reads, the description-strings map from `haven/next.config.ts`,
+and shell interpolation.
+
 ## 7. What keeps it true — the runner-decision sweep
 
 `engine/test/invariants/invariants.test.ts`. Runners are **derived from the
@@ -338,11 +406,23 @@ Phase 0 gate remains **RED**. This audit closes HANDOFF §7.2 and changes nothin
 about §7.1: **L4/H2 — the Gateway caps — is still the Phase 0 blocker**, and the
 primary spend control is still designed and unprovisioned.
 
-**Numbers after the 2026-08-22 rulings**, meta-check passed first: mutations
-**194/194 caught, 0 survived, 0 stale**; suite **387/387** across 29 files;
-three shuffled seeds 387/387; `--no-isolate` and single-fork 384/384; drill
-green; typecheck and leak-check clean. (At `b42d6ba`, before §6a–§6d: 190/190
-and 386/386.)
+**Numbers after the §7.5/§7.6 rulings**, meta-check passed first: mutations
+**202/202 caught, 0 survived, 0 stale**; suite **396/396** across 30 files;
+three shuffled seeds 396/396; `--no-isolate` and single-fork 393/393; drill
+green; typecheck and leak-check clean. (194/194 and 387/387 at `e9cd2ad`;
+190/190 and 386/386 at `b42d6ba`.)
+
+**Every number above says what CI computed, not what CI prevented.** See §6e:
+`main` has no branch protection, so nothing here can stop a merge.
+
+Three harness runs failed before this one and each failure was a real defect,
+recorded rather than tidied: `RA-23` (the corpus red-proof had no red-proof of
+its own — its clause could be deleted with the suite green), `RA-22` (no
+placeholder was `.pgpass`-shaped, so the guard keeping example files quiet was
+unmeasured), and `N-06`, a pre-existing entry that went stale when
+`scanContent`'s detection moved into `secretRuleHits` — repointed, not deleted.
+`RA-28` was refused as an ambiguous target, which is R14-07's fail-closed
+behaviour working.
 
 Full history re-scanned after `git gc --prune=now`: **1,818 blobs, 1,804 read
 as text, 0 findings.** The one prior finding was unreachable blob `cbbb9f50`,

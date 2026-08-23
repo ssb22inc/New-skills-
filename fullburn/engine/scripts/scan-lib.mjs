@@ -1,5 +1,32 @@
 /** Scan rules for the leak + structural check (§10.2, §15; R4).
  *
+ * ─── THESE SECRET RULES ARE ADVISORY. THEY ARE NOT THE PRIMARY DETECTION ────
+ *
+ * Human ruling 2026-08-22, and it has the same shape as the R14-01 ruling on
+ * spend: authority does not live inside the thing being checked.
+ *
+ * A ruleset written by the people it protects only ever meets the credential
+ * formats its authors imagined. Measured: `.npmrc`, `.netrc` and `.pgpass` were
+ * READ by the scan and their real contents — an `npm_` token, a plaintext
+ * password, a `.pgpass` field — matched NOTHING, while the same files carrying
+ * a canary shaped like an Anthropic key flagged immediately. The rules had been
+ * validated against a canary built from the rules.
+ *
+ * PRIMARY is now `gitleaks`, a ruleset this project does not own, run as its
+ * own CI step in `.github/workflows/fullburn-ci.yml`.
+ *
+ * WHAT THIS FILE IS STILL FOR, and why it is not deleted:
+ *   - the STRUCTURAL half — provider hostnames, prediction-gate identifiers,
+ *     registry indexing, raw model ids — is this project's Laws, and no
+ *     third-party scanner knows about them. That half remains PRIMARY here.
+ *   - the secret half is a fast local signal, runnable without network, that
+ *     fails a build before a push.
+ *
+ * NEVER quote a clean verdict from this file as evidence that a tree holds no
+ * credential. Quote gitleaks, and say which formats these rules cover — the
+ * measured list is in ledger L36 and is derived from
+ * `engine/test/credential-corpus.ts`.
+ *
  * Split out of leak-check.mjs so the rules are unit-testable without running a
  * filesystem walk or calling process.exit inside a test worker (adversary
  * finding F18). The CLI lives in leak-check.mjs and imports this.
@@ -33,6 +60,39 @@ export const SECRET_PATTERNS = [
   { name: "google api key", re: /\bAIza[A-Za-z0-9_-]{35}\b/ },
   { name: "slack bot token", re: /\bxox[baprs]-[A-Za-z0-9-]{10,}/ },
   { name: "generic bearer literal", re: /Bearer\s+[A-Za-z0-9._-]{24,}/ },
+
+  /** ─── FORMATS THE RULESET COULD READ AND COULD NOT MATCH ────────────────
+   *
+   * Added 2026-08-22 by human ruling. `.npmrc`, `.netrc` and `.pgpass` were
+   * proven READ by planting a canary shaped like an Anthropic key — a string
+   * these rules were already written to match. That proved readability, and it
+   * was taken as proof of detection. Re-run with what those files actually
+   * hold, the scan reported clean. Readability is not detection.
+   *
+   * Each rule below is validated against `engine/test/credential-corpus.ts`,
+   * which was authored from the FORMATS and never from these expressions, and
+   * every one carries a red-proof: delete it and the corpus goes red. */
+
+  // npm writes `_authToken=` into .npmrc; automation tokens are `npm_` + 36.
+  { name: "npm auth token", re: /\b_authToken\s*=\s*"?(?:npm_[A-Za-z0-9]{20,}|[A-Za-z0-9+/=_-]{32,})"?/ },
+  // .netrc: a `password` keyword followed by the value, one-line or indented.
+  { name: "netrc password", re: /\bmachine\s+\S+[\s\S]{0,120}?\bpassword\s+(?!\$|<|your[_-])\S{8,}/ },
+  // .pgpass: host:port:database:user:password — the value is the fifth field.
+  { name: "pgpass entry", re: /^[^\s:#]+:\d{2,5}:[^\s:]*:[^\s:]+:(?!\$|<|your[_-])\S{8,}$/m },
+  // Password-carrying env vars, assigned a LITERAL. `$VAR` and `${VAR}` are
+  // references, not secrets, and are excluded so the placeholder half stays clean.
+  {
+    name: "database password env assignment",
+    re: /\b(?:PGPASSWORD|MYSQL_PWD|MYSQL_ROOT_PASSWORD|POSTGRES_PASSWORD)\s*=\s*"?(?!\$|\s|"?\s*$|your[_-]|change[_-]?me|<)[^\s"'`$]{8,}/ },
+  // git credential store: scheme://user:secret@host, one per line.
+  { name: "git-credentials entry", re: /\bhttps?:\/\/[^\s:/@]+:(?!\$|<|your[_-])[^\s:/@]{8,}@[^\s/]+/ },
+  // AWS shared-credentials file. The ID rule above catches AKIA…; this is the
+  // SECRET half, which has no distinguishing prefix and must key on the name.
+  { name: "aws secret access key", re: /\baws_secret_access_key\s*=\s*"?(?!\$|<|your[_-])[A-Za-z0-9/+=]{40}\b/i },
+  // Docker config.json stores registry logins as base64 of "user:password".
+  { name: "docker registry auth", re: /"auth"\s*:\s*"[A-Za-z0-9+/]{16,}={0,2}"/ },
+  // htpasswd: user:hash, where the hash names its own algorithm.
+  { name: "htpasswd hash", re: /^[^\s:]+:\$(?:2[aby]|apr1|6|5|1)\$[^\s]{12,}$/m },
 ];
 
 /** LLM providers must be reachable only through AI Gateway (Law 11).
@@ -198,13 +258,24 @@ function realMatches(re, content, path) {
 }
 
 /** Returns a list of finding strings; empty means clean. */
+/** WHICH SECRET RULES FIRE, AS ONE EXPRESSION.
+ *
+ * `scanContent` had this comparison inline, so the credential corpus could only
+ * check the rules through a second code path — and a red-proof that removes one
+ * rule needs to substitute the ruleset, which an inline constant does not allow.
+ * Both the scan and its acceptance corpus run through here, so the corpus
+ * measures what the scan actually does rather than a re-implementation of it.
+ * (Same lesson as `classifyRun`: a self-check that validates a different
+ * expression from the reported result validates nothing.) */
+export function secretRuleHits(path, content, patterns = SECRET_PATTERNS) {
+  return patterns.filter(({ re }) => realMatches(re, content, path).length > 0).map(({ name }) => name);
+}
+
 export function scanContent(path, content) {
   const findings = [];
 
-  for (const { name, re } of SECRET_PATTERNS) {
-    if (realMatches(re, content, path).length > 0) {
-      findings.push(`${path}: possible ${name} (§10.2 — tokens live only in the vault)`);
-    }
+  for (const name of secretRuleHits(path, content)) {
+    findings.push(`${path}: possible ${name} (§10.2 — tokens live only in the vault)`);
   }
 
   // Structural rules are claims about CODE, not about prose describing code,

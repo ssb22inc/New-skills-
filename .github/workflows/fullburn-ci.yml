@@ -15,6 +15,18 @@ on:
   pull_request:
     paths: ["fullburn/**", ".github/**"]
 
+# DEFAULT DENY. This workflow declared NO permissions block, so its token took
+# the repository default — a setting nobody in this project had ever read, and
+# which cannot be read from the build sandbox at all (2026-08-22 audit). Every
+# job here only reads the checkout and runs tests; none writes to the API.
+#
+# `actions: write` is deliberately absent and must stay absent: it is the power
+# to DISABLE THIS WORKFLOW, i.e. to turn off the gate this file exists to be.
+# It is a Class-2 surface wherever it appears (standing rule, 2026-08-22), and
+# the invariant suite fails on any workflow that grants it.
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -22,10 +34,10 @@ jobs:
       run:
         working-directory: fullburn
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - run: npm ci
@@ -52,6 +64,28 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Playwright e2e (smoke until Phase 1)
         run: npm run e2e
+      # ── PRIMARY SECRET DETECTION — a ruleset we do not own ────────────────
+      #
+      # `scan-lib.mjs`'s SECRET_PATTERNS is OURS, and a ruleset that only ever
+      # meets credentials its own authors imagined is a ruleset that reports
+      # clean for everything it never thought of. That is exactly what happened
+      # on 2026-08-22: `.npmrc`, `.netrc` and `.pgpass` were read and their real
+      # credential formats were not matched, because the rules had been
+      # validated against a canary built FROM the rules.
+      #
+      # Same shape as the R14-01 ruling on spend: authority moves outside the
+      # thing being checked. gitleaks is PRIMARY; ours is an advisory fast
+      # signal that also carries this project's structural Laws, which no
+      # third-party scanner knows about. Ledger L36.
+      #
+      # `--redact` so a finding never puts the secret into a public CI log.
+      - name: Secret scan — PRIMARY (gitleaks, third-party ruleset)
+        uses: gitleaks/gitleaks-action@cb7149a9b57195b609c63e8518d2c6056677d2d0 # v2.3.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+          GITLEAKS_ENABLE_SUMMARY: "true"
+
       - name: Leak + structural scan
         run: node engine/scripts/leak-check.mjs ..
       # THE INTERRUPT DRILL — its own step, never part of `npm test`.
@@ -102,8 +136,8 @@ jobs:
       run:
         working-directory: fullburn
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - run: npm ci
@@ -114,10 +148,10 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: Adversary report present, PASS, fresh, append-only (Law 9)
@@ -127,10 +161,10 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
       - name: Class-2 changes carry human approvals (Law 2/14/15)

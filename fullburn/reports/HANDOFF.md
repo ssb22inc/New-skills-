@@ -39,7 +39,7 @@ from inference. Re-derive or ask.
 | PR | Not opened. **Do not open.** | standing instruction, every round since r5 |
 | Latest commit | see `git log -1` | — |
 | Base for current Class-2 accounting | `eb0775f` | re-derived 2026-08-21 |
-| Class-2 approval entries owed | **47** | `node engine/scripts/owed-approvals.mjs . eb0775f` |
+| Class-2 approval entries owed | **51** | `node engine/scripts/owed-approvals.mjs . eb0775f` |
 | Tracked files / Class-2 by `isClass2()` | **488 / 115** | re-derived 2026-08-21 |
 | Live dollars exposed to date | 0 | no write path exists before Phase 6 |
 | Clients exposed to date | 0 | — |
@@ -50,7 +50,8 @@ from inference. Re-derive or ask.
 cross-family brief, superseded) → `0877861` (r8 clean, 100/100) → `7516cd4` →
 `d73df4c` (binds `trustedClock()`, retires `Date.now`) → `cb48c05` (r13 fixes) →
 `a236e8f` (r14 report) → `0466154` (r14 fixes) → `34437d6` (R14-01 ruling) →
-`b42d6ba` (runner audit, §7.2) → this commit (haven-investigation rulings).
+`b42d6ba` (runner audit, §7.2) → `e9cd2ad` (haven-investigation rulings) →
+this commit (§7.5/§7.6 rulings).
 
 ---
 
@@ -192,11 +193,15 @@ the index with the reason each exists.
 Meta-check passed first, so the harness figures are trustworthy rather than
 decorative.
 
-- Mutations: **194 / 194 caught, 0 survived, 0 stale**
-- Suite: **387 / 387** across 29 files
-- Three shuffled seeds: **387 / 387**
-- `--no-isolate`: **384 / 384** across 27 files
-- Single fork: **384 / 384**
+- Mutations: **202 / 202 caught, 0 survived, 0 stale**
+- Suite: **396 / 396** across 30 files
+- Three shuffled seeds: **396 / 396**
+- `--no-isolate`: **393 / 393** across 28 files
+- Single fork: **393 / 393**
+
+**Read the row above against L37.** Every one of these numbers says what CI
+*computed*. None of them says what CI *prevented* — `main` is unprotected, so a
+PR that runs none of this is mergeable today.
 - Drill green. Typecheck clean. Leak-check clean.
 
 The runner audit added 16 entries (RA-01…RA-16) and 32 tests. Two of its own
@@ -207,7 +212,7 @@ given the negative case it never had). Both are CAUGHT now. Recording that the
 first run failed is the point: a harness that only ever prints a clean number
 is the instrument this project distrusts.
 
-Prior high-water marks, for trend: runner audit 190/190 · r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
+Prior high-water marks, for trend: 194/194 · runner audit 190/190 · r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
 r11 124/125 (`departed`) · r13 151/151 across eleven shuffle seeds, with 47/47
 guards individually disabled.
 
@@ -246,7 +251,7 @@ CODEOWNERS: a Class-2 approval must arrive via a PR approved by Sheldon's
 authenticated GitHub identity, and the approval commit must be pushed under that
 account, never agent-authored.
 
-- **47 approval entries owed** against base `eb0775f`, re-derived 2026-08-21 via
+- **51 approval entries owed** against base `eb0775f`, re-derived 2026-08-23 via
   `node engine/scripts/owed-approvals.mjs . eb0775f`. Note the script takes
   `<repoRoot> <baseRef>` as positional arguments; `npm run owed-approvals` with
   no arguments refuses, which is correct fail-closed behaviour and not a bug.
@@ -261,8 +266,15 @@ account, never agent-authored.
 
 ## 7. Open items for the next session
 
-1. **L4/H2 — configure the Gateway caps.** This is now the Phase 0 blocker. Until
-   it lands, the primary spend control is designed and unprovisioned.
+0. **H19 — REPOSITORY PROTECTION. MEASURED 2026-08-22, AND IT OUTRANKS L4.**
+   `main` is `protected: false`. A PR that ran zero gates reported
+   `mergeable_state: "clean"`. Nothing in this repository can stop a merge, so
+   **every gate named below is advisory, including the ones this file calls
+   green**. Human ruling: severity-1, ahead of L4. Ledger L37. It cannot be
+   fixed from the build sandbox — repository settings have no API surface here
+   and the proxy refuses even a branch deletion (HTTP 403).
+1. **L4/H2 — configure the Gateway caps.** The Phase 0 blocker *for spend*.
+   Until it lands, the primary spend control is designed and unprovisioned.
 2. ~~**Audit every drill, gate script and harness that runs under its own
    runner** against the R14-06 rule.~~ **DONE 2026-08-21.** Seven decisions were
    living inside a runner, each measured surviving a one-line revert with the
@@ -283,13 +295,26 @@ account, never agent-authored.
    targeted the drill are restored in substance as entries on
    `post-signal-writes.ts`; the two that deleted a lone assertion inside a test
    stay out, and that half of the original rationale was correct.
-5. **OPEN — the leak scan's rule list, escalated 2026-08-22.** The files are
+5. ~~**OPEN — the leak scan's rule list.**~~ **RULED AND DONE 2026-08-22.**
+   Nine rules added, acceptance moved to an independently-authored credential
+   corpus, `SECRET_PATTERNS` demoted to advisory with `gitleaks` as PRIMARY in
+   CI. Ledger L36 carries the measured covered-format list and its limits.
+   *(previous text, kept for the record: the leak scan's rule list, escalated)* The files are
    read; the credentials are not matched. `.npmrc` npm tokens, `.netrc` and
    `.pgpass` password fields and `PGPASSWORD=` assignments scan clean. Proven by
    execution both ways in `RUNNER_AUDIT_2026-08-21.md` §6b. `scan-lib.mjs` is
    Class-2, so no rule was added — this needs a ruling.
-6. **OPEN — root `.github/workflows/`, reported not deleted** (§6c of the same
-   report). The five exercise-template workflows are inside the branch-protection
+6. ~~**OPEN — root `.github/workflows/`.**~~ **RULED AND DONE 2026-08-22.** All
+   five exercise workflows deleted (with `.github/steps/`), after the
+   measurement they existed to permit — see the new §7.1 blocker. `fullburn-ci`
+   now declares `permissions: contents: read`, every action is SHA-pinned, and
+   two standing rules are enforced by the invariant suite: no mutable tag, and
+   `actions: write` is a Class-2 surface. **Two items from that audit remain
+   OPEN and are human-only:** the repository's default workflow-permission
+   setting (Settings → Actions) cannot be read OR written from this sandbox, so
+   it is unverified; and the phantom `ci.yml` registration belongs to a sibling
+   product's branch, not to any file this project controls.
+   *(previous text: reported not deleted — §6c of the same report)* The five exercise-template workflows are inside the branch-protection
    trust boundary; four are `disabled_manually` and the two PR-triggered ones are
    among them, so **they do not block the fullburn PR** — measured against the
    Actions API, not inferred from YAML. What is still true regardless: `actions:

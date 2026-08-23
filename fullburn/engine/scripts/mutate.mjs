@@ -69,7 +69,12 @@ const MUTATIONS = [
   ["N-03 CLI wiring", "engine/scripts/class2-gate.mjs", "  baseCommit: resolvedBase,", "  baseCommitt: resolvedBase,"],
   ["N-04/05 header window", "engine/scripts/gate-lib.mjs", "for (const raw of lines.slice(0, HEADER_LINES)) {", "for (const raw of lines) {"],
   ["N-04 fence length", "engine/scripts/gate-lib.mjs", "      else if (fence.ch === marker.ch && marker.len >= fence.len) fence = null;", "      else if (fence.ch === marker.ch) fence = null;"],
-  ["N-06 substitute-then-scan", "engine/scripts/scan-lib.mjs", "    if (realMatches(re, content, path).length > 0) {", "    if (re.test(DECLARED_FIXTURES.reduce((t, f) => t.split(f).join(\"[test-fixture]\"), content))) {"],
+  // REPOINTED 2026-08-22, not deleted: the expression this targets moved from
+  // `scanContent`'s body into `secretRuleHits` when the two were collapsed into
+  // one detection path. Same defect, same revert, new address.
+  ["N-06 substitute-then-scan", "engine/scripts/scan-lib.mjs",
+    "  return patterns.filter(({ re }) => realMatches(re, content, path).length > 0).map(({ name }) => name);",
+    "  return patterns.filter(({ re }) => re.test(DECLARED_FIXTURES.reduce((t, f) => t.split(f).join(\"[test-fixture]\"), content))).map(({ name }) => name);"],
   ["N-06 file-scoped exemption travels", "engine/scripts/scan-lib.mjs", "  if (QUOTED_EVIDENCE.get(path)?.includes(matched)) return true;", "  if ([...QUOTED_EVIDENCE.values()].flat().includes(matched)) return true;"],
   ["N-06 residue check", "engine/scripts/scan-lib.mjs", "  return /^[^A-Za-z0-9]*(?:Bearer)?[^A-Za-z0-9]*$/i.test(residue);", "  return true;"],
   ["r4-lock8 WeakSet brand", "config/src/models.ts", "!(att instanceof EvalAttestation) || !GENUINE.has(att)", "!(att instanceof EvalAttestation)"],
@@ -593,6 +598,42 @@ const MUTATIONS = [
   ["RA-20 the L35 scope claim derives the scanned set", "engine/test/invariants/invariants.test.ts",
     "            if (d !== null) scannedTops.add(d);",
     "            if (d === \"fullburn\") scannedTops.add(d);"],
+  // ---- §7.5 / §7.6 rulings 2026-08-22 ----
+  //
+  // The corpus is the acceptance bar for the secret rules and was authored from
+  // the FORMATS, never from the expressions. These keep it load-bearing.
+  ["RA-21 every credential in the corpus is detected", "engine/scripts/scan-lib.mjs",
+    "  { name: \"npm auth token\", re: /\\b_authToken\\s*=\\s*\"?(?:npm_[A-Za-z0-9]{20,}|[A-Za-z0-9+/=_-]{32,})\"?/ },",
+    "  { name: \"npm auth token\", re: /^__never__$/ },"],
+  ["RA-22 a placeholder does not flag", "engine/scripts/scan-lib.mjs",
+    "  { name: \"pgpass entry\", re: /^[^\\s:#]+:\\d{2,5}:[^\\s:]*:[^\\s:]+:(?!\\$|<|your[_-])\\S{8,}$/m },",
+    "  { name: \"pgpass entry\", re: /^[^\\s:#]+:\\d{2,5}:[^\\s:]*:[^\\s:]+:\\S{3,}$/m },"],
+  // REPLACED: the first spelling mutated the clause inline and SURVIVED, because
+  // every real rule is load-bearing and the check had no negative case among
+  // real inputs. The check is a function now, driven by a ruleset that HAS an
+  // idle rule, and this entry targets that function.
+  ["RA-23 the corpus red-proof requires every rule to bite", "engine/test/credential-corpus.test.ts",
+    "        (e) => detected(e, all).length > 0 && detected(e, without).length === 0,",
+    "        (e) => detected(e, all).length > 0,"],
+  ["RA-24 scanContent and the corpus share one detection expression", "engine/scripts/scan-lib.mjs",
+    "  for (const name of secretRuleHits(path, content)) {",
+    "  for (const name of []) {"],
+  // Workflow hygiene: the two standing rules, as code.
+  ["RA-25 no action by mutable tag", "engine/test/invariants/invariants.test.ts",
+    "        if (!SHA_PINNED.test(ref)) {",
+    "        if (false) {"],
+  ["RA-26 no workflow grants actions: write", "engine/test/invariants/invariants.test.ts",
+    "      for (const m of src.matchAll(/^\\s*actions:\\s*(write|read-all|write-all)\\s*$/gm)) {",
+    "      for (const m of []) {"],
+  ["RA-27 fullburn-ci states its own permissions", ".github/workflows/fullburn-ci.yml",
+    "permissions:\n  contents: read",
+    "# permissions removed"],
+  // Anchored on the ONE checkout in this file that is not followed by `with:`.
+  // The first spelling matched three sites and `applyEntry` refused it as
+  // ambiguous — which is R14-07's fail-closed behaviour working as designed.
+  ["RA-28 the gate's actions stay SHA-pinned", ".github/workflows/fullburn-ci.yml",
+    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4",
+    "      - uses: actions/checkout@v4\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4"],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],
