@@ -18,7 +18,7 @@
 
    Gated on reviewers-table membership, the same gate as /api/health. */
 import { createClient } from "@supabase/supabase-js";
-import { computeEntitlement } from "../src/pricing.js";
+import { computeEntitlement, planById } from "../src/pricing.js";
 
 const admin = () =>
   createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -162,6 +162,57 @@ export default async function handler(req, res) {
       const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: SITE });
       if (error) return res.status(400).json({ error: error.message });
       return res.status(200).json({ ok: true, message: `Password reset link sent to ${email}.` });
+    }
+
+    /* Comp a plan to someone — a tester, a partner, a goodwill fix after a
+       billing problem. Writes the same subscription shape the Stripe webhook
+       writes, at zero price and marked OWNER_COMP so comped access is never
+       mistaken for revenue in any later reporting.
+
+       Works by email so it can be used before the person has signed up: if
+       there is no account yet, they are invited, which creates the account and
+       emails them a link. Otherwise a comp would have to wait on the recipient
+       registering first, which is exactly when it gets forgotten. */
+    if (action === "grant") {
+      const email = String(req.body?.email || "").trim();
+      const planId = String(req.body?.planId || "");
+      if (!email) return res.status(400).json({ error: "Email required" });
+
+      const plan = planById(planId);
+      if (!plan || !plan.days) return res.status(400).json({ error: "Pick a plan length" });
+
+      const { users } = await findUsers(sb, email);
+      let target = users.find((u) => (u.email || "").toLowerCase() === email.toLowerCase());
+      let invited = false;
+
+      if (!target) {
+        const { data: inv, error: invErr } = await sb.auth.admin.inviteUserByEmail(email, { redirectTo: SITE });
+        if (invErr || !inv?.user) {
+          return res.status(400).json({ error: `Could not create an account for ${email}: ${invErr?.message || "unknown error"}` });
+        }
+        target = inv.user;
+        invited = true;
+      }
+
+      const expires = new Date(Date.now() + plan.days * 86400e3).toISOString();
+      const { error: insErr } = await sb.from("subscriptions").insert({
+        user_id: target.id,
+        plan: plan.id,
+        expires_at: expires,
+        exams_granted: plan.exams ?? 0,
+        price_cents: 0,
+        discount_code: "OWNER_COMP",
+      });
+      if (insErr) return res.status(400).json({ error: insErr.message });
+
+      return res.status(200).json({
+        ok: true,
+        userId: target.id,
+        message:
+          `${plan.name} access granted to ${email} until ${new Date(expires).toLocaleDateString()}` +
+          `, including ${plan.exams ?? 0} readiness exam${(plan.exams ?? 0) === 1 ? "" : "s"}.` +
+          (invited ? " They had no account, so one was created and an invitation email was sent." : ""),
+      });
     }
 
     /* Destructive and irreversible: every related row cascades away with the

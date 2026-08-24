@@ -791,6 +791,11 @@ export default function App() {
                 <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
                 <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
               </>}
+              {/* Owner only — students never see this entry, and the page and
+                  its API refuse anyone who is not in the reviewers table. */}
+              {isOwner && (
+                <button className="menu-item" onClick={() => { window.location.assign("/owner/"); }}>🛠 Owner tools — system &amp; accounts</button>
+              )}
               <button className="menu-item" onClick={() => supabase.auth.signOut()}>↪ Sign out</button>
             </nav>
           </>

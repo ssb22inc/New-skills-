@@ -121,6 +121,25 @@
       <button onclick="searchUsers()" id="searchBtn">Search</button>
       <p id="usersErr" class="err" style="margin-top:10px"></p>
     </div>
+
+    <details class="card group">
+      <summary>Give someone free access</summary>
+      <p class="plain" style="margin-top:8px">
+        For testers, partners, or putting things right after a billing problem. They get exactly what a
+        paying student gets. If they have never signed up, an account is created and they are emailed an
+        invitation, so you can do this before they have joined.
+      </p>
+      <input id="grantEmail" type="email" placeholder="Their email address">
+      <select id="grantPlan" style="width:100%;padding:11px 12px;margin-bottom:10px;border:1px solid var(--line);border-radius:10px;font-size:15px">
+        <option value="sub30">1 month — 30 days, 1 readiness exam</option>
+        <option value="sub60">2 months — 60 days, 2 readiness exams</option>
+        <option value="sub90" selected>3 months — 90 days, 3 readiness exams</option>
+        <option value="sub180">6 months — 180 days, 4 readiness exams</option>
+        <option value="sub360">12 months — 360 days, 5 readiness exams</option>
+      </select>
+      <button onclick="grant()" id="grantBtn">Give free access</button>
+      <p id="grantMsg" style="margin-top:10px"></p>
+    </details>
     <div id="hits"></div>
     <div id="who"></div>
   </div>
@@ -328,6 +347,27 @@ function userView(d) {
        'It never shows passwords, and it never shows what they answered — only how much they have answered.</p>';
   h += '</div>';
   return h;
+}
+
+async function grant() {
+  const btn = document.getElementById('grantBtn');
+  const msg = document.getElementById('grantMsg');
+  const email = document.getElementById('grantEmail').value.trim();
+  if (!email) { msg.className = 'err'; msg.textContent = 'Enter their email address first.'; return; }
+  btn.disabled = true; btn.textContent = 'Granting…';
+  msg.className = 'detail'; msg.textContent = '';
+  try {
+    const d = await api('/api/users', {
+      action: 'grant', email,
+      planId: document.getElementById('grantPlan').value,
+    });
+    msg.className = 'note'; msg.textContent = d.message;
+    document.getElementById('grantEmail').value = '';
+    if (d.userId) openUser(d.userId);   // show the result so it is visibly done
+  } catch (e) {
+    msg.className = 'err'; msg.textContent = e.message;
+  }
+  btn.disabled = false; btn.textContent = 'Give free access';
 }
 
 async function act(action, userId) {
