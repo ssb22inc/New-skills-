@@ -7,6 +7,7 @@ Allow: /$
 Allow: /about/
 Allow: /legal/
 Disallow: /review/
+Disallow: /owner/
 Disallow: /api/
 
 # AI answer engines and research crawlers. Explicitly welcomed on the public
@@ -16,12 +17,14 @@ Allow: /$
 Allow: /about/
 Allow: /legal/
 Disallow: /review/
+Disallow: /owner/
 
 User-agent: OAI-SearchBot
 Allow: /$
 Allow: /about/
 Allow: /legal/
 Disallow: /review/
+Disallow: /owner/
 
 User-agent: ChatGPT-User
 Allow: /
@@ -31,6 +34,7 @@ Allow: /$
 Allow: /about/
 Allow: /legal/
 Disallow: /review/
+Disallow: /owner/
 
 User-agent: Claude-User
 Allow: /
@@ -40,6 +44,7 @@ Allow: /$
 Allow: /about/
 Allow: /legal/
 Disallow: /review/
+Disallow: /owner/
 
 User-agent: Google-Extended
 Allow: /$
