@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PulseRN · System check</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root { --paper:#F3F6F4; --ink:#0F2E29; --card:#FFFFFF; --muted:#3B554F; --line:#D8E2DD;
+          --teal:#0E7C6B; --ok:#0E7C6B; --okbg:#E9F6EF; --bad:#B4341F; --badbg:#FBEFEC; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--paper); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+         max-width:760px; margin:0 auto; padding:24px 16px 64px; line-height:1.55; }
+  h1 { font-size:22px; margin-bottom:2px; } h1 b { color:var(--teal); }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:12px; }
+  input { width:100%; padding:11px 12px; margin-bottom:10px; border:1px solid var(--line); border-radius:10px; font-size:15px; }
+  button { padding:11px 16px; border:0; border-radius:10px; background:var(--teal); color:#fff;
+           font-size:15px; font-weight:600; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  button:disabled { opacity:.6; cursor:default; }
+
+  /* The verdict is the whole point: one sentence, readable across a room. */
+  .verdict { border-radius:14px; padding:22px; margin-bottom:16px; text-align:center; }
+  .verdict.good { background:var(--okbg); border:1px solid #BCE4CE; }
+  .verdict.bad  { background:var(--badbg); border:1px solid #F0C8C0; }
+  .verdict .big { font-size:26px; font-weight:800; letter-spacing:-.02em; }
+  .verdict.good .big { color:var(--ok); }
+  .verdict.bad  .big { color:var(--bad); }
+  .verdict .when { font-size:12.5px; color:var(--muted); margin-top:6px; }
+
+  .problem { border-left:4px solid var(--bad); background:var(--badbg); border-radius:0 10px 10px 0;
+             padding:14px 16px; margin-bottom:10px; }
+  .problem h3 { font-size:15.5px; margin-bottom:4px; color:var(--bad); }
+  .problem p { font-size:14px; margin-bottom:6px; }
+  .problem .what { color:#2a3833; }
+  .problem .todo { background:#fff; border:1px solid #F0C8C0; border-radius:8px; padding:9px 11px; font-size:13.5px; }
+  .problem .todo b { color:var(--bad); }
+  .tech { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; color:var(--muted); }
+
+  .group { margin-top:6px; }
+  .group summary { cursor:pointer; font-weight:600; font-size:15px; padding:10px 0; list-style:none; }
+  .group summary::-webkit-details-marker { display:none; }
+  .group summary::before { content:"▸ "; color:var(--muted); }
+  .group[open] summary::before { content:"▾ "; }
+  .row { display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--line); }
+  .row:first-of-type { border-top:0; }
+  .dot { flex:none; width:18px; font-weight:700; }
+  .dot.y { color:var(--ok); } .dot.n { color:var(--bad); }
+  .row .label { font-size:14.5px; }
+  .row .detail { font-size:12.5px; color:var(--muted); }
+  .err { color:var(--bad); font-size:13.5px; }
+  .foot { color:var(--muted); font-size:12px; margin-top:20px; }
+  a { color:var(--teal); }
+</style>
+</head>
+<body>
+
+<h1>PULSE<b>RN</b> · System check</h1>
+<p class="sub">Owner only. Tells you in one line whether the app is working, and exactly what to do if it is not.</p>
+
+<div id="auth" class="card">
+  <p style="margin-bottom:10px;font-size:14px">Sign in with your owner account.</p>
+  <input id="email" type="email" placeholder="Email" autocomplete="email">
+  <input id="pw" type="password" placeholder="Password" autocomplete="current-password">
+  <button onclick="signIn()">Sign in</button>
+  <p id="autherr" class="err" style="margin-top:10px"></p>
+</div>
+
+<div id="app" style="display:none">
+  <div id="verdict"></div>
+  <div id="problems"></div>
+  <div id="groups"></div>
+  <p style="margin-top:14px"><button class="ghost" onclick="runCheck()" id="again">Check again</button></p>
+  <p class="foot">
+    Engine checks run the real code the app is serving right now, so a red light here means shipped code is
+    misbehaving — not that a test file is out of date. Content and wiring checks read live data and settings.
+    No secret values are ever shown on this page, only whether each one is present.
+    <br><br><a href="/review/">Review console</a> · <a href="/">Back to the app</a>
+  </p>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://xlfdywudgamrnzjwtrtd.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_wH9FG2HgmC9hrvqNO4hZiQ_eJi86SUd';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function signIn() {
+  const err = document.getElementById('autherr');
+  err.textContent = '';
+  const { error } = await sb.auth.signInWithPassword({
+    email: document.getElementById('email').value,
+    password: document.getElementById('pw').value,
+  });
+  if (error) { err.textContent = error.message; return; }
+  document.getElementById('auth').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  runCheck();
+}
+
+async function runCheck() {
+  const btn = document.getElementById('again');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  document.getElementById('verdict').innerHTML =
+    '<div class="verdict good"><div class="big">Checking…</div></div>';
+  document.getElementById('problems').innerHTML = '';
+  document.getElementById('groups').innerHTML = '';
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const r = await fetch('/api/health', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: session?.access_token }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Check failed');
+    render(d);
+  } catch (e) {
+    document.getElementById('verdict').innerHTML =
+      '<div class="verdict bad"><div class="big">Could not run the check</div>' +
+      '<div class="when">' + esc(e.message) + '</div></div>';
+  }
+  btn.disabled = false; btn.textContent = 'Check again';
+}
+
+function render(d) {
+  const n = d.summary.failing;
+  document.getElementById('verdict').innerHTML =
+    '<div class="verdict ' + (d.ok ? 'good' : 'bad') + '">' +
+      '<div class="big">' + (d.ok
+        ? 'Everything is working'
+        : n + ' thing' + (n === 1 ? '' : 's') + ' need' + (n === 1 ? 's' : '') + ' attention') + '</div>' +
+      '<div class="when">' + d.summary.total + ' checks run · ' +
+        new Date(d.checkedAt).toLocaleString() + '</div>' +
+    '</div>';
+
+  // Problems first, in full, with the fix spelled out. Everything healthy is
+  // collapsed below — nobody needs to read 15 green lines to learn nothing is wrong.
+  const failing = d.groups.flatMap((g) => g.items.filter((i) => !i.ok));
+  document.getElementById('problems').innerHTML = failing.map((i) => (
+    '<div class="problem">' +
+      '<h3>' + esc(i.label) + '</h3>' +
+      '<p class="what"><b>What this means:</b> ' + esc(i.why) + '</p>' +
+      '<p class="todo"><b>What to do:</b> ' + esc(i.fix) + '</p>' +
+      '<p class="tech" style="margin-top:8px">' + esc(i.detail) + '</p>' +
+    '</div>'
+  )).join('');
+
+  document.getElementById('groups').innerHTML = d.groups.map((g) => (
+    '<details class="card group"' + (g.ok ? '' : ' open') + '>' +
+      '<summary>' + (g.ok ? '✅' : '❌') + ' ' + esc(g.group) +
+        ' <span class="detail">(' + g.items.filter((i) => i.ok).length + ' of ' + g.items.length + ' passing)</span>' +
+      '</summary>' +
+      g.items.map((i) => (
+        '<div class="row">' +
+          '<div class="dot ' + (i.ok ? 'y' : 'n') + '">' + (i.ok ? '✓' : '✗') + '</div>' +
+          '<div><div class="label">' + esc(i.label) + '</div>' +
+          '<div class="detail">' + esc(i.detail) + '</div></div>' +
+        '</div>'
+      )).join('') +
+    '</details>'
+  )).join('');
+}
+
+/* Already signed in from a previous visit — skip straight to the check. */
+sb.auth.getSession().then(({ data: { session } }) => {
+  if (session) {
+    document.getElementById('auth').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    runCheck();
+  }
+});
+</script>
+</body>
+</html>
