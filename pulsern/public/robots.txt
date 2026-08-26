@@ -1,11 +1,16 @@
 # PulseRN — https://www.pulsern.app
-# Study content itself sits behind auth and is the owner's property; only the
-# public marketing and legal pages are meant to be indexed.
+# Authenticated study content stays private. Product, trust, pricing, and guide
+# pages are public and may be indexed and cited.
 
 User-agent: *
 Allow: /$
 Allow: /about/
 Allow: /legal/
+Allow: /learn/
+Allow: /pricing/
+Allow: /how-it-works/
+Allow: /methodology/
+Allow: /editorial-policy/
 Disallow: /review/
 Disallow: /owner/
 Disallow: /api/
@@ -16,6 +21,11 @@ User-agent: GPTBot
 Allow: /$
 Allow: /about/
 Allow: /legal/
+Allow: /learn/
+Allow: /pricing/
+Allow: /how-it-works/
+Allow: /methodology/
+Allow: /editorial-policy/
 Disallow: /review/
 Disallow: /owner/
 
@@ -23,6 +33,11 @@ User-agent: OAI-SearchBot
 Allow: /$
 Allow: /about/
 Allow: /legal/
+Allow: /learn/
+Allow: /pricing/
+Allow: /how-it-works/
+Allow: /methodology/
+Allow: /editorial-policy/
 Disallow: /review/
 Disallow: /owner/
 
@@ -33,6 +48,11 @@ User-agent: ClaudeBot
 Allow: /$
 Allow: /about/
 Allow: /legal/
+Allow: /learn/
+Allow: /pricing/
+Allow: /how-it-works/
+Allow: /methodology/
+Allow: /editorial-policy/
 Disallow: /review/
 Disallow: /owner/
 
@@ -43,6 +63,11 @@ User-agent: PerplexityBot
 Allow: /$
 Allow: /about/
 Allow: /legal/
+Allow: /learn/
+Allow: /pricing/
+Allow: /how-it-works/
+Allow: /methodology/
+Allow: /editorial-policy/
 Disallow: /review/
 Disallow: /owner/
 
@@ -50,10 +75,20 @@ User-agent: Google-Extended
 Allow: /$
 Allow: /about/
 Allow: /legal/
+Allow: /learn/
+Allow: /pricing/
+Allow: /how-it-works/
+Allow: /methodology/
+Allow: /editorial-policy/
 
 User-agent: Applebot-Extended
 Allow: /$
 Allow: /about/
 Allow: /legal/
+Allow: /learn/
+Allow: /pricing/
+Allow: /how-it-works/
+Allow: /methodology/
+Allow: /editorial-policy/
 
 Sitemap: https://www.pulsern.app/sitemap.xml

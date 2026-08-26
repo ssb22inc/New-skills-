@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 .vercel/
+reports/
 
 # repo-root .gitignore excludes *.sql; migrations must be tracked
 !supabase/migrations/*.sql

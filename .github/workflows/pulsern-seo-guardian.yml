@@ -1,0 +1,47 @@
+name: PulseRN adversarial search gate
+
+on:
+  pull_request:
+    paths:
+      - "pulsern/**"
+      - ".github/workflows/pulsern-seo-guardian.yml"
+  push:
+    branches: [main]
+    paths:
+      - "pulsern/**"
+      - ".github/workflows/pulsern-seo-guardian.yml"
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-search-audit:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: gpt-5.6-luna
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run seo:audit
+      - name: Optional adversarial model review
+        if: ${{ always() && env.OPENAI_API_KEY != '' }}
+        run: npm run seo:adversary
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsern-search-audit
+          path: pulsern/reports/seo

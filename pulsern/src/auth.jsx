@@ -4,9 +4,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase.js";
 import App from "./App.jsx";
+import LandingPage from "./landing.jsx";
 
-export function AuthScreen() {
-  const [mode, setMode] = useState("signin"); // signin | signup | forgot
+export function AuthScreen({ initialMode = "signin", onBack }) {
+  const [mode, setMode] = useState(initialMode); // signin | signup | forgot
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -112,7 +113,7 @@ export function AuthScreen() {
           background: #f6f7f9; font-family: system-ui, -apple-system, sans-serif; padding: 16px; }
         .auth-card { background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 32px;
           width: 100%; max-width: 400px; box-shadow: 0 4px 24px rgba(20,30,50,.06); }
-        .auth-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #b42318; margin: 0 0 2px; }
+        .auth-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #0e6e5c; margin: 0 0 2px; }
         .auth-motto { font-size: 13px; font-style: italic; color: #0e6e5c; font-weight: 600; margin: 0 0 10px; }
         .auth-sub { color: #5b6472; font-size: 14px; margin: 0 0 20px; }
         .auth-field { display: block; width: 100%; box-sizing: border-box; padding: 11px 12px; margin-bottom: 10px;
@@ -122,18 +123,19 @@ export function AuthScreen() {
         .auth-eye { position: absolute; right: 6px; top: 5px; height: 32px; padding: 0 10px; border: 0;
           background: none; color: #5b6472; font-size: 13px; font-weight: 600; cursor: pointer; }
         .auth-btn { display: block; width: 100%; padding: 11px 12px; border-radius: 10px; border: 0;
-          background: #b42318; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+          background: #0e7c6b; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
         .auth-btn:disabled { opacity: .6; cursor: default; }
         .auth-btn.alt { background: #fff; color: #1c2430; border: 1px solid #d5dae1; margin-top: 10px; }
         .auth-btn.google { display: flex; align-items: center; justify-content: center; gap: 10px; }
         .auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: #8a93a2; font-size: 13px; }
         .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: #e3e6ea; }
-        .auth-switch { background: none; border: 0; color: #b42318; cursor: pointer; font-size: 14px; padding: 0; }
+        .auth-switch { background: none; border: 0; color: #0e6e5c; cursor: pointer; font-size: 14px; padding: 0; }
         .auth-err { color: #b42318; font-size: 13px; margin: 0 0 10px; }
         .auth-note { color: #067647; font-size: 13px; margin: 0 0 10px; }
         .auth-foot { color: #8a93a2; font-size: 12px; margin-top: 18px; line-height: 1.5; }
       `}</style>
       <div className="auth-card">
+        {onBack && <button className="auth-switch" type="button" onClick={onBack} style={{ marginBottom: 16 }}>&larr; Back to PulseRN</button>}
         <p className="auth-logo">PulseRN</p>
         <p className="auth-motto">Created by a licensed RN — for future RNs.</p>
         <p className="auth-sub">{
@@ -262,6 +264,12 @@ export class ErrorBoundary extends React.Component {
 export default function AuthGate() {
   const [session, setSession] = useState(undefined); // undefined = still checking
   const [recovering, setRecovering] = useState(false);
+  const [authMode, setAuthMode] = useState(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("start") === "1") return "signup";
+    if (query.get("signin") === "1") return "signin";
+    return null;
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
@@ -274,6 +282,7 @@ export default function AuthGate() {
 
   if (session === undefined) return null;
   if (recovering && session) return <NewPasswordScreen onDone={() => setRecovering(false)} />;
-  if (!session) return <AuthScreen />;
+  if (!session && authMode) return <AuthScreen initialMode={authMode} onBack={() => setAuthMode(null)} />;
+  if (!session) return <LandingPage onSignIn={() => setAuthMode("signin")} onStart={() => setAuthMode("signup")} />;
   return <App key={session.user.id} />;
 }
