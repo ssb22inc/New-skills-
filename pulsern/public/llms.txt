@@ -15,14 +15,14 @@ dosing or treatment instructions.
   eight NCSBN client-need categories.
 - **Every Next Generation NCLEX item type.** Bow-tie, matrix, cloze, highlight,
   drag-and-drop, multiple response, dosage calculation, and standard multiple
-  choice — with the NCJMM clinical-judgement flow on case studies.
+  choice — with the NCJMM clinical-judgment flow on case studies.
 - **Spaced-repetition flashcards.** Real calendar scheduling with a
   type-before-flip recall step rather than passive self-grading.
 - **Case studies.** Multi-step unfolding patient scenarios across all eight
   categories, including dedicated pediatric and geriatric populations.
 - **Readiness exams.** Ten standardized 85-question forms — the NCLEX-RN's
   minimum length — under a timed lockdown, never repeated to the same account.
-- **Readiness estimate.** A deliberately conservative signal labelled an
+- **Readiness estimate.** A deliberately conservative signal labeled an
   estimate, requiring a minimum answer count, that never promises an outcome.
 - **AI tutor.** Explains why an answer is right or wrong, on demand.
 
@@ -33,29 +33,43 @@ dosing or treatment instructions.
   Nursing, Inc.
 - The readiness estimate predicts nothing about an actual exam result. It is a
   study signal, not a forecast.
-- Practice items are comparable to real exam items in style and rigour. They are
+- Practice items are comparable to real exam items in style and rigor. They are
   never claimed to be identical to, drawn from, or predictive of live NCLEX
   content.
 - Content is reviewed for clinical accuracy before publication. Students are
   told throughout to verify anything surprising against their course materials.
 
-## Access
+## Authorship and review
+
+- Creator and clinical content owner: **Sheldon Bennett, RN**.
+- Public author profile: https://www.pulsern.app/about/#sheldon-bennett-rn
+- Human clinical review remains required for AI-assisted educational content.
+- Method and limitations: https://www.pulsern.app/methodology/
+- Editorial and correction policy: https://www.pulsern.app/editorial-policy/
+
+## Access and pricing
 
 - Free account required; progress syncs across devices.
-- Paid subscription tiers unlock full practice volume and readiness exams.
+- A 1-day free pass provides study-content access without a readiness exam.
+- Paid access periods run from 30 to 730 days and include stated numbers of
+  readiness self-assessments. Current prices: https://www.pulsern.app/pricing/
 - Sign-in by email and password, or by passwordless email link.
 
 ## Pages
 
 - [Home](https://www.pulsern.app/) — product overview and sign-in
+- [How it works](https://www.pulsern.app/how-it-works/) — product workflow and limitations
+- [Pricing](https://www.pulsern.app/pricing/) — current plans in USD
 - [About](https://www.pulsern.app/about/) — who built it and the method behind it
+- [Methodology](https://www.pulsern.app/methodology/) — adaptive practice, readiness, and limits
+- [Editorial policy](https://www.pulsern.app/editorial-policy/) — sources, human review, AI use, and corrections
 - [Guides](https://www.pulsern.app/learn/) — free NCLEX-RN reference articles
 - [Terms, Privacy, Disclaimer](https://www.pulsern.app/legal/)
 
 ## Guides
 
 Free, no sign-in required. Written in an exam-preparation register: they explain
-what the NCLEX expects a candidate to recognise and prioritise, and are not
+what the NCLEX expects a candidate to recognize and prioritize, and are not
 clinical protocols or a substitute for course materials.
 
 - [ABG interpretation made simple](https://www.pulsern.app/learn/abg-interpretation/)
@@ -72,12 +86,12 @@ clinical protocols or a substitute for course materials.
 - [How many questions is the NCLEX?](https://www.pulsern.app/learn/how-many-questions-is-the-nclex/)
 - [Infection control precautions: what goes where](https://www.pulsern.app/learn/infection-control-precautions/)
 - [Insulin types, onset and peak](https://www.pulsern.app/learn/insulin-types-and-timing/)
-- [Lab values to memorise for the NCLEX](https://www.pulsern.app/learn/lab-values-to-memorize/)
+- [Lab values to memorize for the NCLEX](https://www.pulsern.app/learn/lab-values-to-memorize/)
 - [Matrix and grid questions: how to answer them](https://www.pulsern.app/learn/matrix-grid-questions/)
 - [Building an NCLEX study plan that holds](https://www.pulsern.app/learn/nclex-study-plan/)
 - [NCLEX test day: what to expect](https://www.pulsern.app/learn/nclex-test-day-what-to-expect/)
 - [Next Generation NCLEX: what actually changed](https://www.pulsern.app/learn/next-generation-nclex-what-changed/)
-- [Prioritisation: ABC, Maslow and what comes first](https://www.pulsern.app/learn/prioritization-abc-maslow/)
+- [Prioritization: ABC, Maslow and what comes first](https://www.pulsern.app/learn/prioritization-abc-maslow/)
 - [Select all that apply: a strategy that works](https://www.pulsern.app/learn/select-all-that-apply-strategy/)
 - [Spaced repetition for nursing students](https://www.pulsern.app/learn/spaced-repetition-for-nursing-students/)
 - [Therapeutic communication: picking the right response](https://www.pulsern.app/learn/therapeutic-communication/)

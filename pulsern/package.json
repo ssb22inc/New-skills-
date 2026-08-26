@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node ops/build-learn.mjs && vite build",
+    "build": "node ops/build-public-pages.mjs && node ops/build-learn.mjs && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "build:learn": "node ops/build-learn.mjs"
+    "build:learn": "node ops/build-learn.mjs",
+    "seo:audit": "node ops/seo-guardian.mjs dist reports/seo",
+    "seo:adversary": "node ops/seo-adversary-ai.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

@@ -37,3 +37,25 @@ Complete package for building PulseRN end-to-end with Claude Code.
 - 3. Paste Prompt 1 from PULSERN_PROMPTS.md. Proceed prompt by prompt; never advance past a failed verification gate.
 
 - 4. Prompt 13 is the full acceptance run + production deploy; Prompt 14 writes the handoff report.
+
+## Search release gate
+
+The production build generates the public product, trust, pricing, and NCLEX-RN
+guide pages before Vite bundles the authenticated app.
+
+```bash
+npm run build
+npm run seo:audit
+```
+
+`seo:audit` inspects the built artifact for traditional search metadata,
+semantic structure, sitemap and robots coverage, AI-readable entity graphs,
+named RN accountability, citations, unsafe outcome claims, and private-route
+leakage. A critical or high finding fails the release.
+
+The repository workflow runs this gate for PulseRN pull requests, `main` pushes,
+manual runs, and a weekly scheduled check. If the repository has an
+`OPENROUTER_API_KEY` Actions secret, it also runs `npm run seo:adversary` as an
+independent model-based critique through the project's existing AI provider.
+The model review is a second opinion; it does
+not override the deterministic gate or the licensed-RN clinical review.
