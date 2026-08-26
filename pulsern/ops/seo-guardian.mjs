@@ -34,9 +34,16 @@ const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value ?? "") && !Number.
 const normalizedIntent = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const trustedReviewerUrl = (value) => {
   try {
-    const { protocol, hostname } = new URL(value);
+    const parsed = new URL(value);
+    const { protocol, hostname, pathname, searchParams } = parsed;
     const host = hostname.toLowerCase();
-    return protocol === "https:" && (host === "www.nursys.com" || host === "nursys.com" || host === "mqa-internet.doh.state.fl.us" || host.endsWith(".gov"));
+    if (protocol !== "https:") return false;
+    if (host === "mqa-internet.doh.state.fl.us") {
+      return pathname === "/MQASearchServices/HealthcareProviders/LicenseVerification"
+        && /^\d+$/.test(searchParams.get("LicInd") ?? "")
+        && /^\d+$/.test(searchParams.get("Procde") ?? "");
+    }
+    return host === "www.nursys.com" || host === "nursys.com" || host.endsWith(".gov");
   } catch { return false; }
 };
 

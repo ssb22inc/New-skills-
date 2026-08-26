@@ -24,7 +24,7 @@ function page({ slug, title, description, eyebrow, h1, body, schema }) {
   const jsonld = {
     "@context": "https://schema.org",
     "@graph": [
-      { "@type": "WebPage", "@id": `${url}#page`, url, name: title, description, inLanguage: "en-US", isPartOf: { "@id": `${SITE}/#website` }, about: { "@id": `${SITE}/#app` }, author: { "@id": AUTHOR }, ...(REVIEWER_VERIFIED ? { reviewedBy: { "@id": AUTHOR } } : {}) },
+      { "@type": "WebPage", "@id": `${url}#page`, url, name: title, description, inLanguage: "en-US", isPartOf: { "@id": `${SITE}/#website` }, about: { "@id": `${SITE}/#app` }, author: { "@id": AUTHOR } },
       { "@type": "Person", "@id": AUTHOR, name: AUTHOR_LABEL, url: AUTHOR, worksFor: { "@id": `${SITE}/#org` }, ...(REVIEWER_VERIFIED ? { jobTitle: REVIEW_LEDGER.reviewer.licenseType, sameAs: [REVIEW_LEDGER.reviewer.verificationUrl] } : {}) },
       ...(schema ? [schema] : []),
     ],

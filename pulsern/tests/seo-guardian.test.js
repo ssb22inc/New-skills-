@@ -81,6 +81,9 @@ describe("SEO guardian", () => {
     expect(pass.provenanceFindings).toEqual([]);
     expect(pass.intentFindings).toEqual([]);
 
+    const fakeFloridaRecord = auditGovernance({ provenance: { schemaVersion: 1, reviewer: { ...reviewer, verificationUrl: "https://mqa-internet.doh.state.fl.us/not-a-license-record" }, guides: [guide] }, intents: { schemaVersion: 1, intents: { test: intent } }, pages: [{ route: "/learn/test/", identifiers: [`sha256:${contentSha256}`] }], now: new Date("2026-08-26T12:00:00Z") });
+    expect(fakeFloridaRecord.provenanceFindings.map((item) => item.code)).toContain("RN_VERIFICATION");
+
     const fail = auditGovernance({ provenance: { schemaVersion: 1, reviewer: { ...reviewer, verificationStatus: "pending", verificationUrl: null }, guides: [{ ...guide, review: { decision: "pending", claims: [] } }] }, intents: { schemaVersion: 1, intents: { test: intent } }, pages: [{ route: "/learn/test/", identifiers: [] }], now: new Date("2026-08-26T12:00:00Z") });
     expect(fail.provenanceFindings.map((item) => item.code)).toEqual(expect.arrayContaining(["RN_VERIFICATION", "DIGEST_BINDING", "RN_REVIEW", "CLAIM_PROVENANCE"]));
   });
