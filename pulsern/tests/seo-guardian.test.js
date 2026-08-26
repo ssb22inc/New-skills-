@@ -12,10 +12,22 @@ describe("SEO guardian", () => {
     expect(page.findings.some((item) => item.code === "H1_COUNT" && item.severity === "critical")).toBe(true);
   });
 
-  it("rejects a guide without accountable Person authorship", () => {
+  it("rejects a guide without an accountable Person reviewer", () => {
     const body = "clinical judgment ".repeat(520);
     const page = auditHtml("/learn/test/", `<html><head><title>NCLEX clinical judgment guide | PulseRN</title><meta name="description" content="A detailed educational guide to clinical judgment for NCLEX-RN candidates, with clear limitations, sources, and a practical study framework."><link rel="canonical" href="https://www.pulsern.app/learn/test/"><script type="application/ld+json">{"@type":"Article","author":{"@type":"Organization","name":"PulseRN"}}</script></head><body><main><h1>Clinical judgment</h1><a href="/learn/">Guides</a><a href="/about/">About</a><a href="https://www.nclex.com/test-plans.page">Source</a>${body}</main></body></html>`);
     expect(page.findings.some((item) => item.code === "HUMAN_ACCOUNTABILITY")).toBe(true);
+  });
+
+  it("accepts an Organization author with a resolved accountable Person reviewer", () => {
+    const body = "clinical judgment ".repeat(520);
+    const schema = { "@context": "https://schema.org", "@graph": [
+      { "@type": "Article", datePublished: "2026-08-03", dateModified: "2026-08-26", author: { "@id": "https://www.pulsern.app/#org" }, reviewedBy: { "@id": "https://www.pulsern.app/about/#reviewer" }, citation: ["https://www.nclex.com/test-plans.page"] },
+      { "@type": "Organization", "@id": "https://www.pulsern.app/#org", name: "PulseRN" },
+      { "@type": "Person", "@id": "https://www.pulsern.app/about/#reviewer", name: "Test Reviewer, RN", jobTitle: "Registered Nurse" },
+    ] };
+    const page = auditHtml("/learn/test/", `<html><head><title>NCLEX clinical judgment guide | PulseRN</title><meta name="description" content="A detailed educational guide to clinical judgment for NCLEX-RN candidates, with clear limitations, sources, and a practical study framework."><link rel="canonical" href="https://www.pulsern.app/learn/test/"><script type="application/ld+json">${JSON.stringify(schema)}</script></head><body><main><h1>Clinical judgment</h1><time datetime="2026-08-26">2026-08-26</time><a href="/learn/">Guides</a><a href="/about/">About</a><a href="https://www.nclex.com/test-plans.page">Source</a>${body}</main></body></html>`);
+    expect(page.findings.some((item) => item.code === "HUMAN_ACCOUNTABILITY")).toBe(false);
+    expect(page.findings.some((item) => item.code === "REVIEW_DATES")).toBe(false);
   });
 
   it("extracts Responses API output text", () => {

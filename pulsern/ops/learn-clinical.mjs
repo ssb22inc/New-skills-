@@ -85,61 +85,62 @@ export const CLINICAL_ARTICLES = [
     topic: "High-yield clinical",
     title: "ABG interpretation made simple",
     h1: "How to interpret ABGs without panicking",
-    description: "A four-step method for arterial blood gases, how to spot compensation, and the shortcut that gets you to the answer in seconds.",
+    description: "A structured four-step introduction to arterial blood gases, compensation patterns, mixed-disorder cautions, and oxygenation context.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-26",
     cta: "PulseRN drills ABG interpretation inside full clinical scenarios, not just isolated numbers.",
     body: `
-<p>Arterial blood gas questions look intimidating and are among the most learnable items on the exam, because the reasoning is entirely mechanical. Four steps, in order, every time.</p>
+<p>Arterial blood gas questions become more manageable with a consistent screening sequence. The four-step method below helps classify common primary disturbances in exam questions. Real patients can have mixed disorders, so ABG values must also be interpreted with the history, assessment, oxygen delivery, trends and local reference ranges.</p>
 
-<h2>The values</h2>
+<h2>Common adult reference ranges</h2>
+<p>These are general arterial ranges. The reporting laboratory's ranges take priority, and values can vary with age and clinical circumstances.</p>
 <table>
   <tr><th>Value</th><th>Typical range</th></tr>
   <tr><td>pH</td><td>7.35&ndash;7.45</td></tr>
   <tr><td>PaCO2</td><td>35&ndash;45 mmHg</td></tr>
   <tr><td>HCO3</td><td>22&ndash;26 mEq/L</td></tr>
-  <tr><td>PaO2</td><td>80&ndash;100 mmHg</td></tr>
+  <tr><td>PaO2</td><td>75&ndash;100 mmHg</td></tr>
 </table>
 
 <h2>The four steps</h2>
 <ol>
-  <li><b>Look at the pH.</b> Below 7.35 is acidosis, above 7.45 is alkalosis. If it is inside the range but off-centre, keep it in mind — it may be fully compensated.</li>
+  <li><b>Look at the pH.</b> Below 7.35 is acidemia; above 7.45 is alkalemia. A pH within range does not by itself prove full compensation; it can also occur with a mixed disorder.</li>
   <li><b>Look at the CO2.</b> This is the respiratory value. It moves opposite to pH in a respiratory problem: CO2 up, pH down.</li>
   <li><b>Look at the HCO3.</b> This is the metabolic value. It moves with pH in a metabolic problem: bicarbonate down, pH down.</li>
-  <li><b>Decide which one explains the pH.</b> Whichever value is disturbed in the direction that accounts for the pH is the cause. The other tells you whether compensation is under way.</li>
+  <li><b>Identify the likely primary process.</b> Determine which value explains the pH direction, then ask whether the other value has shifted in the expected compensatory direction. A response outside the expected range can signal a second primary disorder.</li>
 </ol>
 
 <div class="key">
-<p><b>The shortcut:</b> if pH and CO2 move in <i>opposite</i> directions, it is respiratory. If pH and HCO3 move in the <i>same</i> direction, it is metabolic. That single comparison resolves most exam ABGs immediately.</p>
+<p><b>The introductory shortcut:</b> in a straightforward single-disorder question, pH and CO2 moving in <i>opposite</i> directions points toward a respiratory process; pH and HCO3 moving in the <i>same</i> direction points toward a metabolic process. This is a screening aid, not a substitute for expected-compensation calculations or clinical context.</p>
 </div>
 
 <h2>Compensation</h2>
-<p>The body defends pH. When one system fails, the other shifts to pull pH back toward normal.</p>
+<p>The body defends pH. When a primary acid-base disturbance occurs, the respiratory or renal system may shift in the opposing direction.</p>
 <table>
-  <tr><th>State</th><th>What you see</th></tr>
-  <tr><td>Uncompensated</td><td>pH abnormal; the other system is still normal.</td></tr>
-  <tr><td>Partially compensated</td><td>pH still abnormal; both values are abnormal as the second system works.</td></tr>
-  <tr><td>Fully compensated</td><td>pH back within range; both values still abnormal. Which side of 7.40 the pH sits tells you the original problem.</td></tr>
+  <tr><th>Teaching label</th><th>Screening pattern</th></tr>
+  <tr><td>No evident compensation</td><td>pH is abnormal and the expected compensatory variable remains within range.</td></tr>
+  <tr><td>Partial compensation</td><td>pH remains abnormal and the other system has shifted in the expected direction.</td></tr>
+  <tr><td>pH within reference range with both values abnormal</td><td>This can reflect a compensated primary disorder or a mixed disorder. Compare with expected compensation and the clinical picture rather than labeling it from pH alone.</td></tr>
 </table>
-<p>That last row is where full compensation is decided. A pH of 7.37 with abnormal CO2 and HCO3 is compensated acidosis — it sits on the acidic side of 7.40 — while 7.43 with the same pattern is compensated alkalosis.</p>
+<p>For simplified exam items, comparing a normal-range pH with 7.40 can help identify the likely primary direction: 7.37 may suggest an acidotic primary process, while 7.43 may suggest an alkalotic primary process. Both values are still within the normal pH range. Treat this comparison as an introductory clue, not proof. Expected-compensation rules, trends and the clinical presentation are needed to identify mixed disorders.</p>
 
-<h2>Causes worth recognising</h2>
+<h2>Causes worth recognizing</h2>
 <table>
   <tr><th>Disturbance</th><th>Common exam scenarios</th></tr>
-  <tr><td>Respiratory acidosis</td><td>Hypoventilation — opioid oversedation, COPD exacerbation, neuromuscular weakness, airway obstruction.</td></tr>
-  <tr><td>Respiratory alkalosis</td><td>Hyperventilation — anxiety, pain, early sepsis, high altitude.</td></tr>
-  <tr><td>Metabolic acidosis</td><td>Diabetic ketoacidosis, renal failure, prolonged diarrhoea, shock.</td></tr>
-  <tr><td>Metabolic alkalosis</td><td>Prolonged vomiting, nasogastric suction, excessive antacids.</td></tr>
+  <tr><td>Respiratory acidosis</td><td>Hypoventilation — COPD, opioid oversedation or overdose, severe obesity, or brain injury.</td></tr>
+  <tr><td>Respiratory alkalosis</td><td>Hyperventilation — panic or anxiety, pulmonary embolism, pneumonia, or salicylate toxicity.</td></tr>
+  <tr><td>Metabolic acidosis</td><td>Diabetic ketoacidosis, renal failure, severe or prolonged diarrhea, lactic acidosis, or shock.</td></tr>
+  <tr><td>Metabolic alkalosis</td><td>Prolonged vomiting, diuretic-related losses, or hypovolemia.</td></tr>
 </table>
-<p>Two pairings recur often enough to be worth holding ready: <b>vomiting produces metabolic alkalosis</b> because acid is lost, while <b>diarrhoea produces metabolic acidosis</b> because bicarbonate is lost.</p>
+<p>Two pairings recur often enough to be worth holding ready: <b>vomiting produces metabolic alkalosis</b> because acid is lost, while <b>diarrhea produces metabolic acidosis</b> because bicarbonate is lost.</p>
 
 <h2>Do not forget the oxygen</h2>
-<p>PaO2 sits outside the acid-base logic and is easy to skip once you have classified the disturbance. A question can present a tidy, fully compensated picture with a PaO2 of 54 — and the correct answer concerns the hypoxaemia, not the elegant compensation. Read all four values before deciding what the client needs.</p>
+<p>PaO2 sits outside the acid-base classification and is easy to skip. A PaO2 of 54 mmHg on room air is below the usual adult range, but oxygenation must be interpreted with the inspired oxygen concentration, age, trend and full clinical presentation. Read every reported value before deciding what the client needs; a normal PaO2 on supplemental oxygen does not by itself exclude respiratory failure.</p>
 `,
     faq: [
-      { q: "How do I interpret an ABG quickly?", a: "Check the pH for acidosis or alkalosis, then compare. If pH and CO2 move in opposite directions it is respiratory; if pH and bicarbonate move in the same direction it is metabolic. Then read PaO2 separately." },
-      { q: "How do I tell if an ABG is compensated?", a: "If pH is abnormal and only one system is disturbed, it is uncompensated. If both are disturbed and pH is still abnormal, it is partially compensated. If pH is back in range with both values abnormal, it is fully compensated — which side of 7.40 the pH sits reveals the original problem." },
-      { q: "Does vomiting cause acidosis or alkalosis?", a: "Metabolic alkalosis, because gastric acid is lost. Prolonged diarrhoea does the opposite, causing metabolic acidosis through loss of bicarbonate." },
+      { q: "How do I interpret an ABG quickly?", a: "Check the pH for acidemia or alkalemia, compare PaCO2 and HCO3 to identify the likely primary process, assess whether the other system moved in the expected compensatory direction, and then evaluate PaO2 in the oxygen-delivery and clinical context." },
+      { q: "How do I tell if an ABG is compensated?", a: "A shift in the other system in the expected direction suggests compensation. If both PaCO2 and HCO3 are abnormal with a normal-range pH, do not assume full compensation automatically; compare the values with expected compensation and assess for a mixed disorder." },
+      { q: "Does vomiting cause acidosis or alkalosis?", a: "Metabolic alkalosis, because gastric acid is lost. Prolonged diarrhea does the opposite, causing metabolic acidosis through loss of bicarbonate." },
     ],
   },
 

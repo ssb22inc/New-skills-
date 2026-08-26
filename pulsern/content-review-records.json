@@ -10,5 +10,61 @@
     "verifiedAt": "2026-08-26",
     "verificationStatus": "verified"
   },
-  "reviews": {}
+  "reviews": {
+    "abg-interpretation": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-26",
+      "scope": "Full RN clinical and source review of the exact Guide 1 ABG content and source-set digests",
+      "contentSha256": "4cc71368c819558ec37ee6c36257aaaea73c5389dc878ce31fed7b932e0c3166",
+      "sourceSetSha256": "897d728338a16872e1438b68ab3270ba4539f270cadc473183a2f823307fcc98",
+      "claims": [
+        {
+          "id": "abg-purpose-and-components",
+          "locator": "Opening paragraph; Common adult reference ranges",
+          "sourceIds": ["medlineplus-abg", "ncbi-statpearls-abg-2026"]
+        },
+        {
+          "id": "abg-adult-reference-ranges",
+          "locator": "Common adult reference ranges table and qualification",
+          "sourceIds": ["medlineplus-abg", "ncbi-statpearls-abg-2026", "ncbi-statpearls-acid-base-balance"]
+        },
+        {
+          "id": "abg-acidemia-alkalemia-and-primary-process",
+          "locator": "The four steps, items 1–4",
+          "sourceIds": ["ncbi-statpearls-abg-2026", "ncbi-statpearls-acid-base-balance"]
+        },
+        {
+          "id": "abg-directional-screening-shortcut",
+          "locator": "The introductory shortcut",
+          "sourceIds": ["ncbi-statpearls-acid-base-balance"]
+        },
+        {
+          "id": "abg-compensation-and-mixed-disorder-caution",
+          "locator": "Compensation table and 7.40 paragraph",
+          "sourceIds": ["ncbi-statpearls-acid-base-balance"]
+        },
+        {
+          "id": "abg-common-metabolic-causes",
+          "locator": "Causes worth recognizing: metabolic rows and vomiting/diarrhea pairing",
+          "sourceIds": ["ncbi-statpearls-abg-2026", "ncbi-statpearls-acid-base-balance"]
+        },
+        {
+          "id": "abg-common-respiratory-causes",
+          "locator": "Causes worth recognizing: respiratory rows",
+          "sourceIds": ["ncbi-statpearls-acid-base-balance"]
+        },
+        {
+          "id": "abg-oxygenation-context",
+          "locator": "Do not forget the oxygen",
+          "sourceIds": ["medlineplus-abg", "ncbi-statpearls-abg-2026"]
+        },
+        {
+          "id": "abg-nclex-education-scope",
+          "locator": "Page title, description, and educational framing",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        }
+      ]
+    }
+  }
 }

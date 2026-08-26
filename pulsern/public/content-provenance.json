@@ -490,17 +490,35 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "e5de4247d3ff2fe757112d57bbf6fde9729afeda04cb8dc3ca314f2819d55fcf",
-      "sourceSetSha256": "92c735501933d56bbb7708cc9a839cb73ab47b5698f9f3ffc1a17beec90c8e80",
+      "contentSha256": "4cc71368c819558ec37ee6c36257aaaea73c5389dc878ce31fed7b932e0c3166",
+      "sourceSetSha256": "897d728338a16872e1438b68ab3270ba4539f270cadc473183a2f823307fcc98",
       "sources": [
         {
           "id": "medlineplus-abg",
           "title": "MedlinePlus — Arterial Blood Gas (ABG) Test",
           "publisher": "U.S. National Library of Medicine",
           "url": "https://medlineplus.gov/lab-tests/arterial-blood-gas-abg-test/",
-          "sourceUpdated": null,
+          "sourceUpdated": "2025-06-26",
           "accessedAt": "2026-08-26",
           "locator": "Measurements, uses, and results sections"
+        },
+        {
+          "id": "ncbi-statpearls-abg-2026",
+          "title": "Arterial Blood Gas Analysis: Fundamentals, Interpretation, and Clinical Utility",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK536919/",
+          "sourceUpdated": "2026-07-05",
+          "accessedAt": "2026-08-26",
+          "locator": "Pathophysiology; Results, Reporting, and Critical Findings; Clinical Significance"
+        },
+        {
+          "id": "ncbi-statpearls-acid-base-balance",
+          "title": "Physiology, Acid Base Balance",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK507807/",
+          "sourceUpdated": "2022-09-12",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Related Testing; Pathophysiology"
         },
         {
           "id": "ncsbn-2026-rn-test-plan",
@@ -513,12 +531,82 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-26",
+        "scope": "Full RN clinical and source review of the exact Guide 1 ABG content and source-set digests",
+        "claims": [
+          {
+            "id": "abg-purpose-and-components",
+            "locator": "Opening paragraph; Common adult reference ranges",
+            "sourceIds": [
+              "medlineplus-abg",
+              "ncbi-statpearls-abg-2026"
+            ]
+          },
+          {
+            "id": "abg-adult-reference-ranges",
+            "locator": "Common adult reference ranges table and qualification",
+            "sourceIds": [
+              "medlineplus-abg",
+              "ncbi-statpearls-abg-2026",
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-acidemia-alkalemia-and-primary-process",
+            "locator": "The four steps, items 1–4",
+            "sourceIds": [
+              "ncbi-statpearls-abg-2026",
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-directional-screening-shortcut",
+            "locator": "The introductory shortcut",
+            "sourceIds": [
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-compensation-and-mixed-disorder-caution",
+            "locator": "Compensation table and 7.40 paragraph",
+            "sourceIds": [
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-common-metabolic-causes",
+            "locator": "Causes worth recognizing: metabolic rows and vomiting/diarrhea pairing",
+            "sourceIds": [
+              "ncbi-statpearls-abg-2026",
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-common-respiratory-causes",
+            "locator": "Causes worth recognizing: respiratory rows",
+            "sourceIds": [
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-oxygenation-context",
+            "locator": "Do not forget the oxygen",
+            "sourceIds": [
+              "medlineplus-abg",
+              "ncbi-statpearls-abg-2026"
+            ]
+          },
+          {
+            "id": "abg-nclex-education-scope",
+            "locator": "Page title, description, and educational framing",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {

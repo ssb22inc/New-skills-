@@ -9,7 +9,7 @@ import process from "node:process";
 
 const SITE = "https://www.pulsern.app";
 const REQUIRED = ["/", "/learn/", "/about/", "/pricing/", "/how-it-works/", "/methodology/", "/editorial-policy/"];
-const TRUSTED = ["nclex.com", "www.nclex.com", "ncsbn.org", "www.ncsbn.org", "cdc.gov", "www.cdc.gov", "medlineplus.gov", "www.fda.gov", "fda.gov", "www.ismp.org", "ismp.org", "home.ecri.org", "doi.org", "pmc.ncbi.nlm.nih.gov"];
+const TRUSTED = ["nclex.com", "www.nclex.com", "ncsbn.org", "www.ncsbn.org", "cdc.gov", "www.cdc.gov", "medlineplus.gov", "www.fda.gov", "fda.gov", "www.ismp.org", "ismp.org", "home.ecri.org", "doi.org", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"];
 const BLOCKING = new Set(["critical", "high"]);
 
 const strip = (html = "") => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ").replace(/&[a-z0-9#]+;/gi, " ").replace(/\s+/g, " ").trim();
@@ -136,14 +136,18 @@ export function auditHtml(route, html) {
   if (isGuide) {
     const article = nodes.find((node) => ["Article", "BlogPosting", "MedicalWebPage"].includes(node["@type"]));
     const people = nodes.filter((node) => node["@type"] === "Person");
+    const organizations = nodes.filter((node) => node["@type"] === "Organization");
     const authorId = article?.author?.["@id"];
-    const authorResolved = people.some((person) => person["@id"] === authorId && person.name && person.jobTitle);
+    const reviewerId = article?.reviewedBy?.["@id"];
+    const authorResolved = people.some((person) => person["@id"] === authorId && person.name && person.jobTitle)
+      || organizations.some((organization) => organization["@id"] === authorId && organization.name);
+    const reviewerResolved = people.some((person) => person["@id"] === reviewerId && person.name && person.jobTitle);
     const trustedLinks = anchors.filter((href) => {
       try { return TRUSTED.includes(new URL(href).hostname.toLowerCase()); } catch { return false; }
     });
     if (!article) findings.push(finding("critical", "ARTICLE_ENTITY", route, "Guide lacks Article schema."));
-    if (!authorResolved || !article?.reviewedBy) findings.push(finding("high", "HUMAN_ACCOUNTABILITY", route, "Guide needs a resolvable Person author and reviewer."));
-    if (!article?.datePublished || !article?.dateModified || !/<time\b[^>]*datetime=/i.test(html)) findings.push(finding("high", "REVIEW_DATES", route, "Guide needs visible and machine-readable publication/review dates."));
+    if (!authorResolved || !reviewerResolved) findings.push(finding("high", "HUMAN_ACCOUNTABILITY", route, "Guide needs a resolvable author entity and accountable Person reviewer."));
+    if (!article?.datePublished || !/<time\b[^>]*datetime=/i.test(html) || (article?.reviewedBy && !article?.dateModified)) findings.push(finding("high", "REVIEW_DATES", route, "Guide needs truthful visible and machine-readable publication/review dates."));
     if (!trustedLinks.length || !Array.isArray(article?.citation) || !article.citation.length) findings.push(finding("high", "CITATIONS", route, "Guide needs visible trusted sources and structured citations."));
     if (words < 500) findings.push(finding("medium", "GUIDE_DEPTH", route, `Guide contains ${words} visible words; editorial review threshold is 500.`));
   }
