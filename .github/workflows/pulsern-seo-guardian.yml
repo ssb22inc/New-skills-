@@ -21,8 +21,8 @@ jobs:
   adversarial-search-audit:
     runs-on: ubuntu-latest
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_MODEL: gpt-5.6-luna
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      SEO_ADVERSARY_MODEL: openai/gpt-4.1
     defaults:
       run:
         working-directory: pulsern
@@ -37,7 +37,7 @@ jobs:
       - run: npm run build
       - run: npm run seo:audit
       - name: Optional adversarial model review
-        if: ${{ always() && env.OPENAI_API_KEY != '' }}
+        if: ${{ always() && env.OPENROUTER_API_KEY != '' }}
         run: npm run seo:adversary
       - name: Upload audit evidence
         if: always()

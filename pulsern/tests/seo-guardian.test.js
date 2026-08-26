@@ -17,4 +17,8 @@ describe("SEO guardian", () => {
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });
+
+  it("extracts OpenRouter chat output text", () => {
+    expect(extractOutputText({ choices: [{ message: { content: "Independent objection" } }] })).toBe("Independent objection");
+  });
 });

@@ -55,6 +55,7 @@ leakage. A critical or high finding fails the release.
 
 The repository workflow runs this gate for PulseRN pull requests, `main` pushes,
 manual runs, and a weekly scheduled check. If the repository has an
-`OPENAI_API_KEY` Actions secret, it also runs `npm run seo:adversary` as an
-independent model-based critique. The model review is a second opinion; it does
+`OPENROUTER_API_KEY` Actions secret, it also runs `npm run seo:adversary` as an
+independent model-based critique through the project's existing AI provider.
+The model review is a second opinion; it does
 not override the deterministic gate or the licensed-RN clinical review.
