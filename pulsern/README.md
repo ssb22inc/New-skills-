@@ -53,9 +53,23 @@ semantic structure, sitemap and robots coverage, AI-readable entity graphs,
 named RN accountability, citations, unsafe outcome claims, and private-route
 leakage. A critical or high finding fails the release.
 
-The repository workflow runs this gate for PulseRN pull requests, `main` pushes,
-manual runs, and a weekly scheduled check. If the repository has an
-`OPENROUTER_API_KEY` Actions secret, it also runs `npm run seo:adversary` as an
-independent model-based critique through the project's existing AI provider.
-The model review is a second opinion; it does
-not override the deterministic gate or the licensed-RN clinical review.
+The repository workflow runs fail-closed gates for PulseRN pull requests,
+`main` pushes, manual runs, and a weekly scheduled check. Every run performs:
+
+- the full unit and negative-fixture suite;
+- a production build and deterministic traditional/LLM/agentic search audit;
+- versioned search-intent and clinical provenance checks;
+- anonymous local and live crawls with browser and named agent user agents;
+- WCAG browser testing at desktop and mobile sizes; and
+- a required structured OpenRouter adversarial review.
+
+`OPENROUTER_API_KEY` is required as an encrypted GitHub Actions repository
+secret. Missing credentials, provider errors, malformed model output, a model
+`FAIL`, or any failed deterministic gate make the workflow fail. Reports are
+uploaded before final enforcement and are bound to the exact commit SHA with
+SHA-256 checksums.
+
+The model cannot approve clinical facts or credentials. `content-review-records.json`
+must contain real, consented RN-verification evidence and claim-level human
+review records bound to the exact content and source digests. Pending or stale
+evidence blocks release.

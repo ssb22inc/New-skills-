@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "intents": {
+    "how-is-the-nclex-scored": {
+      "primary": "how is the NCLEX scored",
+      "secondary": [
+        "NCLEX CAT scoring",
+        "NCLEX passing standard"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "how-many-questions-is-the-nclex": {
+      "primary": "how many questions are on the NCLEX",
+      "secondary": [
+        "NCLEX minimum questions",
+        "NCLEX maximum questions"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "next-generation-nclex-what-changed": {
+      "primary": "what changed on the Next Generation NCLEX",
+      "secondary": [
+        "NGN changes",
+        "NCLEX clinical judgment model"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "nclex-test-day-what-to-expect": {
+      "primary": "what to expect on NCLEX test day",
+      "secondary": [
+        "NCLEX test day rules",
+        "NCLEX exam day process"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "bow-tie-questions": {
+      "primary": "how to answer NCLEX bow-tie questions",
+      "secondary": [
+        "NGN bow-tie strategy"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "matrix-grid-questions": {
+      "primary": "how to answer NCLEX matrix grid questions",
+      "secondary": [
+        "NGN matrix question strategy"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "cloze-drop-down-questions": {
+      "primary": "how to answer NCLEX cloze drop-down questions",
+      "secondary": [
+        "NGN cloze question strategy"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "highlight-questions": {
+      "primary": "how to answer NCLEX highlight questions",
+      "secondary": [
+        "NGN highlight question strategy"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "select-all-that-apply-strategy": {
+      "primary": "NCLEX select all that apply strategy",
+      "secondary": [
+        "SATA NCLEX strategy"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "drag-and-drop-ordering-questions": {
+      "primary": "how to answer NCLEX drag and drop ordering questions",
+      "secondary": [
+        "NGN ordering question strategy"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "lab-values-to-memorize": {
+      "primary": "lab values to memorize for the NCLEX",
+      "secondary": [
+        "NCLEX normal lab values"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "abg-interpretation": {
+      "primary": "ABG interpretation for the NCLEX",
+      "secondary": [
+        "NCLEX ABG practice",
+        "acid base interpretation"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "electrolyte-imbalances": {
+      "primary": "electrolyte imbalances for the NCLEX",
+      "secondary": [
+        "NCLEX electrolyte signs"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "infection-control-precautions": {
+      "primary": "infection control precautions for the NCLEX",
+      "secondary": [
+        "NCLEX isolation precautions"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "insulin-types-and-timing": {
+      "primary": "insulin types onset and peak for the NCLEX",
+      "secondary": [
+        "NCLEX insulin timing"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "high-alert-medications": {
+      "primary": "high alert medications and antidotes for the NCLEX",
+      "secondary": [
+        "NCLEX medication antidotes"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "prioritization-abc-maslow": {
+      "primary": "NCLEX prioritization ABC and Maslow",
+      "secondary": [
+        "what patient comes first NCLEX"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "delegation-and-assignment": {
+      "primary": "NCLEX delegation and assignment rules",
+      "secondary": [
+        "RN LPN UAP delegation NCLEX"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "therapeutic-communication": {
+      "primary": "therapeutic communication NCLEX questions",
+      "secondary": [
+        "NCLEX best response strategy"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "dosage-calculation-formulas": {
+      "primary": "dosage calculation formulas for the NCLEX",
+      "secondary": [
+        "NCLEX medication math"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "nclex-study-plan": {
+      "primary": "NCLEX study plan",
+      "secondary": [
+        "daily NCLEX study schedule"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "education"
+    },
+    "spaced-repetition-for-nursing-students": {
+      "primary": "spaced repetition for nursing students",
+      "secondary": [
+        "NCLEX spaced repetition"
+      ],
+      "audience": "nursing students",
+      "risk": "education"
+    },
+    "failed-the-nclex-what-now": {
+      "primary": "failed the NCLEX what to do next",
+      "secondary": [
+        "NCLEX retake study plan"
+      ],
+      "audience": "NCLEX-RN retake candidates",
+      "risk": "education"
+    }
+  }
+}

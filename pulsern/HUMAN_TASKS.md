@@ -32,6 +32,21 @@ Claude Code executes everything else. These run in parallel with the build.
 
 - H10 · Pass-rate loop — set up the 60-day post-exam email ask (one question: pass/fail). At n≥100 this becomes your strongest marketing asset.
 
+- H15 · Public RN verification for the search release gate — provide the exact
+  legal/display name you consent to publish, RN license jurisdiction and type,
+  an official Nursys or government Board of Nursing verification URL/public
+  identifier, and the date it was verified. Enter only those consented public
+  facts in `content-review-records.json`; never add a private credential,
+  account login, API key, or identity document.
+
+- H16 · Guide-by-guide clinical attestation — review every public guide against
+  its listed authoritative sources. For each guide, record the reviewer ID,
+  review date, scope, exact content SHA-256, exact source-set SHA-256, and at
+  least one claim record with a page/section locator and supporting source IDs.
+  A content or source edit changes the digest and automatically invalidates the
+  old approval. The automated and model gates must both pass after attestation;
+  neither is a substitute for this RN review.
+
 ## Later (Expo phase)
 
 - H11 · Expo/EAS account + Apple Developer ($99/yr) + Google Play ($25 one-time) — only when the web version has retention worth porting.

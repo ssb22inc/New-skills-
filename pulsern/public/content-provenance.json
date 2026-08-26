@@ -1,0 +1,951 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "reviewer": {
+    "id": "sheldon-bennett-rn",
+    "displayName": "Sheldon Bennett",
+    "credential": "RN",
+    "licenseJurisdiction": null,
+    "licenseType": "Registered Nurse",
+    "verificationUrl": null,
+    "verifiedAt": null,
+    "verificationStatus": "pending"
+  },
+  "guides": [
+    {
+      "route": "/learn/how-is-the-nclex-scored/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how is the NCLEX scored",
+        "secondary": [
+          "NCLEX CAT scoring",
+          "NCLEX passing standard"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "45641f0bda59547fa790930cfe98275e11ca9d563dd2aace3724fb99e66d94b4",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/how-many-questions-is-the-nclex/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how many questions are on the NCLEX",
+        "secondary": [
+          "NCLEX minimum questions",
+          "NCLEX maximum questions"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "18d02b6c4458927ac96c9ddb6f25c394b5dad20baee61f0f5cbf56a1cf11278d",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/next-generation-nclex-what-changed/",
+      "risk": "exam",
+      "intent": {
+        "primary": "what changed on the Next Generation NCLEX",
+        "secondary": [
+          "NGN changes",
+          "NCLEX clinical judgment model"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "0d98b0f82d0db71ba55d2f5e3eb091b3e11a2b91f730e4b39e8f0370e27e1963",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/nclex-test-day-what-to-expect/",
+      "risk": "exam",
+      "intent": {
+        "primary": "what to expect on NCLEX test day",
+        "secondary": [
+          "NCLEX test day rules",
+          "NCLEX exam day process"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "a9067d839c47daecb6a395d493f2a5c83a14207826f53bf3a0733b8ca7f77291",
+      "sourceSetSha256": "d07ad20c1b295e4829b95966b8681b9b1d452abfeb2a0c6487670c93e346e30c",
+      "sources": [
+        {
+          "id": "ncsbn-2026-candidate-bulletin",
+          "title": "NCSBN — 2026 Candidate Bulletin",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/prepare.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-26",
+          "locator": "2026 Candidate Bulletin section"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/bow-tie-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX bow-tie questions",
+        "secondary": [
+          "NGN bow-tie strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "0ee2df7e9e10ba8e6db45b06c9a19e945ee8359d6cfb1c2102447dcd22271e47",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/matrix-grid-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX matrix grid questions",
+        "secondary": [
+          "NGN matrix question strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "e04b35c5f78e713d450ed22280a820b9d6e6c7fb3fbc7a47e336e4a6d3fd5264",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/cloze-drop-down-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX cloze drop-down questions",
+        "secondary": [
+          "NGN cloze question strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "d0f04c65398a79b3f808af76aae135dfda136a9f14fe71e87ccf82b0a893e2f8",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/highlight-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX highlight questions",
+        "secondary": [
+          "NGN highlight question strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "867341e0a9ab468c6919900bd06d2ec063525b055d8de9ff16c38bc4005235f8",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/select-all-that-apply-strategy/",
+      "risk": "exam",
+      "intent": {
+        "primary": "NCLEX select all that apply strategy",
+        "secondary": [
+          "SATA NCLEX strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "d7513be83dcd883519b626c4e89a825dd76590a7ff24643f9deadc07c6cced26",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/drag-and-drop-ordering-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX drag and drop ordering questions",
+        "secondary": [
+          "NGN ordering question strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "865af320f2532e5242df06b184ffa15fea325b8035e1d6572532d04fd0633ac6",
+      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/lab-values-to-memorize/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "lab values to memorize for the NCLEX",
+        "secondary": [
+          "NCLEX normal lab values"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "4cb4d2ccb2bfcd70eaa82075ec1d9cf09aa8add5be6cd7dd10d0054e311b8f3b",
+      "sourceSetSha256": "7d610e40c495474da8e0c04523631ca1ad3914b1ed95834fd06333ec42c088b0",
+      "sources": [
+        {
+          "id": "medlineplus-medical-tests",
+          "title": "MedlinePlus — Medical Tests",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/lab-tests/",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-26",
+          "locator": "Medical test index; claim-specific locators still require RN sign-off"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/abg-interpretation/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "ABG interpretation for the NCLEX",
+        "secondary": [
+          "NCLEX ABG practice",
+          "acid base interpretation"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "e5de4247d3ff2fe757112d57bbf6fde9729afeda04cb8dc3ca314f2819d55fcf",
+      "sourceSetSha256": "92c735501933d56bbb7708cc9a839cb73ab47b5698f9f3ffc1a17beec90c8e80",
+      "sources": [
+        {
+          "id": "medlineplus-abg",
+          "title": "MedlinePlus — Arterial Blood Gas (ABG) Test",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/lab-tests/arterial-blood-gas-abg-test/",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-26",
+          "locator": "Measurements, uses, and results sections"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/electrolyte-imbalances/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "electrolyte imbalances for the NCLEX",
+        "secondary": [
+          "NCLEX electrolyte signs"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "731e4379899eaf1f55c9e296ce8d71ec314ef5b3ba9458a51f37cdbdb0685fe9",
+      "sourceSetSha256": "3e8edef88648e99835bf7cbb54620c08044dd923c5570f8a055c7d84b34c194f",
+      "sources": [
+        {
+          "id": "medlineplus-electrolyte-panel",
+          "title": "MedlinePlus — Electrolyte Panel",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/lab-tests/electrolyte-panel/",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-26",
+          "locator": "Electrolytes, uses, symptoms, and results sections"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/infection-control-precautions/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "infection control precautions for the NCLEX",
+        "secondary": [
+          "NCLEX isolation precautions"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "aa76b4285a8250064e4b24919200501f8d2978123dd4214ce164670730891fd8",
+      "sourceSetSha256": "6a5b52796b57336fe03dd259bafacc0c919762ea4fe48af475a81e4dc2fae256",
+      "sources": [
+        {
+          "id": "cdc-isolation-precautions",
+          "title": "CDC — Isolation Precautions Guideline",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/index.html",
+          "sourceUpdated": "2023-11-27",
+          "accessedAt": "2026-08-26",
+          "locator": "Guideline and updates sections"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/insulin-types-and-timing/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "insulin types onset and peak for the NCLEX",
+        "secondary": [
+          "NCLEX insulin timing"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "87a2226dc4ff96796fba68187ac563c57430aacc56a57b8bfc3c9590921783df",
+      "sourceSetSha256": "524dab27c757ca6e973524e98351fdb5ad4db1126d5a3155b584138f0a184a6d",
+      "sources": [
+        {
+          "id": "fda-insulin",
+          "title": "FDA — Insulin",
+          "publisher": "U.S. Food and Drug Administration",
+          "url": "https://www.fda.gov/consumers/free-publications-women/insulin",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-26",
+          "locator": "Types of Insulin section"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/high-alert-medications/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "high alert medications and antidotes for the NCLEX",
+        "secondary": [
+          "NCLEX medication antidotes"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "2948da609a9c0884c96e363580e3b09e4f64f1254701a7f71881a5c2c9c85a63",
+      "sourceSetSha256": "b44e2171617b11f4aa80bd907bdc0e4bccd3284192b440cb4ef618a2766650fb",
+      "sources": [
+        {
+          "id": "ismp-high-alert-acute-care-2024",
+          "title": "ISMP — High-Alert Medications in Acute Care Settings",
+          "publisher": "Institute for Safe Medication Practices",
+          "url": "https://home.ecri.org/blogs/ismp-resources/high-alert-medications-in-acute-care-settings",
+          "sourceUpdated": "2024-01-10",
+          "accessedAt": "2026-08-26",
+          "locator": "2024 high-alert list and safeguards"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/prioritization-abc-maslow/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "NCLEX prioritization ABC and Maslow",
+        "secondary": [
+          "what patient comes first NCLEX"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "54463e06973fa81d8cdae3899d146c47f29fd07e48fc338c082c9cddedee0924",
+      "sourceSetSha256": "cfca3a49b94b35587d4a0ed5c209a3068f489276a10a61ebc4cab5eea8267455",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/delegation-and-assignment/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "NCLEX delegation and assignment rules",
+        "secondary": [
+          "RN LPN UAP delegation NCLEX"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "ed5153c9d401ce7fdbac7440f6bf80f4388f07de340c9c3d4f3b7aad184ca50c",
+      "sourceSetSha256": "cfca3a49b94b35587d4a0ed5c209a3068f489276a10a61ebc4cab5eea8267455",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/therapeutic-communication/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "therapeutic communication NCLEX questions",
+        "secondary": [
+          "NCLEX best response strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "747fd07fe6b181c1a848c9713655fd40cc1bdfc7fcbce46414972a6162c20f0a",
+      "sourceSetSha256": "cfca3a49b94b35587d4a0ed5c209a3068f489276a10a61ebc4cab5eea8267455",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/dosage-calculation-formulas/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "dosage calculation formulas for the NCLEX",
+        "secondary": [
+          "NCLEX medication math"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "1de684b778dc108e78df9aefdc0207e56bbe5cabcabce3747a05c392d8364275",
+      "sourceSetSha256": "cfca3a49b94b35587d4a0ed5c209a3068f489276a10a61ebc4cab5eea8267455",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/nclex-study-plan/",
+      "risk": "education",
+      "intent": {
+        "primary": "NCLEX study plan",
+        "secondary": [
+          "daily NCLEX study schedule"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "education"
+      },
+      "contentSha256": "a2eb9cc5cddff7fbf32d64d5f5210f16a62fedd707bad3a47336022576ec6a8b",
+      "sourceSetSha256": "6b1fdefa3b9aa30adc47fc063aabadfe1139edc81d33b7917d95fd5115208a2c",
+      "sources": [
+        {
+          "id": "khalafi-2024-spaced-learning-nursing",
+          "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
+          "publisher": "BMC Medical Education",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/",
+          "sourceUpdated": "2024-03-21",
+          "accessedAt": "2026-08-26",
+          "locator": "Randomized-controlled methods, results, and conclusion"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/spaced-repetition-for-nursing-students/",
+      "risk": "education",
+      "intent": {
+        "primary": "spaced repetition for nursing students",
+        "secondary": [
+          "NCLEX spaced repetition"
+        ],
+        "audience": "nursing students",
+        "risk": "education"
+      },
+      "contentSha256": "74e0cd801f5d6dc1f6fcb09ced54236f744a4d186756bd0aec4cc9333f5c4ba8",
+      "sourceSetSha256": "6b1fdefa3b9aa30adc47fc063aabadfe1139edc81d33b7917d95fd5115208a2c",
+      "sources": [
+        {
+          "id": "khalafi-2024-spaced-learning-nursing",
+          "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
+          "publisher": "BMC Medical Education",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/",
+          "sourceUpdated": "2024-03-21",
+          "accessedAt": "2026-08-26",
+          "locator": "Randomized-controlled methods, results, and conclusion"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/failed-the-nclex-what-now/",
+      "risk": "education",
+      "intent": {
+        "primary": "failed the NCLEX what to do next",
+        "secondary": [
+          "NCLEX retake study plan"
+        ],
+        "audience": "NCLEX-RN retake candidates",
+        "risk": "education"
+      },
+      "contentSha256": "fb4008c1c14ec2c7866109ae3cbc8ade0678b40694db85073b677915862358aa",
+      "sourceSetSha256": "6b1fdefa3b9aa30adc47fc063aabadfe1139edc81d33b7917d95fd5115208a2c",
+      "sources": [
+        {
+          "id": "khalafi-2024-spaced-learning-nursing",
+          "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
+          "publisher": "BMC Medical Education",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/",
+          "sourceUpdated": "2024-03-21",
+          "accessedAt": "2026-08-26",
+          "locator": "Randomized-controlled methods, results, and conclusion"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    }
+  ]
+}

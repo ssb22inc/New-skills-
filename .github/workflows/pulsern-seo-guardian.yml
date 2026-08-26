@@ -34,14 +34,68 @@ jobs:
           cache: npm
           cache-dependency-path: pulsern/package-lock.json
       - run: npm ci
-      - run: npm run build
-      - run: npm run seo:audit
-      - name: Optional adversarial model review
-        if: ${{ always() && env.OPENROUTER_API_KEY != '' }}
+      - name: Unit and negative-fixture tests
+        id: tests
+        continue-on-error: true
+        run: npm test
+      - name: Install accessibility browser
+        id: browser
+        continue-on-error: true
+        run: npx playwright install --with-deps chromium
+      - name: Build exact candidate artifact
+        id: build
+        continue-on-error: true
+        run: npm run build
+      - name: Deterministic search, provenance, and intent gate
+        id: deterministic
+        if: always()
+        continue-on-error: true
+        run: npm run seo:audit
+      - name: Local anonymous agent crawl
+        id: crawl
+        if: always()
+        continue-on-error: true
+        run: npm run seo:crawl
+      - name: Production anonymous agent crawl
+        id: crawl_live
+        if: always()
+        continue-on-error: true
+        run: npm run seo:crawl:live
+      - name: Authoritative source reachability
+        id: sources
+        if: always()
+        continue-on-error: true
+        run: npm run seo:sources
+      - name: WCAG accessibility audit
+        id: accessibility
+        if: always()
+        continue-on-error: true
+        run: npm run seo:accessibility
+      - name: Required adversarial model review
+        id: adversary
+        if: always()
+        continue-on-error: true
         run: npm run seo:adversary
+      - name: Bind evidence to commit
+        if: always()
+        run: npm run seo:evidence
       - name: Upload audit evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pulsern-search-audit
           path: pulsern/reports/seo
+      - name: Enforce every required gate
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.tests.outcome }}" = "success"
+          test "${{ steps.browser.outcome }}" = "success"
+          test "${{ steps.build.outcome }}" = "success"
+          test "${{ steps.deterministic.outcome }}" = "success"
+          test "${{ steps.crawl.outcome }}" = "success"
+          test "${{ steps.crawl_live.outcome }}" = "success"
+          test "${{ steps.sources.outcome }}" = "success"
+          test "${{ steps.accessibility.outcome }}" = "success"
+          test "${{ steps.adversary.outcome }}" = "success"
+          npm run seo:enforce

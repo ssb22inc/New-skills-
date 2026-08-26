@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "reviewer": {
+    "id": "sheldon-bennett-rn",
+    "displayName": "Sheldon Bennett",
+    "credential": "RN",
+    "licenseJurisdiction": null,
+    "licenseType": "Registered Nurse",
+    "verificationUrl": null,
+    "verifiedAt": null,
+    "verificationStatus": "pending"
+  },
+  "reviews": {}
+}
