@@ -147,59 +147,91 @@ export const CLINICAL_ARTICLES = [
   {
     slug: "electrolyte-imbalances",
     topic: "High-yield clinical",
-    title: "Electrolyte imbalances: signs worth knowing",
-    h1: "Electrolyte imbalances the NCLEX keeps testing",
-    description: "The signs, causes and nursing priorities for potassium, sodium, calcium and magnesium imbalances, organised for recall.",
+    title: "Electrolyte imbalances for NCLEX: signs and priorities",
+    h1: "Electrolyte imbalances for the NCLEX",
+    description: "Compare potassium, sodium, calcium and magnesium imbalances, including common findings, causes and nursing safety priorities.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN drills electrolyte scenarios as full cases, so you practise recognising them from findings rather than labels.",
+    updated: "2026-08-26",
+    cta: "PulseRN drills electrolyte scenarios as full cases, so you practice recognizing them from findings rather than labels.",
     body: `
-<p>Electrolyte questions are common because they connect a number to a clinical picture to a nursing priority. The exam rarely tells you the imbalance — it gives you the findings and expects you to name it.</p>
+<p>Electrolyte questions connect a laboratory result with symptoms, likely causes and a nursing priority. Start with stability: new ECG changes, dysrhythmia, seizure, marked change in consciousness, paralysis or respiratory depression takes priority over memorizing a list. Then check the reporting laboratory's reference interval, the direction and speed of change, symptoms, kidney function, medications and possible specimen error.</p>
 
 <h2>Potassium</h2>
+<div class="table-wrap" role="region" aria-label="Potassium imbalance comparison" tabindex="0">
 <table>
-  <tr><th>Comparison</th><th>Hypokalaemia (below 3.5)</th><th>Hyperkalaemia (above 5.0)</th></tr>
-  <tr><td>Signs</td><td>Muscle weakness, cramps, decreased reflexes, reduced bowel sounds, dysrhythmias</td><td>Muscle weakness, tingling, diarrhoea, dysrhythmias, cardiac arrest</td></tr>
-  <tr><td>Common causes</td><td>Loop diuretics, vomiting, nasogastric suction, poor intake</td><td>Renal failure, potassium-sparing diuretics, crush injury, acidosis</td></tr>
-  <tr><td>Nursing priority</td><td>Cardiac monitoring; never give potassium as an IV push</td><td>Cardiac monitoring; expect measures that shift or remove potassium</td></tr>
+  <caption>Potassium imbalance comparison</caption>
+  <thead><tr><th scope="col">Comparison</th><th scope="col">Hypokalemia</th><th scope="col">Hyperkalemia</th></tr></thead>
+  <tbody>
+  <tr><th scope="row">Typical threshold</th><td>Below 3.5 mEq/L, with laboratory variation</td><td>Above the laboratory's upper limit, commonly 5.0–5.5 mEq/L</td></tr>
+  <tr><th scope="row">Possible findings</th><td>Weakness, fatigue, cramps, constipation, palpitations and dysrhythmias</td><td>Weakness, palpitations, conduction changes, dysrhythmias or paralysis; mild cases may have no symptoms</td></tr>
+  <tr><th scope="row">Common contexts</th><td>Loop or thiazide diuretics, vomiting, diarrhea, poor intake and magnesium depletion</td><td>Acute or chronic kidney disease, potassium-raising medications, tissue breakdown and transcellular shifts such as acidosis</td></tr>
+  <tr><th scope="row">Nursing focus</th><td>Assess symptoms and cardiac risk, review losses and medications, check magnesium when relevant, and replace only as ordered</td><td>Assess symptoms and ECG, stop exogenous sources when ordered, report urgent findings, and anticipate measures that stabilize the myocardium, shift potassium or remove it</td></tr>
+  </tbody>
 </table>
+</div>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-ncbi-statpearls-hypokalemia-2025">Hypokalemia</a>, <a href="#source-ncbi-statpearls-hyperkalemia-2025">Hyperkalemia</a>, and the <a href="#source-dailymed-potassium-chloride-concentrate">potassium chloride product label</a>.</p>
 
 <div class="key">
-<p><b>Potassium is never given by IV push.</b> It is always diluted and infused slowly, on a pump, with cardiac monitoring. An option offering rapid IV potassium is wrong regardless of how low the level is. This is one of the most reliably tested safety facts on the exam.</p>
+<p><b>Never administer concentrated potassium chloride by direct IV injection or IV push.</b> Before IV infusion, dilute the concentrate in a larger volume and ensure it is completely mixed. Use the prescribed patient-specific dose, concentration and rate; do not infuse it rapidly. Monitor the clinical response and serial laboratory results. Use serial ECGs or cardiac monitoring when indicated, especially with cardiac or renal disease; the product label requires continuous cardiac monitoring for urgent high-rate infusion.</p>
 </div>
+<p>An unexpected potassium result also needs context. Hemolysis can produce pseudohyperkalemia, so an unexplained elevation without matching symptoms or ECG changes may need confirmation before aggressive treatment. Do not delay escalation when the client is symptomatic or has concerning ECG findings.</p>
 
 <h2>Sodium</h2>
+<div class="table-wrap" role="region" aria-label="Sodium imbalance comparison" tabindex="0">
 <table>
-  <tr><th>Comparison</th><th>Hyponatraemia (below 135)</th><th>Hypernatraemia (above 145)</th></tr>
-  <tr><td>Signs</td><td>Confusion, headache, nausea, seizures at severe levels</td><td>Thirst, dry mucous membranes, restlessness, agitation</td></tr>
-  <tr><td>Common causes</td><td>Excess water intake, SIADH, diuretics, heart failure</td><td>Water loss, inadequate intake, diabetes insipidus</td></tr>
-  <tr><td>Nursing priority</td><td>Neurological status and seizure precautions</td><td>Neurological status; correction is deliberately gradual</td></tr>
+  <caption>Sodium imbalance comparison</caption>
+  <thead><tr><th scope="col">Comparison</th><th scope="col">Hyponatremia (below 135 mEq/L)</th><th scope="col">Hypernatremia (above 145 mEq/L)</th></tr></thead>
+  <tbody>
+  <tr><th scope="row">Possible findings</th><td>Headache, nausea, fatigue, confusion, gait change, seizures or reduced consciousness when severe or rapidly developing</td><td>Thirst and dehydration findings; restlessness, irritability, lethargy, seizures or coma when severe or rapidly developing</td></tr>
+  <tr><th scope="row">Common contexts</th><td>SIADH, diuretics, excess water relative to solute, heart failure, kidney disease and gastrointestinal losses</td><td>Water loss, inadequate access to water, diabetes insipidus, osmotic diuresis and, less often, excess sodium</td></tr>
+  <tr><th scope="row">Nursing focus</th><td>Neurological and volume-status assessment, seizure precautions when indicated, serial sodium results and the prescribed correction plan</td><td>Neurological and volume-status assessment, intake and output, ongoing losses, serial sodium results and the prescribed correction plan</td></tr>
+  </tbody>
 </table>
-<p>Both extremes present neurologically, which is the point: a sodium question usually arrives as a change in mental status rather than as a number.</p>
+</div>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-ncbi-statpearls-hyponatremia-2026">Hyponatremia</a> and <a href="#source-ncbi-statpearls-hypernatremia-2023">Hypernatremia</a>.</p>
+<p>Symptoms depend on severity, duration and rate of change, not only the sodium value. Correction must be individualized to the cause, volume status, symptoms and whether the disturbance is acute or chronic. Overly rapid correction of chronic hyponatremia can cause osmotic demyelination; overly rapid correction of chronic hypernatremia can cause cerebral edema and seizures.</p>
 
 <h2>Calcium</h2>
+<div class="table-wrap" role="region" aria-label="Calcium imbalance comparison" tabindex="0">
 <table>
-  <tr><th>Comparison</th><th>Hypocalcaemia</th><th>Hypercalcaemia</th></tr>
-  <tr><td>Signs</td><td>Tingling around the mouth and fingers, muscle spasm, tetany, positive Chvostek and Trousseau signs</td><td>Fatigue, weakness, decreased reflexes, constipation, kidney stones</td></tr>
-  <tr><td>Memory hook</td><td>Low calcium, high excitability</td><td>High calcium, low excitability</td></tr>
+  <caption>Calcium imbalance comparison</caption>
+  <thead><tr><th scope="col">Comparison</th><th scope="col">Hypocalcemia</th><th scope="col">Hypercalcemia</th></tr></thead>
+  <tbody>
+  <tr><th scope="row">Possible findings</th><td>Perioral or fingertip tingling, painful cramps, tetany, seizures and QT prolongation</td><td>Weakness, constipation, polyuria, polydipsia, kidney stones and altered mental status when severe</td></tr>
+  <tr><th scope="row">Assessment context</th><td colspan="2">Distinguish total from ionized calcium. Albumin can change total calcium without changing the physiologically active ionized fraction.</td></tr>
+  </tbody>
 </table>
-<p>Two named signs are worth knowing precisely: <b>Chvostek</b> is facial twitching when the facial nerve is tapped, and <b>Trousseau</b> is carpal spasm when a blood pressure cuff is inflated. Both indicate hypocalcaemia.</p>
+</div>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-ncbi-statpearls-calcium-disorders-2026">Calcium homeostasis and disorders</a>.</p>
+<p><b>Chvostek sign</b> is ipsilateral facial contraction after tapping over the facial nerve. <b>Trousseau sign</b> is carpal spasm provoked by inflating a blood pressure cuff above systolic pressure. They are associated with neuromuscular irritability in hypocalcemia, but a bedside sign is not diagnostic by itself; interpret it with symptoms and laboratory evidence.</p>
 
 <h2>Magnesium</h2>
+<div class="table-wrap" role="region" aria-label="Magnesium imbalance comparison" tabindex="0">
 <table>
-  <tr><th>Comparison</th><th>Hypomagnesaemia</th><th>Hypermagnesaemia</th></tr>
-  <tr><td>Signs</td><td>Tremor, hyperactive reflexes, dysrhythmias, seizures</td><td>Diminished reflexes, drowsiness, respiratory depression, hypotension</td></tr>
-  <tr><td>Where it shows up</td><td>Alcohol use disorder, malnutrition, diuretics</td><td>Magnesium therapy in obstetrics, renal impairment</td></tr>
+  <caption>Magnesium imbalance comparison</caption>
+  <thead><tr><th scope="col">Comparison</th><th scope="col">Hypomagnesemia</th><th scope="col">Hypermagnesemia or magnesium toxicity</th></tr></thead>
+  <tbody>
+  <tr><th scope="row">Possible findings</th><td>Tremor, hyperreflexia, muscle fasciculations, dysrhythmias and seizures when severe</td><td>Diminished reflexes, hypotension, central nervous system depression, respiratory depression and conduction abnormalities as toxicity progresses</td></tr>
+  <tr><th scope="row">Common contexts</th><td>Alcohol use disorder, chronic diarrhea, malnutrition, proton-pump inhibitors and loop or thiazide diuretics</td><td>Magnesium-containing medications or IV therapy, especially when kidney function is impaired</td></tr>
+  </tbody>
 </table>
-<p>Magnesium appears constantly in maternity scenarios. A client receiving magnesium sulfate is monitored for <b>reflexes, respiratory rate and urine output</b>, because loss of reflexes is the early warning of toxicity and respiratory depression follows.</p>
+</div>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-ncbi-statpearls-magnesium-2023">Magnesium</a> and the <a href="#source-dailymed-magnesium-sulfate-in-water">magnesium sulfate product label</a>.</p>
+<p>During magnesium sulfate therapy for preeclampsia or eclampsia, monitor deep-tendon reflexes, respiratory status, urine output and renal function, serum magnesium when ordered, and the overall clinical picture. Diminishing or absent patellar reflexes are an important warning of rising magnesium effect and may precede respiratory paralysis; report toxicity findings and follow the ordered emergency protocol.</p>
 
-<h2>The pattern underneath</h2>
-<p>Rather than memorising four separate lists, hold one idea: <b>calcium and magnesium calm, potassium and sodium conduct.</b> Low calcium or magnesium removes the brake, so you get twitching, tremor and hyperactive reflexes. High levels sedate, so you get weakness, diminished reflexes and depressed respiration. That single frame reconstructs most of the table when recall fails.</p>
+<div class="key" role="note" aria-labelledby="urgent-electrolyte-findings">
+<h2 id="urgent-electrolyte-findings" style="margin-top:0">Findings that change the priority</h2>
+<p>Escalate new dysrhythmia or concerning ECG change, severe weakness or paralysis, seizure, marked change in consciousness, tetany, respiratory depression, or diminishing or absent reflexes during magnesium therapy according to the clinical setting and emergency protocol. These findings make immediate safety assessment more important than finishing a diagnostic mnemonic.</p>
+</div>
+
+<h2>A safer recall pattern</h2>
+<p>Use patterns as prompts, not rules. Low calcium and low magnesium often increase neuromuscular excitability; excess magnesium depresses reflexes and respiration. Potassium abnormalities can disrupt cardiac conduction in either direction, and sodium disorders often become neurologic when severe or rapid. Then return to the actual result, trend, ECG, symptoms, cause and clinical orders before choosing an intervention.</p>
 `,
     faq: [
-      { q: "Can potassium be given IV push?", a: "No. Potassium is always diluted and infused slowly on a pump with cardiac monitoring. IV push potassium can cause fatal dysrhythmias, and any answer offering it is incorrect regardless of how low the level is." },
-      { q: "What are Chvostek and Trousseau signs?", a: "Both indicate hypocalcaemia. Chvostek is facial twitching when the facial nerve is tapped; Trousseau is carpal spasm when a blood pressure cuff is inflated on the arm." },
-      { q: "What is monitored during magnesium sulfate therapy?", a: "Deep tendon reflexes, respiratory rate and urine output. Loss of reflexes is the earliest sign of magnesium toxicity, typically appearing before respiratory depression." },
+      { q: "Can potassium chloride be given by IV push?", a: "No. Concentrated potassium chloride must never be administered by direct IV injection or IV push. Before IV infusion, it must be diluted in a larger volume and completely mixed. Use the prescribed patient-specific dose, concentration and rate; do not infuse it rapidly. Monitoring is based on the clinical risk, and continuous cardiac monitoring is required by the product label for urgent high-rate infusion." },
+      { q: "What are Chvostek and Trousseau signs?", a: "Chvostek sign is facial contraction after tapping over the facial nerve; Trousseau sign is carpal spasm induced by inflating a blood pressure cuff above systolic pressure. Both are associated with hypocalcemic neuromuscular irritability but are interpreted with symptoms and laboratory evidence, not alone." },
+      { q: "What is monitored during magnesium sulfate therapy?", a: "Monitor deep-tendon reflexes, respiratory status, urine output and renal function, serum magnesium when ordered, and the client's overall condition. Diminishing or absent patellar reflexes are an important toxicity warning and may occur before respiratory paralysis." },
+      { q: "When is an electrolyte imbalance urgent?", a: "Urgency depends on symptoms, the rate of change and the clinical setting—not the number alone. New dysrhythmia or concerning ECG changes, severe weakness or paralysis, seizure, marked change in consciousness, tetany, respiratory depression, or diminishing or absent reflexes during magnesium therapy require prompt escalation under the applicable emergency protocol." },
     ],
   },
 

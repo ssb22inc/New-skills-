@@ -9,7 +9,7 @@ import process from "node:process";
 
 const SITE = "https://www.pulsern.app";
 const REQUIRED = ["/", "/learn/", "/about/", "/pricing/", "/how-it-works/", "/methodology/", "/editorial-policy/"];
-const TRUSTED = ["nclex.com", "www.nclex.com", "ncsbn.org", "www.ncsbn.org", "cdc.gov", "www.cdc.gov", "medlineplus.gov", "www.fda.gov", "fda.gov", "www.ismp.org", "ismp.org", "home.ecri.org", "doi.org", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"];
+const TRUSTED = ["nclex.com", "www.nclex.com", "ncsbn.org", "www.ncsbn.org", "cdc.gov", "www.cdc.gov", "medlineplus.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "www.ismp.org", "ismp.org", "home.ecri.org", "doi.org", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"];
 const BLOCKING = new Set(["critical", "high"]);
 
 const strip = (html = "") => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ").replace(/&[a-z0-9#]+;/gi, " ").replace(/\s+/g, " ").trim();
@@ -147,7 +147,7 @@ export function auditHtml(route, html) {
     });
     if (!article) findings.push(finding("critical", "ARTICLE_ENTITY", route, "Guide lacks Article schema."));
     if (!authorResolved || !reviewerResolved) findings.push(finding("high", "HUMAN_ACCOUNTABILITY", route, "Guide needs a resolvable author entity and accountable Person reviewer."));
-    if (!article?.datePublished || !/<time\b[^>]*datetime=/i.test(html) || (article?.reviewedBy && !article?.dateModified)) findings.push(finding("high", "REVIEW_DATES", route, "Guide needs truthful visible and machine-readable publication/review dates."));
+    if (!article?.datePublished || !article?.dateModified || !/<time\b[^>]*datetime=/i.test(html)) findings.push(finding("high", "REVIEW_DATES", route, "Guide needs truthful visible and machine-readable publication and revision dates; approved guides also need a review date."));
     if (!trustedLinks.length || !Array.isArray(article?.citation) || !article.citation.length) findings.push(finding("high", "CITATIONS", route, "Guide needs visible trusted sources and structured citations."));
     if (words < 500) findings.push(finding("medium", "GUIDE_DEPTH", route, `Guide contains ${words} visible words; editorial review threshold is 500.`));
   }

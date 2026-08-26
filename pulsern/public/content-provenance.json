@@ -620,17 +620,89 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "ad8da7f52961fe382bb633dda63638b5a22b792b771fc1a8997f9070efd5ae52",
-      "sourceSetSha256": "3e8edef88648e99835bf7cbb54620c08044dd923c5570f8a055c7d84b34c194f",
+      "contentSha256": "52256cc286865ec11a47d5416bec41fa575a4d888e33fb0e7cd35d87936f5383",
+      "sourceSetSha256": "9de71ddc0623cd55e62a42c83201872548e69b3d51aef3ecd873a162e6a29bf2",
       "sources": [
         {
           "id": "medlineplus-electrolyte-panel",
           "title": "MedlinePlus — Electrolyte Panel",
           "publisher": "U.S. National Library of Medicine",
           "url": "https://medlineplus.gov/lab-tests/electrolyte-panel/",
-          "sourceUpdated": null,
+          "sourceUpdated": "2024-03-12",
           "accessedAt": "2026-08-26",
-          "locator": "Electrolytes, uses, symptoms, and results sections"
+          "locator": "Electrolytes, uses, symptoms, and results sections; page last-updated field"
+        },
+        {
+          "id": "ncbi-statpearls-hypokalemia-2025",
+          "title": "Hypokalemia",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK482465/",
+          "sourceUpdated": "2025-01-19",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Pathophysiology; Evaluation; Pearls and Other Issues"
+        },
+        {
+          "id": "ncbi-statpearls-hyperkalemia-2025",
+          "title": "Hyperkalemia",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK470284/",
+          "sourceUpdated": "2025-12-01",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Etiology; Evaluation; Treatment / Management"
+        },
+        {
+          "id": "dailymed-potassium-chloride-concentrate",
+          "title": "Potassium Chloride for Injection Concentrate, USP",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/fda/fdaDrugXsl.cfm?setid=bf8e8ac7-e6a8-4571-a0ea-7bcab89290f6&type=display",
+          "sourceUpdated": "2025-08-12",
+          "accessedAt": "2026-08-26",
+          "locator": "Description; Warnings — undiluted administration and rapid infusion; Precautions — General; Dosage and Administration — dilution, individualized dose/rate, rate limits, and continuous cardiac monitoring for urgent high-rate infusion; Effective Time 20250812"
+        },
+        {
+          "id": "ncbi-statpearls-hyponatremia-2026",
+          "title": "Hyponatremia",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK470386/",
+          "sourceUpdated": "2026-06-19",
+          "accessedAt": "2026-08-26",
+          "locator": "Continuing Education Activity; History and Physical; Treatment / Management; Complications"
+        },
+        {
+          "id": "ncbi-statpearls-hypernatremia-2023",
+          "title": "Hypernatremia",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK441960/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Etiology; History and Physical; Treatment / Management"
+        },
+        {
+          "id": "ncbi-statpearls-calcium-disorders-2026",
+          "title": "Calcium Homeostasis and Disorders: An Integrated Clinical and Laboratory Approach",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK557683/",
+          "sourceUpdated": "2026-06-18",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Interfering Factors; Results, Reporting, and Critical Findings"
+        },
+        {
+          "id": "ncbi-statpearls-magnesium-2023",
+          "title": "Magnesium",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK519036/",
+          "sourceUpdated": "2023-02-20",
+          "accessedAt": "2026-08-26",
+          "locator": "Indications; Effects of Magnesium; Monitoring; Toxicity"
+        },
+        {
+          "id": "dailymed-magnesium-sulfate-in-water",
+          "title": "Magnesium Sulfate in Water for Injection",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/fda/fdaDrugXsl.cfm?setid=efadcb55-f935-4c60-b2e2-0a76b9194b50&type=display",
+          "sourceUpdated": "2026-01-29",
+          "accessedAt": "2026-08-26",
+          "locator": "Clinical Pharmacology; Warnings; Overdosage; Dosage and Administration; Effective Time 20260129"
         },
         {
           "id": "ncsbn-2026-rn-test-plan",

@@ -5,6 +5,9 @@ import path from "node:path";
 import { auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
 import { extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
+import { articleJsonLd } from "../ops/build-learn.mjs";
+import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
+import { sourcesFor } from "../ops/seo-content-policy.mjs";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
@@ -29,6 +32,27 @@ describe("SEO guardian", () => {
     const page = auditHtml("/learn/test/", `<html><head><title>NCLEX clinical judgment guide | PulseRN</title><meta name="description" content="A detailed educational guide to clinical judgment for NCLEX-RN candidates, with clear limitations, sources, and a practical study framework."><link rel="canonical" href="https://www.pulsern.app/learn/test/"><script type="application/ld+json">${JSON.stringify(schema)}</script></head><body><main><h1>Clinical judgment</h1><time datetime="2026-08-26">2026-08-26</time><a href="/learn/">Guides</a><a href="/about/">About</a><a href="https://www.nclex.com/test-plans.page">Source</a>${body}</main></body></html>`);
     expect(page.findings.some((item) => item.code === "HUMAN_ACCOUNTABILITY")).toBe(false);
     expect(page.findings.some((item) => item.code === "REVIEW_DATES")).toBe(false);
+  });
+
+  it("keeps pending-guide revision metadata without publishing an RN reviewer entity", () => {
+    const article = { title: "Pending guide", description: "Pending clinical guide", published: "2026-08-03", updated: "2026-08-26" };
+    const provenance = { contentSha256: "a".repeat(64), sources: [], review: { decision: "pending" } };
+    const graph = articleJsonLd(article, "https://www.pulsern.app/learn/pending/", provenance)["@graph"];
+    const schemaArticle = graph.find((node) => node["@type"] === "Article");
+    expect(schemaArticle).toMatchObject({ datePublished: "2026-08-03", dateModified: "2026-08-26" });
+    expect(schemaArticle).not.toHaveProperty("reviewedBy");
+    expect(graph.some((node) => node["@type"] === "Person")).toBe(false);
+  });
+
+  it("keeps Guide 2 tables accessible and its dated sources section-bound", () => {
+    const guide = CLINICAL_ARTICLES.find((article) => article.slug === "electrolyte-imbalances");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(4);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(12);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(11);
+    expect(guide.body.match(/class="table-wrap" role="region" aria-label=/g)).toHaveLength(4);
+    expect(guide.body).toContain("Findings that change the priority");
+    const datedSources = sourcesFor(guide).filter((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""));
+    expect(datedSources).toHaveLength(sourcesFor(guide).length);
   });
 
   it("extracts Responses API output text", () => {

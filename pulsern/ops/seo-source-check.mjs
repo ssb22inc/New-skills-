@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const ALLOWED_FINAL_HOSTS = new Set(["www.nclex.com", "nclex.com", "www.cdc.gov", "cdc.gov", "home.ecri.org", "medlineplus.gov", "www.medlineplus.gov", "www.fda.gov", "fda.gov", "doi.org", "journals.sagepub.com", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"]);
+const ALLOWED_FINAL_HOSTS = new Set(["www.nclex.com", "nclex.com", "www.cdc.gov", "cdc.gov", "home.ecri.org", "medlineplus.gov", "www.medlineplus.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "doi.org", "journals.sagepub.com", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"]);
 
 async function fetchSource(url) {
   const controller = new AbortController();

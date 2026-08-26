@@ -91,6 +91,11 @@ const CSS = `
   table { width:100%; border-collapse:collapse; margin-bottom:12px; font-size:14.5px; }
   th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { color:var(--teal); font-weight:600; }
+  caption { color:var(--ink); font-weight:700; padding:0 0 8px; text-align:left; }
+  .table-wrap { overflow-x:auto; margin-bottom:14px; border:1px solid var(--line); border-radius:8px; }
+  .table-wrap:focus { outline:3px solid #8CCFC3; outline-offset:2px; }
+  .table-wrap table { min-width:620px; margin-bottom:0; }
+  .source-note { color:var(--muted); font-size:13px; }
   .key { background:#EAF4F0; border-left:3px solid var(--teal); padding:12px 14px; border-radius:0 8px 8px 0; margin-bottom:12px; }
   .key p:last-child { margin-bottom:0; }
   .cta { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--teal); border-radius:12px; padding:18px 20px; margin:22px 0 14px; }
@@ -135,7 +140,7 @@ ${JSON.stringify(jsonld, null, 2)}
 <body>`;
 }
 
-function articleJsonLd(a, url, provenance) {
+export function articleJsonLd(a, url, provenance) {
   const citations = provenance.sources;
   const reviewer = REVIEW_LEDGER.reviewer;
   const person = {
@@ -160,8 +165,9 @@ function articleJsonLd(a, url, provenance) {
       url,
       inLanguage: "en-US",
       datePublished: a.published,
+      dateModified: a.updated,
       author: { "@id": `${SITE}/#org` },
-      ...(provenance.review.decision === "approved" ? { dateModified: provenance.review.reviewedAt, reviewedBy: { "@id": AUTHOR_URL } } : {}),
+      ...(provenance.review.decision === "approved" ? { reviewedBy: { "@id": AUTHOR_URL } } : {}),
       publisher: { "@type": "Organization", "@id": `${SITE}/#org`, name: "PulseRN", url: SITE, logo: `${SITE}/icon-512.png` },
       isPartOf: { "@type": "WebSite", name: "PulseRN", url: SITE },
       about: { "@type": "Thing", name: "NCLEX-RN examination preparation" },
@@ -176,7 +182,7 @@ function articleJsonLd(a, url, provenance) {
       url: SITE,
       logo: `${SITE}/icon-512.png`,
     },
-    person,
+    ...(provenance.review.decision === "approved" ? [person] : []),
     {
       "@type": "BreadcrumbList",
       "@id": `${url}#crumbs`,
@@ -233,7 +239,7 @@ function renderArticle(a, all, provenance) {
 ${faq}
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul>${sources.map((source) => `<li><a href="${source.url}" rel="external noopener">${esc(source.title)}</a> — ${esc(source.publisher)}; evidence locator: ${esc(source.locator)}; accessed ${esc(source.accessedAt)}</li>`).join("")}</ul>
+  <ul>${sources.map((source) => `<li id="source-${esc(source.id)}"><a href="${source.url}" rel="external noopener">${esc(source.title)}</a> — ${esc(source.publisher)}; evidence locator: ${esc(source.locator)}${source.sourceUpdated ? `; source updated <time datetime="${esc(source.sourceUpdated)}">${esc(source.sourceUpdated)}</time>` : ""}; accessed <time datetime="${esc(source.accessedAt)}">${esc(source.accessedAt)}</time></li>`).join("")}</ul>
 </div>
 <div class="cta">
   <p><b>Practice this for real.</b> ${esc(a.cta ?? "PulseRN drills this with adaptive questions that adjust to your level, every Next Gen item type, and full-length readiness exams.")}</p>
