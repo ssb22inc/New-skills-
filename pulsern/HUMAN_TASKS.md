@@ -32,12 +32,13 @@ Claude Code executes everything else. These run in parallel with the build.
 
 - H10 · Pass-rate loop — set up the 60-day post-exam email ask (one question: pass/fail). At n≥100 this becomes your strongest marketing asset.
 
-- H15 · Public RN verification for the search release gate — provide the exact
-  legal/display name you consent to publish, RN license jurisdiction and type,
-  an official Nursys or government Board of Nursing verification URL/public
-  identifier, and the date it was verified. Enter only those consented public
-  facts in `content-review-records.json`; never add a private credential,
-  account login, API key, or identity document.
+- H15 · Public RN verification for the search release gate — **completed
+  2026-08-26.** Florida MQA primary-source verification matched Sheldon Sean
+  Bennett, Registered Nurse, license RN9537022, with Clear/Active multistate
+  status. The release ledger publishes only the consented display name,
+  credential, jurisdiction, official verification URL, and verification date;
+  it does not publish the address or treat license verification as guide
+  approval.
 
 - H16 · Guide-by-guide clinical attestation — review every public guide against
   its listed authoritative sources. For each guide, record the reviewer ID,
