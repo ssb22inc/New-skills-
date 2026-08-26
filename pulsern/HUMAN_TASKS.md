@@ -47,6 +47,13 @@ Claude Code executes everything else. These run in parallel with the build.
   A content or source edit changes the digest and automatically invalidates the
   old approval. The automated and model gates must both pass after attestation;
   neither is a substitute for this RN review.
+  - **Progress 2026-08-26:** Guide 1, “ABG interpretation made simple,” was
+    approved by Sheldon Bennett, RN, after source correction and independent
+    adversarial review. The approval is bound to content SHA-256
+    `4cc71368c819558ec37ee6c36257aaaea73c5389dc878ce31fed7b932e0c3166`
+    and source-set SHA-256
+    `897d728338a16872e1438b68ab3270ba4539f270cadc473183a2f823307fcc98`.
+    The remaining 22 guides are still pending and fail closed.
 
 ## Later (Expo phase)
 
