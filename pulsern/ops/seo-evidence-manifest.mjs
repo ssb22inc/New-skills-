@@ -16,11 +16,16 @@ export async function writeEvidenceManifest({ directory = "reports/seo", outputF
     entries.push({ file: entry.name, bytes: body.byteLength, sha256: sha256(body) });
   }
   entries.sort((a, b) => a.file.localeCompare(b.file));
+  let event = {};
+  try { if (process.env.GITHUB_EVENT_PATH) event = JSON.parse(await fs.readFile(process.env.GITHUB_EVENT_PATH, "utf8")); } catch { event = {}; }
   const manifest = {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     repository: process.env.GITHUB_REPOSITORY ?? null,
     commitSha: process.env.GITHUB_SHA ?? null,
+    testedRef: process.env.GITHUB_REF ?? null,
+    pullRequestHeadSha: event.pull_request?.head?.sha ?? null,
+    pullRequestBaseSha: event.pull_request?.base?.sha ?? null,
     workflowRunId: process.env.GITHUB_RUN_ID ?? null,
     workflowRunAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     productionUrl: "https://www.pulsern.app",

@@ -157,7 +157,7 @@ export const CLINICAL_ARTICLES = [
 
 <h2>Potassium</h2>
 <table>
-  <tr><th></th><th>Hypokalaemia (below 3.5)</th><th>Hyperkalaemia (above 5.0)</th></tr>
+  <tr><th>Comparison</th><th>Hypokalaemia (below 3.5)</th><th>Hyperkalaemia (above 5.0)</th></tr>
   <tr><td>Signs</td><td>Muscle weakness, cramps, decreased reflexes, reduced bowel sounds, dysrhythmias</td><td>Muscle weakness, tingling, diarrhoea, dysrhythmias, cardiac arrest</td></tr>
   <tr><td>Common causes</td><td>Loop diuretics, vomiting, nasogastric suction, poor intake</td><td>Renal failure, potassium-sparing diuretics, crush injury, acidosis</td></tr>
   <tr><td>Nursing priority</td><td>Cardiac monitoring; never give potassium as an IV push</td><td>Cardiac monitoring; expect measures that shift or remove potassium</td></tr>
@@ -169,7 +169,7 @@ export const CLINICAL_ARTICLES = [
 
 <h2>Sodium</h2>
 <table>
-  <tr><th></th><th>Hyponatraemia (below 135)</th><th>Hypernatraemia (above 145)</th></tr>
+  <tr><th>Comparison</th><th>Hyponatraemia (below 135)</th><th>Hypernatraemia (above 145)</th></tr>
   <tr><td>Signs</td><td>Confusion, headache, nausea, seizures at severe levels</td><td>Thirst, dry mucous membranes, restlessness, agitation</td></tr>
   <tr><td>Common causes</td><td>Excess water intake, SIADH, diuretics, heart failure</td><td>Water loss, inadequate intake, diabetes insipidus</td></tr>
   <tr><td>Nursing priority</td><td>Neurological status and seizure precautions</td><td>Neurological status; correction is deliberately gradual</td></tr>
@@ -178,7 +178,7 @@ export const CLINICAL_ARTICLES = [
 
 <h2>Calcium</h2>
 <table>
-  <tr><th></th><th>Hypocalcaemia</th><th>Hypercalcaemia</th></tr>
+  <tr><th>Comparison</th><th>Hypocalcaemia</th><th>Hypercalcaemia</th></tr>
   <tr><td>Signs</td><td>Tingling around the mouth and fingers, muscle spasm, tetany, positive Chvostek and Trousseau signs</td><td>Fatigue, weakness, decreased reflexes, constipation, kidney stones</td></tr>
   <tr><td>Memory hook</td><td>Low calcium, high excitability</td><td>High calcium, low excitability</td></tr>
 </table>
@@ -186,7 +186,7 @@ export const CLINICAL_ARTICLES = [
 
 <h2>Magnesium</h2>
 <table>
-  <tr><th></th><th>Hypomagnesaemia</th><th>Hypermagnesaemia</th></tr>
+  <tr><th>Comparison</th><th>Hypomagnesaemia</th><th>Hypermagnesaemia</th></tr>
   <tr><td>Signs</td><td>Tremor, hyperactive reflexes, dysrhythmias, seizures</td><td>Diminished reflexes, drowsiness, respiratory depression, hypotension</td></tr>
   <tr><td>Where it shows up</td><td>Alcohol use disorder, malnutrition, diuretics</td><td>Magnesium therapy in obstetrics, renal impairment</td></tr>
 </table>
