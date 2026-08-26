@@ -3,10 +3,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
-import { extractOutputText, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
+import { extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 
 describe("SEO guardian", () => {
+  const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
   it("rejects a homepage with no H1", () => {
     const page = auditHtml("/", `<html><head><title>PulseRN adaptive NCLEX-RN preparation</title><meta name="description" content="Adaptive NCLEX-RN practice built by a licensed RN with modern study tools, transparent limitations, and careful educational review for future nurses."><link rel="canonical" href="https://www.pulsern.app/"><script type="application/ld+json">{"@type":"WebApplication"}</script></head><body><main><a href="/learn/">Guides</a><a href="/about/">About</a><a href="/pricing/">Pricing</a></main></body></html>`);
     expect(page.findings.some((item) => item.code === "H1_COUNT" && item.severity === "critical")).toBe(true);
@@ -39,11 +40,11 @@ describe("SEO guardian", () => {
   });
 
   it("accepts a structured adversarial PASS with no blockers", () => {
-    expect(parseReview(JSON.stringify({ verdict: "PASS", summary: "All supplied gates pass.", strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] })).verdict).toBe("PASS");
+    expect(parseReview(JSON.stringify({ verdict: "PASS", summary: "All supplied gates pass.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] })).verdict).toBe("PASS");
   });
 
   it("preserves a structured adversarial FAIL for release enforcement", () => {
-    const review = parseReview(JSON.stringify({ verdict: "FAIL", summary: "Evidence is incomplete.", strongestObjections: [], releaseBlockers: [{ code: "EVIDENCE", finding: "Missing evidence.", requiredAction: "Supply it." }], nonBlockingExperiments: [] }));
+    const review = parseReview(JSON.stringify({ verdict: "FAIL", summary: "Evidence is incomplete.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [{ code: "EVIDENCE", finding: "Missing evidence.", requiredAction: "Supply it." }], nonBlockingExperiments: [] }));
     expect(review.verdict).toBe("FAIL");
     expect(review.releaseBlockers).toHaveLength(1);
   });
@@ -51,9 +52,25 @@ describe("SEO guardian", () => {
   it("fails closed on malformed, unknown, empty, or contradictory model output", () => {
     expect(() => parseReview("")).toThrow(/no text/i);
     expect(() => parseReview("not json")).toThrow(/malformed JSON/i);
-    expect(() => parseReview(JSON.stringify({ verdict: "MAYBE", summary: "x", strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] }))).toThrow(/PASS or FAIL/i);
-    expect(() => parseReview(JSON.stringify({ verdict: "PASS", summary: "x", strongestObjections: [], releaseBlockers: [{ code: "X", finding: "x", requiredAction: "x" }], nonBlockingExperiments: [] }))).toThrow(/cannot contain/i);
-    expect(() => parseReview(JSON.stringify({ verdict: "FAIL", summary: "x", strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] }))).toThrow(/at least one/i);
+    expect(() => parseReview(JSON.stringify({ verdict: "MAYBE", summary: "x", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] }))).toThrow(/PASS or FAIL/i);
+    expect(() => parseReview(JSON.stringify({ verdict: "PASS", summary: "x", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [{ code: "X", finding: "x", requiredAction: "x" }], nonBlockingExperiments: [] }))).toThrow(/cannot contain/i);
+    expect(() => parseReview(JSON.stringify({ verdict: "FAIL", summary: "x", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] }))).toThrow(/at least one/i);
+  });
+
+  it("binds model wording to deterministic approved and pending guide counts", () => {
+    const evidence = {
+      "report.json": { pages: [
+        { route: "/learn/approved/", findings: [] },
+        { route: "/learn/pending/", findings: [{ code: "HUMAN_ACCOUNTABILITY", route: "/learn/pending/" }] },
+      ] },
+      "provenance.json": { findings: [{ code: "RN_REVIEW", route: "/learn/pending/" }] },
+    };
+    const coverage = guideCoverageFromEvidence(evidence);
+    expect(coverage).toEqual({ totalGuides: 2, approvedGuides: 1, pendingGuides: 1, approvedRoutes: ["/learn/approved/"], pendingRoutes: ["/learn/pending/"] });
+    const base = { verdict: "FAIL", summary: "One guide is approved; one remains pending.", guideCoverage: coverage, strongestObjections: [], releaseBlockers: [{ code: "RN_REVIEW", finding: "The pending guide lacks approval.", requiredAction: "Review the pending route." }], nonBlockingExperiments: [] };
+    expect(parseReview(JSON.stringify(base), coverage).guideCoverage).toEqual(coverage);
+    expect(() => parseReview(JSON.stringify({ ...base, summary: "All clinical guides lack RN approval." }), coverage)).toThrow(/narrative contradicts/i);
+    expect(() => parseReview(JSON.stringify({ ...base, guideCoverage: { ...coverage, approvedGuides: 0, pendingGuides: 2, approvedRoutes: [], pendingRoutes: ["/learn/approved/", "/learn/pending/"] } }), coverage)).toThrow(/deterministic evidence/i);
   });
 
   it("fails closed when the secret or provider response is unavailable", async () => {
@@ -63,7 +80,7 @@ describe("SEO guardian", () => {
 
   it("writes PASS evidence and rejects FAIL evidence at enforcement", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-"));
-    const pass = { verdict: "PASS", summary: "All evidence passed.", strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] };
+    const pass = { verdict: "PASS", summary: "All evidence passed.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] };
     const passFetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(pass) } }] }) });
     const passJson = path.join(directory, "adversary.json");
     const result = await runAdversary({ reportDirectory: directory, outputFile: path.join(directory, "adversary.md"), jsonFile: passJson, apiKey: "test", fetchImpl: passFetch, now: () => "2026-08-26T00:00:00.000Z" });
@@ -71,7 +88,7 @@ describe("SEO guardian", () => {
     await expect(enforceAdversary(passJson)).resolves.toMatchObject({ verdict: "PASS" });
 
     const failJson = path.join(directory, "fail.json");
-    await fs.writeFile(failJson, JSON.stringify({ verdict: "FAIL", summary: "Blocked.", strongestObjections: [], releaseBlockers: [{ code: "BLOCK", finding: "Blocked.", requiredAction: "Fix it." }], nonBlockingExperiments: [] }));
+    await fs.writeFile(failJson, JSON.stringify({ verdict: "FAIL", summary: "Blocked.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [{ code: "BLOCK", finding: "Blocked.", requiredAction: "Fix it." }], nonBlockingExperiments: [] }));
     await expect(enforceAdversary(failJson)).rejects.toThrow(/failed/i);
   });
 
