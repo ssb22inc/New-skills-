@@ -36,7 +36,7 @@ const trustedReviewerUrl = (value) => {
   try {
     const { protocol, hostname } = new URL(value);
     const host = hostname.toLowerCase();
-    return protocol === "https:" && (host === "www.nursys.com" || host === "nursys.com" || host.endsWith(".gov"));
+    return protocol === "https:" && (host === "www.nursys.com" || host === "nursys.com" || host === "mqa-internet.doh.state.fl.us" || host.endsWith(".gov"));
   } catch { return false; }
 };
 

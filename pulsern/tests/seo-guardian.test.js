@@ -74,7 +74,7 @@ describe("SEO guardian", () => {
   it("requires verified reviewer identity, exact digest binding, claims, sources, and intent", () => {
     const contentSha256 = "a".repeat(64);
     const sourceSetSha256 = "b".repeat(64);
-    const reviewer = { id: "reviewer-1", displayName: "Test Reviewer", credential: "RN", licenseJurisdiction: "Test Board", licenseType: "Registered Nurse", verificationUrl: "https://www.nursys.com/", verifiedAt: "2026-08-26", verificationStatus: "verified" };
+    const reviewer = { id: "reviewer-1", displayName: "Test Reviewer", credential: "RN", licenseJurisdiction: "Test Board", licenseType: "Registered Nurse", verificationUrl: "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=1&Procde=1701", verifiedAt: "2026-08-26", verificationStatus: "verified" };
     const intent = { primary: "test clinical intent", secondary: ["secondary"], audience: "test learners", risk: "clinical" };
     const guide = { route: "/learn/test/", risk: "clinical", intent, contentSha256, sourceSetSha256, sources: [{ id: "source-1", title: "Official source", publisher: "NCSBN", url: "https://www.nclex.com/test-plans.page", sourceUpdated: "2026-04-01", accessedAt: "2026-08-26", locator: "Test Plan" }], review: { decision: "approved", reviewerId: "reviewer-1", reviewedAt: "2026-08-26", scope: "Full clinical and source review", evidenceMatchesContent: true, claims: [{ id: "claim-1", locator: "Section 1", sourceIds: ["source-1"] }] } };
     const pass = auditGovernance({ provenance: { schemaVersion: 1, reviewer, guides: [guide] }, intents: { schemaVersion: 1, intents: { test: intent } }, pages: [{ route: "/learn/test/", identifiers: [`sha256:${contentSha256}`] }], now: new Date("2026-08-26T12:00:00Z") });

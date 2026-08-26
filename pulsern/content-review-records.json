@@ -4,11 +4,11 @@
     "id": "sheldon-bennett-rn",
     "displayName": "Sheldon Bennett",
     "credential": "RN",
-    "licenseJurisdiction": null,
+    "licenseJurisdiction": "Florida Board of Nursing",
     "licenseType": "Registered Nurse",
-    "verificationUrl": null,
-    "verifiedAt": null,
-    "verificationStatus": "pending"
+    "verificationUrl": "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701",
+    "verifiedAt": "2026-08-26",
+    "verificationStatus": "verified"
   },
   "reviews": {}
 }
