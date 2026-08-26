@@ -51,6 +51,8 @@ describe("SEO guardian", () => {
     expect(guide.body.match(/scope="row"/g)).toHaveLength(11);
     expect(guide.body.match(/class="table-wrap" role="region" aria-label=/g)).toHaveLength(4);
     expect(guide.body).toContain("Findings that change the priority");
+    expect(guide.body).toContain('aria-labelledby="urgent-electrolyte-findings"');
+    expect(guide.body).not.toContain("aria-labeledby");
     const datedSources = sourcesFor(guide).filter((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""));
     expect(datedSources).toHaveLength(sourcesFor(guide).length);
   });

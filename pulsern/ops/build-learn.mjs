@@ -66,7 +66,7 @@ const usEnglish = (html) => html
   .replace(/Prioritise/g, "Prioritize").replace(/Recognise/g, "Recognize")
   .replace(/practising/g, "practicing").replace(/practised/g, "practiced").replace(/practise/g, "practice")
   .replace(/Practising/g, "Practicing").replace(/Practised/g, "Practiced").replace(/Practise/g, "Practice")
-  .replace(/labelled/g, "labeled").replace(/rigour/g, "rigor")
+  .replace(/\blabelled\b/g, "labeled").replace(/rigour/g, "rigor")
   .replace(/centre/g, "center").replace(/Centre/g, "Center").replace(/behaviour/g, "behavior")
   .replace(/memorise/g, "memorize").replace(/standardised/g, "standardized");
 
