@@ -290,21 +290,37 @@ async function run() {
 async function runMany() {
   const started = Date.now();
   const total = { inserted: 0, dupes: 0, reviewed: 0, survived: 0 };
+  let attempted = 0, failed = 0;
   for (let i = 1; i <= LOOPS; i++) {
     const mins = (Date.now() - started) / 60000;
     if (mins > MAX_MIN) { console.log(`Time budget reached after ${i - 1} loops.`); break; }
     console.log(`\n──── loop ${i}/${LOOPS} ────`);
+    attempted++;
     try {
       const r = await run();
       for (const k of Object.keys(total)) total[k] += r?.[k] ?? 0;
     } catch (e) {
-      // One bad generation must not end a multi-hour run.
+      // One bad generation must not end a multi-hour run — but see below: a
+      // run where EVERY loop failed is a failure, not a quiet success.
+      failed++;
       console.error(`  loop ${i} failed: ${e.message}`);
     }
   }
   const pct = total.reviewed ? Math.round((total.survived / total.reviewed) * 100) : 0;
   console.log(`\n════ run complete ════`);
   console.log(`reviewed ${total.reviewed} · passed adversarial ${total.survived} (${pct}%) · inserted ${total.inserted} · duplicates skipped ${total.dupes}`);
+
+  /* Tolerating a bad loop is useful; reporting a totally dead run as success is
+     not. If every loop failed, or a live run inserted nothing at all, exit
+     non-zero so CI goes red instead of showing a green tick over no work. */
+  if (attempted > 0 && failed === attempted) {
+    console.error(`All ${attempted} loops failed — nothing was generated.`);
+    process.exit(1);
+  }
+  if (!DRY && total.inserted === 0) {
+    console.error("Run finished without inserting a single item.");
+    process.exit(1);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
