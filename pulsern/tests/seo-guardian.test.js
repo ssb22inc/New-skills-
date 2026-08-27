@@ -57,6 +57,30 @@ describe("SEO guardian", () => {
     expect(datedSources).toHaveLength(sourcesFor(guide).length);
   });
 
+  it("keeps pending Guide 3 precise, accessible, and bound to current CDC sections", () => {
+    const guide = CLINICAL_ARTICLES.find((article) => article.slug === "infection-control-precautions");
+    expect(guide.updated).toBe("2026-08-27");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(4);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(3);
+    expect(guide.body).toContain('class="table-wrap" role="region" aria-label="Transmission-based precautions comparison" tabindex="0"');
+    expect(guide.body).toContain('aria-labelledby="infection-control-safety-boundary"');
+    expect(guide.body).toContain("allogeneic hematopoietic stem-cell transplant recipients");
+    expect(guide.body).toContain("CDC still prefers alcohol-based hand sanitizer");
+    expect(guide.body).not.toContain("hand hygiene must be <b>soap and water</b>");
+    expect(guide.body).not.toContain("within about 1&ndash;2 metres");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "cdc-isolation-precautions",
+      "cdc-isolation-appendix-a-2025",
+      "cdc-ppe-sequence-2023",
+      "cdc-cdiff-acute-care-2026",
+      "cdc-clinical-hand-hygiene-2024",
+      "cdc-protective-environment-table-5",
+      "ncsbn-2026-rn-test-plan",
+    ]);
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

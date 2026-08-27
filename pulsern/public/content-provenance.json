@@ -826,17 +826,62 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "aa76b4285a8250064e4b24919200501f8d2978123dd4214ce164670730891fd8",
-      "sourceSetSha256": "6a5b52796b57336fe03dd259bafacc0c919762ea4fe48af475a81e4dc2fae256",
+      "contentSha256": "488d688a7c7dd0922c453edf367345fd61c3a44abfed69a62fd539f543b07156",
+      "sourceSetSha256": "2b5a29aca50788c46f08c4c7666bd8fe0fe6f930f6952bc7f61eb3a47981212c",
       "sources": [
         {
           "id": "cdc-isolation-precautions",
-          "title": "CDC — Isolation Precautions Guideline",
+          "title": "CDC — Precautions to Prevent Transmission of Infectious Agents",
           "publisher": "Centers for Disease Control and Prevention",
-          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/index.html",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/precautions.html",
+          "sourceUpdated": "2023-11-22",
+          "accessedAt": "2026-08-27",
+          "locator": "III.B. Transmission-Based Precautions; Contact, Droplet, Airborne, placement, PPE, transport, and discontinuation sections"
+        },
+        {
+          "id": "cdc-isolation-appendix-a-2025",
+          "title": "CDC — Type and Duration of Precautions for Selected Infections",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-type-duration.html",
+          "sourceUpdated": "2025-02-07",
+          "accessedAt": "2026-08-27",
+          "locator": "Disease-specific entries for tuberculosis, measles, varicella, zoster, influenza, pertussis, meningococcal disease, mumps, rubella, group A streptococcus, MDROs, C. difficile, scabies, lice, RSV, and wounds"
+        },
+        {
+          "id": "cdc-ppe-sequence-2023",
+          "title": "CDC — Example of Safe Donning and Removal of PPE",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-figure.html",
           "sourceUpdated": "2023-11-27",
-          "accessedAt": "2026-08-26",
-          "locator": "Guideline and updates sections"
+          "accessedAt": "2026-08-27",
+          "locator": "Donning of PPE; Removing PPE; Safe Work Practices; Hand Hygiene"
+        },
+        {
+          "id": "cdc-cdiff-acute-care-2026",
+          "title": "CDC — C. diff Infection Prevention in Acute Care Facilities",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/c-diff/hcp/clinical-guidance/index.html",
+          "sourceUpdated": "2026-05-13",
+          "accessedAt": "2026-08-27",
+          "locator": "Isolate and initiate contact precautions; dedicated equipment; environmental cleaning; transfer communication; duration after diarrhea resolves"
+        },
+        {
+          "id": "cdc-clinical-hand-hygiene-2024",
+          "title": "CDC — Clinical Safety: Hand Hygiene for Healthcare Workers",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/clean-hands/hcp/clinical-safety/index.html",
+          "sourceUpdated": "2024-02-27",
+          "accessedAt": "2026-08-27",
+          "locator": "When to wash with soap and water; C. difficile outbreaks; continued access to alcohol-based hand sanitizer"
+        },
+        {
+          "id": "cdc-protective-environment-table-5",
+          "title": "CDC — Components of a Protective Environment",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-table-5.html",
+          "sourceUpdated": "2023-11-27",
+          "accessedAt": "2026-08-27",
+          "locator": "Allogeneic HSCT population; Standard and Expanded Precautions; engineering controls; flowers and plants"
         },
         {
           "id": "ncsbn-2026-rn-test-plan",

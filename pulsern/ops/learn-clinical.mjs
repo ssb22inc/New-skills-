@@ -238,68 +238,85 @@ export const CLINICAL_ARTICLES = [
   {
     slug: "infection-control-precautions",
     topic: "High-yield clinical",
-    title: "Infection control precautions: what goes where",
-    h1: "Isolation precautions worth memorising",
-    description: "Airborne, droplet and contact precautions, which conditions belong to each, and the PPE sequence the NCLEX tests every time.",
+    title: "Infection control precautions for the NCLEX",
+    h1: "Infection control precautions for the NCLEX",
+    description: "Compare Standard, Airborne, Droplet and Contact Precautions, disease-specific qualifiers, PPE sequencing and protective environments.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN drills precaution scenarios and PPE sequencing as ordered, drag-and-drop items.",
+    updated: "2026-08-27",
+    cta: "PulseRN drills infection-control scenarios and PPE sequencing as ordered, drag-and-drop items.",
     body: `
-<p>Infection control is reliably tested because it is concrete, safety-critical, and easy to write unambiguous questions about. It is also one of the highest-yield things you can memorise outright.</p>
+<p>Choose infection-control precautions from the suspected or confirmed organism, route of transmission, care setting and current facility policy. <b>Standard Precautions apply to every client</b>; add one or more Transmission-Based Precautions when Standard Precautions alone do not interrupt transmission. When the diagnosis is not yet confirmed, use the indicated empiric precautions while testing is pending.</p>
 
-<h2>The three transmission-based categories</h2>
-<table>
-  <tr><th>Precaution</th><th>Room</th><th>PPE</th></tr>
-  <tr><td>Airborne</td><td>Negative pressure, door closed</td><td>N95 respirator (fit-tested)</td></tr>
-  <tr><td>Droplet</td><td>Private room preferred</td><td>Surgical mask within about 1&ndash;2 metres</td></tr>
-  <tr><td>Contact</td><td>Private room preferred</td><td>Gown and gloves</td></tr>
-</table>
-<p>Standard precautions apply to every client, always, on top of any of the above.</p>
-
-<h2>Which conditions go where</h2>
-<h3>Airborne</h3>
-<ul>
-  <li>Tuberculosis</li>
-  <li>Measles (rubeola)</li>
-  <li>Varicella (chickenpox) — also contact</li>
-  <li>Disseminated herpes zoster — also contact</li>
-</ul>
-<h3>Droplet</h3>
-<ul>
-  <li>Influenza</li>
-  <li>Pertussis</li>
-  <li>Bacterial meningitis (Neisseria meningitidis)</li>
-  <li>Mumps, rubella</li>
-  <li>Group A streptococcal pharyngitis</li>
-</ul>
-<h3>Contact</h3>
-<ul>
-  <li>MRSA, VRE</li>
-  <li>Clostridioides difficile</li>
-  <li>Scabies, lice</li>
-  <li>Respiratory syncytial virus</li>
-  <li>Draining wounds and major skin infections</li>
-</ul>
-
-<div class="key">
-<p><b>C. difficile has two exceptions to memorise.</b> Alcohol-based hand rub does not kill the spores, so hand hygiene must be <b>soap and water</b>. Cleaning requires a sporicidal agent such as bleach. Items testing this almost always offer alcohol gel as a tempting distractor.</p>
+<div class="key" role="note" aria-labelledby="infection-control-safety-boundary">
+<h2 id="infection-control-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>This is an NCLEX study framework, not a substitute for the isolation sign, infection-prevention direction or facility policy. Precaution type, PPE and duration can change with the organism, symptoms, immune status, procedure and care setting.</p>
 </div>
 
-<h2>Protective environment</h2>
-<p>Do not confuse isolation with protection. A severely immunocompromised client — a neutropenic or transplant client — needs a <b>protective environment</b>: positive pressure, filtered air, no standing water or fresh flowers, and screening of anyone entering for illness. Airborne precautions protect others from the client; this protects the client from everyone else, and the pressure runs the opposite way.</p>
+<h2>The three transmission-based categories</h2>
+<div class="table-wrap" role="region" aria-label="Transmission-based precautions comparison" tabindex="0">
+<table>
+  <caption>Transmission-Based Precautions in acute care</caption>
+  <thead><tr><th scope="col">Precaution</th><th scope="col">Placement</th><th scope="col">Healthcare personnel</th><th scope="col">Patient movement</th></tr></thead>
+  <tbody>
+  <tr><th scope="row">Airborne</th><td>Airborne infection isolation room (AIIR) with monitored negative pressure; keep the door closed.</td><td>Put on disease-specific respiratory protection before entry. Current tuberculosis and measles guidance uses a fit-tested N95 or more protective respirator.</td><td>Limit transport. If transport is necessary, place a mask on the patient if tolerated and cover infectious skin lesions.</td></tr>
+  <tr><th scope="row">Droplet</th><td>Single-patient room if available; special air handling is not required.</td><td>Wear a mask for close contact, generally upon room entry. Add eye protection when Standard Precautions or the organism-specific protocol indicates it.</td><td>Limit transport and have the patient wear a mask if tolerated; follow respiratory hygiene.</td></tr>
+  <tr><th scope="row">Contact</th><td>Single-patient room if available; use dedicated or appropriately disinfected equipment.</td><td>Put on gown and gloves on entry when contact with the patient or contaminated environment is expected; remove and discard them before exit.</td><td>Contain infected or colonized areas and communicate the precaution status during transfer.</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-cdc-isolation-precautions">CDC Transmission-Based Precautions</a> and the <a href="#source-cdc-isolation-appendix-a-2025">CDC disease-specific Appendix A</a>.</p>
 
-<h2>PPE order</h2>
-<p><b>Putting on:</b> gown, mask or respirator, goggles or face shield, gloves.</p>
-<p><b>Taking off:</b> gloves, goggles or face shield, gown, mask or respirator.</p>
-<p>The logic makes it recallable rather than rote. Gloves go on last because they cover the gown cuffs, and they come off first because they are the most contaminated thing you are wearing. The mask comes off last on the way out, because you are still in a contaminated space until you leave. Hand hygiene bookends the whole process.</p>
+<h2>High-yield disease examples and qualifiers</h2>
+<h3>Airborne, with Standard Precautions</h3>
+<ul>
+  <li><b>Suspected or confirmed pulmonary or laryngeal tuberculosis:</b> use an AIIR and the respiratory protection required by the tuberculosis and facility protocol.</li>
+  <li><b>Measles (rubeola):</b> Airborne Precautions through four days after rash onset; use the duration of illness when the patient is immunocompromised.</li>
+  <li><b>Varicella (chickenpox):</b> Airborne plus Contact Precautions until lesions are dry and crusted.</li>
+  <li><b>Disseminated herpes zoster:</b> Airborne plus Contact Precautions. Use the same combination for localized zoster in an immunocompromised patient until dissemination is ruled out.</li>
+</ul>
+<p>Localized zoster in an immunocompetent patient is different: if lesions can be completely covered, CDC lists Standard Precautions until they are dry and crusted. When possible, susceptible healthcare personnel should not care for measles, varicella or zoster when immune caregivers are available.</p>
 
-<h2>The one that trips people</h2>
-<p>Some conditions need two categories at once. Varicella and disseminated zoster are <b>airborne and contact</b> — the lesions transmit by contact while the virus also travels through the air. An answer offering only one is incomplete.</p>
+<h3>Droplet, with Standard Precautions</h3>
+<ul>
+  <li><b>Seasonal influenza:</b> follow current influenza and facility guidance.</li>
+  <li><b>Pertussis:</b> continue through five days after effective antibiotic therapy begins.</li>
+  <li><b>Known or suspected meningococcal disease:</b> continue through 24 hours after effective therapy begins.</li>
+  <li><b>Mumps:</b> continue through five days after swelling begins.</li>
+  <li><b>Rubella:</b> continue through seven days after rash onset.</li>
+  <li><b>Group A streptococcal pharyngitis:</b> use Droplet Precautions for the first 24 hours of effective antimicrobial therapy.</li>
+</ul>
+
+<h3>Contact, with Standard Precautions</h3>
+<ul>
+  <li><b>Clostridioides difficile infection:</b> initiate Contact Precautions for suspected or confirmed infection and use dedicated equipment.</li>
+  <li><b>MRSA, VRE and other clinically significant MDROs:</b> use Contact Precautions when indicated by the acute-care setting, transmission risk and infection-prevention program.</li>
+  <li><b>Scabies and head lice:</b> continue through 24 hours after effective therapy begins.</li>
+  <li><b>Respiratory syncytial virus:</b> use Contact Precautions for infants, young children and immunocompromised adults for the duration of illness; prolonged shedding may extend the duration.</li>
+  <li><b>Major wounds or skin infections:</b> use Contact Precautions when drainage cannot be covered or contained. Standard Precautions may be sufficient when a dressing fully contains limited drainage.</li>
+</ul>
+<p class="source-note"><b>Evidence for these examples:</b> the <a href="#source-cdc-isolation-appendix-a-2025">CDC disease-specific precaution and duration table</a>. Always verify the posted isolation order and current institutional protocol.</p>
+
+<h2>C. difficile: separate spores from hand-hygiene policy</h2>
+<div class="key">
+<p>Alcohol-based hand sanitizer does not have sporicidal activity, and soap-and-water washing removes spores better. However, CDC still prefers alcohol-based hand sanitizer for routine healthcare hand hygiene when hands are not visibly soiled because eliminating it can reduce overall compliance. Wash with soap and water when hands are visibly soiled and during care of patients with suspected or confirmed C. difficile in an outbreak; CDC encourages soap-and-water washing after care as an additional outbreak precaution without restricting access to alcohol-based sanitizer.</p>
+</div>
+<p>Use gown and gloves, dedicated equipment and an EPA-registered sporicidal disinfectant according to the product instructions and facility protocol. In acute care, CDC recommends maintaining Contact Precautions for confirmed infection for at least 48 hours after diarrhea resolves, or longer when the facility policy requires it.</p>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-cdc-cdiff-acute-care-2026">CDC acute-care C. difficile guidance</a>, <a href="#source-cdc-clinical-hand-hygiene-2024">CDC clinical hand-hygiene guidance</a>, and the <a href="#source-cdc-isolation-appendix-a-2025">CDC isolation appendix</a>.</p>
+
+<h2>Protective environment is a specific designation</h2>
+<p>Do not use “protective environment” as a generic synonym for neutropenic precautions. CDC's protective-environment table applies to <b>allogeneic hematopoietic stem-cell transplant recipients</b>. It specifies HEPA-filtered incoming air, at least 12 air changes per hour, positive pressure relative to the corridor, a well-sealed room, a self-closing door, and no fresh or dried flowers or potted plants. It does not require masks, gowns or gloves in the absence of suspected or confirmed infection unless Standard Precautions or source control indicates them. Other immunocompromised patients require individualized precautions under facility and infection-prevention guidance.</p>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-cdc-protective-environment-table-5">CDC Components of a Protective Environment</a>.</p>
+
+<h2>PPE sequence: learn the example and follow the protocol</h2>
+<p>A CDC example for <b>putting on</b> PPE is gown, mask or respirator, goggles or face shield, then gloves. One CDC example for <b>removal</b> is gloves, goggles or face shield, gown, then mask or respirator, followed immediately by hand hygiene.</p>
+<p>Use the posted isolation procedure because more than one safe removal method can be acceptable and organism-specific protocols can differ. Keep contaminated surfaces away from clothing and mucous membranes; perform hand hygiene between steps if the hands become contaminated. For an AIIR, keep respiratory protection on until after leaving the room and closing the door unless the applicable protocol directs otherwise.</p>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-cdc-ppe-sequence-2023">CDC's safe donning and removal example</a> and <a href="#source-cdc-isolation-precautions">CDC Transmission-Based Precautions</a>.</p>
 `,
     faq: [
-      { q: "What precautions are used for C. difficile?", a: "Contact precautions with gown and gloves, hand hygiene using soap and water rather than alcohol-based rub, and cleaning with a sporicidal agent such as bleach. Alcohol gel does not kill C. difficile spores." },
-      { q: "What is the correct order for putting on PPE?", a: "Gown, then mask or respirator, then goggles or face shield, then gloves. Removal reverses the principle rather than the list: gloves, goggles, gown, then mask last as you leave the room." },
-      { q: "Which diseases require airborne precautions?", a: "Tuberculosis, measles, varicella and disseminated herpes zoster. Varicella and disseminated zoster require contact precautions as well, since the lesions are also infectious." },
+      { q: "What precautions are used for C. difficile?", a: "Use Standard plus Contact Precautions, gown and gloves, dedicated equipment, and an EPA-registered sporicidal disinfectant under facility policy. Soap and water removes spores better and is emphasized when hands are visibly soiled and during outbreaks, but CDC does not recommend removing access to alcohol-based hand sanitizer." },
+      { q: "What is the correct order for putting on PPE?", a: "One CDC example is gown, mask or respirator, goggles or face shield, then gloves. Follow the posted protocol because organism-specific procedures and safe removal methods can differ." },
+      { q: "Which conditions commonly require Airborne Precautions?", a: "Suspected or confirmed pulmonary or laryngeal tuberculosis, measles, varicella, disseminated zoster, and localized zoster in an immunocompromised patient until dissemination is ruled out. Varicella and the applicable zoster presentations also require Contact Precautions." },
+      { q: "Does every neutropenic patient need a protective-environment room?", a: "No. CDC's protective-environment table specifically applies to allogeneic hematopoietic stem-cell transplant recipients. Other immunocompromised patients need individualized precautions based on facility and infection-prevention guidance." },
     ],
   },
 
