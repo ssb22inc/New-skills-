@@ -983,17 +983,53 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "87a2226dc4ff96796fba68187ac563c57430aacc56a57b8bfc3c9590921783df",
-      "sourceSetSha256": "524dab27c757ca6e973524e98351fdb5ad4db1126d5a3155b584138f0a184a6d",
+      "contentSha256": "a49ad5567061a952e8f7671e2d6a8afde560e74685ea76f20aa50dd43fd29dd6",
+      "sourceSetSha256": "e04e939ce2e4098555f4637b946ad1dc0c9902b3148fe10d14773c9e68f15cea",
       "sources": [
         {
-          "id": "fda-insulin",
-          "title": "FDA — Insulin",
-          "publisher": "U.S. Food and Drug Administration",
-          "url": "https://www.fda.gov/consumers/free-publications-women/insulin",
-          "sourceUpdated": null,
-          "accessedAt": "2026-08-26",
-          "locator": "Types of Insulin section"
+          "id": "cdc-insulin-types-2024",
+          "title": "CDC — Types of Insulin",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/diabetes/about/how-to-use-insulin.html",
+          "sourceUpdated": "2024-05-15",
+          "accessedAt": "2026-08-27",
+          "locator": "Terms to know; insulin types table; brand and patient variability qualification"
+        },
+        {
+          "id": "dailymed-insulin-lispro-2024",
+          "title": "Insulin Lispro Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=2be14cbb-197a-4da8-82c8-2443594e7f6f",
+          "sourceUpdated": "2024-05-31",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — subcutaneous meal timing and supervised intravenous infusion; Warnings and Precautions — hypoglycemia; Drug Interactions — beta-blockers and other agents that blunt symptoms"
+        },
+        {
+          "id": "dailymed-humulin-n-2017",
+          "title": "Humulin N Prescribing Information and Instructions for Use",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=456e226e-e7b0-4850-b649-3d9e5533893c",
+          "sourceUpdated": "2017-10-11",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — mixing with Humulin R or Humalog; Instructions for Use — rolling, inverting, and appearance checks"
+        },
+        {
+          "id": "dailymed-lantus-2025",
+          "title": "Lantus Insulin Glargine Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=d5e07a0c-7e14-4756-9152-9fea485d654a",
+          "sourceUpdated": "2025-06-02",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — do not mix or administer intravenously; Pharmacokinetics — 24-hour profile without a pronounced peak; Drug Interactions — blunted hypoglycemia symptoms"
+        },
+        {
+          "id": "medlineplus-low-blood-sugar-self-care-2026",
+          "title": "MedlinePlus — Low blood sugar: self-care",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/ency/patientinstructions/000085.htm",
+          "sourceUpdated": "2026-01-25",
+          "accessedAt": "2026-08-27",
+          "locator": "When Your Blood Sugar Gets Low — 15 grams, 15-minute recheck, repeat treatment, and conditional follow-up snack"
         },
         {
           "id": "ncsbn-2026-rn-test-plan",

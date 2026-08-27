@@ -323,52 +323,67 @@ export const CLINICAL_ARTICLES = [
   {
     slug: "insulin-types-and-timing",
     topic: "High-yield clinical",
-    title: "Insulin types, onset and peak",
-    h1: "Insulin: types, timing and the peak that matters",
-    description: "Rapid, short, intermediate and long-acting insulin compared, why peak time predicts hypoglycaemia, and the mixing order to memorise.",
+    title: "Insulin types, onset, peak and timing for the NCLEX",
+    h1: "Insulin types, onset, peak and timing for the NCLEX",
+    description: "Compare insulin categories, qualified onset and peak estimates, meal timing, product-specific IV and mixing rules, and hypoglycemia priorities.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN includes insulin timing in both flashcards and full clinical scenarios.",
     body: `
-<p>Insulin questions are rarely about pharmacology for its own sake. They ask: when will this client be at risk of hypoglycaemia, and what should the nurse do about it? Peak time answers that, which is why it is the column worth learning.</p>
+<p>Insulin questions connect the ordered product and route with meal timing, glucose monitoring and hypoglycemia prevention. Onset, peak and duration are useful estimates, but they do not replace the medication label, current order, patient response or facility protocol.</p>
 
-<h2>The four categories</h2>
-<table>
-  <tr><th>Type</th><th>Example</th><th>Onset</th><th>Peak</th><th>Duration</th></tr>
-  <tr><td>Rapid-acting</td><td>lispro, aspart, glulisine</td><td>About 15 min</td><td>1&ndash;2 h</td><td>3&ndash;5 h</td></tr>
-  <tr><td>Short-acting</td><td>regular</td><td>30&ndash;60 min</td><td>2&ndash;4 h</td><td>5&ndash;8 h</td></tr>
-  <tr><td>Intermediate</td><td>NPH</td><td>1&ndash;2 h</td><td>4&ndash;12 h</td><td>12&ndash;18 h</td></tr>
-  <tr><td>Long-acting</td><td>glargine, detemir</td><td>1&ndash;2 h</td><td>Minimal or none</td><td>Up to 24 h</td></tr>
-</table>
-<p>Times are typical teaching values; individual products and clients vary.</p>
-
-<div class="key">
-<p><b>Peak equals hypoglycaemia risk.</b> If an item asks when a client is most likely to experience a reaction, it is asking about peak. Rapid-acting insulin given before a meal peaks while the client eats — which is why a missed or delayed meal after rapid insulin is the classic exam setup.</p>
+<div class="key" role="note" aria-labelledby="insulin-safety-boundary">
+<h2 id="insulin-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>Do not use a study-guide timing table to calculate a dose, change an insulin regimen or assume that two products share the same route or mixing instructions. Verify the exact generic and brand name, concentration, device, route, order, glucose result and relationship to food before administration.</p>
 </div>
 
-<h2>The rules that get tested</h2>
+<h2>Category estimates, not universal clocks</h2>
+<div class="table-wrap" role="region" aria-label="Insulin category timing estimates" tabindex="0">
+<table>
+  <caption>Representative CDC insulin-category estimates</caption>
+  <thead><tr><th scope="col">Category</th><th scope="col">Representative example</th><th scope="col">Onset</th><th scope="col">Peak</th><th scope="col">Duration</th></tr></thead>
+  <tbody>
+  <tr><th scope="row">Rapid-acting</th><td>Insulin lispro</td><td>About 15 min</td><td>About 1 h</td><td>2&ndash;4 h</td></tr>
+  <tr><th scope="row">Regular/short-acting</th><td>Regular human insulin</td><td>About 30 min</td><td>2&ndash;3 h</td><td>3&ndash;6 h</td></tr>
+  <tr><th scope="row">Intermediate-acting</th><td>NPH insulin</td><td>2&ndash;4 h</td><td>4&ndash;12 h</td><td>12&ndash;18 h</td></tr>
+  <tr><th scope="row">Long-acting</th><td>Insulin glargine</td><td>About 2 h</td><td>No pronounced peak</td><td>Up to 24 h</td></tr>
+  <tr><th scope="row">Ultra-long-acting</th><td>Product-specific</td><td>About 6 h</td><td>No pronounced peak</td><td>36 h or longer</td></tr>
+  </tbody>
+</table>
+</div>
+<p>These are category-level teaching estimates. CDC notes that brands within the same category can differ and that absorption and action vary among people. Use the exact product information for clinical decisions.</p>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-cdc-insulin-types-2024">CDC insulin types</a> and the <a href="#source-dailymed-lantus-2025">Lantus label</a>.</p>
+
+<div class="key">
+<p><b>Maximum glucose-lowering effect increases hypoglycemia risk, but it is not a universal clock.</b> Risk also changes with the product, dose, meal timing, activity, injection site, kidney or liver function, concurrent medications and the patient's prior response. Long- and ultra-long-acting products may not have a pronounced peak.</p>
+</div>
+
+<h2>Route, meal timing and preparation are product-specific</h2>
 <ul>
-  <li><b>Rapid-acting is given with food already available</b> — typically within about 15 minutes of eating. Give it and then discover the tray has not arrived, and you have created the problem.</li>
-  <li><b>Only regular insulin is given intravenously.</b> An option offering IV NPH or IV glargine is wrong.</li>
-  <li><b>Long-acting insulin is not mixed</b> with other insulins in the same syringe.</li>
-  <li><b>Do not shake insulin.</b> Cloudy suspensions such as NPH are gently rolled between the palms.</li>
+  <li><b>Meal timing:</b> the insulin lispro label permits subcutaneous administration within 15 minutes before a meal or immediately afterward. Other rapid-acting products can have different instructions, so verify the exact label and order.</li>
+  <li><b>Intravenous use:</b> regular human insulin is not the only insulin that can ever be given IV. Some insulin lispro and insulin aspart products permit supervised IV infusion with close glucose and potassium monitoring. Never infer an IV route from the category alone.</li>
+  <li><b>Mixing:</b> insulin glargine must not be diluted or mixed with another insulin or solution. Compatibility is product-specific rather than a blanket rule for every long-acting insulin.</li>
+  <li><b>Resuspension:</b> follow the device instructions for cloudy suspensions. Humulin N instructions specify gentle rolling and inversion with an appearance check; vigorous shaking is not the instruction.</li>
 </ul>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-dailymed-insulin-lispro-2024">insulin lispro</a>, <a href="#source-dailymed-humulin-n-2017">Humulin N</a> and <a href="#source-dailymed-lantus-2025">Lantus</a> labels.</p>
 
-<h2>Mixing order</h2>
-<p>When regular and NPH are drawn into one syringe, air goes into the cloudy vial first, then air into the clear vial, then <b>clear is drawn before cloudy</b>. The reason is contamination: drawing cloudy first would carry intermediate-acting suspension back into the clear vial and alter every subsequent dose.</p>
-<p>The mnemonic most students carry is <i>clear before cloudy</i>, sometimes as RN — <b>R</b>egular before <b>N</b>PH. Either works as long as you can also say why.</p>
+<h2>Mix only when the exact products are compatible</h2>
+<p>The Humulin N label permits mixing with Humulin R or Humalog when indicated. Draw the clear Humulin R or Humalog into the syringe first, then the cloudy Humulin N, and inject immediately after mixing. This product-specific instruction supports the “clear before cloudy” memory aid; it does not authorize mixing arbitrary insulins. Do not mix insulin glargine.</p>
 
-<h2>Recognising hypoglycaemia</h2>
-<p>Early signs are sympathetic: shakiness, sweating, tachycardia, hunger, anxiety. Later signs are neurological: confusion, slurred speech, seizure, loss of consciousness.</p>
-<p>Treat a conscious client with a fast-acting oral carbohydrate, then recheck. Follow with a longer-acting carbohydrate and protein once the level has recovered, so it does not fall again. If the client cannot swallow safely, oral carbohydrate is not an option and the answer will involve a parenteral route.</p>
+<h2>Recognizing and responding to hypoglycemia</h2>
+<p>Symptoms can begin quickly and vary by person. Shaking, sweating, hunger, anxiety, dizziness, tachycardia, irritability or confusion can occur; severe hypoglycemia can cause inability to self-treat, seizure or loss of consciousness.</p>
+<p>For a conscious person who can swallow and whose glucose is below the individualized target, follow the applicable protocol. A common approach is 15 grams of fast-acting carbohydrate, recheck in about 15 minutes, and repeat if the glucose remains low. Once the glucose is in a safer range, add a carbohydrate-and-protein snack only when the next meal is more than an hour away or the care plan directs it.</p>
+<p>If swallowing is unsafe or the person cannot self-treat, do not give oral carbohydrate. Activate the emergency protocol and use the ordered non-oral treatment, such as glucagon or IV dextrose, with continued monitoring.</p>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-medlineplus-low-blood-sugar-self-care-2026">MedlinePlus low-blood-sugar self-care</a> and the <a href="#source-dailymed-insulin-lispro-2024">insulin lispro label</a>.</p>
 
 <h2>The beta-blocker interaction</h2>
-<p>Beta-blockers mask the early sympathetic warning signs of hypoglycaemia — the tachycardia and tremor a client would normally notice. Sweating tends to persist. A client on both insulin and a beta-blocker may therefore present with confusion as their first apparent sign, which is exactly the scenario the exam builds items around.</p>
+<p>Beta-blockers and other drugs that block sympathetic activity can blunt or eliminate some warning signs of hypoglycemia, and beta-blockers may increase or decrease insulin's glucose-lowering effect. Do not assume that sweating will persist or that confusion will be the first sign. The insulin lispro and insulin glargine labels call for closer glucose monitoring when medications can reduce symptom awareness.</p>
 `,
     faq: [
-      { q: "When is a client most at risk of hypoglycaemia after insulin?", a: "At the insulin's peak. Rapid-acting insulin peaks about one to two hours after administration, regular insulin at two to four hours, and NPH anywhere from four to twelve hours." },
-      { q: "Which insulin can be given intravenously?", a: "Only regular insulin. Intermediate-acting and long-acting insulins are never given IV." },
-      { q: "What order do you draw up insulin when mixing?", a: "Air into the cloudy vial, air into the clear vial, then draw clear before cloudy. Drawing cloudy first would contaminate the clear vial with suspension and change later doses." },
+      { q: "When is hypoglycemia risk highest after insulin?", a: "Risk often rises near the product's maximum glucose-lowering effect, but generic peak tables are only estimates. The exact insulin, dose, meal timing, activity, organ function, concurrent medicines and patient response all matter; some basal insulins have no pronounced peak." },
+      { q: "Is regular insulin the only insulin that can be given intravenously?", a: "No. Regular human insulin and some rapid-acting products, including certain insulin lispro and insulin aspart formulations, may be administered IV under medical supervision with product-specific preparation and close glucose and potassium monitoring. Verify the exact label, route and order." },
+      { q: "What order is used when compatible clear and cloudy insulins are mixed?", a: "For the products specifically permitted by the Humulin N label, draw clear Humulin R or Humalog first, then cloudy Humulin N, and inject immediately. Do not generalize this instruction to incompatible products; insulin glargine must not be mixed." },
+      { q: "How is mild hypoglycemia treated when the client can swallow?", a: "Follow the clinical protocol. A common approach is 15 grams of fast-acting carbohydrate, recheck in about 15 minutes, and repeat if glucose remains low. If the client cannot swallow or self-treat, do not give oral carbohydrate; activate the emergency protocol for ordered non-oral treatment." },
     ],
   },
 

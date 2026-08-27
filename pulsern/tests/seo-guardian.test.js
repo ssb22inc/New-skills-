@@ -81,6 +81,30 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
   });
 
+  it("keeps pending Guide 4 product-specific, accessible, and source-bound", () => {
+    const guide = CLINICAL_ARTICLES.find((article) => article.slug === "insulin-types-and-timing");
+    expect(guide.updated).toBe("2026-08-27");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(5);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(5);
+    expect(guide.body).toContain('class="table-wrap" role="region" aria-label="Insulin category timing estimates" tabindex="0"');
+    expect(guide.body).toContain('aria-labelledby="insulin-safety-boundary"');
+    expect(guide.body).toContain("regular human insulin is not the only insulin that can ever be given IV");
+    expect(guide.body).toContain("Do not mix insulin glargine");
+    expect(guide.body).toContain("15 grams of fast-acting carbohydrate");
+    expect(guide.body).not.toContain("Only regular insulin is given intravenously");
+    expect(guide.body).not.toContain("Sweating tends to persist");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "cdc-insulin-types-2024",
+      "dailymed-insulin-lispro-2024",
+      "dailymed-humulin-n-2017",
+      "dailymed-lantus-2025",
+      "medlineplus-low-blood-sugar-self-care-2026",
+      "ncsbn-2026-rn-test-plan",
+    ]);
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });
