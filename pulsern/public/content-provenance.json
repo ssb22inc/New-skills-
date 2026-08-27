@@ -1051,12 +1051,89 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 4 insulin-types-and-timing content and source-set digests",
+        "claims": [
+          {
+            "id": "insulin-product-route-and-administration-safety-boundary",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "cdc-insulin-types-2024",
+              "dailymed-insulin-lispro-2024",
+              "dailymed-insulin-aspart-2023",
+              "dailymed-humulin-n-2017",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "insulin-category-onset-peak-duration-estimates",
+            "locator": "Category estimates, not universal clocks; insulin category timing table",
+            "sourceIds": [
+              "cdc-insulin-types-2024",
+              "dailymed-insulin-aspart-2023",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "insulin-hypoglycemia-risk-and-timing-variability",
+            "locator": "Maximum glucose-lowering effect callout; peak-risk FAQ",
+            "sourceIds": [
+              "cdc-insulin-types-2024",
+              "dailymed-insulin-lispro-2024",
+              "dailymed-insulin-aspart-2023",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "insulin-lispro-meal-timing",
+            "locator": "Route, meal timing and preparation are product-specific — Meal timing",
+            "sourceIds": [
+              "dailymed-insulin-lispro-2024"
+            ]
+          },
+          {
+            "id": "insulin-lispro-and-aspart-intravenous-use",
+            "locator": "Route, meal timing and preparation are product-specific — Intravenous use; IV-insulin FAQ",
+            "sourceIds": [
+              "dailymed-insulin-lispro-2024",
+              "dailymed-insulin-aspart-2023"
+            ]
+          },
+          {
+            "id": "insulin-product-specific-mixing-and-resuspension",
+            "locator": "Route, meal timing and preparation are product-specific — Mixing and resuspension; Mix only when the exact products are compatible; clear-and-cloudy FAQ",
+            "sourceIds": [
+              "dailymed-humulin-n-2017",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "hypoglycemia-recognition-and-oral-treatment",
+            "locator": "Recognizing and responding to hypoglycemia; mild-hypoglycemia FAQ",
+            "sourceIds": [
+              "medlineplus-low-blood-sugar-self-care-2026",
+              "dailymed-insulin-lispro-2024"
+            ]
+          },
+          {
+            "id": "hypoglycemia-unsafe-swallow-and-beta-blocker-precautions",
+            "locator": "Recognizing and responding to hypoglycemia — unsafe swallowing; The beta-blocker interaction",
+            "sourceIds": [
+              "dailymed-insulin-lispro-2024",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "insulin-nclex-education-scope",
+            "locator": "Page title, description, CTA, and educational framing",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
