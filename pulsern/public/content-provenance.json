@@ -1622,12 +1622,84 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 8 therapeutic-communication content and source-set digests",
+        "claims": [
+          {
+            "id": "therapeutic-communication-purpose-and-safety-boundary",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "communication-purpose-cues-and-clinical-judgment-sequence",
+            "locator": "Start with purpose and cues",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "communication-techniques-contextual-use",
+            "locator": "Therapeutic techniques are contextual",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025"
+            ]
+          },
+          {
+            "id": "open-versus-focused-question-selection",
+            "locator": "Therapeutic techniques are contextual — Open-ended and focused questions; open-ended-question FAQ",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "reflection-clarification-silence-presence-qualifications",
+            "locator": "Therapeutic techniques are contextual — Reflection, clarification, silence and presence",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025"
+            ]
+          },
+          {
+            "id": "information-teaching-referral-and-coordination",
+            "locator": "Therapeutic techniques are contextual — Information, teaching and referral; referral FAQ",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "nontherapeutic-blocking-patterns",
+            "locator": "Patterns that often block communication",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025"
+            ]
+          },
+          {
+            "id": "suicide-cue-direct-question-safety-and-escalation",
+            "locator": "Safety can require direct questions; suicide-risk FAQ",
+            "sourceIds": [
+              "nimh-suicide-five-action-steps-2024",
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "communication-response-comparison-and-nclex-scope",
+            "locator": "Compare plausible responses; title, description and CTA",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
