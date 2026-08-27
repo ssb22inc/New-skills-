@@ -894,12 +894,82 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 3 infection-control-precautions content and source-set digests",
+        "claims": [
+          {
+            "id": "infection-control-standard-and-transmission-based-framework",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "cdc-isolation-precautions",
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "airborne-droplet-contact-placement-ppe-and-transport",
+            "locator": "The three transmission-based categories comparison table",
+            "sourceIds": [
+              "cdc-isolation-precautions",
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "airborne-disease-examples-qualifiers-and-durations",
+            "locator": "High-yield disease examples and qualifiers — Airborne, with Standard Precautions; Airborne FAQ",
+            "sourceIds": [
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "droplet-disease-examples-and-durations",
+            "locator": "High-yield disease examples and qualifiers — Droplet, with Standard Precautions",
+            "sourceIds": [
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "contact-disease-examples-qualifiers-and-durations",
+            "locator": "High-yield disease examples and qualifiers — Contact, with Standard Precautions",
+            "sourceIds": [
+              "cdc-isolation-appendix-a-2025",
+              "cdc-cdiff-acute-care-2026"
+            ]
+          },
+          {
+            "id": "cdiff-contact-environmental-and-hand-hygiene-precautions",
+            "locator": "C. difficile: separate spores from hand-hygiene policy; C. difficile FAQ",
+            "sourceIds": [
+              "cdc-cdiff-acute-care-2026",
+              "cdc-clinical-hand-hygiene-2024",
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "protective-environment-population-and-controls",
+            "locator": "Protective environment is a specific designation; protective-environment FAQ",
+            "sourceIds": [
+              "cdc-protective-environment-table-5"
+            ]
+          },
+          {
+            "id": "ppe-donning-removal-and-protocol-qualification",
+            "locator": "PPE sequence: learn the example and follow the protocol; PPE-order FAQ",
+            "sourceIds": [
+              "cdc-ppe-sequence-2023",
+              "cdc-isolation-precautions"
+            ]
+          },
+          {
+            "id": "infection-control-nclex-education-scope",
+            "locator": "Page title, description, CTA, and educational framing",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
