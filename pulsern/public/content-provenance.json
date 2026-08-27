@@ -1713,9 +1713,18 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "1de684b778dc108e78df9aefdc0207e56bbe5cabcabce3747a05c392d8364275",
-      "sourceSetSha256": "cfca3a49b94b35587d4a0ed5c209a3068f489276a10a61ebc4cab5eea8267455",
+      "contentSha256": "7090723b9c97fc4c0ed38e9b365a02f03c14f4b39ee8d0766e7a6dbf0325c824",
+      "sourceSetSha256": "ffae2149ee574a1ddf529bd3bb57bf104da100e9fde02446e7e1b0fb0347bcdb",
       "sources": [
+        {
+          "id": "ncbi-openrn-math-calculations-2023",
+          "title": "Math Calculations",
+          "publisher": "Open RN via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK596732/",
+          "sourceUpdated": "2023-01-01",
+          "accessedAt": "2026-08-27",
+          "locator": "Sections 5.4–5.17 — equivalencies, rounding, dimensional analysis, conversions, dosage forms, weight-based and safe-dose calculations, and IV infusion rates"
+        },
         {
           "id": "ncsbn-2026-rn-test-plan",
           "title": "NCSBN — 2026 RN Test Plan",
@@ -1724,6 +1733,15 @@
           "sourceUpdated": "2026-04-01",
           "accessedAt": "2026-08-26",
           "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
         }
       ],
       "review": {

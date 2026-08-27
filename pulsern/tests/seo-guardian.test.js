@@ -203,6 +203,27 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide)[1].locator).toContain("revised 2024");
   });
 
+  it("keeps pending Guide 9 dosage calculations unit-bound, qualified, and safety-checked", () => {
+    const guide = SKILL_ARTICLES.find((article) => article.slug === "dosage-calculation-formulas");
+    expect(guide.updated).toBe("2026-08-27");
+    expect(guide.body).toContain('aria-labelledby="dosage-safety-boundary"');
+    expect(guide.body).toContain("unwanted units cancel");
+    expect(guide.body).toContain("per day but is given in divided doses");
+    expect(guide.body).toContain("1 kg ≈ 2.2 lb");
+    expect(guide.body).toContain("Do not administer a dose when the order, concentration, calculation or result is unclear or implausible");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(2);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(5);
+    expect(guide.body).not.toContain("three formulas");
+    expect(guide.body).not.toContain("overwhelming majority");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncbi-openrn-math-calculations-2023",
+      "ncsbn-2026-rn-test-plan",
+      "ncsbn-next-generation-nclex",
+    ]);
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

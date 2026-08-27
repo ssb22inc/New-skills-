@@ -210,67 +210,82 @@ export const SKILL_ARTICLES = [
   {
     slug: "dosage-calculation-formulas",
     topic: "Test-taking skill",
-    title: "Dosage calculation: the formulas that cover it",
-    h1: "Dosage calculation without the panic",
-    description: "The three formulas that cover almost every NCLEX calculation, how to handle weight-based and IV rate problems, and where rounding goes wrong.",
+    title: "NCLEX dosage calculations: formulas and safety checks",
+    h1: "How to solve NCLEX dosage calculations safely",
+    description: "Set up tablet, liquid, weight-based and IV calculations with units, round only when directed, and verify that the result is safe and plausible.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN has an on-screen calculator and worked solutions on every dosage item, so you can see where a calculation went wrong.",
     body: `
-<p>Dosage calculation frightens people out of proportion to its difficulty. There are only a few formulas, the arithmetic is deliberately manageable, and the errors that cost marks are nearly always about setup or units rather than about mathematics.</p>
+<p>NCLEX dosage calculations test whether you can translate an order and a supplied concentration into the requested unit, perform the arithmetic and judge whether the result is safe and plausible. A formula can organize the numbers, but it does not replace reading the entire order, label and item instructions.</p>
 
-<h2>The core formula</h2>
-<p><b>Desired over Have, times Quantity.</b></p>
-<p>Amount to give equals the dose you want, divided by the dose you have on hand, multiplied by the quantity that dose comes in.</p>
-<p>If an order is for 500 mg and the supply is 250 mg per tablet, then 500 divided by 250, times 1 tablet, gives 2 tablets.</p>
-
-<h2>Weight-based doses</h2>
-<p>Two steps, in this order:</p>
-<ol>
-  <li>Convert weight to kilograms if it is given in pounds — <b>divide by 2.2</b>.</li>
-  <li>Multiply the prescribed dose per kilogram by the client's weight in kilograms.</li>
-</ol>
-<p>Then, if needed, apply Desired over Have to convert that dose into a volume.</p>
-
-<div class="key">
-<p><b>Convert units before you calculate, never during.</b> The overwhelming majority of dosage errors are unit errors: pounds left unconverted, milligrams treated as grams, an hourly rate confused with a total volume. Write the units next to every number and make sure they cancel.</p>
+<div class="key" role="note" aria-labelledby="dosage-safety-boundary">
+<h2 id="dosage-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>For exam practice, use the values and rounding direction in the item. In clinical practice, verify the complete order, medication label or concentration, route, timing, patient weight when relevant, safe dose range or maximum dose, allergies, contraindications and required monitoring. Follow current facility policy and the device or pharmacy instructions. Do not administer a dose when the order, concentration, calculation or result is unclear or implausible; stop and obtain an independent verification through the required clinical process.</p>
 </div>
 
-<h2>IV flow rates</h2>
-<p><b>By pump, in millilitres per hour:</b> total volume divided by total hours.</p>
-<p>1,000 mL over 8 hours gives 125 mL/hour.</p>
-<p><b>By gravity, in drops per minute:</b> volume in millilitres, times the drop factor, divided by the time in minutes.</p>
-<p>1,000 mL over 8 hours with a drop factor of 15 becomes 1,000 times 15, divided by 480 minutes, which is about 31 drops per minute.</p>
-<p>Drops per minute are always rounded to a whole number — you cannot deliver a fraction of a drop.</p>
+<h2>Use one setup and keep the units visible</h2>
+<p>Dimensional analysis is a reliable general method: write the target unit, multiply by conversion factors arranged so unwanted units cancel, and confirm that only the requested unit remains. Ratio-proportion or the formula method can also work when used correctly. Avoid switching methods in the middle of a problem.</p>
+<p>For a simple tablet or liquid dose, a common formula is:</p>
+<p><b>Amount to give = (ordered dose ÷ dose available) × quantity containing the available dose.</b></p>
+<p>Example: an order is 500 mg and the supply is 250 mg per tablet. The units show the setup: 500 mg × (1 tablet ÷ 250 mg) = 2 tablets.</p>
+<p class="source-note"><b>Evidence for the calculation method:</b> <a href="#source-ncbi-openrn-math-calculations-2023">NCBI Open RN Math Calculations</a>. <a href="#source-ncsbn-2026-rn-test-plan">NCSBN's RN Test Plan</a> places medication calculations within safe medication administration and clinical judgment.</p>
 
-<h2>Conversions worth knowing without thinking</h2>
+<h2>Weight-based doses</h2>
+<p>First determine exactly what the order expresses: a dose per administration, per day, per hour or per minute. Then:</p>
+<ol>
+  <li>Use the measured weight and unit stated in the item. If pounds must be converted to kilograms, use the supplied conversion; a common clinical approximation is <b>1 kg = 2.2 lb</b>, so pounds ÷ 2.2 = kilograms.</li>
+  <li>Multiply the ordered amount per kilogram by the patient's weight in kilograms, keeping any time unit such as dose, day, hour or minute.</li>
+  <li>If the order is per day but is given in divided doses, calculate the daily amount and then divide by the stated number of doses.</li>
+  <li>Compare the calculated dose with the stated safe range or maximum before converting it to tablets or volume.</li>
+</ol>
+<p>Carry adequate precision through intermediate steps and round the final requested result according to the item, policy and measuring device. Premature rounding can change a small dose.</p>
+
+<h2>IV flow rates</h2>
+<p><b>Simple constant-rate pump problem, in milliliters per hour:</b> total volume in mL ÷ total time in hours.</p>
+<p>1,000 mL over 8 hours gives 125 mL/hour.</p>
+<p><b>Gravity infusion, in drops per minute:</b> (volume in mL × tubing drop factor in gtt/mL) ÷ time in minutes.</p>
+<p>1,000 mL over 8 hours with a drop factor of 15 becomes 1,000 times 15, divided by 480 minutes, which is about 31 drops per minute.</p>
+<p>A manual gravity rate is expressed as a whole number of drops per minute because a fraction of a drop cannot be counted. For medication infusions prescribed by weight and time, such as mcg/kg/min, include the patient's weight and the prepared concentration; do not substitute the simple volume-over-time formula.</p>
+
+<h2>Conversions: distinguish exact from conventional</h2>
+<div class="table-wrap" role="region" aria-label="Dosage calculation conversion factors" tabindex="0">
 <table>
-  <tr><th>From</th><th>To</th></tr>
-  <tr><td>1 kg</td><td>2.2 lb</td></tr>
-  <tr><td>1 g</td><td>1,000 mg</td></tr>
-  <tr><td>1 mg</td><td>1,000 mcg</td></tr>
-  <tr><td>1 L</td><td>1,000 mL</td></tr>
-  <tr><td>1 tsp</td><td>5 mL</td></tr>
-  <tr><td>1 tbsp</td><td>15 mL</td></tr>
-  <tr><td>1 oz</td><td>30 mL</td></tr>
+  <caption>Common factors used in nursing-education problems</caption>
+  <thead><tr><th scope="col">Relationship</th><th scope="col">How to use it</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">1 g = 1,000 mg</th><td>Exact metric relationship.</td></tr>
+    <tr><th scope="row">1 mg = 1,000 mcg</th><td>Exact metric relationship.</td></tr>
+    <tr><th scope="row">1 L = 1,000 mL</th><td>Exact metric relationship.</td></tr>
+    <tr><th scope="row">1 kg ≈ 2.2 lb</th><td>Common clinical approximation; use the conversion specified by the item or policy.</td></tr>
+    <tr><th scope="row">1 tsp ≈ 5 mL; 1 Tbsp ≈ 15 mL; 1 fl oz ≈ 30 mL</th><td>Conventional medication-calculation equivalents. For actual liquid medicine, use a calibrated metric device rather than a household spoon.</td></tr>
+  </tbody>
 </table>
+</div>
 
 <h2>Rounding and format</h2>
 <ul>
-  <li>Follow the rounding the item specifies. If it asks for the nearest tenth, give a tenth.</li>
-  <li>Use a leading zero for values below one — <b>0.5 mg</b>, never .5 mg, which is misread as 5.</li>
-  <li>Never use a trailing zero — <b>5 mg</b>, never 5.0 mg, which is misread as 50.</li>
-  <li>Enter only the number unless the item asks for a unit.</li>
+  <li>Do not round intermediate results unless the item explicitly directs it. Round the final answer to the stated place or to the precision supported by the delivery device and policy.</li>
+  <li>For a medication dose below one, use a leading zero: <b>0.5 mg</b>, not .5 mg.</li>
+  <li>Do not add a trailing zero to a whole-number medication dose: <b>5 mg</b>, not 5.0 mg.</li>
+  <li>Enter the number and unit exactly as the item requests; do not assume every interface uses the same response format.</li>
 </ul>
-<p>Those two zero rules are safety conventions, not style preferences, and they are examinable in their own right.</p>
+<p>The decimal conventions reduce tenfold misreading risk. They do not authorize changing the precision of a device setting or ignoring a specific documentation standard.</p>
 
-<h2>The sense check that catches disasters</h2>
-<p>Before entering an answer, ask whether it is plausible. Half a tablet, two tablets, 125 mL per hour — these are ordinary. Fourteen tablets, or an infusion at 1,200 mL per hour, is a signal that something was set up upside down. In practice a nurse who calculates an implausible dose stops and rechecks, and the exam rewards the same instinct.</p>
+<h2>A final verification sequence</h2>
+<ol>
+  <li>Re-read what the question asks and confirm the target unit.</li>
+  <li>Check that unwanted units cancel and recalculate independently.</li>
+  <li>Compare the result with the order, supplied concentration, stated safe range or maximum, route, timing and available measuring device.</li>
+  <li>Ask whether the magnitude is plausible. A surprising result is a stop signal, not a reason to force the number into an expected pattern.</li>
+  <li>Apply the requested rounding only at the end and label the answer as directed.</li>
+</ol>
 `,
     faq: [
-      { q: "What formula is used for dosage calculation?", a: "Desired over Have times Quantity: divide the dose you want by the dose on hand, then multiply by the quantity that dose comes in. Weight-based problems add a step of converting pounds to kilograms first." },
-      { q: "How do I calculate IV drip rate?", a: "Multiply the volume in millilitres by the drop factor, then divide by the time in minutes. Round drops per minute to a whole number. For a pump in millilitres per hour, divide total volume by total hours." },
-      { q: "How many kilograms is a pound?", a: "There are 2.2 pounds in a kilogram, so divide pounds by 2.2 to get kilograms. Doing this conversion before starting the calculation prevents the most common dosage error." },
+      { q: "What formula is used for a simple dosage calculation?", a: "For a tablet or liquid problem, amount to give equals ordered dose divided by available dose, multiplied by the quantity containing the available dose. Dimensional analysis reaches the same result while showing whether units cancel." },
+      { q: "How do I calculate an IV drip rate?", a: "For gravity tubing, multiply volume in mL by the tubing drop factor in gtt/mL and divide by time in minutes; express the result as whole gtt/min. For a simple pump rate, divide mL by hours. Weight- and time-based medication infusions require the full order, patient weight and prepared concentration." },
+      { q: "Should I round kilograms before calculating a weight-based dose?", a: "Keep adequate precision through the intermediate calculation and round the final requested answer according to the item, facility policy and measuring device. Use the weight conversion supplied by the item; 1 kg = 2.2 lb is a common clinical approximation." },
+      { q: "What should I do if a calculated dose looks unsafe?", a: "Stop and recheck the order, label, units, arithmetic, safe range or maximum and patient-specific factors. In clinical practice, do not administer an unclear or implausible dose; obtain the independent verification required by policy." },
     ],
   },
 
