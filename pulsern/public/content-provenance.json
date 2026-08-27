@@ -1745,12 +1745,87 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 9 dosage-calculation-formulas content and source-set digests",
+        "claims": [
+          {
+            "id": "dosage-calculation-purpose-and-safety-boundary",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "dimensional-analysis-and-unit-cancellation",
+            "locator": "Use one setup and keep the units visible",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "simple-tablet-and-liquid-dose-formula",
+            "locator": "Use one setup and keep the units visible; simple-dose FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "weight-based-dose-time-basis-and-divided-doses",
+            "locator": "Weight-based doses; weight-rounding FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "safe-dose-range-maximum-and-independent-verification",
+            "locator": "Safety boundary; Weight-based doses; unsafe-dose FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "simple-iv-pump-rate-calculation",
+            "locator": "IV flow rates — simple constant-rate pump",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "gravity-infusion-drop-rate-calculation",
+            "locator": "IV flow rates — gravity infusion; IV drip-rate FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "metric-and-conventional-conversion-factors",
+            "locator": "Conversions: distinguish exact from conventional",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "late-rounding-leading-zero-and-no-trailing-zero",
+            "locator": "Rounding and format",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "dosage-final-verification-and-nclex-scope",
+            "locator": "A final verification sequence; title, description and CTA",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023",
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
