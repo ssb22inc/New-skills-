@@ -300,6 +300,56 @@
           "sourceIds": ["ismp-high-alert-acute-care-2024", "ncsbn-2026-rn-test-plan"]
         }
       ]
+    },
+    "prioritization-abc-maslow": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-27",
+      "scope": "Full RN clinical and source review of the exact Guide 6 prioritization-abc-maslow content and source-set digests",
+      "contentSha256": "593f70ffc8e9c3f654cbd636712ec5feec560be75deeb279661589a53ad5cd4f",
+      "sourceSetSha256": "2645b7c1ae74a863333b0a551823a1279bee07b55b025913e968322729cb7669",
+      "claims": [
+        {
+          "id": "prioritization-clinical-judgment-sequence",
+          "locator": "Opening paragraph; A defensible decision sequence",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        },
+        {
+          "id": "prioritization-heuristics-safety-boundary",
+          "locator": "Safety boundary",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "aha-2025-adult-basic-life-support"]
+        },
+        {
+          "id": "established-emergency-and-time-sensitive-action",
+          "locator": "A defensible decision sequence — steps 2 through 4",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "aha-2025-adult-basic-life-support"]
+        },
+        {
+          "id": "abc-screen-limitations-and-adult-bls-sequence",
+          "locator": "ABCs are a screen, not a universal ranking law; ABC FAQ",
+          "sourceIds": ["aha-2025-adult-basic-life-support", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "maslow-limited-tie-breaker",
+          "locator": "Maslow is a tie-breaker, not a clinical guideline; Maslow FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        },
+        {
+          "id": "assessment-action-and-evaluation-context",
+          "locator": "Assessment first—unless the decision is already established; assessment FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        },
+        {
+          "id": "expected-chronic-and-change-comparison-safeguards",
+          "locator": "How to compare clients without unsafe shortcuts; expected-or-chronic FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        },
+        {
+          "id": "prioritization-practice-and-nclex-education-scope",
+          "locator": "Practice the comparison, not only the answer; title, description and CTA",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        }
+      ]
     }
   }
 }
