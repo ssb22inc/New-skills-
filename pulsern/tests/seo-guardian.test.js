@@ -106,6 +106,35 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
   });
 
+  it("keeps pending Guide 5 reversal guidance qualified, accessible, and source-bound", () => {
+    const guide = CLINICAL_ARTICLES.find((article) => article.slug === "high-alert-medications");
+    expect(guide.updated).toBe("2026-08-27");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(8);
+    expect(guide.body).toContain('class="table-wrap" role="region" aria-label="Qualified medication reversal pairings" tabindex="0"');
+    expect(guide.body).toContain('aria-labelledby="high-alert-safety-boundary"');
+    expect(guide.body).toContain("Flumazenil is not an automatic response to every overdose");
+    expect(guide.body).toContain("Naloxone does not replace resuscitation");
+    expect(guide.body).not.toContain("Monitor <b>aPTT for heparin</b>");
+    expect(guide.body).not.toContain("Independent double-checking of the dose is standard practice");
+    expect(guide.body).not.toContain("never stopped abruptly");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ismp-high-alert-acute-care-2024",
+      "dailymed-heparin-sodium-2024",
+      "dailymed-protamine-sulfate-2024",
+      "dailymed-warfarin-sodium-2026",
+      "dailymed-naloxone-injection-2026",
+      "dailymed-flumazenil-2026",
+      "dailymed-acetylcysteine-injection-2025",
+      "dailymed-magnesium-sulfate-in-water",
+      "dailymed-digifab-2025",
+      "dailymed-deferoxamine-2026",
+      "ncsbn-2026-rn-test-plan",
+    ]);
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

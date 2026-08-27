@@ -390,58 +390,58 @@ export const CLINICAL_ARTICLES = [
   {
     slug: "high-alert-medications",
     topic: "High-yield clinical",
-    title: "High-alert medications and their antidotes",
-    h1: "High-alert medications worth knowing cold",
-    description: "The drugs most often involved in serious harm, what to monitor for each, and the antidote pairings the NCLEX expects on recall.",
+    title: "High-alert medications and reversal agents",
+    h1: "High-alert medications, reversal agents and safety priorities",
+    description: "Review high-alert medication safeguards, qualified reversal-agent pairings, anticoagulant monitoring, and escalation priorities for the NCLEX.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN drills these as flashcards and inside case studies where the monitoring decision actually matters.",
+    updated: "2026-08-27",
+    cta: "PulseRN drills medication-safety decisions in flashcards and clinical scenarios where monitoring, escalation and product-specific details matter.",
     body: `
-<p>High-alert medications are those that cause disproportionate harm when something goes wrong. The exam concentrates on them because safety is the organising principle of nursing licensure.</p>
+<p>ISMP defines high-alert medications as drugs that carry a heightened risk of causing significant patient harm when used in error. The designation does not mean errors are necessarily more common, and it is not a complete list of every medication that requires caution. The practical lesson is to use reliable safeguards for the exact medication, concentration, route and care setting.</p>
 
-<h2>Antidote pairings</h2>
+<div class="key" role="note" aria-labelledby="high-alert-safety-boundary">
+<h2 id="high-alert-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>A reversal-agent table is a recognition aid, not a treatment order. In an actual exposure or medication emergency, stabilize airway, breathing and circulation; stop or hold medication only when the order, protocol or emergency response directs it; notify the appropriate clinician or poison resource; and use the exact product label and facility protocol. The correct response depends on the drug, dose, route, timing, laboratory results, symptoms and comorbidities.</p>
+</div>
+
+<h2>Reversal agents: pair the drug with the limitation</h2>
+<div class="table-wrap" role="region" aria-label="Qualified medication reversal pairings" tabindex="0">
 <table>
-  <tr><th>Drug</th><th>Antidote or reversal</th></tr>
-  <tr><td>Heparin</td><td>Protamine sulfate</td></tr>
-  <tr><td>Warfarin</td><td>Vitamin K (phytonadione)</td></tr>
-  <tr><td>Opioids</td><td>Naloxone</td></tr>
-  <tr><td>Benzodiazepines</td><td>Flumazenil</td></tr>
-  <tr><td>Acetaminophen</td><td>Acetylcysteine</td></tr>
-  <tr><td>Magnesium sulfate</td><td>Calcium gluconate</td></tr>
-  <tr><td>Digoxin</td><td>Digoxin immune Fab</td></tr>
-  <tr><td>Iron</td><td>Deferoxamine</td></tr>
+  <caption>High-yield pairings with the safety qualification that prevents overgeneralization</caption>
+  <thead><tr><th scope="col">Medication or exposure</th><th scope="col">Reversal or treatment association</th><th scope="col">Essential limitation</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Unfractionated heparin overdosage</th><td>Protamine sulfate</td><td>The IV dose depends on the heparin amount and elapsed time. Protamine can cause severe hypotensive and anaphylactoid reactions and must be administered slowly with resuscitation capability available.</td></tr>
+    <tr><th scope="row">Warfarin-associated excessive anticoagulation or bleeding</th><td>Phytonadione (vitamin K<sub>1</sub>); factor replacement may also be ordered</td><td>The response depends on INR, bleeding severity and urgency. The warfarin label includes vitamin K and, for urgent situations, options such as prothrombin complex concentrate or plasma under an individualized plan.</td></tr>
+    <tr><th scope="row">Opioid-induced respiratory depression</th><td>Naloxone plus airway and ventilatory support</td><td>Naloxone does not replace resuscitation. Some opioids outlast it, so continued surveillance and repeat administration may be required; response to some partial agonists can be incomplete.</td></tr>
+    <tr><th scope="row">Benzodiazepine sedation or overdose in a selected patient</th><td>Flumazenil</td><td>Flumazenil is not an automatic response to every overdose. It carries seizure risk and is contraindicated in specified situations, including serious cyclic-antidepressant overdose and when a benzodiazepine was used to control a life-threatening condition.</td></tr>
+    <tr><th scope="row">Potentially hepatotoxic acetaminophen ingestion</th><td>Acetylcysteine</td><td>Treatment is time-sensitive and guided by the ingestion history, acetaminophen concentration, hepatic testing and the applicable toxicology protocol.</td></tr>
+    <tr><th scope="row">Clinically significant magnesium toxicity</th><td>Calcium gluconate and supportive care</td><td>Stop magnesium exposure and support respiration and circulation under the emergency protocol; continue reflex, respiratory, urine-output and magnesium monitoring as clinically indicated.</td></tr>
+    <tr><th scope="row">Life-threatening or potentially life-threatening digoxin toxicity</th><td>Digoxin immune Fab</td><td>Use is reserved for qualifying toxicity or overdose rather than every elevated digoxin level. ECG, potassium, renal function and clinical status require close monitoring.</td></tr>
+    <tr><th scope="row">Acute iron intoxication</th><td>Deferoxamine</td><td>The label describes it as an adjunct to standard measures. Route and infusion rate depend on clinical status and must follow the ordered toxicology plan.</td></tr>
+  </tbody>
 </table>
-<p>These are among the highest-return facts to hold on instant recall, because items using them give no time to reason it out.</p>
+</div>
+<p class="source-note"><b>Evidence for this table:</b> the <a href="#source-dailymed-heparin-sodium-2024">heparin</a>, <a href="#source-dailymed-protamine-sulfate-2024">protamine</a>, <a href="#source-dailymed-warfarin-sodium-2026">warfarin</a>, <a href="#source-dailymed-naloxone-injection-2026">naloxone</a>, <a href="#source-dailymed-flumazenil-2026">flumazenil</a>, <a href="#source-dailymed-acetylcysteine-injection-2025">acetylcysteine</a>, <a href="#source-dailymed-magnesium-sulfate-in-water">magnesium sulfate</a>, <a href="#source-dailymed-digifab-2025">DigiFab</a> and <a href="#source-dailymed-deferoxamine-2026">deferoxamine</a> labels.</p>
 
-<h2>Anticoagulants</h2>
-<p>Monitor <b>aPTT for heparin</b> and <b>PT/INR for warfarin</b>. Assess for bleeding: bruising, bleeding gums, blood in urine or stool, and any change in neurological status that could indicate intracranial bleeding.</p>
-<p>Warfarin interacts with dietary vitamin K. The teaching point is <b>consistency</b>, not avoidance — a client should keep green leafy vegetable intake steady rather than eliminate it. An option telling the client to avoid all vitamin K is wrong.</p>
+<h2>Anticoagulant monitoring is drug- and protocol-specific</h2>
+<p>For therapeutic unfractionated heparin, follow the ordered coagulation test and institutional nomogram. The cited IV heparin label uses frequent coagulation testing and an aPTT target linked to anti-factor Xa activity; do not transfer that target to every heparin product or indication. Assess for overt or occult bleeding and monitor platelet counts because heparin-induced thrombocytopenia can occur.</p>
+<p>Warfarin dosing is guided by PT/INR for the specific indication and target. Medication changes, illness and dietary vitamin K can alter the INR. Patient teaching generally emphasizes a consistent pattern of vitamin-K intake rather than eliminating vitamin-K-containing foods, with INR follow-up when meaningful dietary or medication changes occur.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-dailymed-heparin-sodium-2024">heparin label</a> and <a href="#source-dailymed-warfarin-sodium-2026">warfarin label</a>.</p>
 
-<h2>Digoxin</h2>
-<p>Take an apical pulse for a full minute before administering, and withhold for bradycardia below the parameter given. Early toxicity is often gastrointestinal — anorexia, nausea, vomiting — followed by visual disturbance, classically yellow-green vision or halos.</p>
-<p><b>Hypokalaemia increases digoxin toxicity risk.</b> That pairing is the reason a client on both digoxin and a loop diuretic is such a common exam scenario.</p>
+<h2>Use layered safeguards, not one universal ritual</h2>
+<p>ISMP's acute-care list includes classes such as anticoagulants, insulin, opioids, neuromuscular blockers, concentrated electrolytes and other organization-specific high-alert medicines. Safeguards may include standardized concentrations and order sets, restricted access, barcode medication administration, clear labeling, clinical decision support, monitoring, patient education and an independent double-check where the local policy requires one.</p>
+<p>An independent double-check is not a blanket substitute for system design, and high-alert status does not establish one universal checking procedure for every medication or setting. Verify the medication against the order and medication-administration record, resolve discrepancies before administration, and follow the institution's specific safeguards.</p>
+<p class="source-note"><b>Evidence for this section:</b> <a href="#source-ismp-high-alert-acute-care-2024">ISMP's acute-care high-alert list and safeguards</a>.</p>
 
-<h2>Insulin and heparin</h2>
-<p>Both are high-alert partly because of how they are prepared. Independent double-checking of the dose is standard practice for both, and any option that skips verification on a high-alert drug should be treated with suspicion.</p>
-
-<h2>Drug classes with a signature warning</h2>
-<table>
-  <tr><th>Class</th><th>What to watch</th></tr>
-  <tr><td>Aminoglycosides</td><td>Nephrotoxicity and ototoxicity — monitor renal function and hearing.</td></tr>
-  <tr><td>Vancomycin</td><td>Infusion-related flushing reaction if given too quickly; monitor renal function.</td></tr>
-  <tr><td>ACE inhibitors</td><td>Persistent dry cough, hyperkalaemia, angio-oedema.</td></tr>
-  <tr><td>Beta-blockers</td><td>Bradycardia, hypotension; masking of hypoglycaemia signs.</td></tr>
-  <tr><td>Loop diuretics</td><td>Hypokalaemia, dehydration, ototoxicity at high doses.</td></tr>
-  <tr><td>Corticosteroids</td><td>Hyperglycaemia, infection risk, never stopped abruptly.</td></tr>
-</table>
-
-<h2>What the exam is really asking</h2>
-<p>Most high-alert medication items reduce to one of three questions: what do you check before giving this, what do you monitor after, and what would make you withhold it. If you can answer those three for each drug above, you can answer the item even when the specific scenario is unfamiliar.</p>
+<h2>What the NCLEX-style item is testing</h2>
+<p>First identify the immediate threat: respiratory depression, active bleeding, hemodynamic instability, dysrhythmia, seizure or altered consciousness. Then distinguish the assessment or stabilization step from the medication-specific reversal step. A familiar drug–reversal pairing is not enough when the client needs airway support, repeat dosing, laboratory confirmation, continuous monitoring or rapid escalation.</p>
+<p>When an answer choice gives an absolute rule—such as using one laboratory test for every heparin product, giving flumazenil for every benzodiazepine exposure, or performing the same double-check for every high-alert medication—look for the option that respects the exact order, label, clinical condition and protocol.</p>
 `,
     faq: [
-      { q: "What is the antidote for heparin?", a: "Protamine sulfate. Warfarin is reversed with vitamin K, which is a different pairing and frequently tested alongside it." },
-      { q: "What are the early signs of digoxin toxicity?", a: "Often gastrointestinal first — anorexia, nausea and vomiting — followed by visual disturbances such as yellow-green vision or halos. Hypokalaemia increases the risk, so clients on digoxin and a loop diuretic need close monitoring." },
-      { q: "Should clients on warfarin avoid vitamin K?", a: "No. They should keep intake consistent rather than eliminate it. Sudden changes in green leafy vegetable consumption in either direction destabilise the INR." },
+      { q: "What reverses unfractionated heparin overdosage?", a: "Protamine sulfate is the recognized antagonist, but its dose depends on the heparin amount and elapsed time. It must be given slowly under the ordered protocol because severe hypotensive and anaphylactoid reactions can occur." },
+      { q: "Is flumazenil always given for a benzodiazepine overdose?", a: "No. Flumazenil is used only in selected patients and carries a serious seizure risk. It is contraindicated in specified situations, so airway and supportive care plus toxicology guidance remain central." },
+      { q: "Does naloxone replace airway and breathing support?", a: "No. Maintain the airway and assist ventilation as needed. Continue surveillance because some opioids last longer than naloxone and repeat doses may be necessary." },
+      { q: "Should a client taking warfarin avoid vitamin K foods?", a: "Not routinely. Teaching generally emphasizes a consistent dietary pattern and INR follow-up when intake changes, rather than eliminating vitamin-K-containing foods." },
     ],
   },
 ];
