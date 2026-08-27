@@ -4,14 +4,30 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const ALLOWED_FINAL_HOSTS = new Set(["www.nclex.com", "nclex.com", "www.ncsbn.org", "www.cdc.gov", "cdc.gov", "home.ecri.org", "medlineplus.gov", "www.medlineplus.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "doi.org", "journals.sagepub.com", "pubmed.ncbi.nlm.nih.gov", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"]);
+const ALLOWED_FINAL_HOSTS = new Set(["www.nclex.com", "nclex.com", "www.ncsbn.org", "www.cdc.gov", "cdc.gov", "home.ecri.org", "medlineplus.gov", "www.medlineplus.gov", "www.nimh.nih.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "doi.org", "journals.sagepub.com", "pubmed.ncbi.nlm.nih.gov", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"]);
 
-async function fetchSource(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
-  try {
-    return await fetch(url, { headers: { "user-agent": "Mozilla/5.0 PulseRNSourceAudit/1.0", accept: "text/html,application/pdf;q=0.9,*/*;q=0.5" }, redirect: "follow", signal: controller.signal });
-  } finally { clearTimeout(timer); }
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function fetchSource(url, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 PulseRNSourceAudit/1.0", accept: "text/html,application/pdf;q=0.9,*/*;q=0.5" }, redirect: "follow", signal: controller.signal });
+      if ((response.status === 429 || response.status >= 500) && attempt < attempts) {
+        await response.body?.cancel();
+        await wait(attempt * 1500);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts) throw error;
+      await wait(attempt * 1500);
+    } finally { clearTimeout(timer); }
+  }
+  throw lastError ?? new Error("Source request failed without a response.");
 }
 
 const markdown = (report) => `# PulseRN authoritative-source reachability audit\n\nGenerated: ${report.generatedAt}\n\nVerdict: **${report.verdict}**\n\nSources: ${report.sources.length} · Findings: ${report.findings.length}\n\n${report.findings.length ? report.findings.map((item) => `- **${item.code}** ${item.sourceId}: ${item.message}`).join("\n") : "No findings."}\n`;
@@ -36,6 +52,8 @@ export async function runSourceCheck({ provenanceFile = "dist/content-provenance
       findings.push({ severity: "high", code: "SOURCE_FETCH", sourceId: source.id, message: error.message });
       results.push({ id: source.id, requestedUrl: source.url, error: error.message });
     }
+    const sourceHost = new URL(source.url).hostname.toLowerCase();
+    await wait(sourceHost.endsWith("ncbi.nlm.nih.gov") ? 750 : 250);
   }
   const report = { schemaVersion: 1, generatedAt: new Date().toISOString(), verdict: findings.some((item) => ["critical", "high"].includes(item.severity)) ? "FAIL" : "PASS", sources: results, findings };
   await fs.mkdir(path.dirname(outputFile), { recursive: true });

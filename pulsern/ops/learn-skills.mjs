@@ -142,56 +142,68 @@ export const SKILL_ARTICLES = [
   {
     slug: "therapeutic-communication",
     topic: "Test-taking skill",
-    title: "Therapeutic communication: picking the right response",
-    h1: "Therapeutic communication answers",
-    description: "The response patterns that are almost always correct, the ones that are almost always wrong, and why false reassurance fails every time.",
+    title: "Therapeutic communication for NCLEX: choose in context",
+    h1: "How to answer NCLEX therapeutic communication questions",
+    description: "Choose client-centered responses by purpose, cues, safety, culture and context—not by memorizing that one communication technique is always correct.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN includes psychosocial integrity items where the wrong answer is comfortable and the right one is harder.",
     body: `
-<p>Therapeutic communication items are among the most predictable on the exam, because the correct answer follows a small number of patterns. Once you can spot them, these become some of the fastest questions you will answer.</p>
+<p>Therapeutic communication is purposeful, client-centered communication that supports assessment, trust, shared decision-making and safety. An NCLEX option should be judged against the client's words, nonverbal cues, immediate needs and the goal of the encounter—not against a list of phrases labeled “always correct.”</p>
 
-<h2>What correct answers do</h2>
-<ul>
-  <li><b>Stay with the client's feeling</b> rather than moving to the problem. <i>You sound frightened.</i></li>
-  <li><b>Use open-ended invitations.</b> <i>Tell me more about that.</i></li>
-  <li><b>Reflect and restate</b> so the client hears themselves. <i>You are saying you feel like a burden.</i></li>
-  <li><b>Offer presence.</b> <i>I will sit with you.</i></li>
-  <li><b>Seek clarification.</b> <i>I am not sure I understand what you mean by that.</i></li>
-  <li><b>Acknowledge without judging.</b> <i>This has been a hard week for you.</i></li>
-  <li><b>Use silence.</b> Frequently correct and frequently rejected by candidates because it feels passive.</li>
-</ul>
-
-<div class="key">
-<p><b>The single most reliable test:</b> does the response keep the client talking, or does it close the conversation? Correct answers open. Reassurance, advice and explanation all close — however kind they sound.</p>
+<div class="key" role="note" aria-labelledby="communication-safety-boundary">
+<h2 id="communication-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>No communication technique overrides urgent assessment, immediate safety, required treatment or escalation. Adapt language and method for culture, health literacy, preferred language, disability, trauma history, boundaries and client preference. Use qualified interpreters and accessible communication supports when indicated.</p>
 </div>
 
-<h2>What wrong answers do</h2>
+<h2>Start with purpose and cues</h2>
+<ol>
+  <li><b>Identify the task.</b> Is the nurse exploring feelings, clarifying information, assessing safety, teaching, setting a boundary or coordinating care?</li>
+  <li><b>Use the client's exact cue.</b> Respond to what was said or observed rather than introducing an unrelated topic.</li>
+  <li><b>Choose the least judgmental effective response.</b> Preserve dignity, autonomy and professional boundaries.</li>
+  <li><b>Check whether safety changes the sequence.</b> A concerning cue may require a direct, focused question and immediate action.</li>
+</ol>
+<p class="source-note"><b>Evidence for this approach:</b> the <a href="#source-ncbi-openrn-therapeutic-communication-2025">NCBI Open RN therapeutic communication chapter</a> and <a href="#source-ncsbn-2026-rn-test-plan">2026 NCSBN RN Test Plan</a>.</p>
+
+<h2>Techniques are tools, not answer keys</h2>
+<div class="table-wrap" role="region" aria-label="Therapeutic communication techniques in context" tabindex="0">
 <table>
-  <tr><th>Pattern</th><th>Example</th><th>Why it fails</th></tr>
-  <tr><td>False reassurance</td><td>Everything will be fine.</td><td>Dismisses the feeling and makes a promise the nurse cannot keep.</td></tr>
-  <tr><td>Giving advice</td><td>What you should do is...</td><td>Removes the client's autonomy.</td></tr>
-  <tr><td>Asking why</td><td>Why do you feel that way?</td><td>Demands justification and reads as confrontation.</td></tr>
-  <tr><td>Changing the subject</td><td>Let us talk about your discharge plan.</td><td>Avoids the distress the client raised.</td></tr>
-  <tr><td>Minimising</td><td>Everyone feels that way before surgery.</td><td>Tells the client their feeling is unremarkable.</td></tr>
-  <tr><td>Defending</td><td>Your nurse was very busy.</td><td>Takes the institution's side against the client.</td></tr>
-  <tr><td>Approval or disapproval</td><td>That is the right attitude.</td><td>Makes the nurse the judge of acceptable feelings.</td></tr>
-  <tr><td>Deflecting to someone else</td><td>You should discuss that with your doctor.</td><td>Passes the client along rather than responding.</td></tr>
+  <caption>Match the technique to the communication goal and client response</caption>
+  <thead><tr><th scope="col">Technique</th><th scope="col">Useful purpose</th><th scope="col">Important qualification</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Open-ended invitation</th><td>Encourages the client to describe concerns in their own words.</td><td>A focused or closed question can be safer when confirming a specific symptom, fact or immediate risk.</td></tr>
+    <tr><th scope="row">Reflection or restatement</th><td>Checks meaning and keeps attention on the client's experience.</td><td>It should sound natural and accurate; mechanical repetition can feel dismissive.</td></tr>
+    <tr><th scope="row">Clarification</th><td>Resolves ambiguity before the nurse assumes meaning.</td><td>Use plain, respectful language and allow the client to correct the nurse.</td></tr>
+    <tr><th scope="row">Silence</th><td>Allows time to think, feel or continue without interruption.</td><td>Observe whether silence is supportive or increasing distress; do not use it as withdrawal.</td></tr>
+    <tr><th scope="row">Offering presence</th><td>Communicates availability without making promises.</td><td>Respect personal space, consent, culture, trauma history and professional boundaries.</td></tr>
+    <tr><th scope="row">Information or teaching</th><td>Supports informed decisions when the client needs accurate explanation.</td><td>Assess readiness and understanding; explanation is not a substitute for acknowledging emotion or obtaining consent.</td></tr>
+    <tr><th scope="row">Referral or team coordination</th><td>Connects the client with the appropriate professional or resource.</td><td>Address the immediate concern and explain the handoff instead of dismissively passing the client along.</td></tr>
+  </tbody>
 </table>
+</div>
 
-<h2>Why false reassurance is the most tempting trap</h2>
-<p>It sounds caring, it is what people say in ordinary life, and in the moment it is what many of us would want to say. That is exactly why it is written into so many items. If an option would comfort you and requires no further conversation, look at it harder.</p>
+<h2>Patterns that often block communication</h2>
+<ul>
+  <li><b>False reassurance:</b> “Everything will be fine” promises an outcome the nurse cannot know and may dismiss the concern.</li>
+  <li><b>Minimizing or comparison:</b> “Everyone feels that way” shifts attention away from this client's experience.</li>
+  <li><b>Judgment or approval:</b> labeling a feeling or decision as good, bad, right or wrong can make the nurse the arbiter of acceptable responses.</li>
+  <li><b>Defending:</b> explaining the institution's behavior before exploring the client's concern can close the conversation.</li>
+  <li><b>Unsolicited prescriptive advice:</b> telling the client what they “should” do can bypass their goals and autonomy. Collaborative information and clinically necessary instructions are different.</li>
+  <li><b>Repeated or accusatory “why” questions:</b> these may feel challenging or demand justification. A neutral invitation such as “What was happening when this began?” may obtain the needed information more safely.</li>
+</ul>
 
-<h2>Safety overrides communication</h2>
-<p>One important exception: when a client expresses thoughts of self-harm or harm to others, the priority shifts from exploring feelings to <b>direct assessment of risk and immediate safety</b>. Asking plainly whether the client has a plan is the correct nursing action — it is not intrusive, and avoiding the question does not protect anyone.</p>
+<h2>Safety can require direct questions</h2>
+<p>If a client expresses hopelessness, self-harm or suicide-related cues, do not rely on a vague invitation alone. Ask directly about suicidal thoughts and, when indicated, the plan and immediate safety; stay present, reduce access to lethal means when safe and within protocol, obtain urgent help, and follow facility or emergency procedures. NIMH states that asking whether a person is suicidal does not increase suicidal thoughts or behavior.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-nimh-suicide-five-action-steps-2024">NIMH five action steps</a>. In the United States, the 988 Suicide &amp; Crisis Lifeline is available by call or text; an immediate emergency still requires the applicable emergency response.</p>
 
-<h2>A quick screen</h2>
-<p>When two options both look therapeutic, choose the one that is more specific to what this client actually said. Generic empathy is better than false reassurance, but a response that reflects the client's own words is better still.</p>
+<h2>Compare plausible NCLEX responses</h2>
+<p>When two options both appear therapeutic, compare their fit to the stated goal, the client's cue, safety urgency, specificity, respect and likely next step. The best option may invite elaboration, but it may instead clarify a fact, give needed information, set a boundary, ask directly about risk or coordinate care. Context decides.</p>
 `,
     faq: [
-      { q: "What makes a response therapeutic on the NCLEX?", a: "It stays with the client's feeling, is open-ended, and keeps the conversation going. Reflecting, restating, offering presence, seeking clarification and using silence are all reliably correct patterns." },
-      { q: "Why is 'why' a poor therapeutic question?", a: "It asks the client to justify their feelings, which tends to read as confrontational and puts them on the defensive. Open invitations such as 'tell me more about that' get further." },
-      { q: "What should the nurse do if a client expresses suicidal thoughts?", a: "Assess risk directly, including asking whether the client has a plan, and ensure immediate safety. Safety overrides exploratory communication techniques, and asking about a plan does not increase risk." },
+      { q: "Are open-ended questions always the best NCLEX response?", a: "No. They are useful for exploration, but focused or closed questions may be necessary to clarify facts, assess symptoms or determine immediate safety. Choose by purpose and context." },
+      { q: "Are 'why' questions always nontherapeutic?", a: "No single word makes a question unsafe, but repeated or accusatory 'why' questions may sound challenging. Use neutral wording that gathers the needed information without demanding justification." },
+      { q: "Is giving information or making a referral nontherapeutic?", a: "Not when it meets the client's needs. Give accurate information after considering readiness and understanding, and explain a coordinated referral while addressing the immediate concern rather than dismissing it." },
+      { q: "What should the nurse do after a suicide-related cue?", a: "Ask directly about suicidal thoughts and immediate safety, including a plan when indicated; remain present, obtain urgent help and follow the applicable safety or emergency protocol. Direct asking does not increase suicidal thoughts or behavior." },
     ],
   },
 

@@ -180,6 +180,29 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
   });
 
+  it("keeps pending Guide 8 therapeutic communication contextual, accessible, and safety-bound", () => {
+    const guide = SKILL_ARTICLES.find((article) => article.slug === "therapeutic-communication");
+    expect(guide.updated).toBe("2026-08-27");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(7);
+    expect(guide.body).toContain('class="table-wrap" role="region" aria-label="Therapeutic communication techniques in context" tabindex="0"');
+    expect(guide.body).toContain('aria-labelledby="communication-safety-boundary"');
+    expect(guide.body).toContain("Techniques are tools, not answer keys");
+    expect(guide.body).toContain("asking whether a person is suicidal does not increase suicidal thoughts or behavior");
+    expect(guide.body).not.toContain("Correct answers open");
+    expect(guide.body).not.toContain("almost always correct");
+    expect(guide.body).not.toContain("fails every time");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncbi-openrn-therapeutic-communication-2025",
+      "nimh-suicide-five-action-steps-2024",
+      "ncsbn-2026-rn-test-plan",
+      "ncsbn-next-generation-nclex",
+    ]);
+    expect(sourcesFor(guide)[0].sourceUpdated).toBe("2025-11-01");
+    expect(sourcesFor(guide)[1].locator).toContain("revised 2024");
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });
