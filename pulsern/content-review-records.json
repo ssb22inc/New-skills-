@@ -65,6 +65,71 @@
           "sourceIds": ["ncsbn-2026-rn-test-plan"]
         }
       ]
+    },
+    "electrolyte-imbalances": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-27",
+      "scope": "Full RN clinical and source review of the exact Guide 2 electrolyte-imbalances content and source-set digests",
+      "contentSha256": "52256cc286865ec11a47d5416bec41fa575a4d888e33fb0e7cd35d87936f5383",
+      "sourceSetSha256": "9de71ddc0623cd55e62a42c83201872548e69b3d51aef3ecd873a162e6a29bf2",
+      "claims": [
+        {
+          "id": "electrolyte-assessment-and-urgent-findings",
+          "locator": "Opening paragraph; Findings that change the priority; urgency FAQ",
+          "sourceIds": ["medlineplus-electrolyte-panel", "ncbi-statpearls-hyperkalemia-2025", "ncbi-statpearls-hyponatremia-2026", "ncbi-statpearls-calcium-disorders-2026", "ncbi-statpearls-magnesium-2023"]
+        },
+        {
+          "id": "potassium-thresholds-findings-causes-and-priorities",
+          "locator": "Potassium comparison table and contextual interpretation paragraph",
+          "sourceIds": ["ncbi-statpearls-hypokalemia-2025", "ncbi-statpearls-hyperkalemia-2025"]
+        },
+        {
+          "id": "potassium-chloride-infusion-safety",
+          "locator": "Potassium safety callout and potassium chloride FAQ",
+          "sourceIds": ["dailymed-potassium-chloride-concentrate"]
+        },
+        {
+          "id": "pseudohyperkalemia-confirmation-context",
+          "locator": "Unexpected potassium result paragraph",
+          "sourceIds": ["ncbi-statpearls-hyperkalemia-2025"]
+        },
+        {
+          "id": "sodium-findings-causes-and-priorities",
+          "locator": "Sodium comparison table",
+          "sourceIds": ["ncbi-statpearls-hyponatremia-2026", "ncbi-statpearls-hypernatremia-2023"]
+        },
+        {
+          "id": "sodium-correction-risk-and-clinical-context",
+          "locator": "Sodium correction paragraph",
+          "sourceIds": ["ncbi-statpearls-hyponatremia-2026", "ncbi-statpearls-hypernatremia-2023"]
+        },
+        {
+          "id": "calcium-findings-total-versus-ionized-and-bedside-signs",
+          "locator": "Calcium comparison table; Chvostek and Trousseau paragraph and FAQ",
+          "sourceIds": ["ncbi-statpearls-calcium-disorders-2026"]
+        },
+        {
+          "id": "magnesium-findings-causes-and-toxicity",
+          "locator": "Magnesium comparison table",
+          "sourceIds": ["ncbi-statpearls-magnesium-2023", "dailymed-magnesium-sulfate-in-water"]
+        },
+        {
+          "id": "magnesium-sulfate-monitoring-and-toxicity-response",
+          "locator": "Magnesium sulfate monitoring paragraph and FAQ",
+          "sourceIds": ["ncbi-statpearls-magnesium-2023", "dailymed-magnesium-sulfate-in-water"]
+        },
+        {
+          "id": "electrolyte-recall-pattern-qualification",
+          "locator": "A safer recall pattern",
+          "sourceIds": ["ncbi-statpearls-hypokalemia-2025", "ncbi-statpearls-hyperkalemia-2025", "ncbi-statpearls-hyponatremia-2026", "ncbi-statpearls-hypernatremia-2023", "ncbi-statpearls-calcium-disorders-2026", "ncbi-statpearls-magnesium-2023"]
+        },
+        {
+          "id": "electrolyte-nclex-education-scope",
+          "locator": "Page title, description, CTA, and educational framing",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        }
+      ]
     }
   }
 }
