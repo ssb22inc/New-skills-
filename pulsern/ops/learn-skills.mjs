@@ -70,76 +70,72 @@ export const SKILL_ARTICLES = [
   {
     slug: "delegation-and-assignment",
     topic: "Test-taking skill",
-    title: "Delegation and assignment rules",
-    h1: "Delegation: what goes to whom",
-    description: "What can be delegated to assistive personnel and LPNs, what never leaves the RN, and the stable-predictable-routine test that resolves most items.",
+    title: "NCLEX delegation and assignment: a safe framework",
+    h1: "How to answer NCLEX delegation questions",
+    description: "Separate assignment from delegation and apply the Five Rights, scope, competence, communication and supervision before choosing who can safely perform care.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN includes delegation scenarios across management of care, with rationales for every option.",
     body: `
-<p>Delegation items are testable because the rules are genuinely rule-like. Once you hold the boundaries, most of these questions resolve in seconds.</p>
+<p>Delegation questions test clinical judgment, not a universal list of tasks. The safe answer depends on the patient, the requested activity, the delegatee's verified competence, the state or jurisdiction's nurse practice provisions, employer policy and the supervision the licensed nurse can provide.</p>
 
-<h2>What never leaves the RN</h2>
-<p>The nursing process itself does not transfer. Specifically:</p>
-<ul>
-  <li><b>Assessment</b> — the initial assessment and any assessment requiring clinical judgement.</li>
-  <li><b>Diagnosis</b> and analysis of data.</li>
-  <li><b>Planning</b> and setting of goals.</li>
-  <li><b>Evaluation</b> of outcomes.</li>
-  <li><b>Teaching</b> that requires assessment of understanding.</li>
-  <li>Care of the <b>unstable</b> client.</li>
-</ul>
-
-<div class="key">
-<p><b>The test that resolves most items:</b> a task can be delegated when the client is <b>stable</b>, the outcome is <b>predictable</b>, and the task is <b>routine</b> and does not require nursing judgement. If any one of those fails, it stays with the RN.</p>
+<div class="key" role="note" aria-labelledby="delegation-safety-boundary">
+<h2 id="delegation-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>This guide is an NCLEX study framework, not a substitute for a nurse practice act, board rule, job description or facility policy. Jurisdictions differ, and an employer may be more restrictive. Never infer that a task is permitted from a mnemonic alone.</p>
 </div>
 
-<h2>Assistive personnel</h2>
-<p>Generally appropriate:</p>
-<ul>
-  <li>Bathing, hygiene, oral care, grooming</li>
-  <li>Feeding a client with no swallowing difficulty</li>
-  <li>Ambulation and transfers for stable clients</li>
-  <li>Positioning and turning</li>
-  <li>Routine vital signs on a stable client</li>
-  <li>Measuring intake and output, height and weight</li>
-  <li>Simple documentation of the above</li>
-</ul>
-<p>Not appropriate: anything with an unstable client, anything requiring interpretation, any first-time assessment, and any teaching.</p>
+<h2>Assignment and delegation are not the same</h2>
+<p>Under the NCSBN–ANA guidelines, an <b>assignment</b> is routine care, an activity or a procedure already within a licensed nurse's authorized scope or an assistive person's routine role. <b>Delegation</b> transfers responsibility for a specific nursing activity, skill or procedure outside the delegatee's traditional role after the required education, training and competence validation.</p>
+<p>A handoff between licensed clinicians is also different: it transfers responsibility for care between providers rather than delegating an activity.</p>
 
-<h2>Licensed practical nurses</h2>
-<p>Scope varies by state and setting, and the exam works from a general standard. Commonly within scope:</p>
-<ul>
-  <li>Monitoring findings on a stable client, and reporting them</li>
-  <li>Reinforcing teaching the RN has already provided</li>
-  <li>Routine wound care and dressing changes</li>
-  <li>Administering many oral and some parenteral medications</li>
-  <li>Tracheostomy and catheter care</li>
-  <li>Enteral feeding</li>
-</ul>
-<p>Typically outside scope: initial assessment, IV push medications in many jurisdictions, blood product administration, care planning, and the unstable client.</p>
+<h2>A defensible delegation decision</h2>
+<div class="table-wrap" role="region" aria-label="NCLEX delegation decision framework" tabindex="0">
+<table>
+  <caption>Checks required before selecting a delegatee</caption>
+  <thead><tr><th scope="col">Check</th><th scope="col">Question</th><th scope="col">Why it matters</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Patient and circumstance</th><td>What are the patient's needs, stability, predictability and acuity?</td><td>A change in condition requires communication and reassessment of whether delegation remains appropriate.</td></tr>
+    <tr><th scope="row">Authority and policy</th><td>Do jurisdiction rules, authorized scope, job description and employer policy permit this activity?</td><td>Neither an exam shortcut nor a local custom can expand legal scope.</td></tr>
+    <tr><th scope="row">Competence</th><td>Has this specific delegatee's knowledge and skill been trained and validated?</td><td>A title alone does not establish competence for every activity.</td></tr>
+    <tr><th scope="row">Communication</th><td>Are the directions patient-specific, measurable and understood in two-way communication?</td><td>The delegatee needs the task, method, timing, reporting conditions and opportunity to clarify.</td></tr>
+    <tr><th scope="row">Supervision and follow-up</th><td>Can the licensed nurse remain available, intervene, follow up and evaluate the patient outcome?</td><td>Delegation continues through supervision and evaluation; it is not complete when instructions are given.</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="source-note"><b>Evidence for this framework:</b> the <a href="#source-ncsbn-ana-delegation-guidelines-2019">NCSBN–ANA National Guidelines for Nursing Delegation</a> and the <a href="#source-ncsbn-2026-rn-test-plan">2026 NCSBN RN Test Plan</a>.</p>
 
-<h2>The five rights of delegation</h2>
+<h2>The Five Rights of Delegation</h2>
 <ol>
-  <li>Right <b>task</b></li>
-  <li>Right <b>circumstance</b></li>
-  <li>Right <b>person</b></li>
-  <li>Right <b>direction and communication</b> — specific, not vague</li>
-  <li>Right <b>supervision and evaluation</b></li>
+  <li><b>Right task:</b> permitted by the delegatee's job description or written setting policy, with required competency preparation.</li>
+  <li><b>Right circumstance:</b> the patient's condition and available resources make delegation appropriate; a change triggers reporting and reassessment.</li>
+  <li><b>Right person:</b> the individual has the verified knowledge and skill for this activity and patient.</li>
+  <li><b>Right directions and communication:</b> instructions specify what to do, what data to collect, how and when to report, and which findings require prompt notification.</li>
+  <li><b>Right supervision and evaluation:</b> the licensed nurse is available, monitors as needed, follows up and evaluates the outcome.</li>
 </ol>
-<p>The fourth is where exam items live. Telling assistive personnel to let you know if anything changes is not a delegation instruction. Telling them to report a heart rate above 110 or a systolic below 100 is.</p>
 
-<h2>Assignment patterns</h2>
-<p>When asked which client to assign to whom, work from stability: the most stable and predictable clients go to the least qualified appropriate staff member, and the RN keeps the newly admitted, the unstable, the post-operative day-zero client, and anyone needing assessment or teaching.</p>
-<p>Two constraints appear often enough to watch for. A <b>float or agency nurse</b> should receive clients whose care is within general competence rather than unit-specific specialist care. A <b>pregnant staff member</b> should not be assigned clients receiving internal radiation therapy or with certain infectious conditions.</p>
+<h2>What cannot be delegated</h2>
+<p>The NCSBN–ANA guidelines state that clinical reasoning, nursing judgment and critical decision-making cannot be delegated. That boundary is safer than memorizing that every activity with a familiar label is always retained or always transferable. Determine whether the specific activity requires judgment in this patient's situation.</p>
+<p>Similarly, do not assume an LPN/VN or assistive person may perform an activity merely because it appears on a study list. Confirm authorized scope or routine role, the setting's policy, demonstrated competence, the patient's condition and the supervision required.</p>
 
-<h2>Delegation is not transfer of accountability</h2>
-<p>The RN who delegates remains accountable for the outcome. That is why options where the RN delegates and then does nothing further are usually wrong: appropriate delegation includes checking that the task was done and what the result was.</p>
+<h2>How to reason about common NCLEX options</h2>
+<ul>
+  <li><b>Routine activities can still be unsafe to assign.</b> Feeding, mobility, vital signs or intake and output may require a different decision when aspiration risk, instability, a new change or required interpretation is present.</li>
+  <li><b>Data collection is not clinical interpretation.</b> A trained delegatee may collect permitted data; the licensed nurse retains the judgment the scenario requires and acts on the report.</li>
+  <li><b>Licensed status does not erase scope limits.</b> LPN/VN authority varies by jurisdiction, and the activity must also fit employer policy and individual competence.</li>
+  <li><b>Float or agency status does not define capability by itself.</b> Match the assignment to verified competence, authorized scope, patient needs and available orientation or support.</li>
+</ul>
+
+<h2>Accountability is shared but not identical</h2>
+<p>The delegating licensed nurse maintains overall accountability for the patient and must make the delegation decision, remain available, follow up and evaluate the outcome. The delegatee is responsible for accepting only an activity they are competent to perform, carrying it out correctly, documenting it and reporting questions, changes or inability to complete it. The delegatee should not pass the delegated responsibility to someone else.</p>
+
+<h2>Use the stem, not a slogan</h2>
+<p>For each answer option, identify the patient's condition, the activity, the required judgment, the proposed person's authorized role and demonstrated competence, the instructions supplied and the follow-up plan. Reject an option as soon as one required element is missing; do not rely on “stable, predictable and routine” as a complete decision rule.</p>
 `,
     faq: [
-      { q: "What can be delegated to unlicensed assistive personnel?", a: "Routine tasks for stable clients with predictable outcomes that require no nursing judgement — hygiene, feeding a client without swallowing difficulty, ambulation, positioning, routine vital signs, and intake and output." },
-      { q: "What can never be delegated by an RN?", a: "Assessment requiring clinical judgement, nursing diagnosis, planning, evaluation of outcomes, teaching that requires assessing understanding, and the care of unstable clients." },
-      { q: "What are the five rights of delegation?", a: "Right task, right circumstance, right person, right direction and communication, and right supervision and evaluation. Vague instructions fail the fourth right and are a common wrong answer." },
+      { q: "What can be assigned or delegated to assistive personnel?", a: "Only an activity permitted by jurisdiction and employer policy that fits the person's routine role or validated delegated competence and is appropriate for this patient. The licensed nurse must give specific directions, supervise and evaluate the outcome." },
+      { q: "What cannot be delegated by a licensed nurse?", a: "Clinical reasoning, nursing judgment and critical decision-making cannot be delegated. Whether a named activity requires those functions depends on the patient and circumstance, so avoid universal task lists." },
+      { q: "What are the Five Rights of Delegation?", a: "Right task, right circumstance, right person, right directions and communication, and right supervision and evaluation. All five must fit the specific patient, delegatee and setting." },
+      { q: "Is the RN the only person accountable after delegation?", a: "No. The delegating licensed nurse retains overall accountability for the patient and follow-up, while the delegatee is responsible for accepting only work they are competent to perform and for completing, documenting and reporting that activity correctly." },
     ],
   },
 

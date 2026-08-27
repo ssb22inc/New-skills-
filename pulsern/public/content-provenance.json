@@ -1462,9 +1462,18 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "ed5153c9d401ce7fdbac7440f6bf80f4388f07de340c9c3d4f3b7aad184ca50c",
-      "sourceSetSha256": "cfca3a49b94b35587d4a0ed5c209a3068f489276a10a61ebc4cab5eea8267455",
+      "contentSha256": "a2a254264aa027f2ff9adac1148af9804f5ab944ab5d5e90dce9b5ce597f905e",
+      "sourceSetSha256": "ac3a93df4bfccd62851a8d874487fc76a767b7b5f5acfd1166d97d58d9aaaa54",
       "sources": [
+        {
+          "id": "ncsbn-ana-delegation-guidelines-2019",
+          "title": "National Guidelines for Nursing Delegation",
+          "publisher": "National Council of State Boards of Nursing and American Nurses Association",
+          "url": "https://www.ncsbn.org/public-files/NGND-PosPaper_06.pdf",
+          "sourceUpdated": "2019-04-29",
+          "accessedAt": "2026-08-27",
+          "locator": "Purpose and definitions; Five Rights of Delegation; Licensed Nurse Responsibilities; Delegatee Responsibilities"
+        },
         {
           "id": "ncsbn-2026-rn-test-plan",
           "title": "NCSBN — 2026 RN Test Plan",
@@ -1473,6 +1482,15 @@
           "sourceUpdated": "2026-04-01",
           "accessedAt": "2026-08-26",
           "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
         }
       ],
       "review": {

@@ -158,6 +158,28 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
   });
 
+  it("keeps pending Guide 7 delegation jurisdiction-aware, accessible, and source-bound", () => {
+    const guide = SKILL_ARTICLES.find((article) => article.slug === "delegation-and-assignment");
+    expect(guide.updated).toBe("2026-08-27");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(5);
+    expect(guide.body).toContain('class="table-wrap" role="region" aria-label="NCLEX delegation decision framework" tabindex="0"');
+    expect(guide.body).toContain('aria-labelledby="delegation-safety-boundary"');
+    expect(guide.body).toContain("Assignment and delegation are not the same");
+    expect(guide.body).toContain("clinical reasoning, nursing judgment and critical decision-making cannot be delegated");
+    expect(guide.body).not.toContain("The test that resolves most items");
+    expect(guide.body).not.toContain("post-operative day-zero");
+    expect(guide.body).not.toContain("pregnant staff member");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncsbn-ana-delegation-guidelines-2019",
+      "ncsbn-2026-rn-test-plan",
+      "ncsbn-next-generation-nclex",
+    ]);
+    expect(sourcesFor(guide)[0].url).toBe("https://www.ncsbn.org/public-files/NGND-PosPaper_06.pdf");
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });
