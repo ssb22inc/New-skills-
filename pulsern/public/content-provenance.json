@@ -984,7 +984,7 @@
         "risk": "clinical"
       },
       "contentSha256": "a49ad5567061a952e8f7671e2d6a8afde560e74685ea76f20aa50dd43fd29dd6",
-      "sourceSetSha256": "e04e939ce2e4098555f4637b946ad1dc0c9902b3148fe10d14773c9e68f15cea",
+      "sourceSetSha256": "3b0d47187acf1bd444d28c7362dd080f2aaafa6f662b1184b5dde85a51f9e3c5",
       "sources": [
         {
           "id": "cdc-insulin-types-2024",
@@ -1003,6 +1003,15 @@
           "sourceUpdated": "2024-05-31",
           "accessedAt": "2026-08-27",
           "locator": "Dosage and Administration — subcutaneous meal timing and supervised intravenous infusion; Warnings and Precautions — hypoglycemia; Drug Interactions — beta-blockers and other agents that blunt symptoms"
+        },
+        {
+          "id": "dailymed-insulin-aspart-2023",
+          "title": "Insulin Aspart Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=bee5b358-c863-420b-be73-ced2e920c499",
+          "sourceUpdated": "2023-02-28",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — supervised intravenous administration, dilution, and close glucose and potassium monitoring; Clinical Pharmacology — variability of onset, peak, and duration"
         },
         {
           "id": "dailymed-humulin-n-2017",

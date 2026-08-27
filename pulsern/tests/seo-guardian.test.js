@@ -97,6 +97,7 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).map((source) => source.id)).toEqual([
       "cdc-insulin-types-2024",
       "dailymed-insulin-lispro-2024",
+      "dailymed-insulin-aspart-2023",
       "dailymed-humulin-n-2017",
       "dailymed-lantus-2025",
       "medlineplus-low-blood-sugar-self-care-2026",
