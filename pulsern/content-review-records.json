@@ -350,6 +350,61 @@
           "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
         }
       ]
+    },
+    "delegation-and-assignment": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-27",
+      "scope": "Full RN clinical and source review of the exact Guide 7 delegation-and-assignment content and source-set digests",
+      "contentSha256": "a2a254264aa027f2ff9adac1148af9804f5ab944ab5d5e90dce9b5ce597f905e",
+      "sourceSetSha256": "ac3a93df4bfccd62851a8d874487fc76a767b7b5f5acfd1166d97d58d9aaaa54",
+      "claims": [
+        {
+          "id": "delegation-nclex-framework-and-safety-boundary",
+          "locator": "Opening paragraph; Safety boundary",
+          "sourceIds": ["ncsbn-ana-delegation-guidelines-2019", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "assignment-delegation-and-handoff-definitions",
+          "locator": "Assignment and delegation are not the same",
+          "sourceIds": ["ncsbn-ana-delegation-guidelines-2019"]
+        },
+        {
+          "id": "delegation-patient-authority-competence-communication-supervision-checks",
+          "locator": "A defensible delegation decision table",
+          "sourceIds": ["ncsbn-ana-delegation-guidelines-2019", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "five-rights-of-delegation",
+          "locator": "The Five Rights of Delegation; Five Rights FAQ",
+          "sourceIds": ["ncsbn-ana-delegation-guidelines-2019"]
+        },
+        {
+          "id": "nondelegable-clinical-reasoning-judgment-and-decisions",
+          "locator": "What cannot be delegated; nondelegable-work FAQ",
+          "sourceIds": ["ncsbn-ana-delegation-guidelines-2019"]
+        },
+        {
+          "id": "jurisdiction-policy-role-and-competence-limitations",
+          "locator": "Safety boundary; What cannot be delegated; common NCLEX options",
+          "sourceIds": ["ncsbn-ana-delegation-guidelines-2019"]
+        },
+        {
+          "id": "data-collection-versus-clinical-interpretation",
+          "locator": "How to reason about common NCLEX options — Data collection is not clinical interpretation",
+          "sourceIds": ["ncsbn-ana-delegation-guidelines-2019", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "delegator-and-delegatee-accountability-responsibilities",
+          "locator": "Accountability is shared but not identical; accountability FAQ",
+          "sourceIds": ["ncsbn-ana-delegation-guidelines-2019"]
+        },
+        {
+          "id": "delegation-scenario-analysis-and-nclex-education-scope",
+          "locator": "Use the stem, not a slogan; title, description and CTA",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        }
+      ]
     }
   }
 }
