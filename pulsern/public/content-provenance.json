@@ -1344,8 +1344,8 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "54463e06973fa81d8cdae3899d146c47f29fd07e48fc338c082c9cddedee0924",
-      "sourceSetSha256": "cfca3a49b94b35587d4a0ed5c209a3068f489276a10a61ebc4cab5eea8267455",
+      "contentSha256": "593f70ffc8e9c3f654cbd636712ec5feec560be75deeb279661589a53ad5cd4f",
+      "sourceSetSha256": "2645b7c1ae74a863333b0a551823a1279bee07b55b025913e968322729cb7669",
       "sources": [
         {
           "id": "ncsbn-2026-rn-test-plan",
@@ -1355,6 +1355,24 @@
           "sourceUpdated": "2026-04-01",
           "accessedAt": "2026-08-26",
           "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "aha-2025-adult-basic-life-support",
+          "title": "Part 7: Adult Basic Life Support — 2025 AHA Guidelines",
+          "publisher": "American Heart Association via PubMed",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/41122888/",
+          "sourceUpdated": "2025-10-21",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract — recognition of cardiac arrest, emergency-response activation, CPR, AED use, respiratory arrest, and foreign-body airway obstruction; PMID 41122888"
         }
       ],
       "review": {

@@ -7,6 +7,7 @@ import { extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 import { articleJsonLd } from "../ops/build-learn.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
+import { SKILL_ARTICLES } from "../ops/learn-skills.mjs";
 import { sourcesFor } from "../ops/seo-content-policy.mjs";
 
 describe("SEO guardian", () => {
@@ -132,6 +133,28 @@ describe("SEO guardian", () => {
       "dailymed-deferoxamine-2026",
       "ncsbn-2026-rn-test-plan",
     ]);
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
+  it("keeps pending Guide 6 prioritization contextual, accessible, and source-bound", () => {
+    const guide = SKILL_ARTICLES.find((article) => article.slug === "prioritization-abc-maslow");
+    expect(guide.updated).toBe("2026-08-27");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(5);
+    expect(guide.body).toContain('class="table-wrap" role="region" aria-label="NCLEX prioritization decision sequence" tabindex="0"');
+    expect(guide.body).toContain('aria-labelledby="prioritization-safety-boundary"');
+    expect(guide.body).toContain("ABCs are a screen, not a universal ranking law");
+    expect(guide.body).toContain("Cardiac arrest is the clearest counterexample");
+    expect(guide.body).not.toContain("Outranks everything");
+    expect(guide.body).not.toContain("Discard the expected");
+    expect(guide.body).not.toContain("Findings that look urgent and are not");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncsbn-2026-rn-test-plan",
+      "ncsbn-next-generation-nclex",
+      "aha-2025-adult-basic-life-support",
+    ]);
+    expect(sourcesFor(guide).at(-1)?.url).toBe("https://pubmed.ncbi.nlm.nih.gov/41122888/");
     expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
   });
 
