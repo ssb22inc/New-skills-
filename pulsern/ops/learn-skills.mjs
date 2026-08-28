@@ -367,53 +367,60 @@ export const SKILL_ARTICLES = [
   {
     slug: "spaced-repetition-for-nursing-students",
     topic: "Study strategy",
-    title: "Spaced repetition for nursing students",
-    h1: "Why spaced repetition works, and how to use it",
-    description: "The forgetting curve, why re-reading feels productive and is not, and how to run spaced repetition without it becoming a second job.",
+    title: "Spaced repetition for nursing: evidence and safe use",
+    h1: "How nursing students can use spaced repetition",
+    description: "Use retrieval across separated sessions, build source-linked cards, adjust intervals from performance, and pair factual recall with clinical scenarios.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-28",
     cta: "PulseRN schedules flashcards on real calendar dates with a type-before-flip step, so recall is genuine.",
     body: `
-<p>Nursing school asks you to hold an enormous volume of factual material — values, drugs, precautions, milestones — and then tests it months later. Spaced repetition is the best-evidenced tool for that specific problem.</p>
+<p>Spaced repetition revisits material across separated sessions, often with retrieval practice before feedback. Research in health-professions education supports these approaches as useful learning tools, but it does not establish one best schedule, card algorithm or daily duration for every nursing student.</p>
 
-<h2>The forgetting curve</h2>
-<p>Newly learned information decays quickly and then more slowly. Left alone, most of what you studied today is substantially gone within a week. Each successful recall flattens the curve, so the same fact needs reviewing less and less often.</p>
-<p>The insight is that <b>timing matters more than quantity</b>. Reviewing something just as you are about to forget it produces far more durable memory than reviewing it while it is still fresh — which feels easier and accomplishes much less.</p>
-
-<div class="key">
-<p><b>Difficulty is the point.</b> If recall feels effortless, the review came too early to strengthen anything. A little struggle before the answer arrives is the signal that the memory is being reinforced. This is why the study methods that feel most productive are often the least effective.</p>
+<div class="key" role="note" aria-labelledby="spaced-repetition-boundary">
+<h2 id="spaced-repetition-boundary" style="margin-top:0">Important boundary</h2>
+<p>Flashcards are educational aids, not clinical references or proof of NCLEX readiness. Build clinical cards from authoritative, current sources; include context and units; review them when guidance changes; and do not use a memorized card to override an order, medication label, facility policy, patient-specific assessment or clinical judgment.</p>
 </div>
 
-<h2>Why re-reading fails</h2>
-<p>Reading a page again produces <b>recognition</b> — you know you have seen it, so it feels learned. Recognition is not recall, and the exam requires recall with no page in front of you.</p>
-<p>The test is simple: close the book and say the potassium range out loud. If you can, you know it. If you can only recognise it when you see it, you do not yet.</p>
+<h2>What the evidence supports</h2>
+<p>A systematic review included 56 health-professions studies and 63 experiments; 43 studies reported significant benefits from distributed practice, retrieval practice or both. The authors also identified heterogeneous interventions, comparison groups and assessments, so the review does not validate a single interval or algorithm. A randomized study of nurse-anesthesia students reported improved learning outcomes with a spaced-learning intervention in that setting, which supports the approach but does not by itself establish effects for every nursing program or the NCLEX.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-ramnanan-2024-distributed-retrieval-review">systematic review of distributed and retrieval practice</a> and <a href="#source-khalafi-2024-spaced-learning-nursing">nursing spaced-learning trial</a>.</p>
 
-<h2>Making it work</h2>
-<ul>
-  <li><b>Recall before you flip.</b> Say or type the answer first. Flipping to check without attempting is passive review with extra steps.</li>
-  <li><b>Grade yourself honestly.</b> Marking a card as known because you almost had it removes it from your schedule at exactly the wrong moment.</li>
-  <li><b>Keep cards atomic.</b> One fact per card. A card holding six things will be graded on whichever part you remembered.</li>
-  <li><b>Do the due cards daily.</b> The schedule only works if the intervals are respected; skipping days collapses it into cramming.</li>
-</ul>
+<h2>Use retrieval, feedback and correction</h2>
+<ol>
+  <li><b>Attempt before revealing.</b> Produce the answer or reasoning first instead of using familiarity as the only check.</li>
+  <li><b>Compare with the sourced answer.</b> Feedback should identify what was correct, missing or unsafe.</li>
+  <li><b>Correct the card or your response.</b> Do not repeatedly rehearse an ambiguous prompt, obsolete value or oversimplified rule.</li>
+  <li><b>Return after a delay.</b> Use later performance to decide whether the interval should shorten, stay similar or lengthen.</li>
+</ol>
+<p>Rereading can help you orient to unfamiliar material or clarify an error. The limitation is using familiarity from rereading as the only evidence that you can retrieve and apply the content.</p>
 
-<h2>What belongs on a card</h2>
-<p>Spaced repetition suits discrete facts. It is excellent for:</p>
-<ul>
-  <li>Laboratory values and critical thresholds</li>
-  <li>Drug classes, antidotes, and what to monitor</li>
-  <li>Isolation precautions by condition</li>
-  <li>Developmental milestones</li>
-  <li>Signs associated with a specific imbalance</li>
-</ul>
-<p>It is a poor fit for clinical judgement. You cannot flashcard your way to knowing which client to see first — that needs whole scenarios and practice questions. Use both, for what each is good at.</p>
+<h2>Design cards that remain auditable</h2>
+<div class="table-wrap" role="region" aria-label="Safe nursing flashcard design" tabindex="0">
+<table>
+  <caption>Fields that make a nursing flashcard easier to verify and update</caption>
+  <thead><tr><th scope="col">Field</th><th scope="col">What to record</th><th scope="col">Why it matters</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Focused prompt</th><td>One clear retrieval target or one short decision with enough context.</td><td>Avoids grading a multi-part card as known when only one part was recalled.</td></tr>
+    <tr><th scope="row">Answer and units</th><td>The complete answer, including units, population or condition when relevant.</td><td>Prevents a number or rule from being rehearsed without its safety context.</td></tr>
+    <tr><th scope="row">Authoritative source</th><td>Publisher, link and precise section or label locator.</td><td>Makes the claim traceable instead of relying on an unsourced deck.</td></tr>
+    <tr><th scope="row">Source/review date</th><td>When the source was updated and when the card was last checked.</td><td>Supports review when guidelines, labels or exam scope change.</td></tr>
+    <tr><th scope="row">Qualification</th><td>Exceptions, variability or a reminder to apply patient and policy context.</td><td>Reduces unsafe memorization of an absolute rule.</td></tr>
+  </tbody>
+</table>
+</div>
 
-<h2>The realistic version</h2>
-<p>Fifteen minutes a day, every day, will carry several hundred facts to exam day. Two hours on a Sunday will not, however virtuous it feels. The value is entirely in the consistency, which is also why a manageable daily load beats an ambitious one that you start skipping.</p>
+<h2>Match the tool to the learning target</h2>
+<p>Cards can support retrieval of terminology, metric conversions, pharmacology facts, precautions and other source-bound information. They can also present a short cue that begins a reasoning step. They should not be the only practice for prioritization, delegation, unfolding cases, multi-cue clinical judgment or item-format navigation. Pair factual retrieval with mixed questions, case-based practice, rationale review and feedback.</p>
+<p>Be cautious with laboratory ranges, medication timing, antidotes, isolation rules and developmental information: values and recommendations can vary by laboratory, product, population, jurisdiction or current guidance. Put the qualification and source on the card rather than memorizing a universal statement.</p>
+
+<h2>Choose a sustainable review load</h2>
+<p>No study cited here establishes that 15 minutes a day will maintain a particular number of facts. Select a load that leaves time for accurate recall, feedback, corrections and case-based practice. If reviews accumulate, pause or reduce new cards, prioritize current high-risk content, and resume instead of treating one missed day as failure. Consistency can help distribute practice, but the schedule should adapt to performance and real constraints.</p>
 `,
     faq: [
-      { q: "Does spaced repetition work for nursing school?", a: "Very well for factual recall — lab values, drugs, precautions, milestones — which is a large share of what the NCLEX requires. It is a poor fit for clinical judgement, which needs full scenarios and practice questions instead." },
-      { q: "Why is re-reading notes ineffective?", a: "It builds recognition rather than recall. The material feels familiar when you see it, but the exam requires producing it with nothing in front of you. Self-testing is harder and substantially more effective." },
-      { q: "How long should I spend on flashcards each day?", a: "Fifteen minutes daily is enough to carry several hundred facts, and it beats a single long weekly session. Spaced repetition depends on respecting the intervals, so consistency matters more than duration." },
+      { q: "Does spaced repetition work for nursing students?", a: "Health-professions evidence supports distributed and retrieval practice as useful learning approaches, and one randomized nurse-anesthesia study reported improved outcomes. The evidence does not guarantee an NCLEX result or identify one best schedule for every student." },
+      { q: "Should I stop rereading notes?", a: "No. Rereading can orient you or clarify an error, but familiarity should not be your only test of learning. Try to retrieve or apply the information before looking, then use the source and feedback to correct gaps." },
+      { q: "How long should I spend on flashcards each day?", a: "There is no validated universal duration or card count. Use a workload that allows careful recall, feedback, source checking and other practice; reduce new cards when accumulated reviews crowd out those steps." },
+      { q: "Can flashcards teach clinical judgment?", a: "They can support the factual knowledge and short cue recognition used in reasoning, but they should not be the only method. Add mixed items, unfolding cases, prioritization decisions, rationale review and feedback." },
     ],
   },
 

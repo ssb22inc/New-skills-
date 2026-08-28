@@ -246,6 +246,29 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
   });
 
+  it("keeps pending Guide 11 spaced repetition qualified, auditable, and contextual", () => {
+    const guide = SKILL_ARTICLES.find((article) => article.slug === "spaced-repetition-for-nursing-students");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="spaced-repetition-boundary"');
+    expect(guide.body).toContain("does not establish one best schedule");
+    expect(guide.body).toContain("43 studies reported significant benefits");
+    expect(guide.body).toContain("Authoritative source");
+    expect(guide.body).toContain("should not be the only practice for prioritization");
+    expect(guide.body).toContain("No study cited here establishes that 15 minutes a day");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(5);
+    expect(guide.body).not.toContain("best-evidenced tool");
+    expect(guide.body).not.toContain("most of what you studied today is substantially gone within a week");
+    expect(guide.body).not.toContain("Do the due cards daily");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ramnanan-2024-distributed-retrieval-review",
+      "khalafi-2024-spaced-learning-nursing",
+      "ncsbn-2026-rn-test-plan",
+    ]);
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

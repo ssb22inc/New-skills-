@@ -66,6 +66,7 @@ export function sourcesFor(article) {
   if (article.slug === "insulin-types-and-timing") return [SOURCES.cdcInsulinTypes, SOURCES.insulinLisproLabel, SOURCES.insulinAspartLabel, SOURCES.humulinNLabel, SOURCES.lantusLabel, SOURCES.lowBloodSugarSelfCare, SOURCES.testPlan];
   if (article.slug === "lab-values-to-memorize") return [SOURCES.labTests, SOURCES.testPlan];
   if (article.slug === "nclex-study-plan") return [SOURCES.distributedRetrievalReview, SOURCES.learning, SOURCES.testPlan];
+  if (article.slug === "spaced-repetition-for-nursing-students") return [SOURCES.distributedRetrievalReview, SOURCES.learning, SOURCES.testPlan];
   if (article.topic === "Study strategy") return [SOURCES.learning, SOURCES.testPlan];
   return [SOURCES.testPlan];
 }
