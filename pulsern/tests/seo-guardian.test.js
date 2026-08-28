@@ -409,6 +409,18 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
   });
 
+  it("keeps pending Guide 19 cloze guidance qualified and source-bound", () => {
+    const guide = TYPE_ARTICLES.find((article) => article.slug === "cloze-drop-down-questions");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="cloze-boundary"');
+    expect(guide.body).toContain("does not establish that every blank is scored independently");
+    expect(guide.body).toContain("study guidance, not a claim that NCSBN scores the blanks as a linked chain");
+    expect(guide.body).not.toContain("linked selections must agree with one another to earn credit");
+    expect(guide.body).not.toContain("blanks 2 and 3 are almost certainly wrong");
+    expect(guide.body).not.toContain("Answer out of order");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });
