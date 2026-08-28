@@ -957,6 +957,23 @@
         {"id":"no-invented-answer-balancing-rule","locator":"The method — final step; balancing FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
         {"id":"matrix-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
       ]
+    },
+    "cloze-drop-down-questions": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-28",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 19 cloze-drop-down-questions content and source-set digests",
+      "contentSha256": "49a5d6dfaef8bbd9fd8e97a5a17c8e94d065e4a49f7cfe290ed9445dc5872bd9",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "claims": [
+        {"id":"cloze-drop-down-format","locator":"Opening paragraph; definition FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"current-interface-and-directions-boundary","locator":"Opening paragraph; definition FAQ","sourceIds":["ncsbn-next-generation-nclex"]},
+        {"id":"multi-key-partial-credit-methods","locator":"Format and scoring boundary; scoring FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-nclex-faqs"]},
+        {"id":"no-unofficial-blank-level-scoring-rule","locator":"Format and scoring boundary; scoring FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-nclex-faqs"]},
+        {"id":"completion-order-not-an-official-rule","locator":"A consistency-checking study method; completion-order FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"consistency-checking-is-study-guidance","locator":"A consistency-checking study method; Consistency questions to ask","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"cloze-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
+      ]
     }
   }
 }
