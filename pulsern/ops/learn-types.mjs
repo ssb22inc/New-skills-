@@ -67,23 +67,19 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Matrix and grid questions: how to answer them",
     h1: "Matrix and grid questions on the NCLEX",
-    description: "How matrix items are scored row by row, why they punish pattern-guessing, and the one-finding-at-a-time habit that keeps you accurate.",
+    description: "How to interpret NCLEX matrix/grid rows and columns, keep classifications tied to the client context, and avoid unofficial scoring rules.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN drills matrix items with per-row rationales so you can see exactly which finding you misclassified.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide matrix/grid-style practice and rationales; it does not reproduce the official item bank or predict an NCLEX result.",
     body: `
 <p>A matrix item gives you a table. Findings run down the side, categories run across the top, and you classify every row. Typical category sets are <i>expected / unexpected</i>, <i>effective / ineffective</i>, or <i>indicated / contraindicated / non-essential</i>.</p>
 
-<h2>Why this format is unforgiving</h2>
-<p>Matrix items are usually scored <b>row by row</b>. That has two consequences students underestimate:</p>
-<ul>
-  <li>Getting most rows right can still earn partial credit — the item is not all-or-nothing under +/- style scoring, so a careful row is worth placing carefully.</li>
-  <li>There is nowhere to hide. On a multiple-choice item you can eliminate your way to an answer. Here, every single finding demands an independent judgement.</li>
-</ul>
-
-<div class="key">
-<p><b>Treat each row as its own question.</b> The single most common error is drifting — classifying a row based on the overall vibe of the scenario rather than on that specific finding. If the client is clearly deteriorating, it feels wrong to mark a normal finding as expected. Mark it anyway. The exam is testing whether you can tell them apart.</p>
+<div class="key" role="note" aria-labelledby="matrix-boundary">
+<h2 id="matrix-boundary" style="margin-top:0">Scoring boundary</h2>
+<p>NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every matrix is scored row by row, that every correct row earns an independent point, or that one method applies to every matrix item. Follow the displayed directions.</p>
 </div>
+
+<p><b>Study method:</b> treat each row as its own reasoning task, then review the complete grid. This is study guidance, not an official claim about how points are assigned.</p>
 
 <h2>The method</h2>
 <ol>
@@ -107,7 +103,7 @@ export const TYPE_ARTICLES = [
 <p>Skim every row before classifying any. Matrix items are often built around two or three findings that carry the clinical story, with the rest as filler that is genuinely unremarkable. Spotting the important ones early stops you from reading significance into rows that have none.</p>
 `,
     faq: [
-      { q: "How are matrix questions scored on the NCLEX?", a: "Usually row by row, so partial credit is possible. Each finding you classify correctly can earn credit independently, which is why working carefully through every row is worthwhile even when you are unsure of some." },
+      { q: "How are matrix questions scored on the NCLEX?", a: "NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Do not assume every matrix uses a specific row-level or all-or-nothing rule; follow the item directions." },
       { q: "What categories do matrix questions use?", a: "Commonly expected versus unexpected, effective versus ineffective, or indicated versus contraindicated versus non-essential. Read the column headings first — they change what question you are actually answering." },
       { q: "Do matrix questions have an even number of answers per column?", a: "No. There is no requirement that categories be evenly used. If every finding in a scenario is unexpected, every row is marked unexpected." },
     ],

@@ -399,6 +399,16 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
   });
 
+  it("keeps pending Guide 18 matrix guidance qualified and source-bound", () => {
+    const guide = TYPE_ARTICLES.find((article) => article.slug === "matrix-grid-questions");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="matrix-boundary"');
+    expect(guide.body).toContain("does not establish that every matrix is scored row by row");
+    expect(guide.body).not.toContain("usually scored <b>row by row</b>");
+    expect(guide.body).not.toContain("Each finding you classify correctly can earn credit independently");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });
