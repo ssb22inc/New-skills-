@@ -830,6 +830,76 @@
           "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-computerized-adaptive-testing"]
         }
       ]
+    },
+    "next-generation-nclex-what-changed": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-28",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 15 next-generation-nclex-what-changed content and source-set digests",
+      "contentSha256": "e93a96c67936c9efdd3c6c3beddcfe78df5481ab96765883a4e6da922ec29b0b",
+      "sourceSetSha256": "992438279c47b0d36a0adecc760130701165d7d0d22bfc5596dd659c0c983ac3",
+      "claims": [
+        {
+          "id": "ngn-launch-date-purpose-and-presentation",
+          "locator": "Opening paragraph; NGN definition FAQ",
+          "sourceIds": ["ncsbn-next-generation-nclex", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "nclex-knowledge-skills-abilities-and-clinical-judgment-scope",
+          "locator": "Opening paragraph; The central change — second paragraph",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "current-2026-test-plan-effective-period",
+          "locator": "Current-plan boundary",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "clinical-judgment-definition-and-iterative-process",
+          "locator": "The central change — first paragraph",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        },
+        {
+          "id": "case-study-and-stand-alone-clinical-judgment-representation",
+          "locator": "The central change — first paragraph; case-membership FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "ncjmm-six-steps-and-case-study-measurement",
+          "locator": "The clinical judgment model",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        },
+        {
+          "id": "case-study-count-and-stand-alone-percentage",
+          "locator": "How clinical judgment appears — Case studies and Stand-alone items rows; content-amount FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "multiple-item-formats-and-multimedia-boundary",
+          "locator": "How clinical judgment appears — Multiple formats row",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "partial-credit-eligibility-and-methods",
+          "locator": "How clinical judgment appears — Partial credit row; partial-credit FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-nclex-faqs"]
+        },
+        {
+          "id": "no-unofficial-case-weight-inference",
+          "locator": "The clinical judgment model — final paragraph; Case studies row limit",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-nclex-faqs"]
+        },
+        {
+          "id": "cat-pass-fail-client-needs-and-result-boundaries",
+          "locator": "What did not change",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        },
+        {
+          "id": "ngn-study-guidance-scope-and-no-score-guarantee",
+          "locator": "Study implication; CTA",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
+        }
+      ]
     }
   }
 }
