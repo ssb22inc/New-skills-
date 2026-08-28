@@ -158,53 +158,51 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Highlight questions: how to answer them",
     h1: "Highlight questions on the NCLEX",
-    description: "How highlight items test cue recognition, why over-selecting costs you, and how to read a nurse's note for what actually matters.",
+    description: "A source-bound guide to NCLEX highlight items: follow the stem, select only supported text, and avoid invented scoring or answer-count rules.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN's highlight items use realistic chart excerpts and nurse's notes, not simplified fragments.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide highlight-style practice with rationales; it does not reproduce the official NCLEX item bank or predict an exam result.",
     body: `
-<p>A highlight item gives you a piece of a chart — a nurse's note, a history, a set of results — and asks you to click the findings that are significant. It is the purest test of the first step of clinical judgment: <b>recognising cues</b>.</p>
+<p>A highlight item presents text from client information and asks the candidate to select the words or phrases that answer the prompt. Highlight items can support clinical-judgment tasks such as recognizing relevant cues, but the exact task is set by the stem. Use the current NCLEX Candidate Tutorial and official samples for the exact interface.</p>
 
-<h2>The core skill</h2>
-<p>Real charting contains a great deal of information that is true, documented, and completely unremarkable. The competent nurse reads past it to the two or three things that change what happens next. That filtering is exactly what is being scored.</p>
-
-<div class="key">
-<p><b>Do not highlight everything.</b> These items commonly use +/- scoring, where an incorrect selection cancels out a correct one. Highlighting generously to make sure you caught the right ones can reduce your score to zero on an item where you actually knew the answer.</p>
+<div class="key" role="note" aria-labelledby="highlight-boundary">
+<h2 id="highlight-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every highlight item uses plus/minus scoring, that each highlighted phrase has an independent point value, or that a particular number of phrases is correct. Follow the item directions and do not infer a scoring formula from the interface.</p>
 </div>
 
-<h2>The method</h2>
+<p class="source-note"><b>Evidence:</b> The format and clinical-judgment context come from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+
+<h2>A stem-first study method</h2>
 <ol>
-  <li><b>Read the question stem first.</b> Findings requiring immediate follow-up is a narrower ask than findings that are abnormal, which is narrower again than findings relevant to the diagnosis. The stem sets the bar.</li>
-  <li><b>Read the whole passage once without clicking.</b></li>
-  <li><b>For each candidate finding, ask a single question:</b> does this change what I do next? If not, leave it.</li>
-  <li><b>Check what is missing.</b> A note that records no urine output since a time hours ago is a significant finding stated as an absence.</li>
+  <li><b>Read the stem before selecting text.</b> Identify the precise task—for example, cues that require follow-up may not be the same as every value outside a reference interval.</li>
+  <li><b>Read all supplied client information.</b> Establish the client's context, time course and comparison point.</li>
+  <li><b>Evaluate each selectable phrase against the stem.</b> Select text because it directly supports the requested judgment, not merely because it looks familiar or noteworthy.</li>
+  <li><b>Use only the documented information.</b> Do not add an unstated symptom, diagnosis, trend or assumption.</li>
+  <li><b>Review the complete response.</b> Confirm that every selection answers the same prompt and that no required response was missed.</li>
 </ol>
+<p>This method is study guidance, not an NCSBN scoring rule or a promise about how many selections an item contains.</p>
 
-<h2>What tends to be significant</h2>
+<h2>Questions for evaluating a phrase</h2>
 <ul>
-  <li>Values outside the expected range <i>for this client</i>, given age, condition and stage of recovery.</li>
-  <li>Trends — a value that has moved, even while still technically within range.</li>
-  <li>Findings that contradict the expected trajectory, such as pain increasing when it should be settling.</li>
-  <li>New neurological or mental status changes, which are cues far more often than they are noise.</li>
-  <li>Anything touching airway, breathing or circulation.</li>
-  <li>Absences: no output, no bowel sounds, no response.</li>
+  <li>Does the phrase answer the wording of the stem?</li>
+  <li>Is it relevant in this client's age, condition and time course?</li>
+  <li>Does the prompt ask for a current finding, a change, a risk, an intervention or a response to care?</li>
+  <li>Is the relationship supported by the supplied record rather than an assumption?</li>
 </ul>
 
-<h2>What tends not to be</h2>
+<h2>Common reasoning errors</h2>
 <ul>
-  <li>Values inside the expected range for that client.</li>
-  <li>Findings consistent with the known diagnosis and already being managed.</li>
-  <li>Social and historical detail with no bearing on the current problem.</li>
-  <li>Routine care that has been carried out as ordered.</li>
+  <li>Selecting every abnormal-looking phrase without applying the stem.</li>
+  <li>Using one value in isolation while ignoring its unit, trend or client context.</li>
+  <li>Choosing text that is clinically interesting but does not answer the question.</li>
+  <li>Assuming an unofficial target number of selections.</li>
+  <li>Trying to calculate an unofficial partial-credit strategy instead of completing the requested response.</li>
 </ul>
-
-<h2>When you are unsure</h2>
-<p>Under +/- scoring the arithmetic is simple. A finding you are confident about is worth selecting. A finding you are truly 50/50 on has an expected value near zero and can cost you a mark you had already earned. Select what you can defend and leave the rest.</p>
 `,
     faq: [
-      { q: "What is a highlight question on the NCLEX?", a: "An item that presents chart material — a nurse's note, history or results — and asks you to click the findings that are significant. It tests cue recognition, the first step of the clinical judgment model." },
-      { q: "Should I highlight every abnormal finding?", a: "Only those that meet the bar set by the stem. Highlight items often use +/- scoring, where an incorrect selection cancels a correct one, so over-selecting actively reduces your score." },
-      { q: "What counts as a significant finding?", a: "Anything that changes what you would do next: values outside the expected range for that client, meaningful trends, new neurological changes, anything affecting airway, breathing or circulation, and significant absences such as no urine output." },
+      { q: "What is a highlight question on the NCLEX?", a: "An item that presents text from client information and asks the candidate to select the words or phrases that answer the prompt. Consult the current Candidate Tutorial and official samples for the exact interface." },
+      { q: "Should I highlight every abnormal finding?", a: "No fixed rule says to select every abnormal-looking phrase. Apply the wording of the stem and select only text that directly supports the requested judgment in the supplied client context." },
+      { q: "How are highlight questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key, but that general guidance does not prove one method or an independent point value for every highlight selection. Follow the displayed directions." },
     ],
   },
 
