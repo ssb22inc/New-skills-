@@ -760,6 +760,76 @@
           "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan", "ncsbn-nclex-faqs"]
         }
       ]
+    },
+    "how-many-questions-is-the-nclex": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-28",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 14 how-many-questions-is-the-nclex content and source-set digests",
+      "contentSha256": "ec1dd8c4d5e7439dbeb22cb8213d3537308ce59d30ee58d0f9c37c9254126944",
+      "sourceSetSha256": "4e4d4a22601926c9f6d51e37e6318a7aef7013d9b78ed1a2e4e441396949066d",
+      "claims": [
+        {
+          "id": "nclex-2026-item-range-duration-and-effective-period",
+          "locator": "Opening paragraph; Current-rule boundary; item-count FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-2026-candidate-bulletin"]
+        },
+        {
+          "id": "minimum-examination-content-area-composition",
+          "locator": "What is inside the 85-item minimum — Test-plan content areas row",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "minimum-examination-clinical-judgment-case-study-composition",
+          "locator": "What is inside the 85-item minimum — Clinical-judgment case studies row",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "pretest-item-count-purpose-and-indistinguishability",
+          "locator": "What is inside the 85-item minimum — Pretest items row and following paragraph; pretest FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-nclex-faqs"]
+        },
+        {
+          "id": "cat-adaptive-selection-and-variable-examination-length",
+          "locator": "Opening paragraph; Why examination length varies",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "cat-95-percent-confidence-stopping-rule",
+          "locator": "Why examination length varies — first paragraph",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "cat-maximum-length-final-ability-rule",
+          "locator": "Why examination length varies — first and second paragraphs; maximum-question FAQ",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "question-count-and-stopping-point-result-limitation",
+          "locator": "Current-rule boundary; Why examination length varies — second paragraph; maximum-question FAQ",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing"]
+        },
+        {
+          "id": "five-hour-break-item-navigation-and-timing-rules",
+          "locator": "Time, not just items — first paragraph; break-duration FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-2026-candidate-bulletin", "ncsbn-nclex-faqs"]
+        },
+        {
+          "id": "run-out-of-time-minimum-and-final-ability-rules",
+          "locator": "Time, not just items — second paragraph",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "practice-pacing-individualization-and-no-universal-quota",
+          "locator": "Practice pacing without inventing a universal quota",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-2026-candidate-bulletin"]
+        },
+        {
+          "id": "nclex-length-education-scope-and-no-result-prediction",
+          "locator": "Title, description, CTA; Current-rule boundary",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-computerized-adaptive-testing"]
+        }
+      ]
     }
   }
 }
