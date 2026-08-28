@@ -9,6 +9,7 @@ import { articleJsonLd } from "../ops/build-learn.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
 import { EXAM_ARTICLES } from "../ops/learn-exam.mjs";
 import { SKILL_ARTICLES } from "../ops/learn-skills.mjs";
+import { TYPE_ARTICLES } from "../ops/learn-types.mjs";
 import { sourcesFor } from "../ops/seo-content-policy.mjs";
 
 describe("SEO guardian", () => {
@@ -382,6 +383,20 @@ describe("SEO guardian", () => {
       "ncsbn-computerized-adaptive-testing",
       "ncsbn-nclex-faqs",
     ]);
+  });
+
+  it("keeps pending Guide 17 bow-tie guidance qualified and source-bound", () => {
+    const guide = TYPE_ARTICLES.find((article) => article.slug === "bow-tie-questions");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="bow-tie-boundary"');
+    expect(guide.body).toContain("one potential condition, two actions to take and two parameters to monitor");
+    expect(guide.body).toContain("Do not assume a bow-tie is all-or-nothing");
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(3);
+    expect(guide.body).not.toContain("gives you nothing for that");
+    expect(guide.body).not.toContain("incorrect condition usually costs you the whole item");
+    expect(guide.body).not.toContain("Early hypoxaemia");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
   });
 
   it("extracts Responses API output text", () => {

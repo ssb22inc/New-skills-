@@ -8,53 +8,57 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Bow-tie questions: how to answer them",
     h1: "Bow-tie questions on the NCLEX",
-    description: "What a bow-tie item is, why the middle box must be settled first, and the order of reasoning that keeps the wings from collapsing.",
+    description: "A source-bound guide to NCLEX bow-tie items: identify one potential condition, two actions, and two parameters while keeping all five selections consistent.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN includes bow-tie items across all eight client-need categories, with rationales for every wing.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide bow-tie-style practice with rationales; it does not reproduce the official NCLEX item bank or guarantee a result.",
     body: `
-<p>A bow-tie item is the format that most rewards structured thinking. It gives you one scenario and asks you to commit to a whole clinical decision at once: what is going on, what you will do about it, and what you will watch to know whether it worked.</p>
+<p>A bow-tie item presents client information and asks the candidate to select one potential condition, two actions to take and two parameters to monitor. The five selections should form one clinically consistent response to the evidence in the item.</p>
 
-<h2>The shape of it</h2>
-<p>Five boxes arranged as a bow-tie:</p>
-<ul>
-  <li><b>Centre</b> — the condition or problem the client is most likely experiencing.</li>
-  <li><b>Left wing (two boxes)</b> — the actions you would take.</li>
-  <li><b>Right wing (two boxes)</b> — the parameters you would monitor.</li>
-</ul>
-<p>You drag options from a word bank into each box. Everything is drawn from the same pool, which is why plausible-but-wrong options are always available.</p>
-
-<div class="key">
-<p><b>Settle the centre first, always.</b> Both wings depend on it. If you place actions before you have committed to the condition, you will pick things that are individually reasonable but do not belong to the same clinical picture — and a bow-tie scored as a whole gives you nothing for that.</p>
+<div class="key" role="note" aria-labelledby="bow-tie-boundary">
+<h2 id="bow-tie-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>Use the current NCLEX Candidate Tutorial and official sample pack for the exact interface. NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Do not assume a bow-tie is all-or-nothing, that every box earns an independent point, or that an incorrect center selection automatically erases every other selection.</p>
 </div>
 
-<h2>The order that works</h2>
-<ol>
-  <li><b>Read the scenario twice before touching anything.</b> The first read gives you the story; the second lets you spot the findings that discriminate between two candidate conditions.</li>
-  <li><b>Name the condition in your own words</b> before you look at the word bank. If you read the options first, they will anchor you.</li>
-  <li><b>Match your phrase to a centre option.</b> If nothing matches, your read is wrong — go back rather than forcing the closest word.</li>
-  <li><b>Ask what this condition demands right now.</b> Those are your actions. Prefer what addresses the cause or protects airway, breathing and circulation over what merely documents or reassesses.</li>
-  <li><b>Ask what would change first if the action worked</b> — or first if the client deteriorated. Those are your monitoring parameters.</li>
-</ol>
-
-<h2>Where candidates lose marks</h2>
+<h2>What each part asks</h2>
+<div class="table-wrap" role="region" aria-label="NCLEX bow-tie response components" tabindex="0">
 <table>
-  <tr><th>Trap</th><th>What it looks like</th></tr>
-  <tr><td>Right action, wrong condition</td><td>An intervention that is genuinely good nursing but belongs to a different problem than the one in the centre box.</td></tr>
-  <tr><td>Monitoring what will not change</td><td>Choosing a parameter that is real but too slow or too indirect to tell you whether this action worked.</td></tr>
-  <tr><td>Two versions of one action</td><td>Filling both left boxes with the same idea worded differently, leaving a genuinely required action unplaced.</td></tr>
-  <tr><td>Assessment when the client is unstable</td><td>Reassessing is safe on paper, but when the scenario has already given you the finding, the exam wants the action it demands.</td></tr>
+  <caption>The five selections in a bow-tie response</caption>
+  <thead><tr><th scope="col">Component</th><th scope="col">Selections</th><th scope="col">Reasoning task</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Potential condition</th><td>One</td><td>Identify the condition most consistent with the relevant client information.</td></tr>
+    <tr><th scope="row">Actions</th><td>Two</td><td>Select actions appropriate to that condition and the circumstances given.</td></tr>
+    <tr><th scope="row">Parameters</th><td>Two</td><td>Select findings that appropriately monitor the client in relation to the condition and actions.</td></tr>
+  </tbody>
 </table>
+</div>
+<p class="source-note"><b>Evidence for the format:</b> NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. Scoring boundaries come from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
-<h2>A worked pattern</h2>
-<p>A post-operative client is restless, with rising respiratory rate, falling oxygen saturation and diminished breath sounds at one base. The temptation is to reach for options about oxygen and vital signs immediately.</p>
-<p>Instead: name it first. Restlessness plus hypoxaemia plus unilateral diminished sounds points to a respiratory problem in that lung, not to pain or anxiety. With the centre settled, the left wing wants what addresses oxygenation and lung expansion, and the right wing wants the parameters that move earliest — oxygen saturation, respiratory rate and work of breathing — rather than something that would take hours to shift.</p>
-<p>Notice that restlessness is doing real work here. Early hypoxaemia often presents as agitation before anything more dramatic, and exam scenarios use it deliberately as the cue you are supposed to catch.</p>
+<h2>A consistency-first method</h2>
+<p>The NCLEX does not require candidates to fill the targets in a particular reasoning order. One useful study method is:</p>
+<ol>
+  <li><b>Read the complete client information and prompt.</b> Identify time course, trends, risks and the question's exact wording.</li>
+  <li><b>Separate relevant cues from distractors.</b> Use the supplied evidence rather than one isolated familiar finding.</li>
+  <li><b>Compare the potential conditions.</b> Select the option best supported by the combined cues.</li>
+  <li><b>Evaluate each action against that condition.</b> Confirm that both actions fit the client and do not merely sound generally helpful.</li>
+  <li><b>Evaluate each monitoring parameter.</b> Confirm that both parameters are relevant to the selected condition and actions.</li>
+  <li><b>Recheck all five selections together.</b> Change any selection that conflicts with the rest of the response or the scenario.</li>
+</ol>
+<p>This is study guidance, not an NCSBN scoring rule. A candidate may reason in another order and should follow the interface instructions shown on the examination.</p>
+
+<h2>Common reasoning errors</h2>
+<ul>
+  <li>Selecting an action that may be appropriate generally but does not fit the chosen condition.</li>
+  <li>Using one cue in isolation while ignoring contradictory or more urgent information.</li>
+  <li>Choosing two actions or parameters that duplicate one another without covering what the item asks.</li>
+  <li>Inventing facts not provided in the client information.</li>
+  <li>Trying to calculate an unofficial score instead of completing the response requested.</li>
+</ul>
 `,
     faq: [
-      { q: "What is a bow-tie question on the NCLEX?", a: "A Next Generation item type with five boxes: the client's most likely condition in the centre, two actions on the left, and two parameters to monitor on the right. Options are dragged from a shared word bank." },
-      { q: "How is a bow-tie question scored?", a: "As a single item that can carry partial credit, depending on the scoring rule applied. Because the wings depend on the centre being right, an incorrect condition usually costs you the whole item rather than one box." },
-      { q: "What should I fill in first on a bow-tie?", a: "The centre. Both wings are only correct in relation to the condition, so committing to actions before you have identified the problem leads to answers that are individually plausible but clinically inconsistent." },
+      { q: "What is a bow-tie question on the NCLEX?", a: "A clinical-judgment item that asks for one potential condition, two actions to take and two parameters to monitor based on the supplied client information." },
+      { q: "How is a bow-tie question scored?", a: "NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Follow the item directions and do not assume an unofficial per-box or all-or-nothing rule." },
+      { q: "Must I fill in the condition first?", a: "No official rule requires a particular completion order. Identifying the best-supported condition first can be a useful consistency check because the actions and monitoring parameters should fit it, but review all five selections together before advancing." },
     ],
   },
 
