@@ -224,6 +224,28 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
   });
 
+  it("keeps pending Guide 10 study planning evidence-qualified and individualized", () => {
+    const guide = SKILL_ARTICLES.find((article) => article.slug === "nclex-study-plan");
+    expect(guide.updated).toBe("2026-08-27");
+    expect(guide.body).toContain('aria-labelledby="study-plan-boundary"');
+    expect(guide.body).toContain("There is no evidence-based daily question quota");
+    expect(guide.body).toContain("43 reported significant benefits");
+    expect(guide.body).toContain("do not establish one optimal interval, daily item count or guaranteed NCLEX outcome");
+    expect(guide.body).toContain("not the NCLEX result");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(5);
+    expect(guide.body).not.toContain("20&ndash;40 items");
+    expect(guide.body).not.toContain("Weekly or fortnightly");
+    expect(guide.body).not.toContain("Cramming new content in the final week has little effect");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ramnanan-2024-distributed-retrieval-review",
+      "khalafi-2024-spaced-learning-nursing",
+      "ncsbn-2026-rn-test-plan",
+    ]);
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

@@ -292,59 +292,75 @@ export const SKILL_ARTICLES = [
   {
     slug: "nclex-study-plan",
     topic: "Study strategy",
-    title: "Building an NCLEX study plan that holds",
-    h1: "An NCLEX study plan you can actually keep",
-    description: "How to structure study time around retrieval and spacing rather than re-reading, and how to build a plan that survives a working week.",
+    title: "NCLEX study plan: build an adaptable schedule",
+    h1: "Build an NCLEX study plan you can adjust",
+    description: "Use the RN Test Plan, retrieval practice, spaced study and an error log to create an NCLEX schedule that fits your baseline, time and needs.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN builds a weekly plan around your weak areas and schedules flashcards on real calendar dates.",
     body: `
-<p>Most study plans fail for the same two reasons: they are built around hours rather than retrieval, and they assume a week that never happens. A plan that survives contact with shifts, clinicals and ordinary life beats an ambitious one you abandon in ten days.</p>
+<p>An NCLEX study plan should connect the current RN Test Plan to your own evidence: what you can retrieve, which cues or item formats you misread, and what you can realistically practice before the exam. There is no evidence-based daily question quota or universal number of study weeks that fits every candidate.</p>
 
-<h2>Start from a baseline, not a schedule</h2>
-<p>Before deciding what to study, find out where you are. Work through a broad set of questions across all categories and record performance by category rather than overall. The number matters less than the shape — which areas are genuinely weak versus which merely feel uncomfortable.</p>
-<p>Those two often differ. Students routinely over-study the content they find interesting and avoid the category quietly costing them marks.</p>
-
-<h2>The two principles that do the work</h2>
-<div class="key">
-<p><b>Retrieval beats review.</b> Re-reading notes produces recognition — the comfortable feeling of familiarity — without the ability to produce the answer unprompted. Testing yourself is harder, feels worse, and is substantially more effective. If a study session felt easy, it probably was not doing much.</p>
+<div class="key" role="note" aria-labelledby="study-plan-boundary">
+<h2 id="study-plan-boundary" style="margin-top:0">Important boundary</h2>
+<p>This guide is an educational planning framework, not an official NCSBN preparation program or a readiness prediction. Practice-bank scores are not the NCLEX result. Adapt the plan for your testing date, prior education, work and caregiving demands, disability or accommodation needs, health, language needs and the feedback supplied by your nursing program or qualified educator.</p>
 </div>
-<p><b>Spacing beats massing.</b> The same total time spread across several days produces better retention than one long session. Six twenty-minute sessions beat one two-hour block, and they fit a real week far more easily.</p>
 
-<h2>A weekly structure that works</h2>
+<h2>Start with the official scope and a baseline</h2>
+<ol>
+  <li>Read the current <a href="#source-ncsbn-2026-rn-test-plan">NCSBN RN Test Plan</a> so your category map and clinical-judgment practice reflect the exam's published scope.</li>
+  <li>Complete a mixed, representative practice sample under conditions you can repeat. One sample is a starting point, not a verdict.</li>
+  <li>Record more than percent correct: category, item format, cue or concept missed, reasoning error, and whether time or reading changed the response.</li>
+  <li>Choose a small number of priorities for the next cycle, then reassess with a comparable sample.</li>
+</ol>
+
+<h2>Use retrieval and spacing—with evidence-sized claims</h2>
+<p><b>Retrieval practice</b> asks you to produce or apply an answer before seeing it. <b>Distributed practice</b> returns to material across separated sessions instead of placing all exposure in one block. A systematic review of 56 health-professions studies found that 43 reported significant benefits from distributed practice, retrieval practice or both, while also noting heterogeneous designs and assessments. A randomized study in nurse-anesthesia students found higher learning outcomes with a spaced-learning intervention in that setting.</p>
+<p>These findings support using retrieval and spacing as study tools; they do not establish one optimal interval, daily item count or guaranteed NCLEX outcome. Re-reading can still support orientation or clarification, but it should not be your only check of whether you can recall and apply information.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-ramnanan-2024-distributed-retrieval-review">systematic review of distributed and retrieval practice</a> and <a href="#source-khalafi-2024-spaced-learning-nursing">nursing spaced-learning trial</a>.</p>
+
+<h2>Build a repeatable study cycle</h2>
+<div class="table-wrap" role="region" aria-label="Adaptable NCLEX study cycle" tabindex="0">
 <table>
-  <tr><th>Component</th><th>Roughly</th><th>Purpose</th></tr>
-  <tr><td>Daily question practice</td><td>20&ndash;40 items</td><td>Retrieval, and exposure to item formats.</td></tr>
-  <tr><td>Reviewing what you missed</td><td>As long as the practice itself</td><td>Where the actual learning happens.</td></tr>
-  <tr><td>Flashcards</td><td>10&ndash;15 minutes</td><td>Values, drugs, and facts that must be automatic.</td></tr>
-  <tr><td>One weak category, deliberately</td><td>2&ndash;3 sessions weekly</td><td>Turns avoidance into progress.</td></tr>
-  <tr><td>A full-length exam</td><td>Weekly or fortnightly</td><td>Endurance, pacing, and an honest readiness signal.</td></tr>
+  <caption>Choose a workload you can complete and review; the frequencies are individualized</caption>
+  <thead><tr><th scope="col">Component</th><th scope="col">Action</th><th scope="col">Adjustment signal</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Mixed retrieval</th><td>Answer a manageable set across categories and item formats before viewing rationales.</td><td>Reduce set size if review is repeatedly unfinished; increase challenge only when the full cycle remains sustainable.</td></tr>
+    <tr><th scope="row">Deliberate review</th><td>Explain the best answer, the evidence in the stem and the specific reason for your error.</td><td>Return to source material when the rationale exposes a knowledge gap or conflicting information.</td></tr>
+    <tr><th scope="row">Focused repair</th><td>Practice the priority concept, cue or format identified in the error log.</td><td>Change the method when errors persist—for example, from passive reading to recall, worked examples or educator feedback.</td></tr>
+    <tr><th scope="row">Spaced return</th><td>Revisit previously studied material after a delay instead of closing it after one session.</td><td>Shorten or lengthen the interval based on successful recall; research does not prescribe one interval for every learner.</td></tr>
+    <tr><th scope="row">Comparable reassessment</th><td>Use another mixed sample to examine trends across more than one attempt.</td><td>Revise priorities from the pattern, not from a single high or low score.</td></tr>
+  </tbody>
 </table>
+</div>
 
-<h2>Review is not optional</h2>
-<p>Answering 100 questions and reviewing none is close to wasted time. For every item you get wrong, be able to say three things:</p>
+<h2>Turn rationales into an error log</h2>
+<p>After a practice item, use the rationale and an authoritative source when needed to answer:</p>
 <ol>
   <li>Why the correct answer is correct.</li>
-  <li>Why <i>your</i> answer was wrong — specifically.</li>
-  <li>What you would look for to recognise this situation next time.</li>
+  <li>Why your response was less defensible in this stem.</li>
+  <li>Which cue, concept, calculation, priority rule or item-format demand you missed.</li>
+  <li>What you will retrieve or do differently in the next comparable item.</li>
 </ol>
-<p>The second is the one people skip, and it is the one that changes behaviour. Getting an item wrong because you misread the stem is a different problem from not knowing the content, and they need different fixes.</p>
+<p>Also review correct answers that were guesses or were reached with unsafe reasoning. A percent-correct score can hide those gaps.</p>
 
-<h2>Building it around a real life</h2>
+<h2>Fit the workload to real constraints</h2>
 <ul>
-  <li><b>Set a floor, not a ceiling.</b> A minimum you will hit on your worst day — twenty questions — beats a target you miss and then abandon.</li>
-  <li><b>Attach study to an existing habit</b> rather than to a time of day, which shifts with shifts.</li>
-  <li><b>Plan a rest day.</b> Plans without them collapse; plans with them survive.</li>
-  <li><b>Expect to miss days.</b> Missing one is normal. What matters is returning the next day rather than treating the plan as broken.</li>
+  <li><b>Plan from available sessions.</b> Mark work, school, caregiving, appointments and rest before assigning study.</li>
+  <li><b>Use a minimum viable session.</b> On a constrained day, complete a small retrieval-and-review cycle rather than chasing an arbitrary item quota.</li>
+  <li><b>Protect review time.</b> If you can answer more items than you can examine carefully, shrink the set.</li>
+  <li><b>Use recovery rules.</b> When a session is missed, move the highest-priority task or resume the next planned cycle instead of doubling the next workload automatically.</li>
+  <li><b>Seek support when needed.</b> Persistent content, language, test-anxiety or accessibility barriers may require an educator, clinician or the applicable testing-accommodation process rather than more question volume.</li>
 </ul>
 
-<h2>The last week</h2>
-<p>Cramming new content in the final week has little effect and considerable cost. Better: light review of high-yield facts, moderate question practice to keep the rhythm, and genuine attention to sleep. Arriving rested is worth more than the last two hundred questions.</p>
+<h2>Use the final week to stabilize the plan</h2>
+<p>Do not apply a blanket rule that every candidate must stop new content or complete a fixed number of questions. Review the error themes that still matter, keep the workload realistic, rehearse the item formats you will encounter, and verify current exam-day instructions from official sources. Avoid making a single commercial readiness score the basis of a high-stakes decision.</p>
 `,
     faq: [
-      { q: "How long should I study for the NCLEX?", a: "There is no universal figure, and consistency matters far more than total hours. Short daily sessions with real retrieval practice outperform occasional long ones, and a plan you keep for six weeks beats an ambitious one abandoned in ten days." },
-      { q: "How many practice questions should I do a day?", a: "Twenty to forty is a sustainable target for most people, provided you spend as long reviewing what you missed as you spent answering. Volume without review produces very little learning." },
-      { q: "Should I study new content the week before the NCLEX?", a: "Generally no. Late cramming adds little and costs sleep and confidence. Light review of high-yield facts, moderate question practice and proper rest serve you better." },
+      { q: "How long should I study for the NCLEX?", a: "There is no evidence-based duration that fits everyone. Work backward from the test date, establish a repeatable baseline, account for your available time and support needs, and adjust the plan from performance trends rather than a universal number of weeks." },
+      { q: "How many NCLEX practice questions should I do each day?", a: "There is no validated daily quota for every candidate. Choose a set small enough that you can answer it, review the reasoning and update your error log. Increase volume only when quality and sustainability remain intact." },
+      { q: "Should I study new content during the week before the NCLEX?", a: "Use your own error pattern instead of a blanket prohibition. Address high-priority gaps without creating an unsustainable last-minute workload, continue targeted retrieval, and rely on current official instructions for exam-day preparation." },
+      { q: "Does a practice-bank score predict that I will pass?", a: "A score can provide feedback within that product, but it is not the NCLEX result and should not be treated as a guarantee. Look at repeated trends, reasoning quality, content coverage and guidance from your nursing program or qualified educator." },
     ],
   },
 

@@ -49,6 +49,7 @@ export const SOURCES = {
   lantusLabel: { id: "dailymed-lantus-2025", title: "Lantus Insulin Glargine Prescribing Information", publisher: "DailyMed, U.S. National Library of Medicine", url: "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=d5e07a0c-7e14-4756-9152-9fea485d654a", sourceUpdated: "2025-06-02", accessedAt: "2026-08-27", locator: "Dosage and Administration — do not mix or administer intravenously; Pharmacokinetics — 24-hour profile without a pronounced peak; Drug Interactions — blunted hypoglycemia symptoms" },
   lowBloodSugarSelfCare: { id: "medlineplus-low-blood-sugar-self-care-2026", title: "MedlinePlus — Low blood sugar: self-care", publisher: "U.S. National Library of Medicine", url: "https://medlineplus.gov/ency/patientinstructions/000085.htm", sourceUpdated: "2026-01-25", accessedAt: "2026-08-27", locator: "When Your Blood Sugar Gets Low — 15 grams, 15-minute recheck, repeat treatment, and conditional follow-up snack" },
   learning: { id: "khalafi-2024-spaced-learning-nursing", title: "Khalafi et al. — Effect of spaced learning on nurse anesthesia students", publisher: "BMC Medical Education", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/", sourceUpdated: "2024-03-21", accessedAt: EVIDENCE_ACCESSED_AT, locator: "Randomized-controlled methods, results, and conclusion" },
+  distributedRetrievalReview: { id: "ramnanan-2024-distributed-retrieval-review", title: "Systematic review of distributed practice and retrieval practice in health professions education", publisher: "Advances in Health Sciences Education via PubMed Central", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/", sourceUpdated: "2023-08-24", accessedAt: "2026-08-27", locator: "Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions" },
 };
 
 export function sourcesFor(article) {
@@ -64,6 +65,7 @@ export function sourcesFor(article) {
   if (article.slug === "electrolyte-imbalances") return [SOURCES.electrolytes, SOURCES.hypokalemia, SOURCES.hyperkalemia, SOURCES.potassiumChlorideLabel, SOURCES.hyponatremia, SOURCES.hypernatremia, SOURCES.calciumDisorders, SOURCES.magnesium, SOURCES.magnesiumSulfateLabel, SOURCES.testPlan];
   if (article.slug === "insulin-types-and-timing") return [SOURCES.cdcInsulinTypes, SOURCES.insulinLisproLabel, SOURCES.insulinAspartLabel, SOURCES.humulinNLabel, SOURCES.lantusLabel, SOURCES.lowBloodSugarSelfCare, SOURCES.testPlan];
   if (article.slug === "lab-values-to-memorize") return [SOURCES.labTests, SOURCES.testPlan];
+  if (article.slug === "nclex-study-plan") return [SOURCES.distributedRetrievalReview, SOURCES.learning, SOURCES.testPlan];
   if (article.topic === "Study strategy") return [SOURCES.learning, SOURCES.testPlan];
   return [SOURCES.testPlan];
 }

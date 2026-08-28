@@ -1839,9 +1839,18 @@
         "audience": "NCLEX-RN candidates",
         "risk": "education"
       },
-      "contentSha256": "a2eb9cc5cddff7fbf32d64d5f5210f16a62fedd707bad3a47336022576ec6a8b",
-      "sourceSetSha256": "6b1fdefa3b9aa30adc47fc063aabadfe1139edc81d33b7917d95fd5115208a2c",
+      "contentSha256": "c5b1a9027585071faf9c65cc6588568c1036b5ef5a9bd7512db3d407cc6d8a66",
+      "sourceSetSha256": "d243782dd6ddfa49e7d70db9edefab2093199321768c946882b5a3de7ba0fab0",
       "sources": [
+        {
+          "id": "ramnanan-2024-distributed-retrieval-review",
+          "title": "Systematic review of distributed practice and retrieval practice in health professions education",
+          "publisher": "Advances in Health Sciences Education via PubMed Central",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions"
+        },
         {
           "id": "khalafi-2024-spaced-learning-nursing",
           "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
