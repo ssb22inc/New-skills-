@@ -520,6 +520,61 @@
           "sourceIds": ["ncbi-openrn-math-calculations-2023", "ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex"]
         }
       ]
+    },
+    "nclex-study-plan": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-28",
+      "scope": "Full RN clinical, educational, and source review of the exact Guide 10 nclex-study-plan content and source-set digests",
+      "contentSha256": "c5b1a9027585071faf9c65cc6588568c1036b5ef5a9bd7512db3d407cc6d8a66",
+      "sourceSetSha256": "d243782dd6ddfa49e7d70db9edefab2093199321768c946882b5a3de7ba0fab0",
+      "claims": [
+        {
+          "id": "study-plan-scope-and-no-readiness-guarantee",
+          "locator": "Opening paragraph; Important boundary",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "official-test-plan-and-repeatable-baseline",
+          "locator": "Start with the official scope and a baseline",
+          "sourceIds": ["ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "retrieval-and-distributed-practice-evidence",
+          "locator": "Use retrieval and spacing—with evidence-sized claims",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review", "khalafi-2024-spaced-learning-nursing"]
+        },
+        {
+          "id": "retrieval-spacing-limitations-and-no-fixed-quota",
+          "locator": "Use retrieval and spacing—with evidence-sized claims; daily-question FAQ",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review", "khalafi-2024-spaced-learning-nursing"]
+        },
+        {
+          "id": "adaptable-retrieval-review-repair-cycle",
+          "locator": "Build a repeatable study cycle",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "rationale-review-and-error-log",
+          "locator": "Turn rationales into an error log",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "individualized-workload-and-support-boundary",
+          "locator": "Fit the workload to real constraints",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "final-week-individualization-and-official-instructions",
+          "locator": "Use the final week to stabilize the plan; final-week FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "practice-score-limitations-and-education-scope",
+          "locator": "Important boundary; practice-score FAQ; title, description and CTA",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review"]
+        }
+      ]
     }
   }
 }
