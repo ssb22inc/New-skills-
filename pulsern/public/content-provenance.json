@@ -655,12 +655,75 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 17 bow-tie-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "bow-tie-five-selection-structure",
+            "locator": "Opening paragraph; What each part asks; definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "bow-tie-current-interface-verification-boundary",
+            "locator": "Format and scoring boundary — first sentence",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-unofficial-bow-tie-scoring-inference",
+            "locator": "Format and scoring boundary — final sentence; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "potential-condition-actions-and-parameters-tasks",
+            "locator": "What each part asks table",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "completion-order-is-study-guidance-not-rule",
+            "locator": "A consistency-first method; completion-order FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "clinical-judgment-consistency-practice-scope",
+            "locator": "A consistency-first method — steps 1–6; Common reasoning errors",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "bow-tie-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
