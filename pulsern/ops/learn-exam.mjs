@@ -194,52 +194,60 @@ export const EXAM_ARTICLES = [
     slug: "nclex-test-day-what-to-expect",
     topic: "How the exam works",
     title: "NCLEX test day: what to expect",
-    h1: "NCLEX test day: what actually happens",
-    description: "What happens at the test centre, what to bring, how breaks and the clock work, and the mid-exam thinking that costs candidates marks.",
+    h1: "NCLEX test day: what to expect",
+    description: "Current 2026 NCLEX check-in, identification, locker, break, timing, item-navigation, confidentiality, and results rules from official NCSBN sources.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN's readiness exams run under lockdown with a real clock, so test day is not the first time you sit one.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide timed practice and case-based review; it cannot reproduce every test-center condition or predict an official result.",
     body: `
-<p>Most test-day advice is about logistics. Logistics matter, but they are not what costs people the exam. What costs people the exam is what happens in their head around question 60.</p>
+<p>For the 2026 NCLEX, plan around the official identification, arrival, check-in, personal-item, break and confidentiality rules—not anecdotes about a particular question number or how the examination “felt.” Your Candidate Bulletin and appointment confirmation control the logistics for your examination.</p>
 
-<h2>Before you go</h2>
-<ul>
-  <li><b>Acceptable photo ID</b> whose name matches your registration <i>exactly</i>. A mismatch is one of the few things that will stop you sitting the exam.</li>
-  <li>Arrive early. Late arrival can forfeit your appointment and your fee.</li>
-  <li>Personal items go in a locker. Expect palm-vein scanning, a photograph, and a check on the way in and back from every break.</li>
-  <li>You will be given an on-screen calculator and something to write on. Bring nothing of your own to the desk.</li>
-</ul>
-<p>Confirm current ID rules and centre policy in the candidate bulletin at <a href="https://www.nclex.com" rel="noopener">nclex.com</a> and with <a href="https://www.pearsonvue.com/us/en/nclex.html" rel="noopener">Pearson VUE</a> — these are set by NCSBN and Pearson VUE, not by us, and they do change.</p>
-
-<h2>The clock includes your breaks</h2>
-<p>Optional breaks are offered during the session, and the time comes out of your total. A break is often worth taking anyway — the cost of a few minutes is smaller than the cost of grinding through the last hour with nothing left. Decide in advance roughly when you will take one, so it is not a decision you make while depleted.</p>
-
-<h2>The part nobody prepares for</h2>
-<div class="key">
-<p>Somewhere in the middle you will hit a run of items you feel unsure about, and you will start building a story about what it means. Every candidate does this. The story is not evidence. The engine raises difficulty <i>because</i> you are answering well, so the feeling of struggling is the expected experience of a test that is going fine.</p>
+<div class="key" role="note" aria-labelledby="test-day-boundary">
+<h2 id="test-day-boundary" style="margin-top:0">Verify your own appointment</h2>
+<p>This guide summarizes the 2026 NCSBN Candidate Bulletin and RN Test Plan checked on August 28, 2026. Requirements can change and accommodations or international testing can differ. Confirm your appointment email, current Candidate Bulletin and testing-accommodation instructions before test day.</p>
 </div>
-<p>Two habits protect you:</p>
-<ul>
-  <li><b>Do not audit yourself mid-exam.</b> You cannot see your ability estimate, you cannot identify pretest items, and every conclusion you reach is a guess made with the attention you needed for the current item.</li>
-  <li><b>Do not linger.</b> You cannot go back. Read carefully, decide, commit, move. An item you spend five minutes on has usually already had your best answer for four of them.</li>
-</ul>
 
-<h2>Reading the question properly</h2>
-<p>Under pressure, candidates answer the question they expected instead of the one on screen. Before selecting:</p>
-<ul>
-  <li>Is it asking for the <b>first</b> action, or simply an appropriate one?</li>
-  <li>Is it asking what the nurse should do, or what the nurse should do <b>next</b>?</li>
-  <li>Is there a negative — <i>which finding requires no further action</i>?</li>
-  <li>Who is the client, and does their age or condition change the expected values?</li>
-</ul>
+<h2>Before arrival</h2>
+<div class="table-wrap" role="region" aria-label="2026 NCLEX test-day preparation" tabindex="0">
+<table>
+  <caption>Official preparation and check-in requirements</caption>
+  <thead><tr><th scope="col">Requirement</th><th scope="col">What the 2026 bulletin says</th><th scope="col">Action</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Arrival</th><td>Plan to arrive at least 30 minutes before the scheduled time. Arriving more than 30 minutes after the appointment may require forfeiting the appointment.</td><td>Use the time and location in the confirmation email and allow for travel and check-in.</td></tr>
+    <tr><th scope="row">Identification</th><td>Present one acceptable, valid identification whose first and last names exactly match the registration. Additional rules apply when the ID lacks a signature or testing occurs internationally.</td><td>Check every current ID requirement in the bulletin; do not rely on this summary alone.</td></tr>
+    <tr><th scope="row">Check-in</th><td>The process includes a digital signature, palm-vein scan and photograph, plus testing-administrator procedures.</td><td>Follow staff instructions and disclose approved accommodations through the required process.</td></tr>
+    <tr><th scope="row">Personal items</th><td>Personal items must be stored in the assigned locker, and prohibited items cannot be accessed during breaks.</td><td>Bring only what is necessary and review the Candidate Rules before arrival.</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="source-note"><b>Evidence for this table:</b> Identification Requirements, Candidate Rules and Check-In Process in the <a href="#source-ncsbn-2026-candidate-bulletin-pdf">2026 NCLEX Candidate Bulletin</a>.</p>
 
-<h2>Afterwards</h2>
-<p>You will leave with no idea how you did. That is normal and it is not diagnostic. Trying to reconstruct items afterwards tells you nothing useful — many of the ones you remember most vividly were the hardest, which frequently means you were doing well. Results are released through your board of nursing in their own time.</p>
+<h2>Breaks and the clock</h2>
+<p>The five-hour NCLEX-RN time limit includes the introductory screen, two scheduled optional breaks and any unscheduled breaks. The scheduled breaks are offered after approximately two hours and again after approximately three and a half hours of testing time. The examination clock does not stop during a break.</p>
+<p>For any break, follow the testing administrator's instructions. The bulletin requires a palm-vein scan before and after a break and restricts access to prohibited personal items. Whether to use an optional break is an individual decision; NCSBN does not promise that taking or skipping one improves the result.</p>
+<p class="source-note"><b>Evidence for this section:</b> Break Procedures and Breaks in the <a href="#source-ncsbn-2026-candidate-bulletin-pdf">2026 Candidate Bulletin</a> and Examination Length in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a>.</p>
+
+<h2>While answering items</h2>
+<p>CAT selects items using the test-plan requirements and the current ability estimate calculated from previous responses and calibrated item difficulty. Candidates are not shown calibrated difficulty or the ability estimate. A question feeling difficult, familiar or uncertain therefore does not establish whether the examination is going well or poorly.</p>
+<ul>
+  <li>There is no separate time limit for one item; maintain a reasonable overall pace.</li>
+  <li>Every item must be answered before proceeding.</li>
+  <li>You may reconsider an answer before selecting <b>Next</b>, but you cannot return after advancing.</li>
+  <li>Do not infer a result from perceived difficulty, item type, question count or stopping point.</li>
+</ul>
+<p class="source-note"><b>Evidence for this section:</b> Reviewing Answers and Guessing and Computerized Adaptive Testing in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a>, plus NCSBN's <a href="#source-ncsbn-computerized-adaptive-testing">CAT explanation</a>.</p>
+
+<h2>Confidentiality and results</h2>
+<p>Do not reproduce, discuss or share examination items before, during or after the examination. NCSBN states that this can lead to result withholding or cancellation and other consequences.</p>
+<p>No result is released at the test center, and test-center staff do not have access to it. Official results are released only by the nursing regulatory body. Where available, Quick Results after two business days are unofficial and do not authorize practice. Follow the current bulletin and your regulatory body's instructions.</p>
+<p class="source-note"><b>Evidence for this section:</b> Candidate Rules and Results Reporting in the <a href="#source-ncsbn-2026-candidate-bulletin-pdf">2026 Candidate Bulletin</a>.</p>
 `,
     faq: [
-      { q: "What do I need to bring to the NCLEX?", a: "Acceptable photo identification whose name matches your registration exactly, and your appointment details. Everything else goes in a locker. Confirm the current ID requirements in the NCSBN candidate bulletin before your exam date." },
-      { q: "Do NCLEX breaks count against my time?", a: "Yes. Optional breaks come out of your total session time. Many candidates still find a short break worthwhile, because fatigue costs more marks over the final stretch than the minutes do." },
-      { q: "Can I go back and change an NCLEX answer?", a: "No. The exam is adaptive, so each item is selected based on your previous answers. Once you confirm an answer you cannot return to it." },
+      { q: "What identification do I need for the NCLEX?", a: "The 2026 Candidate Bulletin requires one acceptable, valid ID whose first and last names exactly match the registration. International testing and an ID without a signature have additional requirements, so verify the complete current bulletin before test day." },
+      { q: "How early should I arrive for the NCLEX?", a: "The 2026 Candidate Bulletin says to plan to arrive at least 30 minutes before the scheduled testing time. Arriving more than 30 minutes after the appointment may require forfeiting it." },
+      { q: "Do NCLEX breaks count against the five-hour limit?", a: "Yes. The exam clock does not stop for scheduled or unscheduled breaks. Scheduled optional breaks are offered after approximately two hours and approximately three and a half hours of testing time." },
+      { q: "Can I return to an earlier NCLEX item?", a: "No. You may reconsider the current response before advancing, but after confirming it and selecting Next, you cannot return to a previous item." },
+      { q: "Will the test center tell me whether I passed?", a: "No. Test-center staff do not have access to results. Official results come only from the nursing regulatory body; Quick Results, where available, are unofficial." },
     ],
   },
 ];

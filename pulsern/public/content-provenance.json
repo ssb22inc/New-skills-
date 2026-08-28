@@ -473,17 +473,17 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "a9067d839c47daecb6a395d493f2a5c83a14207826f53bf3a0733b8ca7f77291",
-      "sourceSetSha256": "d07ad20c1b295e4829b95966b8681b9b1d452abfeb2a0c6487670c93e346e30c",
+      "contentSha256": "c42b12ab69070103fc9904b45d220c80cd1f9e645f2fca0e0f423e1e67d2187b",
+      "sourceSetSha256": "7a0255cf7cd9f1ca126f2db1a01e1d98accaa72b8ccf8bac976c613558b2c343",
       "sources": [
         {
-          "id": "ncsbn-2026-candidate-bulletin",
-          "title": "NCSBN — 2026 Candidate Bulletin",
+          "id": "ncsbn-2026-candidate-bulletin-pdf",
+          "title": "NCSBN — 2026 NCLEX Candidate Bulletin",
           "publisher": "National Council of State Boards of Nursing",
-          "url": "https://www.nclex.com/prepare.page",
+          "url": "https://www.nclex.com/files/2026_NCLEX_Candidate_Bulletin_English.pdf",
           "sourceUpdated": null,
-          "accessedAt": "2026-08-26",
-          "locator": "2026 Candidate Bulletin section"
+          "accessedAt": "2026-08-28",
+          "locator": "Identification Requirements; Candidate Rules; Check-In Process; Breaks; Results Reporting; live PDF checked 2026-08-28 and no publication-day field is displayed"
         },
         {
           "id": "ncsbn-2026-rn-test-plan",
@@ -493,6 +493,24 @@
           "sourceUpdated": "2026-04-01",
           "accessedAt": "2026-08-26",
           "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-computerized-adaptive-testing",
+          "title": "NCSBN — Computerized Adaptive Testing",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/computerized-adaptive-testing.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
         }
       ],
       "review": {

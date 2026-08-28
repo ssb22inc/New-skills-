@@ -361,6 +361,29 @@ describe("SEO guardian", () => {
     ]);
   });
 
+  it("keeps pending Guide 16 test-day rules current, qualified, and source-bound", () => {
+    const guide = EXAM_ARTICLES.find((article) => article.slug === "nclex-test-day-what-to-expect");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="test-day-boundary"');
+    expect(guide.body).toContain("arrive at least 30 minutes before the scheduled time");
+    expect(guide.body).toContain("clock does not stop during a break");
+    expect(guide.body).toContain("cannot return after advancing");
+    expect(guide.body).toContain("Official results are released only by the nursing regulatory body");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(4);
+    expect(guide.body).not.toContain("around question 60");
+    expect(guide.body).not.toContain("engine raises difficulty");
+    expect(guide.body).not.toContain("break is often worth taking");
+    expect(guide.body).not.toContain("frequently means you were doing well");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncsbn-2026-candidate-bulletin-pdf",
+      "ncsbn-2026-rn-test-plan",
+      "ncsbn-computerized-adaptive-testing",
+      "ncsbn-nclex-faqs",
+    ]);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });
