@@ -339,6 +339,28 @@ describe("SEO guardian", () => {
     ]);
   });
 
+  it("keeps pending Guide 15 NGN changes current, qualified, and source-bound", () => {
+    const guide = EXAM_ARTICLES.find((article) => article.slug === "next-generation-nclex-what-changed");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="ngn-boundary"');
+    expect(guide.body).toContain("launched the Next Generation NCLEX (NGN) on April 1, 2023");
+    expect(guide.body).toContain("three six-item sets, or 18 case-study items");
+    expect(guide.body).toContain("Approximately 10% of the exam consists of stand-alone clinical-judgment items");
+    expect(guide.body).toContain("plus/minus, zero/one or rationale scoring");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(4);
+    expect(guide.body).not.toContain("single case study carries more weight");
+    expect(guide.body).not.toContain("find it fairer");
+    expect(guide.body).not.toContain("Safety is still the organising principle");
+    expect(guide.body).not.toContain("Recognise cues");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncsbn-next-generation-nclex",
+      "ncsbn-2026-rn-test-plan",
+      "ncsbn-nclex-faqs",
+    ]);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

@@ -329,9 +329,18 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "0d98b0f82d0db71ba55d2f5e3eb091b3e11a2b91f730e4b39e8f0370e27e1963",
-      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "contentSha256": "e93a96c67936c9efdd3c6c3beddcfe78df5481ab96765883a4e6da922ec29b0b",
+      "sourceSetSha256": "992438279c47b0d36a0adecc760130701165d7d0d22bfc5596dd659c0c983ac3",
       "sources": [
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
         {
           "id": "ncsbn-2026-rn-test-plan",
           "title": "NCSBN — 2026 RN Test Plan",
@@ -342,13 +351,13 @@
           "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
         },
         {
-          "id": "ncsbn-next-generation-nclex",
-          "title": "NCSBN — Next Generation NCLEX",
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
           "publisher": "National Council of State Boards of Nursing",
-          "url": "https://www.nclex.com/next-generation-nclex.page",
-          "sourceUpdated": "2023-04-01",
-          "accessedAt": "2026-08-26",
-          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
         }
       ],
       "review": {
