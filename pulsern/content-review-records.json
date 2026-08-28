@@ -630,6 +630,71 @@
           "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review", "khalafi-2024-spaced-learning-nursing"]
         }
       ]
+    },
+    "failed-the-nclex-what-now": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-28",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 12 failed-the-nclex-what-now content and source-set digests",
+      "contentSha256": "9757cdf4bf97a2641de69ab79fdda756f561df5f3c669d1b06246f1179e10b99",
+      "sourceSetSha256": "30b27ec996717c17b35ef788f1fc44fa59fab6aaf5d4d14959e056479ae378e3",
+      "claims": [
+        {
+          "id": "nclex-failure-result-and-cpr-interpretation-boundary",
+          "locator": "Opening paragraph; Important boundary",
+          "sourceIds": ["ncsbn-candidate-performance-report", "ncsbn-computerized-adaptive-testing"]
+        },
+        {
+          "id": "cpr-purpose-format-and-abbreviated-report",
+          "locator": "Read the CPR for what it actually reports — opening paragraph; CPR FAQ",
+          "sourceIds": ["ncsbn-candidate-performance-report"]
+        },
+        {
+          "id": "cpr-performance-indicators-and-remediation-order",
+          "locator": "Candidate Performance Report indicators table",
+          "sourceIds": ["ncsbn-candidate-performance-report"]
+        },
+        {
+          "id": "cpr-to-current-test-plan-remediation-mapping",
+          "locator": "Build a remediation plan from more than one signal — items 1–3",
+          "sourceIds": ["ncsbn-candidate-performance-report", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "retrieval-feedback-correction-and-reassessment-cycle",
+          "locator": "Build a remediation plan from more than one signal — items 4–6",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review", "khalafi-2024-spaced-learning-nursing"]
+        },
+        {
+          "id": "distributed-retrieval-practice-limitations-and-no-guarantee",
+          "locator": "Build a remediation plan from more than one signal — item 5; retake-change FAQ",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review", "khalafi-2024-spaced-learning-nursing"]
+        },
+        {
+          "id": "nclex-retake-interval-frequency-and-jurisdiction-qualification",
+          "locator": "The retake logistics — opening paragraph; retake-timing FAQ",
+          "sourceIds": ["ncsbn-nclex-results-retake"]
+        },
+        {
+          "id": "nclex-reregistration-att-and-scheduling-steps",
+          "locator": "The retake logistics — steps 1–4",
+          "sourceIds": ["ncsbn-nclex-results-retake"]
+        },
+        {
+          "id": "exam-like-practice-individualization",
+          "locator": "Practice under exam-like constraints only when it answers a question",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "cat-decision-rules-and-item-count-limitation",
+          "locator": "Do not estimate closeness from the stopping point",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing"]
+        },
+        {
+          "id": "nclex-retake-education-scope-and-no-future-outcome-prediction",
+          "locator": "Title, description, CTA; failure-prognosis FAQ",
+          "sourceIds": ["ncsbn-nclex-results-retake", "ncsbn-candidate-performance-report", "ncsbn-2026-rn-test-plan"]
+        }
+      ]
     }
   }
 }
