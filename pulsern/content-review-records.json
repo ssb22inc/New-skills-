@@ -695,6 +695,71 @@
           "sourceIds": ["ncsbn-nclex-results-retake", "ncsbn-candidate-performance-report", "ncsbn-2026-rn-test-plan"]
         }
       ]
+    },
+    "how-is-the-nclex-scored": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-28",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 13 how-is-the-nclex-scored content and source-set digests",
+      "contentSha256": "b26d42c8a4781b1f8985c511ff9c7c6a21766118bd4a3bc50d37fbb715891d24",
+      "sourceSetSha256": "2a2b6363d44e1f2e3b35113dfdb4d40d923f10b076c0acce267971b9e37b5897",
+      "claims": [
+        {
+          "id": "nclex-pass-fail-cat-and-partial-credit-scope",
+          "locator": "Opening paragraph; Important boundary",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-nclex-faqs", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "cat-running-ability-estimate-and-item-selection",
+          "locator": "What computer adaptive testing does — first paragraph",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing"]
+        },
+        {
+          "id": "cat-initial-item-and-subsequent-performance-selection",
+          "locator": "What computer adaptive testing does — first paragraph",
+          "sourceIds": ["ncsbn-nclex-faqs", "ncsbn-computerized-adaptive-testing"]
+        },
+        {
+          "id": "perceived-difficulty-and-simplified-next-item-limitations",
+          "locator": "What computer adaptive testing does — second paragraph; difficulty FAQ",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-nclex-faqs"]
+        },
+        {
+          "id": "cat-95-percent-confidence-rule",
+          "locator": "The three pass/fail rules — 95% Confidence Interval row",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "cat-maximum-length-rule",
+          "locator": "The three pass/fail rules — Maximum-Length Exam row",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "cat-run-out-of-time-rule",
+          "locator": "The three pass/fail rules — Run-Out-Of-Time row",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "question-count-result-limitation",
+          "locator": "Why your question count means less than you think; minimum-question FAQ",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing"]
+        },
+        {
+          "id": "partial-credit-eligibility-and-three-methods",
+          "locator": "Partial credit applies when an item has more than one key; partial-credit FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ncsbn-nclex-faqs"]
+        },
+        {
+          "id": "unanswered-item-interface-prompt",
+          "locator": "Use scoring information without inventing a result — final bullet",
+          "sourceIds": ["ncsbn-nclex-faqs"]
+        },
+        {
+          "id": "nclex-scoring-education-scope-and-no-product-guarantee",
+          "locator": "Title, description, CTA; Important boundary; passing-percentage FAQ",
+          "sourceIds": ["ncsbn-computerized-adaptive-testing", "ncsbn-2026-rn-test-plan", "ncsbn-nclex-faqs"]
+        }
+      ]
     }
   }
 }
