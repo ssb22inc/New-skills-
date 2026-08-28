@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How is the NCLEX scored? | PulseRN</title>
-<meta name="description" content="The NCLEX is pass/fail with no percentage score. How computerised adaptive testing decides, and why your question count tells you less than you think.">
+<meta name="description" content="How NCLEX-RN computer adaptive testing makes a pass/fail decision, applies partial credit, and uses three decision rules.">
 <link rel="canonical" href="https://www.pulsern.app/learn/how-is-the-nclex-scored/">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <meta name="theme-color" content="#0E7C6B">
@@ -12,7 +12,7 @@
 <meta property="og:site_name" content="PulseRN">
 <meta property="og:url" content="https://www.pulsern.app/learn/how-is-the-nclex-scored/">
 <meta property="og:title" content="How is the NCLEX scored? | PulseRN">
-<meta property="og:description" content="The NCLEX is pass/fail with no percentage score. How computerised adaptive testing decides, and why your question count tells you less than you think.">
+<meta property="og:description" content="How NCLEX-RN computer adaptive testing makes a pass/fail decision, applies partial credit, and uses three decision rules.">
 <meta property="og:image" content="https://www.pulsern.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://www.pulsern.app/og.png">
@@ -24,11 +24,11 @@
       "@type": "Article",
       "@id": "https://www.pulsern.app/learn/how-is-the-nclex-scored/#article",
       "headline": "How is the NCLEX scored?",
-      "description": "The NCLEX is pass/fail with no percentage score. How computerised adaptive testing decides, and why your question count tells you less than you think.",
+      "description": "How NCLEX-RN computer adaptive testing makes a pass/fail decision, applies partial credit, and uses three decision rules.",
       "url": "https://www.pulsern.app/learn/how-is-the-nclex-scored/",
       "inLanguage": "en-US",
       "datePublished": "2026-08-03",
-      "dateModified": "2026-08-03",
+      "dateModified": "2026-08-28",
       "author": {
         "@id": "https://www.pulsern.app/#org"
       },
@@ -49,10 +49,12 @@
         "name": "NCLEX-RN examination preparation"
       },
       "citation": [
+        "https://www.nclex.com/computerized-adaptive-testing.page",
+        "https://www.nclex.com/faqs.page",
         "https://www.nclex.com/test-plans.page",
         "https://www.nclex.com/next-generation-nclex.page"
       ],
-      "identifier": "sha256:45641f0bda59547fa790930cfe98275e11ca9d563dd2aace3724fb99e66d94b4",
+      "identifier": "sha256:b26d42c8a4781b1f8985c511ff9c7c6a21766118bd4a3bc50d37fbb715891d24",
       "sdPublisher": {
         "@id": "https://www.pulsern.app/#org"
       }
@@ -97,7 +99,7 @@
           "name": "Is there a passing percentage on the NCLEX?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. The NCLEX-RN is pass/fail and reports no percentage score. The decision comes from an ability estimate produced by computerised adaptive testing, measured against a passing standard set by NCSBN."
+            "text": "The NCLEX-RN reports pass or fail rather than a candidate percentage score. CAT compares the final ability decision with the passing standard under one of NCSBN's three decision rules."
           }
         },
         {
@@ -105,7 +107,7 @@
           "name": "Does finishing in the minimum number of questions mean I passed?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Stopping early means the exam reached 95% confidence about your ability — that confidence can be that you are clearly above the standard or clearly below it. Candidates pass and fail at every exam length."
+            "text": "No. An early stop under the 95% Confidence Interval Rule can mean ability was clearly above or clearly below the passing standard. Question count alone is not the result."
           }
         },
         {
@@ -113,7 +115,7 @@
           "name": "Do harder questions mean I am doing well?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Often, yes. The engine raises difficulty after correct answers, so a test that feels difficult usually means your ability estimate is climbing. It is not a reliable signal on its own, and it is not a reason to panic mid-exam."
+            "text": "Perceived difficulty is not a reliable score signal. CAT selects an item intended to be optimal for the current estimate, and candidates are not shown calibrated difficulty. Continue answering the item in front of you rather than estimating the result."
           }
         },
         {
@@ -121,7 +123,7 @@
           "name": "Is there partial credit on the NCLEX?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "On Next Generation item types, yes. Matrix, bow-tie, cloze and highlight items can use polytomous scoring, including +/- scoring where an incorrect selection cancels a correct one. Traditional multiple-choice items remain right or wrong."
+            "text": "Yes, for items with more than one key. NCSBN identifies plus/minus, zero/one and rationale scoring as the three partial-credit methods. The applicable method depends on the item; do not treat every item as using the same scoring rule."
           }
         }
       ]
@@ -167,60 +169,63 @@
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>How the NCLEX-RN is actually scored</h1>
-<p class="meta">How the exam works &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; last updated <time datetime="2026-08-03">2026-08-03</time> &middot; clinical review evidence pending</p>
+<p class="meta">How the exam works &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; last updated <time datetime="2026-08-28">2026-08-28</time> &middot; clinical review evidence pending</p>
 
 <div class="card">
-<p>The NCLEX-RN is not scored as a percentage. There is no 75%, no curve, and no partial credit that adds up to a final mark. It is a <b>pass/fail decision</b> produced by computerised adaptive testing, and understanding that changes how you should read your own practice results.</p>
+<p>The NCLEX-RN reports a pass/fail result rather than a candidate percentage score. Computer adaptive testing (CAT) estimates entry-level nursing ability from the difficulty of the items and the candidate's responses. Separately, an individual item with more than one key can receive partial credit under an approved scoring method.</p>
 
-<h2>What computerised adaptive testing does</h2>
-<p>The exam maintains a running estimate of your ability. It starts near the passing standard and updates after every answered item:</p>
-<ul>
-  <li>Answer correctly, and the estimate rises — the next item is harder.</li>
-  <li>Answer incorrectly, and the estimate falls — the next item is easier.</li>
-</ul>
-<p>Because items carry different difficulty, two candidates answering the same <i>number</i> correctly can finish in completely different places. Getting a very hard item right moves you far more than getting an easy one right.</p>
-
-<div class="key">
-<p><b>The consequence students miss:</b> feeling like the questions are hard is not evidence you are failing. If the engine is working and you are performing well, it will keep pushing difficulty up until you are answering roughly half of them correctly. A test that feels hard is often a test that is going well.</p>
+<div class="key" role="note" aria-labelledby="scoring-boundary">
+<h2 id="scoring-boundary" style="margin-top:0">Important boundary</h2>
+<p>Only the official result from the nursing regulatory body determines whether a candidate passed. A practice percentage, commercial readiness estimate, perceived item difficulty, stopping point or remembered question count is not an official NCLEX score and cannot establish the result.</p>
 </div>
 
-<h2>The three ways the exam ends</h2>
+<h2>What computer adaptive testing does</h2>
+<p>After each response, the computer re-estimates ability using all previous responses and the difficulty of those items. It then selects an item intended to be optimal for the current estimate—not too easy or too hard—so that the estimate becomes more precise. NCSBN's FAQ states that every candidate begins with a relatively low-difficulty item; later selection depends on performance.</p>
+<p>That process is more precise than a rule that every correct response must produce a harder next item or every incorrect response an easier one. Candidates do not see calibrated item difficulty, so a question feeling difficult or familiar is not a reliable measure of the current ability estimate.</p>
+<p class="source-note"><b>Evidence for this section:</b> NCSBN's <a href="#source-ncsbn-computerized-adaptive-testing">CAT explanation</a> and <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+
+<h2>The three pass/fail rules</h2>
+<div class="table-wrap" role="region" aria-label="NCLEX computerized adaptive testing decision rules" tabindex="0">
 <table>
-  <tr><th>Rule</th><th>What happens</th></tr>
-  <tr><td>95% confidence</td><td>The exam stops as soon as it is 95% confident you are clearly above or clearly below the passing standard — this ends most exams.</td></tr>
-  <tr><td>Maximum length</td><td>If confidence is never reached, you answer up to the maximum number of items, and the final ability estimate decides.</td></tr>
-  <tr><td>Run out of time</td><td>The decision is made on the items you did answer, using an alternate rule based on your recent performance.</td></tr>
+  <caption>How NCSBN determines the NCLEX result under CAT</caption>
+  <thead><tr><th scope="col">Rule</th><th scope="col">When it applies</th><th scope="col">How the decision is made</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">95% Confidence Interval</th><td>The computer becomes 95% certain that ability is clearly above or clearly below the passing standard.</td><td>The exam stops and the direction of that confidence determines pass or fail. NCSBN identifies this as the most common rule.</td></tr>
+    <tr><th scope="row">Maximum-Length Exam</th><td>The 95% confidence decision is not reached before the maximum number of items.</td><td>The confidence-interval rule is disregarded. The final ability estimate based on all responses passes at or above the standard and fails below it.</td></tr>
+    <tr><th scope="row">Run-Out-Of-Time</th><td>Time expires before the maximum and no 95% confidence decision has been reached.</td><td>Fewer than the required minimum items is an automatic fail. After at least the minimum, the final ability estimate based on all completed responses passes at or above the standard and fails below it.</td></tr>
+  </tbody>
 </table>
+</div>
+<p class="source-note"><b>Evidence for this table:</b> NCSBN's <a href="#source-ncsbn-computerized-adaptive-testing">three CAT pass/fail rules</a> and the administration section of the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a>.</p>
 
 <h2>Why your question count means less than you think</h2>
-<p>Stopping early can mean you were clearly above the standard — or clearly below it. Going the full length means the engine stayed uncertain, which is neither good nor bad on its own. Candidates pass at every length and fail at every length.</p>
-<p>Treat the count as information about the engine's confidence, not about your result. Reading it as a verdict is guessing.</p>
+<p>Under the 95% rule, an early stop can reflect confidence clearly above or clearly below the standard. At maximum length, the final estimate decides. If time expires, the minimum-item and final-estimate criteria apply. The number of items therefore cannot identify the result without the official decision.</p>
 
-<h2>Next Generation scoring is partly different</h2>
-<p>Traditional items are scored right or wrong. Next Generation item types — matrix, bow-tie, cloze, highlight — can use <b>polytomous scoring</b>, meaning partial credit is possible on a single item. Common approaches include:</p>
+<h2>Partial credit applies when an item has more than one key</h2>
+<p>The 2026 RN Test Plan and NCLEX FAQ state that items with more than one key can receive partial credit. They identify three scoring methods:</p>
 <ul>
-  <li><b>0/1 scoring</b> — all-or-nothing; every element must be right.</li>
-  <li><b>+/- scoring</b> — correct selections earn credit, incorrect selections lose it, with the item floored at zero.</li>
-  <li><b>Rationale scoring</b> — linked parts must be consistent with each other to earn credit.</li>
+  <li><b>Plus/minus scoring</b></li>
+  <li><b>Zero/one scoring</b></li>
+  <li><b>Rationale scoring</b></li>
 </ul>
-<p>Practically this means guessing widely on a select-all item can actively cost you under +/- scoring. Choosing only what you can defend is the better habit.</p>
+<p>Do not assume that every multiple-response item uses the same method or reverse-engineer an unofficial point total. Read the item directions, evaluate each option from the supplied evidence and answer only after considering the complete response.</p>
+<p class="source-note"><b>Evidence for this section:</b> the scoring-items section of the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
-<h2>What to do with this</h2>
+<h2>Use scoring information without inventing a result</h2>
 <ul>
-  <li>Stop tracking practice performance as a raw percentage. Track it against difficulty.</li>
-  <li>Do not read difficulty as failure mid-exam. It is the engine doing its job.</li>
-  <li>Do not over-select on partial-credit items to "cover" yourself.</li>
-  <li>Answer every item — an unanswered item cannot help you, and the exam will not advance without one.</li>
+  <li>Use a raw practice percentage as product-specific feedback, not as an NCLEX score.</li>
+  <li>Do not infer pass or fail from perceived difficulty or question count.</li>
+  <li>Practice the official item formats and follow the directions presented with each item.</li>
+  <li>Answer each item before advancing; NCSBN states that the interface prompts a candidate who attempts to continue with an unanswered item.</li>
 </ul>
-<p>For the current, authoritative rules — including exam length and time limits, which are set by NCSBN and can change between test plans — check the official candidate bulletin at <a href="https://www.nclex.com" rel="noopener">nclex.com</a> before your exam date.</p>
 </div>
-<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>Is there a passing percentage on the NCLEX?</h3><p>No. The NCLEX-RN is pass/fail and reports no percentage score. The decision comes from an ability estimate produced by computerised adaptive testing, measured against a passing standard set by NCSBN.</p><h3>Does finishing in the minimum number of questions mean I passed?</h3><p>No. Stopping early means the exam reached 95% confidence about your ability — that confidence can be that you are clearly above the standard or clearly below it. Candidates pass and fail at every exam length.</p><h3>Do harder questions mean I am doing well?</h3><p>Often, yes. The engine raises difficulty after correct answers, so a test that feels difficult usually means your ability estimate is climbing. It is not a reliable signal on its own, and it is not a reason to panic mid-exam.</p><h3>Is there partial credit on the NCLEX?</h3><p>On Next Generation item types, yes. Matrix, bow-tie, cloze and highlight items can use polytomous scoring, including +/- scoring where an incorrect selection cancels a correct one. Traditional multiple-choice items remain right or wrong.</p></div>
+<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>Is there a passing percentage on the NCLEX?</h3><p>The NCLEX-RN reports pass or fail rather than a candidate percentage score. CAT compares the final ability decision with the passing standard under one of NCSBN's three decision rules.</p><h3>Does finishing in the minimum number of questions mean I passed?</h3><p>No. An early stop under the 95% Confidence Interval Rule can mean ability was clearly above or clearly below the passing standard. Question count alone is not the result.</p><h3>Do harder questions mean I am doing well?</h3><p>Perceived difficulty is not a reliable score signal. CAT selects an item intended to be optimal for the current estimate, and candidates are not shown calibrated difficulty. Continue answering the item in front of you rather than estimating the result.</p><h3>Is there partial credit on the NCLEX?</h3><p>Yes, for items with more than one key. NCSBN identifies plus/minus, zero/one and rationale scoring as the three partial-credit methods. The applicable method depends on the item; do not treat every item as using the same scoring rule.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> — National Council of State Boards of Nursing; evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> — National Council of State Boards of Nursing; evidence locator: NGN Project and Clinical Judgment Measurement Model sections; source updated <time datetime="2023-04-01">2023-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li></ul>
+  <ul><li id="source-ncsbn-computerized-adaptive-testing"><a href="https://www.nclex.com/computerized-adaptive-testing.page" rel="external noopener">NCSBN — Computerized Adaptive Testing</a> — National Council of State Boards of Nursing; evidence locator: 95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published; accessed <time datetime="2026-08-28">2026-08-28</time></li><li id="source-ncsbn-nclex-faqs"><a href="https://www.nclex.com/faqs.page" rel="external noopener">NCSBN — NCLEX Frequently Asked Questions</a> — National Council of State Boards of Nursing; evidence locator: How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published; accessed <time datetime="2026-08-28">2026-08-28</time></li><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> — National Council of State Boards of Nursing; evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> — National Council of State Boards of Nursing; evidence locator: NGN Project and Clinical Judgment Measurement Model sections; source updated <time datetime="2023-04-01">2023-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN's readiness estimate is built on the same logic — ability estimated from difficulty, not a raw percentage.</p>
+  <p><b>Practice this for real.</b> PulseRN can organize practice performance by category and difficulty; its readiness estimate is not an official NCLEX score or pass guarantee.</p>
   <p><a href="/">Start studying on PulseRN &rarr;</a></p>
 </div>
 

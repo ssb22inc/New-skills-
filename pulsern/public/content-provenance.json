@@ -24,9 +24,27 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "45641f0bda59547fa790930cfe98275e11ca9d563dd2aace3724fb99e66d94b4",
-      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "contentSha256": "b26d42c8a4781b1f8985c511ff9c7c6a21766118bd4a3bc50d37fbb715891d24",
+      "sourceSetSha256": "2a2b6363d44e1f2e3b35113dfdb4d40d923f10b076c0acce267971b9e37b5897",
       "sources": [
+        {
+          "id": "ncsbn-computerized-adaptive-testing",
+          "title": "NCSBN — Computerized Adaptive Testing",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/computerized-adaptive-testing.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        },
         {
           "id": "ncsbn-2026-rn-test-plan",
           "title": "NCSBN — 2026 RN Test Plan",

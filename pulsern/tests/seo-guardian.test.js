@@ -7,6 +7,7 @@ import { extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 import { articleJsonLd } from "../ops/build-learn.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
+import { EXAM_ARTICLES } from "../ops/learn-exam.mjs";
 import { SKILL_ARTICLES } from "../ops/learn-skills.mjs";
 import { sourcesFor } from "../ops/seo-content-policy.mjs";
 
@@ -292,6 +293,28 @@ describe("SEO guardian", () => {
       "khalafi-2024-spaced-learning-nursing",
     ]);
     expect(sourcesFor(guide).slice(0, 3).every((source) => source.sourceUpdated === null && source.locator.includes("live page checked 2026-08-28"))).toBe(true);
+  });
+
+  it("keeps pending Guide 13 NCLEX scoring accurate, accessible, and source-bound", () => {
+    const guide = EXAM_ARTICLES.find((article) => article.slug === "how-is-the-nclex-scored");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="scoring-boundary"');
+    expect(guide.body).toContain("using all previous responses and the difficulty of those items");
+    expect(guide.body).toContain("Fewer than the required minimum items is an automatic fail");
+    expect(guide.body).toContain("items with more than one key can receive partial credit");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(3);
+    expect(guide.body).not.toContain("no partial credit");
+    expect(guide.body).not.toContain("the next item is harder");
+    expect(guide.body).not.toContain("using an alternate rule based on your recent performance");
+    expect(guide.body).not.toContain("A test that feels hard is often a test that is going well");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncsbn-computerized-adaptive-testing",
+      "ncsbn-nclex-faqs",
+      "ncsbn-2026-rn-test-plan",
+      "ncsbn-next-generation-nclex",
+    ]);
   });
 
   it("extracts Responses API output text", () => {
