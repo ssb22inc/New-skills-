@@ -429,51 +429,66 @@ export const SKILL_ARTICLES = [
     topic: "Study strategy",
     title: "Failed the NCLEX? What to do next",
     h1: "If you did not pass: a practical next step",
-    description: "How to read your candidate performance report, what to change rather than repeat, and why most retakers were closer than they felt.",
+    description: "Use your official Candidate Performance Report, confirm retake rules, and build a source-bound remediation plan without treating category labels as exact scores.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN tracks performance by category so your second attempt targets what actually cost you marks.",
+    updated: "2026-08-28",
+    cta: "PulseRN can organize review by test-plan category; use it alongside your official CPR, current NCSBN guidance, and educator feedback.",
     body: `
-<p>Not passing is common, survivable, and does not mean you will not be a nurse. A great many practising nurses did not pass the first time. What matters now is that the second attempt is different from the first, rather than simply more of it.</p>
+<p>A failing NCLEX result means that this attempt did not meet the passing standard. It does not identify one cause, quantify your future chance of passing or prescribe one study method. Separate the official retake requirements from the learning decisions you make next.</p>
 
-<h2>Read the performance report properly</h2>
-<p>Unsuccessful candidates receive a Candidate Performance Report showing how you performed in each client-need category relative to the passing standard. It is the most useful document you have.</p>
-<p>Read it for <b>shape</b>, not verdict. Categories marked below the standard are where the marks went. Categories near the standard are usually cheaper to fix than the ones far below, because you are closer to competence already.</p>
-
-<div class="key">
-<p><b>Do not simply study more.</b> The most common mistake among retakers is repeating the first attempt's preparation with greater intensity. If your method produced this result, more of it produces the same result. Something specific has to change.</p>
+<div class="key" role="note" aria-labelledby="retake-boundary">
+<h2 id="retake-boundary" style="margin-top:0">Important boundary</h2>
+<p>The Candidate Performance Report (CPR) provides indicators of strengths and weaknesses; it is not a section-by-section grade, an exact score or proof that one factor caused the result. NCSBN states that overall exam performance determines pass or fail. Use the CPR with the current test plan, your own practice evidence and qualified educator support.</p>
 </div>
 
-<h2>Work out which problem you actually have</h2>
+<h2>Read the CPR for what it actually reports</h2>
+<p>NCSBN describes the CPR as an individualized two-page document for candidates who do not pass. A candidate who did not answer the minimum number of items receives an abbreviated CPR stating how many items were answered and how many were required, without further diagnostic information.</p>
+<div class="table-wrap" role="region" aria-label="NCLEX Candidate Performance Report indicators" tabindex="0">
 <table>
-  <tr><th>Pattern</th><th>What it points to</th><th>What to change</th></tr>
-  <tr><td>Weak in one or two categories</td><td>Content gaps</td><td>Targeted content work, then questions in that area.</td></tr>
-  <tr><td>Near the standard everywhere</td><td>Test-taking method</td><td>Prioritisation frameworks and reading the stem precisely.</td></tr>
-  <tr><td>Ran out of time</td><td>Pacing</td><td>Timed full-length practice; a decision rule for hard items.</td></tr>
-  <tr><td>Knew it but chose wrong</td><td>Application</td><td>Whole case studies rather than isolated questions.</td></tr>
-  <tr><td>Went blank</td><td>Anxiety</td><td>Simulate real conditions; address the anxiety directly.</td></tr>
+  <caption>How to use the three CPR performance indicators without over-interpreting them</caption>
+  <thead><tr><th scope="col">Indicator</th><th scope="col">Official meaning or direction</th><th scope="col">Safe planning use</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Below the Passing Standard</th><td>NCSBN directs candidates to concentrate first on these test-plan areas.</td><td>Give these areas early remediation time, then reassess with varied items and rationale review.</td></tr>
+    <tr><th scope="row">Near the Passing Standard</th><td>The ability estimate for that content area is not clearly above or below the standard.</td><td>Review after the below-standard priorities; do not treat “near” as a precise distance from passing.</td></tr>
+    <tr><th scope="row">Above the Passing Standard</th><td>The CPR identifies relative strength, while NCSBN still recommends study to maintain proficiency.</td><td>Use lighter maintenance retrieval instead of deleting the area from the plan.</td></tr>
+  </tbody>
 </table>
+ </div>
+<p class="source-note"><b>Evidence for this section:</b> NCSBN's <a href="#source-ncsbn-candidate-performance-report">Candidate Performance Report guidance</a> and <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a>.</p>
+
+<h2>Build a remediation plan from more than one signal</h2>
+<ol>
+  <li><b>Map the CPR to the current test plan.</b> List the content areas and clinical-judgment categories, starting with below-standard areas and then near-standard areas.</li>
+  <li><b>Collect comparable practice evidence.</b> Use mixed and targeted items to identify repeated errors. A single item, score or commercial readiness label should not control the plan.</li>
+  <li><b>Classify the error you can observe.</b> Record the missed cue, content gap, calculation, unsafe priority, item-format issue or reasoning step. Do not diagnose a cause such as anxiety or poor pacing from a CPR label alone.</li>
+  <li><b>Retrieve, check and correct.</b> Attempt the concept or reasoning before revealing the answer, compare it with an authoritative source and correct the error.</li>
+  <li><b>Return after a delay.</b> Distributed and retrieval practice can support learning, but the evidence does not establish one best interval, daily question quota or guaranteed retake result.</li>
+  <li><b>Reassess the pattern.</b> Change the priority when repeated, comparable attempts show improvement or a persistent gap.</li>
+</ol>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-ramnanan-2024-distributed-retrieval-review">systematic review of distributed and retrieval practice</a>, the <a href="#source-khalafi-2024-spaced-learning-nursing">nursing spaced-learning trial</a> and the <a href="#source-ncsbn-2026-rn-test-plan">official test plan</a>.</p>
 
 <h2>The retake logistics</h2>
-<p>There is a mandatory waiting period before retesting, and boards of nursing set their own limits on attempts within a given period. You will need to re-register and pay again. Confirm the current waiting period and your board's specific requirements at <a href="https://www.nclex.com" rel="noopener">nclex.com</a> and with your state board — these vary and they change.</p>
-<p>Use the wait deliberately. It is enough time to change something real, and long enough that drifting through it is a genuine risk.</p>
+<p>NCSBN's retake policy allows another examination 45 days after the prior administration. Some nursing regulatory bodies (NRBs) require a longer interval. Candidates testing through a participating NRB may take the NCLEX up to eight times in a year with 45 test-free days between examinations, while some jurisdictions impose stricter annual limits.</p>
+<ol>
+  <li>Contact your NRB and confirm its current retake eligibility, attempt limits, fees and required materials.</li>
+  <li>Register again with Pearson and pay the applicable registration fee.</li>
+  <li>Wait for a new Authorization to Test (ATT); its validity dates reflect any required waiting period.</li>
+  <li>Schedule only after the new ATT arrives, using its dates and your NRB's instructions.</li>
+</ol>
+<p>Policies can change, so verify the <a href="#source-ncsbn-nclex-results-retake">current NCSBN retake page</a> and your NRB rather than relying on a memorized rule.</p>
 
-<h2>A different second attempt</h2>
-<ul>
-  <li><b>Start from the report</b>, not from page one of a review book.</li>
-  <li><b>Practise whole cases</b>, since applying knowledge under a scenario is what most retakers are missing.</li>
-  <li><b>Sit full-length timed exams.</b> If pacing or stamina contributed, this is the only thing that fixes it.</li>
-  <li><b>Review every wrong answer</b> to the point of being able to say why <i>your</i> choice was wrong, not just why the right one was right.</li>
-  <li><b>Rebuild the endurance</b> deliberately. Sitting a long adaptive exam is a skill of its own.</li>
-</ul>
+<h2>Practice under exam-like constraints only when it answers a question</h2>
+<p>Timed sets or longer simulations can help you observe pacing, concentration and item-navigation behavior. They are not a universal remedy and should not replace content repair, clinical-judgment cases, feedback, rest or accommodations. Use the shortest practice that produces useful evidence, then review the reasoning carefully.</p>
 
-<h2>One more thing</h2>
-<p>The failure is information about one attempt on one day, not about whether you can do this work. Most candidates who did not pass were closer than the result felt — the exam stops when it is confident, and being just below the standard produces the same letter as being far below it. Treat the report as a map, and make the second attempt a different attempt.</p>
+<h2>Do not estimate closeness from the stopping point</h2>
+<p>NCSBN describes three CAT decision rules: the 95% Confidence Interval Rule, the Maximum-Length Exam Rule and the Run-Out-Of-Time Rule. Because the rule applied and the final ability estimate—not item count alone—determine the outcome, do not infer how close you were from where the exam stopped. Use the official result and CPR instead.</p>
+<p class="source-note"><b>Evidence for this section:</b> NCSBN's <a href="#source-ncsbn-computerized-adaptive-testing">computerized adaptive testing explanation</a>.</p>
 `,
     faq: [
-      { q: "How soon can I retake the NCLEX?", a: "There is a mandatory waiting period, and individual boards of nursing set their own rules on the number of attempts allowed in a period. Confirm the current requirements with NCSBN and your own board, as these vary and change." },
-      { q: "What is the Candidate Performance Report?", a: "A report sent to unsuccessful candidates showing performance in each client-need category relative to the passing standard. It is the most useful guide available for targeting a second attempt." },
-      { q: "Does failing the NCLEX mean I will not be a nurse?", a: "No. Many practising nurses did not pass on their first attempt. What matters is diagnosing what went wrong — content, method, pacing or anxiety — and changing that specifically rather than repeating the same preparation more intensely." },
+      { q: "How soon can I retake the NCLEX?", a: "NCSBN's policy allows retesting 45 days after the previous exam, but some nursing regulatory bodies require a longer interval or impose stricter annual attempt limits. Confirm the current rule with your NRB and use the validity dates on your new ATT." },
+      { q: "What is the Candidate Performance Report?", a: "The CPR is NCSBN's individualized report for a candidate who did not pass. It gives below-, near- and above-standard indicators across test-plan content and clinical-judgment categories, but it is not a section grade or exact score. A candidate who did not answer the minimum number of items receives an abbreviated report without further diagnostic detail." },
+      { q: "What should I change before an NCLEX retake?", a: "There is no single change for every candidate. Start with the CPR and current test plan, collect repeated practice evidence, identify the specific cue, content or reasoning errors you can observe, and use retrieval, feedback and delayed reassessment. Seek qualified educator or accommodation support when needed." },
+      { q: "Does failing the NCLEX mean I cannot become a nurse?", a: "A failing result means this attempt did not meet the NCLEX passing standard; it is not a prediction of your future result. You still must satisfy your nursing regulatory body's eligibility requirements and pass the licensure examination." },
     ],
   },
 ];

@@ -269,6 +269,31 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
   });
 
+  it("keeps pending Guide 12 NCLEX retake guidance official, qualified, and actionable", () => {
+    const guide = SKILL_ARTICLES.find((article) => article.slug === "failed-the-nclex-what-now");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="retake-boundary"');
+    expect(guide.body).toContain("it is not a section-by-section grade, an exact score or proof that one factor caused the result");
+    expect(guide.body).toContain("allows another examination 45 days after the prior administration");
+    expect(guide.body).toContain("up to eight times in a year with 45 test-free days");
+    expect(guide.body).toContain("do not infer how close you were from where the exam stopped");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(3);
+    expect(guide.body).not.toContain("Most candidates who did not pass were closer");
+    expect(guide.body).not.toContain("this is the only thing that fixes it");
+    expect(guide.body).not.toContain("most retakers are missing");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncsbn-nclex-results-retake",
+      "ncsbn-candidate-performance-report",
+      "ncsbn-computerized-adaptive-testing",
+      "ncsbn-2026-rn-test-plan",
+      "ramnanan-2024-distributed-retrieval-review",
+      "khalafi-2024-spaced-learning-nursing",
+    ]);
+    expect(sourcesFor(guide).slice(0, 3).every((source) => source.sourceUpdated === null && source.locator.includes("live page checked 2026-08-28"))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

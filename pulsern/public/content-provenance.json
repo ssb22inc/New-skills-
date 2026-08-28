@@ -2082,17 +2082,35 @@
         "audience": "NCLEX-RN retake candidates",
         "risk": "education"
       },
-      "contentSha256": "fb4008c1c14ec2c7866109ae3cbc8ade0678b40694db85073b677915862358aa",
-      "sourceSetSha256": "6b1fdefa3b9aa30adc47fc063aabadfe1139edc81d33b7917d95fd5115208a2c",
+      "contentSha256": "9757cdf4bf97a2641de69ab79fdda756f561df5f3c669d1b06246f1179e10b99",
+      "sourceSetSha256": "30b27ec996717c17b35ef788f1fc44fa59fab6aaf5d4d14959e056479ae378e3",
       "sources": [
         {
-          "id": "khalafi-2024-spaced-learning-nursing",
-          "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
-          "publisher": "BMC Medical Education",
-          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/",
-          "sourceUpdated": "2024-03-21",
-          "accessedAt": "2026-08-26",
-          "locator": "Randomized-controlled methods, results, and conclusion"
+          "id": "ncsbn-nclex-results-retake",
+          "title": "NCSBN — Exam Results and Retake Details",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/results.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "Candidate Performance Report; Retake Policy; Retake Steps; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-candidate-performance-report",
+          "title": "NCSBN — Candidate Performance Report",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/candidate-performance-report.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "CPR purpose, abbreviated report, overall pass/fail limitation, performance indicators, and remediation order; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-computerized-adaptive-testing",
+          "title": "NCSBN — Computerized Adaptive Testing",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/computerized-adaptive-testing.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published"
         },
         {
           "id": "ncsbn-2026-rn-test-plan",
@@ -2102,6 +2120,24 @@
           "sourceUpdated": "2026-04-01",
           "accessedAt": "2026-08-26",
           "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ramnanan-2024-distributed-retrieval-review",
+          "title": "Systematic review of distributed practice and retrieval practice in health professions education",
+          "publisher": "Advances in Health Sciences Education via PubMed Central",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions"
+        },
+        {
+          "id": "khalafi-2024-spaced-learning-nursing",
+          "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
+          "publisher": "BMC Medical Education",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/",
+          "sourceUpdated": "2024-03-21",
+          "accessedAt": "2026-08-26",
+          "locator": "Randomized-controlled methods, results, and conclusion"
         }
       ],
       "review": {
