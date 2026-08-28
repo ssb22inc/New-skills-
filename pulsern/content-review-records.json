@@ -575,6 +575,61 @@
           "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review"]
         }
       ]
+    },
+    "spaced-repetition-for-nursing-students": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-28",
+      "scope": "Full RN clinical, educational, and source review of the exact Guide 11 spaced-repetition-for-nursing-students content and source-set digests",
+      "contentSha256": "85b2c1878dc68a51360655f365189a1dad27d48bf02161eb1a7e35c104967eeb",
+      "sourceSetSha256": "d243782dd6ddfa49e7d70db9edefab2093199321768c946882b5a3de7ba0fab0",
+      "claims": [
+        {
+          "id": "spaced-repetition-scope-and-safety-boundary",
+          "locator": "Opening paragraph; Important boundary",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review", "ncsbn-2026-rn-test-plan"]
+        },
+        {
+          "id": "distributed-and-retrieval-practice-systematic-review-findings",
+          "locator": "What the evidence supports — systematic-review sample, findings and limitations",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "nurse-anesthesia-spaced-learning-trial",
+          "locator": "What the evidence supports — randomized nursing-study finding and qualification",
+          "sourceIds": ["khalafi-2024-spaced-learning-nursing"]
+        },
+        {
+          "id": "retrieval-feedback-correction-and-delayed-return-cycle",
+          "locator": "Use retrieval, feedback and correction",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "rereading-familiarity-and-retrieval-qualification",
+          "locator": "Use retrieval, feedback and correction — rereading paragraph; rereading FAQ",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "auditable-source-bound-nursing-flashcards",
+          "locator": "Important boundary; Design cards that remain auditable",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "flashcard-learning-target-and-clinical-judgment-limitations",
+          "locator": "Match the tool to the learning target; clinical-judgment FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review"]
+        },
+        {
+          "id": "individualized-interval-duration-and-review-load",
+          "locator": "What the evidence supports; Choose a sustainable review load; daily-duration FAQ",
+          "sourceIds": ["ramnanan-2024-distributed-retrieval-review", "khalafi-2024-spaced-learning-nursing"]
+        },
+        {
+          "id": "spaced-repetition-nclex-education-scope-and-no-guarantee",
+          "locator": "Important boundary; title, description, CTA and evidence FAQ",
+          "sourceIds": ["ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review", "khalafi-2024-spaced-learning-nursing"]
+        }
+      ]
     }
   }
 }
