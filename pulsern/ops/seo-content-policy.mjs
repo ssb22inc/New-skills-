@@ -59,6 +59,7 @@ export const SOURCES = {
 export function sourcesFor(article) {
   if (article.slug === "nclex-test-day-what-to-expect") return [SOURCES.candidate, SOURCES.testPlan];
   if (article.slug === "how-is-the-nclex-scored") return [SOURCES.computerizedAdaptiveTesting, SOURCES.nclexFaqs, SOURCES.testPlan, SOURCES.ngn];
+  if (article.slug === "how-many-questions-is-the-nclex") return [SOURCES.testPlan, SOURCES.computerizedAdaptiveTesting, SOURCES.nclexFaqs, SOURCES.candidate];
   if (article.topic === "How the exam works" || article.topic === "Question types") return [SOURCES.testPlan, SOURCES.ngn];
   if (article.slug === "infection-control-precautions") return [SOURCES.cdcIsolation, SOURCES.cdcIsolationAppendix, SOURCES.cdcPpeSequence, SOURCES.cdcCdiffAcuteCare, SOURCES.cdcHandHygiene, SOURCES.cdcProtectiveEnvironment, SOURCES.testPlan];
   if (article.slug === "high-alert-medications") return [SOURCES.ismp, SOURCES.heparinLabel, SOURCES.protamineLabel, SOURCES.warfarinLabel, SOURCES.naloxoneLabel, SOURCES.flumazenilLabel, SOURCES.acetylcysteineLabel, SOURCES.magnesiumSulfateLabel, SOURCES.digifabLabel, SOURCES.deferoxamineLabel, SOURCES.testPlan];

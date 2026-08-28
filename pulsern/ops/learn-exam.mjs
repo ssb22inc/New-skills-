@@ -74,41 +74,49 @@ export const EXAM_ARTICLES = [
     topic: "How the exam works",
     title: "How many questions is the NCLEX?",
     h1: "How many questions is the NCLEX-RN?",
-    description: "Why the NCLEX has no fixed length, what the minimum and maximum mean, and why pretest items make your question count a poor predictor.",
+    description: "The 2026 NCLEX-RN contains 85–150 items in five hours, including 15 unscored pretest items. Learn why length varies and count cannot reveal the result.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN's readiness exams run at the NCLEX-RN's minimum length so you practise the endurance, not just the content.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide mixed and timed practice; it is not an official NCLEX simulation and cannot predict a result from question count.",
     body: `
-<p>There is no fixed number. The NCLEX-RN is adaptive, so its length is decided by how quickly the engine becomes confident about your ability. Two candidates sitting on the same day can answer very different numbers of items and both pass.</p>
+<p>Under the 2026 RN Test Plan, every candidate answers at least 85 items and may receive up to 150 during a five-hour period. The exact length within that range varies because computer adaptive testing (CAT) selects items and updates the ability estimate as the examination proceeds.</p>
 
-<h2>The structure of your exam</h2>
-<p>Every NCLEX contains two kinds of items, and you cannot tell them apart:</p>
-<ul>
-  <li><b>Operational items</b> — scored, and they determine your result.</li>
-  <li><b>Pretest items</b> — unscored, being trialled for future exams. They look identical to real items.</li>
-</ul>
-<p>This matters more than students expect. An item you agonised over may not have counted at all. It is one more reason that reconstructing your performance from memory afterwards is not a useful exercise.</p>
-
-<div class="key">
-<p><b>Do not try to count.</b> Candidates sometimes try to work out where they are by tracking item numbers or guessing which were pretest. You cannot know, the counting costs attention you need for the item in front of you, and the conclusion you reach will be wrong as often as right.</p>
+<div class="key" role="note" aria-labelledby="length-boundary">
+<h2 id="length-boundary" style="margin-top:0">Current-rule boundary</h2>
+<p>The 85–150 item range and five-hour limit apply to the 2026 RN Test Plan, effective April 1, 2026 through March 31, 2029. Confirm the current test plan and Candidate Bulletin before your examination. Question count, stopping point and remembered items do not establish pass or fail.</p>
 </div>
 
-<h2>Why the length varies</h2>
-<p>The exam stops when it reaches 95% confidence that you are above or below the passing standard. A candidate performing consistently — well above or well below — reaches that confidence quickly. A candidate performing close to the standard keeps the engine uncertain, so it keeps asking.</p>
-<p>Finishing quickly is not a pass. Going long is not a fail. Both happen in both directions.</p>
+<h2>What is inside the 85-item minimum</h2>
+<div class="table-wrap" role="region" aria-label="Composition of the minimum-length 2026 NCLEX-RN" tabindex="0">
+<table>
+  <caption>Items in the minimum-length examination under the 2026 RN Test Plan</caption>
+  <thead><tr><th scope="col">Component</th><th scope="col">Items</th><th scope="col">How NCSBN describes it</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Test-plan content areas</th><td>52</td><td>Items distributed across the eight client-needs content areas in the published percentages.</td></tr>
+    <tr><th scope="row">Clinical-judgment case studies</th><td>18</td><td>Three six-item case studies measuring the six steps of the NCSBN Clinical Judgment Measurement Model.</td></tr>
+    <tr><th scope="row">Pretest items</th><td>15</td><td>Unscored items used for calibration; they do not contribute to the ability estimate or pass/fail decision.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>The 15 pretest items appear on every examination and have a similar style and format to operational scored items. Candidates cannot distinguish them during the test, so every item should receive the same careful attention.</p>
+<p class="source-note"><b>Evidence for this section:</b> Examination Length and Pretest Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a>.</p>
+
+<h2>Why examination length varies</h2>
+<p>After the required minimum, the 95% Confidence Interval Rule can stop the examination when the computer is 95% certain that ability is clearly above or clearly below the passing standard. If that decision is not reached, the examination can continue to the maximum length, where the final ability estimate determines the result.</p>
+<p>An early stop can therefore represent confidence above or below the standard. At maximum length, the final estimate—not the length itself—determines pass or fail. Do not use item count as an unofficial result.</p>
 
 <h2>Time, not just items</h2>
-<p>You are also working against a clock that covers the whole session, including the optional breaks. Running out of time triggers a different decision rule based on your recent performance rather than the full exam.</p>
-<p>The practical risk is not that you are too slow overall — it is that a handful of items eat disproportionate time. A minute or two on a hard item is normal. Five is a warning sign. Make a decision and move.</p>
+<p>The five-hour limit includes all breaks. NCSBN does not set a time limit for an individual item. Once a candidate confirms an answer and advances, the candidate cannot return to that item, and every item must be answered before proceeding.</p>
+<p>If time expires before the maximum and no 95% confidence decision has been reached, fewer than 85 completed items results in a failing examination. After at least 85 items, the final ability estimate from all completed responses passes at or above the standard and fails below it.</p>
 
-<h2>Practising for length</h2>
-<p>Most candidates have practised content far more than they have practised endurance. Sitting a full-length exam under timed conditions is uncomfortable in a way that a 20-question block never is, and that discomfort is the thing you want to meet in advance rather than on test day.</p>
-<p>The exact minimum, maximum and time limit are set by NCSBN and can change between test plans. Confirm the current figures in the candidate bulletin at <a href="https://www.nclex.com" rel="noopener">nclex.com</a>.</p>
+<h2>Practice pacing without inventing a universal quota</h2>
+<p>There is no evidence-based requirement that every candidate complete a particular number of full-length simulations. Timed mixed sets or longer practice can help you observe pacing and concentration, but they should leave enough time to review reasoning, repair content gaps and rest. Use repeated practice evidence to adjust the workload rather than enforcing an arbitrary per-item clock.</p>
 `,
     faq: [
-      { q: "Why does the NCLEX have no fixed number of questions?", a: "Because it is adaptive. The exam continues until it is 95% confident your ability is above or below the passing standard, or until you reach the maximum length or run out of time. How fast that confidence arrives depends on how consistently you perform." },
-      { q: "What are pretest questions on the NCLEX?", a: "Unscored items being trialled for use on future exams. They are indistinguishable from scored items while you are taking the test, and they do not count toward your result." },
-      { q: "Is it bad if I get the maximum number of questions?", a: "No. It means the engine stayed uncertain about where you sit relative to the passing standard. Candidates pass and fail at the maximum length, just as they do at the minimum." },
+      { q: "How many questions are on the NCLEX-RN in 2026?", a: "The 2026 RN Test Plan requires at least 85 items and permits up to 150 within five hours, including breaks. Verify the current test plan before your exam because administration rules can change." },
+      { q: "What are pretest questions on the NCLEX?", a: "Every examination includes 15 unscored pretest items used to estimate item difficulty for possible future use. They do not contribute to the ability estimate or pass/fail decision and cannot be distinguished from operational items during the examination." },
+      { q: "Is it bad if I get the maximum number of questions?", a: "Question count alone does not reveal the result. At maximum length, NCSBN disregards the 95% confidence-interval rule and uses the final ability estimate: at or above the standard passes; below it fails." },
+      { q: "Does the five-hour limit include breaks?", a: "Yes. The 2026 RN Test Plan states that the five-hour limit includes all breaks. There is no separate time limit for each individual item." },
     ],
   },
 

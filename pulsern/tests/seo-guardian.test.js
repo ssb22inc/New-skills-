@@ -317,6 +317,28 @@ describe("SEO guardian", () => {
     ]);
   });
 
+  it("keeps pending Guide 14 NCLEX length current, qualified, and source-bound", () => {
+    const guide = EXAM_ARTICLES.find((article) => article.slug === "how-many-questions-is-the-nclex");
+    expect(guide.updated).toBe("2026-08-28");
+    expect(guide.body).toContain('aria-labelledby="length-boundary"');
+    expect(guide.body).toContain("at least 85 items and may receive up to 150");
+    expect(guide.body).toContain("five-hour limit includes all breaks");
+    expect(guide.body).toContain("fewer than 85 completed items results in a failing examination");
+    expect(guide.body).toContain("15 pretest items appear on every examination");
+    expect(guide.body.match(/<caption>/g)).toHaveLength(1);
+    expect(guide.body.match(/scope="col"/g)).toHaveLength(3);
+    expect(guide.body.match(/scope="row"/g)).toHaveLength(3);
+    expect(guide.body).not.toContain("based on your recent performance");
+    expect(guide.body).not.toContain("Five is a warning sign");
+    expect(guide.body).not.toContain("Candidates pass and fail at the maximum length");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual([
+      "ncsbn-2026-rn-test-plan",
+      "ncsbn-computerized-adaptive-testing",
+      "ncsbn-nclex-faqs",
+      "ncsbn-2026-candidate-bulletin",
+    ]);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

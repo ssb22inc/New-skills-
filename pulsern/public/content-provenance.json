@@ -173,8 +173,8 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "18d02b6c4458927ac96c9ddb6f25c394b5dad20baee61f0f5cbf56a1cf11278d",
-      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "contentSha256": "ec1dd8c4d5e7439dbeb22cb8213d3537308ce59d30ee58d0f9c37c9254126944",
+      "sourceSetSha256": "4e4d4a22601926c9f6d51e37e6318a7aef7013d9b78ed1a2e4e441396949066d",
       "sources": [
         {
           "id": "ncsbn-2026-rn-test-plan",
@@ -186,13 +186,31 @@
           "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
         },
         {
-          "id": "ncsbn-next-generation-nclex",
-          "title": "NCSBN — Next Generation NCLEX",
+          "id": "ncsbn-computerized-adaptive-testing",
+          "title": "NCSBN — Computerized Adaptive Testing",
           "publisher": "National Council of State Boards of Nursing",
-          "url": "https://www.nclex.com/next-generation-nclex.page",
-          "sourceUpdated": "2023-04-01",
+          "url": "https://www.nclex.com/computerized-adaptive-testing.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-2026-candidate-bulletin",
+          "title": "NCSBN — 2026 Candidate Bulletin",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/prepare.page",
+          "sourceUpdated": null,
           "accessedAt": "2026-08-26",
-          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+          "locator": "2026 Candidate Bulletin section"
         }
       ],
       "review": {
