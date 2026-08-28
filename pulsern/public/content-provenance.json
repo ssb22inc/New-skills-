@@ -514,12 +514,102 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 16 nclex-test-day-what-to-expect content and source-set digests",
+        "claims": [
+          {
+            "id": "test-day-current-source-and-appointment-boundary",
+            "locator": "Opening paragraph; Verify your own appointment",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "test-center-arrival-timing-and-late-arrival-rule",
+            "locator": "Before arrival — Arrival row; arrival FAQ",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "identification-match-and-qualification-rules",
+            "locator": "Before arrival — Identification row; identification FAQ",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "check-in-digital-signature-biometric-and-photo-process",
+            "locator": "Before arrival — Check-in row",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "personal-item-locker-and-break-access-rules",
+            "locator": "Before arrival — Personal items row",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "five-hour-scheduled-and-unscheduled-break-timing",
+            "locator": "Breaks and the clock — first paragraph; break FAQ",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "break-biometric-and-prohibited-item-rules",
+            "locator": "Breaks and the clock — second paragraph",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "cat-selection-and-perceived-difficulty-limitation",
+            "locator": "While answering items — opening paragraph and final bullet",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "per-item-time-answer-and-navigation-rules",
+            "locator": "While answering items — first three bullets; return-to-item FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "exam-confidentiality-and-enforcement-boundary",
+            "locator": "Confidentiality and results — first paragraph",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "test-center-official-and-quick-results-boundary",
+            "locator": "Confidentiality and results — second paragraph; results FAQ",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "test-day-education-scope-and-no-result-prediction",
+            "locator": "Description; CTA; Verify your own appointment",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
