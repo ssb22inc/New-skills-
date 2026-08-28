@@ -769,12 +769,68 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 18 matrix-grid-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "matrix-grid-row-column-classification-format",
+            "locator": "Opening paragraph; definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-universal-row-level-scoring-claim",
+            "locator": "Scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "row-by-row-reasoning-is-study-guidance",
+            "locator": "Study method; The method",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "client-context-classification-boundary",
+            "locator": "The method; The frame does most of the work",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "no-invented-answer-balancing-rule",
+            "locator": "The method — final step; balancing FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "matrix-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {

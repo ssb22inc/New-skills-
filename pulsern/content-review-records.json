@@ -940,6 +940,23 @@
         {"id":"clinical-judgment-consistency-practice-scope","locator":"A consistency-first method — steps 1–6; Common reasoning errors","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
         {"id":"bow-tie-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
       ]
+    },
+    "matrix-grid-questions": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-28",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 18 matrix-grid-questions content and source-set digests",
+      "contentSha256": "6281f9f3e7717b7d885662b2e5a0e9eb50ed83b0cbebec2eac015a5646ae939d",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "claims": [
+        {"id":"matrix-grid-row-column-classification-format","locator":"Opening paragraph; definition FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"multi-key-partial-credit-methods","locator":"Scoring boundary; scoring FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-nclex-faqs"]},
+        {"id":"no-universal-row-level-scoring-claim","locator":"Scoring boundary; scoring FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-nclex-faqs"]},
+        {"id":"row-by-row-reasoning-is-study-guidance","locator":"Study method; The method","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"client-context-classification-boundary","locator":"The method; The frame does most of the work","sourceIds":["ncsbn-2026-rn-test-plan"]},
+        {"id":"no-invented-answer-balancing-rule","locator":"The method — final step; balancing FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"matrix-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
+      ]
     }
   }
 }
