@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   APP_SESSION_MIGRATION_KEY,
+  authCallbackAppUrl,
   authModeFromUrl,
   authRedirectUrl,
   enforceOneTimeAppRelogin,
@@ -28,6 +29,12 @@ describe("/app/ routing and session migration", () => {
     expect(isAuthCallbackUrl("https://www.pulsern.app/app/?code=abc")).toBe(true);
     expect(isAuthCallbackUrl("https://www.pulsern.app/app/#access_token=abc")).toBe(true);
     expect(isAuthCallbackUrl("https://www.pulsern.app/app/")).toBe(false);
+  });
+
+  it("moves a legacy root callback to the app without changing its payload", () => {
+    expect(authCallbackAppUrl("https://www.pulsern.app/?code=abc&next=study#type=recovery"))
+      .toBe("https://www.pulsern.app/app/?code=abc&next=study#type=recovery");
+    expect(authCallbackAppUrl("https://www.pulsern.app/?utm_source=email")).toBeNull();
   });
 
   it("forces one local sign-out for an existing root-era session", async () => {

@@ -21,6 +21,13 @@ export function isAuthCallbackUrl(href = window.location.href) {
   return /(?:^|[#&])(access_token|refresh_token|type)=/i.test(url.hash);
 }
 
+export function authCallbackAppUrl(href = window.location.href) {
+  if (!isAuthCallbackUrl(href)) return null;
+  const url = new URL(href);
+  url.pathname = APP_ROOT;
+  return url.toString();
+}
+
 export function authRedirectUrl(kind = "signin", origin = window.location.origin) {
   return appUrl(kind === "recovery" ? APP_RESET : APP_ROOT, origin);
 }

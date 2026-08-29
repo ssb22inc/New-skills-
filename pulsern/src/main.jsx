@@ -1,15 +1,21 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import LandingPage from "./landing.jsx";
+import { authCallbackAppUrl } from "./app-routing.js";
 
-createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <LandingPage
-      onSignIn={() => window.location.assign("/app/sign-in")}
-      onStart={() => window.location.assign("/app/sign-up")}
-    />
-  </React.StrictMode>
-);
+const callbackTarget = authCallbackAppUrl();
+if (callbackTarget) {
+  window.location.replace(callbackTarget);
+} else {
+  createRoot(document.getElementById("root")).render(
+    <React.StrictMode>
+      <LandingPage
+        onSignIn={() => window.location.assign("/app/sign-in")}
+        onStart={() => window.location.assign("/app/sign-up")}
+      />
+    </React.StrictMode>
+  );
+}
 
 /* The legacy PWA controlled the entire origin. The public site must stay a
    normal indexable document, so retire only that old root-scoped worker while
