@@ -1198,12 +1198,68 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 22 drag-and-drop-ordering-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "ordering-and-drag-interface-format-boundary",
+            "locator": "Opening paragraph",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "current-interface-and-directions-boundary",
+            "locator": "Opening paragraph",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-unofficial-ordering-scoring-or-cascade-rule",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "constraint-first-sequencing-is-study-guidance",
+            "locator": "A constraint-first study method",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "no-universal-clinical-priority-mnemonic",
+            "locator": "Study-guidance qualification; Common reasoning errors; action-order and assessment FAQs",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "ordering-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {

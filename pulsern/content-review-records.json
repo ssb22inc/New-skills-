@@ -1008,6 +1008,23 @@
         {"id":"option-by-option-context-check-is-study-guidance","locator":"An option-by-option study method; separate-option FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
         {"id":"sata-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
       ]
+    },
+    "drag-and-drop-ordering-questions": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-29",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 22 drag-and-drop-ordering-questions content and source-set digests",
+      "contentSha256": "1c32e92fccab9f202adfc136bda3828e36bb8f5bd3e376f8d80d8bb0dabb4a9f",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "claims": [
+        {"id":"ordering-and-drag-interface-format-boundary","locator":"Opening paragraph","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"current-interface-and-directions-boundary","locator":"Opening paragraph","sourceIds":["ncsbn-next-generation-nclex"]},
+        {"id":"multi-key-partial-credit-methods","locator":"Format and scoring boundary; scoring FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-nclex-faqs"]},
+        {"id":"no-unofficial-ordering-scoring-or-cascade-rule","locator":"Format and scoring boundary; scoring FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-nclex-faqs"]},
+        {"id":"constraint-first-sequencing-is-study-guidance","locator":"A constraint-first study method","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"no-universal-clinical-priority-mnemonic","locator":"Study-guidance qualification; Common reasoning errors; action-order and assessment FAQs","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"ordering-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
+      ]
     }
   }
 }
