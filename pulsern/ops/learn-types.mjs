@@ -209,55 +209,45 @@ export const TYPE_ARTICLES = [
   {
     slug: "select-all-that-apply-strategy",
     topic: "Question types",
-    title: "Select all that apply: a strategy that works",
+    title: "Select all that apply: a source-bound strategy",
     h1: "Select all that apply (SATA) questions",
-    description: "Why treating each option as a true/false question beats hunting for a pattern, and how partial credit changes when to guess.",
+    description: "A source-bound guide to NCLEX multiple-response items: evaluate every option against the stem without inventing answer-count or scoring rules.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN's multiple-response items rationalise every option, so you learn why the ones you left out were wrong.",
+    updated: "2026-08-29",
+    cta: "PulseRN can provide multiple-response practice with rationales; it does not reproduce the official NCLEX item bank or predict an exam result.",
     body: `
-<p>Select all that apply — extended multiple response — is the item type candidates dread most. The dread is mostly misplaced. SATA is not harder knowledge; it is the same knowledge with nowhere to hide.</p>
+<p>Select-all-that-apply (SATA), also described as multiple response, asks the candidate to select every option that correctly answers the stem. Use the current NCLEX Candidate Tutorial and official samples for the exact interface and directions.</p>
 
-<h2>The one habit that fixes most SATA problems</h2>
-<div class="key">
-<p><b>Treat each option as a separate true/false question about the client in the stem.</b> Cover the other options, read one, and decide: is this true, for this client, right now? Then move to the next. Do not compare options with each other. There is no best answer to find — each one stands or falls alone.</p>
+<div class="key" role="note" aria-labelledby="sata-boundary">
+<h2 id="sata-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every multiple-response item uses plus/minus scoring, that every option has an independent point value, or that a coin-flip strategy has a predictable benefit. Follow the displayed directions rather than applying an unofficial scoring formula.</p>
 </div>
-<p>Comparing options is a habit built by years of single-answer multiple choice, and it is exactly wrong here. It produces the classic SATA failure: rejecting a correct option because another option seemed more correct.</p>
 
-<h2>How many are right?</h2>
-<p>There is no fixed number, no rule that it is usually three, and no guarantee that at least one is wrong. Any number of the options may be correct. Going in expecting three and stopping when you have found three is a way to miss a fourth.</p>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
-<h2>Partial credit changes the maths</h2>
-<p>Many extended multiple response items use <b>+/- scoring</b>: each correct selection earns credit, each incorrect selection removes some, and the item cannot go below zero.</p>
-<table>
-  <tr><th>Situation</th><th>What to do</th></tr>
-  <tr><td>Confident it is true</td><td>Select it.</td></tr>
-  <tr><td>Confident it is false</td><td>Leave it.</td></tr>
-  <tr><td>Genuinely 50/50</td><td>Leave it. Its expected value is roughly zero and it can cancel a mark you earned.</td></tr>
-  <tr><td>Leaning true, can state why</td><td>Select it. Being able to articulate the reason is usually the difference between knowledge and hope.</td></tr>
-</table>
-<p>Under older all-or-nothing scoring the calculation was different — you needed the exact set. Under +/- scoring, restraint is rewarded.</p>
-
-<h2>Recurring traps</h2>
-<ul>
-  <li><b>Absolutes.</b> Options containing always, never, all or none are more often false, because clinical practice rarely tolerates them.</li>
-  <li><b>True but not for this client.</b> A statement that is sound general nursing yet contraindicated by this client's condition, age or stage.</li>
-  <li><b>Right intervention, wrong phase.</b> Something appropriate later in care but not at the point the stem describes.</li>
-  <li><b>Two options saying nearly the same thing.</b> Usually both true or both false — resist assuming exactly one must be right.</li>
-</ul>
-
-<h2>Working through it</h2>
+<h2>An option-by-option study method</h2>
 <ol>
-  <li>Identify the client, the condition, and the moment in their care.</li>
-  <li>Note what the stem is asking for — teaching, actions, expected findings, contraindications.</li>
-  <li>Go down the options one at a time, deciding each in isolation.</li>
-  <li>Do not revisit to make the total feel right. Your per-option reasoning was better than your instinct about the count.</li>
+  <li><b>Read the complete stem and client information.</b> Identify whether the prompt asks for findings, actions, teaching, risks or another category.</li>
+  <li><b>Evaluate each option against the same stem.</b> Ask whether that option is supported for this client and this point in care.</li>
+  <li><b>Use the supplied context.</b> Consider qualifiers such as age, timing, condition and response to care; do not add facts that are not in the item.</li>
+  <li><b>Do not aim for a familiar total.</b> Select options because they answer the stem, not because the count looks typical.</li>
+  <li><b>Review every option before advancing.</b> Confirm that each selected response is supported and each unselected response does not meet the stem.</li>
 </ol>
+<p>Treating each option as a separate check is study guidance, not an assertion that NCSBN awards an independent point to every option.</p>
+
+<h2>Common reasoning errors</h2>
+<ul>
+  <li>Stopping after a guessed target number of selections.</li>
+  <li>Rejecting a supported option merely because another option also looks correct.</li>
+  <li>Selecting a generally true statement that does not answer this stem for this client.</li>
+  <li>Ignoring timing or another qualifier in the prompt.</li>
+  <li>Trying to reverse-engineer an unofficial partial-credit formula.</li>
+</ul>
 `,
     faq: [
-      { q: "How many answers are correct in a select all that apply question?", a: "There is no fixed number. Any number of the options may be correct, and there is no rule that a particular count is typical. Judge each option independently rather than aiming for a total." },
-      { q: "Should I guess on select all that apply questions?", a: "Not on options you are genuinely unsure about. Many extended multiple response items use +/- scoring, where an incorrect selection cancels a correct one, so a coin-flip selection has an expected value near zero." },
-      { q: "Why do I keep getting SATA questions wrong?", a: "Most often because of comparing options against each other instead of judging each one on its own. SATA has no best answer — each option is a separate true/false claim about the client in the stem." },
+      { q: "How many answers are correct in a select-all-that-apply question?", a: "Do not assume a target count. Select every option that answers the stem based on the supplied client information, and consult the current Candidate Tutorial for the exact directions." },
+      { q: "How are select-all-that-apply questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key. That general guidance does not establish one scoring method or an independent point value for every SATA option." },
+      { q: "Should I judge SATA options separately?", a: "Evaluating each option against the same stem is a useful study method. It helps prevent answer-count guessing, but it is not a claim about how NCSBN awards points." },
     ],
   },
 

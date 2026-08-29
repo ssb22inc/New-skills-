@@ -433,6 +433,18 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
   });
 
+  it("keeps pending Guide 21 SATA guidance qualified and source-bound", () => {
+    const guide = TYPE_ARTICLES.find((article) => article.slug === "select-all-that-apply-strategy");
+    expect(guide.updated).toBe("2026-08-29");
+    expect(guide.body).toContain('aria-labelledby="sata-boundary"');
+    expect(guide.body).toContain("does not establish that every multiple-response item uses plus/minus scoring");
+    expect(guide.body).toContain("study guidance, not an assertion that NCSBN awards an independent point");
+    expect(guide.body).not.toContain("expected value is roughly zero");
+    expect(guide.body).not.toContain("Under older all-or-nothing scoring");
+    expect(guide.body).not.toContain("Options containing always, never");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

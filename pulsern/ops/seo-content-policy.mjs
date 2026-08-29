@@ -66,6 +66,7 @@ export function sourcesFor(article) {
   if (article.slug === "matrix-grid-questions") return [SOURCES.testPlan, SOURCES.ngn, SOURCES.nclexFaqs];
   if (article.slug === "cloze-drop-down-questions") return [SOURCES.testPlan, SOURCES.ngn, SOURCES.nclexFaqs];
   if (article.slug === "highlight-questions") return [SOURCES.testPlan, SOURCES.ngn, SOURCES.nclexFaqs];
+  if (article.slug === "select-all-that-apply-strategy") return [SOURCES.testPlan, SOURCES.ngn, SOURCES.nclexFaqs];
   if (article.topic === "How the exam works" || article.topic === "Question types") return [SOURCES.testPlan, SOURCES.ngn];
   if (article.slug === "infection-control-precautions") return [SOURCES.cdcIsolation, SOURCES.cdcIsolationAppendix, SOURCES.cdcPpeSequence, SOURCES.cdcCdiffAcuteCare, SOURCES.cdcHandHygiene, SOURCES.cdcProtectiveEnvironment, SOURCES.testPlan];
   if (article.slug === "high-alert-medications") return [SOURCES.ismp, SOURCES.heparinLabel, SOURCES.protamineLabel, SOURCES.warfarinLabel, SOURCES.naloxoneLabel, SOURCES.flumazenilLabel, SOURCES.acetylcysteineLabel, SOURCES.magnesiumSulfateLabel, SOURCES.digifabLabel, SOURCES.deferoxamineLabel, SOURCES.testPlan];
