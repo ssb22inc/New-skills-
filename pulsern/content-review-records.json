@@ -991,6 +991,23 @@
         {"id":"stem-first-contextual-evaluation-is-study-guidance","locator":"A stem-first study method; Questions for evaluating a phrase","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
         {"id":"highlight-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
       ]
+    },
+    "select-all-that-apply-strategy": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-29",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 21 select-all-that-apply-strategy content and source-set digests",
+      "contentSha256": "c3afb8bd58cd3521d36504a7ea4750300320da040fddd997a9323fe34dd4c159",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "claims": [
+        {"id":"multiple-response-select-every-supported-option-format","locator":"Opening paragraph; answer-count FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"current-interface-and-directions-boundary","locator":"Opening paragraph; answer-count FAQ","sourceIds":["ncsbn-next-generation-nclex"]},
+        {"id":"multi-key-partial-credit-methods","locator":"Format and scoring boundary; scoring FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-nclex-faqs"]},
+        {"id":"no-universal-sata-scoring-or-coin-flip-formula","locator":"Format and scoring boundary; scoring FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-nclex-faqs"]},
+        {"id":"no-invented-answer-count-rule","locator":"An option-by-option study method; Common reasoning errors; answer-count FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"option-by-option-context-check-is-study-guidance","locator":"An option-by-option study method; separate-option FAQ","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
+        {"id":"sata-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
+      ]
     }
   }
 }
