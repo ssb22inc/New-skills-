@@ -55,8 +55,8 @@ export default async function handler(req, res) {
     const site = process.env.SITE_URL || "https://www.pulsern.app";
     const form = new URLSearchParams({
       mode: "payment",
-      success_url: `${site}/?checkout=success`,
-      cancel_url: `${site}/?checkout=cancelled`,
+      success_url: `${site}/app/?checkout=success`,
+      cancel_url: `${site}/app/?checkout=cancelled`,
       customer_email: user.email ?? "",
       "line_items[0][quantity]": "1",
       "line_items[0][price_data][currency]": "usd",

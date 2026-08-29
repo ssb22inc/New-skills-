@@ -14,6 +14,7 @@ import { TYPE_ARTICLES } from "../ops/learn-types.mjs";
 import { SAMPLE_ARTICLES } from "../ops/learn-samples.mjs";
 import { sourcesFor } from "../ops/seo-content-policy.mjs";
 import { injectSearchVerification, verificationMeta } from "../ops/search-verification.mjs";
+import { runAppBoundary } from "../ops/seo-app-boundary.mjs";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
@@ -583,7 +584,31 @@ describe("SEO guardian", () => {
     expect(workflow).toContain("Required adversarial model review");
     expect(workflow).not.toContain("env.OPENROUTER_API_KEY != ''");
     expect(workflow).toContain('test "${{ steps.adversary.outcome }}" = "success"');
+    expect(workflow).toContain('test "${{ steps.app_boundary.outcome }}" = "success"');
     expect(workflow).toContain("npm run seo:enforce");
+  });
+
+  it("fails closed when the public/private app boundary regresses", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-app-boundary-"));
+    await fs.mkdir(path.join(directory, "app"), { recursive: true });
+    await Promise.all([
+      fs.copyFile(new URL("../index.html", import.meta.url), path.join(directory, "index.html")),
+      fs.copyFile(new URL("../app/index.html", import.meta.url), path.join(directory, "app/index.html")),
+      fs.copyFile(new URL("../public/app.webmanifest", import.meta.url), path.join(directory, "app.webmanifest")),
+      fs.copyFile(new URL("../public/app-sw.js", import.meta.url), path.join(directory, "app-sw.js")),
+      fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>'),
+      fs.writeFile(path.join(directory, "llms.txt"), 'PulseRN public pages: https://www.pulsern.app/'),
+    ]);
+    const vercelFile = new URL("../vercel.json", import.meta.url);
+    const pass = await runAppBoundary({ directory, vercelFile, outputFile: path.join(directory, "reports/pass.json") });
+    expect(pass.verdict).toBe("PASS");
+
+    const appFile = path.join(directory, "app/index.html");
+    const appHtml = await fs.readFile(appFile, "utf8");
+    await fs.writeFile(appFile, appHtml.replace(/noindex/g, "index"));
+    const fail = await runAppBoundary({ directory, vercelFile, outputFile: path.join(directory, "reports/fail.json") });
+    expect(fail.verdict).toBe("FAIL");
+    expect(fail.findings.map((item) => item.code)).toContain("APP_NOINDEX");
   });
 
   it("requires verified reviewer identity, exact digest binding, claims, sources, and intent", () => {

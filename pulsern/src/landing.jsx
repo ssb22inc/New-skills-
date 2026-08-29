@@ -1,5 +1,4 @@
 import React from "react";
-import InstallCard from "./install.jsx";
 
 const FEATURES = [
   ["Adaptive practice", "Questions adjust to your demonstrated level across the eight NCSBN client-needs categories."],
@@ -149,13 +148,7 @@ export default function LandingPage({ onSignIn, onStart }) {
               <a className="land-button secondary" href="/how-it-works/">See how it works</a>
             </div>
             <p className="land-note">No credit card for the free pass. Educational exam preparation only.</p>
-            <div style={{ maxWidth: 520 }}>
-              <InstallCard
-                scope="landing"
-                headline="Install the PulseRN web app"
-                message="Keep your NCLEX study tools one tap away. PulseRN installs from your browser and opens full screen; no app-store download is required."
-              />
-            </div>
+            <p className="land-note" style={{ marginTop: 12 }}><a href="/app/">Open the study app</a> to install PulseRN from your browser.</p>
           </div>
           <div className="land-product" aria-label="Illustration of a PulseRN practice question">
             <div className="land-product-top"><span className="land-dot" /> Adaptive practice · Adult Health · Question 18</div>

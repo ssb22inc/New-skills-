@@ -472,7 +472,7 @@ export default function App() {
       setEnt({ status: "offline", expiresAt: null, hadPaid: false, examsLeft: 0, attempted: [] });
     }
   };
-  /* Stripe sends a completed checkout back to /?checkout=success. The webhook
+  /* Stripe sends a completed checkout back to /app/?checkout=success. The webhook
      that writes the subscription row can land a beat after the redirect, so
      poll briefly rather than showing "no plan yet" to someone who just paid.
      The param is stripped immediately so a refresh or a copied link cannot

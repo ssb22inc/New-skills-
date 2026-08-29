@@ -1,7 +1,27 @@
 {
+  "redirects": [
+    { "source": "/app", "destination": "/app/", "permanent": true }
+  ],
+  "headers": [
+    {
+      "source": "/app/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
+        { "key": "Cache-Control", "value": "private, no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/app-sw.js",
+      "headers": [
+        { "key": "Service-Worker-Allowed", "value": "/app/" },
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    }
+  ],
   "rewrites": [
     { "source": "/api/webhooks/stripe", "destination": "/api/stripe-webhook" },
     { "source": "/review", "destination": "/review/index.html" },
-    { "source": "/((?!api|assets|review).*)", "destination": "/index.html" }
+    { "source": "/app/(.*)", "destination": "/app/index.html" },
+    { "source": "/((?!api|assets|review|app).*)", "destination": "/index.html" }
   ]
 }

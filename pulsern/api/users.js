@@ -26,6 +26,8 @@ const admin = () =>
   });
 
 const SITE = process.env.SITE_URL || "https://www.pulsern.app";
+const APP_URL = `${SITE.replace(/\/$/, "")}/app/`;
+const APP_RESET_URL = `${SITE.replace(/\/$/, "")}/app/reset`;
 const PAGE = 200;
 
 /* The admin API has no email search, so pages are scanned and filtered here.
@@ -154,12 +156,12 @@ export default async function handler(req, res) {
         if (got.user.email_confirmed_at) {
           return res.status(400).json({ error: "That account is already confirmed — no email needed." });
         }
-        const { error } = await sb.auth.resend({ type: "signup", email });
+        const { error } = await sb.auth.resend({ type: "signup", email, options: { emailRedirectTo: APP_URL } });
         if (error) return res.status(400).json({ error: error.message });
         return res.status(200).json({ ok: true, message: `Confirmation email sent to ${email}.` });
       }
 
-      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: SITE });
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_RESET_URL });
       if (error) return res.status(400).json({ error: error.message });
       return res.status(200).json({ ok: true, message: `Password reset link sent to ${email}.` });
     }
@@ -186,7 +188,7 @@ export default async function handler(req, res) {
       let invited = false;
 
       if (!target) {
-        const { data: inv, error: invErr } = await sb.auth.admin.inviteUserByEmail(email, { redirectTo: SITE });
+        const { data: inv, error: invErr } = await sb.auth.admin.inviteUserByEmail(email, { redirectTo: APP_URL });
         if (invErr || !inv?.user) {
           return res.status(400).json({ error: `Could not create an account for ${email}: ${invErr?.message || "unknown error"}` });
         }

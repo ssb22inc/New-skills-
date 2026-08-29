@@ -34,3 +34,28 @@ Search Console verification does not override the repository gates. Public
 clinical content still requires digest-bound RN approval, source validation,
 accessibility and crawler audits, OpenRouter adversarial review, evidence
 binding, and fail-closed final enforcement.
+
+## Public site and private app boundary
+
+- `https://www.pulsern.app/` is always the indexable public landing page,
+  including for users who already have an authenticated session.
+- The authenticated PWA lives at `https://www.pulsern.app/app/` in the same
+  Vercel project. `/app` permanently redirects to `/app/`.
+- `/app/` and all deep app routes publish `noindex`, have no canonical URL,
+  and stay out of `sitemap.xml` and `llms.txt`.
+- The app manifest uses `/app/` for `id`, `start_url`, and `scope`. Its service
+  worker is registered with `/app/` scope and cannot control public pages.
+- The first post-migration app visit signs an existing root-era browser session
+  out locally once. OAuth, magic-link, email-confirmation, invitation, and
+  password-recovery callbacks are preserved and return under `/app/`.
+- Stripe success and cancellation returns land under `/app/`.
+
+Before deploying the split, Supabase Authentication URL Configuration must
+allow these exact production redirects:
+
+- `https://www.pulsern.app/app/`
+- `https://www.pulsern.app/app/reset`
+
+Add the equivalent Vercel preview origin routes before testing authentication
+on a preview. Keep the Supabase Site URL at `https://www.pulsern.app`; application
+code supplies the complete `/app/` callback URL.

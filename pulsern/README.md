@@ -41,11 +41,13 @@ Complete package for building PulseRN end-to-end with Claude Code.
 ## Search release gate
 
 The production build generates the public product, trust, pricing, and NCLEX-RN
-guide pages before Vite bundles the authenticated app.
+guide pages at the origin root before Vite bundles the authenticated PWA under
+`/app/` in the same deployment.
 
 ```bash
 npm run build
 npm run seo:audit
+npm run seo:app-boundary
 ```
 
 `seo:audit` inspects the built artifact for traditional search metadata,
@@ -58,6 +60,7 @@ The repository workflow runs fail-closed gates for PulseRN pull requests,
 
 - the full unit and negative-fixture suite;
 - a production build and deterministic traditional/LLM/agentic search audit;
+- a fail-closed public-landing/private-app boundary audit;
 - versioned search-intent and clinical provenance checks;
 - anonymous local and live crawls with browser and named agent user agents;
 - WCAG browser testing at desktop and mobile sizes; and

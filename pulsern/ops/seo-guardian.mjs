@@ -205,7 +205,7 @@ export async function runAudit({ directory = "dist", output = "reports/seo" } = 
   const files = await htmlFiles(directory);
   const pages = await Promise.all(files
     .map((file) => ({ file, route: routeFor(directory, file) }))
-    .filter(({ route }) => !route.startsWith("/owner/") && !route.startsWith("/review/"))
+    .filter(({ route }) => !route.startsWith("/owner/") && !route.startsWith("/review/") && !route.startsWith("/app/"))
     .map(async ({ file, route }) => auditHtml(route, await fs.readFile(file, "utf8"))));
   const findings = pages.flatMap((page) => page.findings);
   const sitemap = await fs.readFile(path.join(directory, "sitemap.xml"), "utf8");
@@ -222,7 +222,7 @@ export async function runAudit({ directory = "dist", output = "reports/seo" } = 
     if (!robotsAllows(robots, route)) findings.push(finding("high", "ROBOTS", route, "robots.txt does not explicitly allow this public path."));
     if (!llms.includes(`${SITE}${route}`)) findings.push(finding("medium", "LLMS_MAP", route, "llms.txt does not map this public page."));
   }
-  if (/\/api\/|\/owner\/|\/review\//.test(sitemap)) findings.push(finding("critical", "PRIVATE_SITEMAP", "/sitemap.xml", "Private route found in public sitemap."));
+  if (/\/api\/|\/owner\/|\/review\/|\/app\//.test(sitemap)) findings.push(finding("critical", "PRIVATE_SITEMAP", "/sitemap.xml", "Private route found in public sitemap."));
 
   const governance = auditGovernance({ provenance, intents, pages });
   findings.push(...governance.provenanceFindings, ...governance.intentFindings);

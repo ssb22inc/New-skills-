@@ -139,7 +139,7 @@ export default function InstallCard({
       ) : plat === "ios-other" ? (
         <p className="small install-steps">
           On iPhone and iPad only Safari can add apps to the home screen. Open{" "}
-          <strong>pulsern.app</strong> in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
+          <strong>www.pulsern.app/app/</strong> in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
         </p>
       ) : (
         <p className="small install-steps">
