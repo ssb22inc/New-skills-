@@ -1025,6 +1025,23 @@
         {"id":"no-universal-clinical-priority-mnemonic","locator":"Study-guidance qualification; Common reasoning errors; action-order and assessment FAQs","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]},
         {"id":"ordering-education-scope-and-no-result-guarantee","locator":"Description; CTA","sourceIds":["ncsbn-next-generation-nclex","ncsbn-2026-rn-test-plan"]}
       ]
+    },
+    "lab-values-to-memorize": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-08-29",
+      "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 23 lab-values-to-memorize content and source-set digests",
+      "contentSha256": "719cf02f930d752ca04965b3bbb07f48f6cfbde1f9cbe99cdb00e11253f2add5",
+      "sourceSetSha256": "f1216fab579c7917936c1be320ca9d06d495d987bd83af8c69faa3bd254f9cad",
+      "claims": [
+        {"id":"laboratory-reference-range-method-and-population-variation","locator":"Opening paragraph; normal-potassium FAQ","sourceIds":["medlineplus-understanding-lab-results-2025"]},
+        {"id":"inside-and-outside-range-interpretation-limitations","locator":"Opening paragraph","sourceIds":["medlineplus-understanding-lab-results-2025"]},
+        {"id":"clinical-use-of-reporting-lab-units-context-and-policy","locator":"Safety and exam boundary; result-by-result interpretation check","sourceIds":["medlineplus-understanding-lab-results-2025"]},
+        {"id":"no-universal-critical-value-list","locator":"Safety and exam boundary","sourceIds":["medlineplus-understanding-lab-results-2025"]},
+        {"id":"no-guaranteed-nclex-laboratory-memorization-list","locator":"Categories to organize during study; lab-values FAQ","sourceIds":["ncsbn-2026-rn-test-plan"]},
+        {"id":"distributed-retrieval-study-method-and-versioning-boundary","locator":"How to study without memorizing false certainty","sourceIds":["ramnanan-2024-distributed-retrieval-review","medlineplus-understanding-lab-results-2025"]},
+        {"id":"lab-education-scope-and-no-result-guarantee","locator":"Description; CTA; Safety and exam boundary","sourceIds":["ncsbn-2026-rn-test-plan","medlineplus-understanding-lab-results-2025"]}
+      ]
     }
   }
 }
