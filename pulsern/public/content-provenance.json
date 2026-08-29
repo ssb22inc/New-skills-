@@ -1166,8 +1166,8 @@
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
       },
-      "contentSha256": "865af320f2532e5242df06b184ffa15fea325b8035e1d6572532d04fd0633ac6",
-      "sourceSetSha256": "818720eaa7ef49bf03f77ce3efcaaa91df0345fa3e5a8afa1d013a69f439cd87",
+      "contentSha256": "1c32e92fccab9f202adfc136bda3828e36bb8f5bd3e376f8d80d8bb0dabb4a9f",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
       "sources": [
         {
           "id": "ncsbn-2026-rn-test-plan",
@@ -1186,6 +1186,15 @@
           "sourceUpdated": "2023-04-01",
           "accessedAt": "2026-08-26",
           "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
         }
       ],
       "review": {

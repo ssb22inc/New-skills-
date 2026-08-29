@@ -256,48 +256,43 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Drag-and-drop and ordering questions",
     h1: "Drag-and-drop and ordering questions on the NCLEX",
-    description: "How sequencing items are scored, the frameworks that decide order, and why you should build the sequence from both ends.",
+    description: "A source-bound guide to NCLEX ordering items: identify the requested sequence, use the supplied context, and avoid unofficial scoring or universal-priority rules.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN includes ordering items across procedures, emergencies and the nursing process.",
+    updated: "2026-08-29",
+    cta: "PulseRN can provide ordering-style practice with rationales; it does not reproduce the official NCLEX item bank, replace clinical protocols, or predict an exam result.",
     body: `
-<p>Drag-and-drop items ask you to place options into an order or a set of categories. The most demanding version is sequencing: put these actions in the order the nurse should perform them.</p>
+<p>An ordering item asks the candidate to arrange supplied options in the sequence requested by the prompt. A drag-and-drop interface may also be used for other response tasks, so read the displayed directions rather than assuming that every draggable response is a sequence. Use the current NCLEX Candidate Tutorial and official samples for the exact interface.</p>
 
-<h2>What is being tested</h2>
-<p>Not whether you know the actions — the word bank has already told you them. What is being tested is <b>priority</b>: which comes first when several reasonable things all need doing.</p>
-
-<h2>The frameworks that decide order</h2>
-<table>
-  <tr><th>Framework</th><th>Use it when</th></tr>
-  <tr><td>ABC — airway, breathing, circulation</td><td>Any scenario with a physiological threat. It outranks everything else.</td></tr>
-  <tr><td>Nursing process</td><td>Assess before you intervene, unless the stem has already given you the assessment finding.</td></tr>
-  <tr><td>Maslow</td><td>Physiological needs before safety, safety before psychosocial.</td></tr>
-  <tr><td>Safety first</td><td>Procedures — hand hygiene, identification, and verification usually precede the technical steps.</td></tr>
-  <tr><td>Least invasive first</td><td>Where several interventions would work and the client is stable.</td></tr>
-</table>
-
-<div class="key">
-<p><b>Build from both ends.</b> The first and last steps are usually the most obvious — hand hygiene near the start, evaluation or documentation near the end. Place those, then fill the middle, where the real discrimination lives. Working strictly top to bottom means spending your effort on the ambiguous middle while your certain anchors sit unplaced.</p>
+<div class="key" role="note" aria-labelledby="ordering-boundary">
+<h2 id="ordering-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every ordering item is all-or-nothing, that every correctly placed position earns an independent point, or that an early error automatically invalidates every later position. Follow the displayed directions and do not apply an unofficial scoring formula.</p>
 </div>
 
-<h2>Sequencing patterns worth knowing</h2>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+
+<h2>A constraint-first study method</h2>
+<ol>
+  <li><b>Read the requested task and all client information.</b> Determine whether the prompt asks for chronological order, priority, procedure steps or another relationship.</li>
+  <li><b>Identify explicit constraints.</b> Note information in the stem that makes one option precede or follow another.</li>
+  <li><b>Compare options in pairs.</b> Ask whether one must happen before another based on the supplied scenario and the applicable current standard.</li>
+  <li><b>Build the complete sequence.</b> Place the best-supported relationships first, then resolve remaining positions without inventing facts.</li>
+  <li><b>Read the sequence from start to finish.</b> Check that each transition fits the prompt and that every required option is placed.</li>
+</ol>
+<p>This is study guidance, not a clinical protocol or an NCSBN scoring rule. Real care follows current orders, facility policy, validated algorithms, scope of practice and the client's condition; a single mnemonic does not determine every sequence.</p>
+
+<h2>Common reasoning errors</h2>
 <ul>
-  <li><b>Sterile procedures</b> — gather and check equipment, hand hygiene, position the client, establish the sterile field, perform, secure, document.</li>
-  <li><b>Personal protective equipment</b> — the order of donning is not the reverse of doffing, and both are commonly tested.</li>
-  <li><b>Deteriorating client</b> — assess and protect airway and breathing, then circulation, then escalate, then document. Documentation is almost never first.</li>
-  <li><b>Admission and handover</b> — verify identity before anything is done to the client.</li>
+  <li>Applying one memorized framework without checking the stem's exact task and context.</li>
+  <li>Assuming the first or last option must be obvious.</li>
+  <li>Treating a generally useful action as correctly timed without checking prerequisites.</li>
+  <li>Adding a step or clinical fact that the item did not provide.</li>
+  <li>Trying to optimize an unofficial scoring formula instead of arranging the requested response.</li>
 </ul>
-
-<h2>Scoring and the practical consequence</h2>
-<p>Ordering items may be scored all-or-nothing or with credit for correctly placed positions, depending on the item. Either way, one misplacement early in a sequence displaces everything after it, so the opening steps deserve the most care.</p>
-
-<h2>Assessment first, except when it is not</h2>
-<p>Assess before intervening is a sound default, and it is also the most over-applied rule in NCLEX preparation. If the stem has already handed you the assessment finding — the client is not breathing, the saturation is 82%, the tracing shows a lethal rhythm — then reassessing is a delay, and the exam scores it as one. Assessment comes first when you still need information. When the information is already in front of you, act.</p>
 `,
     faq: [
-      { q: "How are NCLEX ordering questions scored?", a: "Depending on the item, either all-or-nothing or with credit for positions placed correctly. Because a single early misplacement shifts everything after it, the opening steps carry the most weight." },
-      { q: "What order should I put nursing actions in?", a: "Use ABC first for any physiological threat, then the nursing process, then Maslow. For procedures, safety steps such as hand hygiene and client identification usually precede the technical steps." },
-      { q: "Should assessment always come first?", a: "No. Assess first when you still need information. If the stem has already given you the critical finding, reassessing is a delay and the exam treats it as one." },
+      { q: "How are NCLEX ordering questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key. That general guidance does not establish one method or a per-position value for every ordering item." },
+      { q: "What order should I use for nursing actions?", a: "Use the task, client information and applicable current standard to determine the relationships among the supplied options. No single mnemonic determines every clinical or procedural sequence." },
+      { q: "Should assessment always come first?", a: "Do not use an absolute rule. The correct sequence depends on the prompt, information already supplied, the client's condition and the applicable current standard; in real care, follow current protocols, orders and scope of practice." },
     ],
   },
 ];

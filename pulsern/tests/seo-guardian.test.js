@@ -445,6 +445,18 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
   });
 
+  it("keeps pending Guide 22 ordering guidance qualified and source-bound", () => {
+    const guide = TYPE_ARTICLES.find((article) => article.slug === "drag-and-drop-ordering-questions");
+    expect(guide.updated).toBe("2026-08-29");
+    expect(guide.body).toContain('aria-labelledby="ordering-boundary"');
+    expect(guide.body).toContain("does not establish that every ordering item is all-or-nothing");
+    expect(guide.body).toContain("study guidance, not a clinical protocol or an NCSBN scoring rule");
+    expect(guide.body).not.toContain("ABC — airway, breathing, circulation");
+    expect(guide.body).not.toContain("opening steps carry the most weight");
+    expect(guide.body).not.toContain("the exam scores it as one");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });
