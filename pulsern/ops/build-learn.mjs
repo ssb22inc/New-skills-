@@ -8,35 +8,51 @@
 
    Run: node ops/build-learn.mjs   (also run by `npm run build:learn`) */
 
-import { writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { ARTICLES } from "./learn-content.mjs";
+import { EVIDENCE_ACCESSED_AT, POLICY_VERSION, SEARCH_INTENTS, intentFor, sourcesFor } from "./seo-content-policy.mjs";
 
 const SITE = "https://www.pulsern.app";
 const OUT = "public/learn";
 const AUTHOR_URL = `${SITE}/about/#sheldon-bennett-rn`;
 
-const SOURCES = {
-  testPlan: { title: "NCSBN — NCLEX test plans", url: "https://www.nclex.com/test-plans.page" },
-  ngn: { title: "NCSBN — Next Generation NCLEX", url: "https://www.nclex.com/next-generation-nclex.page" },
-  candidate: { title: "NCSBN — NCLEX candidate bulletin", url: "https://www.nclex.com/candidate-bulletin.page" },
-  cdcIsolation: { title: "CDC — Isolation Precautions Guideline", url: "https://www.cdc.gov/infection-control/hcp/isolation-precautions/index.html" },
-  ismp: { title: "ISMP — High-Alert Medications in Acute Care Settings", url: "https://www.ismp.org/Tools/institutionalhighAlert.asp" },
-  bloodGas: { title: "MedlinePlus — Blood Gases", url: "https://medlineplus.gov/lab-tests/blood-gases/" },
-  electrolytes: { title: "MedlinePlus — Electrolyte Panel", url: "https://medlineplus.gov/lab-tests/electrolyte-panel/" },
-  labTests: { title: "MedlinePlus — Medical Tests", url: "https://medlineplus.gov/lab-tests/" },
-  learning: { title: "Dunlosky et al. — Improving Students’ Learning With Effective Learning Techniques", url: "https://doi.org/10.1177/1529100612453266" },
-};
+const REVIEW_LEDGER = JSON.parse(readFileSync(new URL("../content-review-records.json", import.meta.url), "utf8"));
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
-function sourcesFor(a) {
-  if (a.slug === "nclex-test-day-what-to-expect") return [SOURCES.candidate, SOURCES.testPlan];
-  if (a.topic === "How the exam works" || a.topic === "Question types") return [SOURCES.testPlan, SOURCES.ngn];
-  if (a.slug === "infection-control-precautions") return [SOURCES.cdcIsolation, SOURCES.testPlan];
-  if (a.slug === "high-alert-medications") return [SOURCES.ismp, SOURCES.testPlan];
-  if (a.slug === "abg-interpretation") return [SOURCES.bloodGas, SOURCES.testPlan];
-  if (a.slug === "electrolyte-imbalances") return [SOURCES.electrolytes, SOURCES.testPlan];
-  if (a.slug === "lab-values-to-memorize" || a.slug === "insulin-types-and-timing") return [SOURCES.labTests, SOURCES.testPlan];
-  if (a.topic === "Study strategy") return [SOURCES.learning, SOURCES.testPlan];
-  return [SOURCES.testPlan];
+function provenanceFor(article) {
+  const sources = sourcesFor(article);
+  const intent = intentFor(article);
+  const contentSha256 = sha256(JSON.stringify({ title: article.title, h1: article.h1 ?? article.title, description: article.description, body: article.body, faq: article.faq ?? [] }));
+  const sourceSetSha256 = sha256(JSON.stringify(sources.map(({ id, url, locator }) => ({ id, url, locator }))));
+  const recorded = REVIEW_LEDGER.reviews?.[article.slug] ?? {};
+  const reviewer = REVIEW_LEDGER.reviewer ?? {};
+  const approved = reviewer.verificationStatus === "verified"
+    && /^https:\/\//.test(reviewer.verificationUrl ?? "")
+    && recorded.decision === "approved"
+    && recorded.reviewerId === reviewer.id
+    && recorded.contentSha256 === contentSha256
+    && recorded.sourceSetSha256 === sourceSetSha256
+    && /^\d{4}-\d{2}-\d{2}$/.test(recorded.reviewedAt ?? "")
+    && Array.isArray(recorded.claims)
+    && recorded.claims.length > 0
+    && recorded.claims.every((claim) => claim.id && claim.locator && Array.isArray(claim.sourceIds) && claim.sourceIds.length > 0);
+  return {
+    route: `/learn/${article.slug}/`,
+    risk: intent?.risk ?? "unmapped",
+    intent,
+    contentSha256,
+    sourceSetSha256,
+    sources,
+    review: {
+      decision: approved ? "approved" : "pending",
+      reviewerId: recorded.reviewerId ?? null,
+      reviewedAt: recorded.reviewedAt ?? null,
+      scope: recorded.scope ?? null,
+      claims: recorded.claims ?? [],
+      evidenceMatchesContent: recorded.contentSha256 === contentSha256 && recorded.sourceSetSha256 === sourceSetSha256,
+    },
+  };
 }
 
 /* The original guide bank was drafted with mixed U.K./U.S. spelling. PulseRN
@@ -50,7 +66,7 @@ const usEnglish = (html) => html
   .replace(/Prioritise/g, "Prioritize").replace(/Recognise/g, "Recognize")
   .replace(/practising/g, "practicing").replace(/practised/g, "practiced").replace(/practise/g, "practice")
   .replace(/Practising/g, "Practicing").replace(/Practised/g, "Practiced").replace(/Practise/g, "Practice")
-  .replace(/labelled/g, "labeled").replace(/rigour/g, "rigor")
+  .replace(/\blabelled\b/g, "labeled").replace(/rigour/g, "rigor")
   .replace(/centre/g, "center").replace(/Centre/g, "Center").replace(/behaviour/g, "behavior")
   .replace(/memorise/g, "memorize").replace(/standardised/g, "standardized");
 
@@ -75,6 +91,11 @@ const CSS = `
   table { width:100%; border-collapse:collapse; margin-bottom:12px; font-size:14.5px; }
   th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { color:var(--teal); font-weight:600; }
+  caption { color:var(--ink); font-weight:700; padding:0 0 8px; text-align:left; }
+  .table-wrap { overflow-x:auto; margin-bottom:14px; border:1px solid var(--line); border-radius:8px; }
+  .table-wrap:focus { outline:3px solid #8CCFC3; outline-offset:2px; }
+  .table-wrap table { min-width:620px; margin-bottom:0; }
+  .source-note { color:var(--muted); font-size:13px; }
   .key { background:#EAF4F0; border-left:3px solid var(--teal); padding:12px 14px; border-radius:0 8px 8px 0; margin-bottom:12px; }
   .key p:last-child { margin-bottom:0; }
   .cta { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--teal); border-radius:12px; padding:18px 20px; margin:22px 0 14px; }
@@ -119,8 +140,22 @@ ${JSON.stringify(jsonld, null, 2)}
 <body>`;
 }
 
-function articleJsonLd(a, url) {
-  const citations = sourcesFor(a);
+export function articleJsonLd(a, url, provenance) {
+  const citations = provenance.sources;
+  const reviewer = REVIEW_LEDGER.reviewer;
+  const person = {
+    "@type": "Person",
+    "@id": AUTHOR_URL,
+    name: reviewer.displayName,
+    url: AUTHOR_URL,
+    worksFor: { "@id": `${SITE}/#org` },
+  };
+  if (reviewer.verificationStatus === "verified" && reviewer.verificationUrl) {
+    person.name = `${reviewer.displayName}, ${reviewer.credential}`;
+    person.jobTitle = reviewer.licenseType;
+    person.sameAs = [reviewer.verificationUrl];
+    person.hasCredential = { "@type": "EducationalOccupationalCredential", credentialCategory: reviewer.licenseType, recognizedBy: reviewer.licenseJurisdiction };
+  }
   const graph = [
     {
       "@type": "Article",
@@ -131,21 +166,23 @@ function articleJsonLd(a, url) {
       inLanguage: "en-US",
       datePublished: a.published,
       dateModified: a.updated,
-      author: { "@id": AUTHOR_URL },
-      reviewedBy: { "@id": AUTHOR_URL },
+      author: { "@id": `${SITE}/#org` },
+      ...(provenance.review.decision === "approved" ? { reviewedBy: { "@id": AUTHOR_URL } } : {}),
       publisher: { "@type": "Organization", "@id": `${SITE}/#org`, name: "PulseRN", url: SITE, logo: `${SITE}/icon-512.png` },
       isPartOf: { "@type": "WebSite", name: "PulseRN", url: SITE },
       about: { "@type": "Thing", name: "NCLEX-RN examination preparation" },
       citation: citations.map((source) => source.url),
+      identifier: `sha256:${provenance.contentSha256}`,
+      sdPublisher: { "@id": `${SITE}/#org` },
     },
     {
-      "@type": "Person",
-      "@id": AUTHOR_URL,
-      name: "Sheldon Bennett, RN",
-      jobTitle: "Registered Nurse",
-      url: AUTHOR_URL,
-      worksFor: { "@id": `${SITE}/#org` },
+      "@type": "Organization",
+      "@id": `${SITE}/#org`,
+      name: "PulseRN",
+      url: SITE,
+      logo: `${SITE}/icon-512.png`,
     },
+    ...(provenance.review.decision === "approved" ? [person] : []),
     {
       "@type": "BreadcrumbList",
       "@id": `${url}#crumbs`,
@@ -178,7 +215,7 @@ function related(a, all) {
   return [...same, ...rest].slice(0, 3);
 }
 
-function renderArticle(a, all) {
+function renderArticle(a, all, provenance) {
   const url = `${SITE}/learn/${a.slug}/`;
   const rel = related(a, all);
   const sources = sourcesFor(a);
@@ -188,18 +225,21 @@ function renderArticle(a, all) {
         .join("")}</div>`
     : "";
 
-  return usEnglish(`${head({ title: `${a.title} | PulseRN`, description: a.description, url, jsonld: articleJsonLd(a, url) })}
+  const reviewLine = provenance.review.decision === "approved"
+    ? `clinically reviewed <time datetime="${esc(provenance.review.reviewedAt)}">${esc(provenance.review.reviewedAt)}</time> by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, ${esc(REVIEW_LEDGER.reviewer.credential)}</a>`
+    : `last updated <time datetime="${esc(a.updated)}">${esc(a.updated)}</time> &middot; clinical review evidence pending`;
+  return usEnglish(`${head({ title: `${a.title} | PulseRN`, description: a.description, url, jsonld: articleJsonLd(a, url, provenance) })}
 <main>
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>${esc(a.h1 ?? a.title)}</h1>
-<p class="meta">${esc(a.topic)} &middot; published <time datetime="${esc(a.published)}">${esc(a.published)}</time> &middot; reviewed <time datetime="${esc(a.updated)}">${esc(a.updated)}</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<p class="meta">${esc(a.topic)} &middot; published <time datetime="${esc(a.published)}">${esc(a.published)}</time> &middot; ${reviewLine}</p>
 
 <div class="card">${a.body}</div>
 ${faq}
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul>${sources.map((source) => `<li><a href="${source.url}" rel="external noopener">${esc(source.title)}</a></li>`).join("")}</ul>
+  <ul>${sources.map((source) => `<li id="source-${esc(source.id)}"><a href="${source.url}" rel="external noopener">${esc(source.title)}</a> — ${esc(source.publisher)}; evidence locator: ${esc(source.locator)}${source.sourceUpdated ? `; source updated <time datetime="${esc(source.sourceUpdated)}">${esc(source.sourceUpdated)}</time>` : ""}; accessed <time datetime="${esc(source.accessedAt)}">${esc(source.accessedAt)}</time></li>`).join("")}</ul>
 </div>
 <div class="cta">
   <p><b>Practice this for real.</b> ${esc(a.cta ?? "PulseRN drills this with adaptive questions that adjust to your level, every Next Gen item type, and full-length readiness exams.")}</p>
@@ -230,9 +270,9 @@ function renderIndex(all) {
         "@id": `${url}#page`,
         url,
         name: "NCLEX-RN guides",
-        description: "Straight answers on how the NCLEX-RN works and how to study for it, written by a licensed RN.",
+        description: "Straight answers on how the NCLEX-RN works and how to study for it, with transparent sources and explicit clinical-review status.",
         isPartOf: { "@type": "WebSite", name: "PulseRN", url: SITE },
-        author: { "@id": AUTHOR_URL },
+        author: { "@id": `${SITE}/#org` },
       },
       {
         "@type": "ItemList",
@@ -254,12 +294,12 @@ function renderIndex(all) {
 
   return usEnglish(`${head({
     title: "NCLEX-RN guides — how the exam works and how to study | PulseRN",
-    description: "Straight answers on how the NCLEX-RN is scored, every Next Gen question type, dosage calculation, lab values, prioritisation and delegation — written by a licensed RN.",
+    description: REVIEW_LEDGER.reviewer.verificationStatus === "verified" ? "Straight answers on NCLEX scoring, Next Gen item types, dosage calculation, lab values, prioritization and delegation by a verified RN." : "Straight answers on NCLEX scoring, Next Gen item types and study topics, with transparent sources and clinical-review status.",
     url, jsonld,
   })}
 <main><a class="back" href="/">&larr; Back to PulseRN</a>
 <h1>NCLEX-RN <b>guides</b></h1>
-<p class="sub">Straight answers, written and reviewed by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a>. No fluff, no false promises.</p>
+<p class="sub">Straight answers owned by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}</a>, with explicit source and clinical-review status. No fluff, no false promises.</p>
 ${sections}
 </main><footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms &middot; Privacy &middot; Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
@@ -272,6 +312,7 @@ if (existsSync(OUT)) rmSync(OUT, { recursive: true });
 mkdirSync(OUT, { recursive: true });
 
 const slugs = new Set();
+const provenance = [];
 for (const a of ARTICLES) {
   if (slugs.has(a.slug)) throw new Error(`duplicate slug: ${a.slug}`);
   slugs.add(a.slug);
@@ -279,10 +320,14 @@ for (const a of ARTICLES) {
     if (!a[k]) throw new Error(`article ${a.slug || "(no slug)"} is missing ${k}`);
   }
   if (a.description.length > 165) throw new Error(`${a.slug}: description too long for a search snippet (${a.description.length})`);
+  const record = provenanceFor(a);
+  provenance.push(record);
   mkdirSync(`${OUT}/${a.slug}`, { recursive: true });
-  writeFileSync(`${OUT}/${a.slug}/index.html`, renderArticle(a, ARTICLES));
+  writeFileSync(`${OUT}/${a.slug}/index.html`, renderArticle(a, ARTICLES, record));
 }
 writeFileSync(`${OUT}/index.html`, renderIndex(ARTICLES));
+writeFileSync("public/content-provenance.json", JSON.stringify({ schemaVersion: POLICY_VERSION, generatedAt: `${EVIDENCE_ACCESSED_AT}T00:00:00.000Z`, reviewer: REVIEW_LEDGER.reviewer, guides: provenance }, null, 2) + "\n");
+writeFileSync("public/search-intents.json", JSON.stringify({ schemaVersion: POLICY_VERSION, generatedAt: `${EVIDENCE_ACCESSED_AT}T00:00:00.000Z`, intents: SEARCH_INTENTS }, null, 2) + "\n");
 
 /* Sitemap covers the app pages plus every guide, so nothing relies on the
    crawler finding its own way in. */

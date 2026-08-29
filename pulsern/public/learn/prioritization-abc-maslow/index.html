@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Prioritization: ABC, Maslow and what comes first | PulseRN</title>
-<meta name="description" content="The order of frameworks that decides which client to see first, and the trap of applying assessment-first when the assessment is already done.">
+<title>NCLEX prioritization: who comes first | PulseRN</title>
+<meta name="description" content="Use clinical judgment, immediate-threat screening, ABCs and nursing-process context to decide which client or action comes first.">
 <link rel="canonical" href="https://www.pulsern.app/learn/prioritization-abc-maslow/">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <meta name="theme-color" content="#0E7C6B">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="PulseRN">
 <meta property="og:url" content="https://www.pulsern.app/learn/prioritization-abc-maslow/">
-<meta property="og:title" content="Prioritization: ABC, Maslow and what comes first | PulseRN">
-<meta property="og:description" content="The order of frameworks that decides which client to see first, and the trap of applying assessment-first when the assessment is already done.">
+<meta property="og:title" content="NCLEX prioritization: who comes first | PulseRN">
+<meta property="og:description" content="Use clinical judgment, immediate-threat screening, ABCs and nursing-process context to decide which client or action comes first.">
 <meta property="og:image" content="https://www.pulsern.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://www.pulsern.app/og.png">
@@ -23,14 +23,14 @@
     {
       "@type": "Article",
       "@id": "https://www.pulsern.app/learn/prioritization-abc-maslow/#article",
-      "headline": "Prioritization: ABC, Maslow and what comes first",
-      "description": "The order of frameworks that decides which client to see first, and the trap of applying assessment-first when the assessment is already done.",
+      "headline": "NCLEX prioritization: who comes first",
+      "description": "Use clinical judgment, immediate-threat screening, ABCs and nursing-process context to decide which client or action comes first.",
       "url": "https://www.pulsern.app/learn/prioritization-abc-maslow/",
       "inLanguage": "en-US",
       "datePublished": "2026-08-03",
-      "dateModified": "2026-08-03",
+      "dateModified": "2026-08-27",
       "author": {
-        "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
+        "@id": "https://www.pulsern.app/#org"
       },
       "reviewedBy": {
         "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
@@ -52,17 +52,38 @@
         "name": "NCLEX-RN examination preparation"
       },
       "citation": [
-        "https://www.nclex.com/test-plans.page"
-      ]
+        "https://www.nclex.com/test-plans.page",
+        "https://www.nclex.com/next-generation-nclex.page",
+        "https://pubmed.ncbi.nlm.nih.gov/41122888/"
+      ],
+      "identifier": "sha256:593f70ffc8e9c3f654cbd636712ec5feec560be75deeb279661589a53ad5cd4f",
+      "sdPublisher": {
+        "@id": "https://www.pulsern.app/#org"
+      }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://www.pulsern.app/#org",
+      "name": "PulseRN",
+      "url": "https://www.pulsern.app",
+      "logo": "https://www.pulsern.app/icon-512.png"
     },
     {
       "@type": "Person",
       "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn",
       "name": "Sheldon Bennett, RN",
-      "jobTitle": "Registered Nurse",
       "url": "https://www.pulsern.app/about/#sheldon-bennett-rn",
       "worksFor": {
         "@id": "https://www.pulsern.app/#org"
+      },
+      "jobTitle": "Registered Nurse",
+      "sameAs": [
+        "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+      ],
+      "hasCredential": {
+        "@type": "EducationalOccupationalCredential",
+        "credentialCategory": "Registered Nurse",
+        "recognizedBy": "Florida Board of Nursing"
       }
     },
     {
@@ -84,7 +105,7 @@
         {
           "@type": "ListItem",
           "position": 3,
-          "name": "Prioritization: ABC, Maslow and what comes first",
+          "name": "NCLEX prioritization: who comes first",
           "item": "https://www.pulsern.app/learn/prioritization-abc-maslow/"
         }
       ]
@@ -95,26 +116,34 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "What order should I use for NCLEX prioritization questions?",
+          "name": "Do ABCs always determine which NCLEX client comes first?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Airway, breathing and circulation first, then Maslow, then the nursing process, then acute over chronic and unstable over stable. ABC outranks everything else."
+            "text": "No. ABCs help screen for immediate physiologic threats, but a specific emergency algorithm, established intervention, major safety threat or time-critical change can determine the sequence. Use the complete scenario."
           }
         },
         {
           "@type": "Question",
-          "name": "Should assessment always be the first action?",
+          "name": "Should assessment always be the first nursing action?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Assess first when you still need information. When the stem has already given you the critical finding, reassessing delays care and the exam treats it as the wrong choice."
+            "text": "Assess when material information is missing or ambiguous. If the stem already establishes an emergency and the immediate response is defined, begin that response and evaluate the result rather than delaying for nonessential reassessment."
           }
         },
         {
           "@type": "Question",
-          "name": "How do I decide which client to see first?",
+          "name": "Does an expected or chronic finding automatically have low priority?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Eliminate findings that are expected for each client's condition and stage, identify what is unexpected, then apply ABC to those. Between two abnormal findings, choose the one that could deteriorate fastest."
+            "text": "No. Expected and chronic describe context, not safety. Compare severity, trend, associated cues, baseline and the likely consequence of delay."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Where does Maslow fit in NCLEX prioritization?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Use it as a limited tie-breaker when urgency and safety are otherwise comparable. It does not override emergency protocols, immediate safety threats or time-critical care."
           }
         }
       ]
@@ -139,6 +168,11 @@
   table { width:100%; border-collapse:collapse; margin-bottom:12px; font-size:14.5px; }
   th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { color:var(--teal); font-weight:600; }
+  caption { color:var(--ink); font-weight:700; padding:0 0 8px; text-align:left; }
+  .table-wrap { overflow-x:auto; margin-bottom:14px; border:1px solid var(--line); border-radius:8px; }
+  .table-wrap:focus { outline:3px solid #8CCFC3; outline-offset:2px; }
+  .table-wrap table { min-width:620px; margin-bottom:0; }
+  .source-note { color:var(--muted); font-size:13px; }
   .key { background:#EAF4F0; border-left:3px solid var(--teal); padding:12px 14px; border-radius:0 8px 8px 0; margin-bottom:12px; }
   .key p:last-child { margin-bottom:0; }
   .cta { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--teal); border-radius:12px; padding:18px 20px; margin:22px 0 14px; }
@@ -154,69 +188,69 @@
 <main>
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
-<h1>How to answer prioritization questions</h1>
-<p class="meta">Test-taking skill &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; reviewed <time datetime="2026-08-03">2026-08-03</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<h1>How to answer NCLEX prioritization questions</h1>
+<p class="meta">Test-taking skill &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; clinically reviewed <time datetime="2026-08-27">2026-08-27</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
 
 <div class="card">
-<p>Prioritization items give you several things that all genuinely need doing and ask which comes first. Every option is defensible. That is the design — you are being tested on ordering, not on identifying the one right action.</p>
+<p>Prioritization items test whether you can recognize relevant cues, analyze them, rank the most likely or dangerous hypotheses, choose an action and evaluate the response. A mnemonic can help organize the comparison, but no single mnemonic decides every case.</p>
 
-<h2>The frameworks, in the order you apply them</h2>
-<ol>
-  <li><b>ABC — airway, breathing, circulation.</b> Outranks everything. An airway problem beats a circulation problem beats everything else.</li>
-  <li><b>Maslow.</b> Physiological before safety, safety before psychosocial.</li>
-  <li><b>Nursing process.</b> Assess before intervening — with the exception below.</li>
-  <li><b>Acute over chronic.</b> A new problem outranks a long-standing one.</li>
-  <li><b>Unstable over stable.</b> Unexpected findings outrank expected ones.</li>
-</ol>
-
-<div class="key">
-<p><b>The exception that costs the most marks:</b> assess-first is a default, not a law. When the stem has already handed you the assessment finding — the client is not breathing, the saturation is 84%, the rhythm is lethal — choosing to reassess is a delay, and the exam scores it as one. Assessment comes first when you still need information. When you already have it, act.</p>
+<div class="key" role="note" aria-labelledby="prioritization-safety-boundary">
+<h2 id="prioritization-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>ABCs, Maslow, “acute before chronic” and “assess before acting” are study heuristics—not universal clinical algorithms. Use the exact scenario, current findings, orders, scope of practice and emergency protocol. When the stem establishes an emergency, do not delay the indicated emergency response merely to satisfy a mnemonic.</p>
 </div>
 
-<h2>Which client do you see first?</h2>
-<p>These items list several clients and ask who to attend to first. Work through them in a fixed order rather than by impression:</p>
-<ol>
-  <li><b>Discard the expected.</b> A finding that is normal for that condition or stage of recovery is not urgent, however dramatic it sounds. Post-operative pain on day one is expected.</li>
-  <li><b>Find the unexpected.</b> A finding that does not fit the diagnosis is your candidate.</li>
-  <li><b>Apply ABC</b> to whichever candidates remain.</li>
-  <li><b>Prefer the one who could deteriorate fastest.</b> Between two abnormal findings, the airway or circulatory one wins.</li>
-</ol>
-
-<h2>Patterns that signal urgency</h2>
+<h2>A defensible decision sequence</h2>
+<div class="table-wrap" role="region" aria-label="NCLEX prioritization decision sequence" tabindex="0">
 <table>
-  <tr><th>Finding</th><th>Why it moves up the list</th></tr>
-  <tr><td>New confusion or restlessness</td><td>Frequently the first sign of hypoxaemia, before saturation falls noticeably.</td></tr>
-  <tr><td>A change from the client's baseline</td><td>Trend matters more than an absolute value inside a range.</td></tr>
-  <tr><td>Anything obstructing an airway</td><td>Stridor, drooling, swelling, inability to speak in full sentences.</td></tr>
-  <tr><td>Signs of bleeding or shock</td><td>Tachycardia with falling blood pressure, cool clammy skin, falling output.</td></tr>
-  <tr><td>Sudden severe pain</td><td>Especially chest, abdominal, or calf pain that is new.</td></tr>
+  <caption>Questions to ask before selecting the first client or action</caption>
+  <thead><tr><th scope="col">Step</th><th scope="col">Question</th><th scope="col">How it changes priority</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">1. Read the task</th><td>Does the item ask whom to see, what to assess, or what to do?</td><td>An assessment answer and an intervention answer cannot be ranked without identifying the requested task.</td></tr>
+    <tr><th scope="row">2. Screen for an established emergency</th><td>Do the supplied cues already establish an immediate life threat?</td><td>Activate the applicable response and begin the indicated first action rather than collecting nonessential data.</td></tr>
+    <tr><th scope="row">3. Compare change and acuity</th><td>What is new, worsening, unexpected or different from baseline?</td><td>A meaningful acute change often raises priority, but “chronic” or “expected” never means automatically safe.</td></tr>
+    <tr><th scope="row">4. Compare time sensitivity</th><td>Which delay is most likely to cause serious harm?</td><td>Choose the option whose safe window is shortest, using the clinical context rather than a memorized hierarchy alone.</td></tr>
+    <tr><th scope="row">5. Choose and reassess</th><td>What action fits the evidence, and what response must be evaluated?</td><td>NCSBN's clinical-judgment model continues through taking action and evaluating outcomes.</td></tr>
+  </tbody>
 </table>
+</div>
+<p class="source-note"><b>Evidence for this sequence:</b> the <a href="#source-ncsbn-2026-rn-test-plan">2026 NCSBN RN Test Plan</a> and <a href="#source-ncsbn-next-generation-nclex">NCSBN Clinical Judgment Measurement Model</a>.</p>
 
-<h2>Findings that look urgent and are not</h2>
+<h2>ABCs are a screen, not a universal ranking law</h2>
+<p>Airway, breathing and circulation are useful categories for spotting immediate physiologic threats. They do not mean that every airway-related finding automatically outranks every circulation-related finding. The scenario may invoke a specific algorithm, simultaneous team actions or an already established intervention.</p>
+<p>Cardiac arrest is the clearest counterexample to a rigid “airway always first” rule. The 2025 AHA adult basic-life-support guideline addresses initial recognition of cardiac arrest, activation of emergency response, high-quality CPR and AED use as a resuscitation sequence. It also includes updated recommendations for respiratory arrest and foreign-body airway obstruction. When the scenario establishes one of these emergencies, follow the applicable current algorithm rather than forcing every action into a generic airway-first ranking.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-aha-2025-adult-basic-life-support">2025 AHA Adult Basic Life Support guideline</a>.</p>
+
+<h2>Maslow is a tie-breaker, not a clinical guideline</h2>
+<p>When urgency and safety are otherwise comparable, physiologic needs commonly take priority over psychosocial needs. But Maslow does not override an emergency algorithm, an immediate safety threat, a time-critical treatment or the facts in the stem. Use it only after higher-risk differences have been resolved.</p>
+
+<h2>Assessment first—unless the decision is already established</h2>
+<p>Assessment is appropriate when important information is missing, the finding is ambiguous, or a questionable result should be verified without delaying care. Action is appropriate when the stem already supplies enough evidence for the protocol-defined response. The useful distinction is not “assess or act” in the abstract; it is whether another assessment would change the immediate safe action.</p>
+<p>After acting, evaluation still matters. Reassess the relevant response, compare it with the expected outcome and escalate or revise the plan when the client does not improve.</p>
+
+<h2>How to compare clients without unsafe shortcuts</h2>
 <ul>
-  <li>Pain that is expected for the procedure and stage.</li>
-  <li>A low-grade temperature in the first 24 hours after surgery.</li>
-  <li>Serosanguineous drainage early in wound healing.</li>
-  <li>A chronic abnormal value that matches this client's known baseline.</li>
-  <li>Anxiety before a scheduled procedure with no physiological findings.</li>
+  <li><b>Do not discard “expected” findings automatically.</b> Severity, trend, associated cues and the recovery stage determine whether an expected symptom is tolerable or dangerous.</li>
+  <li><b>Use baseline as context, not permission to ignore change.</b> A chronic condition can destabilize, and a value near baseline can still be urgent when the overall presentation changes.</li>
+  <li><b>Distinguish actual cues from assumptions.</b> Rank what the stem states; do not invent stability, diagnoses or resources.</li>
+  <li><b>Compare the consequence of delay.</b> Ask what could become irreversible first and whether the nurse can safely begin that response now.</li>
 </ul>
 
-<h2>Practicing this properly</h2>
-<p>The common mistake is reading a prioritization rationale, agreeing with it, and moving on. Agreement is not the skill. Before revealing any answer, commit out loud to who you would see first <i>and</i> why the second-place option is second. If your reason for the runner-up is vague, that is the gap — not the one you got right.</p>
+<h2>Practice the comparison, not only the answer</h2>
+<p>Before revealing a rationale, state who or what comes first, identify the decisive cue, and explain why the runner-up can safely wait. Then name what new cue would reverse your ranking. This exposes whether you used the case facts or merely recognized a familiar mnemonic.</p>
 </div>
-<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>What order should I use for NCLEX prioritization questions?</h3><p>Airway, breathing and circulation first, then Maslow, then the nursing process, then acute over chronic and unstable over stable. ABC outranks everything else.</p><h3>Should assessment always be the first action?</h3><p>No. Assess first when you still need information. When the stem has already given you the critical finding, reassessing delays care and the exam treats it as the wrong choice.</p><h3>How do I decide which client to see first?</h3><p>Eliminate findings that are expected for each client's condition and stage, identify what is unexpected, then apply ABC to those. Between two abnormal findings, choose the one that could deteriorate fastest.</p></div>
+<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>Do ABCs always determine which NCLEX client comes first?</h3><p>No. ABCs help screen for immediate physiologic threats, but a specific emergency algorithm, established intervention, major safety threat or time-critical change can determine the sequence. Use the complete scenario.</p><h3>Should assessment always be the first nursing action?</h3><p>Assess when material information is missing or ambiguous. If the stem already establishes an emergency and the immediate response is defined, begin that response and evaluate the result rather than delaying for nonessential reassessment.</p><h3>Does an expected or chronic finding automatically have low priority?</h3><p>No. Expected and chronic describe context, not safety. Compare severity, trend, associated cues, baseline and the likely consequence of delay.</p><h3>Where does Maslow fit in NCLEX prioritization?</h3><p>Use it as a limited tie-breaker when urgency and safety are otherwise comparable. It does not override emergency protocols, immediate safety threats or time-critical care.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — NCLEX test plans</a></li></ul>
+  <ul><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> — National Council of State Boards of Nursing; evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> — National Council of State Boards of Nursing; evidence locator: NGN Project and Clinical Judgment Measurement Model sections; source updated <time datetime="2023-04-01">2023-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-aha-2025-adult-basic-life-support"><a href="https://pubmed.ncbi.nlm.nih.gov/41122888/" rel="external noopener">Part 7: Adult Basic Life Support — 2025 AHA Guidelines</a> — American Heart Association via PubMed; evidence locator: Abstract — recognition of cardiac arrest, emergency-response activation, CPR, AED use, respiratory arrest, and foreign-body airway obstruction; PMID 41122888; source updated <time datetime="2025-10-21">2025-10-21</time>; accessed <time datetime="2026-08-27">2026-08-27</time></li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN's adaptive practice interleaves prioritization across all eight categories, so you meet it in context.</p>
+  <p><b>Practice this for real.</b> PulseRN interleaves prioritization across all eight categories so you practice comparing urgency in context.</p>
   <p><a href="/">Start studying on PulseRN &rarr;</a></p>
 </div>
 
 <div class="card">
   <h2 style="margin-top:0">Keep reading</h2>
-  <ul class="rel"><li><a href="/learn/delegation-and-assignment/">Delegation and assignment rules</a></li><li><a href="/learn/therapeutic-communication/">Therapeutic communication: picking the right response</a></li><li><a href="/learn/dosage-calculation-formulas/">Dosage calculation: the formulas that cover it</a></li></ul>
+  <ul class="rel"><li><a href="/learn/delegation-and-assignment/">NCLEX delegation and assignment: a safe framework</a></li><li><a href="/learn/therapeutic-communication/">Therapeutic communication for NCLEX: choose in context</a></li><li><a href="/learn/dosage-calculation-formulas/">NCLEX dosage calculations: formulas and safety checks</a></li></ul>
 </div>
 </article>
 </main>

@@ -8,53 +8,57 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Bow-tie questions: how to answer them",
     h1: "Bow-tie questions on the NCLEX",
-    description: "What a bow-tie item is, why the middle box must be settled first, and the order of reasoning that keeps the wings from collapsing.",
+    description: "A source-bound guide to NCLEX bow-tie items: identify one potential condition, two actions, and two parameters while keeping all five selections consistent.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN includes bow-tie items across all eight client-need categories, with rationales for every wing.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide bow-tie-style practice with rationales; it does not reproduce the official NCLEX item bank or guarantee a result.",
     body: `
-<p>A bow-tie item is the format that most rewards structured thinking. It gives you one scenario and asks you to commit to a whole clinical decision at once: what is going on, what you will do about it, and what you will watch to know whether it worked.</p>
+<p>A bow-tie item presents client information and asks the candidate to select one potential condition, two actions to take and two parameters to monitor. The five selections should form one clinically consistent response to the evidence in the item.</p>
 
-<h2>The shape of it</h2>
-<p>Five boxes arranged as a bow-tie:</p>
-<ul>
-  <li><b>Centre</b> — the condition or problem the client is most likely experiencing.</li>
-  <li><b>Left wing (two boxes)</b> — the actions you would take.</li>
-  <li><b>Right wing (two boxes)</b> — the parameters you would monitor.</li>
-</ul>
-<p>You drag options from a word bank into each box. Everything is drawn from the same pool, which is why plausible-but-wrong options are always available.</p>
-
-<div class="key">
-<p><b>Settle the centre first, always.</b> Both wings depend on it. If you place actions before you have committed to the condition, you will pick things that are individually reasonable but do not belong to the same clinical picture — and a bow-tie scored as a whole gives you nothing for that.</p>
+<div class="key" role="note" aria-labelledby="bow-tie-boundary">
+<h2 id="bow-tie-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>Use the current NCLEX Candidate Tutorial and official sample pack for the exact interface. NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Do not assume a bow-tie is all-or-nothing, that every box earns an independent point, or that an incorrect center selection automatically erases every other selection.</p>
 </div>
 
-<h2>The order that works</h2>
-<ol>
-  <li><b>Read the scenario twice before touching anything.</b> The first read gives you the story; the second lets you spot the findings that discriminate between two candidate conditions.</li>
-  <li><b>Name the condition in your own words</b> before you look at the word bank. If you read the options first, they will anchor you.</li>
-  <li><b>Match your phrase to a centre option.</b> If nothing matches, your read is wrong — go back rather than forcing the closest word.</li>
-  <li><b>Ask what this condition demands right now.</b> Those are your actions. Prefer what addresses the cause or protects airway, breathing and circulation over what merely documents or reassesses.</li>
-  <li><b>Ask what would change first if the action worked</b> — or first if the client deteriorated. Those are your monitoring parameters.</li>
-</ol>
-
-<h2>Where candidates lose marks</h2>
+<h2>What each part asks</h2>
+<div class="table-wrap" role="region" aria-label="NCLEX bow-tie response components" tabindex="0">
 <table>
-  <tr><th>Trap</th><th>What it looks like</th></tr>
-  <tr><td>Right action, wrong condition</td><td>An intervention that is genuinely good nursing but belongs to a different problem than the one in the centre box.</td></tr>
-  <tr><td>Monitoring what will not change</td><td>Choosing a parameter that is real but too slow or too indirect to tell you whether this action worked.</td></tr>
-  <tr><td>Two versions of one action</td><td>Filling both left boxes with the same idea worded differently, leaving a genuinely required action unplaced.</td></tr>
-  <tr><td>Assessment when the client is unstable</td><td>Reassessing is safe on paper, but when the scenario has already given you the finding, the exam wants the action it demands.</td></tr>
+  <caption>The five selections in a bow-tie response</caption>
+  <thead><tr><th scope="col">Component</th><th scope="col">Selections</th><th scope="col">Reasoning task</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Potential condition</th><td>One</td><td>Identify the condition most consistent with the relevant client information.</td></tr>
+    <tr><th scope="row">Actions</th><td>Two</td><td>Select actions appropriate to that condition and the circumstances given.</td></tr>
+    <tr><th scope="row">Parameters</th><td>Two</td><td>Select findings that appropriately monitor the client in relation to the condition and actions.</td></tr>
+  </tbody>
 </table>
+</div>
+<p class="source-note"><b>Evidence for the format:</b> NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. Scoring boundaries come from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
-<h2>A worked pattern</h2>
-<p>A post-operative client is restless, with rising respiratory rate, falling oxygen saturation and diminished breath sounds at one base. The temptation is to reach for options about oxygen and vital signs immediately.</p>
-<p>Instead: name it first. Restlessness plus hypoxaemia plus unilateral diminished sounds points to a respiratory problem in that lung, not to pain or anxiety. With the centre settled, the left wing wants what addresses oxygenation and lung expansion, and the right wing wants the parameters that move earliest — oxygen saturation, respiratory rate and work of breathing — rather than something that would take hours to shift.</p>
-<p>Notice that restlessness is doing real work here. Early hypoxaemia often presents as agitation before anything more dramatic, and exam scenarios use it deliberately as the cue you are supposed to catch.</p>
+<h2>A consistency-first method</h2>
+<p>The NCLEX does not require candidates to fill the targets in a particular reasoning order. One useful study method is:</p>
+<ol>
+  <li><b>Read the complete client information and prompt.</b> Identify time course, trends, risks and the question's exact wording.</li>
+  <li><b>Separate relevant cues from distractors.</b> Use the supplied evidence rather than one isolated familiar finding.</li>
+  <li><b>Compare the potential conditions.</b> Select the option best supported by the combined cues.</li>
+  <li><b>Evaluate each action against that condition.</b> Confirm that both actions fit the client and do not merely sound generally helpful.</li>
+  <li><b>Evaluate each monitoring parameter.</b> Confirm that both parameters are relevant to the selected condition and actions.</li>
+  <li><b>Recheck all five selections together.</b> Change any selection that conflicts with the rest of the response or the scenario.</li>
+</ol>
+<p>This is study guidance, not an NCSBN scoring rule. A candidate may reason in another order and should follow the interface instructions shown on the examination.</p>
+
+<h2>Common reasoning errors</h2>
+<ul>
+  <li>Selecting an action that may be appropriate generally but does not fit the chosen condition.</li>
+  <li>Using one cue in isolation while ignoring contradictory or more urgent information.</li>
+  <li>Choosing two actions or parameters that duplicate one another without covering what the item asks.</li>
+  <li>Inventing facts not provided in the client information.</li>
+  <li>Trying to calculate an unofficial score instead of completing the response requested.</li>
+</ul>
 `,
     faq: [
-      { q: "What is a bow-tie question on the NCLEX?", a: "A Next Generation item type with five boxes: the client's most likely condition in the centre, two actions on the left, and two parameters to monitor on the right. Options are dragged from a shared word bank." },
-      { q: "How is a bow-tie question scored?", a: "As a single item that can carry partial credit, depending on the scoring rule applied. Because the wings depend on the centre being right, an incorrect condition usually costs you the whole item rather than one box." },
-      { q: "What should I fill in first on a bow-tie?", a: "The centre. Both wings are only correct in relation to the condition, so committing to actions before you have identified the problem leads to answers that are individually plausible but clinically inconsistent." },
+      { q: "What is a bow-tie question on the NCLEX?", a: "A clinical-judgment item that asks for one potential condition, two actions to take and two parameters to monitor based on the supplied client information." },
+      { q: "How is a bow-tie question scored?", a: "NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Follow the item directions and do not assume an unofficial per-box or all-or-nothing rule." },
+      { q: "Must I fill in the condition first?", a: "No official rule requires a particular completion order. Identifying the best-supported condition first can be a useful consistency check because the actions and monitoring parameters should fit it, but review all five selections together before advancing." },
     ],
   },
 
@@ -63,23 +67,19 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Matrix and grid questions: how to answer them",
     h1: "Matrix and grid questions on the NCLEX",
-    description: "How matrix items are scored row by row, why they punish pattern-guessing, and the one-finding-at-a-time habit that keeps you accurate.",
+    description: "How to interpret NCLEX matrix/grid rows and columns, keep classifications tied to the client context, and avoid unofficial scoring rules.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN drills matrix items with per-row rationales so you can see exactly which finding you misclassified.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide matrix/grid-style practice and rationales; it does not reproduce the official item bank or predict an NCLEX result.",
     body: `
 <p>A matrix item gives you a table. Findings run down the side, categories run across the top, and you classify every row. Typical category sets are <i>expected / unexpected</i>, <i>effective / ineffective</i>, or <i>indicated / contraindicated / non-essential</i>.</p>
 
-<h2>Why this format is unforgiving</h2>
-<p>Matrix items are usually scored <b>row by row</b>. That has two consequences students underestimate:</p>
-<ul>
-  <li>Getting most rows right can still earn partial credit — the item is not all-or-nothing under +/- style scoring, so a careful row is worth placing carefully.</li>
-  <li>There is nowhere to hide. On a multiple-choice item you can eliminate your way to an answer. Here, every single finding demands an independent judgement.</li>
-</ul>
-
-<div class="key">
-<p><b>Treat each row as its own question.</b> The single most common error is drifting — classifying a row based on the overall vibe of the scenario rather than on that specific finding. If the client is clearly deteriorating, it feels wrong to mark a normal finding as expected. Mark it anyway. The exam is testing whether you can tell them apart.</p>
+<div class="key" role="note" aria-labelledby="matrix-boundary">
+<h2 id="matrix-boundary" style="margin-top:0">Scoring boundary</h2>
+<p>NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every matrix is scored row by row, that every correct row earns an independent point, or that one method applies to every matrix item. Follow the displayed directions.</p>
 </div>
+
+<p><b>Study method:</b> treat each row as its own reasoning task, then review the complete grid. This is study guidance, not an official claim about how points are assigned.</p>
 
 <h2>The method</h2>
 <ol>
@@ -103,7 +103,7 @@ export const TYPE_ARTICLES = [
 <p>Skim every row before classifying any. Matrix items are often built around two or three findings that carry the clinical story, with the rest as filler that is genuinely unremarkable. Spotting the important ones early stops you from reading significance into rows that have none.</p>
 `,
     faq: [
-      { q: "How are matrix questions scored on the NCLEX?", a: "Usually row by row, so partial credit is possible. Each finding you classify correctly can earn credit independently, which is why working carefully through every row is worthwhile even when you are unsure of some." },
+      { q: "How are matrix questions scored on the NCLEX?", a: "NCSBN states that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. Do not assume every matrix uses a specific row-level or all-or-nothing rule; follow the item directions." },
       { q: "What categories do matrix questions use?", a: "Commonly expected versus unexpected, effective versus ineffective, or indicated versus contraindicated versus non-essential. Read the column headings first — they change what question you are actually answering." },
       { q: "Do matrix questions have an even number of answers per column?", a: "No. There is no requirement that categories be evenly used. If every finding in a scenario is unexpected, every row is marked unexpected." },
     ],
@@ -114,46 +114,42 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Cloze (drop-down) questions: how to answer them",
     h1: "Cloze and drop-down questions on the NCLEX",
-    description: "How cloze items chain clinical reasoning across linked blanks, and why you should answer the blank you are surest about first.",
+    description: "A source-bound guide to NCLEX cloze and drop-down items, with a consistency-checking study method and clear scoring limits.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN includes cloze items with linked reasoning, so you practise the chain rather than isolated facts.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide cloze-style practice with rationales; it does not reproduce the official NCLEX item bank or predict an exam result.",
     body: `
-<p>A cloze item is a sentence — or a short paragraph — with blanks, each offering a drop-down menu. You are completing a clinical statement so that it reads as something a competent nurse would actually say.</p>
+<p>A cloze item asks you to complete one or more blanks in a sentence, short paragraph or table by choosing from drop-down options. Use the current NCLEX Candidate Tutorial and official sample materials for the exact interface and directions.</p>
 
-<h2>Why these are harder than they look</h2>
-<p>The blanks are frequently <b>linked</b>. A typical construction reads: <i>The client is most likely experiencing [blank 1] as evidenced by [blank 2], and the nurse should first [blank 3].</i></p>
-<p>Choose wrongly in blank 1 and blanks 2 and 3 are almost certainly wrong too, because they must be consistent with it. Some cloze items are scored so that linked selections must agree with one another to earn credit.</p>
-
-<div class="key">
-<p><b>Answer out of order.</b> Start with whichever blank you are most confident about, even if it is the last one. A firm anchor anywhere in the sentence constrains the others. Working strictly left-to-right means your least certain guess sets the direction for everything after it.</p>
+<div class="key" role="note" aria-labelledby="cloze-boundary">
+<h2 id="cloze-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every blank is scored independently, that choices must be linked to earn credit, or that one incorrect selection automatically makes the remaining selections wrong. Follow the directions displayed for the item rather than applying an unofficial blank-level scoring rule.</p>
 </div>
 
-<h2>The method</h2>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+
+<h2>A consistency-checking study method</h2>
 <ol>
-  <li><b>Read the complete sentence with every blank empty</b> to see what claim is being built.</li>
-  <li><b>Open each menu and read all the options</b> before choosing anything. The distractors tell you what distinction is being tested.</li>
-  <li><b>Anchor on your strongest blank.</b></li>
-  <li><b>Work outward,</b> keeping every choice consistent with the anchor.</li>
-  <li><b>Read the finished sentence back.</b> This last step catches more errors than any other — a wrong combination usually sounds wrong when you read it whole.</li>
+  <li><b>Read the complete prompt and client information.</b> Identify what the item is asking before opening a menu.</li>
+  <li><b>Review every option for each blank.</b> Compare each choice with the information supplied rather than relying on familiarity alone.</li>
+  <li><b>Make the best-supported selection for each blank.</b> The examination does not require candidates to complete the blanks in a particular reasoning order.</li>
+  <li><b>Read the completed statement or table.</b> Check whether every selection fits the prompt, the client information and the other selections.</li>
+  <li><b>Recheck the displayed directions.</b> Confirm that every required blank has a response before advancing.</li>
 </ol>
+<p>Reading the completed response for consistency is study guidance, not a claim that NCSBN scores the blanks as a linked chain.</p>
 
-<h2>What the distractors are doing</h2>
-<table>
-  <tr><th>Distractor style</th><th>How to beat it</th></tr>
-  <tr><td>Right concept, wrong severity</td><td>Match the urgency in the scenario, not just the topic.</td></tr>
-  <tr><td>True but irrelevant</td><td>A factually correct statement that does not follow from this client's findings.</td></tr>
-  <tr><td>Right action, wrong timing</td><td>Something you would genuinely do, but not first.</td></tr>
-  <tr><td>Plausible-sounding jargon</td><td>Terminology that sounds clinical but does not describe what is happening here.</td></tr>
-</table>
-
-<h2>Reading the sentence back</h2>
-<p>Cloze items are built as complete clinical statements, and an inconsistent set of choices produces a sentence that a nurse would not say. If your completed sentence claims a client is experiencing one problem, evidenced by a finding that belongs to another, and treated with an intervention for a third, you have found your own error before the exam scored it.</p>
+<h2>Consistency questions to ask</h2>
+<ul>
+  <li>Does each selection answer the wording of its blank?</li>
+  <li>Does each selection fit the client's age, condition, time course and current findings?</li>
+  <li>If the response identifies a condition, do the selected evidence and action fit that condition?</li>
+  <li>Have you avoided adding facts that the item did not provide?</li>
+</ul>
 `,
     faq: [
-      { q: "What is a cloze question on the NCLEX?", a: "An item where you complete a clinical sentence or short paragraph by choosing from drop-down menus at each blank. Also called drop-down items." },
-      { q: "Are cloze question blanks scored separately?", a: "It depends on the item. Some blanks are scored independently; others are linked so that selections must be clinically consistent with one another to earn credit." },
-      { q: "Should I answer cloze blanks in order?", a: "No. Start with the blank you are most confident about. A firm anchor constrains the remaining choices, whereas guessing at the first blank sends the rest of the sentence in the wrong direction." },
+      { q: "What is a cloze question on the NCLEX?", a: "A drop-down item in which the candidate selects options to complete one or more blanks in a sentence, short paragraph or table. Consult the current Candidate Tutorial and official samples for the exact interface." },
+      { q: "Are cloze-question blanks scored separately?", a: "NCSBN describes partial-credit methods for items with more than one key, but that general guidance does not prove an independent point value or linked-dependency rule for every cloze blank. Follow the item's directions." },
+      { q: "Should I answer cloze blanks in order?", a: "NCSBN does not require a particular reasoning order. Choose the response best supported by the client information for each blank, then review the completed response for consistency." },
     ],
   },
 
@@ -162,108 +158,96 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Highlight questions: how to answer them",
     h1: "Highlight questions on the NCLEX",
-    description: "How highlight items test cue recognition, why over-selecting costs you, and how to read a nurse's note for what actually matters.",
+    description: "A source-bound guide to NCLEX highlight items: follow the stem, select only supported text, and avoid invented scoring or answer-count rules.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN's highlight items use realistic chart excerpts and nurse's notes, not simplified fragments.",
+    updated: "2026-08-28",
+    cta: "PulseRN can provide highlight-style practice with rationales; it does not reproduce the official NCLEX item bank or predict an exam result.",
     body: `
-<p>A highlight item gives you a piece of a chart — a nurse's note, a history, a set of results — and asks you to click the findings that are significant. It is the purest test of the first step of clinical judgment: <b>recognising cues</b>.</p>
+<p>A highlight item presents text from client information and asks the candidate to select the words or phrases that answer the prompt. Highlight items can support clinical-judgment tasks such as recognizing relevant cues, but the exact task is set by the stem. Use the current NCLEX Candidate Tutorial and official samples for the exact interface.</p>
 
-<h2>The core skill</h2>
-<p>Real charting contains a great deal of information that is true, documented, and completely unremarkable. The competent nurse reads past it to the two or three things that change what happens next. That filtering is exactly what is being scored.</p>
-
-<div class="key">
-<p><b>Do not highlight everything.</b> These items commonly use +/- scoring, where an incorrect selection cancels out a correct one. Highlighting generously to make sure you caught the right ones can reduce your score to zero on an item where you actually knew the answer.</p>
+<div class="key" role="note" aria-labelledby="highlight-boundary">
+<h2 id="highlight-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every highlight item uses plus/minus scoring, that each highlighted phrase has an independent point value, or that a particular number of phrases is correct. Follow the item directions and do not infer a scoring formula from the interface.</p>
 </div>
 
-<h2>The method</h2>
+<p class="source-note"><b>Evidence:</b> The format and clinical-judgment context come from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+
+<h2>A stem-first study method</h2>
 <ol>
-  <li><b>Read the question stem first.</b> Findings requiring immediate follow-up is a narrower ask than findings that are abnormal, which is narrower again than findings relevant to the diagnosis. The stem sets the bar.</li>
-  <li><b>Read the whole passage once without clicking.</b></li>
-  <li><b>For each candidate finding, ask a single question:</b> does this change what I do next? If not, leave it.</li>
-  <li><b>Check what is missing.</b> A note that records no urine output since a time hours ago is a significant finding stated as an absence.</li>
+  <li><b>Read the stem before selecting text.</b> Identify the precise task—for example, cues that require follow-up may not be the same as every value outside a reference interval.</li>
+  <li><b>Read all supplied client information.</b> Establish the client's context, time course and comparison point.</li>
+  <li><b>Evaluate each selectable phrase against the stem.</b> Select text because it directly supports the requested judgment, not merely because it looks familiar or noteworthy.</li>
+  <li><b>Use only the documented information.</b> Do not add an unstated symptom, diagnosis, trend or assumption.</li>
+  <li><b>Review the complete response.</b> Confirm that every selection answers the same prompt and that no required response was missed.</li>
 </ol>
+<p>This method is study guidance, not an NCSBN scoring rule or a promise about how many selections an item contains.</p>
 
-<h2>What tends to be significant</h2>
+<h2>Questions for evaluating a phrase</h2>
 <ul>
-  <li>Values outside the expected range <i>for this client</i>, given age, condition and stage of recovery.</li>
-  <li>Trends — a value that has moved, even while still technically within range.</li>
-  <li>Findings that contradict the expected trajectory, such as pain increasing when it should be settling.</li>
-  <li>New neurological or mental status changes, which are cues far more often than they are noise.</li>
-  <li>Anything touching airway, breathing or circulation.</li>
-  <li>Absences: no output, no bowel sounds, no response.</li>
+  <li>Does the phrase answer the wording of the stem?</li>
+  <li>Is it relevant in this client's age, condition and time course?</li>
+  <li>Does the prompt ask for a current finding, a change, a risk, an intervention or a response to care?</li>
+  <li>Is the relationship supported by the supplied record rather than an assumption?</li>
 </ul>
 
-<h2>What tends not to be</h2>
+<h2>Common reasoning errors</h2>
 <ul>
-  <li>Values inside the expected range for that client.</li>
-  <li>Findings consistent with the known diagnosis and already being managed.</li>
-  <li>Social and historical detail with no bearing on the current problem.</li>
-  <li>Routine care that has been carried out as ordered.</li>
+  <li>Selecting every abnormal-looking phrase without applying the stem.</li>
+  <li>Using one value in isolation while ignoring its unit, trend or client context.</li>
+  <li>Choosing text that is clinically interesting but does not answer the question.</li>
+  <li>Assuming an unofficial target number of selections.</li>
+  <li>Trying to calculate an unofficial partial-credit strategy instead of completing the requested response.</li>
 </ul>
-
-<h2>When you are unsure</h2>
-<p>Under +/- scoring the arithmetic is simple. A finding you are confident about is worth selecting. A finding you are truly 50/50 on has an expected value near zero and can cost you a mark you had already earned. Select what you can defend and leave the rest.</p>
 `,
     faq: [
-      { q: "What is a highlight question on the NCLEX?", a: "An item that presents chart material — a nurse's note, history or results — and asks you to click the findings that are significant. It tests cue recognition, the first step of the clinical judgment model." },
-      { q: "Should I highlight every abnormal finding?", a: "Only those that meet the bar set by the stem. Highlight items often use +/- scoring, where an incorrect selection cancels a correct one, so over-selecting actively reduces your score." },
-      { q: "What counts as a significant finding?", a: "Anything that changes what you would do next: values outside the expected range for that client, meaningful trends, new neurological changes, anything affecting airway, breathing or circulation, and significant absences such as no urine output." },
+      { q: "What is a highlight question on the NCLEX?", a: "An item that presents text from client information and asks the candidate to select the words or phrases that answer the prompt. Consult the current Candidate Tutorial and official samples for the exact interface." },
+      { q: "Should I highlight every abnormal finding?", a: "No fixed rule says to select every abnormal-looking phrase. Apply the wording of the stem and select only text that directly supports the requested judgment in the supplied client context." },
+      { q: "How are highlight questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key, but that general guidance does not prove one method or an independent point value for every highlight selection. Follow the displayed directions." },
     ],
   },
 
   {
     slug: "select-all-that-apply-strategy",
     topic: "Question types",
-    title: "Select all that apply: a strategy that works",
+    title: "Select all that apply: a source-bound strategy",
     h1: "Select all that apply (SATA) questions",
-    description: "Why treating each option as a true/false question beats hunting for a pattern, and how partial credit changes when to guess.",
+    description: "A source-bound guide to NCLEX multiple-response items: evaluate every option against the stem without inventing answer-count or scoring rules.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN's multiple-response items rationalise every option, so you learn why the ones you left out were wrong.",
+    updated: "2026-08-29",
+    cta: "PulseRN can provide multiple-response practice with rationales; it does not reproduce the official NCLEX item bank or predict an exam result.",
     body: `
-<p>Select all that apply — extended multiple response — is the item type candidates dread most. The dread is mostly misplaced. SATA is not harder knowledge; it is the same knowledge with nowhere to hide.</p>
+<p>Select-all-that-apply (SATA), also described as multiple response, asks the candidate to select every option that correctly answers the stem. Use the current NCLEX Candidate Tutorial and official samples for the exact interface and directions.</p>
 
-<h2>The one habit that fixes most SATA problems</h2>
-<div class="key">
-<p><b>Treat each option as a separate true/false question about the client in the stem.</b> Cover the other options, read one, and decide: is this true, for this client, right now? Then move to the next. Do not compare options with each other. There is no best answer to find — each one stands or falls alone.</p>
+<div class="key" role="note" aria-labelledby="sata-boundary">
+<h2 id="sata-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every multiple-response item uses plus/minus scoring, that every option has an independent point value, or that a coin-flip strategy has a predictable benefit. Follow the displayed directions rather than applying an unofficial scoring formula.</p>
 </div>
-<p>Comparing options is a habit built by years of single-answer multiple choice, and it is exactly wrong here. It produces the classic SATA failure: rejecting a correct option because another option seemed more correct.</p>
 
-<h2>How many are right?</h2>
-<p>There is no fixed number, no rule that it is usually three, and no guarantee that at least one is wrong. Any number of the options may be correct. Going in expecting three and stopping when you have found three is a way to miss a fourth.</p>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
 
-<h2>Partial credit changes the maths</h2>
-<p>Many extended multiple response items use <b>+/- scoring</b>: each correct selection earns credit, each incorrect selection removes some, and the item cannot go below zero.</p>
-<table>
-  <tr><th>Situation</th><th>What to do</th></tr>
-  <tr><td>Confident it is true</td><td>Select it.</td></tr>
-  <tr><td>Confident it is false</td><td>Leave it.</td></tr>
-  <tr><td>Genuinely 50/50</td><td>Leave it. Its expected value is roughly zero and it can cancel a mark you earned.</td></tr>
-  <tr><td>Leaning true, can state why</td><td>Select it. Being able to articulate the reason is usually the difference between knowledge and hope.</td></tr>
-</table>
-<p>Under older all-or-nothing scoring the calculation was different — you needed the exact set. Under +/- scoring, restraint is rewarded.</p>
-
-<h2>Recurring traps</h2>
-<ul>
-  <li><b>Absolutes.</b> Options containing always, never, all or none are more often false, because clinical practice rarely tolerates them.</li>
-  <li><b>True but not for this client.</b> A statement that is sound general nursing yet contraindicated by this client's condition, age or stage.</li>
-  <li><b>Right intervention, wrong phase.</b> Something appropriate later in care but not at the point the stem describes.</li>
-  <li><b>Two options saying nearly the same thing.</b> Usually both true or both false — resist assuming exactly one must be right.</li>
-</ul>
-
-<h2>Working through it</h2>
+<h2>An option-by-option study method</h2>
 <ol>
-  <li>Identify the client, the condition, and the moment in their care.</li>
-  <li>Note what the stem is asking for — teaching, actions, expected findings, contraindications.</li>
-  <li>Go down the options one at a time, deciding each in isolation.</li>
-  <li>Do not revisit to make the total feel right. Your per-option reasoning was better than your instinct about the count.</li>
+  <li><b>Read the complete stem and client information.</b> Identify whether the prompt asks for findings, actions, teaching, risks or another category.</li>
+  <li><b>Evaluate each option against the same stem.</b> Ask whether that option is supported for this client and this point in care.</li>
+  <li><b>Use the supplied context.</b> Consider qualifiers such as age, timing, condition and response to care; do not add facts that are not in the item.</li>
+  <li><b>Do not aim for a familiar total.</b> Select options because they answer the stem, not because the count looks typical.</li>
+  <li><b>Review every option before advancing.</b> Confirm that each selected response is supported and each unselected response does not meet the stem.</li>
 </ol>
+<p>Treating each option as a separate check is study guidance, not an assertion that NCSBN awards an independent point to every option.</p>
+
+<h2>Common reasoning errors</h2>
+<ul>
+  <li>Stopping after a guessed target number of selections.</li>
+  <li>Rejecting a supported option merely because another option also looks correct.</li>
+  <li>Selecting a generally true statement that does not answer this stem for this client.</li>
+  <li>Ignoring timing or another qualifier in the prompt.</li>
+  <li>Trying to reverse-engineer an unofficial partial-credit formula.</li>
+</ul>
 `,
     faq: [
-      { q: "How many answers are correct in a select all that apply question?", a: "There is no fixed number. Any number of the options may be correct, and there is no rule that a particular count is typical. Judge each option independently rather than aiming for a total." },
-      { q: "Should I guess on select all that apply questions?", a: "Not on options you are genuinely unsure about. Many extended multiple response items use +/- scoring, where an incorrect selection cancels a correct one, so a coin-flip selection has an expected value near zero." },
-      { q: "Why do I keep getting SATA questions wrong?", a: "Most often because of comparing options against each other instead of judging each one on its own. SATA has no best answer — each option is a separate true/false claim about the client in the stem." },
+      { q: "How many answers are correct in a select-all-that-apply question?", a: "Do not assume a target count. Select every option that answers the stem based on the supplied client information, and consult the current Candidate Tutorial for the exact directions." },
+      { q: "How are select-all-that-apply questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key. That general guidance does not establish one scoring method or an independent point value for every SATA option." },
+      { q: "Should I judge SATA options separately?", a: "Evaluating each option against the same stem is a useful study method. It helps prevent answer-count guessing, but it is not a claim about how NCSBN awards points." },
     ],
   },
 
@@ -272,48 +256,43 @@ export const TYPE_ARTICLES = [
     topic: "Question types",
     title: "Drag-and-drop and ordering questions",
     h1: "Drag-and-drop and ordering questions on the NCLEX",
-    description: "How sequencing items are scored, the frameworks that decide order, and why you should build the sequence from both ends.",
+    description: "A source-bound guide to NCLEX ordering items: identify the requested sequence, use the supplied context, and avoid unofficial scoring or universal-priority rules.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN includes ordering items across procedures, emergencies and the nursing process.",
+    updated: "2026-08-29",
+    cta: "PulseRN can provide ordering-style practice with rationales; it does not reproduce the official NCLEX item bank, replace clinical protocols, or predict an exam result.",
     body: `
-<p>Drag-and-drop items ask you to place options into an order or a set of categories. The most demanding version is sequencing: put these actions in the order the nurse should perform them.</p>
+<p>An ordering item asks the candidate to arrange supplied options in the sequence requested by the prompt. A drag-and-drop interface may also be used for other response tasks, so read the displayed directions rather than assuming that every draggable response is a sequence. Use the current NCLEX Candidate Tutorial and official samples for the exact interface.</p>
 
-<h2>What is being tested</h2>
-<p>Not whether you know the actions — the word bank has already told you them. What is being tested is <b>priority</b>: which comes first when several reasonable things all need doing.</p>
-
-<h2>The frameworks that decide order</h2>
-<table>
-  <tr><th>Framework</th><th>Use it when</th></tr>
-  <tr><td>ABC — airway, breathing, circulation</td><td>Any scenario with a physiological threat. It outranks everything else.</td></tr>
-  <tr><td>Nursing process</td><td>Assess before you intervene, unless the stem has already given you the assessment finding.</td></tr>
-  <tr><td>Maslow</td><td>Physiological needs before safety, safety before psychosocial.</td></tr>
-  <tr><td>Safety first</td><td>Procedures — hand hygiene, identification, and verification usually precede the technical steps.</td></tr>
-  <tr><td>Least invasive first</td><td>Where several interventions would work and the client is stable.</td></tr>
-</table>
-
-<div class="key">
-<p><b>Build from both ends.</b> The first and last steps are usually the most obvious — hand hygiene near the start, evaluation or documentation near the end. Place those, then fill the middle, where the real discrimination lives. Working strictly top to bottom means spending your effort on the ambiguous middle while your certain anchors sit unplaced.</p>
+<div class="key" role="note" aria-labelledby="ordering-boundary">
+<h2 id="ordering-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every ordering item is all-or-nothing, that every correctly placed position earns an independent point, or that an early error automatically invalidates every later position. Follow the displayed directions and do not apply an unofficial scoring formula.</p>
 </div>
 
-<h2>Sequencing patterns worth knowing</h2>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+
+<h2>A constraint-first study method</h2>
+<ol>
+  <li><b>Read the requested task and all client information.</b> Determine whether the prompt asks for chronological order, priority, procedure steps or another relationship.</li>
+  <li><b>Identify explicit constraints.</b> Note information in the stem that makes one option precede or follow another.</li>
+  <li><b>Compare options in pairs.</b> Ask whether one must happen before another based on the supplied scenario and the applicable current standard.</li>
+  <li><b>Build the complete sequence.</b> Place the best-supported relationships first, then resolve remaining positions without inventing facts.</li>
+  <li><b>Read the sequence from start to finish.</b> Check that each transition fits the prompt and that every required option is placed.</li>
+</ol>
+<p>This is study guidance, not a clinical protocol or an NCSBN scoring rule. Real care follows current orders, facility policy, validated algorithms, scope of practice and the client's condition; a single mnemonic does not determine every sequence.</p>
+
+<h2>Common reasoning errors</h2>
 <ul>
-  <li><b>Sterile procedures</b> — gather and check equipment, hand hygiene, position the client, establish the sterile field, perform, secure, document.</li>
-  <li><b>Personal protective equipment</b> — the order of donning is not the reverse of doffing, and both are commonly tested.</li>
-  <li><b>Deteriorating client</b> — assess and protect airway and breathing, then circulation, then escalate, then document. Documentation is almost never first.</li>
-  <li><b>Admission and handover</b> — verify identity before anything is done to the client.</li>
+  <li>Applying one memorized framework without checking the stem's exact task and context.</li>
+  <li>Assuming the first or last option must be obvious.</li>
+  <li>Treating a generally useful action as correctly timed without checking prerequisites.</li>
+  <li>Adding a step or clinical fact that the item did not provide.</li>
+  <li>Trying to optimize an unofficial scoring formula instead of arranging the requested response.</li>
 </ul>
-
-<h2>Scoring and the practical consequence</h2>
-<p>Ordering items may be scored all-or-nothing or with credit for correctly placed positions, depending on the item. Either way, one misplacement early in a sequence displaces everything after it, so the opening steps deserve the most care.</p>
-
-<h2>Assessment first, except when it is not</h2>
-<p>Assess before intervening is a sound default, and it is also the most over-applied rule in NCLEX preparation. If the stem has already handed you the assessment finding — the client is not breathing, the saturation is 82%, the tracing shows a lethal rhythm — then reassessing is a delay, and the exam scores it as one. Assessment comes first when you still need information. When the information is already in front of you, act.</p>
 `,
     faq: [
-      { q: "How are NCLEX ordering questions scored?", a: "Depending on the item, either all-or-nothing or with credit for positions placed correctly. Because a single early misplacement shifts everything after it, the opening steps carry the most weight." },
-      { q: "What order should I put nursing actions in?", a: "Use ABC first for any physiological threat, then the nursing process, then Maslow. For procedures, safety steps such as hand hygiene and client identification usually precede the technical steps." },
-      { q: "Should assessment always come first?", a: "No. Assess first when you still need information. If the stem has already given you the critical finding, reassessing is a delay and the exam treats it as one." },
+      { q: "How are NCLEX ordering questions scored?", a: "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key. That general guidance does not establish one method or a per-position value for every ordering item." },
+      { q: "What order should I use for nursing actions?", a: "Use the task, client information and applicable current standard to determine the relationships among the supplied options. No single mnemonic determines every clinical or procedural sequence." },
+      { q: "Should assessment always come first?", a: "Do not use an absolute rule. The correct sequence depends on the prompt, information already supplied, the client's condition and the applicable current standard; in real care, follow current protocols, orders and scope of practice." },
     ],
   },
 ];

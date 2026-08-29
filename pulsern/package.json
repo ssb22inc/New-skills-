@@ -10,7 +10,13 @@
     "test": "vitest run",
     "build:learn": "node ops/build-learn.mjs",
     "seo:audit": "node ops/seo-guardian.mjs dist reports/seo",
-    "seo:adversary": "node ops/seo-adversary-ai.mjs"
+    "seo:accessibility": "node ops/seo-accessibility.mjs",
+    "seo:crawl": "node ops/seo-crawl.mjs --directory dist --output reports/seo/crawl.json",
+    "seo:crawl:live": "node ops/seo-crawl.mjs --base https://www.pulsern.app --output reports/seo/crawl-live.json",
+    "seo:sources": "node ops/seo-source-check.mjs",
+    "seo:adversary": "node ops/seo-adversary-ai.mjs",
+    "seo:enforce": "node ops/seo-enforce-adversary.mjs",
+    "seo:evidence": "node ops/seo-evidence-manifest.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -18,7 +24,9 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@vitejs/plugin-react": "^4.3.1",
+    "playwright": "^1.62.1",
     "vite": "^5.4.0",
     "vitest": "^2.0.0"
   }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Highlight questions: how to answer them | PulseRN</title>
-<meta name="description" content="How highlight items test cue recognition, why over-selecting costs you, and how to read a nurse's note for what actually matters.">
+<meta name="description" content="A source-bound guide to NCLEX highlight items: follow the stem, select only supported text, and avoid invented scoring or answer-count rules.">
 <link rel="canonical" href="https://www.pulsern.app/learn/highlight-questions/">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <meta name="theme-color" content="#0E7C6B">
@@ -12,7 +12,7 @@
 <meta property="og:site_name" content="PulseRN">
 <meta property="og:url" content="https://www.pulsern.app/learn/highlight-questions/">
 <meta property="og:title" content="Highlight questions: how to answer them | PulseRN">
-<meta property="og:description" content="How highlight items test cue recognition, why over-selecting costs you, and how to read a nurse's note for what actually matters.">
+<meta property="og:description" content="A source-bound guide to NCLEX highlight items: follow the stem, select only supported text, and avoid invented scoring or answer-count rules.">
 <meta property="og:image" content="https://www.pulsern.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://www.pulsern.app/og.png">
@@ -24,13 +24,13 @@
       "@type": "Article",
       "@id": "https://www.pulsern.app/learn/highlight-questions/#article",
       "headline": "Highlight questions: how to answer them",
-      "description": "How highlight items test cue recognition, why over-selecting costs you, and how to read a nurse's note for what actually matters.",
+      "description": "A source-bound guide to NCLEX highlight items: follow the stem, select only supported text, and avoid invented scoring or answer-count rules.",
       "url": "https://www.pulsern.app/learn/highlight-questions/",
       "inLanguage": "en-US",
       "datePublished": "2026-08-03",
-      "dateModified": "2026-08-03",
+      "dateModified": "2026-08-28",
       "author": {
-        "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
+        "@id": "https://www.pulsern.app/#org"
       },
       "reviewedBy": {
         "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
@@ -53,17 +53,37 @@
       },
       "citation": [
         "https://www.nclex.com/test-plans.page",
-        "https://www.nclex.com/next-generation-nclex.page"
-      ]
+        "https://www.nclex.com/next-generation-nclex.page",
+        "https://www.nclex.com/faqs.page"
+      ],
+      "identifier": "sha256:cae7a731e21f0d67385dc9307a86c27622506b5ffeabe2d940dca3a7396f4a90",
+      "sdPublisher": {
+        "@id": "https://www.pulsern.app/#org"
+      }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://www.pulsern.app/#org",
+      "name": "PulseRN",
+      "url": "https://www.pulsern.app",
+      "logo": "https://www.pulsern.app/icon-512.png"
     },
     {
       "@type": "Person",
       "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn",
       "name": "Sheldon Bennett, RN",
-      "jobTitle": "Registered Nurse",
       "url": "https://www.pulsern.app/about/#sheldon-bennett-rn",
       "worksFor": {
         "@id": "https://www.pulsern.app/#org"
+      },
+      "jobTitle": "Registered Nurse",
+      "sameAs": [
+        "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+      ],
+      "hasCredential": {
+        "@type": "EducationalOccupationalCredential",
+        "credentialCategory": "Registered Nurse",
+        "recognizedBy": "Florida Board of Nursing"
       }
     },
     {
@@ -99,7 +119,7 @@
           "name": "What is a highlight question on the NCLEX?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "An item that presents chart material — a nurse's note, history or results — and asks you to click the findings that are significant. It tests cue recognition, the first step of the clinical judgment model."
+            "text": "An item that presents text from client information and asks the candidate to select the words or phrases that answer the prompt. Consult the current Candidate Tutorial and official samples for the exact interface."
           }
         },
         {
@@ -107,15 +127,15 @@
           "name": "Should I highlight every abnormal finding?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Only those that meet the bar set by the stem. Highlight items often use +/- scoring, where an incorrect selection cancels a correct one, so over-selecting actively reduces your score."
+            "text": "No fixed rule says to select every abnormal-looking phrase. Apply the wording of the stem and select only text that directly supports the requested judgment in the supplied client context."
           }
         },
         {
           "@type": "Question",
-          "name": "What counts as a significant finding?",
+          "name": "How are highlight questions scored?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Anything that changes what you would do next: values outside the expected range for that client, meaningful trends, new neurological changes, anything affecting airway, breathing or circulation, and significant absences such as no urine output."
+            "text": "NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key, but that general guidance does not prove one method or an independent point value for every highlight selection. Follow the displayed directions."
           }
         }
       ]
@@ -140,6 +160,11 @@
   table { width:100%; border-collapse:collapse; margin-bottom:12px; font-size:14.5px; }
   th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { color:var(--teal); font-weight:600; }
+  caption { color:var(--ink); font-weight:700; padding:0 0 8px; text-align:left; }
+  .table-wrap { overflow-x:auto; margin-bottom:14px; border:1px solid var(--line); border-radius:8px; }
+  .table-wrap:focus { outline:3px solid #8CCFC3; outline-offset:2px; }
+  .table-wrap table { min-width:620px; margin-bottom:0; }
+  .source-note { color:var(--muted); font-size:13px; }
   .key { background:#EAF4F0; border-left:3px solid var(--teal); padding:12px 14px; border-radius:0 8px 8px 0; margin-bottom:12px; }
   .key p:last-child { margin-bottom:0; }
   .cta { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--teal); border-radius:12px; padding:18px 20px; margin:22px 0 14px; }
@@ -156,54 +181,52 @@
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>Highlight questions on the NCLEX</h1>
-<p class="meta">Question types &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; reviewed <time datetime="2026-08-03">2026-08-03</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<p class="meta">Question types &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; clinically reviewed <time datetime="2026-08-29">2026-08-29</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
 
 <div class="card">
-<p>A highlight item gives you a piece of a chart — a nurse's note, a history, a set of results — and asks you to click the findings that are significant. It is the purest test of the first step of clinical judgment: <b>recognising cues</b>.</p>
+<p>A highlight item presents text from client information and asks the candidate to select the words or phrases that answer the prompt. Highlight items can support clinical-judgment tasks such as recognizing relevant cues, but the exact task is set by the stem. Use the current NCLEX Candidate Tutorial and official samples for the exact interface.</p>
 
-<h2>The core skill</h2>
-<p>Real charting contains a great deal of information that is true, documented, and completely unremarkable. The competent nurse reads past it to the two or three things that change what happens next. That filtering is exactly what is being scored.</p>
-
-<div class="key">
-<p><b>Do not highlight everything.</b> These items commonly use +/- scoring, where an incorrect selection cancels out a correct one. Highlighting generously to make sure you caught the right ones can reduce your score to zero on an item where you actually knew the answer.</p>
+<div class="key" role="note" aria-labelledby="highlight-boundary">
+<h2 id="highlight-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every highlight item uses plus/minus scoring, that each highlighted phrase has an independent point value, or that a particular number of phrases is correct. Follow the item directions and do not infer a scoring formula from the interface.</p>
 </div>
 
-<h2>The method</h2>
+<p class="source-note"><b>Evidence:</b> The format and clinical-judgment context come from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+
+<h2>A stem-first study method</h2>
 <ol>
-  <li><b>Read the question stem first.</b> Findings requiring immediate follow-up is a narrower ask than findings that are abnormal, which is narrower again than findings relevant to the diagnosis. The stem sets the bar.</li>
-  <li><b>Read the whole passage once without clicking.</b></li>
-  <li><b>For each candidate finding, ask a single question:</b> does this change what I do next? If not, leave it.</li>
-  <li><b>Check what is missing.</b> A note that records no urine output since a time hours ago is a significant finding stated as an absence.</li>
+  <li><b>Read the stem before selecting text.</b> Identify the precise task—for example, cues that require follow-up may not be the same as every value outside a reference interval.</li>
+  <li><b>Read all supplied client information.</b> Establish the client's context, time course and comparison point.</li>
+  <li><b>Evaluate each selectable phrase against the stem.</b> Select text because it directly supports the requested judgment, not merely because it looks familiar or noteworthy.</li>
+  <li><b>Use only the documented information.</b> Do not add an unstated symptom, diagnosis, trend or assumption.</li>
+  <li><b>Review the complete response.</b> Confirm that every selection answers the same prompt and that no required response was missed.</li>
 </ol>
+<p>This method is study guidance, not an NCSBN scoring rule or a promise about how many selections an item contains.</p>
 
-<h2>What tends to be significant</h2>
+<h2>Questions for evaluating a phrase</h2>
 <ul>
-  <li>Values outside the expected range <i>for this client</i>, given age, condition and stage of recovery.</li>
-  <li>Trends — a value that has moved, even while still technically within range.</li>
-  <li>Findings that contradict the expected trajectory, such as pain increasing when it should be settling.</li>
-  <li>New neurological or mental status changes, which are cues far more often than they are noise.</li>
-  <li>Anything touching airway, breathing or circulation.</li>
-  <li>Absences: no output, no bowel sounds, no response.</li>
+  <li>Does the phrase answer the wording of the stem?</li>
+  <li>Is it relevant in this client's age, condition and time course?</li>
+  <li>Does the prompt ask for a current finding, a change, a risk, an intervention or a response to care?</li>
+  <li>Is the relationship supported by the supplied record rather than an assumption?</li>
 </ul>
 
-<h2>What tends not to be</h2>
+<h2>Common reasoning errors</h2>
 <ul>
-  <li>Values inside the expected range for that client.</li>
-  <li>Findings consistent with the known diagnosis and already being managed.</li>
-  <li>Social and historical detail with no bearing on the current problem.</li>
-  <li>Routine care that has been carried out as ordered.</li>
+  <li>Selecting every abnormal-looking phrase without applying the stem.</li>
+  <li>Using one value in isolation while ignoring its unit, trend or client context.</li>
+  <li>Choosing text that is clinically interesting but does not answer the question.</li>
+  <li>Assuming an unofficial target number of selections.</li>
+  <li>Trying to calculate an unofficial partial-credit strategy instead of completing the requested response.</li>
 </ul>
-
-<h2>When you are unsure</h2>
-<p>Under +/- scoring the arithmetic is simple. A finding you are confident about is worth selecting. A finding you are truly 50/50 on has an expected value near zero and can cost you a mark you had already earned. Select what you can defend and leave the rest.</p>
 </div>
-<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>What is a highlight question on the NCLEX?</h3><p>An item that presents chart material — a nurse's note, history or results — and asks you to click the findings that are significant. It tests cue recognition, the first step of the clinical judgment model.</p><h3>Should I highlight every abnormal finding?</h3><p>Only those that meet the bar set by the stem. Highlight items often use +/- scoring, where an incorrect selection cancels a correct one, so over-selecting actively reduces your score.</p><h3>What counts as a significant finding?</h3><p>Anything that changes what you would do next: values outside the expected range for that client, meaningful trends, new neurological changes, anything affecting airway, breathing or circulation, and significant absences such as no urine output.</p></div>
+<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>What is a highlight question on the NCLEX?</h3><p>An item that presents text from client information and asks the candidate to select the words or phrases that answer the prompt. Consult the current Candidate Tutorial and official samples for the exact interface.</p><h3>Should I highlight every abnormal finding?</h3><p>No fixed rule says to select every abnormal-looking phrase. Apply the wording of the stem and select only text that directly supports the requested judgment in the supplied client context.</p><h3>How are highlight questions scored?</h3><p>NCSBN describes plus/minus, zero/one and rationale partial-credit methods for items with more than one key, but that general guidance does not prove one method or an independent point value for every highlight selection. Follow the displayed directions.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — NCLEX test plans</a></li><li><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a></li></ul>
+  <ul><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> — National Council of State Boards of Nursing; evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> — National Council of State Boards of Nursing; evidence locator: NGN Project and Clinical Judgment Measurement Model sections; source updated <time datetime="2023-04-01">2023-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-nclex-faqs"><a href="https://www.nclex.com/faqs.page" rel="external noopener">NCSBN — NCLEX Frequently Asked Questions</a> — National Council of State Boards of Nursing; evidence locator: How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published; accessed <time datetime="2026-08-28">2026-08-28</time></li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN's highlight items use realistic chart excerpts and nurse's notes, not simplified fragments.</p>
+  <p><b>Practice this for real.</b> PulseRN can provide highlight-style practice with rationales; it does not reproduce the official NCLEX item bank or predict an exam result.</p>
   <p><a href="/">Start studying on PulseRN &rarr;</a></p>
 </div>
 

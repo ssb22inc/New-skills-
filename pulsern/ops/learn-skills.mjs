@@ -6,374 +6,421 @@ export const SKILL_ARTICLES = [
   {
     slug: "prioritization-abc-maslow",
     topic: "Test-taking skill",
-    title: "Prioritisation: ABC, Maslow and what comes first",
-    h1: "How to answer prioritisation questions",
-    description: "The order of frameworks that decides which client to see first, and the trap of applying assessment-first when the assessment is already done.",
+    title: "NCLEX prioritization: who comes first",
+    h1: "How to answer NCLEX prioritization questions",
+    description: "Use clinical judgment, immediate-threat screening, ABCs and nursing-process context to decide which client or action comes first.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN's adaptive practice interleaves prioritisation across all eight categories, so you meet it in context.",
+    updated: "2026-08-27",
+    cta: "PulseRN interleaves prioritization across all eight categories so you practice comparing urgency in context.",
     body: `
-<p>Prioritisation items give you several things that all genuinely need doing and ask which comes first. Every option is defensible. That is the design — you are being tested on ordering, not on identifying the one right action.</p>
+<p>Prioritization items test whether you can recognize relevant cues, analyze them, rank the most likely or dangerous hypotheses, choose an action and evaluate the response. A mnemonic can help organize the comparison, but no single mnemonic decides every case.</p>
 
-<h2>The frameworks, in the order you apply them</h2>
-<ol>
-  <li><b>ABC — airway, breathing, circulation.</b> Outranks everything. An airway problem beats a circulation problem beats everything else.</li>
-  <li><b>Maslow.</b> Physiological before safety, safety before psychosocial.</li>
-  <li><b>Nursing process.</b> Assess before intervening — with the exception below.</li>
-  <li><b>Acute over chronic.</b> A new problem outranks a long-standing one.</li>
-  <li><b>Unstable over stable.</b> Unexpected findings outrank expected ones.</li>
-</ol>
-
-<div class="key">
-<p><b>The exception that costs the most marks:</b> assess-first is a default, not a law. When the stem has already handed you the assessment finding — the client is not breathing, the saturation is 84%, the rhythm is lethal — choosing to reassess is a delay, and the exam scores it as one. Assessment comes first when you still need information. When you already have it, act.</p>
+<div class="key" role="note" aria-labelledby="prioritization-safety-boundary">
+<h2 id="prioritization-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>ABCs, Maslow, “acute before chronic” and “assess before acting” are study heuristics—not universal clinical algorithms. Use the exact scenario, current findings, orders, scope of practice and emergency protocol. When the stem establishes an emergency, do not delay the indicated emergency response merely to satisfy a mnemonic.</p>
 </div>
 
-<h2>Which client do you see first?</h2>
-<p>These items list several clients and ask who to attend to first. Work through them in a fixed order rather than by impression:</p>
-<ol>
-  <li><b>Discard the expected.</b> A finding that is normal for that condition or stage of recovery is not urgent, however dramatic it sounds. Post-operative pain on day one is expected.</li>
-  <li><b>Find the unexpected.</b> A finding that does not fit the diagnosis is your candidate.</li>
-  <li><b>Apply ABC</b> to whichever candidates remain.</li>
-  <li><b>Prefer the one who could deteriorate fastest.</b> Between two abnormal findings, the airway or circulatory one wins.</li>
-</ol>
-
-<h2>Patterns that signal urgency</h2>
+<h2>A defensible decision sequence</h2>
+<div class="table-wrap" role="region" aria-label="NCLEX prioritization decision sequence" tabindex="0">
 <table>
-  <tr><th>Finding</th><th>Why it moves up the list</th></tr>
-  <tr><td>New confusion or restlessness</td><td>Frequently the first sign of hypoxaemia, before saturation falls noticeably.</td></tr>
-  <tr><td>A change from the client's baseline</td><td>Trend matters more than an absolute value inside a range.</td></tr>
-  <tr><td>Anything obstructing an airway</td><td>Stridor, drooling, swelling, inability to speak in full sentences.</td></tr>
-  <tr><td>Signs of bleeding or shock</td><td>Tachycardia with falling blood pressure, cool clammy skin, falling output.</td></tr>
-  <tr><td>Sudden severe pain</td><td>Especially chest, abdominal, or calf pain that is new.</td></tr>
+  <caption>Questions to ask before selecting the first client or action</caption>
+  <thead><tr><th scope="col">Step</th><th scope="col">Question</th><th scope="col">How it changes priority</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">1. Read the task</th><td>Does the item ask whom to see, what to assess, or what to do?</td><td>An assessment answer and an intervention answer cannot be ranked without identifying the requested task.</td></tr>
+    <tr><th scope="row">2. Screen for an established emergency</th><td>Do the supplied cues already establish an immediate life threat?</td><td>Activate the applicable response and begin the indicated first action rather than collecting nonessential data.</td></tr>
+    <tr><th scope="row">3. Compare change and acuity</th><td>What is new, worsening, unexpected or different from baseline?</td><td>A meaningful acute change often raises priority, but “chronic” or “expected” never means automatically safe.</td></tr>
+    <tr><th scope="row">4. Compare time sensitivity</th><td>Which delay is most likely to cause serious harm?</td><td>Choose the option whose safe window is shortest, using the clinical context rather than a memorized hierarchy alone.</td></tr>
+    <tr><th scope="row">5. Choose and reassess</th><td>What action fits the evidence, and what response must be evaluated?</td><td>NCSBN's clinical-judgment model continues through taking action and evaluating outcomes.</td></tr>
+  </tbody>
 </table>
+</div>
+<p class="source-note"><b>Evidence for this sequence:</b> the <a href="#source-ncsbn-2026-rn-test-plan">2026 NCSBN RN Test Plan</a> and <a href="#source-ncsbn-next-generation-nclex">NCSBN Clinical Judgment Measurement Model</a>.</p>
 
-<h2>Findings that look urgent and are not</h2>
+<h2>ABCs are a screen, not a universal ranking law</h2>
+<p>Airway, breathing and circulation are useful categories for spotting immediate physiologic threats. They do not mean that every airway-related finding automatically outranks every circulation-related finding. The scenario may invoke a specific algorithm, simultaneous team actions or an already established intervention.</p>
+<p>Cardiac arrest is the clearest counterexample to a rigid “airway always first” rule. The 2025 AHA adult basic-life-support guideline addresses initial recognition of cardiac arrest, activation of emergency response, high-quality CPR and AED use as a resuscitation sequence. It also includes updated recommendations for respiratory arrest and foreign-body airway obstruction. When the scenario establishes one of these emergencies, follow the applicable current algorithm rather than forcing every action into a generic airway-first ranking.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-aha-2025-adult-basic-life-support">2025 AHA Adult Basic Life Support guideline</a>.</p>
+
+<h2>Maslow is a tie-breaker, not a clinical guideline</h2>
+<p>When urgency and safety are otherwise comparable, physiologic needs commonly take priority over psychosocial needs. But Maslow does not override an emergency algorithm, an immediate safety threat, a time-critical treatment or the facts in the stem. Use it only after higher-risk differences have been resolved.</p>
+
+<h2>Assessment first—unless the decision is already established</h2>
+<p>Assessment is appropriate when important information is missing, the finding is ambiguous, or a questionable result should be verified without delaying care. Action is appropriate when the stem already supplies enough evidence for the protocol-defined response. The useful distinction is not “assess or act” in the abstract; it is whether another assessment would change the immediate safe action.</p>
+<p>After acting, evaluation still matters. Reassess the relevant response, compare it with the expected outcome and escalate or revise the plan when the client does not improve.</p>
+
+<h2>How to compare clients without unsafe shortcuts</h2>
 <ul>
-  <li>Pain that is expected for the procedure and stage.</li>
-  <li>A low-grade temperature in the first 24 hours after surgery.</li>
-  <li>Serosanguineous drainage early in wound healing.</li>
-  <li>A chronic abnormal value that matches this client's known baseline.</li>
-  <li>Anxiety before a scheduled procedure with no physiological findings.</li>
+  <li><b>Do not discard “expected” findings automatically.</b> Severity, trend, associated cues and the recovery stage determine whether an expected symptom is tolerable or dangerous.</li>
+  <li><b>Use baseline as context, not permission to ignore change.</b> A chronic condition can destabilize, and a value near baseline can still be urgent when the overall presentation changes.</li>
+  <li><b>Distinguish actual cues from assumptions.</b> Rank what the stem states; do not invent stability, diagnoses or resources.</li>
+  <li><b>Compare the consequence of delay.</b> Ask what could become irreversible first and whether the nurse can safely begin that response now.</li>
 </ul>
 
-<h2>Practising this properly</h2>
-<p>The common mistake is reading a prioritisation rationale, agreeing with it, and moving on. Agreement is not the skill. Before revealing any answer, commit out loud to who you would see first <i>and</i> why the second-place option is second. If your reason for the runner-up is vague, that is the gap — not the one you got right.</p>
+<h2>Practice the comparison, not only the answer</h2>
+<p>Before revealing a rationale, state who or what comes first, identify the decisive cue, and explain why the runner-up can safely wait. Then name what new cue would reverse your ranking. This exposes whether you used the case facts or merely recognized a familiar mnemonic.</p>
 `,
     faq: [
-      { q: "What order should I use for NCLEX prioritisation questions?", a: "Airway, breathing and circulation first, then Maslow, then the nursing process, then acute over chronic and unstable over stable. ABC outranks everything else." },
-      { q: "Should assessment always be the first action?", a: "No. Assess first when you still need information. When the stem has already given you the critical finding, reassessing delays care and the exam treats it as the wrong choice." },
-      { q: "How do I decide which client to see first?", a: "Eliminate findings that are expected for each client's condition and stage, identify what is unexpected, then apply ABC to those. Between two abnormal findings, choose the one that could deteriorate fastest." },
+      { q: "Do ABCs always determine which NCLEX client comes first?", a: "No. ABCs help screen for immediate physiologic threats, but a specific emergency algorithm, established intervention, major safety threat or time-critical change can determine the sequence. Use the complete scenario." },
+      { q: "Should assessment always be the first nursing action?", a: "Assess when material information is missing or ambiguous. If the stem already establishes an emergency and the immediate response is defined, begin that response and evaluate the result rather than delaying for nonessential reassessment." },
+      { q: "Does an expected or chronic finding automatically have low priority?", a: "No. Expected and chronic describe context, not safety. Compare severity, trend, associated cues, baseline and the likely consequence of delay." },
+      { q: "Where does Maslow fit in NCLEX prioritization?", a: "Use it as a limited tie-breaker when urgency and safety are otherwise comparable. It does not override emergency protocols, immediate safety threats or time-critical care." },
     ],
   },
 
   {
     slug: "delegation-and-assignment",
     topic: "Test-taking skill",
-    title: "Delegation and assignment rules",
-    h1: "Delegation: what goes to whom",
-    description: "What can be delegated to assistive personnel and LPNs, what never leaves the RN, and the stable-predictable-routine test that resolves most items.",
+    title: "NCLEX delegation and assignment: a safe framework",
+    h1: "How to answer NCLEX delegation questions",
+    description: "Separate assignment from delegation and apply the Five Rights, scope, competence, communication and supervision before choosing who can safely perform care.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN includes delegation scenarios across management of care, with rationales for every option.",
     body: `
-<p>Delegation items are testable because the rules are genuinely rule-like. Once you hold the boundaries, most of these questions resolve in seconds.</p>
+<p>Delegation questions test clinical judgment, not a universal list of tasks. The safe answer depends on the patient, the requested activity, the delegatee's verified competence, the state or jurisdiction's nurse practice provisions, employer policy and the supervision the licensed nurse can provide.</p>
 
-<h2>What never leaves the RN</h2>
-<p>The nursing process itself does not transfer. Specifically:</p>
-<ul>
-  <li><b>Assessment</b> — the initial assessment and any assessment requiring clinical judgement.</li>
-  <li><b>Diagnosis</b> and analysis of data.</li>
-  <li><b>Planning</b> and setting of goals.</li>
-  <li><b>Evaluation</b> of outcomes.</li>
-  <li><b>Teaching</b> that requires assessment of understanding.</li>
-  <li>Care of the <b>unstable</b> client.</li>
-</ul>
-
-<div class="key">
-<p><b>The test that resolves most items:</b> a task can be delegated when the client is <b>stable</b>, the outcome is <b>predictable</b>, and the task is <b>routine</b> and does not require nursing judgement. If any one of those fails, it stays with the RN.</p>
+<div class="key" role="note" aria-labelledby="delegation-safety-boundary">
+<h2 id="delegation-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>This guide is an NCLEX study framework, not a substitute for a nurse practice act, board rule, job description or facility policy. Jurisdictions differ, and an employer may be more restrictive. Never infer that a task is permitted from a mnemonic alone.</p>
 </div>
 
-<h2>Assistive personnel</h2>
-<p>Generally appropriate:</p>
-<ul>
-  <li>Bathing, hygiene, oral care, grooming</li>
-  <li>Feeding a client with no swallowing difficulty</li>
-  <li>Ambulation and transfers for stable clients</li>
-  <li>Positioning and turning</li>
-  <li>Routine vital signs on a stable client</li>
-  <li>Measuring intake and output, height and weight</li>
-  <li>Simple documentation of the above</li>
-</ul>
-<p>Not appropriate: anything with an unstable client, anything requiring interpretation, any first-time assessment, and any teaching.</p>
+<h2>Assignment and delegation are not the same</h2>
+<p>Under the NCSBN–ANA guidelines, an <b>assignment</b> is routine care, an activity or a procedure already within a licensed nurse's authorized scope or an assistive person's routine role. <b>Delegation</b> transfers responsibility for a specific nursing activity, skill or procedure outside the delegatee's traditional role after the required education, training and competence validation.</p>
+<p>A handoff between licensed clinicians is also different: it transfers responsibility for care between providers rather than delegating an activity.</p>
 
-<h2>Licensed practical nurses</h2>
-<p>Scope varies by state and setting, and the exam works from a general standard. Commonly within scope:</p>
-<ul>
-  <li>Monitoring findings on a stable client, and reporting them</li>
-  <li>Reinforcing teaching the RN has already provided</li>
-  <li>Routine wound care and dressing changes</li>
-  <li>Administering many oral and some parenteral medications</li>
-  <li>Tracheostomy and catheter care</li>
-  <li>Enteral feeding</li>
-</ul>
-<p>Typically outside scope: initial assessment, IV push medications in many jurisdictions, blood product administration, care planning, and the unstable client.</p>
+<h2>A defensible delegation decision</h2>
+<div class="table-wrap" role="region" aria-label="NCLEX delegation decision framework" tabindex="0">
+<table>
+  <caption>Checks required before selecting a delegatee</caption>
+  <thead><tr><th scope="col">Check</th><th scope="col">Question</th><th scope="col">Why it matters</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Patient and circumstance</th><td>What are the patient's needs, stability, predictability and acuity?</td><td>A change in condition requires communication and reassessment of whether delegation remains appropriate.</td></tr>
+    <tr><th scope="row">Authority and policy</th><td>Do jurisdiction rules, authorized scope, job description and employer policy permit this activity?</td><td>Neither an exam shortcut nor a local custom can expand legal scope.</td></tr>
+    <tr><th scope="row">Competence</th><td>Has this specific delegatee's knowledge and skill been trained and validated?</td><td>A title alone does not establish competence for every activity.</td></tr>
+    <tr><th scope="row">Communication</th><td>Are the directions patient-specific, measurable and understood in two-way communication?</td><td>The delegatee needs the task, method, timing, reporting conditions and opportunity to clarify.</td></tr>
+    <tr><th scope="row">Supervision and follow-up</th><td>Can the licensed nurse remain available, intervene, follow up and evaluate the patient outcome?</td><td>Delegation continues through supervision and evaluation; it is not complete when instructions are given.</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="source-note"><b>Evidence for this framework:</b> the <a href="#source-ncsbn-ana-delegation-guidelines-2019">NCSBN–ANA National Guidelines for Nursing Delegation</a> and the <a href="#source-ncsbn-2026-rn-test-plan">2026 NCSBN RN Test Plan</a>.</p>
 
-<h2>The five rights of delegation</h2>
+<h2>The Five Rights of Delegation</h2>
 <ol>
-  <li>Right <b>task</b></li>
-  <li>Right <b>circumstance</b></li>
-  <li>Right <b>person</b></li>
-  <li>Right <b>direction and communication</b> — specific, not vague</li>
-  <li>Right <b>supervision and evaluation</b></li>
+  <li><b>Right task:</b> permitted by the delegatee's job description or written setting policy, with required competency preparation.</li>
+  <li><b>Right circumstance:</b> the patient's condition and available resources make delegation appropriate; a change triggers reporting and reassessment.</li>
+  <li><b>Right person:</b> the individual has the verified knowledge and skill for this activity and patient.</li>
+  <li><b>Right directions and communication:</b> instructions specify what to do, what data to collect, how and when to report, and which findings require prompt notification.</li>
+  <li><b>Right supervision and evaluation:</b> the licensed nurse is available, monitors as needed, follows up and evaluates the outcome.</li>
 </ol>
-<p>The fourth is where exam items live. Telling assistive personnel to let you know if anything changes is not a delegation instruction. Telling them to report a heart rate above 110 or a systolic below 100 is.</p>
 
-<h2>Assignment patterns</h2>
-<p>When asked which client to assign to whom, work from stability: the most stable and predictable clients go to the least qualified appropriate staff member, and the RN keeps the newly admitted, the unstable, the post-operative day-zero client, and anyone needing assessment or teaching.</p>
-<p>Two constraints appear often enough to watch for. A <b>float or agency nurse</b> should receive clients whose care is within general competence rather than unit-specific specialist care. A <b>pregnant staff member</b> should not be assigned clients receiving internal radiation therapy or with certain infectious conditions.</p>
+<h2>What cannot be delegated</h2>
+<p>The NCSBN–ANA guidelines state that clinical reasoning, nursing judgment and critical decision-making cannot be delegated. That boundary is safer than memorizing that every activity with a familiar label is always retained or always transferable. Determine whether the specific activity requires judgment in this patient's situation.</p>
+<p>Similarly, do not assume an LPN/VN or assistive person may perform an activity merely because it appears on a study list. Confirm authorized scope or routine role, the setting's policy, demonstrated competence, the patient's condition and the supervision required.</p>
 
-<h2>Delegation is not transfer of accountability</h2>
-<p>The RN who delegates remains accountable for the outcome. That is why options where the RN delegates and then does nothing further are usually wrong: appropriate delegation includes checking that the task was done and what the result was.</p>
+<h2>How to reason about common NCLEX options</h2>
+<ul>
+  <li><b>Routine activities can still be unsafe to assign.</b> Feeding, mobility, vital signs or intake and output may require a different decision when aspiration risk, instability, a new change or required interpretation is present.</li>
+  <li><b>Data collection is not clinical interpretation.</b> A trained delegatee may collect permitted data; the licensed nurse retains the judgment the scenario requires and acts on the report.</li>
+  <li><b>Licensed status does not erase scope limits.</b> LPN/VN authority varies by jurisdiction, and the activity must also fit employer policy and individual competence.</li>
+  <li><b>Float or agency status does not define capability by itself.</b> Match the assignment to verified competence, authorized scope, patient needs and available orientation or support.</li>
+</ul>
+
+<h2>Accountability is shared but not identical</h2>
+<p>The delegating licensed nurse maintains overall accountability for the patient and must make the delegation decision, remain available, follow up and evaluate the outcome. The delegatee is responsible for accepting only an activity they are competent to perform, carrying it out correctly, documenting it and reporting questions, changes or inability to complete it. The delegatee should not pass the delegated responsibility to someone else.</p>
+
+<h2>Use the stem, not a slogan</h2>
+<p>For each answer option, identify the patient's condition, the activity, the required judgment, the proposed person's authorized role and demonstrated competence, the instructions supplied and the follow-up plan. Reject an option as soon as one required element is missing; do not rely on “stable, predictable and routine” as a complete decision rule.</p>
 `,
     faq: [
-      { q: "What can be delegated to unlicensed assistive personnel?", a: "Routine tasks for stable clients with predictable outcomes that require no nursing judgement — hygiene, feeding a client without swallowing difficulty, ambulation, positioning, routine vital signs, and intake and output." },
-      { q: "What can never be delegated by an RN?", a: "Assessment requiring clinical judgement, nursing diagnosis, planning, evaluation of outcomes, teaching that requires assessing understanding, and the care of unstable clients." },
-      { q: "What are the five rights of delegation?", a: "Right task, right circumstance, right person, right direction and communication, and right supervision and evaluation. Vague instructions fail the fourth right and are a common wrong answer." },
+      { q: "What can be assigned or delegated to assistive personnel?", a: "Only an activity permitted by jurisdiction and employer policy that fits the person's routine role or validated delegated competence and is appropriate for this patient. The licensed nurse must give specific directions, supervise and evaluate the outcome." },
+      { q: "What cannot be delegated by a licensed nurse?", a: "Clinical reasoning, nursing judgment and critical decision-making cannot be delegated. Whether a named activity requires those functions depends on the patient and circumstance, so avoid universal task lists." },
+      { q: "What are the Five Rights of Delegation?", a: "Right task, right circumstance, right person, right directions and communication, and right supervision and evaluation. All five must fit the specific patient, delegatee and setting." },
+      { q: "Is the RN the only person accountable after delegation?", a: "No. The delegating licensed nurse retains overall accountability for the patient and follow-up, while the delegatee is responsible for accepting only work they are competent to perform and for completing, documenting and reporting that activity correctly." },
     ],
   },
 
   {
     slug: "therapeutic-communication",
     topic: "Test-taking skill",
-    title: "Therapeutic communication: picking the right response",
-    h1: "Therapeutic communication answers",
-    description: "The response patterns that are almost always correct, the ones that are almost always wrong, and why false reassurance fails every time.",
+    title: "Therapeutic communication for NCLEX: choose in context",
+    h1: "How to answer NCLEX therapeutic communication questions",
+    description: "Choose client-centered responses by purpose, cues, safety, culture and context—not by memorizing that one communication technique is always correct.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN includes psychosocial integrity items where the wrong answer is comfortable and the right one is harder.",
     body: `
-<p>Therapeutic communication items are among the most predictable on the exam, because the correct answer follows a small number of patterns. Once you can spot them, these become some of the fastest questions you will answer.</p>
+<p>Therapeutic communication is purposeful, client-centered communication that supports assessment, trust, shared decision-making and safety. An NCLEX option should be judged against the client's words, nonverbal cues, immediate needs and the goal of the encounter—not against a list of phrases labeled “always correct.”</p>
 
-<h2>What correct answers do</h2>
-<ul>
-  <li><b>Stay with the client's feeling</b> rather than moving to the problem. <i>You sound frightened.</i></li>
-  <li><b>Use open-ended invitations.</b> <i>Tell me more about that.</i></li>
-  <li><b>Reflect and restate</b> so the client hears themselves. <i>You are saying you feel like a burden.</i></li>
-  <li><b>Offer presence.</b> <i>I will sit with you.</i></li>
-  <li><b>Seek clarification.</b> <i>I am not sure I understand what you mean by that.</i></li>
-  <li><b>Acknowledge without judging.</b> <i>This has been a hard week for you.</i></li>
-  <li><b>Use silence.</b> Frequently correct and frequently rejected by candidates because it feels passive.</li>
-</ul>
-
-<div class="key">
-<p><b>The single most reliable test:</b> does the response keep the client talking, or does it close the conversation? Correct answers open. Reassurance, advice and explanation all close — however kind they sound.</p>
+<div class="key" role="note" aria-labelledby="communication-safety-boundary">
+<h2 id="communication-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>No communication technique overrides urgent assessment, immediate safety, required treatment or escalation. Adapt language and method for culture, health literacy, preferred language, disability, trauma history, boundaries and client preference. Use qualified interpreters and accessible communication supports when indicated.</p>
 </div>
 
-<h2>What wrong answers do</h2>
+<h2>Start with purpose and cues</h2>
+<ol>
+  <li><b>Identify the task.</b> Is the nurse exploring feelings, clarifying information, assessing safety, teaching, setting a boundary or coordinating care?</li>
+  <li><b>Use the client's exact cue.</b> Respond to what was said or observed rather than introducing an unrelated topic.</li>
+  <li><b>Choose the least judgmental effective response.</b> Preserve dignity, autonomy and professional boundaries.</li>
+  <li><b>Check whether safety changes the sequence.</b> A concerning cue may require a direct, focused question and immediate action.</li>
+</ol>
+<p class="source-note"><b>Evidence for this approach:</b> the <a href="#source-ncbi-openrn-therapeutic-communication-2025">NCBI Open RN therapeutic communication chapter</a> and <a href="#source-ncsbn-2026-rn-test-plan">2026 NCSBN RN Test Plan</a>.</p>
+
+<h2>Techniques are tools, not answer keys</h2>
+<div class="table-wrap" role="region" aria-label="Therapeutic communication techniques in context" tabindex="0">
 <table>
-  <tr><th>Pattern</th><th>Example</th><th>Why it fails</th></tr>
-  <tr><td>False reassurance</td><td>Everything will be fine.</td><td>Dismisses the feeling and makes a promise the nurse cannot keep.</td></tr>
-  <tr><td>Giving advice</td><td>What you should do is...</td><td>Removes the client's autonomy.</td></tr>
-  <tr><td>Asking why</td><td>Why do you feel that way?</td><td>Demands justification and reads as confrontation.</td></tr>
-  <tr><td>Changing the subject</td><td>Let us talk about your discharge plan.</td><td>Avoids the distress the client raised.</td></tr>
-  <tr><td>Minimising</td><td>Everyone feels that way before surgery.</td><td>Tells the client their feeling is unremarkable.</td></tr>
-  <tr><td>Defending</td><td>Your nurse was very busy.</td><td>Takes the institution's side against the client.</td></tr>
-  <tr><td>Approval or disapproval</td><td>That is the right attitude.</td><td>Makes the nurse the judge of acceptable feelings.</td></tr>
-  <tr><td>Deflecting to someone else</td><td>You should discuss that with your doctor.</td><td>Passes the client along rather than responding.</td></tr>
+  <caption>Match the technique to the communication goal and client response</caption>
+  <thead><tr><th scope="col">Technique</th><th scope="col">Useful purpose</th><th scope="col">Important qualification</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Open-ended invitation</th><td>Encourages the client to describe concerns in their own words.</td><td>A focused or closed question can be safer when confirming a specific symptom, fact or immediate risk.</td></tr>
+    <tr><th scope="row">Reflection or restatement</th><td>Checks meaning and keeps attention on the client's experience.</td><td>It should sound natural and accurate; mechanical repetition can feel dismissive.</td></tr>
+    <tr><th scope="row">Clarification</th><td>Resolves ambiguity before the nurse assumes meaning.</td><td>Use plain, respectful language and allow the client to correct the nurse.</td></tr>
+    <tr><th scope="row">Silence</th><td>Allows time to think, feel or continue without interruption.</td><td>Observe whether silence is supportive or increasing distress; do not use it as withdrawal.</td></tr>
+    <tr><th scope="row">Offering presence</th><td>Communicates availability without making promises.</td><td>Respect personal space, consent, culture, trauma history and professional boundaries.</td></tr>
+    <tr><th scope="row">Information or teaching</th><td>Supports informed decisions when the client needs accurate explanation.</td><td>Assess readiness and understanding; explanation is not a substitute for acknowledging emotion or obtaining consent.</td></tr>
+    <tr><th scope="row">Referral or team coordination</th><td>Connects the client with the appropriate professional or resource.</td><td>Address the immediate concern and explain the handoff instead of dismissively passing the client along.</td></tr>
+  </tbody>
 </table>
+</div>
 
-<h2>Why false reassurance is the most tempting trap</h2>
-<p>It sounds caring, it is what people say in ordinary life, and in the moment it is what many of us would want to say. That is exactly why it is written into so many items. If an option would comfort you and requires no further conversation, look at it harder.</p>
+<h2>Patterns that often block communication</h2>
+<ul>
+  <li><b>False reassurance:</b> “Everything will be fine” promises an outcome the nurse cannot know and may dismiss the concern.</li>
+  <li><b>Minimizing or comparison:</b> “Everyone feels that way” shifts attention away from this client's experience.</li>
+  <li><b>Judgment or approval:</b> labeling a feeling or decision as good, bad, right or wrong can make the nurse the arbiter of acceptable responses.</li>
+  <li><b>Defending:</b> explaining the institution's behavior before exploring the client's concern can close the conversation.</li>
+  <li><b>Unsolicited prescriptive advice:</b> telling the client what they “should” do can bypass their goals and autonomy. Collaborative information and clinically necessary instructions are different.</li>
+  <li><b>Repeated or accusatory “why” questions:</b> these may feel challenging or demand justification. A neutral invitation such as “What was happening when this began?” may obtain the needed information more safely.</li>
+</ul>
 
-<h2>Safety overrides communication</h2>
-<p>One important exception: when a client expresses thoughts of self-harm or harm to others, the priority shifts from exploring feelings to <b>direct assessment of risk and immediate safety</b>. Asking plainly whether the client has a plan is the correct nursing action — it is not intrusive, and avoiding the question does not protect anyone.</p>
+<h2>Safety can require direct questions</h2>
+<p>If a client expresses hopelessness, self-harm or suicide-related cues, do not rely on a vague invitation alone. Ask directly about suicidal thoughts and, when indicated, the plan and immediate safety; stay present, reduce access to lethal means when safe and within protocol, obtain urgent help, and follow facility or emergency procedures. NIMH states that asking whether a person is suicidal does not increase suicidal thoughts or behavior.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-nimh-suicide-five-action-steps-2024">NIMH five action steps</a>. In the United States, the 988 Suicide &amp; Crisis Lifeline is available by call or text; an immediate emergency still requires the applicable emergency response.</p>
 
-<h2>A quick screen</h2>
-<p>When two options both look therapeutic, choose the one that is more specific to what this client actually said. Generic empathy is better than false reassurance, but a response that reflects the client's own words is better still.</p>
+<h2>Compare plausible NCLEX responses</h2>
+<p>When two options both appear therapeutic, compare their fit to the stated goal, the client's cue, safety urgency, specificity, respect and likely next step. The best option may invite elaboration, but it may instead clarify a fact, give needed information, set a boundary, ask directly about risk or coordinate care. Context decides.</p>
 `,
     faq: [
-      { q: "What makes a response therapeutic on the NCLEX?", a: "It stays with the client's feeling, is open-ended, and keeps the conversation going. Reflecting, restating, offering presence, seeking clarification and using silence are all reliably correct patterns." },
-      { q: "Why is 'why' a poor therapeutic question?", a: "It asks the client to justify their feelings, which tends to read as confrontational and puts them on the defensive. Open invitations such as 'tell me more about that' get further." },
-      { q: "What should the nurse do if a client expresses suicidal thoughts?", a: "Assess risk directly, including asking whether the client has a plan, and ensure immediate safety. Safety overrides exploratory communication techniques, and asking about a plan does not increase risk." },
+      { q: "Are open-ended questions always the best NCLEX response?", a: "No. They are useful for exploration, but focused or closed questions may be necessary to clarify facts, assess symptoms or determine immediate safety. Choose by purpose and context." },
+      { q: "Are 'why' questions always nontherapeutic?", a: "No single word makes a question unsafe, but repeated or accusatory 'why' questions may sound challenging. Use neutral wording that gathers the needed information without demanding justification." },
+      { q: "Is giving information or making a referral nontherapeutic?", a: "Not when it meets the client's needs. Give accurate information after considering readiness and understanding, and explain a coordinated referral while addressing the immediate concern rather than dismissing it." },
+      { q: "What should the nurse do after a suicide-related cue?", a: "Ask directly about suicidal thoughts and immediate safety, including a plan when indicated; remain present, obtain urgent help and follow the applicable safety or emergency protocol. Direct asking does not increase suicidal thoughts or behavior." },
     ],
   },
 
   {
     slug: "dosage-calculation-formulas",
     topic: "Test-taking skill",
-    title: "Dosage calculation: the formulas that cover it",
-    h1: "Dosage calculation without the panic",
-    description: "The three formulas that cover almost every NCLEX calculation, how to handle weight-based and IV rate problems, and where rounding goes wrong.",
+    title: "NCLEX dosage calculations: formulas and safety checks",
+    h1: "How to solve NCLEX dosage calculations safely",
+    description: "Set up tablet, liquid, weight-based and IV calculations with units, round only when directed, and verify that the result is safe and plausible.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN has an on-screen calculator and worked solutions on every dosage item, so you can see where a calculation went wrong.",
     body: `
-<p>Dosage calculation frightens people out of proportion to its difficulty. There are only a few formulas, the arithmetic is deliberately manageable, and the errors that cost marks are nearly always about setup or units rather than about mathematics.</p>
+<p>NCLEX dosage calculations test whether you can translate an order and a supplied concentration into the requested unit, perform the arithmetic and judge whether the result is safe and plausible. A formula can organize the numbers, but it does not replace reading the entire order, label and item instructions.</p>
 
-<h2>The core formula</h2>
-<p><b>Desired over Have, times Quantity.</b></p>
-<p>Amount to give equals the dose you want, divided by the dose you have on hand, multiplied by the quantity that dose comes in.</p>
-<p>If an order is for 500 mg and the supply is 250 mg per tablet, then 500 divided by 250, times 1 tablet, gives 2 tablets.</p>
-
-<h2>Weight-based doses</h2>
-<p>Two steps, in this order:</p>
-<ol>
-  <li>Convert weight to kilograms if it is given in pounds — <b>divide by 2.2</b>.</li>
-  <li>Multiply the prescribed dose per kilogram by the client's weight in kilograms.</li>
-</ol>
-<p>Then, if needed, apply Desired over Have to convert that dose into a volume.</p>
-
-<div class="key">
-<p><b>Convert units before you calculate, never during.</b> The overwhelming majority of dosage errors are unit errors: pounds left unconverted, milligrams treated as grams, an hourly rate confused with a total volume. Write the units next to every number and make sure they cancel.</p>
+<div class="key" role="note" aria-labelledby="dosage-safety-boundary">
+<h2 id="dosage-safety-boundary" style="margin-top:0">Safety boundary</h2>
+<p>For exam practice, use the values and rounding direction in the item. In clinical practice, verify the complete order, medication label or concentration, route, timing, patient weight when relevant, safe dose range or maximum dose, allergies, contraindications and required monitoring. Follow current facility policy and the device or pharmacy instructions. Do not administer a dose when the order, concentration, calculation or result is unclear or implausible; stop and obtain an independent verification through the required clinical process.</p>
 </div>
 
-<h2>IV flow rates</h2>
-<p><b>By pump, in millilitres per hour:</b> total volume divided by total hours.</p>
-<p>1,000 mL over 8 hours gives 125 mL/hour.</p>
-<p><b>By gravity, in drops per minute:</b> volume in millilitres, times the drop factor, divided by the time in minutes.</p>
-<p>1,000 mL over 8 hours with a drop factor of 15 becomes 1,000 times 15, divided by 480 minutes, which is about 31 drops per minute.</p>
-<p>Drops per minute are always rounded to a whole number — you cannot deliver a fraction of a drop.</p>
+<h2>Use one setup and keep the units visible</h2>
+<p>Dimensional analysis is a reliable general method: write the target unit, multiply by conversion factors arranged so unwanted units cancel, and confirm that only the requested unit remains. Ratio-proportion or the formula method can also work when used correctly. Avoid switching methods in the middle of a problem.</p>
+<p>For a simple tablet or liquid dose, a common formula is:</p>
+<p><b>Amount to give = (ordered dose ÷ dose available) × quantity containing the available dose.</b></p>
+<p>Example: an order is 500 mg and the supply is 250 mg per tablet. The units show the setup: 500 mg × (1 tablet ÷ 250 mg) = 2 tablets.</p>
+<p class="source-note"><b>Evidence for the calculation method:</b> <a href="#source-ncbi-openrn-math-calculations-2023">NCBI Open RN Math Calculations</a>. <a href="#source-ncsbn-2026-rn-test-plan">NCSBN's RN Test Plan</a> places medication calculations within safe medication administration and clinical judgment.</p>
 
-<h2>Conversions worth knowing without thinking</h2>
+<h2>Weight-based doses</h2>
+<p>First determine exactly what the order expresses: a dose per administration, per day, per hour or per minute. Then:</p>
+<ol>
+  <li>Use the measured weight and unit stated in the item. If pounds must be converted to kilograms, use the supplied conversion; a common clinical approximation is <b>1 kg = 2.2 lb</b>, so pounds ÷ 2.2 = kilograms.</li>
+  <li>Multiply the ordered amount per kilogram by the patient's weight in kilograms, keeping any time unit such as dose, day, hour or minute.</li>
+  <li>If the order is per day but is given in divided doses, calculate the daily amount and then divide by the stated number of doses.</li>
+  <li>Compare the calculated dose with the stated safe range or maximum before converting it to tablets or volume.</li>
+</ol>
+<p>Carry adequate precision through intermediate steps and round the final requested result according to the item, policy and measuring device. Premature rounding can change a small dose.</p>
+
+<h2>IV flow rates</h2>
+<p><b>Simple constant-rate pump problem, in milliliters per hour:</b> total volume in mL ÷ total time in hours.</p>
+<p>1,000 mL over 8 hours gives 125 mL/hour.</p>
+<p><b>Gravity infusion, in drops per minute:</b> (volume in mL × tubing drop factor in gtt/mL) ÷ time in minutes.</p>
+<p>1,000 mL over 8 hours with a drop factor of 15 becomes 1,000 times 15, divided by 480 minutes, which is about 31 drops per minute.</p>
+<p>A manual gravity rate is expressed as a whole number of drops per minute because a fraction of a drop cannot be counted. For medication infusions prescribed by weight and time, such as mcg/kg/min, include the patient's weight and the prepared concentration; do not substitute the simple volume-over-time formula.</p>
+
+<h2>Conversions: distinguish exact from conventional</h2>
+<div class="table-wrap" role="region" aria-label="Dosage calculation conversion factors" tabindex="0">
 <table>
-  <tr><th>From</th><th>To</th></tr>
-  <tr><td>1 kg</td><td>2.2 lb</td></tr>
-  <tr><td>1 g</td><td>1,000 mg</td></tr>
-  <tr><td>1 mg</td><td>1,000 mcg</td></tr>
-  <tr><td>1 L</td><td>1,000 mL</td></tr>
-  <tr><td>1 tsp</td><td>5 mL</td></tr>
-  <tr><td>1 tbsp</td><td>15 mL</td></tr>
-  <tr><td>1 oz</td><td>30 mL</td></tr>
+  <caption>Common factors used in nursing-education problems</caption>
+  <thead><tr><th scope="col">Relationship</th><th scope="col">How to use it</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">1 g = 1,000 mg</th><td>Exact metric relationship.</td></tr>
+    <tr><th scope="row">1 mg = 1,000 mcg</th><td>Exact metric relationship.</td></tr>
+    <tr><th scope="row">1 L = 1,000 mL</th><td>Exact metric relationship.</td></tr>
+    <tr><th scope="row">1 kg ≈ 2.2 lb</th><td>Common clinical approximation; use the conversion specified by the item or policy.</td></tr>
+    <tr><th scope="row">1 tsp ≈ 5 mL; 1 Tbsp ≈ 15 mL; 1 fl oz ≈ 30 mL</th><td>Conventional medication-calculation equivalents. For actual liquid medicine, use a calibrated metric device rather than a household spoon.</td></tr>
+  </tbody>
 </table>
+</div>
 
 <h2>Rounding and format</h2>
 <ul>
-  <li>Follow the rounding the item specifies. If it asks for the nearest tenth, give a tenth.</li>
-  <li>Use a leading zero for values below one — <b>0.5 mg</b>, never .5 mg, which is misread as 5.</li>
-  <li>Never use a trailing zero — <b>5 mg</b>, never 5.0 mg, which is misread as 50.</li>
-  <li>Enter only the number unless the item asks for a unit.</li>
+  <li>Do not round intermediate results unless the item explicitly directs it. Round the final answer to the stated place or to the precision supported by the delivery device and policy.</li>
+  <li>For a medication dose below one, use a leading zero: <b>0.5 mg</b>, not .5 mg.</li>
+  <li>Do not add a trailing zero to a whole-number medication dose: <b>5 mg</b>, not 5.0 mg.</li>
+  <li>Enter the number and unit exactly as the item requests; do not assume every interface uses the same response format.</li>
 </ul>
-<p>Those two zero rules are safety conventions, not style preferences, and they are examinable in their own right.</p>
+<p>The decimal conventions reduce tenfold misreading risk. They do not authorize changing the precision of a device setting or ignoring a specific documentation standard.</p>
 
-<h2>The sense check that catches disasters</h2>
-<p>Before entering an answer, ask whether it is plausible. Half a tablet, two tablets, 125 mL per hour — these are ordinary. Fourteen tablets, or an infusion at 1,200 mL per hour, is a signal that something was set up upside down. In practice a nurse who calculates an implausible dose stops and rechecks, and the exam rewards the same instinct.</p>
+<h2>A final verification sequence</h2>
+<ol>
+  <li>Re-read what the question asks and confirm the target unit.</li>
+  <li>Check that unwanted units cancel and recalculate independently.</li>
+  <li>Compare the result with the order, supplied concentration, stated safe range or maximum, route, timing and available measuring device.</li>
+  <li>Ask whether the magnitude is plausible. A surprising result is a stop signal, not a reason to force the number into an expected pattern.</li>
+  <li>Apply the requested rounding only at the end and label the answer as directed.</li>
+</ol>
 `,
     faq: [
-      { q: "What formula is used for dosage calculation?", a: "Desired over Have times Quantity: divide the dose you want by the dose on hand, then multiply by the quantity that dose comes in. Weight-based problems add a step of converting pounds to kilograms first." },
-      { q: "How do I calculate IV drip rate?", a: "Multiply the volume in millilitres by the drop factor, then divide by the time in minutes. Round drops per minute to a whole number. For a pump in millilitres per hour, divide total volume by total hours." },
-      { q: "How many kilograms is a pound?", a: "There are 2.2 pounds in a kilogram, so divide pounds by 2.2 to get kilograms. Doing this conversion before starting the calculation prevents the most common dosage error." },
+      { q: "What formula is used for a simple dosage calculation?", a: "For a tablet or liquid problem, amount to give equals ordered dose divided by available dose, multiplied by the quantity containing the available dose. Dimensional analysis reaches the same result while showing whether units cancel." },
+      { q: "How do I calculate an IV drip rate?", a: "For gravity tubing, multiply volume in mL by the tubing drop factor in gtt/mL and divide by time in minutes; express the result as whole gtt/min. For a simple pump rate, divide mL by hours. Weight- and time-based medication infusions require the full order, patient weight and prepared concentration." },
+      { q: "Should I round kilograms before calculating a weight-based dose?", a: "Keep adequate precision through the intermediate calculation and round the final requested answer according to the item, facility policy and measuring device. Use the weight conversion supplied by the item; 1 kg = 2.2 lb is a common clinical approximation." },
+      { q: "What should I do if a calculated dose looks unsafe?", a: "Stop and recheck the order, label, units, arithmetic, safe range or maximum and patient-specific factors. In clinical practice, do not administer an unclear or implausible dose; obtain the independent verification required by policy." },
     ],
   },
 
   {
     slug: "nclex-study-plan",
     topic: "Study strategy",
-    title: "Building an NCLEX study plan that holds",
-    h1: "An NCLEX study plan you can actually keep",
-    description: "How to structure study time around retrieval and spacing rather than re-reading, and how to build a plan that survives a working week.",
+    title: "NCLEX study plan: build an adaptable schedule",
+    h1: "Build an NCLEX study plan you can adjust",
+    description: "Use the RN Test Plan, retrieval practice, spaced study and an error log to create an NCLEX schedule that fits your baseline, time and needs.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-27",
     cta: "PulseRN builds a weekly plan around your weak areas and schedules flashcards on real calendar dates.",
     body: `
-<p>Most study plans fail for the same two reasons: they are built around hours rather than retrieval, and they assume a week that never happens. A plan that survives contact with shifts, clinicals and ordinary life beats an ambitious one you abandon in ten days.</p>
+<p>An NCLEX study plan should connect the current RN Test Plan to your own evidence: what you can retrieve, which cues or item formats you misread, and what you can realistically practice before the exam. There is no evidence-based daily question quota or universal number of study weeks that fits every candidate.</p>
 
-<h2>Start from a baseline, not a schedule</h2>
-<p>Before deciding what to study, find out where you are. Work through a broad set of questions across all categories and record performance by category rather than overall. The number matters less than the shape — which areas are genuinely weak versus which merely feel uncomfortable.</p>
-<p>Those two often differ. Students routinely over-study the content they find interesting and avoid the category quietly costing them marks.</p>
-
-<h2>The two principles that do the work</h2>
-<div class="key">
-<p><b>Retrieval beats review.</b> Re-reading notes produces recognition — the comfortable feeling of familiarity — without the ability to produce the answer unprompted. Testing yourself is harder, feels worse, and is substantially more effective. If a study session felt easy, it probably was not doing much.</p>
+<div class="key" role="note" aria-labelledby="study-plan-boundary">
+<h2 id="study-plan-boundary" style="margin-top:0">Important boundary</h2>
+<p>This guide is an educational planning framework, not an official NCSBN preparation program or a readiness prediction. Practice-bank scores are not the NCLEX result. Adapt the plan for your testing date, prior education, work and caregiving demands, disability or accommodation needs, health, language needs and the feedback supplied by your nursing program or qualified educator.</p>
 </div>
-<p><b>Spacing beats massing.</b> The same total time spread across several days produces better retention than one long session. Six twenty-minute sessions beat one two-hour block, and they fit a real week far more easily.</p>
 
-<h2>A weekly structure that works</h2>
+<h2>Start with the official scope and a baseline</h2>
+<ol>
+  <li>Read the current <a href="#source-ncsbn-2026-rn-test-plan">NCSBN RN Test Plan</a> so your category map and clinical-judgment practice reflect the exam's published scope.</li>
+  <li>Complete a mixed, representative practice sample under conditions you can repeat. One sample is a starting point, not a verdict.</li>
+  <li>Record more than percent correct: category, item format, cue or concept missed, reasoning error, and whether time or reading changed the response.</li>
+  <li>Choose a small number of priorities for the next cycle, then reassess with a comparable sample.</li>
+</ol>
+
+<h2>Use retrieval and spacing—with evidence-sized claims</h2>
+<p><b>Retrieval practice</b> asks you to produce or apply an answer before seeing it. <b>Distributed practice</b> returns to material across separated sessions instead of placing all exposure in one block. A systematic review of 56 health-professions studies found that 43 reported significant benefits from distributed practice, retrieval practice or both, while also noting heterogeneous designs and assessments. A randomized study in nurse-anesthesia students found higher learning outcomes with a spaced-learning intervention in that setting.</p>
+<p>These findings support using retrieval and spacing as study tools; they do not establish one optimal interval, daily item count or guaranteed NCLEX outcome. Re-reading can still support orientation or clarification, but it should not be your only check of whether you can recall and apply information.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-ramnanan-2024-distributed-retrieval-review">systematic review of distributed and retrieval practice</a> and <a href="#source-khalafi-2024-spaced-learning-nursing">nursing spaced-learning trial</a>.</p>
+
+<h2>Build a repeatable study cycle</h2>
+<div class="table-wrap" role="region" aria-label="Adaptable NCLEX study cycle" tabindex="0">
 <table>
-  <tr><th>Component</th><th>Roughly</th><th>Purpose</th></tr>
-  <tr><td>Daily question practice</td><td>20&ndash;40 items</td><td>Retrieval, and exposure to item formats.</td></tr>
-  <tr><td>Reviewing what you missed</td><td>As long as the practice itself</td><td>Where the actual learning happens.</td></tr>
-  <tr><td>Flashcards</td><td>10&ndash;15 minutes</td><td>Values, drugs, and facts that must be automatic.</td></tr>
-  <tr><td>One weak category, deliberately</td><td>2&ndash;3 sessions weekly</td><td>Turns avoidance into progress.</td></tr>
-  <tr><td>A full-length exam</td><td>Weekly or fortnightly</td><td>Endurance, pacing, and an honest readiness signal.</td></tr>
+  <caption>Choose a workload you can complete and review; the frequencies are individualized</caption>
+  <thead><tr><th scope="col">Component</th><th scope="col">Action</th><th scope="col">Adjustment signal</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Mixed retrieval</th><td>Answer a manageable set across categories and item formats before viewing rationales.</td><td>Reduce set size if review is repeatedly unfinished; increase challenge only when the full cycle remains sustainable.</td></tr>
+    <tr><th scope="row">Deliberate review</th><td>Explain the best answer, the evidence in the stem and the specific reason for your error.</td><td>Return to source material when the rationale exposes a knowledge gap or conflicting information.</td></tr>
+    <tr><th scope="row">Focused repair</th><td>Practice the priority concept, cue or format identified in the error log.</td><td>Change the method when errors persist—for example, from passive reading to recall, worked examples or educator feedback.</td></tr>
+    <tr><th scope="row">Spaced return</th><td>Revisit previously studied material after a delay instead of closing it after one session.</td><td>Shorten or lengthen the interval based on successful recall; research does not prescribe one interval for every learner.</td></tr>
+    <tr><th scope="row">Comparable reassessment</th><td>Use another mixed sample to examine trends across more than one attempt.</td><td>Revise priorities from the pattern, not from a single high or low score.</td></tr>
+  </tbody>
 </table>
+</div>
 
-<h2>Review is not optional</h2>
-<p>Answering 100 questions and reviewing none is close to wasted time. For every item you get wrong, be able to say three things:</p>
+<h2>Turn rationales into an error log</h2>
+<p>After a practice item, use the rationale and an authoritative source when needed to answer:</p>
 <ol>
   <li>Why the correct answer is correct.</li>
-  <li>Why <i>your</i> answer was wrong — specifically.</li>
-  <li>What you would look for to recognise this situation next time.</li>
+  <li>Why your response was less defensible in this stem.</li>
+  <li>Which cue, concept, calculation, priority rule or item-format demand you missed.</li>
+  <li>What you will retrieve or do differently in the next comparable item.</li>
 </ol>
-<p>The second is the one people skip, and it is the one that changes behaviour. Getting an item wrong because you misread the stem is a different problem from not knowing the content, and they need different fixes.</p>
+<p>Also review correct answers that were guesses or were reached with unsafe reasoning. A percent-correct score can hide those gaps.</p>
 
-<h2>Building it around a real life</h2>
+<h2>Fit the workload to real constraints</h2>
 <ul>
-  <li><b>Set a floor, not a ceiling.</b> A minimum you will hit on your worst day — twenty questions — beats a target you miss and then abandon.</li>
-  <li><b>Attach study to an existing habit</b> rather than to a time of day, which shifts with shifts.</li>
-  <li><b>Plan a rest day.</b> Plans without them collapse; plans with them survive.</li>
-  <li><b>Expect to miss days.</b> Missing one is normal. What matters is returning the next day rather than treating the plan as broken.</li>
+  <li><b>Plan from available sessions.</b> Mark work, school, caregiving, appointments and rest before assigning study.</li>
+  <li><b>Use a minimum viable session.</b> On a constrained day, complete a small retrieval-and-review cycle rather than chasing an arbitrary item quota.</li>
+  <li><b>Protect review time.</b> If you can answer more items than you can examine carefully, shrink the set.</li>
+  <li><b>Use recovery rules.</b> When a session is missed, move the highest-priority task or resume the next planned cycle instead of doubling the next workload automatically.</li>
+  <li><b>Seek support when needed.</b> Persistent content, language, test-anxiety or accessibility barriers may require an educator, clinician or the applicable testing-accommodation process rather than more question volume.</li>
 </ul>
 
-<h2>The last week</h2>
-<p>Cramming new content in the final week has little effect and considerable cost. Better: light review of high-yield facts, moderate question practice to keep the rhythm, and genuine attention to sleep. Arriving rested is worth more than the last two hundred questions.</p>
+<h2>Use the final week to stabilize the plan</h2>
+<p>Do not apply a blanket rule that every candidate must stop new content or complete a fixed number of questions. Review the error themes that still matter, keep the workload realistic, rehearse the item formats you will encounter, and verify current exam-day instructions from official sources. Avoid making a single commercial readiness score the basis of a high-stakes decision.</p>
 `,
     faq: [
-      { q: "How long should I study for the NCLEX?", a: "There is no universal figure, and consistency matters far more than total hours. Short daily sessions with real retrieval practice outperform occasional long ones, and a plan you keep for six weeks beats an ambitious one abandoned in ten days." },
-      { q: "How many practice questions should I do a day?", a: "Twenty to forty is a sustainable target for most people, provided you spend as long reviewing what you missed as you spent answering. Volume without review produces very little learning." },
-      { q: "Should I study new content the week before the NCLEX?", a: "Generally no. Late cramming adds little and costs sleep and confidence. Light review of high-yield facts, moderate question practice and proper rest serve you better." },
+      { q: "How long should I study for the NCLEX?", a: "There is no evidence-based duration that fits everyone. Work backward from the test date, establish a repeatable baseline, account for your available time and support needs, and adjust the plan from performance trends rather than a universal number of weeks." },
+      { q: "How many NCLEX practice questions should I do each day?", a: "There is no validated daily quota for every candidate. Choose a set small enough that you can answer it, review the reasoning and update your error log. Increase volume only when quality and sustainability remain intact." },
+      { q: "Should I study new content during the week before the NCLEX?", a: "Use your own error pattern instead of a blanket prohibition. Address high-priority gaps without creating an unsustainable last-minute workload, continue targeted retrieval, and rely on current official instructions for exam-day preparation." },
+      { q: "Does a practice-bank score predict that I will pass?", a: "A score can provide feedback within that product, but it is not the NCLEX result and should not be treated as a guarantee. Look at repeated trends, reasoning quality, content coverage and guidance from your nursing program or qualified educator." },
     ],
   },
 
   {
     slug: "spaced-repetition-for-nursing-students",
     topic: "Study strategy",
-    title: "Spaced repetition for nursing students",
-    h1: "Why spaced repetition works, and how to use it",
-    description: "The forgetting curve, why re-reading feels productive and is not, and how to run spaced repetition without it becoming a second job.",
+    title: "Spaced repetition for nursing: evidence and safe use",
+    h1: "How nursing students can use spaced repetition",
+    description: "Use retrieval across separated sessions, build source-linked cards, adjust intervals from performance, and pair factual recall with clinical scenarios.",
     published: "2026-08-03",
-    updated: "2026-08-03",
+    updated: "2026-08-28",
     cta: "PulseRN schedules flashcards on real calendar dates with a type-before-flip step, so recall is genuine.",
     body: `
-<p>Nursing school asks you to hold an enormous volume of factual material — values, drugs, precautions, milestones — and then tests it months later. Spaced repetition is the best-evidenced tool for that specific problem.</p>
+<p>Spaced repetition revisits material across separated sessions, often with retrieval practice before feedback. Research in health-professions education supports these approaches as useful learning tools, but it does not establish one best schedule, card algorithm or daily duration for every nursing student.</p>
 
-<h2>The forgetting curve</h2>
-<p>Newly learned information decays quickly and then more slowly. Left alone, most of what you studied today is substantially gone within a week. Each successful recall flattens the curve, so the same fact needs reviewing less and less often.</p>
-<p>The insight is that <b>timing matters more than quantity</b>. Reviewing something just as you are about to forget it produces far more durable memory than reviewing it while it is still fresh — which feels easier and accomplishes much less.</p>
-
-<div class="key">
-<p><b>Difficulty is the point.</b> If recall feels effortless, the review came too early to strengthen anything. A little struggle before the answer arrives is the signal that the memory is being reinforced. This is why the study methods that feel most productive are often the least effective.</p>
+<div class="key" role="note" aria-labelledby="spaced-repetition-boundary">
+<h2 id="spaced-repetition-boundary" style="margin-top:0">Important boundary</h2>
+<p>Flashcards are educational aids, not clinical references or proof of NCLEX readiness. Build clinical cards from authoritative, current sources; include context and units; review them when guidance changes; and do not use a memorized card to override an order, medication label, facility policy, patient-specific assessment or clinical judgment.</p>
 </div>
 
-<h2>Why re-reading fails</h2>
-<p>Reading a page again produces <b>recognition</b> — you know you have seen it, so it feels learned. Recognition is not recall, and the exam requires recall with no page in front of you.</p>
-<p>The test is simple: close the book and say the potassium range out loud. If you can, you know it. If you can only recognise it when you see it, you do not yet.</p>
+<h2>What the evidence supports</h2>
+<p>A systematic review included 56 health-professions studies and 63 experiments; 43 studies reported significant benefits from distributed practice, retrieval practice or both. The authors also identified heterogeneous interventions, comparison groups and assessments, so the review does not validate a single interval or algorithm. A randomized study of nurse-anesthesia students reported improved learning outcomes with a spaced-learning intervention in that setting, which supports the approach but does not by itself establish effects for every nursing program or the NCLEX.</p>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-ramnanan-2024-distributed-retrieval-review">systematic review of distributed and retrieval practice</a> and <a href="#source-khalafi-2024-spaced-learning-nursing">nursing spaced-learning trial</a>.</p>
 
-<h2>Making it work</h2>
-<ul>
-  <li><b>Recall before you flip.</b> Say or type the answer first. Flipping to check without attempting is passive review with extra steps.</li>
-  <li><b>Grade yourself honestly.</b> Marking a card as known because you almost had it removes it from your schedule at exactly the wrong moment.</li>
-  <li><b>Keep cards atomic.</b> One fact per card. A card holding six things will be graded on whichever part you remembered.</li>
-  <li><b>Do the due cards daily.</b> The schedule only works if the intervals are respected; skipping days collapses it into cramming.</li>
-</ul>
+<h2>Use retrieval, feedback and correction</h2>
+<ol>
+  <li><b>Attempt before revealing.</b> Produce the answer or reasoning first instead of using familiarity as the only check.</li>
+  <li><b>Compare with the sourced answer.</b> Feedback should identify what was correct, missing or unsafe.</li>
+  <li><b>Correct the card or your response.</b> Do not repeatedly rehearse an ambiguous prompt, obsolete value or oversimplified rule.</li>
+  <li><b>Return after a delay.</b> Use later performance to decide whether the interval should shorten, stay similar or lengthen.</li>
+</ol>
+<p>Rereading can help you orient to unfamiliar material or clarify an error. The limitation is using familiarity from rereading as the only evidence that you can retrieve and apply the content.</p>
 
-<h2>What belongs on a card</h2>
-<p>Spaced repetition suits discrete facts. It is excellent for:</p>
-<ul>
-  <li>Laboratory values and critical thresholds</li>
-  <li>Drug classes, antidotes, and what to monitor</li>
-  <li>Isolation precautions by condition</li>
-  <li>Developmental milestones</li>
-  <li>Signs associated with a specific imbalance</li>
-</ul>
-<p>It is a poor fit for clinical judgement. You cannot flashcard your way to knowing which client to see first — that needs whole scenarios and practice questions. Use both, for what each is good at.</p>
+<h2>Design cards that remain auditable</h2>
+<div class="table-wrap" role="region" aria-label="Safe nursing flashcard design" tabindex="0">
+<table>
+  <caption>Fields that make a nursing flashcard easier to verify and update</caption>
+  <thead><tr><th scope="col">Field</th><th scope="col">What to record</th><th scope="col">Why it matters</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Focused prompt</th><td>One clear retrieval target or one short decision with enough context.</td><td>Avoids grading a multi-part card as known when only one part was recalled.</td></tr>
+    <tr><th scope="row">Answer and units</th><td>The complete answer, including units, population or condition when relevant.</td><td>Prevents a number or rule from being rehearsed without its safety context.</td></tr>
+    <tr><th scope="row">Authoritative source</th><td>Publisher, link and precise section or label locator.</td><td>Makes the claim traceable instead of relying on an unsourced deck.</td></tr>
+    <tr><th scope="row">Source/review date</th><td>When the source was updated and when the card was last checked.</td><td>Supports review when guidelines, labels or exam scope change.</td></tr>
+    <tr><th scope="row">Qualification</th><td>Exceptions, variability or a reminder to apply patient and policy context.</td><td>Reduces unsafe memorization of an absolute rule.</td></tr>
+  </tbody>
+</table>
+</div>
 
-<h2>The realistic version</h2>
-<p>Fifteen minutes a day, every day, will carry several hundred facts to exam day. Two hours on a Sunday will not, however virtuous it feels. The value is entirely in the consistency, which is also why a manageable daily load beats an ambitious one that you start skipping.</p>
+<h2>Match the tool to the learning target</h2>
+<p>Cards can support retrieval of terminology, metric conversions, pharmacology facts, precautions and other source-bound information. They can also present a short cue that begins a reasoning step. They should not be the only practice for prioritization, delegation, unfolding cases, multi-cue clinical judgment or item-format navigation. Pair factual retrieval with mixed questions, case-based practice, rationale review and feedback.</p>
+<p>Be cautious with laboratory ranges, medication timing, antidotes, isolation rules and developmental information: values and recommendations can vary by laboratory, product, population, jurisdiction or current guidance. Put the qualification and source on the card rather than memorizing a universal statement.</p>
+
+<h2>Choose a sustainable review load</h2>
+<p>No study cited here establishes that 15 minutes a day will maintain a particular number of facts. Select a load that leaves time for accurate recall, feedback, corrections and case-based practice. If reviews accumulate, pause or reduce new cards, prioritize current high-risk content, and resume instead of treating one missed day as failure. Consistency can help distribute practice, but the schedule should adapt to performance and real constraints.</p>
 `,
     faq: [
-      { q: "Does spaced repetition work for nursing school?", a: "Very well for factual recall — lab values, drugs, precautions, milestones — which is a large share of what the NCLEX requires. It is a poor fit for clinical judgement, which needs full scenarios and practice questions instead." },
-      { q: "Why is re-reading notes ineffective?", a: "It builds recognition rather than recall. The material feels familiar when you see it, but the exam requires producing it with nothing in front of you. Self-testing is harder and substantially more effective." },
-      { q: "How long should I spend on flashcards each day?", a: "Fifteen minutes daily is enough to carry several hundred facts, and it beats a single long weekly session. Spaced repetition depends on respecting the intervals, so consistency matters more than duration." },
+      { q: "Does spaced repetition work for nursing students?", a: "Health-professions evidence supports distributed and retrieval practice as useful learning approaches, and one randomized nurse-anesthesia study reported improved outcomes. The evidence does not guarantee an NCLEX result or identify one best schedule for every student." },
+      { q: "Should I stop rereading notes?", a: "No. Rereading can orient you or clarify an error, but familiarity should not be your only test of learning. Try to retrieve or apply the information before looking, then use the source and feedback to correct gaps." },
+      { q: "How long should I spend on flashcards each day?", a: "There is no validated universal duration or card count. Use a workload that allows careful recall, feedback, source checking and other practice; reduce new cards when accumulated reviews crowd out those steps." },
+      { q: "Can flashcards teach clinical judgment?", a: "They can support the factual knowledge and short cue recognition used in reasoning, but they should not be the only method. Add mixed items, unfolding cases, prioritization decisions, rationale review and feedback." },
     ],
   },
 
@@ -382,51 +429,66 @@ export const SKILL_ARTICLES = [
     topic: "Study strategy",
     title: "Failed the NCLEX? What to do next",
     h1: "If you did not pass: a practical next step",
-    description: "How to read your candidate performance report, what to change rather than repeat, and why most retakers were closer than they felt.",
+    description: "Use your official Candidate Performance Report, confirm retake rules, and build a source-bound remediation plan without treating category labels as exact scores.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN tracks performance by category so your second attempt targets what actually cost you marks.",
+    updated: "2026-08-28",
+    cta: "PulseRN can organize review by test-plan category; use it alongside your official CPR, current NCSBN guidance, and educator feedback.",
     body: `
-<p>Not passing is common, survivable, and does not mean you will not be a nurse. A great many practising nurses did not pass the first time. What matters now is that the second attempt is different from the first, rather than simply more of it.</p>
+<p>A failing NCLEX result means that this attempt did not meet the passing standard. It does not identify one cause, quantify your future chance of passing or prescribe one study method. Separate the official retake requirements from the learning decisions you make next.</p>
 
-<h2>Read the performance report properly</h2>
-<p>Unsuccessful candidates receive a Candidate Performance Report showing how you performed in each client-need category relative to the passing standard. It is the most useful document you have.</p>
-<p>Read it for <b>shape</b>, not verdict. Categories marked below the standard are where the marks went. Categories near the standard are usually cheaper to fix than the ones far below, because you are closer to competence already.</p>
-
-<div class="key">
-<p><b>Do not simply study more.</b> The most common mistake among retakers is repeating the first attempt's preparation with greater intensity. If your method produced this result, more of it produces the same result. Something specific has to change.</p>
+<div class="key" role="note" aria-labelledby="retake-boundary">
+<h2 id="retake-boundary" style="margin-top:0">Important boundary</h2>
+<p>The Candidate Performance Report (CPR) provides indicators of strengths and weaknesses; it is not a section-by-section grade, an exact score or proof that one factor caused the result. NCSBN states that overall exam performance determines pass or fail. Use the CPR with the current test plan, your own practice evidence and qualified educator support.</p>
 </div>
 
-<h2>Work out which problem you actually have</h2>
+<h2>Read the CPR for what it actually reports</h2>
+<p>NCSBN describes the CPR as an individualized two-page document for candidates who do not pass. A candidate who did not answer the minimum number of items receives an abbreviated CPR stating how many items were answered and how many were required, without further diagnostic information.</p>
+<div class="table-wrap" role="region" aria-label="NCLEX Candidate Performance Report indicators" tabindex="0">
 <table>
-  <tr><th>Pattern</th><th>What it points to</th><th>What to change</th></tr>
-  <tr><td>Weak in one or two categories</td><td>Content gaps</td><td>Targeted content work, then questions in that area.</td></tr>
-  <tr><td>Near the standard everywhere</td><td>Test-taking method</td><td>Prioritisation frameworks and reading the stem precisely.</td></tr>
-  <tr><td>Ran out of time</td><td>Pacing</td><td>Timed full-length practice; a decision rule for hard items.</td></tr>
-  <tr><td>Knew it but chose wrong</td><td>Application</td><td>Whole case studies rather than isolated questions.</td></tr>
-  <tr><td>Went blank</td><td>Anxiety</td><td>Simulate real conditions; address the anxiety directly.</td></tr>
+  <caption>How to use the three CPR performance indicators without over-interpreting them</caption>
+  <thead><tr><th scope="col">Indicator</th><th scope="col">Official meaning or direction</th><th scope="col">Safe planning use</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Below the Passing Standard</th><td>NCSBN directs candidates to concentrate first on these test-plan areas.</td><td>Give these areas early remediation time, then reassess with varied items and rationale review.</td></tr>
+    <tr><th scope="row">Near the Passing Standard</th><td>The ability estimate for that content area is not clearly above or below the standard.</td><td>Review after the below-standard priorities; do not treat “near” as a precise distance from passing.</td></tr>
+    <tr><th scope="row">Above the Passing Standard</th><td>The CPR identifies relative strength, while NCSBN still recommends study to maintain proficiency.</td><td>Use lighter maintenance retrieval instead of deleting the area from the plan.</td></tr>
+  </tbody>
 </table>
+ </div>
+<p class="source-note"><b>Evidence for this section:</b> NCSBN's <a href="#source-ncsbn-candidate-performance-report">Candidate Performance Report guidance</a> and <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a>.</p>
+
+<h2>Build a remediation plan from more than one signal</h2>
+<ol>
+  <li><b>Map the CPR to the current test plan.</b> List the content areas and clinical-judgment categories, starting with below-standard areas and then near-standard areas.</li>
+  <li><b>Collect comparable practice evidence.</b> Use mixed and targeted items to identify repeated errors. A single item, score or commercial readiness label should not control the plan.</li>
+  <li><b>Classify the error you can observe.</b> Record the missed cue, content gap, calculation, unsafe priority, item-format issue or reasoning step. Do not diagnose a cause such as anxiety or poor pacing from a CPR label alone.</li>
+  <li><b>Retrieve, check and correct.</b> Attempt the concept or reasoning before revealing the answer, compare it with an authoritative source and correct the error.</li>
+  <li><b>Return after a delay.</b> Distributed and retrieval practice can support learning, but the evidence does not establish one best interval, daily question quota or guaranteed retake result.</li>
+  <li><b>Reassess the pattern.</b> Change the priority when repeated, comparable attempts show improvement or a persistent gap.</li>
+</ol>
+<p class="source-note"><b>Evidence for this section:</b> the <a href="#source-ramnanan-2024-distributed-retrieval-review">systematic review of distributed and retrieval practice</a>, the <a href="#source-khalafi-2024-spaced-learning-nursing">nursing spaced-learning trial</a> and the <a href="#source-ncsbn-2026-rn-test-plan">official test plan</a>.</p>
 
 <h2>The retake logistics</h2>
-<p>There is a mandatory waiting period before retesting, and boards of nursing set their own limits on attempts within a given period. You will need to re-register and pay again. Confirm the current waiting period and your board's specific requirements at <a href="https://www.nclex.com" rel="noopener">nclex.com</a> and with your state board — these vary and they change.</p>
-<p>Use the wait deliberately. It is enough time to change something real, and long enough that drifting through it is a genuine risk.</p>
+<p>NCSBN's retake policy allows another examination 45 days after the prior administration. Some nursing regulatory bodies (NRBs) require a longer interval. Candidates testing through a participating NRB may take the NCLEX up to eight times in a year with 45 test-free days between examinations, while some jurisdictions impose stricter annual limits.</p>
+<ol>
+  <li>Contact your NRB and confirm its current retake eligibility, attempt limits, fees and required materials.</li>
+  <li>Register again with Pearson and pay the applicable registration fee.</li>
+  <li>Wait for a new Authorization to Test (ATT); its validity dates reflect any required waiting period.</li>
+  <li>Schedule only after the new ATT arrives, using its dates and your NRB's instructions.</li>
+</ol>
+<p>Policies can change, so verify the <a href="#source-ncsbn-nclex-results-retake">current NCSBN retake page</a> and your NRB rather than relying on a memorized rule.</p>
 
-<h2>A different second attempt</h2>
-<ul>
-  <li><b>Start from the report</b>, not from page one of a review book.</li>
-  <li><b>Practise whole cases</b>, since applying knowledge under a scenario is what most retakers are missing.</li>
-  <li><b>Sit full-length timed exams.</b> If pacing or stamina contributed, this is the only thing that fixes it.</li>
-  <li><b>Review every wrong answer</b> to the point of being able to say why <i>your</i> choice was wrong, not just why the right one was right.</li>
-  <li><b>Rebuild the endurance</b> deliberately. Sitting a long adaptive exam is a skill of its own.</li>
-</ul>
+<h2>Practice under exam-like constraints only when it answers a question</h2>
+<p>Timed sets or longer simulations can help you observe pacing, concentration and item-navigation behavior. They are not a universal remedy and should not replace content repair, clinical-judgment cases, feedback, rest or accommodations. Use the shortest practice that produces useful evidence, then review the reasoning carefully.</p>
 
-<h2>One more thing</h2>
-<p>The failure is information about one attempt on one day, not about whether you can do this work. Most candidates who did not pass were closer than the result felt — the exam stops when it is confident, and being just below the standard produces the same letter as being far below it. Treat the report as a map, and make the second attempt a different attempt.</p>
+<h2>Do not estimate closeness from the stopping point</h2>
+<p>NCSBN describes three CAT decision rules: the 95% Confidence Interval Rule, the Maximum-Length Exam Rule and the Run-Out-Of-Time Rule. Because the rule applied and the final ability estimate—not item count alone—determine the outcome, do not infer how close you were from where the exam stopped. Use the official result and CPR instead.</p>
+<p class="source-note"><b>Evidence for this section:</b> NCSBN's <a href="#source-ncsbn-computerized-adaptive-testing">computerized adaptive testing explanation</a>.</p>
 `,
     faq: [
-      { q: "How soon can I retake the NCLEX?", a: "There is a mandatory waiting period, and individual boards of nursing set their own rules on the number of attempts allowed in a period. Confirm the current requirements with NCSBN and your own board, as these vary and change." },
-      { q: "What is the Candidate Performance Report?", a: "A report sent to unsuccessful candidates showing performance in each client-need category relative to the passing standard. It is the most useful guide available for targeting a second attempt." },
-      { q: "Does failing the NCLEX mean I will not be a nurse?", a: "No. Many practising nurses did not pass on their first attempt. What matters is diagnosing what went wrong — content, method, pacing or anxiety — and changing that specifically rather than repeating the same preparation more intensely." },
+      { q: "How soon can I retake the NCLEX?", a: "NCSBN's policy allows retesting 45 days after the previous exam, but some nursing regulatory bodies require a longer interval or impose stricter annual attempt limits. Confirm the current rule with your NRB and use the validity dates on your new ATT." },
+      { q: "What is the Candidate Performance Report?", a: "The CPR is NCSBN's individualized report for a candidate who did not pass. It gives below-, near- and above-standard indicators across test-plan content and clinical-judgment categories, but it is not a section grade or exact score. A candidate who did not answer the minimum number of items receives an abbreviated report without further diagnostic detail." },
+      { q: "What should I change before an NCLEX retake?", a: "There is no single change for every candidate. Start with the CPR and current test plan, collect repeated practice evidence, identify the specific cue, content or reasoning errors you can observe, and use retrieval, feedback and delayed reassessment. Seek qualified educator or accommodation support when needed." },
+      { q: "Does failing the NCLEX mean I cannot become a nurse?", a: "A failing result means this attempt did not meet the NCLEX passing standard; it is not a prediction of your future result. You still must satisfy your nursing regulatory body's eligibility requirements and pass the licensure examination." },
     ],
   },
 ];

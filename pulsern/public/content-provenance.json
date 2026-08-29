@@ -1,0 +1,3125 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "reviewer": {
+    "id": "sheldon-bennett-rn",
+    "displayName": "Sheldon Bennett",
+    "credential": "RN",
+    "licenseJurisdiction": "Florida Board of Nursing",
+    "licenseType": "Registered Nurse",
+    "verificationUrl": "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701",
+    "verifiedAt": "2026-08-26",
+    "verificationStatus": "verified"
+  },
+  "guides": [
+    {
+      "route": "/learn/how-is-the-nclex-scored/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how is the NCLEX scored",
+        "secondary": [
+          "NCLEX CAT scoring",
+          "NCLEX passing standard"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "b26d42c8a4781b1f8985c511ff9c7c6a21766118bd4a3bc50d37fbb715891d24",
+      "sourceSetSha256": "2a2b6363d44e1f2e3b35113dfdb4d40d923f10b076c0acce267971b9e37b5897",
+      "sources": [
+        {
+          "id": "ncsbn-computerized-adaptive-testing",
+          "title": "NCSBN — Computerized Adaptive Testing",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/computerized-adaptive-testing.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 13 how-is-the-nclex-scored content and source-set digests",
+        "claims": [
+          {
+            "id": "nclex-pass-fail-cat-and-partial-credit-scope",
+            "locator": "Opening paragraph; Important boundary",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-nclex-faqs",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "cat-running-ability-estimate-and-item-selection",
+            "locator": "What computer adaptive testing does — first paragraph",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing"
+            ]
+          },
+          {
+            "id": "cat-initial-item-and-subsequent-performance-selection",
+            "locator": "What computer adaptive testing does — first paragraph",
+            "sourceIds": [
+              "ncsbn-nclex-faqs",
+              "ncsbn-computerized-adaptive-testing"
+            ]
+          },
+          {
+            "id": "perceived-difficulty-and-simplified-next-item-limitations",
+            "locator": "What computer adaptive testing does — second paragraph; difficulty FAQ",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "cat-95-percent-confidence-rule",
+            "locator": "The three pass/fail rules — 95% Confidence Interval row",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "cat-maximum-length-rule",
+            "locator": "The three pass/fail rules — Maximum-Length Exam row",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "cat-run-out-of-time-rule",
+            "locator": "The three pass/fail rules — Run-Out-Of-Time row",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "question-count-result-limitation",
+            "locator": "Why your question count means less than you think; minimum-question FAQ",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing"
+            ]
+          },
+          {
+            "id": "partial-credit-eligibility-and-three-methods",
+            "locator": "Partial credit applies when an item has more than one key; partial-credit FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "unanswered-item-interface-prompt",
+            "locator": "Use scoring information without inventing a result — final bullet",
+            "sourceIds": [
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "nclex-scoring-education-scope-and-no-product-guarantee",
+            "locator": "Title, description, CTA; Important boundary; passing-percentage FAQ",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/how-many-questions-is-the-nclex/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how many questions are on the NCLEX",
+        "secondary": [
+          "NCLEX minimum questions",
+          "NCLEX maximum questions"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "ec1dd8c4d5e7439dbeb22cb8213d3537308ce59d30ee58d0f9c37c9254126944",
+      "sourceSetSha256": "4e4d4a22601926c9f6d51e37e6318a7aef7013d9b78ed1a2e4e441396949066d",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-computerized-adaptive-testing",
+          "title": "NCSBN — Computerized Adaptive Testing",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/computerized-adaptive-testing.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-2026-candidate-bulletin",
+          "title": "NCSBN — 2026 Candidate Bulletin",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/prepare.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-26",
+          "locator": "2026 Candidate Bulletin section"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 14 how-many-questions-is-the-nclex content and source-set digests",
+        "claims": [
+          {
+            "id": "nclex-2026-item-range-duration-and-effective-period",
+            "locator": "Opening paragraph; Current-rule boundary; item-count FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-2026-candidate-bulletin"
+            ]
+          },
+          {
+            "id": "minimum-examination-content-area-composition",
+            "locator": "What is inside the 85-item minimum — Test-plan content areas row",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "minimum-examination-clinical-judgment-case-study-composition",
+            "locator": "What is inside the 85-item minimum — Clinical-judgment case studies row",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "pretest-item-count-purpose-and-indistinguishability",
+            "locator": "What is inside the 85-item minimum — Pretest items row and following paragraph; pretest FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "cat-adaptive-selection-and-variable-examination-length",
+            "locator": "Opening paragraph; Why examination length varies",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "cat-95-percent-confidence-stopping-rule",
+            "locator": "Why examination length varies — first paragraph",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "cat-maximum-length-final-ability-rule",
+            "locator": "Why examination length varies — first and second paragraphs; maximum-question FAQ",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "question-count-and-stopping-point-result-limitation",
+            "locator": "Current-rule boundary; Why examination length varies — second paragraph; maximum-question FAQ",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing"
+            ]
+          },
+          {
+            "id": "five-hour-break-item-navigation-and-timing-rules",
+            "locator": "Time, not just items — first paragraph; break-duration FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-2026-candidate-bulletin",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "run-out-of-time-minimum-and-final-ability-rules",
+            "locator": "Time, not just items — second paragraph",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "practice-pacing-individualization-and-no-universal-quota",
+            "locator": "Practice pacing without inventing a universal quota",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-2026-candidate-bulletin"
+            ]
+          },
+          {
+            "id": "nclex-length-education-scope-and-no-result-prediction",
+            "locator": "Title, description, CTA; Current-rule boundary",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-computerized-adaptive-testing"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/next-generation-nclex-what-changed/",
+      "risk": "exam",
+      "intent": {
+        "primary": "what changed on the Next Generation NCLEX",
+        "secondary": [
+          "NGN changes",
+          "NCLEX clinical judgment model"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "e93a96c67936c9efdd3c6c3beddcfe78df5481ab96765883a4e6da922ec29b0b",
+      "sourceSetSha256": "992438279c47b0d36a0adecc760130701165d7d0d22bfc5596dd659c0c983ac3",
+      "sources": [
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 15 next-generation-nclex-what-changed content and source-set digests",
+        "claims": [
+          {
+            "id": "ngn-launch-date-purpose-and-presentation",
+            "locator": "Opening paragraph; NGN definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "nclex-knowledge-skills-abilities-and-clinical-judgment-scope",
+            "locator": "Opening paragraph; The central change — second paragraph",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "current-2026-test-plan-effective-period",
+            "locator": "Current-plan boundary",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "clinical-judgment-definition-and-iterative-process",
+            "locator": "The central change — first paragraph",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "case-study-and-stand-alone-clinical-judgment-representation",
+            "locator": "The central change — first paragraph; case-membership FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "ncjmm-six-steps-and-case-study-measurement",
+            "locator": "The clinical judgment model",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "case-study-count-and-stand-alone-percentage",
+            "locator": "How clinical judgment appears — Case studies and Stand-alone items rows; content-amount FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "multiple-item-formats-and-multimedia-boundary",
+            "locator": "How clinical judgment appears — Multiple formats row",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "partial-credit-eligibility-and-methods",
+            "locator": "How clinical judgment appears — Partial credit row; partial-credit FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-unofficial-case-weight-inference",
+            "locator": "The clinical judgment model — final paragraph; Case studies row limit",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "cat-pass-fail-client-needs-and-result-boundaries",
+            "locator": "What did not change",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "ngn-study-guidance-scope-and-no-score-guarantee",
+            "locator": "Study implication; CTA",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-test-day-what-to-expect/",
+      "risk": "exam",
+      "intent": {
+        "primary": "what to expect on NCLEX test day",
+        "secondary": [
+          "NCLEX test day rules",
+          "NCLEX exam day process"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "c42b12ab69070103fc9904b45d220c80cd1f9e645f2fca0e0f423e1e67d2187b",
+      "sourceSetSha256": "7a0255cf7cd9f1ca126f2db1a01e1d98accaa72b8ccf8bac976c613558b2c343",
+      "sources": [
+        {
+          "id": "ncsbn-2026-candidate-bulletin-pdf",
+          "title": "NCSBN — 2026 NCLEX Candidate Bulletin",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_NCLEX_Candidate_Bulletin_English.pdf",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "Identification Requirements; Candidate Rules; Check-In Process; Breaks; Results Reporting; live PDF checked 2026-08-28 and no publication-day field is displayed"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-computerized-adaptive-testing",
+          "title": "NCSBN — Computerized Adaptive Testing",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/computerized-adaptive-testing.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 16 nclex-test-day-what-to-expect content and source-set digests",
+        "claims": [
+          {
+            "id": "test-day-current-source-and-appointment-boundary",
+            "locator": "Opening paragraph; Verify your own appointment",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "test-center-arrival-timing-and-late-arrival-rule",
+            "locator": "Before arrival — Arrival row; arrival FAQ",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "identification-match-and-qualification-rules",
+            "locator": "Before arrival — Identification row; identification FAQ",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "check-in-digital-signature-biometric-and-photo-process",
+            "locator": "Before arrival — Check-in row",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "personal-item-locker-and-break-access-rules",
+            "locator": "Before arrival — Personal items row",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "five-hour-scheduled-and-unscheduled-break-timing",
+            "locator": "Breaks and the clock — first paragraph; break FAQ",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "break-biometric-and-prohibited-item-rules",
+            "locator": "Breaks and the clock — second paragraph",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "cat-selection-and-perceived-difficulty-limitation",
+            "locator": "While answering items — opening paragraph and final bullet",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "per-item-time-answer-and-navigation-rules",
+            "locator": "While answering items — first three bullets; return-to-item FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "exam-confidentiality-and-enforcement-boundary",
+            "locator": "Confidentiality and results — first paragraph",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "test-center-official-and-quick-results-boundary",
+            "locator": "Confidentiality and results — second paragraph; results FAQ",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "test-day-education-scope-and-no-result-prediction",
+            "locator": "Description; CTA; Verify your own appointment",
+            "sourceIds": [
+              "ncsbn-2026-candidate-bulletin-pdf",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/bow-tie-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX bow-tie questions",
+        "secondary": [
+          "NGN bow-tie strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "2440e4ee6369a2fc174e3a7764d521bfbf06d0afb4f66a81b1a3a814f3f0b1a1",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 17 bow-tie-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "bow-tie-five-selection-structure",
+            "locator": "Opening paragraph; What each part asks; definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "bow-tie-current-interface-verification-boundary",
+            "locator": "Format and scoring boundary — first sentence",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-unofficial-bow-tie-scoring-inference",
+            "locator": "Format and scoring boundary — final sentence; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "potential-condition-actions-and-parameters-tasks",
+            "locator": "What each part asks table",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "completion-order-is-study-guidance-not-rule",
+            "locator": "A consistency-first method; completion-order FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "clinical-judgment-consistency-practice-scope",
+            "locator": "A consistency-first method — steps 1–6; Common reasoning errors",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "bow-tie-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/matrix-grid-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX matrix grid questions",
+        "secondary": [
+          "NGN matrix question strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "6281f9f3e7717b7d885662b2e5a0e9eb50ed83b0cbebec2eac015a5646ae939d",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 18 matrix-grid-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "matrix-grid-row-column-classification-format",
+            "locator": "Opening paragraph; definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-universal-row-level-scoring-claim",
+            "locator": "Scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "row-by-row-reasoning-is-study-guidance",
+            "locator": "Study method; The method",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "client-context-classification-boundary",
+            "locator": "The method; The frame does most of the work",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "no-invented-answer-balancing-rule",
+            "locator": "The method — final step; balancing FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "matrix-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/cloze-drop-down-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX cloze drop-down questions",
+        "secondary": [
+          "NGN cloze question strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "49a5d6dfaef8bbd9fd8e97a5a17c8e94d065e4a49f7cfe290ed9445dc5872bd9",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 19 cloze-drop-down-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "cloze-drop-down-format",
+            "locator": "Opening paragraph; definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "current-interface-and-directions-boundary",
+            "locator": "Opening paragraph; definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-unofficial-blank-level-scoring-rule",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "completion-order-not-an-official-rule",
+            "locator": "A consistency-checking study method; completion-order FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "consistency-checking-is-study-guidance",
+            "locator": "A consistency-checking study method; Consistency questions to ask",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "cloze-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/highlight-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX highlight questions",
+        "secondary": [
+          "NGN highlight question strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "cae7a731e21f0d67385dc9307a86c27622506b5ffeabe2d940dca3a7396f4a90",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 20 highlight-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "highlight-item-text-selection-format",
+            "locator": "Opening paragraph; definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "recognize-relevant-cues-context",
+            "locator": "Opening paragraph; A stem-first study method",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-universal-highlight-scoring-or-point-value",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-fixed-highlight-answer-count",
+            "locator": "Format and scoring boundary; study-guidance qualification; Common reasoning errors",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "stem-first-contextual-evaluation-is-study-guidance",
+            "locator": "A stem-first study method; Questions for evaluating a phrase",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "highlight-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/select-all-that-apply-strategy/",
+      "risk": "exam",
+      "intent": {
+        "primary": "NCLEX select all that apply strategy",
+        "secondary": [
+          "SATA NCLEX strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "c3afb8bd58cd3521d36504a7ea4750300320da040fddd997a9323fe34dd4c159",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 21 select-all-that-apply-strategy content and source-set digests",
+        "claims": [
+          {
+            "id": "multiple-response-select-every-supported-option-format",
+            "locator": "Opening paragraph; answer-count FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "current-interface-and-directions-boundary",
+            "locator": "Opening paragraph; answer-count FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-universal-sata-scoring-or-coin-flip-formula",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-invented-answer-count-rule",
+            "locator": "An option-by-option study method; Common reasoning errors; answer-count FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "option-by-option-context-check-is-study-guidance",
+            "locator": "An option-by-option study method; separate-option FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "sata-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/drag-and-drop-ordering-questions/",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to answer NCLEX drag and drop ordering questions",
+        "secondary": [
+          "NGN ordering question strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "1c32e92fccab9f202adfc136bda3828e36bb8f5bd3e376f8d80d8bb0dabb4a9f",
+      "sourceSetSha256": "da905d4a1796bf78c83cdbdad1d122f7ad9e6d17db5622ab264d1e424fc264c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 22 drag-and-drop-ordering-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "ordering-and-drag-interface-format-boundary",
+            "locator": "Opening paragraph",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "current-interface-and-directions-boundary",
+            "locator": "Opening paragraph",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-unofficial-ordering-scoring-or-cascade-rule",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "constraint-first-sequencing-is-study-guidance",
+            "locator": "A constraint-first study method",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "no-universal-clinical-priority-mnemonic",
+            "locator": "Study-guidance qualification; Common reasoning errors; action-order and assessment FAQs",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "ordering-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/lab-values-to-memorize/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "lab values to memorize for the NCLEX",
+        "secondary": [
+          "NCLEX normal lab values"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "719cf02f930d752ca04965b3bbb07f48f6cfbde1f9cbe99cdb00e11253f2add5",
+      "sourceSetSha256": "f1216fab579c7917936c1be320ca9d06d495d987bd83af8c69faa3bd254f9cad",
+      "sources": [
+        {
+          "id": "medlineplus-understanding-lab-results-2025",
+          "title": "MedlinePlus — How to Understand Your Lab Results",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/lab-tests/how-to-understand-your-lab-results/",
+          "sourceUpdated": "2025-09-04",
+          "accessedAt": "2026-08-29",
+          "locator": "Reference ranges; laboratory-method and range variation; results inside and outside ranges; factors affecting results; page last-updated field"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ramnanan-2024-distributed-retrieval-review",
+          "title": "Systematic review of distributed practice and retrieval practice in health professions education",
+          "publisher": "Advances in Health Sciences Education via PubMed Central",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 23 lab-values-to-memorize content and source-set digests",
+        "claims": [
+          {
+            "id": "laboratory-reference-range-method-and-population-variation",
+            "locator": "Opening paragraph; normal-potassium FAQ",
+            "sourceIds": [
+              "medlineplus-understanding-lab-results-2025"
+            ]
+          },
+          {
+            "id": "inside-and-outside-range-interpretation-limitations",
+            "locator": "Opening paragraph",
+            "sourceIds": [
+              "medlineplus-understanding-lab-results-2025"
+            ]
+          },
+          {
+            "id": "clinical-use-of-reporting-lab-units-context-and-policy",
+            "locator": "Safety and exam boundary; result-by-result interpretation check",
+            "sourceIds": [
+              "medlineplus-understanding-lab-results-2025"
+            ]
+          },
+          {
+            "id": "no-universal-critical-value-list",
+            "locator": "Safety and exam boundary",
+            "sourceIds": [
+              "medlineplus-understanding-lab-results-2025"
+            ]
+          },
+          {
+            "id": "no-guaranteed-nclex-laboratory-memorization-list",
+            "locator": "Categories to organize during study; lab-values FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "distributed-retrieval-study-method-and-versioning-boundary",
+            "locator": "How to study without memorizing false certainty",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "medlineplus-understanding-lab-results-2025"
+            ]
+          },
+          {
+            "id": "lab-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA; Safety and exam boundary",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "medlineplus-understanding-lab-results-2025"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/abg-interpretation/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "ABG interpretation for the NCLEX",
+        "secondary": [
+          "NCLEX ABG practice",
+          "acid base interpretation"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "4cc71368c819558ec37ee6c36257aaaea73c5389dc878ce31fed7b932e0c3166",
+      "sourceSetSha256": "897d728338a16872e1438b68ab3270ba4539f270cadc473183a2f823307fcc98",
+      "sources": [
+        {
+          "id": "medlineplus-abg",
+          "title": "MedlinePlus — Arterial Blood Gas (ABG) Test",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/lab-tests/arterial-blood-gas-abg-test/",
+          "sourceUpdated": "2025-06-26",
+          "accessedAt": "2026-08-26",
+          "locator": "Measurements, uses, and results sections"
+        },
+        {
+          "id": "ncbi-statpearls-abg-2026",
+          "title": "Arterial Blood Gas Analysis: Fundamentals, Interpretation, and Clinical Utility",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK536919/",
+          "sourceUpdated": "2026-07-05",
+          "accessedAt": "2026-08-26",
+          "locator": "Pathophysiology; Results, Reporting, and Critical Findings; Clinical Significance"
+        },
+        {
+          "id": "ncbi-statpearls-acid-base-balance",
+          "title": "Physiology, Acid Base Balance",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK507807/",
+          "sourceUpdated": "2022-09-12",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Related Testing; Pathophysiology"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-26",
+        "scope": "Full RN clinical and source review of the exact Guide 1 ABG content and source-set digests",
+        "claims": [
+          {
+            "id": "abg-purpose-and-components",
+            "locator": "Opening paragraph; Common adult reference ranges",
+            "sourceIds": [
+              "medlineplus-abg",
+              "ncbi-statpearls-abg-2026"
+            ]
+          },
+          {
+            "id": "abg-adult-reference-ranges",
+            "locator": "Common adult reference ranges table and qualification",
+            "sourceIds": [
+              "medlineplus-abg",
+              "ncbi-statpearls-abg-2026",
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-acidemia-alkalemia-and-primary-process",
+            "locator": "The four steps, items 1–4",
+            "sourceIds": [
+              "ncbi-statpearls-abg-2026",
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-directional-screening-shortcut",
+            "locator": "The introductory shortcut",
+            "sourceIds": [
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-compensation-and-mixed-disorder-caution",
+            "locator": "Compensation table and 7.40 paragraph",
+            "sourceIds": [
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-common-metabolic-causes",
+            "locator": "Causes worth recognizing: metabolic rows and vomiting/diarrhea pairing",
+            "sourceIds": [
+              "ncbi-statpearls-abg-2026",
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-common-respiratory-causes",
+            "locator": "Causes worth recognizing: respiratory rows",
+            "sourceIds": [
+              "ncbi-statpearls-acid-base-balance"
+            ]
+          },
+          {
+            "id": "abg-oxygenation-context",
+            "locator": "Do not forget the oxygen",
+            "sourceIds": [
+              "medlineplus-abg",
+              "ncbi-statpearls-abg-2026"
+            ]
+          },
+          {
+            "id": "abg-nclex-education-scope",
+            "locator": "Page title, description, and educational framing",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/electrolyte-imbalances/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "electrolyte imbalances for the NCLEX",
+        "secondary": [
+          "NCLEX electrolyte signs"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "52256cc286865ec11a47d5416bec41fa575a4d888e33fb0e7cd35d87936f5383",
+      "sourceSetSha256": "9de71ddc0623cd55e62a42c83201872548e69b3d51aef3ecd873a162e6a29bf2",
+      "sources": [
+        {
+          "id": "medlineplus-electrolyte-panel",
+          "title": "MedlinePlus — Electrolyte Panel",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/lab-tests/electrolyte-panel/",
+          "sourceUpdated": "2024-03-12",
+          "accessedAt": "2026-08-26",
+          "locator": "Electrolytes, uses, symptoms, and results sections; page last-updated field"
+        },
+        {
+          "id": "ncbi-statpearls-hypokalemia-2025",
+          "title": "Hypokalemia",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK482465/",
+          "sourceUpdated": "2025-01-19",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Pathophysiology; Evaluation; Pearls and Other Issues"
+        },
+        {
+          "id": "ncbi-statpearls-hyperkalemia-2025",
+          "title": "Hyperkalemia",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK470284/",
+          "sourceUpdated": "2025-12-01",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Etiology; Evaluation; Treatment / Management"
+        },
+        {
+          "id": "dailymed-potassium-chloride-concentrate",
+          "title": "Potassium Chloride for Injection Concentrate, USP",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/fda/fdaDrugXsl.cfm?setid=bf8e8ac7-e6a8-4571-a0ea-7bcab89290f6&type=display",
+          "sourceUpdated": "2025-08-12",
+          "accessedAt": "2026-08-26",
+          "locator": "Description; Warnings — undiluted administration and rapid infusion; Precautions — General; Dosage and Administration — dilution, individualized dose/rate, rate limits, and continuous cardiac monitoring for urgent high-rate infusion; Effective Time 20250812"
+        },
+        {
+          "id": "ncbi-statpearls-hyponatremia-2026",
+          "title": "Hyponatremia",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK470386/",
+          "sourceUpdated": "2026-06-19",
+          "accessedAt": "2026-08-26",
+          "locator": "Continuing Education Activity; History and Physical; Treatment / Management; Complications"
+        },
+        {
+          "id": "ncbi-statpearls-hypernatremia-2023",
+          "title": "Hypernatremia",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK441960/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Etiology; History and Physical; Treatment / Management"
+        },
+        {
+          "id": "ncbi-statpearls-calcium-disorders-2026",
+          "title": "Calcium Homeostasis and Disorders: An Integrated Clinical and Laboratory Approach",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK557683/",
+          "sourceUpdated": "2026-06-18",
+          "accessedAt": "2026-08-26",
+          "locator": "Introduction; Interfering Factors; Results, Reporting, and Critical Findings"
+        },
+        {
+          "id": "ncbi-statpearls-magnesium-2023",
+          "title": "Magnesium",
+          "publisher": "StatPearls Publishing via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK519036/",
+          "sourceUpdated": "2023-02-20",
+          "accessedAt": "2026-08-26",
+          "locator": "Indications; Effects of Magnesium; Monitoring; Toxicity"
+        },
+        {
+          "id": "dailymed-magnesium-sulfate-in-water",
+          "title": "Magnesium Sulfate in Water for Injection",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/fda/fdaDrugXsl.cfm?setid=efadcb55-f935-4c60-b2e2-0a76b9194b50&type=display",
+          "sourceUpdated": "2026-01-29",
+          "accessedAt": "2026-08-26",
+          "locator": "Clinical Pharmacology; Warnings; Overdosage; Dosage and Administration; Effective Time 20260129"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 2 electrolyte-imbalances content and source-set digests",
+        "claims": [
+          {
+            "id": "electrolyte-assessment-and-urgent-findings",
+            "locator": "Opening paragraph; Findings that change the priority; urgency FAQ",
+            "sourceIds": [
+              "medlineplus-electrolyte-panel",
+              "ncbi-statpearls-hyperkalemia-2025",
+              "ncbi-statpearls-hyponatremia-2026",
+              "ncbi-statpearls-calcium-disorders-2026",
+              "ncbi-statpearls-magnesium-2023"
+            ]
+          },
+          {
+            "id": "potassium-thresholds-findings-causes-and-priorities",
+            "locator": "Potassium comparison table and contextual interpretation paragraph",
+            "sourceIds": [
+              "ncbi-statpearls-hypokalemia-2025",
+              "ncbi-statpearls-hyperkalemia-2025"
+            ]
+          },
+          {
+            "id": "potassium-chloride-infusion-safety",
+            "locator": "Potassium safety callout and potassium chloride FAQ",
+            "sourceIds": [
+              "dailymed-potassium-chloride-concentrate"
+            ]
+          },
+          {
+            "id": "pseudohyperkalemia-confirmation-context",
+            "locator": "Unexpected potassium result paragraph",
+            "sourceIds": [
+              "ncbi-statpearls-hyperkalemia-2025"
+            ]
+          },
+          {
+            "id": "sodium-findings-causes-and-priorities",
+            "locator": "Sodium comparison table",
+            "sourceIds": [
+              "ncbi-statpearls-hyponatremia-2026",
+              "ncbi-statpearls-hypernatremia-2023"
+            ]
+          },
+          {
+            "id": "sodium-correction-risk-and-clinical-context",
+            "locator": "Sodium correction paragraph",
+            "sourceIds": [
+              "ncbi-statpearls-hyponatremia-2026",
+              "ncbi-statpearls-hypernatremia-2023"
+            ]
+          },
+          {
+            "id": "calcium-findings-total-versus-ionized-and-bedside-signs",
+            "locator": "Calcium comparison table; Chvostek and Trousseau paragraph and FAQ",
+            "sourceIds": [
+              "ncbi-statpearls-calcium-disorders-2026"
+            ]
+          },
+          {
+            "id": "magnesium-findings-causes-and-toxicity",
+            "locator": "Magnesium comparison table",
+            "sourceIds": [
+              "ncbi-statpearls-magnesium-2023",
+              "dailymed-magnesium-sulfate-in-water"
+            ]
+          },
+          {
+            "id": "magnesium-sulfate-monitoring-and-toxicity-response",
+            "locator": "Magnesium sulfate monitoring paragraph and FAQ",
+            "sourceIds": [
+              "ncbi-statpearls-magnesium-2023",
+              "dailymed-magnesium-sulfate-in-water"
+            ]
+          },
+          {
+            "id": "electrolyte-recall-pattern-qualification",
+            "locator": "A safer recall pattern",
+            "sourceIds": [
+              "ncbi-statpearls-hypokalemia-2025",
+              "ncbi-statpearls-hyperkalemia-2025",
+              "ncbi-statpearls-hyponatremia-2026",
+              "ncbi-statpearls-hypernatremia-2023",
+              "ncbi-statpearls-calcium-disorders-2026",
+              "ncbi-statpearls-magnesium-2023"
+            ]
+          },
+          {
+            "id": "electrolyte-nclex-education-scope",
+            "locator": "Page title, description, CTA, and educational framing",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/infection-control-precautions/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "infection control precautions for the NCLEX",
+        "secondary": [
+          "NCLEX isolation precautions"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "488d688a7c7dd0922c453edf367345fd61c3a44abfed69a62fd539f543b07156",
+      "sourceSetSha256": "2b5a29aca50788c46f08c4c7666bd8fe0fe6f930f6952bc7f61eb3a47981212c",
+      "sources": [
+        {
+          "id": "cdc-isolation-precautions",
+          "title": "CDC — Precautions to Prevent Transmission of Infectious Agents",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/precautions.html",
+          "sourceUpdated": "2023-11-22",
+          "accessedAt": "2026-08-27",
+          "locator": "III.B. Transmission-Based Precautions; Contact, Droplet, Airborne, placement, PPE, transport, and discontinuation sections"
+        },
+        {
+          "id": "cdc-isolation-appendix-a-2025",
+          "title": "CDC — Type and Duration of Precautions for Selected Infections",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-type-duration.html",
+          "sourceUpdated": "2025-02-07",
+          "accessedAt": "2026-08-27",
+          "locator": "Disease-specific entries for tuberculosis, measles, varicella, zoster, influenza, pertussis, meningococcal disease, mumps, rubella, group A streptococcus, MDROs, C. difficile, scabies, lice, RSV, and wounds"
+        },
+        {
+          "id": "cdc-ppe-sequence-2023",
+          "title": "CDC — Example of Safe Donning and Removal of PPE",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-figure.html",
+          "sourceUpdated": "2023-11-27",
+          "accessedAt": "2026-08-27",
+          "locator": "Donning of PPE; Removing PPE; Safe Work Practices; Hand Hygiene"
+        },
+        {
+          "id": "cdc-cdiff-acute-care-2026",
+          "title": "CDC — C. diff Infection Prevention in Acute Care Facilities",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/c-diff/hcp/clinical-guidance/index.html",
+          "sourceUpdated": "2026-05-13",
+          "accessedAt": "2026-08-27",
+          "locator": "Isolate and initiate contact precautions; dedicated equipment; environmental cleaning; transfer communication; duration after diarrhea resolves"
+        },
+        {
+          "id": "cdc-clinical-hand-hygiene-2024",
+          "title": "CDC — Clinical Safety: Hand Hygiene for Healthcare Workers",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/clean-hands/hcp/clinical-safety/index.html",
+          "sourceUpdated": "2024-02-27",
+          "accessedAt": "2026-08-27",
+          "locator": "When to wash with soap and water; C. difficile outbreaks; continued access to alcohol-based hand sanitizer"
+        },
+        {
+          "id": "cdc-protective-environment-table-5",
+          "title": "CDC — Components of a Protective Environment",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-table-5.html",
+          "sourceUpdated": "2023-11-27",
+          "accessedAt": "2026-08-27",
+          "locator": "Allogeneic HSCT population; Standard and Expanded Precautions; engineering controls; flowers and plants"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 3 infection-control-precautions content and source-set digests",
+        "claims": [
+          {
+            "id": "infection-control-standard-and-transmission-based-framework",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "cdc-isolation-precautions",
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "airborne-droplet-contact-placement-ppe-and-transport",
+            "locator": "The three transmission-based categories comparison table",
+            "sourceIds": [
+              "cdc-isolation-precautions",
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "airborne-disease-examples-qualifiers-and-durations",
+            "locator": "High-yield disease examples and qualifiers — Airborne, with Standard Precautions; Airborne FAQ",
+            "sourceIds": [
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "droplet-disease-examples-and-durations",
+            "locator": "High-yield disease examples and qualifiers — Droplet, with Standard Precautions",
+            "sourceIds": [
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "contact-disease-examples-qualifiers-and-durations",
+            "locator": "High-yield disease examples and qualifiers — Contact, with Standard Precautions",
+            "sourceIds": [
+              "cdc-isolation-appendix-a-2025",
+              "cdc-cdiff-acute-care-2026"
+            ]
+          },
+          {
+            "id": "cdiff-contact-environmental-and-hand-hygiene-precautions",
+            "locator": "C. difficile: separate spores from hand-hygiene policy; C. difficile FAQ",
+            "sourceIds": [
+              "cdc-cdiff-acute-care-2026",
+              "cdc-clinical-hand-hygiene-2024",
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "protective-environment-population-and-controls",
+            "locator": "Protective environment is a specific designation; protective-environment FAQ",
+            "sourceIds": [
+              "cdc-protective-environment-table-5"
+            ]
+          },
+          {
+            "id": "ppe-donning-removal-and-protocol-qualification",
+            "locator": "PPE sequence: learn the example and follow the protocol; PPE-order FAQ",
+            "sourceIds": [
+              "cdc-ppe-sequence-2023",
+              "cdc-isolation-precautions"
+            ]
+          },
+          {
+            "id": "infection-control-nclex-education-scope",
+            "locator": "Page title, description, CTA, and educational framing",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/insulin-types-and-timing/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "insulin types onset and peak for the NCLEX",
+        "secondary": [
+          "NCLEX insulin timing"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "a49ad5567061a952e8f7671e2d6a8afde560e74685ea76f20aa50dd43fd29dd6",
+      "sourceSetSha256": "3b0d47187acf1bd444d28c7362dd080f2aaafa6f662b1184b5dde85a51f9e3c5",
+      "sources": [
+        {
+          "id": "cdc-insulin-types-2024",
+          "title": "CDC — Types of Insulin",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/diabetes/about/how-to-use-insulin.html",
+          "sourceUpdated": "2024-05-15",
+          "accessedAt": "2026-08-27",
+          "locator": "Terms to know; insulin types table; brand and patient variability qualification"
+        },
+        {
+          "id": "dailymed-insulin-lispro-2024",
+          "title": "Insulin Lispro Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=2be14cbb-197a-4da8-82c8-2443594e7f6f",
+          "sourceUpdated": "2024-05-31",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — subcutaneous meal timing and supervised intravenous infusion; Warnings and Precautions — hypoglycemia; Drug Interactions — beta-blockers and other agents that blunt symptoms"
+        },
+        {
+          "id": "dailymed-insulin-aspart-2023",
+          "title": "Insulin Aspart Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=bee5b358-c863-420b-be73-ced2e920c499",
+          "sourceUpdated": "2023-02-28",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — supervised intravenous administration, dilution, and close glucose and potassium monitoring; Clinical Pharmacology — variability of onset, peak, and duration"
+        },
+        {
+          "id": "dailymed-humulin-n-2017",
+          "title": "Humulin N Prescribing Information and Instructions for Use",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=456e226e-e7b0-4850-b649-3d9e5533893c",
+          "sourceUpdated": "2017-10-11",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — mixing with Humulin R or Humalog; Instructions for Use — rolling, inverting, and appearance checks"
+        },
+        {
+          "id": "dailymed-lantus-2025",
+          "title": "Lantus Insulin Glargine Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=d5e07a0c-7e14-4756-9152-9fea485d654a",
+          "sourceUpdated": "2025-06-02",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — do not mix or administer intravenously; Pharmacokinetics — 24-hour profile without a pronounced peak; Drug Interactions — blunted hypoglycemia symptoms"
+        },
+        {
+          "id": "medlineplus-low-blood-sugar-self-care-2026",
+          "title": "MedlinePlus — Low blood sugar: self-care",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/ency/patientinstructions/000085.htm",
+          "sourceUpdated": "2026-01-25",
+          "accessedAt": "2026-08-27",
+          "locator": "When Your Blood Sugar Gets Low — 15 grams, 15-minute recheck, repeat treatment, and conditional follow-up snack"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 4 insulin-types-and-timing content and source-set digests",
+        "claims": [
+          {
+            "id": "insulin-product-route-and-administration-safety-boundary",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "cdc-insulin-types-2024",
+              "dailymed-insulin-lispro-2024",
+              "dailymed-insulin-aspart-2023",
+              "dailymed-humulin-n-2017",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "insulin-category-onset-peak-duration-estimates",
+            "locator": "Category estimates, not universal clocks; insulin category timing table",
+            "sourceIds": [
+              "cdc-insulin-types-2024",
+              "dailymed-insulin-aspart-2023",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "insulin-hypoglycemia-risk-and-timing-variability",
+            "locator": "Maximum glucose-lowering effect callout; peak-risk FAQ",
+            "sourceIds": [
+              "cdc-insulin-types-2024",
+              "dailymed-insulin-lispro-2024",
+              "dailymed-insulin-aspart-2023",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "insulin-lispro-meal-timing",
+            "locator": "Route, meal timing and preparation are product-specific — Meal timing",
+            "sourceIds": [
+              "dailymed-insulin-lispro-2024"
+            ]
+          },
+          {
+            "id": "insulin-lispro-and-aspart-intravenous-use",
+            "locator": "Route, meal timing and preparation are product-specific — Intravenous use; IV-insulin FAQ",
+            "sourceIds": [
+              "dailymed-insulin-lispro-2024",
+              "dailymed-insulin-aspart-2023"
+            ]
+          },
+          {
+            "id": "insulin-product-specific-mixing-and-resuspension",
+            "locator": "Route, meal timing and preparation are product-specific — Mixing and resuspension; Mix only when the exact products are compatible; clear-and-cloudy FAQ",
+            "sourceIds": [
+              "dailymed-humulin-n-2017",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "hypoglycemia-recognition-and-oral-treatment",
+            "locator": "Recognizing and responding to hypoglycemia; mild-hypoglycemia FAQ",
+            "sourceIds": [
+              "medlineplus-low-blood-sugar-self-care-2026",
+              "dailymed-insulin-lispro-2024"
+            ]
+          },
+          {
+            "id": "hypoglycemia-unsafe-swallow-and-beta-blocker-precautions",
+            "locator": "Recognizing and responding to hypoglycemia — unsafe swallowing; The beta-blocker interaction",
+            "sourceIds": [
+              "dailymed-insulin-lispro-2024",
+              "dailymed-lantus-2025"
+            ]
+          },
+          {
+            "id": "insulin-nclex-education-scope",
+            "locator": "Page title, description, CTA, and educational framing",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/high-alert-medications/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "high alert medications and antidotes for the NCLEX",
+        "secondary": [
+          "NCLEX medication antidotes"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "4b9333991566244b9c6a57c4c6a8b99310e8e0f627925a987d761b48c7907abc",
+      "sourceSetSha256": "187410cae562b5e40b98c4632562b053dd9422fa2f7269ab26bc0d17416915e8",
+      "sources": [
+        {
+          "id": "ismp-high-alert-acute-care-2024",
+          "title": "ISMP — High-Alert Medications in Acute Care Settings",
+          "publisher": "Institute for Safe Medication Practices",
+          "url": "https://home.ecri.org/blogs/ismp-resources/high-alert-medications-in-acute-care-settings",
+          "sourceUpdated": "2024-01-10",
+          "accessedAt": "2026-08-26",
+          "locator": "2024 high-alert list and safeguards"
+        },
+        {
+          "id": "dailymed-heparin-sodium-2024",
+          "title": "Heparin Sodium Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=cb1c1e7a-c9ca-4a07-8833-e45ce436d287",
+          "sourceUpdated": "2024-05-03",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — coagulation-test monitoring; Warnings and Precautions — hemorrhage and thrombocytopenia; Overdosage — protamine neutralization"
+        },
+        {
+          "id": "dailymed-protamine-sulfate-2024",
+          "title": "Protamine Sulfate Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=94d4f57f-940e-c0a8-e053-2a95a90ae3af",
+          "sourceUpdated": "2024-01-23",
+          "accessedAt": "2026-08-27",
+          "locator": "Indications and Usage — heparin overdosage; Warnings — severe hypotensive and anaphylactoid reactions; Dosage and Administration — slow IV administration and dose dependence on elapsed time"
+        },
+        {
+          "id": "dailymed-warfarin-sodium-2026",
+          "title": "Warfarin Sodium Tablets Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=558b7a0d-5490-4c1b-802e-3ab3f1efe760",
+          "sourceUpdated": "2026-06-03",
+          "accessedAt": "2026-08-27",
+          "locator": "Boxed Warning; Dosage and Administration — INR monitoring; Drug Interactions — dietary vitamin K; Overdosage — vitamin K and factor replacement options"
+        },
+        {
+          "id": "dailymed-naloxone-injection-2026",
+          "title": "Naloxone Hydrochloride Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=21d20dff-6efe-481e-a5a0-9c80ded73ca9",
+          "sourceUpdated": "2026-07-01",
+          "accessedAt": "2026-08-27",
+          "locator": "Opioid Overdose — airway and resuscitative support, surveillance, incomplete response, and repeat administration"
+        },
+        {
+          "id": "dailymed-flumazenil-2026",
+          "title": "Flumazenil Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=53d9144a-b7ee-b52a-e063-6294a90a09c5",
+          "sourceUpdated": "2026-06-10",
+          "accessedAt": "2026-08-27",
+          "locator": "Indications and Usage; Contraindications; Boxed Warning and Risk of Seizures; monitoring for resedation"
+        },
+        {
+          "id": "dailymed-acetylcysteine-injection-2025",
+          "title": "Acetylcysteine Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=277963a0-8ab2-4305-a688-28e47e87c584",
+          "sourceUpdated": "2025-09-09",
+          "accessedAt": "2026-08-27",
+          "locator": "Indications and Usage — acetaminophen overdose; Dosage and Administration — pretreatment assessment and time-sensitive treatment"
+        },
+        {
+          "id": "dailymed-magnesium-sulfate-in-water",
+          "title": "Magnesium Sulfate in Water for Injection",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/fda/fdaDrugXsl.cfm?setid=efadcb55-f935-4c60-b2e2-0a76b9194b50&type=display",
+          "sourceUpdated": "2026-01-29",
+          "accessedAt": "2026-08-26",
+          "locator": "Clinical Pharmacology; Warnings; Overdosage; Dosage and Administration; Effective Time 20260129"
+        },
+        {
+          "id": "dailymed-digifab-2025",
+          "title": "DigiFab Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=c05ee6a5-c98b-45f4-83fd-40781639d653",
+          "sourceUpdated": "2025-01-29",
+          "accessedAt": "2026-08-27",
+          "locator": "Indications and Usage — life-threatening or potentially life-threatening digoxin toxicity; Warnings and Precautions — potassium, ECG, and clinical monitoring"
+        },
+        {
+          "id": "dailymed-deferoxamine-2026",
+          "title": "Deferoxamine Mesylate for Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=c99553fb-3fae-b88a-6c2c-efa7520197f9",
+          "sourceUpdated": "2026-06-01",
+          "accessedAt": "2026-08-27",
+          "locator": "Indications and Usage — adjunct to standard measures for acute iron intoxication; Dosage and Administration — route and rate qualifications"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 5 high-alert-medications content and source-set digests",
+        "claims": [
+          {
+            "id": "high-alert-definition-and-safety-boundary",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "ismp-high-alert-acute-care-2024",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "heparin-overdose-protamine-reversal-and-limitations",
+            "locator": "Reversal agents table — Unfractionated heparin; heparin-reversal FAQ",
+            "sourceIds": [
+              "dailymed-heparin-sodium-2024",
+              "dailymed-protamine-sulfate-2024"
+            ]
+          },
+          {
+            "id": "warfarin-reversal-monitoring-and-vitamin-k-diet",
+            "locator": "Reversal agents table — Warfarin; Anticoagulant monitoring; warfarin-diet FAQ",
+            "sourceIds": [
+              "dailymed-warfarin-sodium-2026"
+            ]
+          },
+          {
+            "id": "opioid-respiratory-depression-naloxone-and-support",
+            "locator": "Reversal agents table — Opioids; naloxone FAQ",
+            "sourceIds": [
+              "dailymed-naloxone-injection-2026"
+            ]
+          },
+          {
+            "id": "benzodiazepine-flumazenil-selection-and-seizure-risk",
+            "locator": "Reversal agents table — Benzodiazepines; flumazenil FAQ",
+            "sourceIds": [
+              "dailymed-flumazenil-2026"
+            ]
+          },
+          {
+            "id": "acetaminophen-overdose-acetylcysteine",
+            "locator": "Reversal agents table — Acetaminophen",
+            "sourceIds": [
+              "dailymed-acetylcysteine-injection-2025"
+            ]
+          },
+          {
+            "id": "magnesium-toxicity-calcium-and-supportive-care",
+            "locator": "Reversal agents table — Magnesium sulfate",
+            "sourceIds": [
+              "dailymed-magnesium-sulfate-in-water"
+            ]
+          },
+          {
+            "id": "digoxin-toxicity-digoxin-immune-fab-and-monitoring",
+            "locator": "Reversal agents table — Digoxin",
+            "sourceIds": [
+              "dailymed-digifab-2025"
+            ]
+          },
+          {
+            "id": "acute-iron-intoxication-deferoxamine-qualification",
+            "locator": "Reversal agents table — Iron",
+            "sourceIds": [
+              "dailymed-deferoxamine-2026"
+            ]
+          },
+          {
+            "id": "high-alert-layered-safeguards-and-nclex-scope",
+            "locator": "Use layered safeguards; What the NCLEX-style item is testing; title, description and CTA",
+            "sourceIds": [
+              "ismp-high-alert-acute-care-2024",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/prioritization-abc-maslow/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "NCLEX prioritization ABC and Maslow",
+        "secondary": [
+          "what patient comes first NCLEX"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "593f70ffc8e9c3f654cbd636712ec5feec560be75deeb279661589a53ad5cd4f",
+      "sourceSetSha256": "2645b7c1ae74a863333b0a551823a1279bee07b55b025913e968322729cb7669",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "aha-2025-adult-basic-life-support",
+          "title": "Part 7: Adult Basic Life Support — 2025 AHA Guidelines",
+          "publisher": "American Heart Association via PubMed",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/41122888/",
+          "sourceUpdated": "2025-10-21",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract — recognition of cardiac arrest, emergency-response activation, CPR, AED use, respiratory arrest, and foreign-body airway obstruction; PMID 41122888"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 6 prioritization-abc-maslow content and source-set digests",
+        "claims": [
+          {
+            "id": "prioritization-clinical-judgment-sequence",
+            "locator": "Opening paragraph; A defensible decision sequence",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "prioritization-heuristics-safety-boundary",
+            "locator": "Safety boundary",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex",
+              "aha-2025-adult-basic-life-support"
+            ]
+          },
+          {
+            "id": "established-emergency-and-time-sensitive-action",
+            "locator": "A defensible decision sequence — steps 2 through 4",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex",
+              "aha-2025-adult-basic-life-support"
+            ]
+          },
+          {
+            "id": "abc-screen-limitations-and-adult-bls-sequence",
+            "locator": "ABCs are a screen, not a universal ranking law; ABC FAQ",
+            "sourceIds": [
+              "aha-2025-adult-basic-life-support",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "maslow-limited-tie-breaker",
+            "locator": "Maslow is a tie-breaker, not a clinical guideline; Maslow FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "assessment-action-and-evaluation-context",
+            "locator": "Assessment first—unless the decision is already established; assessment FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "expected-chronic-and-change-comparison-safeguards",
+            "locator": "How to compare clients without unsafe shortcuts; expected-or-chronic FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "prioritization-practice-and-nclex-education-scope",
+            "locator": "Practice the comparison, not only the answer; title, description and CTA",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/delegation-and-assignment/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "NCLEX delegation and assignment rules",
+        "secondary": [
+          "RN LPN UAP delegation NCLEX"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "a2a254264aa027f2ff9adac1148af9804f5ab944ab5d5e90dce9b5ce597f905e",
+      "sourceSetSha256": "ac3a93df4bfccd62851a8d874487fc76a767b7b5f5acfd1166d97d58d9aaaa54",
+      "sources": [
+        {
+          "id": "ncsbn-ana-delegation-guidelines-2019",
+          "title": "National Guidelines for Nursing Delegation",
+          "publisher": "National Council of State Boards of Nursing and American Nurses Association",
+          "url": "https://www.ncsbn.org/public-files/NGND-PosPaper_06.pdf",
+          "sourceUpdated": "2019-04-29",
+          "accessedAt": "2026-08-27",
+          "locator": "Purpose and definitions; Five Rights of Delegation; Licensed Nurse Responsibilities; Delegatee Responsibilities"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 7 delegation-and-assignment content and source-set digests",
+        "claims": [
+          {
+            "id": "delegation-nclex-framework-and-safety-boundary",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "ncsbn-ana-delegation-guidelines-2019",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "assignment-delegation-and-handoff-definitions",
+            "locator": "Assignment and delegation are not the same",
+            "sourceIds": [
+              "ncsbn-ana-delegation-guidelines-2019"
+            ]
+          },
+          {
+            "id": "delegation-patient-authority-competence-communication-supervision-checks",
+            "locator": "A defensible delegation decision table",
+            "sourceIds": [
+              "ncsbn-ana-delegation-guidelines-2019",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "five-rights-of-delegation",
+            "locator": "The Five Rights of Delegation; Five Rights FAQ",
+            "sourceIds": [
+              "ncsbn-ana-delegation-guidelines-2019"
+            ]
+          },
+          {
+            "id": "nondelegable-clinical-reasoning-judgment-and-decisions",
+            "locator": "What cannot be delegated; nondelegable-work FAQ",
+            "sourceIds": [
+              "ncsbn-ana-delegation-guidelines-2019"
+            ]
+          },
+          {
+            "id": "jurisdiction-policy-role-and-competence-limitations",
+            "locator": "Safety boundary; What cannot be delegated; common NCLEX options",
+            "sourceIds": [
+              "ncsbn-ana-delegation-guidelines-2019"
+            ]
+          },
+          {
+            "id": "data-collection-versus-clinical-interpretation",
+            "locator": "How to reason about common NCLEX options — Data collection is not clinical interpretation",
+            "sourceIds": [
+              "ncsbn-ana-delegation-guidelines-2019",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "delegator-and-delegatee-accountability-responsibilities",
+            "locator": "Accountability is shared but not identical; accountability FAQ",
+            "sourceIds": [
+              "ncsbn-ana-delegation-guidelines-2019"
+            ]
+          },
+          {
+            "id": "delegation-scenario-analysis-and-nclex-education-scope",
+            "locator": "Use the stem, not a slogan; title, description and CTA",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/therapeutic-communication/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "therapeutic communication NCLEX questions",
+        "secondary": [
+          "NCLEX best response strategy"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "e51357e7f9f5932cf4b03f89f2c20c3d2d87953a26af0bfff422b99aa4c838f7",
+      "sourceSetSha256": "67f827a14c2b045e4e24e8bb75fac69d0f499fdd420b7e97bcee7cea7509b05e",
+      "sources": [
+        {
+          "id": "ncbi-openrn-therapeutic-communication-2025",
+          "title": "Therapeutic Communication and the Nurse-Client Relationship",
+          "publisher": "Open RN via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK617004/",
+          "sourceUpdated": "2025-11-01",
+          "accessedAt": "2026-08-27",
+          "locator": "Communication competencies; nurse-client relationship; therapeutic techniques; nontherapeutic responses; escalation and cultural considerations"
+        },
+        {
+          "id": "nimh-suicide-five-action-steps-2024",
+          "title": "5 Action Steps to Help Someone Having Thoughts of Suicide",
+          "publisher": "National Institute of Mental Health",
+          "url": "https://www.nimh.nih.gov/health/publications/5-action-steps-to-help-someone-having-thoughts-of-suicide",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-27",
+          "locator": "ASK; BE THERE; HELP KEEP THEM SAFE; HELP THEM CONNECT; FOLLOW UP; NIMH Identifier OM 24-4315, revised 2024"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 8 therapeutic-communication content and source-set digests",
+        "claims": [
+          {
+            "id": "therapeutic-communication-purpose-and-safety-boundary",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "communication-purpose-cues-and-clinical-judgment-sequence",
+            "locator": "Start with purpose and cues",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "communication-techniques-contextual-use",
+            "locator": "Therapeutic techniques are contextual",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025"
+            ]
+          },
+          {
+            "id": "open-versus-focused-question-selection",
+            "locator": "Therapeutic techniques are contextual — Open-ended and focused questions; open-ended-question FAQ",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "reflection-clarification-silence-presence-qualifications",
+            "locator": "Therapeutic techniques are contextual — Reflection, clarification, silence and presence",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025"
+            ]
+          },
+          {
+            "id": "information-teaching-referral-and-coordination",
+            "locator": "Therapeutic techniques are contextual — Information, teaching and referral; referral FAQ",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "nontherapeutic-blocking-patterns",
+            "locator": "Patterns that often block communication",
+            "sourceIds": [
+              "ncbi-openrn-therapeutic-communication-2025"
+            ]
+          },
+          {
+            "id": "suicide-cue-direct-question-safety-and-escalation",
+            "locator": "Safety can require direct questions; suicide-risk FAQ",
+            "sourceIds": [
+              "nimh-suicide-five-action-steps-2024",
+              "ncbi-openrn-therapeutic-communication-2025",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "communication-response-comparison-and-nclex-scope",
+            "locator": "Compare plausible responses; title, description and CTA",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/dosage-calculation-formulas/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "dosage calculation formulas for the NCLEX",
+        "secondary": [
+          "NCLEX medication math"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "7090723b9c97fc4c0ed38e9b365a02f03c14f4b39ee8d0766e7a6dbf0325c824",
+      "sourceSetSha256": "ffae2149ee574a1ddf529bd3bb57bf104da100e9fde02446e7e1b0fb0347bcdb",
+      "sources": [
+        {
+          "id": "ncbi-openrn-math-calculations-2023",
+          "title": "Math Calculations",
+          "publisher": "Open RN via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK596732/",
+          "sourceUpdated": "2023-01-01",
+          "accessedAt": "2026-08-27",
+          "locator": "Sections 5.4–5.17 — equivalencies, rounding, dimensional analysis, conversions, dosage forms, weight-based and safe-dose calculations, and IV infusion rates"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-27",
+        "scope": "Full RN clinical and source review of the exact Guide 9 dosage-calculation-formulas content and source-set digests",
+        "claims": [
+          {
+            "id": "dosage-calculation-purpose-and-safety-boundary",
+            "locator": "Opening paragraph; Safety boundary",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "dimensional-analysis-and-unit-cancellation",
+            "locator": "Use one setup and keep the units visible",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "simple-tablet-and-liquid-dose-formula",
+            "locator": "Use one setup and keep the units visible; simple-dose FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "weight-based-dose-time-basis-and-divided-doses",
+            "locator": "Weight-based doses; weight-rounding FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "safe-dose-range-maximum-and-independent-verification",
+            "locator": "Safety boundary; Weight-based doses; unsafe-dose FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "simple-iv-pump-rate-calculation",
+            "locator": "IV flow rates — simple constant-rate pump",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "gravity-infusion-drop-rate-calculation",
+            "locator": "IV flow rates — gravity infusion; IV drip-rate FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "metric-and-conventional-conversion-factors",
+            "locator": "Conversions: distinguish exact from conventional",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "late-rounding-leading-zero-and-no-trailing-zero",
+            "locator": "Rounding and format",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "dosage-final-verification-and-nclex-scope",
+            "locator": "A final verification sequence; title, description and CTA",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023",
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-study-plan/",
+      "risk": "education",
+      "intent": {
+        "primary": "NCLEX study plan",
+        "secondary": [
+          "daily NCLEX study schedule"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "education"
+      },
+      "contentSha256": "c5b1a9027585071faf9c65cc6588568c1036b5ef5a9bd7512db3d407cc6d8a66",
+      "sourceSetSha256": "d243782dd6ddfa49e7d70db9edefab2093199321768c946882b5a3de7ba0fab0",
+      "sources": [
+        {
+          "id": "ramnanan-2024-distributed-retrieval-review",
+          "title": "Systematic review of distributed practice and retrieval practice in health professions education",
+          "publisher": "Advances in Health Sciences Education via PubMed Central",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions"
+        },
+        {
+          "id": "khalafi-2024-spaced-learning-nursing",
+          "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
+          "publisher": "BMC Medical Education",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/",
+          "sourceUpdated": "2024-03-21",
+          "accessedAt": "2026-08-26",
+          "locator": "Randomized-controlled methods, results, and conclusion"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, and source review of the exact Guide 10 nclex-study-plan content and source-set digests",
+        "claims": [
+          {
+            "id": "study-plan-scope-and-no-readiness-guarantee",
+            "locator": "Opening paragraph; Important boundary",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "official-test-plan-and-repeatable-baseline",
+            "locator": "Start with the official scope and a baseline",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "retrieval-and-distributed-practice-evidence",
+            "locator": "Use retrieval and spacing—with evidence-sized claims",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "khalafi-2024-spaced-learning-nursing"
+            ]
+          },
+          {
+            "id": "retrieval-spacing-limitations-and-no-fixed-quota",
+            "locator": "Use retrieval and spacing—with evidence-sized claims; daily-question FAQ",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "khalafi-2024-spaced-learning-nursing"
+            ]
+          },
+          {
+            "id": "adaptable-retrieval-review-repair-cycle",
+            "locator": "Build a repeatable study cycle",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "rationale-review-and-error-log",
+            "locator": "Turn rationales into an error log",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "individualized-workload-and-support-boundary",
+            "locator": "Fit the workload to real constraints",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "final-week-individualization-and-official-instructions",
+            "locator": "Use the final week to stabilize the plan; final-week FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "practice-score-limitations-and-education-scope",
+            "locator": "Important boundary; practice-score FAQ; title, description and CTA",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/spaced-repetition-for-nursing-students/",
+      "risk": "education",
+      "intent": {
+        "primary": "spaced repetition for nursing students",
+        "secondary": [
+          "NCLEX spaced repetition"
+        ],
+        "audience": "nursing students",
+        "risk": "education"
+      },
+      "contentSha256": "85b2c1878dc68a51360655f365189a1dad27d48bf02161eb1a7e35c104967eeb",
+      "sourceSetSha256": "d243782dd6ddfa49e7d70db9edefab2093199321768c946882b5a3de7ba0fab0",
+      "sources": [
+        {
+          "id": "ramnanan-2024-distributed-retrieval-review",
+          "title": "Systematic review of distributed practice and retrieval practice in health professions education",
+          "publisher": "Advances in Health Sciences Education via PubMed Central",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions"
+        },
+        {
+          "id": "khalafi-2024-spaced-learning-nursing",
+          "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
+          "publisher": "BMC Medical Education",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/",
+          "sourceUpdated": "2024-03-21",
+          "accessedAt": "2026-08-26",
+          "locator": "Randomized-controlled methods, results, and conclusion"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, and source review of the exact Guide 11 spaced-repetition-for-nursing-students content and source-set digests",
+        "claims": [
+          {
+            "id": "spaced-repetition-scope-and-safety-boundary",
+            "locator": "Opening paragraph; Important boundary",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "distributed-and-retrieval-practice-systematic-review-findings",
+            "locator": "What the evidence supports — systematic-review sample, findings and limitations",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "nurse-anesthesia-spaced-learning-trial",
+            "locator": "What the evidence supports — randomized nursing-study finding and qualification",
+            "sourceIds": [
+              "khalafi-2024-spaced-learning-nursing"
+            ]
+          },
+          {
+            "id": "retrieval-feedback-correction-and-delayed-return-cycle",
+            "locator": "Use retrieval, feedback and correction",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "rereading-familiarity-and-retrieval-qualification",
+            "locator": "Use retrieval, feedback and correction — rereading paragraph; rereading FAQ",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "auditable-source-bound-nursing-flashcards",
+            "locator": "Important boundary; Design cards that remain auditable",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "flashcard-learning-target-and-clinical-judgment-limitations",
+            "locator": "Match the tool to the learning target; clinical-judgment FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "individualized-interval-duration-and-review-load",
+            "locator": "What the evidence supports; Choose a sustainable review load; daily-duration FAQ",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "khalafi-2024-spaced-learning-nursing"
+            ]
+          },
+          {
+            "id": "spaced-repetition-nclex-education-scope-and-no-guarantee",
+            "locator": "Important boundary; title, description, CTA and evidence FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ramnanan-2024-distributed-retrieval-review",
+              "khalafi-2024-spaced-learning-nursing"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/failed-the-nclex-what-now/",
+      "risk": "education",
+      "intent": {
+        "primary": "failed the NCLEX what to do next",
+        "secondary": [
+          "NCLEX retake study plan"
+        ],
+        "audience": "NCLEX-RN retake candidates",
+        "risk": "education"
+      },
+      "contentSha256": "9757cdf4bf97a2641de69ab79fdda756f561df5f3c669d1b06246f1179e10b99",
+      "sourceSetSha256": "30b27ec996717c17b35ef788f1fc44fa59fab6aaf5d4d14959e056479ae378e3",
+      "sources": [
+        {
+          "id": "ncsbn-nclex-results-retake",
+          "title": "NCSBN — Exam Results and Retake Details",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/results.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "Candidate Performance Report; Retake Policy; Retake Steps; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-candidate-performance-report",
+          "title": "NCSBN — Candidate Performance Report",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/candidate-performance-report.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "CPR purpose, abbreviated report, overall pass/fail limitation, performance indicators, and remediation order; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-computerized-adaptive-testing",
+          "title": "NCSBN — Computerized Adaptive Testing",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/computerized-adaptive-testing.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "95% Confidence Interval, Maximum-Length Exam, and Run-Out-Of-Time pass/fail rules; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ramnanan-2024-distributed-retrieval-review",
+          "title": "Systematic review of distributed practice and retrieval practice in health professions education",
+          "publisher": "Advances in Health Sciences Education via PubMed Central",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions"
+        },
+        {
+          "id": "khalafi-2024-spaced-learning-nursing",
+          "title": "Khalafi et al. — Effect of spaced learning on nurse anesthesia students",
+          "publisher": "BMC Medical Education",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10958887/",
+          "sourceUpdated": "2024-03-21",
+          "accessedAt": "2026-08-26",
+          "locator": "Randomized-controlled methods, results, and conclusion"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-28",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 12 failed-the-nclex-what-now content and source-set digests",
+        "claims": [
+          {
+            "id": "nclex-failure-result-and-cpr-interpretation-boundary",
+            "locator": "Opening paragraph; Important boundary",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report",
+              "ncsbn-computerized-adaptive-testing"
+            ]
+          },
+          {
+            "id": "cpr-purpose-format-and-abbreviated-report",
+            "locator": "Read the CPR for what it actually reports — opening paragraph; CPR FAQ",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report"
+            ]
+          },
+          {
+            "id": "cpr-performance-indicators-and-remediation-order",
+            "locator": "Candidate Performance Report indicators table",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report"
+            ]
+          },
+          {
+            "id": "cpr-to-current-test-plan-remediation-mapping",
+            "locator": "Build a remediation plan from more than one signal — items 1–3",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "retrieval-feedback-correction-and-reassessment-cycle",
+            "locator": "Build a remediation plan from more than one signal — items 4–6",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "khalafi-2024-spaced-learning-nursing"
+            ]
+          },
+          {
+            "id": "distributed-retrieval-practice-limitations-and-no-guarantee",
+            "locator": "Build a remediation plan from more than one signal — item 5; retake-change FAQ",
+            "sourceIds": [
+              "ramnanan-2024-distributed-retrieval-review",
+              "khalafi-2024-spaced-learning-nursing"
+            ]
+          },
+          {
+            "id": "nclex-retake-interval-frequency-and-jurisdiction-qualification",
+            "locator": "The retake logistics — opening paragraph; retake-timing FAQ",
+            "sourceIds": [
+              "ncsbn-nclex-results-retake"
+            ]
+          },
+          {
+            "id": "nclex-reregistration-att-and-scheduling-steps",
+            "locator": "The retake logistics — steps 1–4",
+            "sourceIds": [
+              "ncsbn-nclex-results-retake"
+            ]
+          },
+          {
+            "id": "exam-like-practice-individualization",
+            "locator": "Practice under exam-like constraints only when it answers a question",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ramnanan-2024-distributed-retrieval-review"
+            ]
+          },
+          {
+            "id": "cat-decision-rules-and-item-count-limitation",
+            "locator": "Do not estimate closeness from the stopping point",
+            "sourceIds": [
+              "ncsbn-computerized-adaptive-testing"
+            ]
+          },
+          {
+            "id": "nclex-retake-education-scope-and-no-future-outcome-prediction",
+            "locator": "Title, description, CTA; failure-prognosis FAQ",
+            "sourceIds": [
+              "ncsbn-nclex-results-retake",
+              "ncsbn-candidate-performance-report",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    }
+  ]
+}

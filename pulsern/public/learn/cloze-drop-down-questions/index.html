@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cloze (drop-down) questions: how to answer them | PulseRN</title>
-<meta name="description" content="How cloze items chain clinical reasoning across linked blanks, and why you should answer the blank you are surest about first.">
+<meta name="description" content="A source-bound guide to NCLEX cloze and drop-down items, with a consistency-checking study method and clear scoring limits.">
 <link rel="canonical" href="https://www.pulsern.app/learn/cloze-drop-down-questions/">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <meta name="theme-color" content="#0E7C6B">
@@ -12,7 +12,7 @@
 <meta property="og:site_name" content="PulseRN">
 <meta property="og:url" content="https://www.pulsern.app/learn/cloze-drop-down-questions/">
 <meta property="og:title" content="Cloze (drop-down) questions: how to answer them | PulseRN">
-<meta property="og:description" content="How cloze items chain clinical reasoning across linked blanks, and why you should answer the blank you are surest about first.">
+<meta property="og:description" content="A source-bound guide to NCLEX cloze and drop-down items, with a consistency-checking study method and clear scoring limits.">
 <meta property="og:image" content="https://www.pulsern.app/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://www.pulsern.app/og.png">
@@ -24,13 +24,13 @@
       "@type": "Article",
       "@id": "https://www.pulsern.app/learn/cloze-drop-down-questions/#article",
       "headline": "Cloze (drop-down) questions: how to answer them",
-      "description": "How cloze items chain clinical reasoning across linked blanks, and why you should answer the blank you are surest about first.",
+      "description": "A source-bound guide to NCLEX cloze and drop-down items, with a consistency-checking study method and clear scoring limits.",
       "url": "https://www.pulsern.app/learn/cloze-drop-down-questions/",
       "inLanguage": "en-US",
       "datePublished": "2026-08-03",
-      "dateModified": "2026-08-03",
+      "dateModified": "2026-08-28",
       "author": {
-        "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
+        "@id": "https://www.pulsern.app/#org"
       },
       "reviewedBy": {
         "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn"
@@ -53,17 +53,37 @@
       },
       "citation": [
         "https://www.nclex.com/test-plans.page",
-        "https://www.nclex.com/next-generation-nclex.page"
-      ]
+        "https://www.nclex.com/next-generation-nclex.page",
+        "https://www.nclex.com/faqs.page"
+      ],
+      "identifier": "sha256:49a5d6dfaef8bbd9fd8e97a5a17c8e94d065e4a49f7cfe290ed9445dc5872bd9",
+      "sdPublisher": {
+        "@id": "https://www.pulsern.app/#org"
+      }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://www.pulsern.app/#org",
+      "name": "PulseRN",
+      "url": "https://www.pulsern.app",
+      "logo": "https://www.pulsern.app/icon-512.png"
     },
     {
       "@type": "Person",
       "@id": "https://www.pulsern.app/about/#sheldon-bennett-rn",
       "name": "Sheldon Bennett, RN",
-      "jobTitle": "Registered Nurse",
       "url": "https://www.pulsern.app/about/#sheldon-bennett-rn",
       "worksFor": {
         "@id": "https://www.pulsern.app/#org"
+      },
+      "jobTitle": "Registered Nurse",
+      "sameAs": [
+        "https://mqa-internet.doh.state.fl.us/MQASearchServices/HealthcareProviders/LicenseVerification?LicInd=648118&Procde=1701"
+      ],
+      "hasCredential": {
+        "@type": "EducationalOccupationalCredential",
+        "credentialCategory": "Registered Nurse",
+        "recognizedBy": "Florida Board of Nursing"
       }
     },
     {
@@ -99,15 +119,15 @@
           "name": "What is a cloze question on the NCLEX?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "An item where you complete a clinical sentence or short paragraph by choosing from drop-down menus at each blank. Also called drop-down items."
+            "text": "A drop-down item in which the candidate selects options to complete one or more blanks in a sentence, short paragraph or table. Consult the current Candidate Tutorial and official samples for the exact interface."
           }
         },
         {
           "@type": "Question",
-          "name": "Are cloze question blanks scored separately?",
+          "name": "Are cloze-question blanks scored separately?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "It depends on the item. Some blanks are scored independently; others are linked so that selections must be clinically consistent with one another to earn credit."
+            "text": "NCSBN describes partial-credit methods for items with more than one key, but that general guidance does not prove an independent point value or linked-dependency rule for every cloze blank. Follow the item's directions."
           }
         },
         {
@@ -115,7 +135,7 @@
           "name": "Should I answer cloze blanks in order?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Start with the blank you are most confident about. A firm anchor constrains the remaining choices, whereas guessing at the first blank sends the rest of the sentence in the wrong direction."
+            "text": "NCSBN does not require a particular reasoning order. Choose the response best supported by the client information for each blank, then review the completed response for consistency."
           }
         }
       ]
@@ -140,6 +160,11 @@
   table { width:100%; border-collapse:collapse; margin-bottom:12px; font-size:14.5px; }
   th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { color:var(--teal); font-weight:600; }
+  caption { color:var(--ink); font-weight:700; padding:0 0 8px; text-align:left; }
+  .table-wrap { overflow-x:auto; margin-bottom:14px; border:1px solid var(--line); border-radius:8px; }
+  .table-wrap:focus { outline:3px solid #8CCFC3; outline-offset:2px; }
+  .table-wrap table { min-width:620px; margin-bottom:0; }
+  .source-note { color:var(--muted); font-size:13px; }
   .key { background:#EAF4F0; border-left:3px solid var(--teal); padding:12px 14px; border-radius:0 8px 8px 0; margin-bottom:12px; }
   .key p:last-child { margin-bottom:0; }
   .cta { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--teal); border-radius:12px; padding:18px 20px; margin:22px 0 14px; }
@@ -156,47 +181,43 @@
 <a class="back" href="/learn/">&larr; All guides</a>
 <article>
 <h1>Cloze and drop-down questions on the NCLEX</h1>
-<p class="meta">Question types &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; reviewed <time datetime="2026-08-03">2026-08-03</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
+<p class="meta">Question types &middot; published <time datetime="2026-08-03">2026-08-03</time> &middot; clinically reviewed <time datetime="2026-08-28">2026-08-28</time> by <a href="/about/#sheldon-bennett-rn">Sheldon Bennett, RN</a></p>
 
 <div class="card">
-<p>A cloze item is a sentence — or a short paragraph — with blanks, each offering a drop-down menu. You are completing a clinical statement so that it reads as something a competent nurse would actually say.</p>
+<p>A cloze item asks you to complete one or more blanks in a sentence, short paragraph or table by choosing from drop-down options. Use the current NCLEX Candidate Tutorial and official sample materials for the exact interface and directions.</p>
 
-<h2>Why these are harder than they look</h2>
-<p>The blanks are frequently <b>linked</b>. A typical construction reads: <i>The client is most likely experiencing [blank 1] as evidenced by [blank 2], and the nurse should first [blank 3].</i></p>
-<p>Choose wrongly in blank 1 and blanks 2 and 3 are almost certainly wrong too, because they must be consistent with it. Some cloze items are scored so that linked selections must agree with one another to earn credit.</p>
-
-<div class="key">
-<p><b>Answer out of order.</b> Start with whichever blank you are most confident about, even if it is the last one. A firm anchor anywhere in the sentence constrains the others. Working strictly left-to-right means your least certain guess sets the direction for everything after it.</p>
+<div class="key" role="note" aria-labelledby="cloze-boundary">
+<h2 id="cloze-boundary" style="margin-top:0">Format and scoring boundary</h2>
+<p>NCSBN states generally that items with more than one key can receive partial credit under plus/minus, zero/one or rationale scoring. That does not establish that every blank is scored independently, that choices must be linked to earn credit, or that one incorrect selection automatically makes the remaining selections wrong. Follow the directions displayed for the item rather than applying an unofficial blank-level scoring rule.</p>
 </div>
 
-<h2>The method</h2>
+<p class="source-note"><b>Evidence:</b> Item-format context comes from NCSBN's <a href="#source-ncsbn-next-generation-nclex">Next Generation NCLEX materials</a>. The scoring boundary comes from Scoring Items in the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a> and the <a href="#source-ncsbn-nclex-faqs">NCLEX FAQ</a>.</p>
+
+<h2>A consistency-checking study method</h2>
 <ol>
-  <li><b>Read the complete sentence with every blank empty</b> to see what claim is being built.</li>
-  <li><b>Open each menu and read all the options</b> before choosing anything. The distractors tell you what distinction is being tested.</li>
-  <li><b>Anchor on your strongest blank.</b></li>
-  <li><b>Work outward,</b> keeping every choice consistent with the anchor.</li>
-  <li><b>Read the finished sentence back.</b> This last step catches more errors than any other — a wrong combination usually sounds wrong when you read it whole.</li>
+  <li><b>Read the complete prompt and client information.</b> Identify what the item is asking before opening a menu.</li>
+  <li><b>Review every option for each blank.</b> Compare each choice with the information supplied rather than relying on familiarity alone.</li>
+  <li><b>Make the best-supported selection for each blank.</b> The examination does not require candidates to complete the blanks in a particular reasoning order.</li>
+  <li><b>Read the completed statement or table.</b> Check whether every selection fits the prompt, the client information and the other selections.</li>
+  <li><b>Recheck the displayed directions.</b> Confirm that every required blank has a response before advancing.</li>
 </ol>
+<p>Reading the completed response for consistency is study guidance, not a claim that NCSBN scores the blanks as a linked chain.</p>
 
-<h2>What the distractors are doing</h2>
-<table>
-  <tr><th>Distractor style</th><th>How to beat it</th></tr>
-  <tr><td>Right concept, wrong severity</td><td>Match the urgency in the scenario, not just the topic.</td></tr>
-  <tr><td>True but irrelevant</td><td>A factually correct statement that does not follow from this client's findings.</td></tr>
-  <tr><td>Right action, wrong timing</td><td>Something you would genuinely do, but not first.</td></tr>
-  <tr><td>Plausible-sounding jargon</td><td>Terminology that sounds clinical but does not describe what is happening here.</td></tr>
-</table>
-
-<h2>Reading the sentence back</h2>
-<p>Cloze items are built as complete clinical statements, and an inconsistent set of choices produces a sentence that a nurse would not say. If your completed sentence claims a client is experiencing one problem, evidenced by a finding that belongs to another, and treated with an intervention for a third, you have found your own error before the exam scored it.</p>
+<h2>Consistency questions to ask</h2>
+<ul>
+  <li>Does each selection answer the wording of its blank?</li>
+  <li>Does each selection fit the client's age, condition, time course and current findings?</li>
+  <li>If the response identifies a condition, do the selected evidence and action fit that condition?</li>
+  <li>Have you avoided adding facts that the item did not provide?</li>
+</ul>
 </div>
-<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>What is a cloze question on the NCLEX?</h3><p>An item where you complete a clinical sentence or short paragraph by choosing from drop-down menus at each blank. Also called drop-down items.</p><h3>Are cloze question blanks scored separately?</h3><p>It depends on the item. Some blanks are scored independently; others are linked so that selections must be clinically consistent with one another to earn credit.</p><h3>Should I answer cloze blanks in order?</h3><p>No. Start with the blank you are most confident about. A firm anchor constrains the remaining choices, whereas guessing at the first blank sends the rest of the sentence in the wrong direction.</p></div>
+<div class="card"><h2 style="margin-top:0">Common questions</h2><h3>What is a cloze question on the NCLEX?</h3><p>A drop-down item in which the candidate selects options to complete one or more blanks in a sentence, short paragraph or table. Consult the current Candidate Tutorial and official samples for the exact interface.</p><h3>Are cloze-question blanks scored separately?</h3><p>NCSBN describes partial-credit methods for items with more than one key, but that general guidance does not prove an independent point value or linked-dependency rule for every cloze blank. Follow the item's directions.</p><h3>Should I answer cloze blanks in order?</h3><p>NCSBN does not require a particular reasoning order. Choose the response best supported by the client information for each blank, then review the completed response for consistency.</p></div>
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul><li><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — NCLEX test plans</a></li><li><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a></li></ul>
+  <ul><li id="source-ncsbn-2026-rn-test-plan"><a href="https://www.nclex.com/test-plans.page" rel="external noopener">NCSBN — 2026 RN Test Plan</a> — National Council of State Boards of Nursing; evidence locator: 2026 RN Test Plan; effective April 1, 2026–March 31, 2029; source updated <time datetime="2026-04-01">2026-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-next-generation-nclex"><a href="https://www.nclex.com/next-generation-nclex.page" rel="external noopener">NCSBN — Next Generation NCLEX</a> — National Council of State Boards of Nursing; evidence locator: NGN Project and Clinical Judgment Measurement Model sections; source updated <time datetime="2023-04-01">2023-04-01</time>; accessed <time datetime="2026-08-26">2026-08-26</time></li><li id="source-ncsbn-nclex-faqs"><a href="https://www.nclex.com/faqs.page" rel="external noopener">NCSBN — NCLEX Frequently Asked Questions</a> — National Council of State Boards of Nursing; evidence locator: How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published; accessed <time datetime="2026-08-28">2026-08-28</time></li></ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> PulseRN includes cloze items with linked reasoning, so you practice the chain rather than isolated facts.</p>
+  <p><b>Practice this for real.</b> PulseRN can provide cloze-style practice with rationales; it does not reproduce the official NCLEX item bank or predict an exam result.</p>
   <p><a href="/">Start studying on PulseRN &rarr;</a></p>
 </div>
 

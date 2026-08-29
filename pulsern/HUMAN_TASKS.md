@@ -32,6 +32,29 @@ Claude Code executes everything else. These run in parallel with the build.
 
 - H10 · Pass-rate loop — set up the 60-day post-exam email ask (one question: pass/fail). At n≥100 this becomes your strongest marketing asset.
 
+- H15 · Public RN verification for the search release gate — **completed
+  2026-08-26.** Florida MQA primary-source verification matched Sheldon Sean
+  Bennett, Registered Nurse, license RN9537022, with Clear/Active multistate
+  status. The release ledger publishes only the consented display name,
+  credential, jurisdiction, official verification URL, and verification date;
+  it does not publish the address or treat license verification as guide
+  approval.
+
+- H16 · Guide-by-guide clinical attestation — review every public guide against
+  its listed authoritative sources. For each guide, record the reviewer ID,
+  review date, scope, exact content SHA-256, exact source-set SHA-256, and at
+  least one claim record with a page/section locator and supporting source IDs.
+  A content or source edit changes the digest and automatically invalidates the
+  old approval. The automated and model gates must both pass after attestation;
+  neither is a substitute for this RN review.
+  - **Progress 2026-08-26:** Guide 1, “ABG interpretation made simple,” was
+    approved by Sheldon Bennett, RN, after source correction and independent
+    adversarial review. The approval is bound to content SHA-256
+    `4cc71368c819558ec37ee6c36257aaaea73c5389dc878ce31fed7b932e0c3166`
+    and source-set SHA-256
+    `897d728338a16872e1438b68ab3270ba4539f270cadc473183a2f823307fcc98`.
+    The remaining 22 guides are still pending and fail closed.
+
 ## Later (Expo phase)
 
 - H11 · Expo/EAS account + Apple Developer ($99/yr) + Google Play ($25 one-time) — only when the web version has retention worth porting.

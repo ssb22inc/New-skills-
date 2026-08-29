@@ -1,10 +1,13 @@
 /* Build the public product and trust pages that search engines, answer engines,
    agents, and prospective learners need before entering the authenticated app. */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { PLANS, fmtUsd } from "../src/pricing.js";
 
 const SITE = "https://www.pulsern.app";
 const AUTHOR = `${SITE}/about/#sheldon-bennett-rn`;
+const REVIEW_LEDGER = JSON.parse(readFileSync(new URL("../content-review-records.json", import.meta.url), "utf8"));
+const REVIEWER_VERIFIED = REVIEW_LEDGER.reviewer?.verificationStatus === "verified" && /^https:\/\//.test(REVIEW_LEDGER.reviewer?.verificationUrl ?? "");
+const AUTHOR_LABEL = REVIEWER_VERIFIED ? `${REVIEW_LEDGER.reviewer.displayName}, ${REVIEW_LEDGER.reviewer.credential}` : REVIEW_LEDGER.reviewer.displayName;
 const esc = (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const CSS = `
@@ -21,15 +24,15 @@ function page({ slug, title, description, eyebrow, h1, body, schema }) {
   const jsonld = {
     "@context": "https://schema.org",
     "@graph": [
-      { "@type": "WebPage", "@id": `${url}#page`, url, name: title, description, inLanguage: "en-US", isPartOf: { "@id": `${SITE}/#website` }, about: { "@id": `${SITE}/#app` }, author: { "@id": AUTHOR }, reviewedBy: { "@id": AUTHOR } },
-      { "@type": "Person", "@id": AUTHOR, name: "Sheldon Bennett, RN", jobTitle: "Registered Nurse", url: AUTHOR, worksFor: { "@id": `${SITE}/#org` } },
+      { "@type": "WebPage", "@id": `${url}#page`, url, name: title, description, inLanguage: "en-US", isPartOf: { "@id": `${SITE}/#website` }, about: { "@id": `${SITE}/#app` }, author: { "@id": AUTHOR } },
+      { "@type": "Person", "@id": AUTHOR, name: AUTHOR_LABEL, url: AUTHOR, worksFor: { "@id": `${SITE}/#org` }, ...(REVIEWER_VERIFIED ? { jobTitle: REVIEW_LEDGER.reviewer.licenseType, sameAs: [REVIEW_LEDGER.reviewer.verificationUrl] } : {}) },
       ...(schema ? [schema] : []),
     ],
   };
   return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}</style></head><body>
   <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/pricing/">Pricing</a><a href="/?signin=1">Sign in</a></div></nav></header>
   <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${body}
-  <div class="callout"><strong>Ready for a focused study session?</strong><br><a class="button" href="/?start=1">Start the 1-day free pass</a><a class="button alt" href="/learn/">Read the RN-written guides</a></div></main>
+  <div class="callout"><strong>Ready for a focused study session?</strong><br><a class="button" href="/?start=1">Start the 1-day free pass</a><a class="button alt" href="/learn/">Read the nursing-study guides</a></div></main>
   <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div><p>Educational exam preparation only — not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN.</p></div></footer></body></html>`;
 }
 
@@ -59,7 +62,7 @@ const pages = [
       <section><h2>2. Review after committing</h2><div class="card"><p>Answer first, then review the rationale. The goal is not merely to expose the correct choice; it is to make the priority, safety, or clinical-judgment principle explicit.</p></div></section>
       <section><h2>3. Return to weak knowledge</h2><div class="card"><p>Adaptive difficulty responds to demonstrated performance. Recall-first flashcards use calendar-based spaced repetition so review returns over time instead of staying in one long session.</p></div></section>
       <section><h2>4. Interpret progress carefully</h2><div class="card"><p>Readiness self-assessments use standardized 85-question forms that are not repeated. Any readiness result is labeled as an estimate and does not predict or guarantee an exam result.</p></div></section>
-      <p class="meta">Product description reviewed by <a href="${AUTHOR}">Sheldon Bennett, RN</a>. For the scoring and content-governance details, read the <a href="/methodology/">methodology</a> and <a href="/editorial-policy/">editorial policy</a>.</p>`,
+      <p class="meta">Product description owner: <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a>. For the scoring and content-governance details, read the <a href="/methodology/">methodology</a> and <a href="/editorial-policy/">editorial policy</a>.</p>`,
   },
   {
     slug: "methodology", title: "PulseRN methodology", eyebrow: "Methods and limitations", h1: "What PulseRN measures—and what it does not.",
@@ -71,18 +74,18 @@ const pages = [
       <section><h2>Readiness estimates</h2><div class="card"><p>Self-assessments use 85-question forms and never repeat a form for the same account. Results are deliberately described as estimates, require sufficient answered material, and never promise a pass outcome.</p></div></section>
       <section><h2>Limits</h2><ul><li>PulseRN is not affiliated with or endorsed by NCSBN.</li><li>Practice performance can be affected by content exposure, study conditions, and other factors.</li><li>Educational content is not medical advice and should not replace current clinical policies or instruction.</li></ul></section>
       <section><h2>Primary framework</h2><ul class="sources"><li><a href="https://www.nclex.com/test-plans.page" rel="external">NCSBN NCLEX test plans</a></li><li><a href="https://www.nclex.com/next-generation-nclex.page" rel="external">NCSBN Next Generation NCLEX information</a></li></ul></section>
-      <p class="meta">Method owner and reviewer: <a href="${AUTHOR}">Sheldon Bennett, RN</a>.</p>`,
+      <p class="meta">Method owner: <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a>. ${REVIEWER_VERIFIED ? "Reviewer identity is linked to public verification evidence." : "Independent credential verification is pending."}</p>`,
   },
   {
     slug: "editorial-policy", title: "Editorial and clinical review policy", eyebrow: "Content governance", h1: "A human-owned review process for nursing education.",
     description: "Read PulseRN's policy for authorship, clinical review, source use, AI assistance, corrections, and educational safety.",
     body: `<p class="lead">PulseRN content is educational material for NCLEX-RN preparation. Clinical responsibility stays with the named human owner and reviewer.</p>
-      <section><h2>Authorship and accountability</h2><div class="card"><p>Sheldon Bennett, RN, is identified as the creator and clinical content owner. Public guides name their reviewer and show publication and review dates.</p></div></section>
+      <section><h2>Authorship and accountability</h2><div class="card"><p>${esc(AUTHOR_LABEL)} is identified as the creator and content owner. Public guides expose versioned source, content-digest, reviewer, and review-status evidence. No guide is treated as clinically approved while that evidence is pending.</p></div></section>
       <section><h2>Source hierarchy</h2><div class="card"><p>Exam-format claims prioritize NCSBN materials. Clinical content should favor current primary or authoritative sources such as government health agencies, official professional guidance, and peer-reviewed evidence. Sources are linked where they materially support a guide.</p></div></section>
       <section><h2>AI assistance</h2><div class="card"><p>AI may assist with drafting, critique, or explanation. It is not the accountable author. Generated clinical or educational content must pass automated checks and human RN review before publication.</p></div></section>
       <section><h2>Claims and safety</h2><ul><li>PulseRN never claims its questions are identical to live NCLEX content.</li><li>Readiness is never presented as an outcome guarantee.</li><li>Educational content is never framed as patient-specific medical advice.</li><li>Material uncertainty or conflicting guidance must be surfaced, not hidden.</li></ul></section>
       <section><h2>Corrections</h2><div class="card"><p>Substantive corrections should update the affected page, its review date, and its cited support. Questions or correction requests can be sent to <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a>.</p></div></section>
-      <p class="meta">Policy owner: <a href="${AUTHOR}">Sheldon Bennett, RN</a>.</p>`,
+      <p class="meta">Policy owner: <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a>.</p>`,
   },
 ];
 
