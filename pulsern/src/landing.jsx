@@ -65,7 +65,7 @@ export default function LandingPage({ onSignIn, onStart }) {
         .land-proof-grid { display:grid; grid-template-columns: 1.25fr repeat(3, 1fr); gap:1px; }
         .land-proof-cell { padding:25px 28px; background:rgba(0,0,0,.04); min-height:120px; display:flex; flex-direction:column; justify-content:center; }
         .land-proof-cell b { font-size:20px; letter-spacing:-.02em; }
-        .land-proof-cell span { color:#d4eee7; font-size:13px; margin-top:4px; }
+        .land-proof-cell span { color:#fff; font-size:13px; margin-top:4px; }
         .land-section { padding: 82px 0; }
         .land-section.white { background: white; }
         .land-section-head { max-width:740px; margin-bottom:36px; }

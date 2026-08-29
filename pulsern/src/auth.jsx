@@ -128,12 +128,12 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
         .auth-btn:disabled { opacity: .6; cursor: default; }
         .auth-btn.alt { background: #fff; color: #1c2430; border: 1px solid #d5dae1; margin-top: 10px; }
         .auth-btn.google { display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: #8a93a2; font-size: 13px; }
+        .auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: #5b6472; font-size: 13px; }
         .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: #e3e6ea; }
         .auth-switch { background: none; border: 0; color: #0e6e5c; cursor: pointer; font-size: 14px; padding: 0; }
         .auth-err { color: #b42318; font-size: 13px; margin: 0 0 10px; }
         .auth-note { color: #067647; font-size: 13px; margin: 0 0 10px; }
-        .auth-foot { color: #8a93a2; font-size: 12px; margin-top: 18px; line-height: 1.5; }
+        .auth-foot { color: #5b6472; font-size: 12px; margin-top: 18px; line-height: 1.5; }
       `}</style>
       <div className="auth-card">
         {onBack && <button className="auth-switch" type="button" onClick={onBack} style={{ marginBottom: 16 }}>&larr; Back to PulseRN</button>}

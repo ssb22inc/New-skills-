@@ -34,7 +34,16 @@ export async function runAccessibility({ directory = "dist", outputFile = "repor
           continue;
         }
         const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
-        for (const violation of result.violations) findings.push({ impact: violation.impact, id: violation.id, help: violation.help, helpUrl: violation.helpUrl, route, viewport: device.name, nodes: violation.nodes.length });
+        for (const violation of result.violations) findings.push({
+          impact: violation.impact,
+          id: violation.id,
+          help: violation.help,
+          helpUrl: violation.helpUrl,
+          route,
+          viewport: device.name,
+          nodes: violation.nodes.length,
+          details: violation.nodes.slice(0, 10).map((node) => ({ target: node.target, failureSummary: node.failureSummary })),
+        });
         const structure = await page.evaluate(() => ({
           lang: document.documentElement.lang,
           mains: document.querySelectorAll("main").length,
