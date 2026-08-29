@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
@@ -49,20 +50,26 @@ describe("SEO guardian", () => {
     expect(graph.some((node) => node["@type"] === "Person")).toBe(false);
   });
 
-  it("keeps every public sample set complete, source-bound, and pending until exact RN approval", async () => {
+  it("keeps every public sample set complete, source-bound, and bound to its exact RN approval", async () => {
     expect(SAMPLE_ARTICLES).toHaveLength(4);
     const ledger = JSON.parse(await fs.readFile(new URL("../content-review-records.json", import.meta.url), "utf8"));
+    const sha256 = (value) => createHash("sha256").update(value).digest("hex");
     for (const sample of SAMPLE_ARTICLES) {
       expect(sample.topic).toBe("Practice questions");
       expect(sample.body.match(/<section class="question"/g)).toHaveLength(5);
       expect(sample.body.match(/<details>/g)).toHaveLength(5);
       expect(sample.body).toContain("Educational boundary");
-      expect(sourcesFor(sample).length).toBeGreaterThanOrEqual(3);
+      const sources = sourcesFor(sample);
+      expect(sources.length).toBeGreaterThanOrEqual(3);
+      const contentSha256 = sha256(JSON.stringify({ title: sample.title, h1: sample.h1 ?? sample.title, description: sample.description, body: sample.body, faq: sample.faq ?? [] }));
+      const sourceSetSha256 = sha256(JSON.stringify(sources.map(({ id, url, locator }) => ({ id, url, locator }))));
       expect(ledger.reviews[sample.slug]).toMatchObject({
-        decision: "pending",
+        decision: "approved",
         reviewerId: "sheldon-bennett-rn",
+        contentSha256,
+        sourceSetSha256,
       });
-      expect(ledger.reviews[sample.slug].reviewedAt).toBeNull();
+      expect(ledger.reviews[sample.slug].reviewedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(ledger.reviews[sample.slug].claims.length).toBeGreaterThanOrEqual(6);
     }
   });

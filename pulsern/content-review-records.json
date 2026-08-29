@@ -1044,10 +1044,10 @@
       ]
     },
     "nclex-pharmacology-practice-questions": {
-      "decision": "pending",
+      "decision": "approved",
       "reviewerId": "sheldon-bennett-rn",
-      "reviewedAt": null,
-      "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public pharmacology sample set",
+      "reviewedAt": "2026-08-29",
+      "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public pharmacology sample-set content and source-set digests",
       "contentSha256": "c3b0e07a8b83c49121600aaf2fae0421062caff23d32393d3458ccd3b2a1dd2f",
       "sourceSetSha256": "a0c38d611028de5d3b2cb617393c325ca1f79cef7574704709219b08b9fd7c30",
       "claims": [
@@ -1060,10 +1060,10 @@
       ]
     },
     "nclex-prioritization-practice-questions": {
-      "decision": "pending",
+      "decision": "approved",
       "reviewerId": "sheldon-bennett-rn",
-      "reviewedAt": null,
-      "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public prioritization sample set",
+      "reviewedAt": "2026-08-29",
+      "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public prioritization sample-set content and source-set digests",
       "contentSha256": "689cb2df200b88bc09713661b10902a9f12ba392e0c41bb33801a9c401611942",
       "sourceSetSha256": "2645b7c1ae74a863333b0a551823a1279bee07b55b025913e968322729cb7669",
       "claims": [
@@ -1076,10 +1076,10 @@
       ]
     },
     "nclex-dosage-calculation-practice-questions": {
-      "decision": "pending",
+      "decision": "approved",
       "reviewerId": "sheldon-bennett-rn",
-      "reviewedAt": null,
-      "scope": "Pending RN clinical, educational, arithmetic, unit, rationale, and source review of the exact public dosage-calculation sample set",
+      "reviewedAt": "2026-08-29",
+      "scope": "Full RN clinical, educational, arithmetic, unit, rationale, and source review of the exact public dosage-calculation sample-set content and source-set digests",
       "contentSha256": "76cf923b2db04f098f0682f17bc06b45e51be0001f95a749b0ac15c62f4f193b",
       "sourceSetSha256": "ffae2149ee574a1ddf529bd3bb57bf104da100e9fde02446e7e1b0fb0347bcdb",
       "claims": [
@@ -1092,10 +1092,10 @@
       ]
     },
     "ngn-bow-tie-practice-questions": {
-      "decision": "pending",
+      "decision": "approved",
       "reviewerId": "sheldon-bennett-rn",
-      "reviewedAt": null,
-      "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public NGN bow-tie sample set",
+      "reviewedAt": "2026-08-29",
+      "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public NGN bow-tie sample-set content and source-set digests",
       "contentSha256": "f70984039383685fac87199d057c89c1e07f064c78fb93e3668de20de254607b",
       "sourceSetSha256": "4503c3137871c310437019cbbf74a5b680c22b4f96280df58d89d085bd946efd",
       "claims": [

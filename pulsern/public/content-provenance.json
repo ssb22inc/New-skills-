@@ -3201,10 +3201,10 @@
         }
       ],
       "review": {
-        "decision": "pending",
+        "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": null,
-        "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public pharmacology sample set",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public pharmacology sample-set content and source-set digests",
         "claims": [
           {
             "id": "pharmacology-high-alert-definition",
@@ -3297,10 +3297,10 @@
         }
       ],
       "review": {
-        "decision": "pending",
+        "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": null,
-        "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public prioritization sample set",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public prioritization sample-set content and source-set digests",
         "claims": [
           {
             "id": "prioritization-cardiac-arrest-recognition-response",
@@ -3397,10 +3397,10 @@
         }
       ],
       "review": {
-        "decision": "pending",
+        "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": null,
-        "scope": "Pending RN clinical, educational, arithmetic, unit, rationale, and source review of the exact public dosage-calculation sample set",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, arithmetic, unit, rationale, and source review of the exact public dosage-calculation sample-set content and source-set digests",
         "claims": [
           {
             "id": "dosage-tablet-calculation",
@@ -3556,10 +3556,10 @@
         }
       ],
       "review": {
-        "decision": "pending",
+        "decision": "approved",
         "reviewerId": "sheldon-bennett-rn",
-        "reviewedAt": null,
-        "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public NGN bow-tie sample set",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public NGN bow-tie sample-set content and source-set digests",
         "claims": [
           {
             "id": "bow-tie-format-selection-structure",
