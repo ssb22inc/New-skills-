@@ -1,4 +1,5 @@
 import React from "react";
+import InstallCard from "./install.jsx";
 
 const FEATURES = [
   ["Adaptive practice", "Questions adjust to your demonstrated level across the eight NCSBN client-needs categories."],
@@ -14,6 +15,13 @@ const FAQ = [
   ["Does PulseRN use real NCLEX questions?", "No. PulseRN does not claim to reproduce live exam content. It provides original educational practice designed around published NCSBN formats and categories."],
   ["Can PulseRN tell me whether I will pass?", "No. Readiness is an estimate based on your work inside PulseRN. It cannot predict or guarantee an NCLEX result."],
   ["Is there a free option?", "Yes. New learners can use a 1-day free pass for study content. Readiness self-assessments are included with paid plans."],
+];
+
+const SAMPLES = [
+  ["Pharmacology", "Five questions on high-alert medications, reversal agents, monitoring, and label-based safety.", "/learn/nclex-pharmacology-practice-questions/"],
+  ["Prioritization", "Five questions on emergency recognition, change from baseline, assessment, action, and evaluation.", "/learn/nclex-prioritization-practice-questions/"],
+  ["Dosage calculations", "Five worked questions covering tablets, liquids, pump rates, gravity tubing, and weight-based math.", "/learn/nclex-dosage-calculation-practice-questions/"],
+  ["NGN bow-tie", "Five text-based bow-tie examples connecting a condition, two actions, and two parameters.", "/learn/ngn-bow-tie-practice-questions/"],
 ];
 
 export default function LandingPage({ onSignIn, onStart }) {
@@ -65,7 +73,10 @@ export default function LandingPage({ onSignIn, onStart }) {
         .land-section h2 { font-size:clamp(30px, 4vw, 46px); line-height:1.08; letter-spacing:-.035em; margin:10px 0 12px; }
         .land-section-head p { color:#506b64; font-size:17px; margin:0; }
         .land-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; }
+        .land-sample-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:16px; }
         .land-card { background:#f7faf8; border:1px solid #dbe7e3; border-radius:16px; padding:23px; }
+        .land-card-link { display:block; color:inherit !important; text-decoration:none; }
+        .land-card-link:hover { border-color:#72b9a8; box-shadow:0 10px 30px rgba(14,124,107,.09); }
         .land-card-num { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; background:#dff1eb; color:#0e6e5c; font-weight:850; }
         .land-card h3 { font-size:18px; margin:18px 0 8px; }
         .land-card p { color:#4b665f; font-size:14px; margin:0; }
@@ -105,7 +116,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           .land-links .land-button { padding:9px 11px; font-size:13px; }
           .land-hero { padding:42px 0 58px; }
           .land-hero h1 { font-size:43px; }
-          .land-proof-grid, .land-grid, .land-faq { grid-template-columns:1fr; }
+          .land-proof-grid, .land-grid, .land-sample-grid, .land-faq { grid-template-columns:1fr; }
           .land-proof-cell { min-height:auto; padding:20px; }
           .land-section { padding:58px 0; }
           .land-author { grid-template-columns:1fr; }
@@ -121,7 +132,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-links">
             <a href="#features">Features</a>
             <a href="/pricing/">Pricing</a>
-            <a href="/learn/">RN-written guides</a>
+            <a href="/learn/">RN-reviewed guides</a>
             <button className="land-button secondary keep" type="button" onClick={onSignIn}>Sign in</button>
           </div>
         </nav>
@@ -138,6 +149,13 @@ export default function LandingPage({ onSignIn, onStart }) {
               <a className="land-button secondary" href="/how-it-works/">See how it works</a>
             </div>
             <p className="land-note">No credit card for the free pass. Educational exam preparation only.</p>
+            <div style={{ maxWidth: 520 }}>
+              <InstallCard
+                scope="landing"
+                headline="Install the PulseRN web app"
+                message="Keep your NCLEX study tools one tap away. PulseRN installs from your browser and opens full screen; no app-store download is required."
+              />
+            </div>
           </div>
           <div className="land-product" aria-label="Illustration of a PulseRN practice question">
             <div className="land-product-top"><span className="land-dot" /> Adaptive practice · Adult Health · Question 18</div>
@@ -174,6 +192,24 @@ export default function LandingPage({ onSignIn, onStart }) {
                   <div className="land-card-num">{index + 1}</div>
                   <h3>{title}</h3><p>{text}</p>
                 </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="land-section">
+          <div className="land-container">
+            <div className="land-section-head">
+              <div className="land-eyebrow">Free sample questions</div>
+              <h2>Try the reasoning before creating an account.</h2>
+              <p>Each public set includes five original questions, visible rationales, authoritative sources, and explicit RN-review status.</p>
+            </div>
+            <div className="land-sample-grid">
+              {SAMPLES.map(([title, text, href]) => (
+                <a className="land-card land-card-link" href={href} key={href}>
+                  <div className="land-card-num" aria-hidden="true">5</div>
+                  <h3>{title}</h3><p>{text}</p>
+                </a>
               ))}
             </div>
           </div>

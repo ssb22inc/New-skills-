@@ -2,6 +2,42 @@
   "schemaVersion": 1,
   "generatedAt": "2026-08-26T00:00:00.000Z",
   "intents": {
+    "nclex-pharmacology-practice-questions": {
+      "primary": "free NCLEX pharmacology practice questions",
+      "secondary": [
+        "NCLEX pharmacology quiz with rationales",
+        "high alert medication practice questions"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "nclex-prioritization-practice-questions": {
+      "primary": "free NCLEX prioritization practice questions",
+      "secondary": [
+        "who to see first NCLEX questions",
+        "NCLEX priority questions with rationales"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "nclex-dosage-calculation-practice-questions": {
+      "primary": "free NCLEX dosage calculation practice questions",
+      "secondary": [
+        "NCLEX medication math quiz",
+        "dosage calculations with answers"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
+    "ngn-bow-tie-practice-questions": {
+      "primary": "free NGN bow tie practice questions",
+      "secondary": [
+        "NCLEX bow tie questions with rationales",
+        "Next Gen NCLEX bow tie examples"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "clinical"
+    },
     "how-is-the-nclex-scored": {
       "primary": "how is the NCLEX scored",
       "secondary": [

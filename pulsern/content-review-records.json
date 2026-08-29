@@ -1042,6 +1042,71 @@
         {"id":"distributed-retrieval-study-method-and-versioning-boundary","locator":"How to study without memorizing false certainty","sourceIds":["ramnanan-2024-distributed-retrieval-review","medlineplus-understanding-lab-results-2025"]},
         {"id":"lab-education-scope-and-no-result-guarantee","locator":"Description; CTA; Safety and exam boundary","sourceIds":["ncsbn-2026-rn-test-plan","medlineplus-understanding-lab-results-2025"]}
       ]
+    },
+    "nclex-pharmacology-practice-questions": {
+      "decision": "pending",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": null,
+      "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public pharmacology sample set",
+      "contentSha256": "c3b0e07a8b83c49121600aaf2fae0421062caff23d32393d3458ccd3b2a1dd2f",
+      "sourceSetSha256": "a0c38d611028de5d3b2cb617393c325ca1f79cef7574704709219b08b9fd7c30",
+      "claims": [
+        {"id":"pharmacology-high-alert-definition","locator":"Question 1 and rationale","sourceIds":["ismp-high-alert-acute-care-2024"]},
+        {"id":"pharmacology-heparin-protamine-reversal","locator":"Question 2 and rationale","sourceIds":["dailymed-heparin-sodium-2024","dailymed-protamine-sulfate-2024"]},
+        {"id":"pharmacology-warfarin-inr-and-vitamin-k-consistency","locator":"Question 3 and rationale","sourceIds":["dailymed-warfarin-sodium-2026"]},
+        {"id":"pharmacology-naloxone-support-repeat-and-surveillance","locator":"Question 4 and rationale","sourceIds":["dailymed-naloxone-injection-2026"]},
+        {"id":"pharmacology-flumazenil-seizure-and-resedation-risk","locator":"Question 5 and rationale","sourceIds":["dailymed-flumazenil-2026"]},
+        {"id":"pharmacology-original-educational-sample-scope","locator":"Opening paragraph; Educational boundary; FAQ","sourceIds":["ncsbn-2026-rn-test-plan"]}
+      ]
+    },
+    "nclex-prioritization-practice-questions": {
+      "decision": "pending",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": null,
+      "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public prioritization sample set",
+      "contentSha256": "689cb2df200b88bc09713661b10902a9f12ba392e0c41bb33801a9c401611942",
+      "sourceSetSha256": "2645b7c1ae74a863333b0a551823a1279bee07b55b025913e968322729cb7669",
+      "claims": [
+        {"id":"prioritization-cardiac-arrest-recognition-response","locator":"Question 1 and rationale","sourceIds":["aha-2025-adult-basic-life-support"]},
+        {"id":"prioritization-change-from-baseline-and-delay-consequence","locator":"Question 2 and rationale","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-next-generation-nclex"]},
+        {"id":"prioritization-assess-versus-act-boundary","locator":"Question 3 and rationale","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-next-generation-nclex","aha-2025-adult-basic-life-support"]},
+        {"id":"prioritization-maslow-limited-tiebreaker","locator":"Question 4 and rationale","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-next-generation-nclex"]},
+        {"id":"prioritization-evaluate-outcomes","locator":"Question 5 and rationale","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-next-generation-nclex"]},
+        {"id":"prioritization-original-educational-sample-scope","locator":"Opening paragraph; Educational boundary; FAQ","sourceIds":["ncsbn-2026-rn-test-plan"]}
+      ]
+    },
+    "nclex-dosage-calculation-practice-questions": {
+      "decision": "pending",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": null,
+      "scope": "Pending RN clinical, educational, arithmetic, unit, rationale, and source review of the exact public dosage-calculation sample set",
+      "contentSha256": "76cf923b2db04f098f0682f17bc06b45e51be0001f95a749b0ac15c62f4f193b",
+      "sourceSetSha256": "ffae2149ee574a1ddf529bd3bb57bf104da100e9fde02446e7e1b0fb0347bcdb",
+      "claims": [
+        {"id":"dosage-tablet-calculation","locator":"Question 1 and rationale","sourceIds":["ncbi-openrn-math-calculations-2023"]},
+        {"id":"dosage-liquid-calculation","locator":"Question 2 and rationale","sourceIds":["ncbi-openrn-math-calculations-2023"]},
+        {"id":"dosage-pump-rate-calculation","locator":"Question 3 and rationale","sourceIds":["ncbi-openrn-math-calculations-2023"]},
+        {"id":"dosage-gravity-rate-calculation-and-rounding","locator":"Question 4 and rationale","sourceIds":["ncbi-openrn-math-calculations-2023"]},
+        {"id":"dosage-weight-conversion-and-weight-based-calculation","locator":"Question 5 and rationale","sourceIds":["ncbi-openrn-math-calculations-2023"]},
+        {"id":"dosage-clinical-verification-and-education-scope","locator":"Opening paragraph; Educational boundary; FAQ","sourceIds":["ncbi-openrn-math-calculations-2023","ncsbn-2026-rn-test-plan"]}
+      ]
+    },
+    "ngn-bow-tie-practice-questions": {
+      "decision": "pending",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": null,
+      "scope": "Pending RN clinical, educational, item-key, rationale, and source review of the exact public NGN bow-tie sample set",
+      "contentSha256": "f70984039383685fac87199d057c89c1e07f064c78fb93e3668de20de254607b",
+      "sourceSetSha256": "4503c3137871c310437019cbbf74a5b680c22b4f96280df58d89d085bd946efd",
+      "claims": [
+        {"id":"bow-tie-format-selection-structure","locator":"Opening paragraph; FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-next-generation-nclex","ncsbn-nclex-faqs"]},
+        {"id":"bow-tie-opioid-toxicity-response","locator":"Question 1 and rationale","sourceIds":["dailymed-naloxone-injection-2026"]},
+        {"id":"bow-tie-conscious-hypoglycemia-response","locator":"Question 2 and rationale","sourceIds":["medlineplus-low-blood-sugar-self-care-2026"]},
+        {"id":"bow-tie-cdiff-contact-precautions","locator":"Question 3 and rationale","sourceIds":["cdc-cdiff-acute-care-2026","cdc-isolation-appendix-a-2025"]},
+        {"id":"bow-tie-heparin-overanticoagulation-response","locator":"Question 4 and rationale","sourceIds":["dailymed-heparin-sodium-2024","dailymed-protamine-sulfate-2024"]},
+        {"id":"bow-tie-cardiac-arrest-response","locator":"Question 5 and rationale","sourceIds":["aha-2025-adult-basic-life-support"]},
+        {"id":"bow-tie-original-educational-sample-scope","locator":"Educational boundary; FAQ","sourceIds":["ncsbn-2026-rn-test-plan","ncsbn-next-generation-nclex"]}
+      ]
     }
   }
 }

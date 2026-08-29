@@ -8,7 +8,13 @@ import path from "node:path";
 import process from "node:process";
 
 const SITE = "https://www.pulsern.app";
-const REQUIRED = ["/", "/learn/", "/about/", "/pricing/", "/how-it-works/", "/methodology/", "/editorial-policy/"];
+const REQUIRED = [
+  "/", "/learn/", "/about/", "/pricing/", "/how-it-works/", "/methodology/", "/editorial-policy/",
+  "/learn/nclex-pharmacology-practice-questions/",
+  "/learn/nclex-prioritization-practice-questions/",
+  "/learn/nclex-dosage-calculation-practice-questions/",
+  "/learn/ngn-bow-tie-practice-questions/",
+];
 const TRUSTED = ["nclex.com", "www.nclex.com", "ncsbn.org", "www.ncsbn.org", "cdc.gov", "www.cdc.gov", "medlineplus.gov", "www.nimh.nih.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "www.ismp.org", "ismp.org", "home.ecri.org", "doi.org", "pubmed.ncbi.nlm.nih.gov", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"];
 const BLOCKING = new Set(["critical", "high"]);
 
@@ -119,6 +125,7 @@ export function auditHtml(route, html) {
   const anchors = values(html, /<a\b[^>]*href=["']([^"']+)["']/gi);
   const words = strip(html).split(/\s+/).filter(Boolean).length;
   const isGuide = route.startsWith("/learn/") && route !== "/learn/";
+  const isSampleSet = /\/learn\/(?:nclex|ngn)-[^/]*practice-questions\/$/.test(route);
   const expectedCanonical = `${SITE}${route}`;
 
   if (!title) findings.push(finding("critical", "TITLE_MISSING", route, "Missing <title>."));
@@ -151,6 +158,12 @@ export function auditHtml(route, html) {
     if (!trustedLinks.length || !Array.isArray(article?.citation) || !article.citation.length) findings.push(finding("high", "CITATIONS", route, "Guide needs visible trusted sources and structured citations."));
     if (words < 500) findings.push(finding("medium", "GUIDE_DEPTH", route, `Guide contains ${words} visible words; editorial review threshold is 500.`));
   }
+  if (isSampleSet) {
+    const questions = (html.match(/<section\b[^>]*class=["'][^"']*\bquestion\b[^"']*["']/gi) ?? []).length;
+    const rationales = (html.match(/<details\b/gi) ?? []).length;
+    if (questions < 5 || rationales < 5) findings.push(finding("high", "SAMPLE_SET_DEPTH", route, `Public sample set needs at least five questions and five visible rationales; found ${questions} questions and ${rationales} rationales.`));
+    if (!/Educational boundary/i.test(strip(html))) findings.push(finding("high", "SAMPLE_SET_BOUNDARY", route, "Public clinical sample set needs a visible educational safety boundary."));
+  }
 
   if (/\b(memorise|prioritisation|practise|practised|recognise|judgement|labelled|rigour|centre)\b/i.test(strip(html))) findings.push(finding("medium", "LOCALE", route, "U.K. spelling remains on a U.S.-focused NCLEX page."));
   if (/\b(guarantee(?:d|s)? pass|will pass the nclex|predicts? (?:your )?(?:pass|outcome))\b/i.test(strip(html))) findings.push(finding("critical", "OUTCOME_CLAIM", route, "Potential unsupported pass prediction or guarantee."));
@@ -174,8 +187,13 @@ async function htmlFiles(directory) {
 }
 
 function robotsAllows(robots, route) {
-  const publicAllow = robots.split(/\r?\n/).some((line) => line.trim().toLowerCase() === `allow: ${route}`.toLowerCase());
-  return route === "/" ? /allow:\s*\/\$?/i.test(robots) : publicAllow;
+  const allowed = robots.split(/\r?\n/)
+    .map((line) => line.match(/^\s*allow:\s*(\S+)\s*$/i)?.[1])
+    .filter(Boolean);
+  return allowed.some((pattern) => {
+    if (pattern.endsWith("$")) return route === pattern.slice(0, -1);
+    return route.startsWith(pattern);
+  });
 }
 
 function markdown(report) {

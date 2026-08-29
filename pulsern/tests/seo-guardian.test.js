@@ -10,7 +10,9 @@ import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
 import { EXAM_ARTICLES } from "../ops/learn-exam.mjs";
 import { SKILL_ARTICLES } from "../ops/learn-skills.mjs";
 import { TYPE_ARTICLES } from "../ops/learn-types.mjs";
+import { SAMPLE_ARTICLES } from "../ops/learn-samples.mjs";
 import { sourcesFor } from "../ops/seo-content-policy.mjs";
+import { injectSearchVerification, verificationMeta } from "../ops/search-verification.mjs";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
@@ -45,6 +47,44 @@ describe("SEO guardian", () => {
     expect(schemaArticle).toMatchObject({ datePublished: "2026-08-03", dateModified: "2026-08-26" });
     expect(schemaArticle).not.toHaveProperty("reviewedBy");
     expect(graph.some((node) => node["@type"] === "Person")).toBe(false);
+  });
+
+  it("keeps every public sample set complete, source-bound, and pending until exact RN approval", async () => {
+    expect(SAMPLE_ARTICLES).toHaveLength(4);
+    const ledger = JSON.parse(await fs.readFile(new URL("../content-review-records.json", import.meta.url), "utf8"));
+    for (const sample of SAMPLE_ARTICLES) {
+      expect(sample.topic).toBe("Practice questions");
+      expect(sample.body.match(/<section class="question"/g)).toHaveLength(5);
+      expect(sample.body.match(/<details>/g)).toHaveLength(5);
+      expect(sample.body).toContain("Educational boundary");
+      expect(sourcesFor(sample).length).toBeGreaterThanOrEqual(3);
+      expect(ledger.reviews[sample.slug]).toMatchObject({
+        decision: "pending",
+        reviewerId: "sheldon-bennett-rn",
+      });
+      expect(ledger.reviews[sample.slug].reviewedAt).toBeNull();
+      expect(ledger.reviews[sample.slug].claims.length).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it("injects Search Console verification only from a valid build-time token", () => {
+    const token = "abcDEF_1234567890-search-console-token";
+    expect(verificationMeta("")).toBe("");
+    expect(() => verificationMeta("bad token")).toThrow(/GOOGLE_SITE_VERIFICATION/);
+    const html = '<html><head><meta name="description" content="PulseRN"></head></html>';
+    expect(injectSearchVerification(html, "")).toBe(html);
+    expect(injectSearchVerification(html, token)).toContain(`name="google-site-verification" content="${token}"`);
+  });
+
+  it("rejects a public sample set with fewer than five questions and rationales", () => {
+    const body = "clinical judgment ".repeat(520);
+    const schema = { "@context": "https://schema.org", "@graph": [
+      { "@type": "Article", datePublished: "2026-08-29", dateModified: "2026-08-29", author: { "@id": "https://www.pulsern.app/#org" }, reviewedBy: { "@id": "https://www.pulsern.app/about/#reviewer" }, citation: ["https://www.nclex.com/test-plans.page"] },
+      { "@type": "Organization", "@id": "https://www.pulsern.app/#org", name: "PulseRN" },
+      { "@type": "Person", "@id": "https://www.pulsern.app/about/#reviewer", name: "Test Reviewer, RN", jobTitle: "Registered Nurse" },
+    ] };
+    const page = auditHtml("/learn/nclex-test-practice-questions/", `<html><head><title>NCLEX test practice questions | PulseRN</title><meta name="description" content="Five original NCLEX practice questions with visible rationales, current sources, review evidence, and an educational safety boundary."><link rel="canonical" href="https://www.pulsern.app/learn/nclex-test-practice-questions/"><script type="application/ld+json">${JSON.stringify(schema)}</script></head><body><main><h1>NCLEX test practice questions</h1><time datetime="2026-08-29">2026-08-29</time><p>Educational boundary</p><a href="/learn/">Guides</a><a href="/about/">About</a><a href="https://www.nclex.com/test-plans.page">Source</a><section class="question"><details><summary>Answer</summary><p>Rationale</p></details></section>${body}</main></body></html>`);
+    expect(page.findings.some((item) => item.code === "SAMPLE_SET_DEPTH" && item.severity === "high")).toBe(true);
   });
 
   it("keeps Guide 2 tables accessible and its dated sources section-bound", () => {

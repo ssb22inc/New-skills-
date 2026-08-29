@@ -96,6 +96,16 @@ clinical protocols or a substitute for course materials.
 - [Spaced repetition for nursing students](https://www.pulsern.app/learn/spaced-repetition-for-nursing-students/)
 - [Therapeutic communication: picking the right response](https://www.pulsern.app/learn/therapeutic-communication/)
 
+## Free sample question sets
+
+Each public set contains five original educational questions with visible
+rationales, authoritative sources, and explicit RN-review status.
+
+- [NCLEX pharmacology practice questions](https://www.pulsern.app/learn/nclex-pharmacology-practice-questions/)
+- [NCLEX prioritization practice questions](https://www.pulsern.app/learn/nclex-prioritization-practice-questions/)
+- [NCLEX dosage calculation practice questions](https://www.pulsern.app/learn/nclex-dosage-calculation-practice-questions/)
+- [NGN bow-tie practice questions](https://www.pulsern.app/learn/ngn-bow-tie-practice-questions/)
+
 ## Ownership
 
 All questions, case studies, flashcards, and explanatory material are the
