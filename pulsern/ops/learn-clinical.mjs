@@ -7,76 +7,48 @@ export const CLINICAL_ARTICLES = [
   {
     slug: "lab-values-to-memorize",
     topic: "High-yield clinical",
-    title: "Lab values to memorise for the NCLEX",
-    h1: "The lab values worth memorising",
-    description: "The reference ranges the NCLEX actually leans on, grouped so they stick, plus the critical values that should trigger immediate action.",
+    title: "Lab values to memorize for the NCLEX",
+    h1: "How to study lab values for the NCLEX",
+    description: "How to study common laboratory categories without treating one memorized reference table as universal: check units, ranges, trends and client context.",
     published: "2026-08-03",
-    updated: "2026-08-03",
-    cta: "PulseRN has a built-in lab reference drawer and flashcards that drill these with real spaced repetition.",
+    updated: "2026-08-29",
+    cta: "PulseRN can provide lab-interpretation practice and spaced review; it does not replace the reporting laboratory, clinical policy, or professional judgment, and it cannot predict an exam result.",
     body: `
-<p>You cannot memorise every laboratory value, and you do not need to. A relatively small set does most of the work on the exam, because those are the values that change what a nurse does next.</p>
-<p>Ranges below are <b>typical adult reference ranges</b>. Real ranges vary between laboratories, and your institution's values always govern in practice. Paediatric, pregnancy and older-adult ranges differ.</p>
+<p>Laboratory results are not interpreted from a universal table. MedlinePlus explains that laboratories may use different testing methods and reference ranges, that a result outside a reference interval may or may not indicate a health problem, and that a result inside the interval does not guarantee health. Use the interval, units and flags supplied with the result.</p>
 
-<h2>Electrolytes</h2>
-<table>
-  <tr><th>Test</th><th>Typical range</th><th>Why it is tested</th></tr>
-  <tr><td>Sodium</td><td>135&ndash;145 mEq/L</td><td>Drives neurological signs — confusion, seizures at extremes.</td></tr>
-  <tr><td>Potassium</td><td>3.5&ndash;5.0 mEq/L</td><td>Cardiac. Both ends are dangerous; small deviations matter.</td></tr>
-  <tr><td>Calcium</td><td>9.0&ndash;10.5 mg/dL</td><td>Neuromuscular excitability, tetany, cardiac effects.</td></tr>
-  <tr><td>Magnesium</td><td>1.3&ndash;2.1 mEq/L</td><td>Reflexes and cardiac conduction; central to obstetric scenarios.</td></tr>
-  <tr><td>Phosphorus</td><td>3.0&ndash;4.5 mg/dL</td><td>Moves inversely to calcium.</td></tr>
-  <tr><td>Chloride</td><td>98&ndash;106 mEq/L</td><td>Follows sodium; acid-base context.</td></tr>
-</table>
-
-<div class="key">
-<p><b>Potassium is the one to know cold.</b> More NCLEX items hinge on potassium than any other single value. It is narrow, it is cardiac, and both hypo- and hyperkalaemia are lethal. If you memorise one range perfectly, make it 3.5&ndash;5.0.</p>
+<div class="key" role="note" aria-labelledby="lab-safety-boundary">
+<h2 id="lab-safety-boundary" style="margin-top:0">Safety and exam boundary</h2>
+<p>This guide is an educational framework, not a clinical protocol or a universal critical-value list. In practice, interpret results with the reporting laboratory's interval and units, the specimen and method, the client's characteristics and condition, trends, current orders, and organizational policy. Follow required escalation procedures for results the reporting laboratory or organization identifies as critical.</p>
 </div>
 
-<h2>Renal and metabolic</h2>
-<table>
-  <tr><th>Test</th><th>Typical range</th><th>Why it is tested</th></tr>
-  <tr><td>BUN</td><td>10&ndash;20 mg/dL</td><td>Rises with dehydration as well as renal impairment.</td></tr>
-  <tr><td>Creatinine</td><td>0.6&ndash;1.2 mg/dL</td><td>More specific to kidney function than BUN.</td></tr>
-  <tr><td>Glucose (fasting)</td><td>70&ndash;100 mg/dL</td><td>Hypoglycaemia is the emergency; treat before investigating.</td></tr>
-  <tr><td>HbA1c</td><td>Below 5.7% (non-diabetic)</td><td>Long-term control — an education topic, not an acute one.</td></tr>
-</table>
+<p class="source-note"><b>Evidence:</b> Reference-range interpretation comes from <a href="#source-medlineplus-understanding-lab-results-2025">MedlinePlus</a>. Exam-scope boundaries come from the <a href="#source-ncsbn-2026-rn-test-plan">2026 RN Test Plan</a>. The learning-method evidence comes from a <a href="#source-ramnanan-2024-distributed-retrieval-review">systematic review of distributed and retrieval practice</a>.</p>
 
-<h2>Haematology</h2>
-<table>
-  <tr><th>Test</th><th>Typical range</th><th>Why it is tested</th></tr>
-  <tr><td>Haemoglobin</td><td>12&ndash;16 g/dL (female), 13&ndash;17 (male)</td><td>Oxygen-carrying capacity; fatigue, pallor, tachycardia.</td></tr>
-  <tr><td>Haematocrit</td><td>Roughly three times the haemoglobin</td><td>A quick internal consistency check.</td></tr>
-  <tr><td>White cells</td><td>5,000&ndash;10,000/mm3</td><td>Low means infection risk; the client cannot mount a normal response.</td></tr>
-  <tr><td>Platelets</td><td>150,000&ndash;400,000/mm3</td><td>Bleeding precautions as the count falls.</td></tr>
-</table>
-
-<h2>Coagulation</h2>
-<table>
-  <tr><th>Test</th><th>Typical range</th><th>Pairs with</th></tr>
-  <tr><td>INR</td><td>0.8&ndash;1.1 untreated; often 2&ndash;3 on therapy</td><td>Warfarin</td></tr>
-  <tr><td>PT</td><td>11&ndash;13.5 seconds</td><td>Warfarin</td></tr>
-  <tr><td>aPTT</td><td>30&ndash;40 seconds</td><td>Heparin</td></tr>
-</table>
-<p>The pairing is worth committing to memory: <b>PT/INR with warfarin, aPTT with heparin</b>. Items frequently test whether you monitor the right one.</p>
-
-<h2>Values that should stop you</h2>
-<p>The exam cares less about your recall of a range than about whether you recognise a value that demands action now:</p>
+<h2>Categories to organize during study</h2>
+<p>The NCLEX test plan defines broad client-needs and clinical-judgment content, but it does not publish a guaranteed list of laboratory numbers that every candidate must memorize. A practical study map can include:</p>
 <ul>
-  <li>Potassium below 2.5 or above 6.5 mEq/L</li>
-  <li>Sodium below 120 or above 160 mEq/L</li>
-  <li>Glucose below 40 or above 400 mg/dL</li>
-  <li>Platelets below 20,000/mm3</li>
-  <li>Haemoglobin below 7 g/dL</li>
-  <li>INR above 5 in a client on anticoagulation</li>
+  <li><b>Electrolytes and minerals:</b> recognize the test name, unit, direction of change and relevant client findings.</li>
+  <li><b>Renal and metabolic tests:</b> relate an individual result to the supplied history, other results and trend.</li>
+  <li><b>Complete blood count:</b> distinguish the measured components and interpret them in the scenario rather than from one isolated number.</li>
+  <li><b>Glucose-related tests:</b> distinguish an immediate measurement from a measure representing a longer interval.</li>
+  <li><b>Coagulation tests:</b> identify what the prompt asks, then use the stated therapy, target, units and reporting range.</li>
 </ul>
 
-<h2>How to learn these so they stay</h2>
-<p>Reading a table repeatedly produces recognition, not recall — you feel familiar with the numbers without being able to produce them. Retrieval practice is what makes them stick: cover the range, state it aloud, then check. Spacing those attempts over days rather than massing them in one session is the difference between knowing them this week and knowing them on exam day.</p>
+<h2>A result-by-result interpretation check</h2>
+<ol>
+  <li><b>Identify the exact test, specimen and unit.</b> Similar-looking numbers are not interchangeable when units or specimens differ.</li>
+  <li><b>Use the reference interval shown with the result.</b> Do not substitute a number from a different laboratory or study aid.</li>
+  <li><b>Check the client's context.</b> Age, pregnancy, health conditions, medicines, preparation and other factors can affect interpretation.</li>
+  <li><b>Compare trends and related information.</b> A single result does not replace the rest of the record or clinical assessment.</li>
+  <li><b>Answer the question actually asked.</b> Distinguish recognition, follow-up, monitoring and prioritization tasks.</li>
+</ol>
+
+<h2>How to study without memorizing false certainty</h2>
+<p>Use retrieval practice and distribute it over time: hide the answer, retrieve the test category, unit, direction and interpretation steps, then check against one clearly identified current source. If your school or examination preparation program requires numeric ranges, record the source, units, population and revision date and recheck them when the source changes. This keeps a study range from being mistaken for a universal clinical threshold.</p>
 `,
     faq: [
-      { q: "What lab values do I need to know for the NCLEX?", a: "Electrolytes (especially potassium and sodium), renal markers (BUN, creatinine), glucose, the complete blood count, and coagulation studies with the drug each monitors — PT/INR with warfarin, aPTT with heparin." },
-      { q: "What is the normal potassium level?", a: "Typically 3.5 to 5.0 mEq/L in adults. It is the value most worth memorising precisely, because the range is narrow and deviations at either end carry cardiac risk." },
-      { q: "Does the NCLEX give you lab values?", a: "Some items provide reference ranges alongside results and others do not, so you cannot rely on them being supplied. Knowing the common ranges also lets you read a result quickly rather than pausing to interpret." },
+      { q: "What lab values do I need to know for the NCLEX?", a: "NCSBN does not publish a guaranteed memorization list. Organize study around common laboratory categories, units, direction of change, client context and the interpretation task, while following current official exam materials." },
+      { q: "What is the normal potassium level?", a: "There is no single reference interval that replaces the reporting laboratory's range and units. Laboratories may use different methods and ranges, so use the interval supplied with the result and interpret it in context." },
+      { q: "Does the NCLEX provide reference ranges?", a: "Do not assume that every item will present information in the same way. Follow the data, exhibits and directions supplied in the item and use the current Candidate Tutorial and Test Plan for official exam guidance." },
     ],
   },
 

@@ -457,6 +457,19 @@ describe("SEO guardian", () => {
     expect(sourcesFor(guide).map((source) => source.id)).toEqual(["ncsbn-2026-rn-test-plan", "ncsbn-next-generation-nclex", "ncsbn-nclex-faqs"]);
   });
 
+  it("keeps pending Guide 23 lab guidance qualified and source-bound", () => {
+    const guide = CLINICAL_ARTICLES.find((article) => article.slug === "lab-values-to-memorize");
+    expect(guide.updated).toBe("2026-08-29");
+    expect(guide.body).toContain('aria-labelledby="lab-safety-boundary"');
+    expect(guide.body).toContain("Laboratory results are not interpreted from a universal table");
+    expect(guide.body).toContain("does not publish a guaranteed list of laboratory numbers");
+    expect(guide.body).not.toContain("More NCLEX items hinge on potassium");
+    expect(guide.body).not.toContain("Potassium below 2.5");
+    expect(guide.body).not.toContain("roughly three times");
+    expect(sourcesFor(guide).map((source) => source.id)).toEqual(["medlineplus-understanding-lab-results-2025", "ncsbn-2026-rn-test-plan", "ramnanan-2024-distributed-retrieval-review"]);
+    expect(sourcesFor(guide).every((source) => /^\d{4}-\d{2}-\d{2}$/.test(source.sourceUpdated ?? ""))).toBe(true);
+  });
+
   it("extracts Responses API output text", () => {
     expect(extractOutputText({ output: [{ type: "message", content: [{ type: "output_text", text: "Adversarial result" }] }] })).toBe("Adversarial result");
   });

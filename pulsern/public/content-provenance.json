@@ -1273,17 +1273,17 @@
         "audience": "NCLEX-RN candidates",
         "risk": "clinical"
       },
-      "contentSha256": "4cb4d2ccb2bfcd70eaa82075ec1d9cf09aa8add5be6cd7dd10d0054e311b8f3b",
-      "sourceSetSha256": "7d610e40c495474da8e0c04523631ca1ad3914b1ed95834fd06333ec42c088b0",
+      "contentSha256": "719cf02f930d752ca04965b3bbb07f48f6cfbde1f9cbe99cdb00e11253f2add5",
+      "sourceSetSha256": "f1216fab579c7917936c1be320ca9d06d495d987bd83af8c69faa3bd254f9cad",
       "sources": [
         {
-          "id": "medlineplus-medical-tests",
-          "title": "MedlinePlus — Medical Tests",
+          "id": "medlineplus-understanding-lab-results-2025",
+          "title": "MedlinePlus — How to Understand Your Lab Results",
           "publisher": "U.S. National Library of Medicine",
-          "url": "https://medlineplus.gov/lab-tests/",
-          "sourceUpdated": null,
-          "accessedAt": "2026-08-26",
-          "locator": "Medical test index; claim-specific locators still require RN sign-off"
+          "url": "https://medlineplus.gov/lab-tests/how-to-understand-your-lab-results/",
+          "sourceUpdated": "2025-09-04",
+          "accessedAt": "2026-08-29",
+          "locator": "Reference ranges; laboratory-method and range variation; results inside and outside ranges; factors affecting results; page last-updated field"
         },
         {
           "id": "ncsbn-2026-rn-test-plan",
@@ -1293,6 +1293,15 @@
           "sourceUpdated": "2026-04-01",
           "accessedAt": "2026-08-26",
           "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ramnanan-2024-distributed-retrieval-review",
+          "title": "Systematic review of distributed practice and retrieval practice in health professions education",
+          "publisher": "Advances in Health Sciences Education via PubMed Central",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11078833/",
+          "sourceUpdated": "2023-08-24",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract; methods; results across 56 studies and 63 experiments; limitations and conclusions"
         }
       ],
       "review": {
