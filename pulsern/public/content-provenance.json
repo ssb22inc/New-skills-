@@ -983,12 +983,69 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, exam-policy, and source review of the exact Guide 20 highlight-questions content and source-set digests",
+        "claims": [
+          {
+            "id": "highlight-item-text-selection-format",
+            "locator": "Opening paragraph; definition FAQ",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "recognize-relevant-cues-context",
+            "locator": "Opening paragraph; A stem-first study method",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "multi-key-partial-credit-methods",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-universal-highlight-scoring-or-point-value",
+            "locator": "Format and scoring boundary; scoring FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "no-fixed-highlight-answer-count",
+            "locator": "Format and scoring boundary; study-guidance qualification; Common reasoning errors",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "stem-first-contextual-evaluation-is-study-guidance",
+            "locator": "A stem-first study method; Questions for evaluating a phrase",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "highlight-education-scope-and-no-result-guarantee",
+            "locator": "Description; CTA",
+            "sourceIds": [
+              "ncsbn-next-generation-nclex",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
