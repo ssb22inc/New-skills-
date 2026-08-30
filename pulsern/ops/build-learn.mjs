@@ -12,6 +12,7 @@ import { writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from "node
 import { createHash } from "node:crypto";
 import { ARTICLES } from "./learn-content.mjs";
 import { EVIDENCE_ACCESSED_AT, POLICY_VERSION, SEARCH_INTENTS, intentFor, sourcesFor } from "./seo-content-policy.mjs";
+import { COMMERCIAL_PAGES } from "./commercial-content.mjs";
 
 const SITE = "https://www.pulsern.app";
 const OUT = "public/learn";
@@ -346,6 +347,7 @@ const urls = [
   { loc: `${SITE}/editorial-policy/`, freq: "monthly", pri: "0.8" },
   { loc: `${SITE}/about/`, freq: "monthly", pri: "0.7" },
   { loc: `${SITE}/legal/`, freq: "yearly", pri: "0.3" },
+  ...COMMERCIAL_PAGES.map((page) => ({ loc: `${SITE}/${page.slug}/`, freq: "monthly", pri: page.slug === "compare" ? "0.9" : "0.8", lastmod: page.updated })),
   ...ARTICLES.map((a) => ({ loc: `${SITE}/learn/${a.slug}/`, freq: "monthly", pri: "0.8", lastmod: a.updated })),
 ];
 const today = ARTICLES.reduce((m, a) => (a.updated > m ? a.updated : m), "2026-08-03");

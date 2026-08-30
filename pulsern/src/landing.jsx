@@ -23,6 +23,12 @@ const SAMPLES = [
   ["NGN bow-tie", "Five text-based bow-tie examples connecting a condition, two actions, and two parameters.", "/learn/ngn-bow-tie-practice-questions/"],
 ];
 
+const COMPARISONS = [
+  ["PulseRN vs UWorld", "Compare AI study help, question-bank scale, lab access, media depth, RN accountability, and current public pricing.", "/compare/pulsern-vs-uworld/"],
+  ["PulseRN vs Archer Review", "Compare an integrated RN-owned app with high-volume readiness, CAT, video, and live-support packages.", "/compare/pulsern-vs-archer/"],
+  ["PulseRN vs Kaplan", "Compare a focused self-directed app with Kaplan’s strategy instruction, CAT practice, classes, and tutoring tiers.", "/compare/pulsern-vs-kaplan/"],
+];
+
 export default function LandingPage({ onSignIn, onStart }) {
   return (
     <div className="landing-shell">
@@ -130,6 +136,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           <a className="land-brand" href="/" aria-label="PulseRN home">PulseRN</a>
           <div className="land-links">
             <a href="#features">Features</a>
+            <a href="/compare/">Compare</a>
             <a href="/pricing/">Pricing</a>
             <a href="/learn/">RN-reviewed guides</a>
             <button className="land-button secondary keep" type="button" onClick={onSignIn}>Sign in</button>
@@ -208,6 +215,25 @@ export default function LandingPage({ onSignIn, onStart }) {
           </div>
         </section>
 
+        <section className="land-section white">
+          <div className="land-container">
+            <div className="land-section-head">
+              <div className="land-eyebrow">Sourced comparisons</div>
+              <h2>Choose by fit, not by a manufactured winner.</h2>
+              <p>PulseRN publishes the conflict, dates competitor facts, links provider-owned sources, and gives competing products credit for capabilities they document.</p>
+            </div>
+            <div className="land-grid">
+              {COMPARISONS.map(([title, text, href]) => (
+                <a className="land-card land-card-link" href={href} key={href}>
+                  <div className="land-card-num" aria-hidden="true">↔</div>
+                  <h3>{title}</h3><p>{text}</p>
+                </a>
+              ))}
+            </div>
+            <p className="land-note" style={{ marginTop: 18 }}><a href="/compare/">See every NCLEX-prep comparison and the methodology →</a></p>
+          </div>
+        </section>
+
         <section className="land-section">
           <div className="land-container land-how">
             <div className="land-section-head">
@@ -250,7 +276,7 @@ export default function LandingPage({ onSignIn, onStart }) {
 
       <footer className="land-footer">
         <div className="land-container">
-          <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div></div>
+          <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div></div>
           <p className="land-disclaimer">Educational exam preparation only — not medical advice or a clinical reference. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse PulseRN.</p>
         </div>
       </footer>

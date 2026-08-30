@@ -73,6 +73,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:sources
+      - name: Commercial comparison source and drift audit
+        id: commercial
+        if: always()
+        continue-on-error: true
+        run: npm run seo:commercial
       - name: WCAG accessibility audit
         id: accessibility
         if: always()
@@ -104,6 +109,7 @@ jobs:
           test "${{ steps.crawl.outcome }}" = "success"
           test "${{ steps.crawl_live.outcome }}" = "success"
           test "${{ steps.sources.outcome }}" = "success"
+          test "${{ steps.commercial.outcome }}" = "success"
           test "${{ steps.accessibility.outcome }}" = "success"
           test "${{ steps.adversary.outcome }}" = "success"
           npm run seo:enforce
