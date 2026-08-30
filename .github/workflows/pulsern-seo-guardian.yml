@@ -23,6 +23,8 @@ jobs:
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       SEO_ADVERSARY_MODEL: openai/gpt-4.1
+      VITE_SUPABASE_URL: http://127.0.0.1:54321
+      VITE_SUPABASE_ANON_KEY: public-ci-placeholder
     defaults:
       run:
         working-directory: pulsern
@@ -51,6 +53,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:audit
+      - name: Public landing and private app boundary
+        id: app_boundary
+        if: always()
+        continue-on-error: true
+        run: npm run seo:app-boundary
       - name: Local anonymous agent crawl
         id: crawl
         if: always()
@@ -93,6 +100,7 @@ jobs:
           test "${{ steps.browser.outcome }}" = "success"
           test "${{ steps.build.outcome }}" = "success"
           test "${{ steps.deterministic.outcome }}" = "success"
+          test "${{ steps.app_boundary.outcome }}" = "success"
           test "${{ steps.crawl.outcome }}" = "success"
           test "${{ steps.crawl_live.outcome }}" = "success"
           test "${{ steps.sources.outcome }}" = "success"

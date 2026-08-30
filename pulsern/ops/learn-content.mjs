@@ -8,10 +8,12 @@ import { EXAM_ARTICLES } from "./learn-exam.mjs";
 import { TYPE_ARTICLES } from "./learn-types.mjs";
 import { CLINICAL_ARTICLES } from "./learn-clinical.mjs";
 import { SKILL_ARTICLES } from "./learn-skills.mjs";
+import { SAMPLE_ARTICLES } from "./learn-samples.mjs";
 
 export const ARTICLES = [
   ...EXAM_ARTICLES,
   ...TYPE_ARTICLES,
   ...CLINICAL_ARTICLES,
   ...SKILL_ARTICLES,
+  ...SAMPLE_ARTICLES,
 ];

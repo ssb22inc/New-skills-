@@ -4,7 +4,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase.js";
 import App from "./App.jsx";
-import LandingPage from "./landing.jsx";
+import InstallCard from "./install.jsx";
+import { APP_ROOT, authModeFromUrl, authRedirectUrl } from "./app-routing.js";
 
 export function AuthScreen({ initialMode = "signin", onBack }) {
   const [mode, setMode] = useState(initialMode); // signin | signup | forgot
@@ -32,12 +33,12 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
     setBusy(true); setError(""); setNotice("");
     try {
       if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: authRedirectUrl() } });
         if (error) throw error;
         if (data.user && !data.session) setNotice("Check your email to confirm your account, then sign in.");
       } else if (mode === "forgot") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin,
+          redirectTo: authRedirectUrl("recovery"),
         });
         if (error) throw error;
         setNotice("If that email has an account, a reset link is on its way. Open it on this device.");
@@ -78,7 +79,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: window.location.origin },
+        options: { emailRedirectTo: authRedirectUrl() },
       });
       if (error) throw error;
       setNotice("Check your email — tap the link and you're in. No password needed.");
@@ -101,13 +102,13 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
     setError(""); setNotice("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: authRedirectUrl() },
     });
     if (error) setError(error.message || "Google sign-in is unavailable right now.");
   };
 
   return (
-    <div className="auth-wrap">
+    <main className="auth-wrap">
       <style>{`
         .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center;
           background: #f6f7f9; font-family: system-ui, -apple-system, sans-serif; padding: 16px; }
@@ -127,16 +128,16 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
         .auth-btn:disabled { opacity: .6; cursor: default; }
         .auth-btn.alt { background: #fff; color: #1c2430; border: 1px solid #d5dae1; margin-top: 10px; }
         .auth-btn.google { display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: #8a93a2; font-size: 13px; }
+        .auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: #5b6472; font-size: 13px; }
         .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: #e3e6ea; }
         .auth-switch { background: none; border: 0; color: #0e6e5c; cursor: pointer; font-size: 14px; padding: 0; }
         .auth-err { color: #b42318; font-size: 13px; margin: 0 0 10px; }
         .auth-note { color: #067647; font-size: 13px; margin: 0 0 10px; }
-        .auth-foot { color: #8a93a2; font-size: 12px; margin-top: 18px; line-height: 1.5; }
+        .auth-foot { color: #5b6472; font-size: 12px; margin-top: 18px; line-height: 1.5; }
       `}</style>
       <div className="auth-card">
         {onBack && <button className="auth-switch" type="button" onClick={onBack} style={{ marginBottom: 16 }}>&larr; Back to PulseRN</button>}
-        <p className="auth-logo">PulseRN</p>
+        <h1 className="auth-logo">PulseRN</h1>
         <p className="auth-motto">Created by a licensed RN — for future RNs.</p>
         <p className="auth-sub">{
           mode === "signup" ? "Create your account — progress syncs to every device."
@@ -197,8 +198,9 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
           </button>
         </p>
         <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/learn/" style={{ color: "#5b6472" }}>Guides</a> · <a href="/about/" style={{ color: "#5b6472" }}>About</a> · <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
+        <InstallCard scope="auth" headline="Install the PulseRN study app" message="Keep your study tools one tap away. Installation is handled by your browser; no app-store download is required." />
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -219,9 +221,9 @@ function NewPasswordScreen({ onDone }) {
   };
 
   return (
-    <div className="auth-wrap">
+    <main className="auth-wrap">
       <div className="auth-card">
-        <p className="auth-logo">PulseRN</p>
+        <h1 className="auth-logo">PulseRN</h1>
         <p className="auth-sub">Choose a new password to finish resetting your account.</p>
         {error && <p className="auth-err">{error}</p>}
         <form onSubmit={submit}>
@@ -237,7 +239,7 @@ function NewPasswordScreen({ onDone }) {
           <button className="auth-btn" type="submit" disabled={busy}>{busy ? "Saving…" : "Save new password"}</button>
         </form>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -250,26 +252,21 @@ export class ErrorBoundary extends React.Component {
   render() {
     if (!this.state.crashed) return this.props.children;
     return (
-      <div className="auth-wrap">
+      <main className="auth-wrap">
         <div className="auth-card">
-          <p className="auth-logo">PulseRN</p>
+          <h1 className="auth-logo">PulseRN</h1>
           <p className="auth-sub">Something went wrong on this screen. Your progress is saved to your account — reloading will pick up right where you left off.</p>
           <button className="auth-btn" onClick={() => window.location.reload()}>Reload PulseRN</button>
         </div>
-      </div>
+      </main>
     );
   }
 }
 
 export default function AuthGate() {
   const [session, setSession] = useState(undefined); // undefined = still checking
-  const [recovering, setRecovering] = useState(false);
-  const [authMode, setAuthMode] = useState(() => {
-    const query = new URLSearchParams(window.location.search);
-    if (query.get("start") === "1") return "signup";
-    if (query.get("signin") === "1") return "signin";
-    return null;
-  });
+  const [recovering, setRecovering] = useState(() => authModeFromUrl() === "reset");
+  const [authMode] = useState(() => authModeFromUrl());
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
@@ -280,9 +277,13 @@ export default function AuthGate() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!session || recovering || window.location.pathname === APP_ROOT) return;
+    window.history.replaceState({}, "", `${APP_ROOT}${window.location.search}${window.location.hash}`);
+  }, [session, recovering]);
+
   if (session === undefined) return null;
-  if (recovering && session) return <NewPasswordScreen onDone={() => setRecovering(false)} />;
-  if (!session && authMode) return <AuthScreen initialMode={authMode} onBack={() => setAuthMode(null)} />;
-  if (!session) return <LandingPage onSignIn={() => setAuthMode("signin")} onStart={() => setAuthMode("signup")} />;
+  if (recovering && session) return <NewPasswordScreen onDone={() => { setRecovering(false); window.history.replaceState({}, "", APP_ROOT); }} />;
+  if (!session) return <AuthScreen initialMode={authMode} onBack={() => window.location.assign("/")} />;
   return <App key={session.user.id} />;
 }

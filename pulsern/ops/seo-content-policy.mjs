@@ -59,6 +59,10 @@ export const SOURCES = {
 };
 
 export function sourcesFor(article) {
+  if (article.slug === "nclex-pharmacology-practice-questions") return [SOURCES.ismp, SOURCES.heparinLabel, SOURCES.protamineLabel, SOURCES.warfarinLabel, SOURCES.naloxoneLabel, SOURCES.flumazenilLabel, SOURCES.testPlan];
+  if (article.slug === "nclex-prioritization-practice-questions") return [SOURCES.testPlan, SOURCES.ngn, SOURCES.ahaAdultBls];
+  if (article.slug === "nclex-dosage-calculation-practice-questions") return [SOURCES.openRnMathCalculations, SOURCES.testPlan, SOURCES.ngn];
+  if (article.slug === "ngn-bow-tie-practice-questions") return [SOURCES.testPlan, SOURCES.ngn, SOURCES.nclexFaqs, SOURCES.naloxoneLabel, SOURCES.lowBloodSugarSelfCare, SOURCES.cdcCdiffAcuteCare, SOURCES.cdcIsolationAppendix, SOURCES.heparinLabel, SOURCES.protamineLabel, SOURCES.ahaAdultBls];
   if (article.slug === "nclex-test-day-what-to-expect") return [SOURCES.candidate2026Pdf, SOURCES.testPlan, SOURCES.computerizedAdaptiveTesting, SOURCES.nclexFaqs];
   if (article.slug === "how-is-the-nclex-scored") return [SOURCES.computerizedAdaptiveTesting, SOURCES.nclexFaqs, SOURCES.testPlan, SOURCES.ngn];
   if (article.slug === "how-many-questions-is-the-nclex") return [SOURCES.testPlan, SOURCES.computerizedAdaptiveTesting, SOURCES.nclexFaqs, SOURCES.candidate];
@@ -88,6 +92,10 @@ export function sourcesFor(article) {
 }
 
 export const SEARCH_INTENTS = {
+  "nclex-pharmacology-practice-questions": { primary: "free NCLEX pharmacology practice questions", secondary: ["NCLEX pharmacology quiz with rationales", "high alert medication practice questions"], audience: "NCLEX-RN candidates", risk: "clinical" },
+  "nclex-prioritization-practice-questions": { primary: "free NCLEX prioritization practice questions", secondary: ["who to see first NCLEX questions", "NCLEX priority questions with rationales"], audience: "NCLEX-RN candidates", risk: "clinical" },
+  "nclex-dosage-calculation-practice-questions": { primary: "free NCLEX dosage calculation practice questions", secondary: ["NCLEX medication math quiz", "dosage calculations with answers"], audience: "NCLEX-RN candidates", risk: "clinical" },
+  "ngn-bow-tie-practice-questions": { primary: "free NGN bow tie practice questions", secondary: ["NCLEX bow tie questions with rationales", "Next Gen NCLEX bow tie examples"], audience: "NCLEX-RN candidates", risk: "clinical" },
   "how-is-the-nclex-scored": { primary: "how is the NCLEX scored", secondary: ["NCLEX CAT scoring", "NCLEX passing standard"], audience: "NCLEX-RN candidates", risk: "exam" },
   "how-many-questions-is-the-nclex": { primary: "how many questions are on the NCLEX", secondary: ["NCLEX minimum questions", "NCLEX maximum questions"], audience: "NCLEX-RN candidates", risk: "exam" },
   "next-generation-nclex-what-changed": { primary: "what changed on the Next Generation NCLEX", secondary: ["NGN changes", "NCLEX clinical judgment model"], audience: "NCLEX-RN candidates", risk: "exam" },

@@ -20,7 +20,7 @@ Claude Code executes everything else. These run in parallel with the build.
 
   (Find your uid under Authentication → Users.)
 
-- H6 · Google OAuth (optional but conversion-critical) — Supabase → Authentication → Providers → Google; needs a Google Cloud OAuth client (~15 min, their docs walk it).
+- H6 · Google OAuth and app-path redirects (optional provider, required redirect allowlist) — Supabase → Authentication → URL Configuration: allow `https://www.pulsern.app/app/` and `https://www.pulsern.app/app/reset` (plus the equivalent Vercel preview routes used for auth testing). Keep the Site URL at `https://www.pulsern.app`. Then enable Google under Authentication → Providers if desired; it needs a Google Cloud OAuth client. The one-time `/app/` migration deliberately asks existing users to sign in once again.
 
 ## Before public launch (non-negotiable)
 

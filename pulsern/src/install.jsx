@@ -50,7 +50,11 @@ if (typeof window !== "undefined") {
    cannot have its offer silently suppressed by a dismissal made elsewhere. */
 const dismissKey = (scope) => `pulsern.install.dismissed.${scope}`;
 
-export default function InstallCard({ scope = "paid" }) {
+export default function InstallCard({
+  scope = "paid",
+  headline = "Put PulseRN on your home screen",
+  message = "You've got full access — keep it one tap away. Opens full screen with no address bar.",
+}) {
   const [canPrompt, setCanPrompt] = useState(Boolean(deferred));
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(dismissKey(scope)) === "1"; } catch { return false; }
@@ -114,12 +118,12 @@ export default function InstallCard({ scope = "paid" }) {
             <path d="M12 6v8M9 11l3 3 3-3" />
           </svg>
         </span>
-        <strong>Put PulseRN on your home screen</strong>
+        <strong>{headline}</strong>
         <button className="install-x" type="button" onClick={close} aria-label="Dismiss">×</button>
       </div>
 
       <p className="small">
-        You've got full access — keep it one tap away. Opens full screen with no address bar.
+        {message}
       </p>
 
       {canPrompt ? (
@@ -135,7 +139,7 @@ export default function InstallCard({ scope = "paid" }) {
       ) : plat === "ios-other" ? (
         <p className="small install-steps">
           On iPhone and iPad only Safari can add apps to the home screen. Open{" "}
-          <strong>pulsern.app</strong> in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
+          <strong>www.pulsern.app/app/</strong> in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
         </p>
       ) : (
         <p className="small install-steps">

@@ -15,7 +15,17 @@ const USER_AGENTS = {
   perplexity: "PerplexityBot/1.0; +https://perplexity.ai/perplexitybot",
 };
 
-const mime = { ".html": "text/html; charset=utf-8", ".xml": "application/xml; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".json": "application/json; charset=utf-8" };
+const mime = {
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".xml": "application/xml; charset=utf-8",
+};
 const attr = (html, tag, name) => html.match(tag)?.[0]?.match(new RegExp(`${name}\\s*=\\s*(["'])(.*?)\\1`, "i"))?.[2] ?? "";
 const routeFromUrl = (url) => {
   const pathname = new URL(url).pathname;
@@ -122,7 +132,7 @@ export async function runCrawl({ directory = "dist", baseUrl, outputFile = "repo
           for (const href of links(html)) {
             let linked;
             try { linked = new URL(href, SITE); } catch { continue; }
-            if (linked.origin === SITE && !linked.search && linked.pathname.endsWith("/") && !routeSet.has(linked.pathname) && !["/owner/", "/review/"].includes(linked.pathname)) findings.push({ severity: "high", code: "BROKEN_INTERNAL_MAP", route, message: `Internal link ${linked.pathname} is absent from the sitemap.` });
+            if (linked.origin === SITE && !linked.search && linked.pathname.endsWith("/") && !routeSet.has(linked.pathname) && !["/app/", "/owner/", "/review/"].includes(linked.pathname)) findings.push({ severity: "high", code: "BROKEN_INTERNAL_MAP", route, message: `Internal link ${linked.pathname} is absent from the sitemap.` });
           }
         }
       }

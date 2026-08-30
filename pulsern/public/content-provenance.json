@@ -3120,6 +3120,504 @@
         ],
         "evidenceMatchesContent": true
       }
+    },
+    {
+      "route": "/learn/nclex-pharmacology-practice-questions/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "free NCLEX pharmacology practice questions",
+        "secondary": [
+          "NCLEX pharmacology quiz with rationales",
+          "high alert medication practice questions"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "c3b0e07a8b83c49121600aaf2fae0421062caff23d32393d3458ccd3b2a1dd2f",
+      "sourceSetSha256": "a0c38d611028de5d3b2cb617393c325ca1f79cef7574704709219b08b9fd7c30",
+      "sources": [
+        {
+          "id": "ismp-high-alert-acute-care-2024",
+          "title": "ISMP — High-Alert Medications in Acute Care Settings",
+          "publisher": "Institute for Safe Medication Practices",
+          "url": "https://home.ecri.org/blogs/ismp-resources/high-alert-medications-in-acute-care-settings",
+          "sourceUpdated": "2024-01-10",
+          "accessedAt": "2026-08-26",
+          "locator": "2024 high-alert list and safeguards"
+        },
+        {
+          "id": "dailymed-heparin-sodium-2024",
+          "title": "Heparin Sodium Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=cb1c1e7a-c9ca-4a07-8833-e45ce436d287",
+          "sourceUpdated": "2024-05-03",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — coagulation-test monitoring; Warnings and Precautions — hemorrhage and thrombocytopenia; Overdosage — protamine neutralization"
+        },
+        {
+          "id": "dailymed-protamine-sulfate-2024",
+          "title": "Protamine Sulfate Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=94d4f57f-940e-c0a8-e053-2a95a90ae3af",
+          "sourceUpdated": "2024-01-23",
+          "accessedAt": "2026-08-27",
+          "locator": "Indications and Usage — heparin overdosage; Warnings — severe hypotensive and anaphylactoid reactions; Dosage and Administration — slow IV administration and dose dependence on elapsed time"
+        },
+        {
+          "id": "dailymed-warfarin-sodium-2026",
+          "title": "Warfarin Sodium Tablets Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=558b7a0d-5490-4c1b-802e-3ab3f1efe760",
+          "sourceUpdated": "2026-06-03",
+          "accessedAt": "2026-08-27",
+          "locator": "Boxed Warning; Dosage and Administration — INR monitoring; Drug Interactions — dietary vitamin K; Overdosage — vitamin K and factor replacement options"
+        },
+        {
+          "id": "dailymed-naloxone-injection-2026",
+          "title": "Naloxone Hydrochloride Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=21d20dff-6efe-481e-a5a0-9c80ded73ca9",
+          "sourceUpdated": "2026-07-01",
+          "accessedAt": "2026-08-27",
+          "locator": "Opioid Overdose — airway and resuscitative support, surveillance, incomplete response, and repeat administration"
+        },
+        {
+          "id": "dailymed-flumazenil-2026",
+          "title": "Flumazenil Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=53d9144a-b7ee-b52a-e063-6294a90a09c5",
+          "sourceUpdated": "2026-06-10",
+          "accessedAt": "2026-08-27",
+          "locator": "Indications and Usage; Contraindications; Boxed Warning and Risk of Seizures; monitoring for resedation"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public pharmacology sample-set content and source-set digests",
+        "claims": [
+          {
+            "id": "pharmacology-high-alert-definition",
+            "locator": "Question 1 and rationale",
+            "sourceIds": [
+              "ismp-high-alert-acute-care-2024"
+            ]
+          },
+          {
+            "id": "pharmacology-heparin-protamine-reversal",
+            "locator": "Question 2 and rationale",
+            "sourceIds": [
+              "dailymed-heparin-sodium-2024",
+              "dailymed-protamine-sulfate-2024"
+            ]
+          },
+          {
+            "id": "pharmacology-warfarin-inr-and-vitamin-k-consistency",
+            "locator": "Question 3 and rationale",
+            "sourceIds": [
+              "dailymed-warfarin-sodium-2026"
+            ]
+          },
+          {
+            "id": "pharmacology-naloxone-support-repeat-and-surveillance",
+            "locator": "Question 4 and rationale",
+            "sourceIds": [
+              "dailymed-naloxone-injection-2026"
+            ]
+          },
+          {
+            "id": "pharmacology-flumazenil-seizure-and-resedation-risk",
+            "locator": "Question 5 and rationale",
+            "sourceIds": [
+              "dailymed-flumazenil-2026"
+            ]
+          },
+          {
+            "id": "pharmacology-original-educational-sample-scope",
+            "locator": "Opening paragraph; Educational boundary; FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-prioritization-practice-questions/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "free NCLEX prioritization practice questions",
+        "secondary": [
+          "who to see first NCLEX questions",
+          "NCLEX priority questions with rationales"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "689cb2df200b88bc09713661b10902a9f12ba392e0c41bb33801a9c401611942",
+      "sourceSetSha256": "2645b7c1ae74a863333b0a551823a1279bee07b55b025913e968322729cb7669",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "aha-2025-adult-basic-life-support",
+          "title": "Part 7: Adult Basic Life Support — 2025 AHA Guidelines",
+          "publisher": "American Heart Association via PubMed",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/41122888/",
+          "sourceUpdated": "2025-10-21",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract — recognition of cardiac arrest, emergency-response activation, CPR, AED use, respiratory arrest, and foreign-body airway obstruction; PMID 41122888"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public prioritization sample-set content and source-set digests",
+        "claims": [
+          {
+            "id": "prioritization-cardiac-arrest-recognition-response",
+            "locator": "Question 1 and rationale",
+            "sourceIds": [
+              "aha-2025-adult-basic-life-support"
+            ]
+          },
+          {
+            "id": "prioritization-change-from-baseline-and-delay-consequence",
+            "locator": "Question 2 and rationale",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "prioritization-assess-versus-act-boundary",
+            "locator": "Question 3 and rationale",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex",
+              "aha-2025-adult-basic-life-support"
+            ]
+          },
+          {
+            "id": "prioritization-maslow-limited-tiebreaker",
+            "locator": "Question 4 and rationale",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "prioritization-evaluate-outcomes",
+            "locator": "Question 5 and rationale",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          },
+          {
+            "id": "prioritization-original-educational-sample-scope",
+            "locator": "Opening paragraph; Educational boundary; FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-dosage-calculation-practice-questions/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "free NCLEX dosage calculation practice questions",
+        "secondary": [
+          "NCLEX medication math quiz",
+          "dosage calculations with answers"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "76cf923b2db04f098f0682f17bc06b45e51be0001f95a749b0ac15c62f4f193b",
+      "sourceSetSha256": "ffae2149ee574a1ddf529bd3bb57bf104da100e9fde02446e7e1b0fb0347bcdb",
+      "sources": [
+        {
+          "id": "ncbi-openrn-math-calculations-2023",
+          "title": "Math Calculations",
+          "publisher": "Open RN via NCBI Bookshelf",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK596732/",
+          "sourceUpdated": "2023-01-01",
+          "accessedAt": "2026-08-27",
+          "locator": "Sections 5.4–5.17 — equivalencies, rounding, dimensional analysis, conversions, dosage forms, weight-based and safe-dose calculations, and IV infusion rates"
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, arithmetic, unit, rationale, and source review of the exact public dosage-calculation sample-set content and source-set digests",
+        "claims": [
+          {
+            "id": "dosage-tablet-calculation",
+            "locator": "Question 1 and rationale",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "dosage-liquid-calculation",
+            "locator": "Question 2 and rationale",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "dosage-pump-rate-calculation",
+            "locator": "Question 3 and rationale",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "dosage-gravity-rate-calculation-and-rounding",
+            "locator": "Question 4 and rationale",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "dosage-weight-conversion-and-weight-based-calculation",
+            "locator": "Question 5 and rationale",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023"
+            ]
+          },
+          {
+            "id": "dosage-clinical-verification-and-education-scope",
+            "locator": "Opening paragraph; Educational boundary; FAQ",
+            "sourceIds": [
+              "ncbi-openrn-math-calculations-2023",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/ngn-bow-tie-practice-questions/",
+      "risk": "clinical",
+      "intent": {
+        "primary": "free NGN bow tie practice questions",
+        "secondary": [
+          "NCLEX bow tie questions with rationales",
+          "Next Gen NCLEX bow tie examples"
+        ],
+        "audience": "NCLEX-RN candidates",
+        "risk": "clinical"
+      },
+      "contentSha256": "f70984039383685fac87199d057c89c1e07f064c78fb93e3668de20de254607b",
+      "sourceSetSha256": "4503c3137871c310437019cbbf74a5b680c22b4f96280df58d89d085bd946efd",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        },
+        {
+          "id": "ncsbn-next-generation-nclex",
+          "title": "NCSBN — Next Generation NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/next-generation-nclex.page",
+          "sourceUpdated": "2023-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "NGN Project and Clinical Judgment Measurement Model sections"
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        },
+        {
+          "id": "dailymed-naloxone-injection-2026",
+          "title": "Naloxone Hydrochloride Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=21d20dff-6efe-481e-a5a0-9c80ded73ca9",
+          "sourceUpdated": "2026-07-01",
+          "accessedAt": "2026-08-27",
+          "locator": "Opioid Overdose — airway and resuscitative support, surveillance, incomplete response, and repeat administration"
+        },
+        {
+          "id": "medlineplus-low-blood-sugar-self-care-2026",
+          "title": "MedlinePlus — Low blood sugar: self-care",
+          "publisher": "U.S. National Library of Medicine",
+          "url": "https://medlineplus.gov/ency/patientinstructions/000085.htm",
+          "sourceUpdated": "2026-01-25",
+          "accessedAt": "2026-08-27",
+          "locator": "When Your Blood Sugar Gets Low — 15 grams, 15-minute recheck, repeat treatment, and conditional follow-up snack"
+        },
+        {
+          "id": "cdc-cdiff-acute-care-2026",
+          "title": "CDC — C. diff Infection Prevention in Acute Care Facilities",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/c-diff/hcp/clinical-guidance/index.html",
+          "sourceUpdated": "2026-05-13",
+          "accessedAt": "2026-08-27",
+          "locator": "Isolate and initiate contact precautions; dedicated equipment; environmental cleaning; transfer communication; duration after diarrhea resolves"
+        },
+        {
+          "id": "cdc-isolation-appendix-a-2025",
+          "title": "CDC — Type and Duration of Precautions for Selected Infections",
+          "publisher": "Centers for Disease Control and Prevention",
+          "url": "https://www.cdc.gov/infection-control/hcp/isolation-precautions/appendix-a-type-duration.html",
+          "sourceUpdated": "2025-02-07",
+          "accessedAt": "2026-08-27",
+          "locator": "Disease-specific entries for tuberculosis, measles, varicella, zoster, influenza, pertussis, meningococcal disease, mumps, rubella, group A streptococcus, MDROs, C. difficile, scabies, lice, RSV, and wounds"
+        },
+        {
+          "id": "dailymed-heparin-sodium-2024",
+          "title": "Heparin Sodium Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=cb1c1e7a-c9ca-4a07-8833-e45ce436d287",
+          "sourceUpdated": "2024-05-03",
+          "accessedAt": "2026-08-27",
+          "locator": "Dosage and Administration — coagulation-test monitoring; Warnings and Precautions — hemorrhage and thrombocytopenia; Overdosage — protamine neutralization"
+        },
+        {
+          "id": "dailymed-protamine-sulfate-2024",
+          "title": "Protamine Sulfate Injection Prescribing Information",
+          "publisher": "DailyMed, U.S. National Library of Medicine",
+          "url": "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=94d4f57f-940e-c0a8-e053-2a95a90ae3af",
+          "sourceUpdated": "2024-01-23",
+          "accessedAt": "2026-08-27",
+          "locator": "Indications and Usage — heparin overdosage; Warnings — severe hypotensive and anaphylactoid reactions; Dosage and Administration — slow IV administration and dose dependence on elapsed time"
+        },
+        {
+          "id": "aha-2025-adult-basic-life-support",
+          "title": "Part 7: Adult Basic Life Support — 2025 AHA Guidelines",
+          "publisher": "American Heart Association via PubMed",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/41122888/",
+          "sourceUpdated": "2025-10-21",
+          "accessedAt": "2026-08-27",
+          "locator": "Abstract — recognition of cardiac arrest, emergency-response activation, CPR, AED use, respiratory arrest, and foreign-body airway obstruction; PMID 41122888"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-08-29",
+        "scope": "Full RN clinical, educational, item-key, rationale, and source review of the exact public NGN bow-tie sample-set content and source-set digests",
+        "claims": [
+          {
+            "id": "bow-tie-format-selection-structure",
+            "locator": "Opening paragraph; FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "bow-tie-opioid-toxicity-response",
+            "locator": "Question 1 and rationale",
+            "sourceIds": [
+              "dailymed-naloxone-injection-2026"
+            ]
+          },
+          {
+            "id": "bow-tie-conscious-hypoglycemia-response",
+            "locator": "Question 2 and rationale",
+            "sourceIds": [
+              "medlineplus-low-blood-sugar-self-care-2026"
+            ]
+          },
+          {
+            "id": "bow-tie-cdiff-contact-precautions",
+            "locator": "Question 3 and rationale",
+            "sourceIds": [
+              "cdc-cdiff-acute-care-2026",
+              "cdc-isolation-appendix-a-2025"
+            ]
+          },
+          {
+            "id": "bow-tie-heparin-overanticoagulation-response",
+            "locator": "Question 4 and rationale",
+            "sourceIds": [
+              "dailymed-heparin-sodium-2024",
+              "dailymed-protamine-sulfate-2024"
+            ]
+          },
+          {
+            "id": "bow-tie-cardiac-arrest-response",
+            "locator": "Question 5 and rationale",
+            "sourceIds": [
+              "aha-2025-adult-basic-life-support"
+            ]
+          },
+          {
+            "id": "bow-tie-original-educational-sample-scope",
+            "locator": "Educational boundary; FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan",
+              "ncsbn-next-generation-nclex"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
     }
   ]
 }
