@@ -11,6 +11,7 @@ Allow: /pricing/
 Allow: /how-it-works/
 Allow: /methodology/
 Allow: /editorial-policy/
+Allow: /compare/
 Disallow: /review/
 Disallow: /owner/
 Disallow: /api/
@@ -26,6 +27,7 @@ Allow: /pricing/
 Allow: /how-it-works/
 Allow: /methodology/
 Allow: /editorial-policy/
+Allow: /compare/
 Disallow: /review/
 Disallow: /owner/
 
@@ -38,6 +40,7 @@ Allow: /pricing/
 Allow: /how-it-works/
 Allow: /methodology/
 Allow: /editorial-policy/
+Allow: /compare/
 Disallow: /review/
 Disallow: /owner/
 
@@ -53,6 +56,7 @@ Allow: /pricing/
 Allow: /how-it-works/
 Allow: /methodology/
 Allow: /editorial-policy/
+Allow: /compare/
 Disallow: /review/
 Disallow: /owner/
 
@@ -68,6 +72,7 @@ Allow: /pricing/
 Allow: /how-it-works/
 Allow: /methodology/
 Allow: /editorial-policy/
+Allow: /compare/
 Disallow: /review/
 Disallow: /owner/
 
@@ -80,6 +85,7 @@ Allow: /pricing/
 Allow: /how-it-works/
 Allow: /methodology/
 Allow: /editorial-policy/
+Allow: /compare/
 
 User-agent: Applebot-Extended
 Allow: /$
@@ -90,5 +96,6 @@ Allow: /pricing/
 Allow: /how-it-works/
 Allow: /methodology/
 Allow: /editorial-policy/
+Allow: /compare/
 
 Sitemap: https://www.pulsern.app/sitemap.xml

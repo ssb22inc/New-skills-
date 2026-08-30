@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
+import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
 import { extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 import { articleJsonLd } from "../ops/build-learn.mjs";
@@ -15,12 +15,60 @@ import { SAMPLE_ARTICLES } from "../ops/learn-samples.mjs";
 import { sourcesFor } from "../ops/seo-content-policy.mjs";
 import { injectSearchVerification, verificationMeta } from "../ops/search-verification.mjs";
 import { runAppBoundary } from "../ops/seo-app-boundary.mjs";
+import { COMMERCIAL_PAGES, commercialEvidence } from "../ops/commercial-content.mjs";
+import { runCommercialCheck } from "../ops/seo-commercial-check.mjs";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
   it("rejects a homepage with no H1", () => {
     const page = auditHtml("/", `<html><head><title>PulseRN adaptive NCLEX-RN preparation</title><meta name="description" content="Adaptive NCLEX-RN practice built by a licensed RN with modern study tools, transparent limitations, and careful educational review for future nurses."><link rel="canonical" href="https://www.pulsern.app/"><script type="application/ld+json">{"@type":"WebApplication"}</script></head><body><main><a href="/learn/">Guides</a><a href="/about/">About</a><a href="/pricing/">Pricing</a></main></body></html>`);
     expect(page.findings.some((item) => item.code === "H1_COUNT" && item.severity === "critical")).toBe(true);
+  });
+
+  it("keeps eight distinct commercial pages source-bound and digest-bound", () => {
+    const evidence = commercialEvidence();
+    expect(COMMERCIAL_PAGES).toHaveLength(8);
+    expect(evidence.pages).toHaveLength(8);
+    expect(new Set(evidence.pages.map((page) => page.intent.primary.toLowerCase())).size).toBe(8);
+    for (const page of evidence.pages) {
+      const sourceIds = new Set(page.sources.map((source) => source.id));
+      expect(page.contentSha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(page.sourceSetSha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(page.sources.some((source) => new URL(source.url).hostname !== "www.pulsern.app")).toBe(true);
+      expect(page.claims.length).toBeGreaterThan(0);
+      expect(page.claims.every((claim) => claim.sourceIds.every((id) => sourceIds.has(id)))).toBe(true);
+    }
+    const pages = evidence.pages.map((page) => ({ route: page.route, identifiers: [`sha256:${page.contentSha256}`] }));
+    const intents = { intents: Object.fromEntries(evidence.pages.map((page) => [page.route, page.intent])) };
+    expect(auditCommercialGovernance({ evidence, intents, pages, now: new Date("2026-08-30T12:00:00Z") })).toEqual([]);
+  });
+
+  it("fails closed when a commercial claim cites an unresolved source", () => {
+    const evidence = commercialEvidence();
+    evidence.pages[0].claims[0].sourceIds.push("missing-provider-source");
+    const pages = evidence.pages.map((page) => ({ route: page.route, identifiers: [`sha256:${page.contentSha256}`] }));
+    const intents = { intents: Object.fromEntries(evidence.pages.map((page) => [page.route, page.intent])) };
+    const findings = auditCommercialGovernance({ evidence, intents, pages, now: new Date("2026-08-30T12:00:00Z") });
+    expect(findings.some((item) => item.code === "COMMERCIAL_CLAIM_BINDING" && item.severity === "critical")).toBe(true);
+  });
+
+  it("rejects a comparison page without disclosure and provider sources", () => {
+    const body = "comparison evidence ".repeat(520);
+    const schema = { "@context": "https://schema.org", "@type": "Article", datePublished: "2026-08-30", dateModified: "2026-08-30", citation: ["https://www.pulsern.app/pricing/", "https://www.pulsern.app/about/"], identifier: `sha256:${"a".repeat(64)}` };
+    const page = auditHtml("/compare/test/", `<html><head><title>PulseRN comparison methodology page</title><meta name="description" content="A transparent and current comparison of NCLEX preparation products using provider-owned evidence, dated prices, limitations, and learner-fit criteria."><link rel="canonical" href="https://www.pulsern.app/compare/test/"><script type="application/ld+json">${JSON.stringify(schema)}</script></head><body><main><h1>Compare products</h1><time datetime="2026-08-30">Last verified 2026-08-30</time><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/about/">About</a>${body}</main></body></html>`);
+    expect(page.findings.some((item) => item.code === "COMMERCIAL_DISCLOSURE")).toBe(true);
+    expect(page.findings.some((item) => item.code === "COMMERCIAL_VISIBLE_SOURCES")).toBe(true);
+  });
+
+  it("fails the commercial source audit when provider evidence markers drift", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-commercial-"));
+    const evidenceFile = path.join(directory, "comparison-evidence.json");
+    const outputFile = path.join(directory, "commercial.json");
+    const evidence = { schemaVersion: 1, pages: [{ sources: [{ id: "provider", title: "Provider", publisher: "UWorld", url: "https://nursing.uworld.com/nclex-rn/", locator: "Features", accessedAt: "2026-08-30", expectedMarkers: ["expected feature"] }] }] };
+    await fs.writeFile(evidenceFile, JSON.stringify(evidence));
+    const report = await runCommercialCheck({ evidenceFile, directory, outputFile, fetchImpl: async () => new Response("<html><body>changed product page</body></html>", { status: 200, headers: { "content-type": "text/html" } }) });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.findings.some((item) => item.code === "COMMERCIAL_SOURCE_DRIFT")).toBe(true);
   });
 
   it("rejects a guide without an accountable Person reviewer", () => {

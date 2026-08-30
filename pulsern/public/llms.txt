@@ -64,7 +64,23 @@ dosing or treatment instructions.
 - [Methodology](https://www.pulsern.app/methodology/) — adaptive practice, readiness, and limits
 - [Editorial policy](https://www.pulsern.app/editorial-policy/) — sources, human review, AI use, and corrections
 - [Guides](https://www.pulsern.app/learn/) — free NCLEX-RN reference articles
+- [NCLEX prep comparisons](https://www.pulsern.app/compare/) — sourced product-fit comparisons without affiliate rankings
+- [Comparison methodology](https://www.pulsern.app/compare/methodology/) — evidence hierarchy, pricing dates, conflicts, and corrections
 - [Terms, Privacy, Disclaimer](https://www.pulsern.app/legal/)
+
+## NCLEX preparation comparisons
+
+Provider features and prices are sourced to provider-owned public pages and
+carry an observation date. PulseRN publishes these pages about its own product,
+uses no affiliate placement, and does not assign a universal winner or outcome
+guarantee.
+
+- [PulseRN vs UWorld](https://www.pulsern.app/compare/pulsern-vs-uworld/)
+- [PulseRN vs Archer Review](https://www.pulsern.app/compare/pulsern-vs-archer/)
+- [PulseRN vs Kaplan](https://www.pulsern.app/compare/pulsern-vs-kaplan/)
+- [Best NCLEX question banks compared](https://www.pulsern.app/compare/best-nclex-question-banks/)
+- [Best affordable NCLEX preparation compared](https://www.pulsern.app/compare/best-affordable-nclex-prep/)
+- [Best NCLEX apps for repeat test-takers](https://www.pulsern.app/compare/best-nclex-app-repeat-test-takers/)
 
 ## Guides
 

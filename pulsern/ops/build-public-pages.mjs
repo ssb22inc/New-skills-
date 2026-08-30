@@ -2,6 +2,7 @@
    agents, and prospective learners need before entering the authenticated app. */
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { PLANS, fmtUsd } from "../src/pricing.js";
+import { COMMERCIAL_PAGES, COMMERCIAL_SOURCES, commercialEvidence } from "./commercial-content.mjs";
 
 const SITE = "https://www.pulsern.app";
 const AUTHOR = `${SITE}/about/#sheldon-bennett-rn`;
@@ -15,25 +16,28 @@ const CSS = `
   *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.62}
   a{color:#096d5d;text-underline-offset:3px}a:focus-visible,.button:focus-visible,summary:focus-visible{outline:3px solid #f4b942;outline-offset:3px}
   .wrap{width:min(100% - 36px,920px);margin:auto}.nav{min-height:70px;display:flex;align-items:center;gap:20px}.brand{font-size:21px;font-weight:850;letter-spacing:-.03em;text-decoration:none}.links{margin-left:auto;display:flex;gap:18px;font-size:14px;font-weight:650}.links a{text-decoration:none;color:#37544d}
-  main{padding:64px 0 80px}.eyebrow{color:var(--teal);font-size:12px;font-weight:850;letter-spacing:.09em;text-transform:uppercase}h1{font-size:clamp(38px,7vw,62px);line-height:1.04;letter-spacing:-.045em;max-width:800px;margin:12px 0 18px}h2{font-size:27px;line-height:1.15;letter-spacing:-.025em;margin:42px 0 14px}h3{font-size:18px;margin:0 0 6px}p,li{color:#304a44}.lead{font-size:19px;max-width:760px}.card{background:var(--white);border:1px solid var(--line);border-radius:15px;padding:22px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.grid .card{margin:0}.callout{background:var(--pale);border-left:4px solid var(--teal);border-radius:0 13px 13px 0;padding:18px 20px;margin:26px 0}.button{display:inline-block;border:0;border-radius:10px;background:var(--teal);color:white;text-decoration:none;font-weight:750;padding:11px 17px;margin:10px 8px 0 0}.button.alt{background:white;color:#0e6e5c;border:1px solid #b9d2ca}.meta{font-size:13px;color:#526b65}.price{font-size:30px;font-weight:850;color:var(--ink)}.price small{font-size:13px;color:var(--muted);font-weight:500}.best{border:2px solid var(--teal);position:relative}.tag{display:inline-block;background:var(--teal);color:white;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:800;margin-bottom:12px}table{width:100%;border-collapse:collapse;background:white;border:1px solid var(--line)}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--line)}th{color:#0b6557}.sources li{margin-bottom:7px}footer{background:#0b2a25;color:#c7ddd7;padding:34px 0;font-size:12px}footer p{color:#96b3ab}.footlinks{display:flex;flex-wrap:wrap;gap:14px}.footlinks a{color:#d9ebe6}
+  main{padding:64px 0 80px}.eyebrow{color:var(--teal);font-size:12px;font-weight:850;letter-spacing:.09em;text-transform:uppercase}h1{font-size:clamp(38px,7vw,62px);line-height:1.04;letter-spacing:-.045em;max-width:800px;margin:12px 0 18px}h2{font-size:27px;line-height:1.15;letter-spacing:-.025em;margin:42px 0 14px}h3{font-size:18px;margin:0 0 6px}p,li{color:#304a44}.lead{font-size:19px;max-width:760px}.card{background:var(--white);border:1px solid var(--line);border-radius:15px;padding:22px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.grid .card{margin:0}.callout{background:var(--pale);border-left:4px solid var(--teal);border-radius:0 13px 13px 0;padding:18px 20px;margin:26px 0}.button{display:inline-block;border:0;border-radius:10px;background:var(--teal);color:white;text-decoration:none;font-weight:750;padding:11px 17px;margin:10px 8px 0 0}.button.alt{background:white;color:#0e6e5c;border:1px solid #b9d2ca}.meta{font-size:13px;color:#526b65}.price{font-size:30px;font-weight:850;color:var(--ink)}.price small{font-size:13px;color:var(--muted);font-weight:500}.best{border:2px solid var(--teal);position:relative}.tag{display:inline-block;background:var(--teal);color:white;border-radius:99px;padding:3px 9px;font-size:11px;font-weight:800;margin-bottom:12px}.table-wrap{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:12px}.table-wrap:focus{outline:3px solid #8ccfc3;outline-offset:2px}.table-wrap table{min-width:760px;border:0;margin:0}table{width:100%;border-collapse:collapse;background:white;border:1px solid var(--line)}caption{text-align:left;font-weight:800;color:var(--ink);padding:13px 12px;background:var(--pale)}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--line);vertical-align:top}th{color:#0b6557}.sources li{margin-bottom:7px}footer{background:#0b2a25;color:#c7ddd7;padding:34px 0;font-size:12px}footer p{color:#96b3ab}.footlinks{display:flex;flex-wrap:wrap;gap:14px}.footlinks a{color:#d9ebe6}
   @media(max-width:650px){.links a:not(:last-child){display:none}.grid{grid-template-columns:1fr}main{padding-top:42px}h1{font-size:42px}table{font-size:13px}th,td{padding:9px}}
 `;
 
-function page({ slug, title, description, eyebrow, h1, body, schema }) {
+function page({ slug, title, description, eyebrow, h1, body, schema, published, updated, sources = [], faq = [], contentSha256 }) {
   const url = `${SITE}/${slug}/`;
+  const pageNode = { "@type": published ? "Article" : "WebPage", "@id": `${url}#page`, url, name: title, ...(published ? { headline: title } : {}), description, inLanguage: "en-US", isPartOf: { "@id": `${SITE}/#website` }, about: { "@id": `${SITE}/#app` }, author: { "@id": AUTHOR }, ...(published ? { datePublished: published, dateModified: updated, citation: sources.map((id) => COMMERCIAL_SOURCES[id]?.url).filter(Boolean), identifier: `sha256:${contentSha256}` } : {}) };
   const jsonld = {
     "@context": "https://schema.org",
     "@graph": [
-      { "@type": "WebPage", "@id": `${url}#page`, url, name: title, description, inLanguage: "en-US", isPartOf: { "@id": `${SITE}/#website` }, about: { "@id": `${SITE}/#app` }, author: { "@id": AUTHOR } },
+      pageNode,
       { "@type": "Person", "@id": AUTHOR, name: AUTHOR_LABEL, url: AUTHOR, worksFor: { "@id": `${SITE}/#org` }, ...(REVIEWER_VERIFIED ? { jobTitle: REVIEW_LEDGER.reviewer.licenseType, sameAs: [REVIEW_LEDGER.reviewer.verificationUrl] } : {}) },
+      ...(published ? [{ "@type": "BreadcrumbList", "@id": `${url}#crumbs`, itemListElement: [{ "@type": "ListItem", position: 1, name: "PulseRN", item: `${SITE}/` }, { "@type": "ListItem", position: 2, name: "Comparisons", item: `${SITE}/compare/` }, { "@type": "ListItem", position: 3, name: title, item: url }] }] : []),
+      ...(faq.length ? [{ "@type": "FAQPage", "@id": `${url}#faq`, mainEntity: faq.map((item) => ({ "@type": "Question", name: item.q, acceptedAnswer: { "@type": "Answer", text: item.a } })) }] : []),
       ...(schema ? [schema] : []),
     ],
   };
   return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}</style></head><body>
-  <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/pricing/">Pricing</a><a href="/?signin=1">Sign in</a></div></nav></header>
-  <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${body}
+  <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/pricing/">Pricing</a><a href="/?signin=1">Sign in</a></div></nav></header>
+  <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${published ? `<p class="meta">Published and last verified <time datetime="${esc(updated)}">${esc(updated)}</time> · editorial owner <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a></p>` : ""}${body}
   <div class="callout"><strong>Ready for a focused study session?</strong><br><a class="button" href="/?start=1">Start the 1-day free pass</a><a class="button alt" href="/learn/">Read the nursing-study guides</a></div></main>
-  <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div><p>Educational exam preparation only — not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN.</p></div></footer></body></html>`;
+  <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div><p>Educational exam preparation only — not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN. Competitor trademarks belong to their respective owners; no affiliation or endorsement is implied.</p></div></footer></body></html>`;
 }
 
 const paid = PLANS.filter((p) => !p.addon && p.cents > 0);
@@ -89,10 +93,14 @@ const pages = [
   },
 ];
 
-for (const data of pages) {
+const evidence = commercialEvidence();
+for (const data of [...pages, ...COMMERCIAL_PAGES.map((item) => ({ ...item, contentSha256: evidence.pages.find((page) => page.route === `/${item.slug}/`)?.contentSha256 }))]) {
   const directory = `public/${data.slug}`;
   mkdirSync(directory, { recursive: true });
   writeFileSync(`${directory}/index.html`, page(data));
 }
 
-console.log(`built ${pages.length} public product and trust pages`);
+writeFileSync("public/comparison-evidence.json", JSON.stringify(evidence, null, 2) + "\n");
+writeFileSync("public/commercial-search-intents.json", JSON.stringify({ schemaVersion: 1, generatedAt: evidence.generatedAt, intents: Object.fromEntries(evidence.pages.map((item) => [item.route, item.intent])) }, null, 2) + "\n");
+
+console.log(`built ${pages.length} public product/trust pages and ${COMMERCIAL_PAGES.length} commercial-intent pages`);

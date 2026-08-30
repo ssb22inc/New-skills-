@@ -10,6 +10,8 @@ import process from "node:process";
 const SITE = "https://www.pulsern.app";
 const REQUIRED = [
   "/", "/learn/", "/about/", "/pricing/", "/how-it-works/", "/methodology/", "/editorial-policy/",
+  "/compare/", "/compare/methodology/", "/compare/pulsern-vs-uworld/", "/compare/pulsern-vs-archer/", "/compare/pulsern-vs-kaplan/",
+  "/compare/best-nclex-question-banks/", "/compare/best-affordable-nclex-prep/", "/compare/best-nclex-app-repeat-test-takers/",
   "/learn/nclex-pharmacology-practice-questions/",
   "/learn/nclex-prioritization-practice-questions/",
   "/learn/nclex-dosage-calculation-practice-questions/",
@@ -17,6 +19,7 @@ const REQUIRED = [
 ];
 const TRUSTED = ["nclex.com", "www.nclex.com", "ncsbn.org", "www.ncsbn.org", "cdc.gov", "www.cdc.gov", "medlineplus.gov", "www.nimh.nih.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "www.ismp.org", "ismp.org", "home.ecri.org", "doi.org", "pubmed.ncbi.nlm.nih.gov", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"];
 const BLOCKING = new Set(["critical", "high"]);
+const COMMERCIAL_HOSTS = new Set(["www.pulsern.app", "nursing.uworld.com", "nurses.archerreview.com", "www.kaptest.com"]);
 
 const strip = (html = "") => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " ").replace(/&[a-z0-9#]+;/gi, " ").replace(/\s+/g, " ").trim();
 const values = (html, re) => [...html.matchAll(re)].map((match) => match[1]);
@@ -113,6 +116,51 @@ export function auditGovernance({ provenance, intents, pages, now = new Date() }
   return { provenanceFindings: findings, intentFindings };
 }
 
+export function auditCommercialGovernance({ evidence, intents, pages, now = new Date() }) {
+  const findings = [];
+  const records = evidence?.pages;
+  if (!evidence || evidence.schemaVersion !== 1 || !Array.isArray(records)) {
+    return [finding("critical", "COMMERCIAL_EVIDENCE", "/comparison-evidence.json", "Missing or invalid comparison-evidence manifest.")];
+  }
+  const publishedRoutes = new Set(pages.filter((page) => page.route.startsWith("/compare/") || page.route === "/compare/").map((page) => page.route));
+  const evidenceRoutes = new Set(records.map((record) => record.route));
+  for (const route of publishedRoutes) if (!evidenceRoutes.has(route)) findings.push(finding("critical", "COMMERCIAL_COVERAGE", route, "Published comparison page is missing from comparison evidence."));
+  for (const record of records) {
+    const route = record.route ?? "/comparison-evidence.json";
+    const page = pages.find((item) => item.route === route);
+    if (!page) findings.push(finding("critical", "COMMERCIAL_ORPHAN", route, "Comparison evidence does not resolve to a published page."));
+    if (!/^[a-f0-9]{64}$/.test(record.contentSha256 ?? "") || !/^[a-f0-9]{64}$/.test(record.sourceSetSha256 ?? "")) findings.push(finding("critical", "COMMERCIAL_DIGEST", route, "Comparison content and source-set SHA-256 digests are required."));
+    if (page && !page.identifiers?.includes(`sha256:${record.contentSha256}`)) findings.push(finding("critical", "COMMERCIAL_DIGEST_BINDING", route, "Published comparison schema is not bound to its content digest."));
+    const mappedIntent = intents?.intents?.[route];
+    if (!record.intent?.primary || !record.intent?.audience || record.intent?.risk !== "commercial" || !mappedIntent) findings.push(finding("high", "COMMERCIAL_INTENT", route, "Comparison page lacks a complete commercial-intent record."));
+    if (mappedIntent && normalizedIntent(mappedIntent.primary) !== normalizedIntent(record.intent.primary)) findings.push(finding("high", "COMMERCIAL_INTENT_DRIFT", route, "Built comparison intent differs from the versioned intent manifest."));
+    const sourceIds = new Set();
+    let competitorSources = 0;
+    for (const source of record.sources ?? []) {
+      if (!source.id || !source.title || !source.publisher || !source.locator || !validDate(source.accessedAt)) findings.push(finding("high", "COMMERCIAL_SOURCE_METADATA", route, "Every comparison source needs an ID, title, publisher, locator, and access date."));
+      if (source.id) sourceIds.add(source.id);
+      try {
+        const parsed = new URL(source.url);
+        if (parsed.protocol !== "https:" || !COMMERCIAL_HOSTS.has(parsed.hostname.toLowerCase())) throw new Error();
+        if (parsed.hostname.toLowerCase() !== "www.pulsern.app") competitorSources += 1;
+      } catch { findings.push(finding("critical", "COMMERCIAL_SOURCE_AUTHORITY", route, `Unapproved comparison source URL: ${source.url ?? "missing"}.`)); }
+      const ageDays = validDate(source.accessedAt) ? (now - new Date(`${source.accessedAt}T00:00:00Z`)) / 86400000 : Infinity;
+      if (ageDays > 45) findings.push(finding("high", "COMMERCIAL_SOURCE_STALE", route, `Comparison source evidence is ${Math.floor(ageDays)} days old; reverify prices and features within 45 days.`));
+    }
+    if (!record.sources?.length || !competitorSources) findings.push(finding("critical", "COMMERCIAL_SOURCE_PROVENANCE", route, "Every comparison page needs dated provider-owned competitor evidence."));
+    if (!Array.isArray(record.claims) || !record.claims.length) findings.push(finding("critical", "COMMERCIAL_CLAIMS", route, "Comparison page lacks claim-level source mappings."));
+    for (const claim of record.claims ?? []) if (!claim.id || !claim.statement || !Array.isArray(claim.sourceIds) || !claim.sourceIds.length || claim.sourceIds.some((id) => !sourceIds.has(id))) findings.push(finding("critical", "COMMERCIAL_CLAIM_BINDING", route, "Comparison claim has missing or unresolved source evidence."));
+  }
+  const owners = new Map();
+  for (const record of records) {
+    const key = normalizedIntent(record.intent?.primary);
+    if (key && owners.has(key)) findings.push(finding("high", "COMMERCIAL_CANNIBALIZATION", record.route, `Primary comparison intent duplicates ${owners.get(key)}.`));
+    else if (key) owners.set(key, record.route);
+  }
+  for (const route of Object.keys(intents?.intents ?? {})) if (!evidenceRoutes.has(route)) findings.push(finding("medium", "COMMERCIAL_INTENT_ORPHAN", route, "Commercial intent has no published evidence record."));
+  return findings;
+}
+
 export function auditHtml(route, html) {
   const findings = [];
   const title = first(html, /<title\b[^>]*>([\s\S]*?)<\/title>/i);
@@ -126,6 +174,7 @@ export function auditHtml(route, html) {
   const words = strip(html).split(/\s+/).filter(Boolean).length;
   const isGuide = route.startsWith("/learn/") && route !== "/learn/";
   const isSampleSet = /\/learn\/(?:nclex|ngn)-[^/]*practice-questions\/$/.test(route);
+  const isCommercial = route === "/compare/" || route.startsWith("/compare/");
   const expectedCanonical = `${SITE}${route}`;
 
   if (!title) findings.push(finding("critical", "TITLE_MISSING", route, "Missing <title>."));
@@ -163,6 +212,18 @@ export function auditHtml(route, html) {
     const rationales = (html.match(/<details\b/gi) ?? []).length;
     if (questions < 5 || rationales < 5) findings.push(finding("high", "SAMPLE_SET_DEPTH", route, `Public sample set needs at least five questions and five visible rationales; found ${questions} questions and ${rationales} rationales.`));
     if (!/Educational boundary/i.test(strip(html))) findings.push(finding("high", "SAMPLE_SET_BOUNDARY", route, "Public clinical sample set needs a visible educational safety boundary."));
+  }
+  if (isCommercial) {
+    const article = nodes.find((node) => node["@type"] === "Article");
+    const externalSources = anchors.filter((href) => {
+      try { const host = new URL(href).hostname.toLowerCase(); return COMMERCIAL_HOSTS.has(host) && host !== "www.pulsern.app"; } catch { return false; }
+    });
+    if (!article || !article.datePublished || !article.dateModified || !Array.isArray(article.citation) || article.citation.length < 2 || !/^sha256:[a-f0-9]{64}$/.test(article.identifier ?? "")) findings.push(finding("high", "COMMERCIAL_SCHEMA", route, "Comparison page needs dated Article schema, citations, and a content-digest identifier."));
+    if (!/<time\b[^>]*datetime=/i.test(html) || !/last verified/i.test(strip(html))) findings.push(finding("high", "COMMERCIAL_FRESHNESS", route, "Comparison page needs a visible machine-readable verification date."));
+    if (!/commercial interest/i.test(strip(html)) || !anchors.includes("/compare/methodology/")) findings.push(finding("high", "COMMERCIAL_DISCLOSURE", route, "Comparison page needs a visible conflict disclosure and methodology link."));
+    if (externalSources.length < 2) findings.push(finding("high", "COMMERCIAL_VISIBLE_SOURCES", route, "Comparison page needs at least two visible provider-owned competitor source links."));
+    if (words < 500) findings.push(finding("medium", "COMMERCIAL_DEPTH", route, `Comparison page contains ${words} visible words; require at least 500.`));
+    if (/\b(?:objectively|definitively|universally) (?:the )?best\b|\bguaranteed to pass\b/i.test(strip(html))) findings.push(finding("critical", "COMMERCIAL_HYPE", route, "Comparison page contains an unsupported universal ranking or outcome promise."));
   }
 
   if (/\b(memorise|prioritisation|practise|practised|recognise|judgement|labelled|rigour|centre)\b/i.test(strip(html))) findings.push(finding("medium", "LOCALE", route, "U.K. spelling remains on a U.S.-focused NCLEX page."));
@@ -213,8 +274,12 @@ export async function runAudit({ directory = "dist", output = "reports/seo" } = 
   const llms = await fs.readFile(path.join(directory, "llms.txt"), "utf8");
   let provenance;
   let intents;
+  let commercialEvidence;
+  let commercialIntents;
   try { provenance = JSON.parse(await fs.readFile(path.join(directory, "content-provenance.json"), "utf8")); } catch { provenance = null; }
   try { intents = JSON.parse(await fs.readFile(path.join(directory, "search-intents.json"), "utf8")); } catch { intents = null; }
+  try { commercialEvidence = JSON.parse(await fs.readFile(path.join(directory, "comparison-evidence.json"), "utf8")); } catch { commercialEvidence = null; }
+  try { commercialIntents = JSON.parse(await fs.readFile(path.join(directory, "commercial-search-intents.json"), "utf8")); } catch { commercialIntents = null; }
 
   for (const route of REQUIRED) {
     if (!pages.some((page) => page.route === route)) findings.push(finding("critical", "REQUIRED_PAGE", route, "Required public page is absent from the built artifact."));
@@ -226,6 +291,8 @@ export async function runAudit({ directory = "dist", output = "reports/seo" } = 
 
   const governance = auditGovernance({ provenance, intents, pages });
   findings.push(...governance.provenanceFindings, ...governance.intentFindings);
+  const commercialFindings = auditCommercialGovernance({ evidence: commercialEvidence, intents: commercialIntents, pages });
+  findings.push(...commercialFindings);
 
   const blockers = findings.filter((item) => BLOCKING.has(item.severity)).length;
   const report = { generatedAt: new Date().toISOString(), verdict: blockers ? "FAIL" : "PASS", blockers, pages, findings };
@@ -234,8 +301,10 @@ export async function runAudit({ directory = "dist", output = "reports/seo" } = 
   await fs.writeFile(path.join(output, "report.md"), markdown(report));
   const provenanceReport = { generatedAt: report.generatedAt, verdict: governance.provenanceFindings.some((item) => BLOCKING.has(item.severity)) ? "FAIL" : "PASS", findings: governance.provenanceFindings };
   const intentReport = { generatedAt: report.generatedAt, verdict: governance.intentFindings.some((item) => BLOCKING.has(item.severity)) ? "FAIL" : "PASS", findings: governance.intentFindings };
+  const commercialReport = { generatedAt: report.generatedAt, verdict: commercialFindings.some((item) => BLOCKING.has(item.severity)) ? "FAIL" : "PASS", findings: commercialFindings };
   await fs.writeFile(path.join(output, "provenance.json"), JSON.stringify(provenanceReport, null, 2) + "\n");
   await fs.writeFile(path.join(output, "intent.json"), JSON.stringify(intentReport, null, 2) + "\n");
+  await fs.writeFile(path.join(output, "commercial-governance.json"), JSON.stringify(commercialReport, null, 2) + "\n");
   return report;
 }
 

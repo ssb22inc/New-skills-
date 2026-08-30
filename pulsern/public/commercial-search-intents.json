@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-30T00:00:00.000Z",
+  "intents": {
+    "/compare/": {
+      "primary": "compare NCLEX prep courses",
+      "secondary": [
+        "NCLEX prep comparison",
+        "NCLEX question bank comparison"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "commercial"
+    },
+    "/compare/methodology/": {
+      "primary": "NCLEX prep comparison methodology",
+      "secondary": [
+        "how NCLEX courses are compared"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "commercial"
+    },
+    "/compare/pulsern-vs-uworld/": {
+      "primary": "PulseRN vs UWorld",
+      "secondary": [
+        "UWorld alternative for NCLEX",
+        "PulseRN or UWorld"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "commercial"
+    },
+    "/compare/pulsern-vs-archer/": {
+      "primary": "PulseRN vs Archer Review",
+      "secondary": [
+        "Archer Review alternative",
+        "PulseRN or Archer NCLEX"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "commercial"
+    },
+    "/compare/pulsern-vs-kaplan/": {
+      "primary": "PulseRN vs Kaplan NCLEX",
+      "secondary": [
+        "Kaplan NCLEX alternative",
+        "PulseRN or Kaplan"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "commercial"
+    },
+    "/compare/best-nclex-question-banks/": {
+      "primary": "best NCLEX question banks",
+      "secondary": [
+        "NCLEX QBank comparison",
+        "best NCLEX practice questions"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "commercial"
+    },
+    "/compare/best-affordable-nclex-prep/": {
+      "primary": "best affordable NCLEX preparation",
+      "secondary": [
+        "affordable NCLEX prep",
+        "cheap NCLEX question bank"
+      ],
+      "audience": "NCLEX-RN candidates",
+      "risk": "commercial"
+    },
+    "/compare/best-nclex-app-repeat-test-takers/": {
+      "primary": "best NCLEX application for repeat test-takers",
+      "secondary": [
+        "NCLEX repeat test prep app",
+        "failed NCLEX best question bank"
+      ],
+      "audience": "NCLEX-RN repeat test-takers",
+      "risk": "commercial"
+    }
+  }
+}
