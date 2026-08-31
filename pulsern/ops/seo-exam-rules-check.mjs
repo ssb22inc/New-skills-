@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const OFFICIAL_HOSTS = new Set(["www.nclex.com", "nclex.com", "ncsbn.zendesk.com"]);
+const OFFICIAL_HOSTS = new Set(["www.nclex.com", "nclex.com", "www.pearsonvue.com"]);
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const visibleText = (html = "") => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;|&#34;/gi, '"').replace(/\s+/g, " ").trim();
 const normalize = (value) => String(value).toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, " ");

@@ -927,21 +927,37 @@
         "audience": "NCLEX-RN candidates requesting accommodations",
         "risk": "exam"
       },
-      "contentSha256": "206b4e85f5a96455677d1a7776040a0d9f23ed132dd4a2b2d527d57ddc136adf",
-      "sourceSetSha256": "1745446dac79d4f56bd62beda96127d4b737ae2e36261f5f42630795157db29e",
+      "contentSha256": "d94cceac779e8ff59ec2bbc976efc7ec9ea12bf6902c059bd84030f01173a209",
+      "sourceSetSha256": "b03b9fd71a313021dd49aa8d63c93acff54f3bc1b4858eb15818f93ed47a0964",
       "sources": [
         {
-          "id": "ncsbn-accommodations-2026",
-          "title": "NCSBN — How to Request Accommodations",
+          "id": "ncsbn-pearson-registration-2026",
+          "title": "NCSBN — How to Register with Pearson",
           "publisher": "National Council of State Boards of Nursing",
-          "url": "https://ncsbn.zendesk.com/hc/en-us/articles/16540717525015-How-do-I-request-accommodations",
-          "sourceUpdated": "2026-01-16",
+          "url": "https://www.nclex.com/registration.page",
+          "sourceUpdated": null,
           "accessedAt": "2026-08-31",
-          "locator": "NRB responsibility; submission with licensure application before Pearson registration; comfort-aid distinction and Pearson list",
+          "locator": "Program Codes; Pearson registration options; confirmation email; 365-day Registration Time Limit; duplicate registrations; Testing Accommodations",
           "expectedMarkers": [
-            "nursing regulatory body",
-            "before submitting the NCLEX registration",
-            "Comfort Aid List"
+            "Program Codes",
+            "Registration Time Limit",
+            "365 days",
+            "may not have two NCLEX registrations"
+          ]
+        },
+        {
+          "id": "pearson-vue-comfort-aid-list-2024",
+          "title": "Pearson VUE — Comfort Aid List",
+          "publisher": "Pearson VUE",
+          "url": "https://www.pearsonvue.com/us/en/test-takers/accommodations/comfort-aid-list.html",
+          "sourceUpdated": "2024-07-01",
+          "accessedAt": "2026-08-31",
+          "locator": "Items not requiring pre-approval; visual-inspection rule; medical-device qualifications; testing-channel qualifications",
+          "expectedMarkers": [
+            "do not require pre-approval",
+            "visual inspection",
+            "formal accommodation approval",
+            "Last update: July 1, 2024"
           ]
         },
         {
@@ -957,21 +973,6 @@
             "Authorization to Test",
             "ATT Validity Dates",
             "Schedule Exam Appointment"
-          ]
-        },
-        {
-          "id": "ncsbn-pearson-registration-2026",
-          "title": "NCSBN — How to Register with Pearson",
-          "publisher": "National Council of State Boards of Nursing",
-          "url": "https://www.nclex.com/registration.page",
-          "sourceUpdated": null,
-          "accessedAt": "2026-08-31",
-          "locator": "Program Codes; Pearson registration options; confirmation email; 365-day Registration Time Limit; duplicate registrations; Testing Accommodations",
-          "expectedMarkers": [
-            "Program Codes",
-            "Registration Time Limit",
-            "365 days",
-            "may not have two NCLEX registrations"
           ]
         },
         {

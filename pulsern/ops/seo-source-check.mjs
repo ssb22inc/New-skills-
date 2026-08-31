@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const ALLOWED_FINAL_HOSTS = new Set(["www.nclex.com", "nclex.com", "www.ncsbn.org", "ncsbn.zendesk.com", "www.cdc.gov", "cdc.gov", "home.ecri.org", "medlineplus.gov", "www.medlineplus.gov", "www.nimh.nih.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "doi.org", "journals.sagepub.com", "pubmed.ncbi.nlm.nih.gov", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"]);
+const ALLOWED_FINAL_HOSTS = new Set(["www.nclex.com", "nclex.com", "www.ncsbn.org", "www.pearsonvue.com", "home.pearsonvue.com", "www.cdc.gov", "cdc.gov", "home.ecri.org", "medlineplus.gov", "www.medlineplus.gov", "www.nimh.nih.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "doi.org", "journals.sagepub.com", "pubmed.ncbi.nlm.nih.gov", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"]);
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 

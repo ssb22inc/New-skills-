@@ -221,7 +221,7 @@ export const LOGISTICS_ARTICLES = [
     updated: "2026-08-31",
     cta: "PulseRN can offer flexible study settings, but it does not evaluate disabilities, approve accommodations, or modify NCLEX appointments.",
     body: `
-<p>The nursing regulatory body—not PulseRN, Pearson alone, or the test center—coordinates a candidate's NCLEX accommodations. NCSBN directs candidates to submit the request to the NRB with the nurse-licensure or registration application and to do so before registering for the NCLEX with Pearson.</p>
+<p>The nursing regulatory body (NRB)—not PulseRN, Pearson alone, or the test center—controls the candidate-specific NCLEX accommodation decision. The official NCLEX registration page directs candidates to request accommodations from the NRB before registering for the NCLEX with Pearson.</p>
 
 <div class="key" role="note" aria-labelledby="accommodation-boundary">
 <h2 id="accommodation-boundary" style="margin-top:0">This is process information, not legal advice</h2>
@@ -231,13 +231,13 @@ export const LOGISTICS_ARTICLES = [
 <h2>The published sequence</h2>
 <ol>
   <li>Apply for licensure or registration through the appropriate NRB.</li>
-  <li>Submit the accommodation request and required documentation to that NRB.</li>
-  <li>Wait for the NRB's process and decision before Pearson registration when instructed.</li>
+  <li>Request the accommodation from that NRB and follow its documentation and deadline requirements.</li>
+  <li>Complete the NRB request before Pearson registration, as the official NCLEX registration page directs.</li>
   <li>Register with Pearson using information consistent with the NRB application.</li>
   <li>Review the ATT and approved scheduling instructions.</li>
   <li>Use the accommodations contact path on the ATT when scheduling or changing the appointment.</li>
 </ol>
-<p class="source-note"><b>Evidence for this process:</b> NCSBN's dated <a href="#source-ncsbn-accommodations-2026">accommodations instruction</a>, the <a href="#source-ncsbn-registration-process-2026">registration-process page</a>, and the official <a href="#source-ncsbn-scheduling-rules-2026">scheduling page</a>.</p>
+<p class="source-note"><b>Evidence for this process:</b> the official NCLEX <a href="#source-ncsbn-pearson-registration-2026">Pearson-registration page</a>, the <a href="#source-ncsbn-registration-process-2026">registration-process page</a>, the official <a href="#source-ncsbn-scheduling-rules-2026">scheduling page</a>, and Pearson VUE's dated <a href="#source-pearson-vue-comfort-aid-list-2024">Comfort Aid List</a>.</p>
 
 <h2>Accommodations and comfort aids are not identical</h2>
 <div class="table-wrap" role="region" aria-label="NCLEX accommodations and comfort aids comparison" tabindex="0">
@@ -245,19 +245,19 @@ export const LOGISTICS_ARTICLES = [
   <caption>Two different pre-exam pathways</caption>
   <thead><tr><th scope="col">Path</th><th scope="col">Approval</th><th scope="col">Action</th></tr></thead>
   <tbody>
-    <tr><th scope="row">Testing accommodation</th><td>Coordinated by the NRB using its requirements and decision process.</td><td>Request it with the licensure application and before Pearson registration, as directed.</td></tr>
+    <tr><th scope="row">Testing accommodation</th><td>Controlled by the NRB using its requirements and decision process.</td><td>Request it from the NRB before Pearson registration and follow that regulator's current instructions.</td></tr>
     <tr><th scope="row">Listed comfort aid</th><td>Some items do not require advance approval and are admitted after test-center inspection.</td><td>Check the current Pearson Comfort Aid List; do not assume an unlisted item qualifies.</td></tr>
   </tbody>
 </table>
 </div>
-<p>NCSBN gives casts, hearing aids and insulin pumps as examples of items permitted after visual inspection, but the current Pearson list controls. A medical device being important does not by itself establish the test-center procedure; verify the list and contact path in advance.</p>
+<p>Pearson VUE's current list includes qualified examples such as casts, hearing aids and insulin pumps among items admitted after visual inspection. Device-specific conditions apply, and some devices or testing channels require formal accommodation approval. A medical device being important does not by itself establish the test-center procedure; verify the live list and contact path in advance.</p>
 
 <h2>Scheduling and changing an accommodated appointment</h2>
 <p>The official scheduling page instructs candidates with approved accommodations to call the number on the ATT and ask for the NCLEX Accommodations Coordinator when changing an appointment. Preserve the approval and appointment confirmation records, and verify that the scheduled arrangements match the authorization before test day.</p>
 `,
     faq: [
       { q: "Who approves NCLEX testing accommodations?", a: "The nursing regulatory body coordinates the accommodations process. Submit the request and required materials according to that regulator's instructions." },
-      { q: "When should I request NCLEX accommodations?", a: "NCSBN directs candidates to submit the request with the licensure or registration application and before registering for the NCLEX with Pearson." },
+      { q: "When should I request NCLEX accommodations?", a: "The official NCLEX registration page directs candidates to request accommodations from the NRB before registering for the NCLEX with Pearson. Follow the NRB's own documentation and deadline rules." },
       { q: "Do all medical or comfort items require preapproval?", a: "No. Some items on Pearson's current Comfort Aid List can be admitted after visual inspection. Check the live list rather than assuming an item is covered." },
       { q: "How do I change an accommodated NCLEX appointment?", a: "Call the number listed on the ATT and ask for the NCLEX Accommodations Coordinator, following the official scheduling instructions." },
     ],
