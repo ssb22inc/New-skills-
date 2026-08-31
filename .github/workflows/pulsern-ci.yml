@@ -1,0 +1,54 @@
+name: pulsern-ci
+
+# There was no CI running the PulseRN test suite, so nothing checked a pull
+# request before it merged. This runs the tests and a production build on every
+# push and PR that touches the project.
+#
+# It also runs tests/workflows.test.js, which fails if any workflow file has
+# drifted out of .github/workflows/ at the repository root — the mistake that
+# left the content factory dead for its entire existence.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pulsern/**"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "pulsern/**"
+      - ".github/workflows/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+
+      - run: npm ci
+
+      # Includes the workflow-placement guard.
+      - name: Tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+        env:
+          # Build-time public client values. These are the only two the client
+          # is ever allowed to hold (CLAUDE.md rule 2) and both are public by
+          # design, so they are not secrets.
+          VITE_SUPABASE_URL: https://xlfdywudgamrnzjwtrtd.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_wH9FG2HgmC9hrvqNO4hZiQ_eJi86SUd
