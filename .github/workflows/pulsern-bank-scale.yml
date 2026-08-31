@@ -63,6 +63,33 @@ jobs:
 
       - run: npm ci
 
+      - name: Preflight — required secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          # Presence only — lengths and names, never values.
+          missing=""
+          [ -n "$SUPABASE_URL" ]             || missing="$missing SUPABASE_URL"
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || missing="$missing SUPABASE_SERVICE_ROLE_KEY"
+          [ -n "$OPENROUTER_API_KEY" ]        || missing="$missing OPENROUTER_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"
+            echo ""
+            echo "These must be REPOSITORY secrets on ssb22inc/New-skills-:"
+            echo "  Settings -> Secrets and variables -> Actions -> Repository secrets"
+            echo ""
+            echo "Common causes: added as Variables rather than Secrets, added as"
+            echo "Environment or Dependabot secrets (Actions cannot read those), or"
+            echo "added to a different repository."
+            exit 1
+          fi
+          echo "All three required secrets are present."
+          echo "  SUPABASE_URL length: ${#SUPABASE_URL}"
+          echo "  SUPABASE_SERVICE_ROLE_KEY length: ${#SUPABASE_SERVICE_ROLE_KEY}"
+          echo "  OPENROUTER_API_KEY length: ${#OPENROUTER_API_KEY}"
+
       - name: Expand ${{ matrix.cat }}
         run: |
           node ops/content-factory.mjs \
