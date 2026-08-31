@@ -11,7 +11,7 @@
 import { writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { ARTICLES } from "./learn-content.mjs";
-import { EVIDENCE_ACCESSED_AT, POLICY_VERSION, SEARCH_INTENTS, intentFor, sourcesFor } from "./seo-content-policy.mjs";
+import { MANIFEST_GENERATED_AT, POLICY_VERSION, SEARCH_INTENTS, intentFor, sourcesFor } from "./seo-content-policy.mjs";
 import { COMMERCIAL_PAGES } from "./commercial-content.mjs";
 
 const SITE = "https://www.pulsern.app";
@@ -232,9 +232,10 @@ function renderArticle(a, all, provenance) {
         .join("")}</div>`
     : "";
 
+  const clinical = provenance.risk === "clinical";
   const reviewLine = provenance.review.decision === "approved"
-    ? `clinically reviewed <time datetime="${esc(provenance.review.reviewedAt)}">${esc(provenance.review.reviewedAt)}</time> by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, ${esc(REVIEW_LEDGER.reviewer.credential)}</a>`
-    : `last updated <time datetime="${esc(a.updated)}">${esc(a.updated)}</time> &middot; clinical review evidence pending`;
+    ? `${clinical ? "clinically reviewed" : "reviewed"} <time datetime="${esc(provenance.review.reviewedAt)}">${esc(provenance.review.reviewedAt)}</time> by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, ${esc(REVIEW_LEDGER.reviewer.credential)}</a>`
+    : `last updated <time datetime="${esc(a.updated)}">${esc(a.updated)}</time> &middot; ${clinical ? "clinical" : "editorial"} review evidence pending`;
   return usEnglish(`${head({ title: `${a.title} | PulseRN`, description: a.description, url, jsonld: articleJsonLd(a, url, provenance) })}
 <main>
 <a class="back" href="/learn/">&larr; All guides</a>
@@ -333,8 +334,8 @@ for (const a of ARTICLES) {
   writeFileSync(`${OUT}/${a.slug}/index.html`, renderArticle(a, ARTICLES, record));
 }
 writeFileSync(`${OUT}/index.html`, renderIndex(ARTICLES));
-writeFileSync("public/content-provenance.json", JSON.stringify({ schemaVersion: POLICY_VERSION, generatedAt: `${EVIDENCE_ACCESSED_AT}T00:00:00.000Z`, reviewer: REVIEW_LEDGER.reviewer, guides: provenance }, null, 2) + "\n");
-writeFileSync("public/search-intents.json", JSON.stringify({ schemaVersion: POLICY_VERSION, generatedAt: `${EVIDENCE_ACCESSED_AT}T00:00:00.000Z`, intents: SEARCH_INTENTS }, null, 2) + "\n");
+writeFileSync("public/content-provenance.json", JSON.stringify({ schemaVersion: POLICY_VERSION, generatedAt: `${MANIFEST_GENERATED_AT}T00:00:00.000Z`, reviewer: REVIEW_LEDGER.reviewer, guides: provenance }, null, 2) + "\n");
+writeFileSync("public/search-intents.json", JSON.stringify({ schemaVersion: POLICY_VERSION, generatedAt: `${MANIFEST_GENERATED_AT}T00:00:00.000Z`, intents: SEARCH_INTENTS }, null, 2) + "\n");
 
 /* Sitemap covers the app pages plus every guide, so nothing relies on the
    crawler finding its own way in. */
