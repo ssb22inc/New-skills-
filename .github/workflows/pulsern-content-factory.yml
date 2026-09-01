@@ -53,25 +53,15 @@ jobs:
           echo "  SUPABASE_SERVICE_ROLE_KEY length: ${#SUPABASE_SERVICE_ROLE_KEY}"
           echo "  OPENROUTER_API_KEY length: ${#OPENROUTER_API_KEY}"
 
-          # The publishable key and the secret key look similar and sit next to
-          # each other in the Supabase dashboard. Supplying the public one here
-          # gets past every presence check and then fails much later with
-          # "new row violates row-level security policy", because the client is
-          # simply an anonymous user. Catch it now, by name.
-          case "$SUPABASE_SERVICE_ROLE_KEY" in
-            sb_publishable_*|anon_*)
-              echo "::error::SUPABASE_SERVICE_ROLE_KEY holds a PUBLISHABLE key, not the secret one."
-              echo "The publishable key is public and has no write access, so every insert"
-              echo "will be rejected by row-level security."
-              echo "Use Supabase -> Project Settings -> API Keys -> the secret/service_role key."
-              exit 1
-              ;;
-          esac
-          if [ "${#SUPABASE_SERVICE_ROLE_KEY}" -lt 60 ]; then
-            echo "::warning::SUPABASE_SERVICE_ROLE_KEY is only ${#SUPABASE_SERVICE_ROLE_KEY} characters."
-            echo "Service-role keys are normally longer. If inserts fail with a row-level"
-            echo "security error, this is the value to re-check first."
-          fi
+      # Presence is not validity: a publishable key and a personal access token
+      # both pass every name check and then fail deep inside a run, after the
+      # model spend. Make the credential prove itself instead — one read and one
+      # service-role-only call, neither of which writes anything.
+      - name: Preflight — credentials actually work
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node ops/content-factory.mjs --check
 
       - name: Run question factory
         run: node ops/content-factory.mjs --batch 12

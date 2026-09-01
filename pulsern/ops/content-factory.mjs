@@ -154,6 +154,60 @@ async function pickTargets() {
   return sorted.slice(0, 2); // two thinnest categories
 }
 
+/* ---------- Credential preflight ----------
+   Generation is the expensive part of a run: two model calls per loop, a
+   couple of minutes of wall clock, and real OpenRouter credit. Discovering
+   at the INSERT step that the database was never reachable wastes all of it
+   and, worse, reads as a content problem rather than a credential one.
+
+   So prove the credential first, with two cheap round-trips:
+
+     read  — any select against questions. Fails if the URL is wrong, the key
+             belongs to another project, or the key is not a Supabase API key
+             at all (a personal access token, sbp_..., is the classic mix-up:
+             it is not rejected by any name check but PostgREST answers
+             "Invalid API key").
+     write — auth.admin.listUsers is service-role only. A publishable/anon key
+             gets a 401 here while still passing the read probe, which is the
+             exact shape of the row-level-security failures seen earlier.
+
+   Neither probe writes anything, and neither prints any part of a key. */
+const KEY_CLASSES = [
+  ["sb_secret_",      "secret (service_role) key — correct for this job"],
+  ["sb_publishable_", "PUBLISHABLE key — public, read-only, wrong for this job"],
+  ["sbp_",            "personal ACCESS TOKEN — for the Management API, not the database"],
+  ["eyJ",             "JWT — legacy anon or service_role key"],
+];
+function keyClass(key) {
+  const hit = KEY_CLASSES.find(([p]) => key.startsWith(p));
+  return hit ? hit[1] : "unrecognised prefix";
+}
+
+async function preflightDb() {
+  const url = process.env.SUPABASE_URL ?? "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  const fail = (what, detail) => {
+    throw new Error(
+      `Supabase ${what} check failed: ${detail}\n` +
+      `  SUPABASE_URL: ${url ? url.replace(/^(https:\/\/[a-z0-9]{6}).*/, "$1…") : "(empty)"}\n` +
+      `  SUPABASE_SERVICE_ROLE_KEY: ${key.length} chars, looks like a ${keyClass(key)}\n` +
+      `  Fix: Supabase dashboard -> Project Settings -> API Keys -> copy the\n` +
+      `  SECRET (service_role) key for THIS project, and paste it with no\n` +
+      `  surrounding spaces or newline into the SUPABASE_SERVICE_ROLE_KEY secret.`
+    );
+  };
+  if (!url) fail("URL", "SUPABASE_URL is empty");
+  if (!key) fail("key", "SUPABASE_SERVICE_ROLE_KEY is empty");
+
+  const { error: readErr } = await db().from("questions").select("id").limit(1);
+  if (readErr) fail("read", readErr.message);
+
+  const { error: adminErr } = await db().auth.admin.listUsers({ page: 1, perPage: 1 });
+  if (adminErr) fail("service-role", `${adminErr.message} (the key reached the project but is not the service_role key)`);
+
+  console.log("Credentials verified: database readable and key has service-role rights.");
+}
+
 /* ---------- Step 2: generator prompt ---------- */
 function genPrompt(cats, existingStems) {
   const types = NGN_ONLY ? TYPES_NGN : [...TYPES_STD, ...TYPES_NGN];
@@ -205,8 +259,12 @@ async function run() {
 
   let existingStems = [];
   if (!DRY) {
-    const { data } = await db().from("questions").select("stem").in("cat", targets)
+    /* This read is what stops the generator rewriting items the bank already
+       holds. Swallowing its error does not degrade gracefully — it silently
+       turns duplicate avoidance off, so surface it. */
+    const { data, error } = await db().from("questions").select("stem").in("cat", targets)
       .order("created_at", { ascending: false }).limit(60);
+    if (error) throw new Error(`Could not read existing stems (duplicate avoidance would be off): ${error.message}`);
     existingStems = (data ?? []).map((r) => r.stem.slice(0, 60));
   }
 
@@ -289,6 +347,7 @@ async function run() {
    clock, so a CI job stops itself cleanly instead of being killed mid-insert. */
 async function runMany() {
   const started = Date.now();
+  if (!DRY) await preflightDb(); // fail in seconds, before any model spend
   const total = { inserted: 0, dupes: 0, reviewed: 0, survived: 0 };
   let attempted = 0, failed = 0;
   for (let i = 1; i <= LOOPS; i++) {
@@ -324,7 +383,13 @@ async function runMany() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  runMany().catch((e) => { console.error("FACTORY FAILED:", e.message); process.exit(1); });
+  /* --check verifies credentials and exits. CI runs it as its own step so a
+     bad secret shows up as a named failure in seconds rather than as a
+     mysterious error two minutes into generation. */
+  const job = flag("--check")
+    ? preflightDb().then(() => console.log("Preflight OK."))
+    : runMany();
+  job.catch((e) => { console.error("FACTORY FAILED:", e.message); process.exit(1); });
 }
 
 export { validItem }; // exported for tests
