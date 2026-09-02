@@ -9,6 +9,7 @@ import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 import { articleJsonLd } from "../ops/build-learn.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
 import { EXAM_ARTICLES } from "../ops/learn-exam.mjs";
+import { LOGISTICS_ARTICLES } from "../ops/learn-logistics.mjs";
 import { SKILL_ARTICLES } from "../ops/learn-skills.mjs";
 import { TYPE_ARTICLES } from "../ops/learn-types.mjs";
 import { SAMPLE_ARTICLES } from "../ops/learn-samples.mjs";
@@ -17,6 +18,8 @@ import { injectSearchVerification, verificationMeta } from "../ops/search-verifi
 import { runAppBoundary } from "../ops/seo-app-boundary.mjs";
 import { COMMERCIAL_PAGES, commercialEvidence } from "../ops/commercial-content.mjs";
 import { runCommercialCheck } from "../ops/seo-commercial-check.mjs";
+import { runExamRulesCheck } from "../ops/seo-exam-rules-check.mjs";
+import { runLiveRelease } from "../ops/seo-live-release.mjs";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
@@ -69,6 +72,58 @@ describe("SEO guardian", () => {
     const report = await runCommercialCheck({ evidenceFile, directory, outputFile, fetchImpl: async () => new Response("<html><body>changed product page</body></html>", { status: 200, headers: { "content-type": "text/html" } }) });
     expect(report.verdict).toBe("FAIL");
     expect(report.findings.some((item) => item.code === "COMMERCIAL_SOURCE_DRIFT")).toBe(true);
+  });
+
+  it("keeps eight distinct exam-logistics guides intent-mapped and bound to official rule markers", () => {
+    expect(LOGISTICS_ARTICLES).toHaveLength(8);
+    expect(new Set(LOGISTICS_ARTICLES.map((article) => article.slug)).size).toBe(8);
+    for (const article of LOGISTICS_ARTICLES) {
+      expect(article.topic).toBe("Registration and results");
+      expect(article.published).toBe("2026-08-31");
+      expect(article.updated).toBe("2026-08-31");
+      expect(article.body).toContain("source-");
+      const sources = sourcesFor(article);
+      expect(sources.length).toBeGreaterThanOrEqual(2);
+      expect(sources.some((source) => Array.isArray(source.expectedMarkers) && source.expectedMarkers.length)).toBe(true);
+      expect(sources.every((source) => new URL(source.url).protocol === "https:")).toBe(true);
+    }
+  });
+
+  it("fails closed when an official NCLEX rule marker drifts", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-exam-rules-"));
+    const provenanceFile = path.join(directory, "content-provenance.json");
+    const outputFile = path.join(directory, "exam-rules.json");
+    await fs.writeFile(provenanceFile, JSON.stringify({ schemaVersion: 1, guides: [{ sources: [{ id: "ncsbn-rule", url: "https://www.nclex.com/register.page", expectedMarkers: ["Authorization to Test"] }] }] }));
+    const report = await runExamRulesCheck({ provenanceFile, outputFile, fetchImpl: async () => new Response("<html><body>changed official page</body></html>", { status: 200, headers: { "content-type": "text/html" } }) });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.findings.some((item) => item.code === "EXAM_RULE_SOURCE_DRIFT")).toBe(true);
+  });
+
+  it("does not describe a pull-request candidate as already live", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-live-candidate-"));
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>');
+    const report = await runLiveRelease({ directory, outputFile: path.join(directory, "live-release.json"), expectedCommitSha: "a".repeat(40), expectedLive: false });
+    expect(report.verdict).toBe("PASS");
+    expect(report.expectedLive).toBe(false);
+    expect(report.status).toContain("candidate-artifact-only");
+    expect(report.deployedCommitSha).toBeNull();
+  });
+
+  it("fails closed when production is not bound to the exact merge commit", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-live-main-"));
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>');
+    const report = await runLiveRelease({
+      directory,
+      outputFile: path.join(directory, "live-release.json"),
+      expectedCommitSha: "a".repeat(40),
+      expectedLive: true,
+      maxAttempts: 1,
+      intervalMs: 0,
+      fetchImpl: async () => new Response(JSON.stringify({ commitSha: "b".repeat(40) }), { status: 200, headers: { "content-type": "application/json" } }),
+      runCrawlImpl: async () => { throw new Error("crawl must not run for the wrong commit"); },
+    });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.findings.some((item) => item.code === "LIVE_RELEASE_COMMIT")).toBe(true);
   });
 
   it("rejects a guide without an accountable Person reviewer", () => {
@@ -389,7 +444,7 @@ describe("SEO guardian", () => {
       "ramnanan-2024-distributed-retrieval-review",
       "khalafi-2024-spaced-learning-nursing",
     ]);
-    expect(sourcesFor(guide).slice(0, 3).every((source) => source.sourceUpdated === null && source.locator.includes("live page checked 2026-08-28"))).toBe(true);
+    expect(sourcesFor(guide).slice(0, 3).every((source) => source.sourceUpdated === null && /live page checked 2026-08-(?:28|31)/.test(source.locator))).toBe(true);
   });
 
   it("keeps pending Guide 13 NCLEX scoring accurate, accessible, and source-bound", () => {

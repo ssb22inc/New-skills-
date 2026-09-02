@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "generatedAt": "2026-08-31T00:00:00.000Z",
   "intents": {
     "nclex-pharmacology-practice-questions": {
       "primary": "free NCLEX pharmacology practice questions",
@@ -72,6 +72,78 @@
         "NCLEX exam day process"
       ],
       "audience": "NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "how-to-register-for-the-nclex": {
+      "primary": "how to register for the NCLEX",
+      "secondary": [
+        "NCLEX registration steps",
+        "apply for NCLEX RN"
+      ],
+      "audience": "prospective NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "nclex-authorization-to-test-att": {
+      "primary": "NCLEX authorization to test ATT",
+      "secondary": [
+        "when will I get NCLEX ATT",
+        "NCLEX ATT validity"
+      ],
+      "audience": "registered NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "schedule-reschedule-cancel-nclex": {
+      "primary": "how to reschedule the NCLEX",
+      "secondary": [
+        "cancel NCLEX appointment",
+        "schedule NCLEX exam"
+      ],
+      "audience": "NCLEX-RN candidates with an ATT",
+      "risk": "exam"
+    },
+    "nclex-fees-and-payment": {
+      "primary": "how much does the NCLEX cost",
+      "secondary": [
+        "NCLEX registration fee",
+        "international NCLEX fee"
+      ],
+      "audience": "prospective NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "nclex-testing-accommodations": {
+      "primary": "NCLEX testing accommodations",
+      "secondary": [
+        "request NCLEX accommodations",
+        "NCLEX comfort aids"
+      ],
+      "audience": "NCLEX-RN candidates requesting accommodations",
+      "risk": "exam"
+    },
+    "nclex-quick-results-vs-official-results": {
+      "primary": "NCLEX quick results vs official results",
+      "secondary": [
+        "when do NCLEX results come out",
+        "NCLEX quick results cost"
+      ],
+      "audience": "recent NCLEX-RN candidates",
+      "risk": "exam"
+    },
+    "how-to-read-nclex-candidate-performance-report": {
+      "primary": "how to read NCLEX candidate performance report",
+      "secondary": [
+        "NCLEX CPR below near above",
+        "NCLEX performance report retake plan"
+      ],
+      "audience": "NCLEX-RN retake candidates",
+      "risk": "exam"
+    },
+    "international-nclex-testing": {
+      "primary": "international NCLEX testing",
+      "secondary": [
+        "NCLEX international test centers",
+        "take NCLEX outside the US"
+      ],
+      "audience": "international NCLEX-RN candidates",
       "risk": "exam"
     },
     "bow-tie-questions": {

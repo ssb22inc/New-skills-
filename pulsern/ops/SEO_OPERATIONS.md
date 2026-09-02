@@ -35,6 +35,24 @@ clinical content still requires digest-bound RN approval, source validation,
 accessibility and crawler audits, OpenRouter adversarial review, evidence
 binding, and fail-closed final enforcement.
 
+Official NCLEX registration, scheduling, fee, accommodations, result, and
+test-center pages also carry marker-bound NCSBN evidence. The
+`seo:exam-rules` gate fails when those official pages stop exposing a rule or
+price used by PulseRN, forcing re-verification before release.
+
+## Exact live-release verification
+
+- Every build publishes `/release.json` with the source commit SHA.
+- Pull-request evidence explicitly describes the candidate as not yet live.
+- On `main`, `seo:live-release` waits for `www.pulsern.app/release.json` to
+  match the exact merge SHA and for the production sitemap to match the
+  candidate sitemap.
+- Only then does it crawl every production route under six browser/search-agent
+  identities and check status, indexability, canonical URL, semantic content,
+  crawler access, `llms.txt`, and the internal route map.
+- The OpenRouter adversary receives the live-release report. A successful
+  build or hosting status alone is not accepted as proof that production works.
+
 ## Public site and private app boundary
 
 - `https://www.pulsern.app/` is always the indexable public landing page,

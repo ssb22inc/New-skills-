@@ -68,6 +68,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:crawl:live
+      - name: Exact production commit and route verification
+        id: live_release
+        if: always()
+        continue-on-error: true
+        run: npm run seo:live-release
       - name: Authoritative source reachability
         id: sources
         if: always()
@@ -78,6 +83,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:commercial
+      - name: Official NCLEX rule and fee drift audit
+        id: exam_rules
+        if: always()
+        continue-on-error: true
+        run: npm run seo:exam-rules
       - name: WCAG accessibility audit
         id: accessibility
         if: always()
@@ -108,8 +118,10 @@ jobs:
           test "${{ steps.app_boundary.outcome }}" = "success"
           test "${{ steps.crawl.outcome }}" = "success"
           test "${{ steps.crawl_live.outcome }}" = "success"
+          test "${{ steps.live_release.outcome }}" = "success"
           test "${{ steps.sources.outcome }}" = "success"
           test "${{ steps.commercial.outcome }}" = "success"
+          test "${{ steps.exam_rules.outcome }}" = "success"
           test "${{ steps.accessibility.outcome }}" = "success"
           test "${{ steps.adversary.outcome }}" = "success"
           npm run seo:enforce
