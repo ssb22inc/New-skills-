@@ -689,12 +689,51 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, and source review of the exact how-to-register-for-the-nclex content and source-set digests",
+        "claims": [
+          {
+            "id": "registration-sequence-and-organizational-responsibility",
+            "locator": "Opening paragraph; six-step registration sequence",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "registration-name-program-code-email-and-acknowledgment",
+            "locator": "Name, program code and email checks",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "registration-eligibility-365-day-and-duplicate-boundaries",
+            "locator": "Registration does not equal eligibility; eligibility FAQ",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "registration-att-issuance-and-validity",
+            "locator": "What happens after eligibility; scheduling FAQ",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "registration-fee-and-jurisdiction-boundary",
+            "locator": "Registration sequence; regulator boundary; CTA",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
@@ -768,12 +807,52 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, and source review of the exact nclex-authorization-to-test-att content and source-set digests",
+        "claims": [
+          {
+            "id": "att-definition-and-prerequisites",
+            "locator": "Opening paragraph; What must happen before the ATT",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "att-average-and-controlling-validity-dates",
+            "locator": "Your ATT controls your dates; validity FAQ",
+            "sourceIds": [
+              "ncsbn-registration-process-2026"
+            ]
+          },
+          {
+            "id": "att-verification-and-accommodated-scheduling",
+            "locator": "What to verify when it arrives",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "att-not-received-and-duplicate-registration-boundary",
+            "locator": "If the ATT has not arrived; contact FAQ",
+            "sourceIds": [
+              "ncsbn-nclex-faqs",
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "att-seat-availability-and-scheduling-window",
+            "locator": "Schedule before the window becomes narrow; scheduling FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
@@ -837,12 +916,57 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, and source review of the exact schedule-reschedule-cancel-nclex content and source-set digests",
+        "claims": [
+          {
+            "id": "scheduling-att-channel-and-confirmation-requirements",
+            "locator": "Opening paragraph; Get a confirmation",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          },
+          {
+            "id": "scheduling-first-time-and-repeat-appointment-offers",
+            "locator": "Scheduling the first appointment",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "domestic-change-and-cancellation-deadlines",
+            "locator": "Changing or canceling a domestic appointment table; notice FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "international-appointment-change-and-fee-boundaries",
+            "locator": "International and accommodated appointments",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-testing-locations-2026"
+            ]
+          },
+          {
+            "id": "accommodated-appointment-change-path",
+            "locator": "International and accommodated appointments",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "missed-appointment-consequences",
+            "locator": "What happens after a missed appointment; missed-exam FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
@@ -907,12 +1031,56 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, pricing, and source review of the exact nclex-fees-and-payment content and source-set digests",
+        "claims": [
+          {
+            "id": "fees-current-registration-international-and-change-table",
+            "locator": "Published fees before February 1, 2027",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026"
+            ]
+          },
+          {
+            "id": "fees-announced-february-2027-change",
+            "locator": "The announced 2027 change; price FAQ",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026"
+            ]
+          },
+          {
+            "id": "fees-payment-options-and-confirmation",
+            "locator": "Payment and duplicate-registration risk",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "fees-duplicate-registration-risk",
+            "locator": "Payment and duplicate-registration risk",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "fees-refund-and-missed-appointment-boundaries",
+            "locator": "Refund boundaries; refund FAQ",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026",
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "fees-nrb-tax-travel-and-pulsern-separation",
+            "locator": "Opening paragraph; time-sensitive prices; CTA",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
@@ -992,12 +1160,59 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, accessibility-process, and source review of the exact nclex-testing-accommodations content and source-set digests",
+        "claims": [
+          {
+            "id": "accommodations-nrb-control-and-pre-registration-timing",
+            "locator": "Opening paragraph; timing FAQ",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "accommodations-published-process-sequence",
+            "locator": "The published sequence",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026",
+              "ncsbn-registration-process-2026",
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "accommodations-jurisdiction-and-legal-boundary",
+            "locator": "This is process information, not legal advice",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          },
+          {
+            "id": "accommodations-comfort-aid-distinction-and-inspection",
+            "locator": "Accommodations and comfort aids are not identical",
+            "sourceIds": [
+              "pearson-vue-comfort-aid-list-2024",
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "accommodations-qualified-device-examples",
+            "locator": "Comfort-aid qualification paragraph",
+            "sourceIds": [
+              "pearson-vue-comfort-aid-list-2024"
+            ]
+          },
+          {
+            "id": "accommodations-appointment-change-contact-path",
+            "locator": "Scheduling and changing an accommodated appointment; change FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
@@ -1046,12 +1261,50 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, results-channel, and source review of the exact nclex-quick-results-vs-official-results content and source-set digests",
+        "claims": [
+          {
+            "id": "results-unofficial-quick-versus-official-nrb-boundary",
+            "locator": "Opening paragraph; Practice authorization boundary",
+            "sourceIds": [
+              "ncsbn-quick-results-2026",
+              "ncsbn-nclex-results-2026-08-31"
+            ]
+          },
+          {
+            "id": "results-channel-timing-availability-status-and-price",
+            "locator": "Quick Results compared with official results table",
+            "sourceIds": [
+              "ncsbn-quick-results-2026",
+              "ncsbn-nclex-results-2026-08-31"
+            ]
+          },
+          {
+            "id": "quick-results-account-purchase-process",
+            "locator": "How the published Quick Results process works",
+            "sourceIds": [
+              "ncsbn-quick-results-2026"
+            ]
+          },
+          {
+            "id": "quick-results-participation-and-no-unofficial-inference",
+            "locator": "Quick Results process qualification paragraph",
+            "sourceIds": [
+              "ncsbn-quick-results-2026"
+            ]
+          },
+          {
+            "id": "official-results-six-week-contact-path",
+            "locator": "When to contact the NRB; late-results FAQ",
+            "sourceIds": [
+              "ncsbn-nclex-results-2026-08-31"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
@@ -1109,12 +1362,56 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, remediation, and source review of the exact how-to-read-nclex-candidate-performance-report content and source-set digests",
+        "claims": [
+          {
+            "id": "cpr-purpose-audience-and-two-page-format",
+            "locator": "Opening paragraph; recipient FAQ",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31"
+            ]
+          },
+          {
+            "id": "cpr-overall-pass-fail-and-no-section-score-boundary",
+            "locator": "The NCLEX is not graded in sections; grading FAQ",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31"
+            ]
+          },
+          {
+            "id": "cpr-below-near-above-indicators-and-study-order",
+            "locator": "What the three indicators mean for planning; study-order FAQs",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31"
+            ]
+          },
+          {
+            "id": "cpr-abbreviated-report-boundary",
+            "locator": "When the CPR is abbreviated; recipient FAQ",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31"
+            ]
+          },
+          {
+            "id": "cpr-four-step-test-plan-remediation-workflow",
+            "locator": "A four-step retake workflow",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "cpr-retake-authorization-and-45-day-minimum",
+            "locator": "Retake administration is separate",
+            "sourceIds": [
+              "ncsbn-nclex-results-2026-08-31"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
@@ -1193,12 +1490,58 @@
         }
       ],
       "review": {
-        "decision": "pending",
-        "reviewerId": null,
-        "reviewedAt": null,
-        "scope": null,
-        "claims": [],
-        "evidenceMatchesContent": false
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, international-scheduling, and source review of the exact international-nclex-testing content and source-set digests",
+        "claims": [
+          {
+            "id": "international-domestic-definition-by-licensure-destination",
+            "locator": "Opening paragraph; Domestic depends on the licensure destination table",
+            "sourceIds": [
+              "ncsbn-testing-locations-2026"
+            ]
+          },
+          {
+            "id": "international-live-location-and-advice-boundary",
+            "locator": "Verify the live location list; planning checklist",
+            "sourceIds": [
+              "ncsbn-testing-locations-2026"
+            ]
+          },
+          {
+            "id": "international-scheduling-fee-vat-and-separate-costs",
+            "locator": "Scheduling cost and tax; fee FAQ",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026"
+            ]
+          },
+          {
+            "id": "international-appointment-change-and-fee-treatment",
+            "locator": "Changing an international appointment; change FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-testing-locations-2026"
+            ]
+          },
+          {
+            "id": "international-att-validity-not-automatically-extended",
+            "locator": "Changing an international appointment; ATT FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          },
+          {
+            "id": "international-eligibility-travel-and-booking-separation",
+            "locator": "Plan beyond the examination booking; CTA",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-testing-locations-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
       }
     },
     {
