@@ -70,4 +70,14 @@ describe("workflow placement", () => {
     expect(workflow).toContain("run: npm run seo:indexnow");
     expect(workflow).toContain('test "${{ steps.indexnow.outcome }}" = "success"');
   });
+
+  it("captures authentic product screenshots in the fail-closed workflow", () => {
+    const workflow = readFileSync(join(LIVE_DIR, "pulsern-seo-guardian.yml"), "utf8");
+    expect(workflow).toContain("id: product_capture");
+    expect(workflow).toContain("run: npm run product:screenshots:capture");
+    expect(workflow).toContain('test "${{ steps.product_capture.outcome }}" = "success"');
+    expect(workflow).toContain("id: product_images");
+    expect(workflow).toContain("run: npm run seo:product-images");
+    expect(workflow).toContain('test "${{ steps.product_images.outcome }}" = "success"');
+  });
 });
