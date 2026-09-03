@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-31T00:00:00.000Z",
+  "generatedAt": "2026-09-02T00:00:00.000Z",
   "reviewer": {
     "id": "sheldon-bennett-rn",
     "displayName": "Sheldon Bennett",
@@ -13,7 +13,127 @@
   },
   "guides": [
     {
+      "route": "/learn/2026-nclex-rn-test-plan/",
+      "published": "2026-09-02",
+      "updated": "2026-09-02",
+      "risk": "exam",
+      "intent": {
+        "primary": "2026 NCLEX RN test plan",
+        "secondary": [
+          "NCLEX RN content categories 2026",
+          "NCLEX test plan percentages"
+        ],
+        "audience": "NCLEX-RN candidates and nursing educators",
+        "risk": "exam"
+      },
+      "contentSha256": "c7c31c7bc7a0b33324c79869b4833dadaa720f88ce861ec4ba174684ddff4cd0",
+      "sourceSetSha256": "de0e7d6629009d46b75b16980bdca9780a13b2a2cf0f5520bc0d4e61bd2384c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan-pdf",
+          "title": "NCSBN — 2026 NCLEX-RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_RN_Test%20Plan_English-F.pdf",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-09-02",
+          "locator": "Effective dates; Integrated Processes; Clinical Judgment; Distribution of Content; Administration and Examination Length"
+        },
+        {
+          "id": "ncsbn-2026-candidate-bulletin-pdf",
+          "title": "NCSBN — 2026 NCLEX Candidate Bulletin",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_NCLEX_Candidate_Bulletin_English.pdf",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "Identification Requirements; Candidate Rules; Check-In Process; Breaks; Results Reporting; live PDF checked 2026-08-28 and no publication-day field is displayed"
+        },
+        {
+          "id": "ncsbn-clinical-judgment-measurement-model",
+          "title": "NCSBN — Clinical Judgment Measurement Model",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/clinical-judgment-measurement-model.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-09-02",
+          "locator": "Measuring Clinical Judgment; A Closer Look at the NCJMM; nursing-process and model-purpose boundaries; live page checked 2026-09-02 and no page-level revision date is published",
+          "expectedMarkers": [
+            "framework for the valid measurement of clinical judgment",
+            "was not constructed to replace",
+            "neither defines nor redefines clinical judgment"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
+      "route": "/learn/nclex-clinical-judgment/",
+      "published": "2026-09-02",
+      "updated": "2026-09-02",
+      "risk": "exam",
+      "intent": {
+        "primary": "NCLEX clinical judgment",
+        "secondary": [
+          "NCSBN clinical judgment measurement model",
+          "six NCLEX clinical judgment skills"
+        ],
+        "audience": "NCLEX-RN candidates and nursing educators",
+        "risk": "exam"
+      },
+      "contentSha256": "86a8a3f3986e1f8fe23c8101f35a017796b81605dbc604bb2f462a6fa84efcd9",
+      "sourceSetSha256": "de0e7d6629009d46b75b16980bdca9780a13b2a2cf0f5520bc0d4e61bd2384c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan-pdf",
+          "title": "NCSBN — 2026 NCLEX-RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_RN_Test%20Plan_English-F.pdf",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-09-02",
+          "locator": "Effective dates; Integrated Processes; Clinical Judgment; Distribution of Content; Administration and Examination Length"
+        },
+        {
+          "id": "ncsbn-2026-candidate-bulletin-pdf",
+          "title": "NCSBN — 2026 NCLEX Candidate Bulletin",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_NCLEX_Candidate_Bulletin_English.pdf",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "Identification Requirements; Candidate Rules; Check-In Process; Breaks; Results Reporting; live PDF checked 2026-08-28 and no publication-day field is displayed"
+        },
+        {
+          "id": "ncsbn-clinical-judgment-measurement-model",
+          "title": "NCSBN — Clinical Judgment Measurement Model",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/clinical-judgment-measurement-model.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-09-02",
+          "locator": "Measuring Clinical Judgment; A Closer Look at the NCJMM; nursing-process and model-purpose boundaries; live page checked 2026-09-02 and no page-level revision date is published",
+          "expectedMarkers": [
+            "framework for the valid measurement of clinical judgment",
+            "was not constructed to replace",
+            "neither defines nor redefines clinical judgment"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "pending",
+        "reviewerId": null,
+        "reviewedAt": null,
+        "scope": null,
+        "claims": [],
+        "evidenceMatchesContent": false
+      }
+    },
+    {
       "route": "/learn/how-is-the-nclex-scored/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how is the NCLEX scored",
@@ -163,6 +283,8 @@
     },
     {
       "route": "/learn/how-many-questions-is-the-nclex/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how many questions are on the NCLEX",
@@ -319,12 +441,14 @@
     },
     {
       "route": "/learn/next-generation-nclex-what-changed/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "what changed on the Next Generation NCLEX",
         "secondary": [
           "NGN changes",
-          "NCLEX clinical judgment model"
+          "when did Next Generation NCLEX start"
         ],
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
@@ -463,6 +587,8 @@
     },
     {
       "route": "/learn/nclex-test-day-what-to-expect/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "what to expect on NCLEX test day",
@@ -614,6 +740,8 @@
     },
     {
       "route": "/learn/how-to-register-for-the-nclex/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
       "risk": "exam",
       "intent": {
         "primary": "how to register for the NCLEX",
@@ -738,6 +866,8 @@
     },
     {
       "route": "/learn/nclex-authorization-to-test-att/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
       "risk": "exam",
       "intent": {
         "primary": "NCLEX authorization to test ATT",
@@ -857,6 +987,8 @@
     },
     {
       "route": "/learn/schedule-reschedule-cancel-nclex/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
       "risk": "exam",
       "intent": {
         "primary": "how to reschedule the NCLEX",
@@ -971,6 +1103,8 @@
     },
     {
       "route": "/learn/nclex-fees-and-payment/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
       "risk": "exam",
       "intent": {
         "primary": "how much does the NCLEX cost",
@@ -1085,6 +1219,8 @@
     },
     {
       "route": "/learn/nclex-testing-accommodations/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
       "risk": "exam",
       "intent": {
         "primary": "NCLEX testing accommodations",
@@ -1217,6 +1353,8 @@
     },
     {
       "route": "/learn/nclex-quick-results-vs-official-results/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
       "risk": "exam",
       "intent": {
         "primary": "NCLEX quick results vs official results",
@@ -1309,6 +1447,8 @@
     },
     {
       "route": "/learn/how-to-read-nclex-candidate-performance-report/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
       "risk": "exam",
       "intent": {
         "primary": "how to read NCLEX candidate performance report",
@@ -1416,6 +1556,8 @@
     },
     {
       "route": "/learn/international-nclex-testing/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
       "risk": "exam",
       "intent": {
         "primary": "international NCLEX testing",
@@ -1546,6 +1688,8 @@
     },
     {
       "route": "/learn/bow-tie-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX bow-tie questions",
@@ -1660,6 +1804,8 @@
     },
     {
       "route": "/learn/matrix-grid-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX matrix grid questions",
@@ -1767,6 +1913,8 @@
     },
     {
       "route": "/learn/cloze-drop-down-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX cloze drop-down questions",
@@ -1874,6 +2022,8 @@
     },
     {
       "route": "/learn/highlight-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX highlight questions",
@@ -1982,6 +2132,8 @@
     },
     {
       "route": "/learn/select-all-that-apply-strategy/",
+      "published": "2026-08-03",
+      "updated": "2026-08-29",
       "risk": "exam",
       "intent": {
         "primary": "NCLEX select all that apply strategy",
@@ -2089,6 +2241,8 @@
     },
     {
       "route": "/learn/drag-and-drop-ordering-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-29",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX drag and drop ordering questions",
@@ -2196,6 +2350,8 @@
     },
     {
       "route": "/learn/lab-values-to-memorize/",
+      "published": "2026-08-03",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "lab values to memorize for the NCLEX",
@@ -2299,6 +2455,8 @@
     },
     {
       "route": "/learn/abg-interpretation/",
+      "published": "2026-08-03",
+      "updated": "2026-08-26",
       "risk": "clinical",
       "intent": {
         "primary": "ABG interpretation for the NCLEX",
@@ -2430,6 +2588,8 @@
     },
     {
       "route": "/learn/electrolyte-imbalances/",
+      "published": "2026-08-03",
+      "updated": "2026-08-26",
       "risk": "clinical",
       "intent": {
         "primary": "electrolyte imbalances for the NCLEX",
@@ -2636,6 +2796,8 @@
     },
     {
       "route": "/learn/infection-control-precautions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "infection control precautions for the NCLEX",
@@ -2793,6 +2955,8 @@
     },
     {
       "route": "/learn/insulin-types-and-timing/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "insulin types onset and peak for the NCLEX",
@@ -2957,6 +3121,8 @@
     },
     {
       "route": "/learn/high-alert-medications/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "high alert medications and antidotes for the NCLEX",
@@ -3154,6 +3320,8 @@
     },
     {
       "route": "/learn/prioritization-abc-maslow/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "NCLEX prioritization ABC and Maslow",
@@ -3272,6 +3440,8 @@
     },
     {
       "route": "/learn/delegation-and-assignment/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "NCLEX delegation and assignment rules",
@@ -3391,6 +3561,8 @@
     },
     {
       "route": "/learn/therapeutic-communication/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "therapeutic communication NCLEX questions",
@@ -3523,6 +3695,8 @@
     },
     {
       "route": "/learn/dosage-calculation-formulas/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "dosage calculation formulas for the NCLEX",
@@ -3649,6 +3823,8 @@
     },
     {
       "route": "/learn/nclex-study-plan/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "education",
       "intent": {
         "primary": "NCLEX study plan",
@@ -3771,6 +3947,8 @@
     },
     {
       "route": "/learn/spaced-repetition-for-nursing-students/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "education",
       "intent": {
         "primary": "spaced repetition for nursing students",
@@ -3892,6 +4070,8 @@
     },
     {
       "route": "/learn/failed-the-nclex-what-now/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "education",
       "intent": {
         "primary": "failed the NCLEX what to do next",
@@ -4066,6 +4246,8 @@
     },
     {
       "route": "/learn/nclex-pharmacology-practice-questions/",
+      "published": "2026-08-29",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "free NCLEX pharmacology practice questions",
@@ -4198,6 +4380,8 @@
     },
     {
       "route": "/learn/nclex-prioritization-practice-questions/",
+      "published": "2026-08-29",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "free NCLEX prioritization practice questions",
@@ -4298,6 +4482,8 @@
     },
     {
       "route": "/learn/nclex-dosage-calculation-practice-questions/",
+      "published": "2026-08-29",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "free NCLEX dosage calculation practice questions",
@@ -4394,6 +4580,8 @@
     },
     {
       "route": "/learn/ngn-bow-tie-practice-questions/",
+      "published": "2026-08-29",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "free NGN bow tie practice questions",

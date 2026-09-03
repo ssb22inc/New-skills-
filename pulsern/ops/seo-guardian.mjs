@@ -24,6 +24,8 @@ const REQUIRED = [
   "/learn/nclex-quick-results-vs-official-results/",
   "/learn/how-to-read-nclex-candidate-performance-report/",
   "/learn/international-nclex-testing/",
+  "/learn/2026-nclex-rn-test-plan/",
+  "/learn/nclex-clinical-judgment/",
 ];
 const TRUSTED = ["nclex.com", "www.nclex.com", "ncsbn.org", "www.ncsbn.org", "www.pearsonvue.com", "home.pearsonvue.com", "cdc.gov", "www.cdc.gov", "medlineplus.gov", "www.nimh.nih.gov", "www.fda.gov", "fda.gov", "dailymed.nlm.nih.gov", "www.ismp.org", "ismp.org", "home.ecri.org", "doi.org", "pubmed.ncbi.nlm.nih.gov", "pmc.ncbi.nlm.nih.gov", "www.ncbi.nlm.nih.gov"];
 const BLOCKING = new Set(["critical", "high"]);

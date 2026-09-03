@@ -88,6 +88,8 @@ Free, no sign-in required. Written in an exam-preparation register: they explain
 what the NCLEX expects a candidate to recognize and prioritize, and are not
 clinical protocols or a substitute for course materials.
 
+- [2026 NCLEX-RN Test Plan: categories and percentages](https://www.pulsern.app/learn/2026-nclex-rn-test-plan/)
+- [NCLEX clinical judgment: the six skills explained](https://www.pulsern.app/learn/nclex-clinical-judgment/)
 - [ABG interpretation made simple](https://www.pulsern.app/learn/abg-interpretation/)
 - [Bow-tie questions: how to answer them](https://www.pulsern.app/learn/bow-tie-questions/)
 - [Cloze (drop-down) questions: how to answer them](https://www.pulsern.app/learn/cloze-drop-down-questions/)

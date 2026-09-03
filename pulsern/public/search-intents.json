@@ -1,7 +1,25 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-31T00:00:00.000Z",
+  "generatedAt": "2026-09-02T00:00:00.000Z",
   "intents": {
+    "2026-nclex-rn-test-plan": {
+      "primary": "2026 NCLEX RN test plan",
+      "secondary": [
+        "NCLEX RN content categories 2026",
+        "NCLEX test plan percentages"
+      ],
+      "audience": "NCLEX-RN candidates and nursing educators",
+      "risk": "exam"
+    },
+    "nclex-clinical-judgment": {
+      "primary": "NCLEX clinical judgment",
+      "secondary": [
+        "NCSBN clinical judgment measurement model",
+        "six NCLEX clinical judgment skills"
+      ],
+      "audience": "NCLEX-RN candidates and nursing educators",
+      "risk": "exam"
+    },
     "nclex-pharmacology-practice-questions": {
       "primary": "free NCLEX pharmacology practice questions",
       "secondary": [
@@ -60,7 +78,7 @@
       "primary": "what changed on the Next Generation NCLEX",
       "secondary": [
         "NGN changes",
-        "NCLEX clinical judgment model"
+        "when did Next Generation NCLEX start"
       ],
       "audience": "NCLEX-RN candidates",
       "risk": "exam"
