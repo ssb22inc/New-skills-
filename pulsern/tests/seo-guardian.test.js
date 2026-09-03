@@ -22,6 +22,7 @@ import { runCommercialCheck } from "../ops/seo-commercial-check.mjs";
 import { runExamRulesCheck } from "../ops/seo-exam-rules-check.mjs";
 import { runLiveRelease } from "../ops/seo-live-release.mjs";
 import { INDEXNOW_KEY, runIndexNow } from "../ops/seo-indexnow.mjs";
+import { auditProductImages } from "../ops/seo-product-images.mjs";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
@@ -806,7 +807,50 @@ describe("SEO guardian", () => {
     expect(workflow).not.toContain("env.OPENROUTER_API_KEY != ''");
     expect(workflow).toContain('test "${{ steps.adversary.outcome }}" = "success"');
     expect(workflow).toContain('test "${{ steps.app_boundary.outcome }}" = "success"');
+    expect(workflow).toContain('test "${{ steps.product_images.outcome }}" = "success"');
     expect(workflow).toContain("npm run seo:enforce");
+  });
+
+  it("fails closed when an authentic product image, privacy assertion, or homepage binding drifts", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-product-images-"));
+    const publicDirectory = path.join(directory, "public");
+    const captureDirectory = path.join(directory, "capture");
+    await Promise.all([fs.mkdir(publicDirectory), fs.mkdir(captureDirectory)]);
+    const specs = [
+      ["pulsern-adaptive-practice.png", 720, 620, "PulseRN adaptive NCLEX practice screen with a pharmacology question and four answer choices", "Authentic adaptive NCLEX practice with answer-first review."],
+      ["pulsern-today-dashboard.png", 720, 1000, "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards", "A focused daily study plan with progress signals."],
+      ["pulsern-lab-reference.png", 430, 932, "PulseRN mobile lab-reference drawer open over an adaptive practice question", "Searchable educational lab-reference ranges inside the study workflow."],
+    ];
+    const images = [];
+    for (const [file, width, height, alt, caption] of specs) {
+      const buffer = Buffer.alloc(12000, file.length);
+      Buffer.from("89504e470d0a1a0a", "hex").copy(buffer, 0);
+      buffer.write("IHDR", 12, "ascii");
+      buffer.writeUInt32BE(width, 16);
+      buffer.writeUInt32BE(height, 20);
+      await fs.writeFile(path.join(publicDirectory, file), buffer);
+      images.push({ file, sha256: createHash("sha256").update(buffer).digest("hex"), bytes: buffer.byteLength, width, height, alt, caption });
+    }
+    const manifest = { schemaVersion: 1, sourceCommitSha: "a".repeat(40), renderer: "PulseRN App.jsx deterministic built-in-content harness", containsLearnerData: false, images };
+    const capture = { ...manifest, browser: "test-browser", images: images.map(({ alt, caption, ...image }) => image) };
+    const manifestFile = path.join(directory, "manifest.json");
+    const captureFile = path.join(captureDirectory, "capture.json");
+    const landingFile = path.join(directory, "index.html");
+    const markup = images.map((image) => `<figure><img src="/product/${image.file}" alt="${image.alt}" width="${image.width}" height="${image.height}"><figcaption>${image.caption}</figcaption></figure>`).join("");
+    await Promise.all([
+      fs.writeFile(manifestFile, JSON.stringify(manifest)),
+      fs.writeFile(captureFile, JSON.stringify(capture)),
+      fs.writeFile(landingFile, markup),
+    ]);
+    const options = { manifestFile, captureFile, publicDirectory, landingFile, outputFile: path.join(directory, "pass.json") };
+    await expect(auditProductImages(options)).resolves.toMatchObject({ verdict: "PASS", containsLearnerData: false });
+
+    capture.containsLearnerData = true;
+    capture.images[0].sha256 = "f".repeat(64);
+    await fs.writeFile(captureFile, JSON.stringify(capture));
+    const fail = await auditProductImages({ ...options, outputFile: path.join(directory, "fail.json") });
+    expect(fail.verdict).toBe("FAIL");
+    expect(fail.findings.map((item) => item.code)).toEqual(expect.arrayContaining(["PRODUCT_IMAGE_PRIVACY", "PRODUCT_IMAGE_STALE"]));
   });
 
   it("fails closed when the public/private app boundary regresses", async () => {
