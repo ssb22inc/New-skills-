@@ -22,6 +22,7 @@
     "seo:adversary": "node ops/seo-adversary-ai.mjs",
     "seo:enforce": "node ops/seo-enforce-adversary.mjs",
     "seo:evidence": "node ops/seo-evidence-manifest.mjs"
+    ,"product:screenshots:capture": "node ops/capture-product-screenshots.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
