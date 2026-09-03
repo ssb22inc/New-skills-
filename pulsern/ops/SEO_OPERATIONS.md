@@ -17,6 +17,21 @@ authorized owner; no Google credential or verification token belongs in git.
 5. Inspect `/`, `/learn/`, and each new sample-question route. Confirm the
    declared canonical is selected and the page is allowed by `robots.txt`.
 
+## IndexNow release submission
+
+- The repository publishes a root ownership file and builds an IndexNow batch
+  from the exact public sitemap. The ownership key is intentionally public; it
+  proves control by being served from `www.pulsern.app` and is not a secret.
+- Pull requests validate the key, sitemap, host, URL count, and exclusion of
+  `/app/`, `/owner/`, and `/review/`, but do not notify search engines.
+- On `main`, submission remains blocked until `seo:live-release` proves that
+  production is serving the exact merge commit and matching route set.
+- The production workflow accepts only IndexNow HTTP 200 (received) or 202
+  (received; key validation pending), stores the response in the evidence
+  artifact, and lets the adversary challenge the result before enforcement.
+- IndexNow notifies participating engines, including Bing. Google sitemap and
+  URL inspection remain separate Search Console owner tasks.
+
 ## Weekly measurement
 
 - Record indexed pages, excluded-page reasons, impressions, clicks, CTR, and

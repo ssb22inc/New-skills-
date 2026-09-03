@@ -21,6 +21,7 @@ import { COMMERCIAL_PAGES, commercialEvidence } from "../ops/commercial-content.
 import { runCommercialCheck } from "../ops/seo-commercial-check.mjs";
 import { runExamRulesCheck } from "../ops/seo-exam-rules-check.mjs";
 import { runLiveRelease } from "../ops/seo-live-release.mjs";
+import { INDEXNOW_KEY, runIndexNow } from "../ops/seo-indexnow.mjs";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
@@ -160,6 +161,50 @@ describe("SEO guardian", () => {
     });
     expect(report.verdict).toBe("FAIL");
     expect(report.findings.some((item) => item.code === "LIVE_RELEASE_COMMIT")).toBe(true);
+  });
+
+  it("validates the exact public sitemap and IndexNow ownership file without submitting a PR candidate", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-indexnow-candidate-"));
+    await fs.writeFile(path.join(directory, `${INDEXNOW_KEY}.txt`), `${INDEXNOW_KEY}\n`);
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url><url><loc>https://www.pulsern.app/learn/</loc></url></urlset>');
+    const report = await runIndexNow({ directory, outputFile: path.join(directory, "reports/indexnow.json"), submit: false, expectedCommitSha: "a".repeat(40) });
+    expect(report).toMatchObject({ verdict: "PASS", mode: "candidate-validation", submitted: false, urls: 2, httpStatus: null });
+    expect(report.payload.urlList).toEqual(["https://www.pulsern.app/", "https://www.pulsern.app/learn/"]);
+    expect(report.payload.keyLocation).toBe(`https://www.pulsern.app/${INDEXNOW_KEY}.txt`);
+  });
+
+  it("rejects private routes in an IndexNow batch", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-indexnow-private-"));
+    await fs.writeFile(path.join(directory, `${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/app/</loc></url></urlset>');
+    const report = await runIndexNow({ directory, outputFile: path.join(directory, "reports/indexnow.json"), submit: false });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.findings.some((item) => item.code === "INDEXNOW_URL_SCOPE")).toBe(true);
+  });
+
+  it("blocks IndexNow submission until the exact production commit is verified", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-indexnow-live-block-"));
+    await fs.writeFile(path.join(directory, `${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>');
+    const liveReportFile = path.join(directory, "live-release.json");
+    await fs.writeFile(liveReportFile, JSON.stringify({ expectedLive: true, verdict: "PASS", deployedCommitSha: "b".repeat(40) }));
+    const report = await runIndexNow({ directory, liveReportFile, outputFile: path.join(directory, "reports/indexnow.json"), submit: true, expectedCommitSha: "a".repeat(40), fetchImpl: async () => { throw new Error("submission must remain blocked"); } });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.submitted).toBe(false);
+    expect(report.findings.some((item) => item.code === "INDEXNOW_LIVE_COMMIT")).toBe(true);
+  });
+
+  it("submits only after exact-commit live evidence and accepts IndexNow 202", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-indexnow-live-pass-"));
+    const commit = "a".repeat(40);
+    await fs.writeFile(path.join(directory, `${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>');
+    const liveReportFile = path.join(directory, "live-release.json");
+    await fs.writeFile(liveReportFile, JSON.stringify({ expectedLive: true, verdict: "PASS", deployedCommitSha: commit }));
+    let submittedPayload;
+    const report = await runIndexNow({ directory, liveReportFile, outputFile: path.join(directory, "reports/indexnow.json"), submit: true, expectedCommitSha: commit, fetchImpl: async (_url, options) => { submittedPayload = JSON.parse(options.body); return new Response("Accepted", { status: 202 }); } });
+    expect(report).toMatchObject({ verdict: "PASS", mode: "production-submission", submitted: true, urls: 1, httpStatus: 202 });
+    expect(submittedPayload.urlList).toEqual(["https://www.pulsern.app/"]);
   });
 
   it("rejects a guide without an accountable Person reviewer", () => {

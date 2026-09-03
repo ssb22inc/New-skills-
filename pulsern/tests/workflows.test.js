@@ -10,7 +10,7 @@
    This test exists so that failure mode is caught by `npm test` rather than by
    wondering months later why the numbers never moved. */
 import { describe, it, expect } from "vitest";
-import { readdirSync, existsSync, statSync } from "node:fs";
+import { readdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const REPO_ROOT = resolve(process.cwd(), "..");
@@ -62,5 +62,12 @@ describe("workflow placement", () => {
     for (const w of ["pulsern-content-factory.yml", "pulsern-sms-reminders.yml", "pulsern-bank-scale.yml"]) {
       expect(live, `${w} is missing from the live workflows directory`).toContain(w);
     }
+  });
+
+  it("keeps IndexNow inside the fail-closed adversarial release workflow", () => {
+    const workflow = readFileSync(join(LIVE_DIR, "pulsern-seo-guardian.yml"), "utf8");
+    expect(workflow).toContain("id: indexnow");
+    expect(workflow).toContain("run: npm run seo:indexnow");
+    expect(workflow).toContain('test "${{ steps.indexnow.outcome }}" = "success"');
   });
 });
