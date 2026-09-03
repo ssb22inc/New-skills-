@@ -735,7 +735,9 @@ describe("SEO guardian", () => {
 
   it("fails closed when the secret or provider response is unavailable", async () => {
     await expect(runAdversary({ apiKey: "" })).rejects.toThrow(/OPENROUTER_API_KEY/);
-    await expect(runAdversary({ apiKey: "test", fetchImpl: async () => ({ ok: false, status: 503, text: async () => "provider unavailable" }) })).rejects.toThrow(/503/);
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-unavailable-"));
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [] }));
+    await expect(runAdversary({ apiKey: "test", reportDirectory: directory, distDirectory: directory, fetchImpl: async () => ({ ok: false, status: 503, text: async () => "provider unavailable" }) })).rejects.toThrow(/503/);
   });
 
   it("writes PASS evidence and rejects FAIL evidence at enforcement", async () => {
@@ -743,7 +745,8 @@ describe("SEO guardian", () => {
     const pass = { verdict: "PASS", summary: "All evidence passed.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] };
     const passFetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(pass) } }] }) });
     const passJson = path.join(directory, "adversary.json");
-    const result = await runAdversary({ reportDirectory: directory, outputFile: path.join(directory, "adversary.md"), jsonFile: passJson, apiKey: "test", fetchImpl: passFetch, now: () => "2026-08-26T00:00:00.000Z" });
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [] }));
+    const result = await runAdversary({ reportDirectory: directory, outputFile: path.join(directory, "adversary.md"), jsonFile: passJson, apiKey: "test", distDirectory: directory, fetchImpl: passFetch, now: () => "2026-08-26T00:00:00.000Z" });
     expect(result.verdict).toBe("PASS");
     await expect(enforceAdversary(passJson)).resolves.toMatchObject({ verdict: "PASS" });
 
