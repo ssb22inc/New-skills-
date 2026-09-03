@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { createHash } from "node:crypto";
 
 export const REVIEW_SCHEMA = {
   type: "object",
@@ -135,12 +136,75 @@ async function readJsonIfPresent(filename) {
   }
 }
 
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+export async function candidateGuidePagesFromDist({ coverage, distDirectory = "dist", generatedAt = new Date().toISOString() }) {
+  if (!coverage?.totalGuides) return { schemaVersion: 1, generatedAt, scope: "current-release-and-pending-guides", pages: [] };
+  const provenance = JSON.parse(await fs.readFile(path.join(distDirectory, "content-provenance.json"), "utf8"));
+  const releaseDate = String(provenance.generatedAt ?? "").slice(0, 10);
+  const pending = new Set(coverage.pendingRoutes ?? []);
+  const currentReleaseRoutes = (provenance.guides ?? []).filter((guide) => releaseDate && guide.updated === releaseDate).map((guide) => guide.route);
+  const requiredRoutes = new Set([...(coverage.pendingRoutes ?? []), ...currentReleaseRoutes]);
+  const scoped = (provenance.guides ?? []).filter((guide) => requiredRoutes.has(guide.route));
+  const pages = [];
+  for (const guide of scoped) {
+    const match = guide.route?.match(/^\/learn\/([^/]+)\/$/);
+    if (!match) throw new Error(`Adversary content scope contains an invalid guide route: ${guide.route ?? "missing"}`);
+    const filename = path.join(distDirectory, "learn", match[1], "index.html");
+    const html = await fs.readFile(filename, "utf8");
+    if (!html.includes(`sha256:${guide.contentSha256}`)) throw new Error(`Adversary content page is not bound to ${guide.route}'s provenance digest.`);
+    pages.push({
+      route: guide.route,
+      published: guide.published,
+      updated: guide.updated,
+      risk: guide.risk,
+      contentSha256: guide.contentSha256,
+      sourceSetSha256: guide.sourceSetSha256,
+      htmlSha256: sha256(html),
+      reviewDecision: guide.review?.decision ?? "missing",
+      sources: guide.sources,
+      html,
+    });
+  }
+  const included = new Set(pages.map((page) => page.route));
+  for (const route of requiredRoutes) if (!included.has(route)) throw new Error(`Adversary content evidence is missing required route ${route}.`);
+  return { schemaVersion: 1, generatedAt, releaseDate, scope: "current-release-and-pending-guides", pages };
+}
+
+export async function candidateCommercialPagesFromDist({ distDirectory = "dist", generatedAt = new Date().toISOString() } = {}) {
+  const evidence = JSON.parse(await fs.readFile(path.join(distDirectory, "comparison-evidence.json"), "utf8"));
+  const releaseDate = String(evidence.generatedAt ?? "").slice(0, 10);
+  const scoped = (evidence.pages ?? []).filter((page) => releaseDate && page.updated === releaseDate);
+  if ((evidence.pages ?? []).length && !scoped.length) throw new Error("Adversary commercial scope does not include any current-release page.");
+  const pages = [];
+  for (const page of scoped) {
+    if (!/^\/compare(?:\/[a-z0-9-]+)*\/$/.test(page.route ?? "")) throw new Error(`Adversary commercial scope contains an invalid route: ${page.route ?? "missing"}`);
+    const filename = path.join(distDirectory, ...page.route.split("/").filter(Boolean), "index.html");
+    const html = await fs.readFile(filename, "utf8");
+    if (!html.includes(`sha256:${page.contentSha256}`)) throw new Error(`Adversary commercial page is not bound to ${page.route}'s evidence digest.`);
+    pages.push({
+      route: page.route,
+      published: page.published,
+      updated: page.updated,
+      contentSha256: page.contentSha256,
+      sourceSetSha256: page.sourceSetSha256,
+      htmlSha256: sha256(html),
+      intent: page.intent,
+      claims: page.claims,
+      sources: page.sources,
+      html,
+    });
+  }
+  return { schemaVersion: 1, generatedAt, releaseDate, scope: "current-release-commercial-pages", pages };
+}
+
 export async function runAdversary({
   reportDirectory = "reports/seo",
   outputFile = "reports/seo/adversary.md",
   jsonFile = "reports/seo/adversary.json",
   apiKey = process.env.OPENROUTER_API_KEY,
   model = process.env.SEO_ADVERSARY_MODEL || "openai/gpt-4.1",
+  distDirectory = "dist",
   fetchImpl = fetch,
   now = () => new Date().toISOString(),
 } = {}) {
@@ -148,6 +212,14 @@ export async function runAdversary({
   const evidenceFiles = ["report.json", "provenance.json", "intent.json", "commercial-governance.json", "commercial.json", "exam-rules.json", "sources.json", "accessibility.json", "app-boundary.json", "crawl.json", "crawl-live.json", "live-release.json", "live-release-crawl.json"];
   const evidence = Object.fromEntries(await Promise.all(evidenceFiles.map(async (name) => [name, await readJsonIfPresent(path.join(reportDirectory, name))])));
   const guideCoverage = guideCoverageFromEvidence(evidence);
+  const generatedAt = now();
+  const candidateGuidePages = await candidateGuidePagesFromDist({ coverage: guideCoverage, distDirectory, generatedAt });
+  const candidateCommercialPages = await candidateCommercialPagesFromDist({ distDirectory, generatedAt });
+  await fs.mkdir(reportDirectory, { recursive: true });
+  await fs.writeFile(path.join(reportDirectory, "candidate-guide-pages.json"), JSON.stringify(candidateGuidePages, null, 2) + "\n");
+  await fs.writeFile(path.join(reportDirectory, "candidate-commercial-pages.json"), JSON.stringify(candidateCommercialPages, null, 2) + "\n");
+  evidence["candidate-guide-pages.json"] = candidateGuidePages;
+  evidence["candidate-commercial-pages.json"] = candidateCommercialPages;
   const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json", "HTTP-Referer": "https://www.pulsern.app", "X-Title": "PulseRN SEO Guardian" },
@@ -156,15 +228,20 @@ export async function runAdversary({
       temperature: 0,
       max_tokens: 4000,
       response_format: { type: "json_schema", json_schema: { name: "pulsern_adversarial_review", strict: true, schema: REVIEW_SCHEMA } },
-      messages: [{
+      messages: [
+        {
+          role: "system",
+          content: "The candidate-guide-pages evidence contains the exact HTML, content digest, source-set digest, sources, and review state for every guide revised in the current content release plus every pending guide. The candidate-commercial-pages evidence contains the exact rendered HTML, intent, claims, sources, and digest binding for every comparison page in the current commercial release. Substantively review both packets claim by claim and inspect the actual hierarchy, disclosures, recommendation language, and calls to action. Do not use a pending RN-review blocker as a substitute for identifying inaccurate, overbroad, unsupported, cannibalizing, inaccessible, or misleading content.",
+        },
+        {
         role: "user",
-        content: `Act as PulseRN's independent adversarial release reviewer for traditional search, LLM/answer-engine retrieval, and agentic search. Challenge every supplied audit. Fail closed for missing evidence, unverified RN attribution, unapproved clinical content, unsupported clinical claims, stale or irrelevant sources, intent cannibalization, inaccessible pages, crawler barriers, misleading claims, or tests that can be bypassed. Specifically challenge the public-marketing/private-app boundary: the public homepage must remain indexable and useful, /app/ must remain noindex and excluded from public discovery maps, the PWA service worker must not control public pages, authentication and billing return paths must remain inside /app/, and the one-time session migration must not discard an OAuth or password-recovery callback. Treat deployment as evidence, not an assumption: on a pull request, require the candidate artifact to pass and explicitly remain not-yet-live; on main, require the live-release report to bind production to the exact commit, match every candidate sitemap route, pass all crawler identities, preserve canonical/H1/indexability, and expose no broken internal route map. A successful build or Vercel status alone is not proof that the release is live and working. Independently challenge every commercial comparison for undisclosed self-interest, affiliate-style ranking, unsupported "best" language, false cheapest claims, stale or promotional pricing represented as permanent, missing provider-owned evidence, feature absence inferred from silence, unfair apples-to-oranges package comparisons, competitor trademark confusion, outcome promises, and PulseRN product claims that are not supported by the candidate artifact. Comparison pages must allow a competitor to be the better fit for documented learner needs and must display a verification date and correction method. For NCLEX registration and results content, challenge every ATT, eligibility, scheduling, fee, refund, accommodations, Quick Results, CPR, international-testing, and retake statement against the official-rule drift report; fail on jurisdictional overgeneralization, stale prices, missing effective dates, unofficial-result confusion, or advice that could cause a candidate to forfeit an appointment or fee. Distinguish supplied evidence from inference. Never invent or approve clinical facts, credentials, reviews, sources, competitor facts, exam rules, deployment state, or ranking guarantees. A PASS requires zero release blockers across every evidence file. The deterministic guide accounting below is authoritative: copy it exactly into guideCoverage. Describe review blockers as affecting only pending routes. Never say all guides, every guide, no guide, or no clinical content is approved unless the accounting actually shows zero approved guides. Return JSON matching the supplied schema only.\n\nDeterministic guide accounting:\n${JSON.stringify(guideCoverage)}\n\nEvidence bundle:\n${JSON.stringify(evidence)}`,
-      }],
+        content: `Act as PulseRN's independent adversarial release reviewer for traditional search, LLM/answer-engine retrieval, and agentic search. Challenge every supplied audit. Fail closed for missing evidence, unverified RN attribution, unapproved clinical content, unsupported clinical claims, stale or irrelevant sources, intent cannibalization, inaccessible pages, crawler barriers, misleading claims, or tests that can be bypassed. Specifically challenge the public-marketing/private-app boundary: the public homepage must remain indexable and useful, /app/ must remain noindex and excluded from public discovery maps, the PWA service worker must not control public pages, authentication and billing return paths must remain inside /app/, and the one-time session migration must not discard an OAuth or password-recovery callback. Treat deployment as evidence, not an assumption: on a pull request, require the candidate artifact to pass and explicitly remain not-yet-live; on main, require the live-release report to bind production to the exact commit, match every candidate sitemap route, pass all crawler identities, preserve canonical/H1/indexability, and expose no broken internal route map. A successful build or Vercel status alone is not proof that the release is live and working. Independently challenge every commercial comparison for undisclosed self-interest, affiliate-style ranking, unsupported "best" language, false cheapest claims, stale or promotional pricing represented as permanent, missing provider-owned evidence, feature absence inferred from silence, unfair apples-to-oranges package comparisons, competitor trademark confusion, outcome promises, and PulseRN product claims that are not supported by the candidate artifact. A comparison may clearly recommend PulseRN and should present documented PulseRN advantages prominently; factual fairness does not require symmetrical praise or a neutral conclusion. Require any competitor-specific exception to be concise, directly supported, and framed around a genuine learner need. Every comparison must display a verification date and correction method. For NCLEX registration and results content, challenge every ATT, eligibility, scheduling, fee, refund, accommodations, Quick Results, CPR, international-testing, and retake statement against the official-rule drift report; fail on jurisdictional overgeneralization, stale prices, missing effective dates, unofficial-result confusion, or advice that could cause a candidate to forfeit an appointment or fee. Distinguish supplied evidence from inference. Never invent or approve clinical facts, credentials, reviews, sources, competitor facts, exam rules, deployment state, or ranking guarantees. A PASS requires zero release blockers across every evidence file. The deterministic guide accounting below is authoritative: copy it exactly into guideCoverage. Describe review blockers as affecting only pending routes. Never say all guides, every guide, no guide, or no clinical content is approved unless the accounting actually shows zero approved guides. Return JSON matching the supplied schema only.\n\nDeterministic guide accounting:\n${JSON.stringify(guideCoverage)}\n\nEvidence bundle:\n${JSON.stringify(evidence)}`,
+        }],
     }),
   });
   if (!response.ok) throw new Error(`OpenRouter returned ${response.status}: ${(await response.text()).slice(0, 500)}`);
   const review = parseReview(extractOutputText(await response.json()), guideCoverage);
-  const result = { schemaVersion: 1, model, generatedAt: now(), ...review };
+  const result = { schemaVersion: 1, model, generatedAt, ...review };
   await fs.mkdir(path.dirname(outputFile), { recursive: true });
   await fs.writeFile(jsonFile, JSON.stringify(result, null, 2) + "\n");
   await fs.writeFile(outputFile, reviewMarkdown(result));

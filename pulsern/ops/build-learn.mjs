@@ -40,6 +40,8 @@ function provenanceFor(article) {
     && recorded.claims.every((claim) => claim.id && claim.locator && Array.isArray(claim.sourceIds) && claim.sourceIds.length > 0);
   return {
     route: `/learn/${article.slug}/`,
+    published: article.published,
+    updated: article.updated,
     risk: intent?.risk ?? "unmapped",
     intent,
     contentSha256,

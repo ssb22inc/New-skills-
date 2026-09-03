@@ -3,11 +3,13 @@
 
 export const POLICY_VERSION = 1;
 export const EVIDENCE_ACCESSED_AT = "2026-08-26";
-export const MANIFEST_GENERATED_AT = "2026-08-31";
+export const MANIFEST_GENERATED_AT = "2026-09-02";
 
 export const SOURCES = {
   testPlan: { id: "ncsbn-2026-rn-test-plan", title: "NCSBN — 2026 RN Test Plan", publisher: "National Council of State Boards of Nursing", url: "https://www.nclex.com/test-plans.page", sourceUpdated: "2026-04-01", accessedAt: EVIDENCE_ACCESSED_AT, locator: "2026 RN Test Plan; effective April 1, 2026–March 31, 2029" },
   ngn: { id: "ncsbn-next-generation-nclex", title: "NCSBN — Next Generation NCLEX", publisher: "National Council of State Boards of Nursing", url: "https://www.nclex.com/next-generation-nclex.page", sourceUpdated: "2023-04-01", accessedAt: EVIDENCE_ACCESSED_AT, locator: "NGN Project and Clinical Judgment Measurement Model sections" },
+  testPlan2026Pdf: { id: "ncsbn-2026-rn-test-plan-pdf", title: "NCSBN — 2026 NCLEX-RN Test Plan", publisher: "National Council of State Boards of Nursing", url: "https://www.nclex.com/files/2026_RN_Test%20Plan_English-F.pdf", sourceUpdated: "2026-04-01", accessedAt: "2026-09-02", locator: "Effective dates; Integrated Processes; Clinical Judgment; Distribution of Content; Administration and Examination Length" },
+  clinicalJudgmentModel: { id: "ncsbn-clinical-judgment-measurement-model", title: "NCSBN — Clinical Judgment Measurement Model", publisher: "National Council of State Boards of Nursing", url: "https://www.nclex.com/clinical-judgment-measurement-model.page", sourceUpdated: null, accessedAt: "2026-09-02", locator: "Measuring Clinical Judgment; A Closer Look at the NCJMM; nursing-process and model-purpose boundaries; live page checked 2026-09-02 and no page-level revision date is published", expectedMarkers: ["framework for the valid measurement of clinical judgment", "was not constructed to replace", "neither defines nor redefines clinical judgment"] },
   ahaAdultBls: { id: "aha-2025-adult-basic-life-support", title: "Part 7: Adult Basic Life Support — 2025 AHA Guidelines", publisher: "American Heart Association via PubMed", url: "https://pubmed.ncbi.nlm.nih.gov/41122888/", sourceUpdated: "2025-10-21", accessedAt: "2026-08-27", locator: "Abstract — recognition of cardiac arrest, emergency-response activation, CPR, AED use, respiratory arrest, and foreign-body airway obstruction; PMID 41122888" },
   ncsbnAnaDelegation: { id: "ncsbn-ana-delegation-guidelines-2019", title: "National Guidelines for Nursing Delegation", publisher: "National Council of State Boards of Nursing and American Nurses Association", url: "https://www.ncsbn.org/public-files/NGND-PosPaper_06.pdf", sourceUpdated: "2019-04-29", accessedAt: "2026-08-27", locator: "Purpose and definitions; Five Rights of Delegation; Licensed Nurse Responsibilities; Delegatee Responsibilities" },
   therapeuticCommunication: { id: "ncbi-openrn-therapeutic-communication-2025", title: "Therapeutic Communication and the Nurse-Client Relationship", publisher: "Open RN via NCBI Bookshelf", url: "https://www.ncbi.nlm.nih.gov/books/NBK617004/", sourceUpdated: "2025-11-01", accessedAt: "2026-08-27", locator: "Communication competencies; nurse-client relationship; therapeutic techniques; nontherapeutic responses; escalation and cultural considerations" },
@@ -69,6 +71,8 @@ export const SOURCES = {
 };
 
 export function sourcesFor(article) {
+  if (article.slug === "2026-nclex-rn-test-plan") return [SOURCES.testPlan2026Pdf, SOURCES.candidate2026Pdf, SOURCES.clinicalJudgmentModel];
+  if (article.slug === "nclex-clinical-judgment") return [SOURCES.testPlan2026Pdf, SOURCES.candidate2026Pdf, SOURCES.clinicalJudgmentModel];
   if (article.slug === "nclex-pharmacology-practice-questions") return [SOURCES.ismp, SOURCES.heparinLabel, SOURCES.protamineLabel, SOURCES.warfarinLabel, SOURCES.naloxoneLabel, SOURCES.flumazenilLabel, SOURCES.testPlan];
   if (article.slug === "nclex-prioritization-practice-questions") return [SOURCES.testPlan, SOURCES.ngn, SOURCES.ahaAdultBls];
   if (article.slug === "nclex-dosage-calculation-practice-questions") return [SOURCES.openRnMathCalculations, SOURCES.testPlan, SOURCES.ngn];
@@ -110,13 +114,15 @@ export function sourcesFor(article) {
 }
 
 export const SEARCH_INTENTS = {
+  "2026-nclex-rn-test-plan": { primary: "2026 NCLEX RN test plan", secondary: ["NCLEX RN content categories 2026", "NCLEX test plan percentages"], audience: "NCLEX-RN candidates and nursing educators", risk: "exam" },
+  "nclex-clinical-judgment": { primary: "NCLEX clinical judgment", secondary: ["NCSBN clinical judgment measurement model", "six NCLEX clinical judgment skills"], audience: "NCLEX-RN candidates and nursing educators", risk: "exam" },
   "nclex-pharmacology-practice-questions": { primary: "free NCLEX pharmacology practice questions", secondary: ["NCLEX pharmacology quiz with rationales", "high alert medication practice questions"], audience: "NCLEX-RN candidates", risk: "clinical" },
   "nclex-prioritization-practice-questions": { primary: "free NCLEX prioritization practice questions", secondary: ["who to see first NCLEX questions", "NCLEX priority questions with rationales"], audience: "NCLEX-RN candidates", risk: "clinical" },
   "nclex-dosage-calculation-practice-questions": { primary: "free NCLEX dosage calculation practice questions", secondary: ["NCLEX medication math quiz", "dosage calculations with answers"], audience: "NCLEX-RN candidates", risk: "clinical" },
   "ngn-bow-tie-practice-questions": { primary: "free NGN bow tie practice questions", secondary: ["NCLEX bow tie questions with rationales", "Next Gen NCLEX bow tie examples"], audience: "NCLEX-RN candidates", risk: "clinical" },
   "how-is-the-nclex-scored": { primary: "how is the NCLEX scored", secondary: ["NCLEX CAT scoring", "NCLEX passing standard"], audience: "NCLEX-RN candidates", risk: "exam" },
   "how-many-questions-is-the-nclex": { primary: "how many questions are on the NCLEX", secondary: ["NCLEX minimum questions", "NCLEX maximum questions"], audience: "NCLEX-RN candidates", risk: "exam" },
-  "next-generation-nclex-what-changed": { primary: "what changed on the Next Generation NCLEX", secondary: ["NGN changes", "NCLEX clinical judgment model"], audience: "NCLEX-RN candidates", risk: "exam" },
+  "next-generation-nclex-what-changed": { primary: "what changed on the Next Generation NCLEX", secondary: ["NGN changes", "when did Next Generation NCLEX start"], audience: "NCLEX-RN candidates", risk: "exam" },
   "nclex-test-day-what-to-expect": { primary: "what to expect on NCLEX test day", secondary: ["NCLEX test day rules", "NCLEX exam day process"], audience: "NCLEX-RN candidates", risk: "exam" },
   "how-to-register-for-the-nclex": { primary: "how to register for the NCLEX", secondary: ["NCLEX registration steps", "apply for NCLEX RN"], audience: "prospective NCLEX-RN candidates", risk: "exam" },
   "nclex-authorization-to-test-att": { primary: "NCLEX authorization to test ATT", secondary: ["when will I get NCLEX ATT", "NCLEX ATT validity"], audience: "registered NCLEX-RN candidates", risk: "exam" },

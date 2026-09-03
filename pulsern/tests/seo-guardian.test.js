@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
-import { extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
+import { candidateCommercialPagesFromDist, candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 import { articleJsonLd } from "../ops/build-learn.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
@@ -13,6 +13,7 @@ import { LOGISTICS_ARTICLES } from "../ops/learn-logistics.mjs";
 import { SKILL_ARTICLES } from "../ops/learn-skills.mjs";
 import { TYPE_ARTICLES } from "../ops/learn-types.mjs";
 import { SAMPLE_ARTICLES } from "../ops/learn-samples.mjs";
+import { HUB_ARTICLES } from "../ops/learn-hubs.mjs";
 import { sourcesFor } from "../ops/seo-content-policy.mjs";
 import { injectSearchVerification, verificationMeta } from "../ops/search-verification.mjs";
 import { runAppBoundary } from "../ops/seo-app-boundary.mjs";
@@ -44,6 +45,18 @@ describe("SEO guardian", () => {
     const pages = evidence.pages.map((page) => ({ route: page.route, identifiers: [`sha256:${page.contentSha256}`] }));
     const intents = { intents: Object.fromEntries(evidence.pages.map((page) => [page.route, page.intent])) };
     expect(auditCommercialGovernance({ evidence, intents, pages, now: new Date("2026-08-30T12:00:00Z") })).toEqual([]);
+  });
+
+  it("keeps the UWorld and Archer comparisons PulseRN-led without unsupported outcome claims", () => {
+    for (const slug of ["compare/pulsern-vs-uworld", "compare/pulsern-vs-archer"]) {
+      const page = COMMERCIAL_PAGES.find((item) => item.slug === slug);
+      expect(page.h1).toContain("why start with PulseRN?");
+      expect(page.body).toContain("Our recommendation: start with PulseRN.");
+      expect(page.body).toContain("PulseRN recommendation");
+      expect(page.body).toContain("Try PulseRN free");
+      expect(page.body).not.toMatch(/Where (?:UWorld|Archer) is the clearer fit/i);
+      expect(page.body).not.toMatch(/(?:guaranteed to pass|will pass the NCLEX|raises? your chance of passing)/i);
+    }
   });
 
   it("fails closed when a commercial claim cites an unresolved source", () => {
@@ -87,6 +100,29 @@ describe("SEO guardian", () => {
       expect(sources.some((source) => Array.isArray(source.expectedMarkers) && source.expectedMarkers.length)).toBe(true);
       expect(sources.every((source) => new URL(source.url).protocol === "https:")).toBe(true);
     }
+  });
+
+  it("keeps the two 2026 authority hubs distinct, source-bound, and internally connected", () => {
+    expect(HUB_ARTICLES).toHaveLength(2);
+    expect(new Set(HUB_ARTICLES.map((article) => article.slug)).size).toBe(2);
+    expect(HUB_ARTICLES.map((article) => article.slug)).toEqual(["2026-nclex-rn-test-plan", "nclex-clinical-judgment"]);
+    for (const article of HUB_ARTICLES) {
+      expect(article.topic).toBe("2026 NCLEX essentials");
+      expect(article.published).toBe("2026-09-02");
+      expect(article.updated).toBe("2026-09-02");
+      expect(article.body.match(/href="\/learn\//g)?.length).toBeGreaterThanOrEqual(8);
+      const sources = sourcesFor(article);
+      expect(sources).toHaveLength(3);
+      expect(sources.every((source) => new URL(source.url).protocol === "https:")).toBe(true);
+      expect(sources.some((source) => Array.isArray(source.expectedMarkers) && source.expectedMarkers.length >= 3)).toBe(true);
+    }
+    const testPlan = HUB_ARTICLES.find((article) => article.slug === "2026-nclex-rn-test-plan");
+    const clinicalJudgment = HUB_ARTICLES.find((article) => article.slug === "nclex-clinical-judgment");
+    expect(testPlan.body).toContain("15–21%");
+    expect(testPlan.body).toContain("13–19%");
+    expect(testPlan.body).toContain("/learn/nclex-clinical-judgment/");
+    expect(clinicalJudgment.body).toContain("was not constructed to replace");
+    expect(clinicalJudgment.body).toContain("/learn/next-generation-nclex-what-changed/");
   });
 
   it("fails closed when an official NCLEX rule marker drifts", async () => {
@@ -663,9 +699,45 @@ describe("SEO guardian", () => {
     expect(() => parseReview(JSON.stringify({ ...base, guideCoverage: { ...coverage, approvedGuides: 0, pendingGuides: 2, approvedRoutes: [], pendingRoutes: ["/learn/approved/", "/learn/pending/"] } }), coverage)).toThrow(/deterministic evidence/i);
   });
 
+  it("binds exact current-release and pending guide HTML into the adversary packet", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-content-"));
+    await fs.mkdir(path.join(directory, "learn", "current"), { recursive: true });
+    await fs.mkdir(path.join(directory, "learn", "pending"), { recursive: true });
+    const currentDigest = "a".repeat(64);
+    const pendingDigest = "b".repeat(64);
+    await fs.writeFile(path.join(directory, "content-provenance.json"), JSON.stringify({ generatedAt: "2026-09-02T00:00:00.000Z", guides: [
+      { route: "/learn/current/", published: "2026-09-02", updated: "2026-09-02", risk: "exam", contentSha256: currentDigest, sourceSetSha256: "c".repeat(64), sources: [], review: { decision: "approved" } },
+      { route: "/learn/pending/", published: "2026-08-01", updated: "2026-08-01", risk: "exam", contentSha256: pendingDigest, sourceSetSha256: "d".repeat(64), sources: [], review: { decision: "pending" } },
+      { route: "/learn/old/", published: "2026-08-01", updated: "2026-08-01", risk: "exam", contentSha256: "e".repeat(64), sourceSetSha256: "f".repeat(64), sources: [], review: { decision: "approved" } },
+    ] }));
+    await fs.writeFile(path.join(directory, "learn", "current", "index.html"), `<article data-guide="current">sha256:${currentDigest}</article>`);
+    await fs.writeFile(path.join(directory, "learn", "pending", "index.html"), `<article data-guide="pending">sha256:${pendingDigest}</article>`);
+    const packet = await candidateGuidePagesFromDist({ coverage: { totalGuides: 3, pendingRoutes: ["/learn/pending/"] }, distDirectory: directory, generatedAt: "2026-09-02T12:00:00.000Z" });
+    expect(packet.pages.map((page) => page.route)).toEqual(["/learn/current/", "/learn/pending/"]);
+    expect(packet.pages.every((page) => /^[a-f0-9]{64}$/.test(page.htmlSha256))).toBe(true);
+    expect(packet.pages.find((page) => page.route === "/learn/current/").html).toContain('data-guide="current"');
+  });
+
+  it("binds exact current-release commercial HTML into the adversary packet", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-commercial-"));
+    await fs.mkdir(path.join(directory, "compare", "pulsern-vs-example"), { recursive: true });
+    const digest = "a".repeat(64);
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [
+      { route: "/compare/pulsern-vs-example/", published: "2026-08-30", updated: "2026-09-03", contentSha256: digest, sourceSetSha256: "b".repeat(64), intent: { primary: "PulseRN vs Example" }, claims: [], sources: [] },
+      { route: "/compare/old/", published: "2026-08-30", updated: "2026-08-30", contentSha256: "c".repeat(64), sourceSetSha256: "d".repeat(64), intent: { primary: "old" }, claims: [], sources: [] },
+    ] }));
+    await fs.writeFile(path.join(directory, "compare", "pulsern-vs-example", "index.html"), `<article data-comparison="example">sha256:${digest}</article>`);
+    const packet = await candidateCommercialPagesFromDist({ distDirectory: directory, generatedAt: "2026-09-03T12:00:00.000Z" });
+    expect(packet.pages.map((page) => page.route)).toEqual(["/compare/pulsern-vs-example/"]);
+    expect(packet.pages[0].html).toContain('data-comparison="example"');
+    expect(packet.pages[0].htmlSha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+
   it("fails closed when the secret or provider response is unavailable", async () => {
     await expect(runAdversary({ apiKey: "" })).rejects.toThrow(/OPENROUTER_API_KEY/);
-    await expect(runAdversary({ apiKey: "test", fetchImpl: async () => ({ ok: false, status: 503, text: async () => "provider unavailable" }) })).rejects.toThrow(/503/);
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-unavailable-"));
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [] }));
+    await expect(runAdversary({ apiKey: "test", reportDirectory: directory, distDirectory: directory, fetchImpl: async () => ({ ok: false, status: 503, text: async () => "provider unavailable" }) })).rejects.toThrow(/503/);
   });
 
   it("writes PASS evidence and rejects FAIL evidence at enforcement", async () => {
@@ -673,7 +745,8 @@ describe("SEO guardian", () => {
     const pass = { verdict: "PASS", summary: "All evidence passed.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] };
     const passFetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(pass) } }] }) });
     const passJson = path.join(directory, "adversary.json");
-    const result = await runAdversary({ reportDirectory: directory, outputFile: path.join(directory, "adversary.md"), jsonFile: passJson, apiKey: "test", fetchImpl: passFetch, now: () => "2026-08-26T00:00:00.000Z" });
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [] }));
+    const result = await runAdversary({ reportDirectory: directory, outputFile: path.join(directory, "adversary.md"), jsonFile: passJson, apiKey: "test", distDirectory: directory, fetchImpl: passFetch, now: () => "2026-08-26T00:00:00.000Z" });
     expect(result.verdict).toBe("PASS");
     await expect(enforceAdversary(passJson)).resolves.toMatchObject({ verdict: "PASS" });
 

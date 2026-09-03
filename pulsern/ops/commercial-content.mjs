@@ -1,68 +1,68 @@
 import { createHash } from "node:crypto";
 
 export const COMMERCIAL_POLICY_VERSION = 1;
-export const COMMERCIAL_VERIFIED_AT = "2026-08-30";
+export const COMMERCIAL_VERIFIED_AT = "2026-09-03";
 const SITE = "https://www.pulsern.app";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 export const COMMERCIAL_SOURCES = {
   pulseHome: {
-    id: "pulsern-home-2026-08-30", publisher: "PulseRN", title: "PulseRN product overview",
+    id: "pulsern-home-2026-09-03", publisher: "PulseRN", title: "PulseRN product overview",
     url: `${SITE}/`, accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "Public product description, features, free access, authorship, and limitations",
   },
   pulsePricing: {
-    id: "pulsern-pricing-2026-08-30", publisher: "PulseRN", title: "PulseRN pricing",
+    id: "pulsern-pricing-2026-09-03", publisher: "PulseRN", title: "PulseRN pricing",
     url: `${SITE}/pricing/`, accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "Access-plan prices, question-bank quantities, and included self-assessments",
   },
   pulseHow: {
-    id: "pulsern-how-it-works-2026-08-30", publisher: "PulseRN", title: "How PulseRN works",
+    id: "pulsern-how-it-works-2026-09-03", publisher: "PulseRN", title: "How PulseRN works",
     url: `${SITE}/how-it-works/`, accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "Adaptive practice, review, spaced repetition, and readiness limitations",
   },
   pulseAbout: {
-    id: "pulsern-about-2026-08-30", publisher: "PulseRN", title: "About PulseRN",
+    id: "pulsern-about-2026-09-03", publisher: "PulseRN", title: "About PulseRN",
     url: `${SITE}/about/`, accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "Creator identity, RN verification, clinical review, and content ownership",
   },
   pulseLegal: {
-    id: "pulsern-legal-2026-08-30", publisher: "PulseRN", title: "PulseRN terms, privacy, and educational disclaimer",
+    id: "pulsern-legal-2026-09-03", publisher: "PulseRN", title: "PulseRN terms, privacy, and educational disclaimer",
     url: `${SITE}/legal/`, accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "AI-tutor limitations, lab-reference qualification, privacy, and educational-use boundary",
   },
   uworldCourse: {
-    id: "uworld-nclex-rn-course-2026-08-30", publisher: "UWorld", title: "UWorld NCLEX-RN Prep Course",
+    id: "uworld-nclex-rn-course-2026-09-03", publisher: "UWorld", title: "UWorld NCLEX-RN Prep Course",
     url: "https://nursing.uworld.com/nclex-rn/", accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "Course features, question counts, access periods, public prices, RN team, assessments, and UAsk prompt allowances",
     expectedMarkers: ["3,400+", "UAsk", "40+"],
   },
   uworldAi: {
-    id: "uworld-uask-2026-08-30", publisher: "UWorld", title: "UAsk — UWorld Nursing AI Assistant",
+    id: "uworld-uask-2026-09-03", publisher: "UWorld", title: "UAsk — UWorld Nursing AI Assistant",
     url: "https://nursing.uworld.com/features/uask/", accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "Personalized NCLEX and nursing-study explanations and stated educational role",
     expectedMarkers: ["UAsk", "AI", "NCLEX"],
   },
   archerPackages: {
-    id: "archer-nclex-rn-packages-2026-08-30", publisher: "Archer Review", title: "Archer Review NCLEX-RN package comparison",
+    id: "archer-nclex-rn-packages-2026-09-03", publisher: "Archer Review", title: "Archer Review NCLEX-RN package comparison",
     url: "https://nurses.archerreview.com/nclex-rn/discounted-combo", accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "QBank, CAT, video, live-review, readiness-assessment, package-price, and repeat-tester support descriptions",
     expectedMarkers: ["3,100+", "Q-Bank + CAT", "Intense PREP"],
   },
   archerReadiness: {
-    id: "archer-readiness-assessment-2026-08-30", publisher: "Archer Review", title: "Archer NCLEX Readiness Assessment",
+    id: "archer-readiness-assessment-2026-09-03", publisher: "Archer Review", title: "Archer NCLEX Readiness Assessment",
     url: "https://nurses.archerreview.com/features/archer-readiness-assessment", accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "85-question readiness-assessment description and four-consecutive-assessment recommendation",
     expectedMarkers: ["85-question", "Readiness Assessment", "four"],
   },
   kaplanCourse: {
-    id: "kaplan-nclex-course-2026-08-30", publisher: "Kaplan Test Prep", title: "Kaplan NCLEX Review and Test Prep",
+    id: "kaplan-nclex-course-2026-09-03", publisher: "Kaplan Test Prep", title: "Kaplan NCLEX Review and Test Prep",
     url: "https://www.kaptest.com/nclex", accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "Practice and course package prices, QBank quantities, CATs, AI tutor, classes, and guarantee qualification",
     expectedMarkers: ["AI Tutor", "Computer Adaptive", "Decision Tree"],
   },
   kaplanPractice: {
-    id: "kaplan-nclex-practice-2026-08-30", publisher: "Kaplan Test Prep", title: "Kaplan NCLEX Practice Tests and Questions",
+    id: "kaplan-nclex-practice-2026-09-03", publisher: "Kaplan Test Prep", title: "Kaplan NCLEX Practice Tests and Questions",
     url: "https://www.kaptest.com/nclex/practice/computer-adaptive-test", accessedAt: COMMERCIAL_VERIFIED_AT,
     locator: "QBank, AI tutor, three CATs, flashcards, mobile access, and public practice-package prices",
     expectedMarkers: ["Qbank", "AI Tutor", "Computer Adaptive"],
@@ -76,7 +76,7 @@ const sourceList = (ids) => `<section aria-labelledby="sources"><h2 id="sources"
 
 const table = (caption, rows) => `<div class="table-wrap" role="region" aria-label="${caption}" tabindex="0"><table><caption>${caption}</caption><thead><tr><th scope="col">Decision point</th><th scope="col">PulseRN</th><th scope="col">Competitor</th><th scope="col">How to interpret it</th></tr></thead><tbody>${rows.map(([label, pulse, competitor, meaning]) => `<tr><th scope="row">${label}</th><td>${pulse}</td><td>${competitor}</td><td>${meaning}</td></tr>`).join("")}</tbody></table></div>`;
 
-const disclosure = `<div class="callout"><strong>How this comparison works:</strong> PulseRN publishes this page about its own product and therefore has a commercial interest. The table uses provider-owned public pages, separates observed facts from interpretation, gives competitors credit for capabilities they document, and does not use affiliate links, paid placement, star ratings, pass predictions, or a universal “winner.” Read the <a href="/compare/methodology/">comparison methodology</a>.</div>`;
+const disclosure = `<div class="callout"><strong>Disclosure:</strong> PulseRN publishes this comparison and has a commercial interest. Every product fact is tied to a dated provider-owned source; there are no affiliate links, paid placements, star ratings, or pass guarantees. Read the <a href="/compare/methodology/">comparison methodology</a>.</div>`;
 
 const pages = [
   {
@@ -123,58 +123,62 @@ const pages = [
     faq: [{ q: "Does a missing feature mean a competitor does not offer it?", a: "No. Unless a provider explicitly states that a feature is unavailable, the comparison says only that it was not confirmed in the cited public evidence." }],
   },
   {
-    slug: "compare/pulsern-vs-uworld", title: "PulseRN vs UWorld for NCLEX-RN prep", eyebrow: "Head-to-head fit", h1: "PulseRN vs UWorld: which study workflow fits you?",
-    description: "Compare PulseRN and UWorld NCLEX-RN prep by public pricing, question-bank scale, AI tutoring, lab access, RN accountability, videos, and assessments.",
+    slug: "compare/pulsern-vs-uworld", title: "PulseRN vs UWorld for NCLEX-RN prep", eyebrow: "PulseRN advantage", h1: "PulseRN vs UWorld: why start with PulseRN?",
+    description: "See why PulseRN is our recommended UWorld alternative for integrated NCLEX practice, nursing AI Q&A, lab access, transparent pricing, and direct RN accountability.",
     intent: { primary: "PulseRN vs UWorld", secondary: ["UWorld alternative for NCLEX", "PulseRN or UWorld"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "uworldCourse", "uworldAi"],
     claims: [
       { id: "uworld-public-scale", statement: "UWorld publicly lists up to 3,400+ questions, videos, visual rationales, CAT practice, up to six self-assessments, and a 40+ RN/educator team.", sourceIds: ["uworldCourse"] },
       { id: "both-ai", statement: "Both products publicly describe an in-product AI study assistant.", sourceIds: ["pulseHome", "uworldAi"] },
       { id: "pulse-labs-rn", statement: "PulseRN documents a searchable lab reference and a verified working-RN creator and reviewer.", sourceIds: ["pulseHome", "pulseAbout", "pulseLegal"] },
+      { id: "pulse-uworld-value", statement: "At the public 30-day prices observed, PulseRN listed a $99 paid plan and a no-card one-day study pass while UWorld listed $149 before a displayed promotion.", sourceIds: ["pulsePricing", "uworldCourse"] },
     ],
-    body: `<p class="lead">PulseRN and UWorld both combine NCLEX question practice with adaptive or CAT-style work, study tools, readiness signals, and AI explanations. The choice is less about a missing core feature and more about whether you want UWorld’s larger content-and-media ecosystem or PulseRN’s smaller, directly RN-owned study workflow with a built-in lab reference and broad nursing-study Q&amp;A.</p>
+    body: `<p class="lead"><strong>Our recommendation: start with PulseRN.</strong> It brings adaptive NCLEX practice, missed-question repair, spaced repetition, case studies, an always-available lab and vital-sign reference, and broad educational nursing Q&amp;A into one focused app created and clinically owned by a working RN. You can test that workflow for one day without a credit card.</p>
+      <div class="card best"><span class="tag">Why PulseRN leads</span><h2 style="margin-top:0">More than a question bank—one connected nursing-study workflow</h2><p>PulseRN is designed for the moment a learner gets stuck: answer the question, read the rationale, ask for a different explanation, check a related lab value, return to missed material, and reinforce it with spaced cards without leaving the app. Its named RN owner, exact content-review records, public sources, and conservative readiness language make the accountability easy to inspect.</p><p><a class="button" href="/?start=1">Start PulseRN free for one day</a><a class="button alt" href="/pricing/">See transparent pricing</a></p></div>
       ${disclosure}
       ${table("PulseRN and UWorld public-feature comparison", [
-        ["Public 30-day price", "$99; one-day study pass is $0", "$149 list price; a promotion was displayed when checked", "Verify checkout pricing. PulseRN is lower for this observed 30-day comparison, but price alone does not measure content fit."],
+        ["Public 30-day price", "$99; one-day study pass is $0", "$149 list price; a promotion was displayed when checked", "PulseRN was $50 lower at the observed list prices and lets you test its study workflow before paying. Verify current checkout pricing."],
         ["Question-bank scale", "Paid plans publicly list 3,100+ questions at 60/90 days and higher quantities on longer plans", "Publicly lists 2,900+ at 30 days and up to 3,400+ by duration", "Counts vary by access period and do not prove question quality."],
-        ["AI study help", "AI explains answered questions differently; the in-app helper and lab search accept educational NCLEX and nursing-concept questions", "UAsk provides contextual NCLEX and nursing-study explanations; published prompt allowances vary by plan", "Both use AI meaningfully inside study. Neither AI should replace human clinical guidance."],
-        ["Lab reference", "Searchable lab and vital-sign reference is available from the app’s quick actions", "Not confirmed on the cited UWorld course or UAsk pages", "Not confirmed does not mean unavailable elsewhere in UWorld."],
-        ["Human accountability", "Created and clinically owned by Sheldon Bennett, RN, with public license verification and digest-bound guide reviews", "Public page states that 40+ practicing RNs and nurse educators write the content", "UWorld offers team scale; PulseRN offers direct named-owner traceability."],
+        ["AI study help", "AI explains answered questions differently; the in-app helper and lab search accept educational NCLEX and nursing-concept questions", "UAsk provides contextual NCLEX and nursing-study explanations; published prompt allowances vary by plan", "Both use AI, but PulseRN connects question explanations, broad nursing Q&amp;A, and lab lookup in the same focused workflow. Neither AI replaces human clinical guidance."],
+        ["Lab reference", "Searchable lab and vital-sign reference is available from the app’s quick actions", "Not confirmed on the cited UWorld course or UAsk pages", "This is a documented PulseRN advantage. Not confirmed does not prove that UWorld lacks every adjacent resource."],
+        ["Human accountability", "Created and clinically owned by Sheldon Bennett, RN, with public license verification and digest-bound guide reviews", "Public page states that 40+ practicing RNs and nurse educators write the content", "PulseRN gives learners direct named-owner traceability instead of asking them to rely on team size alone."],
         ["Teaching media", "Text rationales, AI re-explanations, guides, questions, cards, and cases", "Publicly lists visual rationales, illustrations, review videos, a notebook, a planner, flashcards, and a review book option", "UWorld is the stronger documented fit when a broad visual/video library is essential."],
-        ["Readiness", "Standardized 85-question forms and a deliberately qualified educational estimate", "Up to six 100-question self-assessments with a publicly described readiness prediction", "PulseRN avoids outcome prediction; UWorld makes stronger validation claims on its own page."],
+        ["Readiness", "Standardized 85-question forms and a deliberately qualified educational estimate", "Up to six 100-question self-assessments with a publicly described readiness prediction", "PulseRN gives a study signal without turning it into a promise about your exam outcome."],
       ])}
-      <section><h2>Where PulseRN is the clearer fit</h2><p>Choose PulseRN when you want one web app that keeps a searchable lab reference close to practice, lets you ask educational NCLEX or nursing-concept questions without leaving the workflow, returns missed material for repair, and identifies one working RN as the product’s clinical owner. The AI boundary is explicit: explanations are study aids, not individually reviewed clinical advice.</p><p>PulseRN also gives a one-day study-content pass without a credit card and publishes every current plan on one pricing page. Its readiness language is deliberately conservative. That may appeal to learners who prefer a study signal over a product claim about their exam outcome.</p></section>
-      <section><h2>Where UWorld is the clearer fit</h2><p>Choose UWorld when its documented visual rationales, illustrations, videos, digital notebook, planner, review book, peer benchmarking, and large RN/educator team justify the price for you. UWorld also publishes a much larger learner-and-review footprint. PulseRN should not pretend that a newer product has already matched that institutional scale.</p></section>
-      <section><h2>Bottom line</h2><div class="card"><p><strong>PulseRN:</strong> focused RN-owned app, direct lab access, broad study Q&amp;A, adaptive practice, spaced repetition, and conservative readiness language.</p><p><strong>UWorld:</strong> mature content ecosystem with extensive visuals, videos, planner/notebook tools, a large author team, and substantial public outcome and learner evidence.</p><p>Try PulseRN’s free day if its workflow sounds right. Choose UWorld if its broader media and evidence base are the capabilities you expect to use. No product choice can guarantee an NCLEX result.</p></div></section>
+      <section><h2>Choose PulseRN for the advantages you will use every day</h2><div class="grid"><article class="card"><h3>Ask beyond the rationale</h3><p>Ask an educational NCLEX or nursing-concept question, or request a different explanation after answering, without leaving the study app.</p></article><article class="card"><h3>Keep labs at your fingertips</h3><p>Open a searchable lab and vital-sign reference directly from the app instead of interrupting study to assemble a separate resource.</p></article><article class="card"><h3>Repair weak areas</h3><p>Adaptive practice, missed-question review, spaced cards, case studies, and qualified readiness estimates form one repeatable loop.</p></article><article class="card"><h3>Know who is accountable</h3><p>PulseRN is created and clinically owned by Sheldon Bennett, RN, with public license verification and digest-bound content review.</p></article></div></section>
+      <section><h2>When UWorld may still justify its higher observed price</h2><p>Consider UWorld if an extensive visual-and-video library, digital notebook, planner, review book, peer benchmarking, or a large author team is a non-negotiable requirement you know you will use. Those are documented UWorld strengths. They do not erase PulseRN’s advantages in integrated lab access, broad nursing Q&amp;A, direct RN-owner traceability, a free no-card trial, or the lower observed 30-day list price.</p></section>
+      <section><h2>Bottom line: begin with PulseRN</h2><div class="card best"><span class="tag">PulseRN recommendation</span><p>For a self-directed NCLEX candidate who wants focused practice, meaningful AI help, lab values at their fingertips, direct RN accountability, and transparent pricing in one app, <strong>PulseRN is the stronger starting choice</strong>. Use the free day to test the real workflow before paying. Choose UWorld only when its specific media and planning extras are important enough to justify the additional observed cost.</p><p>No preparation product can guarantee an NCLEX result.</p><p><a class="button" href="/?start=1">Try PulseRN free</a></p></div></section>
       ${sourceList(["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "uworldCourse", "uworldAi"])}`,
     faq: [
-      { q: "Is PulseRN cheaper than UWorld?", a: "For the public 30-day prices observed on August 30, 2026, PulseRN listed $99 and UWorld listed $149 before a displayed promotion. Prices change, so verify both provider pages." },
+      { q: "Is PulseRN cheaper than UWorld?", a: "For the public 30-day prices observed on September 3, 2026, PulseRN listed $99 and UWorld listed $149 before a displayed promotion. Prices change, so verify both provider pages." },
       { q: "Do both PulseRN and UWorld include AI help?", a: "Yes. Both publicly describe in-product AI explanations. Their allowances, context, safeguards, and surrounding study tools differ." },
     ],
   },
   {
-    slug: "compare/pulsern-vs-archer", title: "PulseRN vs Archer Review for NCLEX-RN", eyebrow: "Head-to-head fit", h1: "PulseRN vs Archer Review: app workflow or high-volume package?",
-    description: "Compare PulseRN and Archer Review by QBank size, public pricing, AI study help, lab access, readiness assessments, videos, live support, and repeat-tester fit.",
+    slug: "compare/pulsern-vs-archer", title: "PulseRN vs Archer Review for NCLEX-RN", eyebrow: "PulseRN advantage", h1: "PulseRN vs Archer Review: why start with PulseRN?",
+    description: "See why PulseRN is our recommended Archer alternative for connected NCLEX practice, nursing AI Q&A, lab access, missed-question repair, and direct RN accountability.",
     intent: { primary: "PulseRN vs Archer Review", secondary: ["Archer Review alternative", "PulseRN or Archer NCLEX"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "archerPackages", "archerReadiness"],
     claims: [
       { id: "archer-packages", statement: "Archer publicly lists 3,100+ questions, 30+ readiness/CAT exams, video packages, and live-support tiers.", sourceIds: ["archerPackages"] },
       { id: "archer-readiness", statement: "Archer describes 85-question readiness assessments and recommends four consecutive high or very-high results.", sourceIds: ["archerReadiness"] },
       { id: "pulse-integrated-tools", statement: "PulseRN documents AI nursing-study Q&A, lab reference, spaced repetition, adaptive practice, and RN ownership in one app.", sourceIds: ["pulseHome", "pulseHow", "pulseAbout", "pulseLegal"] },
+      { id: "pulse-archer-trial", statement: "PulseRN publicly offers a one-day no-card study pass before a paid plan; Archer's cited page lists a lower one-month paid QBank and CAT entry price.", sourceIds: ["pulseHome", "pulsePricing", "archerPackages"] },
     ],
-    body: `<p class="lead">Archer Review’s public packages emphasize question volume, repeated readiness/CAT opportunities, videos, and progressively more live support. PulseRN emphasizes an integrated daily study loop: adaptive questions, missed-question repair, spaced repetition, an always-available lab reference, educational nursing Q&amp;A, and named RN ownership.</p>
+    body: `<p class="lead"><strong>Our recommendation: start with PulseRN.</strong> Its advantage is not simply another QBank. It connects adaptive practice, missed-question repair, spaced repetition, case studies, nursing-study AI Q&amp;A, and an always-available lab and vital-sign reference in one app created and clinically owned by a working RN.</p>
+      <div class="card best"><span class="tag">Why PulseRN leads</span><h2 style="margin-top:0">A focused daily workflow—not a collection of package tiers</h2><p>PulseRN keeps the tools a self-directed candidate is likely to use every day on one study surface. When a rationale is not enough, ask for another explanation or a broader nursing-concept answer. When a laboratory value appears, check the built-in reference. When an item is missed, return to it through the review loop. Try the study content free for one day without a credit card.</p><p><a class="button" href="/?start=1">Start PulseRN free for one day</a><a class="button alt" href="/how-it-works/">See how PulseRN works</a></p></div>
       ${disclosure}
       ${table("PulseRN and Archer Review public-feature comparison", [
-        ["Basic one-month entry", "$99 for 30 days; one-day study pass is $0", "QBank + CAT publicly listed from $79 for one month when checked", "Archer has the lower observed paid entry price. PulseRN offers a free first day and different included tools."],
+        ["Basic one-month entry", "$99 for 30 days; one-day study pass is $0", "QBank + CAT publicly listed from $79 for one month when checked", "Archer was $20 lower at the paid entry level; PulseRN uniquely lets you test this compared study workflow free before paying."],
         ["Question bank", "Public plans list 3,100+ questions at 60/90 days and higher quantities on longer plans", "Public package page lists 3,100+ questions", "The documented quantities are comparable; evaluate rationales, workflow, and unused-question rules too."],
-        ["Readiness practice", "A stated number of standardized 85-question self-assessments by plan", "Publicly lists 30+ readiness assessments and CAT exams; readiness forms use 85 questions", "Archer is the stronger documented fit for learners who want frequent formal readiness forms."],
+        ["Readiness practice", "A stated number of standardized 85-question self-assessments by plan", "Publicly lists 30+ readiness assessments and CAT exams; readiness forms use 85 questions", "Archer's volume is useful only if you need and will carefully review frequent formal assessments; neither provider can guarantee the exam result."],
         ["AI and lab help", "Educational nursing Q&amp;A, answer re-explanations, and a searchable lab/vital reference", "An equivalent broad AI study assistant or built-in lab reference was not confirmed on the cited package pages", "This is a documented PulseRN workflow advantage, not proof that Archer has no adjacent capability."],
-        ["Videos and live support", "Self-directed app; no live class package is listed", "Video packages, a three-day live review, daily live topics, and intensive support are listed by tier", "Archer is the clearer fit when scheduled human instruction or accountability is required."],
-        ["Content ownership", "Named working-RN creator and reviewer with public verification", "Public pages describe instructors, tutors, and package support", "PulseRN makes one accountable owner especially visible; Archer offers a broader instruction system."],
+        ["Videos and live support", "Self-directed app; no live class package is listed", "Video packages, a three-day live review, daily live topics, and intensive support are listed by tier", "Archer's scheduled instruction is a specialized exception for learners who know they need human-led structure."],
+        ["Content ownership", "Named working-RN creator and reviewer with public verification", "Public pages describe instructors, tutors, and package support", "PulseRN gives the product one visible, verifiable RN owner and binds public clinical reviews to exact content and sources."],
       ])}
-      <section><h2>Choose PulseRN when the study surface matters most</h2><p>PulseRN keeps practice, explanations, labs, cards, case studies, study questions, and progress signals together. A learner can open the lab reference from the same app, ask a concept question, request a different explanation after answering, and return to missed material without assembling several resources. The product’s clinical owner is a working RN whose public guides are bound to exact review and source evidence.</p></section>
-      <section><h2>Choose Archer when repetition and human support matter most</h2><p>Archer publicly offers substantially more readiness/CAT opportunities than PulseRN and sells packages that add videos, live review, interactive cases, and tutor guidance. Its Intense PREP tier is explicitly positioned for repeat test-takers or high-anxiety learners wanting more accountability. PulseRN should not label its self-directed app superior for someone who knows that scheduled instruction is necessary.</p></section>
-      <section><h2>Bottom line</h2><div class="card"><p><strong>PulseRN:</strong> choose the integrated RN-owned app when lab lookup, broad nursing-study Q&amp;A, adaptive daily work, spaced repetition, and conservative claims are central.</p><p><strong>Archer:</strong> choose the documented package breadth when low entry price, frequent readiness/CAT use, videos, live review, or intensive support is central.</p><p>Neither provider’s readiness label can guarantee an actual exam outcome.</p></div></section>
+      <section><h2>Choose PulseRN for the advantages you will use every day</h2><div class="grid"><article class="card"><h3>One connected workflow</h3><p>Move from practice to rationales, AI re-explanations, labs, cards, cases, and missed-question repair without assembling separate resources.</p></article><article class="card"><h3>Ask any study question</h3><p>Use broad educational NCLEX and nursing-concept Q&amp;A when the uncertainty extends beyond one answer rationale.</p></article><article class="card"><h3>Labs at your fingertips</h3><p>Search lab values and vital signs from inside the app while working through lab-heavy questions and cases.</p></article><article class="card"><h3>Working-RN ownership</h3><p>Sheldon Bennett, RN, is the named, publicly verified product owner, with exact review and source evidence for approved clinical guides.</p></article></div></section>
+      <section><h2>When Archer may still be the better specialized purchase</h2><p>Consider Archer when your plan specifically requires frequent formal readiness/CAT forms, scheduled video or live review, tutor guidance, or intensive external accountability—and you know you will use those services. Its cited one-month paid entry was also $20 lower. Those are real package advantages, but they do not replace PulseRN’s integrated AI-and-lab workflow, named RN ownership, missed-question repair, or free no-card trial.</p></section>
+      <section><h2>Bottom line: begin with PulseRN</h2><div class="card best"><span class="tag">PulseRN recommendation</span><p>For a self-directed candidate who wants an all-in-one nursing-study app—not just repeated assessment volume—<strong>PulseRN is the stronger starting choice</strong>. It connects practice, error repair, meaningful AI explanations, broad nursing Q&amp;A, lab access, spaced review, and direct RN accountability. Use the free day to see whether the workflow keeps you studying.</p><p>Choose an Archer support tier instead only when frequent assessments or scheduled human instruction is the specific gap your study plan must fill. Neither provider can guarantee an NCLEX result.</p><p><a class="button" href="/?start=1">Try PulseRN free</a></p></div></section>
       ${sourceList(["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "archerPackages", "archerReadiness"])}`,
     faq: [
       { q: "Is PulseRN less expensive than Archer Review?", a: "Not at the observed one-month paid entry level. Archer listed a $79 QBank + CAT option, while PulseRN listed $99 for 30 days and also offered a one-day free study pass." },
@@ -241,9 +245,9 @@ const pages = [
       { id: "observed-entry-prices", statement: "Observed public entry prices differ by duration, package, and promotion, with Archer lower than PulseRN at the basic one-month paid level when checked.", sourceIds: ["pulsePricing", "uworldCourse", "archerPackages", "kaplanCourse"] },
       { id: "pulse-free-day", statement: "PulseRN publicly lists a one-day free study-content pass without a readiness self-assessment.", sourceIds: ["pulseHome", "pulsePricing"] },
     ],
-    body: `<p class="lead">“Affordable” should mean the lowest total cost for the study support you will actually use—not whichever page displays the smallest promotional number. On August 30, 2026, Archer had the lowest observed basic one-month paid entry among these four. PulseRN offered the only documented one-day study-content pass in this comparison and a $99 30-day plan.</p>
+    body: `<p class="lead">“Affordable” should mean the lowest total cost for the study support you will actually use—not whichever page displays the smallest promotional number. On September 3, 2026, Archer had the lowest observed basic one-month paid entry among these four. PulseRN offered the only documented one-day study-content pass in this comparison and a $99 30-day plan.</p>
       ${disclosure}
-      <section><h2>Observed public entry points</h2><div class="table-wrap" role="region" aria-label="Observed NCLEX preparation entry prices" tabindex="0"><table><caption>Provider prices observed August 30, 2026</caption><thead><tr><th scope="col">Provider</th><th scope="col">Observed entry</th><th scope="col">Important context</th></tr></thead><tbody><tr><th scope="row">PulseRN</th><td>$0 one-day study pass; $99 for 30 days</td><td>The free day excludes readiness self-assessments. Paid plans include a stated assessment count.</td></tr><tr><th scope="row">UWorld</th><td>$149 list price for 30 days; a promotion was displayed</td><td>Package includes a duration-specific question total, media/tools, and one self-assessment.</td></tr><tr><th scope="row">Archer Review</th><td>$79 for one-month QBank + CAT when checked</td><td>Videos and live support require higher tiers; pricing pages frequently show promotions.</td></tr><tr><th scope="row">Kaplan</th><td>$99 list price for CAT + QBank when checked</td><td>Temporary promotions may reduce the price. Classes and larger course systems cost more.</td></tr></tbody></table></div></section>
+      <section><h2>Observed public entry points</h2><div class="table-wrap" role="region" aria-label="Observed NCLEX preparation entry prices" tabindex="0"><table><caption>Provider prices observed September 3, 2026</caption><thead><tr><th scope="col">Provider</th><th scope="col">Observed entry</th><th scope="col">Important context</th></tr></thead><tbody><tr><th scope="row">PulseRN</th><td>$0 one-day study pass; $99 for 30 days</td><td>The free day excludes readiness self-assessments. Paid plans include a stated assessment count.</td></tr><tr><th scope="row">UWorld</th><td>$149 list price for 30 days; a promotion was displayed</td><td>Package includes a duration-specific question total, media/tools, and one self-assessment.</td></tr><tr><th scope="row">Archer Review</th><td>$79 for one-month QBank + CAT when checked</td><td>Videos and live support require higher tiers; pricing pages frequently show promotions.</td></tr><tr><th scope="row">Kaplan</th><td>$99 list price for CAT + QBank when checked</td><td>Temporary promotions may reduce the price. Classes and larger course systems cost more.</td></tr></tbody></table></div></section>
       <section><h2>When PulseRN is good value</h2><p>PulseRN can be a strong value when you would otherwise combine a QBank with separate flashcards, a lab reference, an AI nursing-study tool, case studies, readiness forms, and study guides. Those capabilities live in one browser-based app created and clinically owned by a working RN. The free first day lets a learner test the workflow before buying, although one day is not a meaningful preparation plan by itself.</p></section>
       <section><h2>When another provider may be the better value</h2><p>Archer’s observed basic package is less expensive than PulseRN’s 30-day paid plan and documents far more readiness/CAT opportunities. UWorld may be worth the higher price for a learner who will consistently use visual rationales, videos, the planner, notebook, book option, and its larger content team. Kaplan may be worth more when strategy instruction, recorded or live teaching, a content channel, tutoring, or guarantee eligibility replaces other purchases.</p></section>
       <section><h2>Costs that comparison tables often hide</h2><ul><li><strong>Unused access:</strong> a six-month discount is not value if the exam is in six weeks.</li><li><strong>Add-ons:</strong> extra assessments, extensions, books, tutoring, or higher-support packages can change the total.</li><li><strong>Promotion expiry:</strong> a crossed-out price may disappear before checkout.</li><li><strong>Guarantee conditions:</strong> a money-back promise may require completion, timing, first-attempt status, or other eligibility rules.</li><li><strong>Tool duplication:</strong> buying a separate app, cards, lab reference, or tutor can make a low QBank price less affordable.</li><li><strong>Review time:</strong> the cheapest unused bank creates no study value.</li></ul></section>
