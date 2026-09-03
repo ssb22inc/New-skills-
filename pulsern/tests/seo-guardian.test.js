@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
-import { candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
+import { candidateCommercialPagesFromDist, candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 import { articleJsonLd } from "../ops/build-learn.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
@@ -45,6 +45,18 @@ describe("SEO guardian", () => {
     const pages = evidence.pages.map((page) => ({ route: page.route, identifiers: [`sha256:${page.contentSha256}`] }));
     const intents = { intents: Object.fromEntries(evidence.pages.map((page) => [page.route, page.intent])) };
     expect(auditCommercialGovernance({ evidence, intents, pages, now: new Date("2026-08-30T12:00:00Z") })).toEqual([]);
+  });
+
+  it("keeps the UWorld and Archer comparisons PulseRN-led without unsupported outcome claims", () => {
+    for (const slug of ["compare/pulsern-vs-uworld", "compare/pulsern-vs-archer"]) {
+      const page = COMMERCIAL_PAGES.find((item) => item.slug === slug);
+      expect(page.h1).toContain("why start with PulseRN?");
+      expect(page.body).toContain("Our recommendation: start with PulseRN.");
+      expect(page.body).toContain("PulseRN recommendation");
+      expect(page.body).toContain("Try PulseRN free");
+      expect(page.body).not.toMatch(/Where (?:UWorld|Archer) is the clearer fit/i);
+      expect(page.body).not.toMatch(/(?:guaranteed to pass|will pass the NCLEX|raises? your chance of passing)/i);
+    }
   });
 
   it("fails closed when a commercial claim cites an unresolved source", () => {
@@ -704,6 +716,21 @@ describe("SEO guardian", () => {
     expect(packet.pages.map((page) => page.route)).toEqual(["/learn/current/", "/learn/pending/"]);
     expect(packet.pages.every((page) => /^[a-f0-9]{64}$/.test(page.htmlSha256))).toBe(true);
     expect(packet.pages.find((page) => page.route === "/learn/current/").html).toContain('data-guide="current"');
+  });
+
+  it("binds exact current-release commercial HTML into the adversary packet", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-commercial-"));
+    await fs.mkdir(path.join(directory, "compare", "pulsern-vs-example"), { recursive: true });
+    const digest = "a".repeat(64);
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [
+      { route: "/compare/pulsern-vs-example/", published: "2026-08-30", updated: "2026-09-03", contentSha256: digest, sourceSetSha256: "b".repeat(64), intent: { primary: "PulseRN vs Example" }, claims: [], sources: [] },
+      { route: "/compare/old/", published: "2026-08-30", updated: "2026-08-30", contentSha256: "c".repeat(64), sourceSetSha256: "d".repeat(64), intent: { primary: "old" }, claims: [], sources: [] },
+    ] }));
+    await fs.writeFile(path.join(directory, "compare", "pulsern-vs-example", "index.html"), `<article data-comparison="example">sha256:${digest}</article>`);
+    const packet = await candidateCommercialPagesFromDist({ distDirectory: directory, generatedAt: "2026-09-03T12:00:00.000Z" });
+    expect(packet.pages.map((page) => page.route)).toEqual(["/compare/pulsern-vs-example/"]);
+    expect(packet.pages[0].html).toContain('data-comparison="example"');
+    expect(packet.pages[0].htmlSha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("fails closed when the secret or provider response is unavailable", async () => {

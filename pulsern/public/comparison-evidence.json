@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-30T00:00:00.000Z",
+  "generatedAt": "2026-09-03T00:00:00.000Z",
   "editorialOwner": {
     "name": "Sheldon Bennett, RN",
     "url": "https://www.pulsern.app/about/#sheldon-bennett-rn"
@@ -18,33 +18,33 @@
         "audience": "NCLEX-RN candidates",
         "risk": "commercial"
       },
-      "published": "2026-08-30",
-      "updated": "2026-08-30",
-      "contentSha256": "9c9b203d9e33174988ea2d790f195a174b6bd3a1e9c2afdea2692f0e750d14cc",
-      "sourceSetSha256": "e9fcff33eb69b18062363713ef6340fe64d012edc510e9abca7e5818a07d8df2",
+      "published": "2026-09-03",
+      "updated": "2026-09-03",
+      "contentSha256": "fd214f080da89fb1b18d2022beb825690bca918db3ad673c8e46c1c3d35f22cb",
+      "sourceSetSha256": "2a80ed53fc851a8e12071d5eb674fd864889b03f9a668567f53c12b37b53d06d",
       "sources": [
         {
-          "id": "pulsern-home-2026-08-30",
+          "id": "pulsern-home-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN product overview",
           "url": "https://www.pulsern.app/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Public product description, features, free access, authorship, and limitations"
         },
         {
-          "id": "pulsern-pricing-2026-08-30",
+          "id": "pulsern-pricing-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN pricing",
           "url": "https://www.pulsern.app/pricing/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Access-plan prices, question-bank quantities, and included self-assessments"
         },
         {
-          "id": "uworld-nclex-rn-course-2026-08-30",
+          "id": "uworld-nclex-rn-course-2026-09-03",
           "publisher": "UWorld",
           "title": "UWorld NCLEX-RN Prep Course",
           "url": "https://nursing.uworld.com/nclex-rn/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Course features, question counts, access periods, public prices, RN team, assessments, and UAsk prompt allowances",
           "expectedMarkers": [
             "3,400+",
@@ -53,11 +53,11 @@
           ]
         },
         {
-          "id": "archer-nclex-rn-packages-2026-08-30",
+          "id": "archer-nclex-rn-packages-2026-09-03",
           "publisher": "Archer Review",
           "title": "Archer Review NCLEX-RN package comparison",
           "url": "https://nurses.archerreview.com/nclex-rn/discounted-combo",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "QBank, CAT, video, live-review, readiness-assessment, package-price, and repeat-tester support descriptions",
           "expectedMarkers": [
             "3,100+",
@@ -66,11 +66,11 @@
           ]
         },
         {
-          "id": "kaplan-nclex-course-2026-08-30",
+          "id": "kaplan-nclex-course-2026-09-03",
           "publisher": "Kaplan Test Prep",
           "title": "Kaplan NCLEX Review and Test Prep",
           "url": "https://www.kaptest.com/nclex",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Practice and course package prices, QBank quantities, CATs, AI tutor, classes, and guarantee qualification",
           "expectedMarkers": [
             "AI Tutor",
@@ -84,10 +84,10 @@
           "id": "compare-sourced-method",
           "statement": "The comparison uses dated provider-owned public sources and no affiliate placement.",
           "sourceIds": [
-            "pulsern-home-2026-08-30",
-            "uworld-nclex-rn-course-2026-08-30",
-            "archer-nclex-rn-packages-2026-08-30",
-            "kaplan-nclex-course-2026-08-30"
+            "pulsern-home-2026-09-03",
+            "uworld-nclex-rn-course-2026-09-03",
+            "archer-nclex-rn-packages-2026-09-03",
+            "kaplan-nclex-course-2026-09-03"
           ]
         }
       ]
@@ -102,33 +102,33 @@
         "audience": "NCLEX-RN candidates",
         "risk": "commercial"
       },
-      "published": "2026-08-30",
-      "updated": "2026-08-30",
-      "contentSha256": "032c6feca9b2a7a36a435b14678b3a55bc70cbbc953cc6a7c5e0ed2a35744e83",
-      "sourceSetSha256": "e9fcff33eb69b18062363713ef6340fe64d012edc510e9abca7e5818a07d8df2",
+      "published": "2026-09-03",
+      "updated": "2026-09-03",
+      "contentSha256": "bc70a1f04a1962cd68fecab786f6822ad6073ce302c03649e41d90653977c761",
+      "sourceSetSha256": "2a80ed53fc851a8e12071d5eb674fd864889b03f9a668567f53c12b37b53d06d",
       "sources": [
         {
-          "id": "pulsern-home-2026-08-30",
+          "id": "pulsern-home-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN product overview",
           "url": "https://www.pulsern.app/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Public product description, features, free access, authorship, and limitations"
         },
         {
-          "id": "pulsern-pricing-2026-08-30",
+          "id": "pulsern-pricing-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN pricing",
           "url": "https://www.pulsern.app/pricing/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Access-plan prices, question-bank quantities, and included self-assessments"
         },
         {
-          "id": "uworld-nclex-rn-course-2026-08-30",
+          "id": "uworld-nclex-rn-course-2026-09-03",
           "publisher": "UWorld",
           "title": "UWorld NCLEX-RN Prep Course",
           "url": "https://nursing.uworld.com/nclex-rn/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Course features, question counts, access periods, public prices, RN team, assessments, and UAsk prompt allowances",
           "expectedMarkers": [
             "3,400+",
@@ -137,11 +137,11 @@
           ]
         },
         {
-          "id": "archer-nclex-rn-packages-2026-08-30",
+          "id": "archer-nclex-rn-packages-2026-09-03",
           "publisher": "Archer Review",
           "title": "Archer Review NCLEX-RN package comparison",
           "url": "https://nurses.archerreview.com/nclex-rn/discounted-combo",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "QBank, CAT, video, live-review, readiness-assessment, package-price, and repeat-tester support descriptions",
           "expectedMarkers": [
             "3,100+",
@@ -150,11 +150,11 @@
           ]
         },
         {
-          "id": "kaplan-nclex-course-2026-08-30",
+          "id": "kaplan-nclex-course-2026-09-03",
           "publisher": "Kaplan Test Prep",
           "title": "Kaplan NCLEX Review and Test Prep",
           "url": "https://www.kaptest.com/nclex",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Practice and course package prices, QBank quantities, CATs, AI tutor, classes, and guarantee qualification",
           "expectedMarkers": [
             "AI Tutor",
@@ -168,9 +168,9 @@
           "id": "method-provider-sources",
           "statement": "Provider-owned pages are the primary evidence for competitor features and prices.",
           "sourceIds": [
-            "uworld-nclex-rn-course-2026-08-30",
-            "archer-nclex-rn-packages-2026-08-30",
-            "kaplan-nclex-course-2026-08-30"
+            "uworld-nclex-rn-course-2026-09-03",
+            "archer-nclex-rn-packages-2026-09-03",
+            "kaplan-nclex-course-2026-09-03"
           ]
         }
       ]
@@ -186,57 +186,57 @@
         "audience": "NCLEX-RN candidates",
         "risk": "commercial"
       },
-      "published": "2026-08-30",
-      "updated": "2026-08-30",
-      "contentSha256": "990cb1551f830621b6570eba2b4cdda4860d4a8c0e508fae519e8a2a50703dc6",
-      "sourceSetSha256": "ba58ef08864a89e6988f0d50cd83149bf17272ed9b5309c6df91249daf9a7259",
+      "published": "2026-09-03",
+      "updated": "2026-09-03",
+      "contentSha256": "9d1e0572d2fbf2a6c5a273fe5b3f46afbac9d9854f4c2c364b164980b0e7e55d",
+      "sourceSetSha256": "5a42bf9bcd85547f81122faf383f7d1c6d5529493f7915510009f318fa0eb343",
       "sources": [
         {
-          "id": "pulsern-home-2026-08-30",
+          "id": "pulsern-home-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN product overview",
           "url": "https://www.pulsern.app/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Public product description, features, free access, authorship, and limitations"
         },
         {
-          "id": "pulsern-pricing-2026-08-30",
+          "id": "pulsern-pricing-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN pricing",
           "url": "https://www.pulsern.app/pricing/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Access-plan prices, question-bank quantities, and included self-assessments"
         },
         {
-          "id": "pulsern-how-it-works-2026-08-30",
+          "id": "pulsern-how-it-works-2026-09-03",
           "publisher": "PulseRN",
           "title": "How PulseRN works",
           "url": "https://www.pulsern.app/how-it-works/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Adaptive practice, review, spaced repetition, and readiness limitations"
         },
         {
-          "id": "pulsern-about-2026-08-30",
+          "id": "pulsern-about-2026-09-03",
           "publisher": "PulseRN",
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Creator identity, RN verification, clinical review, and content ownership"
         },
         {
-          "id": "pulsern-legal-2026-08-30",
+          "id": "pulsern-legal-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN terms, privacy, and educational disclaimer",
           "url": "https://www.pulsern.app/legal/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "AI-tutor limitations, lab-reference qualification, privacy, and educational-use boundary"
         },
         {
-          "id": "uworld-nclex-rn-course-2026-08-30",
+          "id": "uworld-nclex-rn-course-2026-09-03",
           "publisher": "UWorld",
           "title": "UWorld NCLEX-RN Prep Course",
           "url": "https://nursing.uworld.com/nclex-rn/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Course features, question counts, access periods, public prices, RN team, assessments, and UAsk prompt allowances",
           "expectedMarkers": [
             "3,400+",
@@ -245,11 +245,11 @@
           ]
         },
         {
-          "id": "uworld-uask-2026-08-30",
+          "id": "uworld-uask-2026-09-03",
           "publisher": "UWorld",
           "title": "UAsk — UWorld Nursing AI Assistant",
           "url": "https://nursing.uworld.com/features/uask/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Personalized NCLEX and nursing-study explanations and stated educational role",
           "expectedMarkers": [
             "UAsk",
@@ -263,24 +263,32 @@
           "id": "uworld-public-scale",
           "statement": "UWorld publicly lists up to 3,400+ questions, videos, visual rationales, CAT practice, up to six self-assessments, and a 40+ RN/educator team.",
           "sourceIds": [
-            "uworld-nclex-rn-course-2026-08-30"
+            "uworld-nclex-rn-course-2026-09-03"
           ]
         },
         {
           "id": "both-ai",
           "statement": "Both products publicly describe an in-product AI study assistant.",
           "sourceIds": [
-            "pulsern-home-2026-08-30",
-            "uworld-uask-2026-08-30"
+            "pulsern-home-2026-09-03",
+            "uworld-uask-2026-09-03"
           ]
         },
         {
           "id": "pulse-labs-rn",
           "statement": "PulseRN documents a searchable lab reference and a verified working-RN creator and reviewer.",
           "sourceIds": [
-            "pulsern-home-2026-08-30",
-            "pulsern-about-2026-08-30",
-            "pulsern-legal-2026-08-30"
+            "pulsern-home-2026-09-03",
+            "pulsern-about-2026-09-03",
+            "pulsern-legal-2026-09-03"
+          ]
+        },
+        {
+          "id": "pulse-uworld-value",
+          "statement": "At the public 30-day prices observed, PulseRN listed a $99 paid plan and a no-card one-day study pass while UWorld listed $149 before a displayed promotion.",
+          "sourceIds": [
+            "pulsern-pricing-2026-09-03",
+            "uworld-nclex-rn-course-2026-09-03"
           ]
         }
       ]
@@ -296,57 +304,57 @@
         "audience": "NCLEX-RN candidates",
         "risk": "commercial"
       },
-      "published": "2026-08-30",
-      "updated": "2026-08-30",
-      "contentSha256": "048539483c960f1efaa1db1d2679e0682a28a0cd71533934b019ba1ff6d01db5",
-      "sourceSetSha256": "530cd2c869721aa9e3856061c4784d385ac52c48c235f56be1590081c4932975",
+      "published": "2026-09-03",
+      "updated": "2026-09-03",
+      "contentSha256": "ab26c19c2be3bc860595ded4c5ccc38e954ce3db05b6dc1b6e2a29f5f7f0fcff",
+      "sourceSetSha256": "466557e57fed00d5f0cd08faab3816200e5036e0d73856df9d56b939e4f07156",
       "sources": [
         {
-          "id": "pulsern-home-2026-08-30",
+          "id": "pulsern-home-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN product overview",
           "url": "https://www.pulsern.app/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Public product description, features, free access, authorship, and limitations"
         },
         {
-          "id": "pulsern-pricing-2026-08-30",
+          "id": "pulsern-pricing-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN pricing",
           "url": "https://www.pulsern.app/pricing/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Access-plan prices, question-bank quantities, and included self-assessments"
         },
         {
-          "id": "pulsern-how-it-works-2026-08-30",
+          "id": "pulsern-how-it-works-2026-09-03",
           "publisher": "PulseRN",
           "title": "How PulseRN works",
           "url": "https://www.pulsern.app/how-it-works/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Adaptive practice, review, spaced repetition, and readiness limitations"
         },
         {
-          "id": "pulsern-about-2026-08-30",
+          "id": "pulsern-about-2026-09-03",
           "publisher": "PulseRN",
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Creator identity, RN verification, clinical review, and content ownership"
         },
         {
-          "id": "pulsern-legal-2026-08-30",
+          "id": "pulsern-legal-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN terms, privacy, and educational disclaimer",
           "url": "https://www.pulsern.app/legal/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "AI-tutor limitations, lab-reference qualification, privacy, and educational-use boundary"
         },
         {
-          "id": "archer-nclex-rn-packages-2026-08-30",
+          "id": "archer-nclex-rn-packages-2026-09-03",
           "publisher": "Archer Review",
           "title": "Archer Review NCLEX-RN package comparison",
           "url": "https://nurses.archerreview.com/nclex-rn/discounted-combo",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "QBank, CAT, video, live-review, readiness-assessment, package-price, and repeat-tester support descriptions",
           "expectedMarkers": [
             "3,100+",
@@ -355,11 +363,11 @@
           ]
         },
         {
-          "id": "archer-readiness-assessment-2026-08-30",
+          "id": "archer-readiness-assessment-2026-09-03",
           "publisher": "Archer Review",
           "title": "Archer NCLEX Readiness Assessment",
           "url": "https://nurses.archerreview.com/features/archer-readiness-assessment",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "85-question readiness-assessment description and four-consecutive-assessment recommendation",
           "expectedMarkers": [
             "85-question",
@@ -373,24 +381,33 @@
           "id": "archer-packages",
           "statement": "Archer publicly lists 3,100+ questions, 30+ readiness/CAT exams, video packages, and live-support tiers.",
           "sourceIds": [
-            "archer-nclex-rn-packages-2026-08-30"
+            "archer-nclex-rn-packages-2026-09-03"
           ]
         },
         {
           "id": "archer-readiness",
           "statement": "Archer describes 85-question readiness assessments and recommends four consecutive high or very-high results.",
           "sourceIds": [
-            "archer-readiness-assessment-2026-08-30"
+            "archer-readiness-assessment-2026-09-03"
           ]
         },
         {
           "id": "pulse-integrated-tools",
           "statement": "PulseRN documents AI nursing-study Q&A, lab reference, spaced repetition, adaptive practice, and RN ownership in one app.",
           "sourceIds": [
-            "pulsern-home-2026-08-30",
-            "pulsern-how-it-works-2026-08-30",
-            "pulsern-about-2026-08-30",
-            "pulsern-legal-2026-08-30"
+            "pulsern-home-2026-09-03",
+            "pulsern-how-it-works-2026-09-03",
+            "pulsern-about-2026-09-03",
+            "pulsern-legal-2026-09-03"
+          ]
+        },
+        {
+          "id": "pulse-archer-trial",
+          "statement": "PulseRN publicly offers a one-day no-card study pass before a paid plan; Archer's cited page lists a lower one-month paid QBank and CAT entry price.",
+          "sourceIds": [
+            "pulsern-home-2026-09-03",
+            "pulsern-pricing-2026-09-03",
+            "archer-nclex-rn-packages-2026-09-03"
           ]
         }
       ]
@@ -406,57 +423,57 @@
         "audience": "NCLEX-RN candidates",
         "risk": "commercial"
       },
-      "published": "2026-08-30",
-      "updated": "2026-08-30",
-      "contentSha256": "c4afbb34a09e6379686f3714220e0e9a0f1eea5cca38989aecf069d9469d2590",
-      "sourceSetSha256": "9b037f420a1aa0eb0cd01cf45ddd1d0a47f6589a1f8f9ce2f755875a631dbfe6",
+      "published": "2026-09-03",
+      "updated": "2026-09-03",
+      "contentSha256": "bed5a60521bb3f36f143c464d87bc4873a60e9fc43741f220265197b10ea74b9",
+      "sourceSetSha256": "b6beee662281dd927d9a7b9d8bee0abce679c18f508810413de41136c7ab969c",
       "sources": [
         {
-          "id": "pulsern-home-2026-08-30",
+          "id": "pulsern-home-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN product overview",
           "url": "https://www.pulsern.app/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Public product description, features, free access, authorship, and limitations"
         },
         {
-          "id": "pulsern-pricing-2026-08-30",
+          "id": "pulsern-pricing-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN pricing",
           "url": "https://www.pulsern.app/pricing/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Access-plan prices, question-bank quantities, and included self-assessments"
         },
         {
-          "id": "pulsern-how-it-works-2026-08-30",
+          "id": "pulsern-how-it-works-2026-09-03",
           "publisher": "PulseRN",
           "title": "How PulseRN works",
           "url": "https://www.pulsern.app/how-it-works/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Adaptive practice, review, spaced repetition, and readiness limitations"
         },
         {
-          "id": "pulsern-about-2026-08-30",
+          "id": "pulsern-about-2026-09-03",
           "publisher": "PulseRN",
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Creator identity, RN verification, clinical review, and content ownership"
         },
         {
-          "id": "pulsern-legal-2026-08-30",
+          "id": "pulsern-legal-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN terms, privacy, and educational disclaimer",
           "url": "https://www.pulsern.app/legal/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "AI-tutor limitations, lab-reference qualification, privacy, and educational-use boundary"
         },
         {
-          "id": "kaplan-nclex-course-2026-08-30",
+          "id": "kaplan-nclex-course-2026-09-03",
           "publisher": "Kaplan Test Prep",
           "title": "Kaplan NCLEX Review and Test Prep",
           "url": "https://www.kaptest.com/nclex",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Practice and course package prices, QBank quantities, CATs, AI tutor, classes, and guarantee qualification",
           "expectedMarkers": [
             "AI Tutor",
@@ -465,11 +482,11 @@
           ]
         },
         {
-          "id": "kaplan-nclex-practice-2026-08-30",
+          "id": "kaplan-nclex-practice-2026-09-03",
           "publisher": "Kaplan Test Prep",
           "title": "Kaplan NCLEX Practice Tests and Questions",
           "url": "https://www.kaptest.com/nclex/practice/computer-adaptive-test",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "QBank, AI tutor, three CATs, flashcards, mobile access, and public practice-package prices",
           "expectedMarkers": [
             "Qbank",
@@ -483,25 +500,25 @@
           "id": "kaplan-practice",
           "statement": "Kaplan publicly lists a QBank, AI tutor, CAT practice, and pharmacy flashcards in its practice tiers; quantities and prices vary by current package presentation.",
           "sourceIds": [
-            "kaplan-nclex-course-2026-08-30",
-            "kaplan-nclex-practice-2026-08-30"
+            "kaplan-nclex-course-2026-09-03",
+            "kaplan-nclex-practice-2026-09-03"
           ]
         },
         {
           "id": "kaplan-course",
           "statement": "Kaplan course tiers add classes, strategy instruction, content review, and a conditional guarantee.",
           "sourceIds": [
-            "kaplan-nclex-course-2026-08-30"
+            "kaplan-nclex-course-2026-09-03"
           ]
         },
         {
           "id": "pulse-tools",
           "statement": "PulseRN documents a built-in lab reference, broad nursing-study Q&A, adaptive practice, spaced repetition, and named RN ownership.",
           "sourceIds": [
-            "pulsern-home-2026-08-30",
-            "pulsern-how-it-works-2026-08-30",
-            "pulsern-about-2026-08-30",
-            "pulsern-legal-2026-08-30"
+            "pulsern-home-2026-09-03",
+            "pulsern-how-it-works-2026-09-03",
+            "pulsern-about-2026-09-03",
+            "pulsern-legal-2026-09-03"
           ]
         }
       ]
@@ -517,49 +534,49 @@
         "audience": "NCLEX-RN candidates",
         "risk": "commercial"
       },
-      "published": "2026-08-30",
-      "updated": "2026-08-30",
-      "contentSha256": "df52862cca2980643e050f9afb262f8f42ff54f7293f8d4837dcdc8b9a650a4f",
-      "sourceSetSha256": "3f32642b724e869111132c956f4948245bea4a41969a679cf31e5bbe0d8d8dc8",
+      "published": "2026-09-03",
+      "updated": "2026-09-03",
+      "contentSha256": "28dfee4164cbf90053afcf8b4305b1ebe65d3c0eaa9080e61bc7ac6ca5b1f435",
+      "sourceSetSha256": "cd7248cd616cbfd27a711a24c1d370ee3db97caf20fb60b43a1b693c8af130f3",
       "sources": [
         {
-          "id": "pulsern-home-2026-08-30",
+          "id": "pulsern-home-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN product overview",
           "url": "https://www.pulsern.app/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Public product description, features, free access, authorship, and limitations"
         },
         {
-          "id": "pulsern-pricing-2026-08-30",
+          "id": "pulsern-pricing-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN pricing",
           "url": "https://www.pulsern.app/pricing/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Access-plan prices, question-bank quantities, and included self-assessments"
         },
         {
-          "id": "pulsern-how-it-works-2026-08-30",
+          "id": "pulsern-how-it-works-2026-09-03",
           "publisher": "PulseRN",
           "title": "How PulseRN works",
           "url": "https://www.pulsern.app/how-it-works/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Adaptive practice, review, spaced repetition, and readiness limitations"
         },
         {
-          "id": "pulsern-about-2026-08-30",
+          "id": "pulsern-about-2026-09-03",
           "publisher": "PulseRN",
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Creator identity, RN verification, clinical review, and content ownership"
         },
         {
-          "id": "uworld-nclex-rn-course-2026-08-30",
+          "id": "uworld-nclex-rn-course-2026-09-03",
           "publisher": "UWorld",
           "title": "UWorld NCLEX-RN Prep Course",
           "url": "https://nursing.uworld.com/nclex-rn/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Course features, question counts, access periods, public prices, RN team, assessments, and UAsk prompt allowances",
           "expectedMarkers": [
             "3,400+",
@@ -568,11 +585,11 @@
           ]
         },
         {
-          "id": "archer-nclex-rn-packages-2026-08-30",
+          "id": "archer-nclex-rn-packages-2026-09-03",
           "publisher": "Archer Review",
           "title": "Archer Review NCLEX-RN package comparison",
           "url": "https://nurses.archerreview.com/nclex-rn/discounted-combo",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "QBank, CAT, video, live-review, readiness-assessment, package-price, and repeat-tester support descriptions",
           "expectedMarkers": [
             "3,100+",
@@ -581,11 +598,11 @@
           ]
         },
         {
-          "id": "kaplan-nclex-course-2026-08-30",
+          "id": "kaplan-nclex-course-2026-09-03",
           "publisher": "Kaplan Test Prep",
           "title": "Kaplan NCLEX Review and Test Prep",
           "url": "https://www.kaptest.com/nclex",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Practice and course package prices, QBank quantities, CATs, AI tutor, classes, and guarantee qualification",
           "expectedMarkers": [
             "AI Tutor",
@@ -594,11 +611,11 @@
           ]
         },
         {
-          "id": "kaplan-nclex-practice-2026-08-30",
+          "id": "kaplan-nclex-practice-2026-09-03",
           "publisher": "Kaplan Test Prep",
           "title": "Kaplan NCLEX Practice Tests and Questions",
           "url": "https://www.kaptest.com/nclex/practice/computer-adaptive-test",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "QBank, AI tutor, three CATs, flashcards, mobile access, and public practice-package prices",
           "expectedMarkers": [
             "Qbank",
@@ -612,20 +629,20 @@
           "id": "qbank-counts",
           "statement": "The compared providers publicly list question inventories or packages in roughly the low-thousands, with definitions and access periods that differ.",
           "sourceIds": [
-            "pulsern-pricing-2026-08-30",
-            "uworld-nclex-rn-course-2026-08-30",
-            "archer-nclex-rn-packages-2026-08-30",
-            "kaplan-nclex-course-2026-08-30"
+            "pulsern-pricing-2026-09-03",
+            "uworld-nclex-rn-course-2026-09-03",
+            "archer-nclex-rn-packages-2026-09-03",
+            "kaplan-nclex-course-2026-09-03"
           ]
         },
         {
           "id": "qbank-tools",
           "statement": "The providers differentiate through rationales, CAT/adaptive work, assessments, AI, videos, classes, cards, and other review tools.",
           "sourceIds": [
-            "pulsern-how-it-works-2026-08-30",
-            "uworld-nclex-rn-course-2026-08-30",
-            "archer-nclex-rn-packages-2026-08-30",
-            "kaplan-nclex-practice-2026-08-30"
+            "pulsern-how-it-works-2026-09-03",
+            "uworld-nclex-rn-course-2026-09-03",
+            "archer-nclex-rn-packages-2026-09-03",
+            "kaplan-nclex-practice-2026-09-03"
           ]
         }
       ]
@@ -641,33 +658,33 @@
         "audience": "NCLEX-RN candidates",
         "risk": "commercial"
       },
-      "published": "2026-08-30",
-      "updated": "2026-08-30",
-      "contentSha256": "860a20ca4cda78e1fb57bafbd8cbd3142b94e61a6fd1184dc1d597e1d1f18f49",
-      "sourceSetSha256": "e9fcff33eb69b18062363713ef6340fe64d012edc510e9abca7e5818a07d8df2",
+      "published": "2026-09-03",
+      "updated": "2026-09-03",
+      "contentSha256": "d9e14af7b93de6443ad693e11174ded7720489bb1a1ec074bef8516ae8e454b3",
+      "sourceSetSha256": "2a80ed53fc851a8e12071d5eb674fd864889b03f9a668567f53c12b37b53d06d",
       "sources": [
         {
-          "id": "pulsern-home-2026-08-30",
+          "id": "pulsern-home-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN product overview",
           "url": "https://www.pulsern.app/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Public product description, features, free access, authorship, and limitations"
         },
         {
-          "id": "pulsern-pricing-2026-08-30",
+          "id": "pulsern-pricing-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN pricing",
           "url": "https://www.pulsern.app/pricing/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Access-plan prices, question-bank quantities, and included self-assessments"
         },
         {
-          "id": "uworld-nclex-rn-course-2026-08-30",
+          "id": "uworld-nclex-rn-course-2026-09-03",
           "publisher": "UWorld",
           "title": "UWorld NCLEX-RN Prep Course",
           "url": "https://nursing.uworld.com/nclex-rn/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Course features, question counts, access periods, public prices, RN team, assessments, and UAsk prompt allowances",
           "expectedMarkers": [
             "3,400+",
@@ -676,11 +693,11 @@
           ]
         },
         {
-          "id": "archer-nclex-rn-packages-2026-08-30",
+          "id": "archer-nclex-rn-packages-2026-09-03",
           "publisher": "Archer Review",
           "title": "Archer Review NCLEX-RN package comparison",
           "url": "https://nurses.archerreview.com/nclex-rn/discounted-combo",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "QBank, CAT, video, live-review, readiness-assessment, package-price, and repeat-tester support descriptions",
           "expectedMarkers": [
             "3,100+",
@@ -689,11 +706,11 @@
           ]
         },
         {
-          "id": "kaplan-nclex-course-2026-08-30",
+          "id": "kaplan-nclex-course-2026-09-03",
           "publisher": "Kaplan Test Prep",
           "title": "Kaplan NCLEX Review and Test Prep",
           "url": "https://www.kaptest.com/nclex",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Practice and course package prices, QBank quantities, CATs, AI tutor, classes, and guarantee qualification",
           "expectedMarkers": [
             "AI Tutor",
@@ -707,18 +724,18 @@
           "id": "observed-entry-prices",
           "statement": "Observed public entry prices differ by duration, package, and promotion, with Archer lower than PulseRN at the basic one-month paid level when checked.",
           "sourceIds": [
-            "pulsern-pricing-2026-08-30",
-            "uworld-nclex-rn-course-2026-08-30",
-            "archer-nclex-rn-packages-2026-08-30",
-            "kaplan-nclex-course-2026-08-30"
+            "pulsern-pricing-2026-09-03",
+            "uworld-nclex-rn-course-2026-09-03",
+            "archer-nclex-rn-packages-2026-09-03",
+            "kaplan-nclex-course-2026-09-03"
           ]
         },
         {
           "id": "pulse-free-day",
           "statement": "PulseRN publicly lists a one-day free study-content pass without a readiness self-assessment.",
           "sourceIds": [
-            "pulsern-home-2026-08-30",
-            "pulsern-pricing-2026-08-30"
+            "pulsern-home-2026-09-03",
+            "pulsern-pricing-2026-09-03"
           ]
         }
       ]
@@ -734,49 +751,49 @@
         "audience": "NCLEX-RN repeat test-takers",
         "risk": "commercial"
       },
-      "published": "2026-08-30",
-      "updated": "2026-08-30",
-      "contentSha256": "460c3d3099fcabeaa596882e967d59c0bf59a1c9f81984e3519e73a92a7ea101",
-      "sourceSetSha256": "09f57bbfe135eb3a8491b7d28bcef3fb0652382258d4b984e64cc08d9d4c86b7",
+      "published": "2026-09-03",
+      "updated": "2026-09-03",
+      "contentSha256": "4642ca0e786ff6ac3eabde2fd33327ce5f88dd5f3d2dfa285357d49fcfb024de",
+      "sourceSetSha256": "3a91eec2b8f15011ecbe6836307d65199536e62e1f0f7fd599152e604fc6abef",
       "sources": [
         {
-          "id": "pulsern-home-2026-08-30",
+          "id": "pulsern-home-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN product overview",
           "url": "https://www.pulsern.app/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Public product description, features, free access, authorship, and limitations"
         },
         {
-          "id": "pulsern-pricing-2026-08-30",
+          "id": "pulsern-pricing-2026-09-03",
           "publisher": "PulseRN",
           "title": "PulseRN pricing",
           "url": "https://www.pulsern.app/pricing/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Access-plan prices, question-bank quantities, and included self-assessments"
         },
         {
-          "id": "pulsern-how-it-works-2026-08-30",
+          "id": "pulsern-how-it-works-2026-09-03",
           "publisher": "PulseRN",
           "title": "How PulseRN works",
           "url": "https://www.pulsern.app/how-it-works/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Adaptive practice, review, spaced repetition, and readiness limitations"
         },
         {
-          "id": "pulsern-about-2026-08-30",
+          "id": "pulsern-about-2026-09-03",
           "publisher": "PulseRN",
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Creator identity, RN verification, clinical review, and content ownership"
         },
         {
-          "id": "uworld-nclex-rn-course-2026-08-30",
+          "id": "uworld-nclex-rn-course-2026-09-03",
           "publisher": "UWorld",
           "title": "UWorld NCLEX-RN Prep Course",
           "url": "https://nursing.uworld.com/nclex-rn/",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Course features, question counts, access periods, public prices, RN team, assessments, and UAsk prompt allowances",
           "expectedMarkers": [
             "3,400+",
@@ -785,11 +802,11 @@
           ]
         },
         {
-          "id": "archer-nclex-rn-packages-2026-08-30",
+          "id": "archer-nclex-rn-packages-2026-09-03",
           "publisher": "Archer Review",
           "title": "Archer Review NCLEX-RN package comparison",
           "url": "https://nurses.archerreview.com/nclex-rn/discounted-combo",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "QBank, CAT, video, live-review, readiness-assessment, package-price, and repeat-tester support descriptions",
           "expectedMarkers": [
             "3,100+",
@@ -798,11 +815,11 @@
           ]
         },
         {
-          "id": "archer-readiness-assessment-2026-08-30",
+          "id": "archer-readiness-assessment-2026-09-03",
           "publisher": "Archer Review",
           "title": "Archer NCLEX Readiness Assessment",
           "url": "https://nurses.archerreview.com/features/archer-readiness-assessment",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "85-question readiness-assessment description and four-consecutive-assessment recommendation",
           "expectedMarkers": [
             "85-question",
@@ -811,11 +828,11 @@
           ]
         },
         {
-          "id": "kaplan-nclex-course-2026-08-30",
+          "id": "kaplan-nclex-course-2026-09-03",
           "publisher": "Kaplan Test Prep",
           "title": "Kaplan NCLEX Review and Test Prep",
           "url": "https://www.kaptest.com/nclex",
-          "accessedAt": "2026-08-30",
+          "accessedAt": "2026-09-03",
           "locator": "Practice and course package prices, QBank quantities, CATs, AI tutor, classes, and guarantee qualification",
           "expectedMarkers": [
             "AI Tutor",
@@ -829,25 +846,25 @@
           "id": "repeat-support-options",
           "statement": "The compared products document different repeat-preparation tools, including error review, resets or new forms, intensive support, CATs, classes, and AI study help.",
           "sourceIds": [
-            "pulsern-how-it-works-2026-08-30",
-            "uworld-nclex-rn-course-2026-08-30",
-            "archer-nclex-rn-packages-2026-08-30",
-            "kaplan-nclex-course-2026-08-30"
+            "pulsern-how-it-works-2026-09-03",
+            "uworld-nclex-rn-course-2026-09-03",
+            "archer-nclex-rn-packages-2026-09-03",
+            "kaplan-nclex-course-2026-09-03"
           ]
         },
         {
           "id": "archer-intense",
           "statement": "Archer explicitly positions Intense PREP for repeat test-takers or learners wanting added support and accountability.",
           "sourceIds": [
-            "archer-nclex-rn-packages-2026-08-30"
+            "archer-nclex-rn-packages-2026-09-03"
           ]
         },
         {
           "id": "pulse-repair",
           "statement": "PulseRN documents missed-question review, adaptive sequencing, educational nursing Q&A, lab reference, and never-repeated assessment forms.",
           "sourceIds": [
-            "pulsern-home-2026-08-30",
-            "pulsern-how-it-works-2026-08-30"
+            "pulsern-home-2026-09-03",
+            "pulsern-how-it-works-2026-09-03"
           ]
         }
       ]

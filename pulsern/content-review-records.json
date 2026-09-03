@@ -1232,6 +1232,43 @@
         {"id":"international-att-validity-not-automatically-extended","locator":"Changing an international appointment; ATT FAQ","sourceIds":["ncsbn-scheduling-rules-2026","ncsbn-registration-process-2026"]},
         {"id":"international-eligibility-travel-and-booking-separation","locator":"Plan beyond the examination booking; CTA","sourceIds":["ncsbn-registration-process-2026","ncsbn-testing-locations-2026"]}
       ]
+    },
+    "2026-nclex-rn-test-plan": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-09-03",
+      "scope": "Full RN exam-policy, educational, clinical-judgment, and source review of the exact 2026 NCLEX-RN Test Plan authority-hub content and source-set digests",
+      "contentSha256": "c7c31c7bc7a0b33324c79869b4833dadaa720f88ce861ec4ba174684ddff4cd0",
+      "sourceSetSha256": "de0e7d6629009d46b75b16980bdca9780a13b2a2cf0f5520bc0d4e61bd2384c2",
+      "claims": [
+        {"id":"test-plan-purpose-effective-period-and-development","locator":"Opening paragraph; effective-date FAQ","sourceIds":["ncsbn-2026-rn-test-plan-pdf"]},
+        {"id":"test-plan-blueprint-not-prediction-boundary","locator":"Use the plan as a blueprint, not a prediction","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf"]},
+        {"id":"test-plan-client-needs-ranges-and-tolerance","locator":"2026 RN Client Needs percentages table and qualification","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf"]},
+        {"id":"test-plan-integrated-processes","locator":"Integrated processes appear throughout the plan","sourceIds":["ncsbn-2026-rn-test-plan-pdf"]},
+        {"id":"test-plan-clinical-judgment-case-and-standalone-items","locator":"Integrated processes appear throughout the plan; clinical-judgment FAQ","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-clinical-judgment-measurement-model"]},
+        {"id":"test-plan-study-interpretation-boundary","locator":"What the percentages mean for studying","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf"]},
+        {"id":"test-plan-exam-structure-separation","locator":"Exam structure is a separate question","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf"]},
+        {"id":"test-plan-education-and-no-result-guarantee","locator":"Description; CTA; blueprint boundary","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf"]}
+      ]
+    },
+    "nclex-clinical-judgment": {
+      "decision": "approved",
+      "reviewerId": "sheldon-bennett-rn",
+      "reviewedAt": "2026-09-03",
+      "scope": "Full RN exam-policy, clinical-judgment, educational, and source review of the exact NCLEX clinical-judgment authority-hub content and source-set digests",
+      "contentSha256": "86a8a3f3986e1f8fe23c8101f35a017796b81605dbc604bb2f462a6fa84efcd9",
+      "sourceSetSha256": "de0e7d6629009d46b75b16980bdca9780a13b2a2cf0f5520bc0d4e61bd2384c2",
+      "claims": [
+        {"id":"clinical-judgment-definition-and-iterative-process","locator":"Opening paragraph","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf"]},
+        {"id":"ncjmm-purpose-and-nursing-process-boundary","locator":"What the NCJMM is—and is not; NCJMM FAQ","sourceIds":["ncsbn-clinical-judgment-measurement-model"]},
+        {"id":"six-clinical-judgment-skills","locator":"The six measurable clinical-judgment skills table; skills FAQ","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf","ncsbn-clinical-judgment-measurement-model"]},
+        {"id":"clinical-judgment-case-and-standalone-item-structure","locator":"How clinical judgment appears on the 2026 NCLEX-RN; case-study FAQ","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf"]},
+        {"id":"clinical-judgment-integrated-reasoning-boundary","locator":"How clinical judgment appears on the 2026 NCLEX-RN","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-clinical-judgment-measurement-model"]},
+        {"id":"clinical-judgment-practice-loop-as-pulsern-guidance","locator":"A disciplined practice loop and qualification","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-clinical-judgment-measurement-model"]},
+        {"id":"clinical-judgment-error-review-framework","locator":"Review mistakes by reasoning failure, not only topic","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-clinical-judgment-measurement-model"]},
+        {"id":"clinical-judgment-content-knowledge-connection","locator":"Keep content knowledge connected to judgment","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-clinical-judgment-measurement-model"]},
+        {"id":"clinical-judgment-education-and-no-prediction-boundary","locator":"Description; CTA; NCJMM boundary","sourceIds":["ncsbn-2026-rn-test-plan-pdf","ncsbn-2026-candidate-bulletin-pdf","ncsbn-clinical-judgment-measurement-model"]}
+      ]
     }
   }
 }
