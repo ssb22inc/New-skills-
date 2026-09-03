@@ -187,6 +187,7 @@ export async function runAdversary({
   const guideCoverage = guideCoverageFromEvidence(evidence);
   const generatedAt = now();
   const candidateGuidePages = await candidateGuidePagesFromDist({ coverage: guideCoverage, distDirectory, generatedAt });
+  await fs.mkdir(reportDirectory, { recursive: true });
   await fs.writeFile(path.join(reportDirectory, "candidate-guide-pages.json"), JSON.stringify(candidateGuidePages, null, 2) + "\n");
   evidence["candidate-guide-pages.json"] = candidateGuidePages;
   const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
