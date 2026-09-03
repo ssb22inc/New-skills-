@@ -18,6 +18,7 @@
     "seo:commercial": "node ops/seo-commercial-check.mjs",
     "seo:exam-rules": "node ops/seo-exam-rules-check.mjs",
     "seo:live-release": "node ops/seo-live-release.mjs",
+    "seo:indexnow": "node ops/seo-indexnow.mjs",
     "seo:adversary": "node ops/seo-adversary-ai.mjs",
     "seo:enforce": "node ops/seo-enforce-adversary.mjs",
     "seo:evidence": "node ops/seo-evidence-manifest.mjs"
