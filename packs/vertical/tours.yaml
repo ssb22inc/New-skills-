@@ -1,0 +1,38 @@
+vertical_id: tours
+name: Tours & Excursions
+
+capacity:
+  unit_singular: seat
+  unit_plural: seats
+  time_granularity_minutes: 60
+
+booking:
+  # Tours hold real capacity for hours — 20.00% deposit by default.
+  deposit_default_bps: 2000
+  completion_proof:
+    - qr_scan
+    - geo_checkin
+
+mentor:
+  review_heuristics:
+    - signal: timeliness
+      keywords:
+        - late
+        - on time
+        - delayed
+    - signal: guide_quality
+      keywords:
+        - knowledgeable
+        - friendly
+        - rude
+    - signal: safety
+      keywords:
+        - unsafe
+        - life jacket
+        - reckless
+
+trust:
+  licence_fields:
+    - Marine licence number
+    - TPDCo tour operator registration
+  back_on_time_guarantee: true

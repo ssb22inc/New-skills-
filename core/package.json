@@ -1,0 +1,26 @@
+{
+  "name": "@sycamore/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "migrate": "tsx src/db/migrate.ts",
+    "seed": "tsx src/db/migrate.ts seed"
+  },
+  "dependencies": {
+    "@sycamore/adapters": "workspace:*",
+    "@sycamore/packs": "workspace:*",
+    "kysely": "^0.29.2",
+    "pg": "^8.22.0",
+    "pino": "^10.3.1",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/pg": "^8.20.0"
+  }
+}

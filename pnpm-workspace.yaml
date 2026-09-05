@@ -1,0 +1,9 @@
+packages:
+  - core
+  - packs
+  - design
+  - adapters
+  - apps/gateway
+  - apps/web
+  - apps/worker
+  - tests
