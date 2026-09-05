@@ -56,7 +56,7 @@ export default function LandingPage({ onSignIn, onStart }) {
         .land-lead { color: #36534d; font-size: clamp(18px, 2vw, 21px); max-width: 650px; margin: 0; }
         .land-actions { display: flex; flex-wrap: wrap; gap: 11px; margin: 28px 0 17px; }
         .land-note { color: #4d665f; font-size: 13px; margin: 0; }
-        .land-product { position: relative; background: #0d302b; border-radius: 26px; padding: 18px;
+        .land-product { position: relative; margin:0; background: #0d302b; border-radius: 26px; padding: 14px;
           box-shadow: 0 30px 70px rgba(15,46,41,.22); transform: rotate(1deg); }
         .land-product:before { content: ""; position: absolute; inset: -20px 32px auto -22px; height: 130px;
           background: #8fd7c4; opacity: .32; filter: blur(45px); z-index: -1; }
@@ -67,6 +67,8 @@ export default function LandingPage({ onSignIn, onStart }) {
         .land-question h2 { font-size:19px; line-height:1.35; margin:8px 0 18px; }
         .land-option { border:1px solid #d6e3df; border-radius:9px; padding:10px 12px; margin-top:8px; font-size:13px; color:#415d56; }
         .land-option.selected { border-color:#0e7c6b; background:#e9f5f1; color:#0b5b4e; font-weight:700; }
+        .land-product-image { display:block; width:100%; height:auto; border-radius:17px; background:#f4f8f6; }
+        .land-product-caption { color:#d7ebe6; font-size:12px; padding:11px 5px 1px; }
         .land-proof { background: #0e7c6b; color: white; }
         .land-proof-grid { display:grid; grid-template-columns: 1.25fr repeat(3, 1fr); gap:1px; }
         .land-proof-cell { padding:25px 28px; background:rgba(0,0,0,.04); min-height:120px; display:flex; flex-direction:column; justify-content:center; }
@@ -85,6 +87,12 @@ export default function LandingPage({ onSignIn, onStart }) {
         .land-card-num { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; background:#dff1eb; color:#0e6e5c; font-weight:850; }
         .land-card h3 { font-size:18px; margin:18px 0 8px; }
         .land-card p { color:#4b665f; font-size:14px; margin:0; }
+        .land-screen-grid { display:grid; grid-template-columns:1.35fr .65fr; gap:22px; align-items:start; }
+        .land-screen { margin:0; background:#0d302b; border:1px solid #1a4e45; border-radius:20px; padding:10px; box-shadow:0 18px 42px rgba(15,46,41,.14); }
+        .land-screen img { display:block; width:100%; height:auto; border-radius:13px; background:#f4f8f6; }
+        .land-screen figcaption { color:#d7ebe6; padding:13px 8px 6px; font-size:14px; }
+        .land-screen figcaption strong { color:white; display:block; font-size:16px; margin-bottom:3px; }
+        .land-screen-note { color:#506b64; font-size:13px; margin:18px 0 0; }
         .land-how { display:grid; grid-template-columns:.9fr 1.1fr; gap:64px; align-items:start; }
         .land-steps { display:grid; gap:13px; }
         .land-step { background:white; border:1px solid #dbe7e3; border-radius:14px; padding:20px; display:grid; grid-template-columns:auto 1fr; gap:16px; }
@@ -111,6 +119,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           .land-hero, .land-how { grid-template-columns:1fr; gap:42px; }
           .land-hero { padding-top:48px; }
           .land-product { max-width:540px; }
+          .land-screen-grid { grid-template-columns:1fr 1fr; }
           .land-proof-grid { grid-template-columns:1fr 1fr; }
           .land-grid { grid-template-columns:1fr 1fr; }
         }
@@ -121,7 +130,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           .land-links .land-button { padding:9px 11px; font-size:13px; }
           .land-hero { padding:42px 0 58px; }
           .land-hero h1 { font-size:43px; }
-          .land-proof-grid, .land-grid, .land-sample-grid, .land-faq { grid-template-columns:1fr; }
+          .land-proof-grid, .land-grid, .land-sample-grid, .land-faq, .land-screen-grid { grid-template-columns:1fr; }
           .land-proof-cell { min-height:auto; padding:20px; }
           .land-section { padding:58px 0; }
           .land-author { grid-template-columns:1fr; }
@@ -136,6 +145,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           <a className="land-brand" href="/" aria-label="PulseRN home">PulseRN</a>
           <div className="land-links">
             <a href="#features">Features</a>
+            <a href="#product-tour">App preview</a>
             <a href="/compare/">Compare</a>
             <a href="/pricing/">Pricing</a>
             <a href="/learn/">RN-reviewed guides</a>
@@ -157,17 +167,10 @@ export default function LandingPage({ onSignIn, onStart }) {
             <p className="land-note">No credit card for the free pass. Educational exam preparation only.</p>
             <p className="land-note" style={{ marginTop: 12 }}><a href="/app/">Open the study app</a> to install PulseRN from your browser.</p>
           </div>
-          <div className="land-product" aria-label="Illustration of a PulseRN practice question">
-            <div className="land-product-top"><span className="land-dot" /> Adaptive practice · Adult Health · Question 18</div>
-            <div className="land-question">
-              <div className="land-kicker">Clinical judgment</div>
-              <h2>Which finding should the nurse address first?</h2>
-              <div className="land-option">A. Reassess the client in 30 minutes</div>
-              <div className="land-option selected">B. Apply the priority framework</div>
-              <div className="land-option">C. Document the expected finding</div>
-              <div className="land-option">D. Continue the current plan</div>
-            </div>
-          </div>
+          <figure className="land-product">
+            <img className="land-product-image" src="/product/pulsern-adaptive-practice.png" width="720" height="620" fetchPriority="high" alt="PulseRN adaptive NCLEX practice screen with a pharmacology question and four answer choices" />
+            <figcaption className="land-product-caption">Authentic adaptive NCLEX practice with answer-first review. Built-in demonstration content; no learner data.</figcaption>
+          </figure>
         </section>
 
         <section className="land-proof" aria-label="PulseRN facts">
@@ -176,6 +179,27 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-proof-cell"><b>8 categories</b><span>NCSBN client-needs coverage</span></div>
             <div className="land-proof-cell"><b>7 NGN formats</b><span>Plus standard multiple choice</span></div>
             <div className="land-proof-cell"><b>85 questions</b><span>Per readiness self-assessment</span></div>
+          </div>
+        </section>
+
+        <section className="land-section" id="product-tour">
+          <div className="land-container">
+            <div className="land-section-head">
+              <div className="land-eyebrow">Inside the app</div>
+              <h2>See your study workflow before you sign up.</h2>
+              <p>Start with one focused daily round, move into adaptive practice, and open the lab-reference drawer without leaving the question screen.</p>
+            </div>
+            <div className="land-screen-grid">
+              <figure className="land-screen">
+                <img src="/product/pulsern-today-dashboard.png" width="720" height="1000" loading="lazy" alt="PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards" />
+                <figcaption><strong>A daily plan without guesswork</strong>See due flashcards, adaptive questions, study progress, and the next focused action in one place.</figcaption>
+              </figure>
+              <figure className="land-screen">
+                <img src="/product/pulsern-lab-reference.png" width="430" height="932" loading="lazy" alt="PulseRN mobile lab-reference drawer open over an adaptive practice question" />
+                <figcaption><strong>Lab reference at your fingertips</strong>Open searchable educational reference ranges while you study, then return to the question where you left off.</figcaption>
+              </figure>
+            </div>
+            <p className="land-screen-note">Screens captured from PulseRN’s real interface using built-in demonstration content. Reference ranges vary by source and clinical context; this study tool is not medical advice.</p>
           </div>
         </section>
 

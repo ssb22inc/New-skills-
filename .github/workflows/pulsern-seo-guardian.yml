@@ -44,6 +44,10 @@ jobs:
         id: browser
         continue-on-error: true
         run: npx playwright install --with-deps chromium
+      - name: Capture authentic product screenshot evidence
+        id: product_capture
+        continue-on-error: true
+        run: npm run product:screenshots:capture
       - name: Build exact candidate artifact
         id: build
         continue-on-error: true
@@ -53,6 +57,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:audit
+      - name: Authentic product image provenance
+        id: product_images
+        if: always()
+        continue-on-error: true
+        run: npm run seo:product-images
       - name: Public landing and private app boundary
         id: app_boundary
         if: always()
@@ -118,8 +127,10 @@ jobs:
         run: |
           test "${{ steps.tests.outcome }}" = "success"
           test "${{ steps.browser.outcome }}" = "success"
+          test "${{ steps.product_capture.outcome }}" = "success"
           test "${{ steps.build.outcome }}" = "success"
           test "${{ steps.deterministic.outcome }}" = "success"
+          test "${{ steps.product_images.outcome }}" = "success"
           test "${{ steps.app_boundary.outcome }}" = "success"
           test "${{ steps.crawl.outcome }}" = "success"
           test "${{ steps.crawl_live.outcome }}" = "success"
