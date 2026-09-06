@@ -20,6 +20,7 @@
    ------------------------------------------------------------------ */
 
 import { db, preflightDb, publishedCount } from "./supabase-guard.mjs";
+import { llm } from "./llm.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -42,17 +43,6 @@ const POPULATION = opt("--population", null); // 'peds' | 'geriatric' | 'materna
 const DRY = flag("--dry-run");
 const STOP_AT = parseInt(opt("--stop-at", "0"), 10); // library size to stop at (0 = no target)
 
-async function llm(model, prompt, maxTokens = 6000) {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
-    body: JSON.stringify({ model, max_tokens: maxTokens, temperature: 0.7, messages: [{ role: "user", content: prompt }] }),
-  });
-  const data = await r.json();
-  const text = data?.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error(`Empty response from ${model}`);
-  return text;
-}
 const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
 /* ---------- schema gate (exported for tests) ---------- */

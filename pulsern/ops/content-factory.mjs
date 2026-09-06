@@ -29,6 +29,7 @@
    ------------------------------------------------------------------ */
 
 import { db, preflightDb, publishedCount } from "./supabase-guard.mjs";
+import { llm } from "./llm.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -54,24 +55,6 @@ const LOOPS = Math.max(1, parseInt(opt("--loops", "1"), 10));      // repeat the
 const MAX_MIN = parseInt(opt("--max-minutes", "300"), 10);          // stop before a CI job is killed
 const STOP_AT = parseInt(opt("--stop-at", "0"), 10);                // bank size to stop at (0 = no target)
 
-/* ---------- LLM call through OpenRouter ---------- */
-async function llm(model, prompt, maxTokens = 6000) {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model, max_tokens: maxTokens, temperature: 0.7,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  const data = await r.json();
-  const text = data?.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error(`Empty response from ${model}`);
-  return text;
-}
 
 const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
@@ -325,7 +308,17 @@ async function runMany() {
   }
   const pct = total.reviewed ? Math.round((total.survived / total.reviewed) * 100) : 0;
   console.log(`\n════ run complete ════`);
+  console.log(`loops ${attempted} attempted · ${failed} failed`);
   console.log(`reviewed ${total.reviewed} · passed adversarial ${total.survived} (${pct}%) · inserted ${total.inserted} · duplicates skipped ${total.dupes}`);
+
+  /* Tolerating a bad loop keeps a long run alive, but it also hides the case
+     that matters: a run that quietly lost most of its loops to rate limiting
+     still ends green, and the only visible symptom is a target that never
+     arrives. Say so loudly enough to be noticed in a CI summary. */
+  if (attempted > 0 && failed / attempted > 0.25) {
+    const lostPct = Math.round((failed / attempted) * 100);
+    console.log(`::warning::${failed} of ${attempted} loops failed (${lostPct}%). Throughput was far below capacity — check the retry messages above for rate limiting or credit limits.`);
+  }
 
   /* Tolerating a bad loop is useful; reporting a totally dead run as success is
      not. If every loop failed, or a live run inserted nothing at all, exit
