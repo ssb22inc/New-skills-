@@ -1,0 +1,104 @@
+name: case-scale
+
+# Bulk expansion of the NGN case-study library, run on demand.
+#
+# The scheduled content-factory workflow adds 2 cases a day, which tops the
+# library up but would take a year to move it by hundreds. This one fans out
+# across the eight client-need categories so eight jobs generate in parallel.
+#
+# Cases are far more expensive than practice questions: six NCJMM steps per
+# case, every step's key attacked by a different vendor, and up to three
+# targeted repair rounds. Budget roughly a minute and a half per case.
+#
+# Auto-publish at >=0.85 reviewer confidence follows the standing owner order
+# of 2026-07-16 for scaled content, with the review console keeping rejection
+# authority.
+
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "Cases to attempt per category"
+        required: true
+        default: "10"
+      stop_at:
+        description: "Stop once the library reaches this many approved cases (0 = no target)"
+        required: true
+        default: "500"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    # Categories run independently, so one failing job never blocks the rest.
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        cat:
+          - "Management of Care"
+          - "Safety & Infection Control"
+          - "Health Promotion & Maintenance"
+          - "Psychosocial Integrity"
+          - "Basic Care & Comfort"
+          - "Pharmacology"
+          - "Reduction of Risk"
+          - "Physiological Adaptation"
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+
+      - run: npm ci
+
+      # Presence is not validity: a publishable key and a personal access token
+      # both pass every name check and then fail deep inside a run, after the
+      # model spend. Make the credential prove itself first — one read and one
+      # service-role-only call, neither of which writes anything.
+      - name: Preflight — credentials actually work
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node ops/case-factory.mjs --check
+
+      - name: Expand ${{ matrix.cat }}
+        run: |
+          node ops/case-factory.mjs \
+            --cat "${{ matrix.cat }}" \
+            --count "${{ inputs.count }}" \
+            --stop-at "${{ inputs.stop_at }}"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+  report:
+    needs: generate
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the resulting library size
+        run: |
+          COUNT=$(curl -s -o /dev/null -D - \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/case_studies?select=id&approved=eq.true&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Prefer: count=exact" -H "Range: 0-0" \
+            | grep -i '^content-range' | sed 's|.*/||' | tr -d '\r')
+          if [ -z "$COUNT" ]; then
+            echo "::error::Could not read the library size — Supabase returned no count."
+            echo "The credential in SUPABASE_SERVICE_ROLE_KEY cannot read this project."
+            echo "### Case studies: could not be read" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "Approved case studies now live: $COUNT"
+          echo "### Case studies: $COUNT approved" >> $GITHUB_STEP_SUMMARY

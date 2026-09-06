@@ -28,7 +28,7 @@
      SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENROUTER_API_KEY
    ------------------------------------------------------------------ */
 
-import { createClient } from "@supabase/supabase-js";
+import { db, preflightDb, publishedCount } from "./supabase-guard.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -53,9 +53,6 @@ const NGN_ONLY = flag("--ngn");
 const LOOPS = Math.max(1, parseInt(opt("--loops", "1"), 10));      // repeat the pipeline in one process
 const MAX_MIN = parseInt(opt("--max-minutes", "300"), 10);          // stop before a CI job is killed
 const STOP_AT = parseInt(opt("--stop-at", "0"), 10);                // bank size to stop at (0 = no target)
-
-let _sb = null;
-const db = () => (_sb ??= createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY));
 
 /* ---------- LLM call through OpenRouter ---------- */
 async function llm(model, prompt, maxTokens = 6000) {
@@ -153,70 +150,6 @@ async function pickTargets() {
   const sorted = CATS.slice().sort((a, b) => counts[a] - counts[b]);
   console.log("Bank audit (approved):", counts);
   return sorted.slice(0, 2); // two thinnest categories
-}
-
-/* ---------- Credential preflight ----------
-   Generation is the expensive part of a run: two model calls per loop, a
-   couple of minutes of wall clock, and real OpenRouter credit. Discovering
-   at the INSERT step that the database was never reachable wastes all of it
-   and, worse, reads as a content problem rather than a credential one.
-
-   So prove the credential first, with two cheap round-trips:
-
-     read  — any select against questions. Fails if the URL is wrong, the key
-             belongs to another project, or the key is not a Supabase API key
-             at all (a personal access token, sbp_..., is the classic mix-up:
-             it is not rejected by any name check but PostgREST answers
-             "Invalid API key").
-     write — auth.admin.listUsers is service-role only. A publishable/anon key
-             gets a 401 here while still passing the read probe, which is the
-             exact shape of the row-level-security failures seen earlier.
-
-   Neither probe writes anything, and neither prints any part of a key. */
-const KEY_CLASSES = [
-  ["sb_secret_",      "secret (service_role) key — correct for this job"],
-  ["sb_publishable_", "PUBLISHABLE key — public, read-only, wrong for this job"],
-  ["sbp_",            "personal ACCESS TOKEN — for the Management API, not the database"],
-  ["eyJ",             "JWT — legacy anon or service_role key"],
-];
-function keyClass(key) {
-  const hit = KEY_CLASSES.find(([p]) => key.startsWith(p));
-  return hit ? hit[1] : "unrecognised prefix";
-}
-
-/* Size of the live practice bank. Exam items sit in the same table but are
-   quarantined by exam_form, so they must not count toward a bank target. */
-async function bankSize() {
-  const { count, error } = await db().from("questions")
-    .select("id", { count: "exact", head: true })
-    .eq("approved", true).is("exam_form", null);
-  if (error) throw new Error(`Could not read bank size: ${error.message}`);
-  return count ?? 0;
-}
-
-async function preflightDb() {
-  const url = process.env.SUPABASE_URL ?? "";
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
-  const fail = (what, detail) => {
-    throw new Error(
-      `Supabase ${what} check failed: ${detail}\n` +
-      `  SUPABASE_URL: ${url ? url.replace(/^(https:\/\/[a-z0-9]{6}).*/, "$1…") : "(empty)"}\n` +
-      `  SUPABASE_SERVICE_ROLE_KEY: ${key.length} chars, looks like a ${keyClass(key)}\n` +
-      `  Fix: Supabase dashboard -> Project Settings -> API Keys -> copy the\n` +
-      `  SECRET (service_role) key for THIS project, and paste it with no\n` +
-      `  surrounding spaces or newline into the SUPABASE_SERVICE_ROLE_KEY secret.`
-    );
-  };
-  if (!url) fail("URL", "SUPABASE_URL is empty");
-  if (!key) fail("key", "SUPABASE_SERVICE_ROLE_KEY is empty");
-
-  const { error: readErr } = await db().from("questions").select("id").limit(1);
-  if (readErr) fail("read", readErr.message);
-
-  const { error: adminErr } = await db().auth.admin.listUsers({ page: 1, perPage: 1 });
-  if (adminErr) fail("service-role", `${adminErr.message} (the key reached the project but is not the service_role key)`);
-
-  console.log("Credentials verified: database readable and key has service-role rights.");
 }
 
 /* ---------- Step 2: generator prompt ---------- */
@@ -370,7 +303,7 @@ async function runMany() {
        one loop per job — far cheaper than the alternative, which is paying for
        thousands of items nobody asked for. */
     if (STOP_AT > 0 && !DRY) {
-      const size = await bankSize();
+      const size = await publishedCount("questions", { excludeExamForm: true });
       if (size >= STOP_AT) {
         console.log(`Target reached: bank holds ${size} approved practice items (target ${STOP_AT}).`);
         hitTarget = true;
