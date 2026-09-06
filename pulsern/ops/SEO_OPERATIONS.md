@@ -17,6 +17,21 @@ authorized owner; no Google credential or verification token belongs in git.
 5. Inspect `/`, `/learn/`, and each new sample-question route. Confirm the
    declared canonical is selected and the page is allowed by `robots.txt`.
 
+## IndexNow release submission
+
+- The repository publishes a root ownership file and builds an IndexNow batch
+  from the exact public sitemap. The ownership key is intentionally public; it
+  proves control by being served from `www.pulsern.app` and is not a secret.
+- Pull requests validate the key, sitemap, host, URL count, and exclusion of
+  `/app/`, `/owner/`, and `/review/`, but do not notify search engines.
+- On `main`, submission remains blocked until `seo:live-release` proves that
+  production is serving the exact merge commit and matching route set.
+- The production workflow accepts only IndexNow HTTP 200 (received) or 202
+  (received; key validation pending), stores the response in the evidence
+  artifact, and lets the adversary challenge the result before enforcement.
+- IndexNow notifies participating engines, including Bing. Google sitemap and
+  URL inspection remain separate Search Console owner tasks.
+
 ## Weekly measurement
 
 - Record indexed pages, excluded-page reasons, impressions, clicks, CTR, and
@@ -34,6 +49,24 @@ Search Console verification does not override the repository gates. Public
 clinical content still requires digest-bound RN approval, source validation,
 accessibility and crawler audits, OpenRouter adversarial review, evidence
 binding, and fail-closed final enforcement.
+
+Official NCLEX registration, scheduling, fee, accommodations, result, and
+test-center pages also carry marker-bound NCSBN evidence. The
+`seo:exam-rules` gate fails when those official pages stop exposing a rule or
+price used by PulseRN, forcing re-verification before release.
+
+## Exact live-release verification
+
+- Every build publishes `/release.json` with the source commit SHA.
+- Pull-request evidence explicitly describes the candidate as not yet live.
+- On `main`, `seo:live-release` waits for `www.pulsern.app/release.json` to
+  match the exact merge SHA and for the production sitemap to match the
+  candidate sitemap.
+- Only then does it crawl every production route under six browser/search-agent
+  identities and check status, indexability, canonical URL, semantic content,
+  crawler access, `llms.txt`, and the internal route map.
+- The OpenRouter adversary receives the live-release report. A successful
+  build or hosting status alone is not accepted as proof that production works.
 
 ## Public site and private app boundary
 

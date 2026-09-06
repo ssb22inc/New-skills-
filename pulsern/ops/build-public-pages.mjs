@@ -102,5 +102,10 @@ for (const data of [...pages, ...COMMERCIAL_PAGES.map((item) => ({ ...item, cont
 
 writeFileSync("public/comparison-evidence.json", JSON.stringify(evidence, null, 2) + "\n");
 writeFileSync("public/commercial-search-intents.json", JSON.stringify({ schemaVersion: 1, generatedAt: evidence.generatedAt, intents: Object.fromEntries(evidence.pages.map((item) => [item.route, item.intent])) }, null, 2) + "\n");
+writeFileSync("public/release.json", JSON.stringify({
+  schemaVersion: 1,
+  commitSha: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || "local-unbound",
+  source: process.env.VERCEL_GIT_COMMIT_SHA ? "vercel" : process.env.GITHUB_SHA ? "github" : "local",
+}, null, 2) + "\n");
 
 console.log(`built ${pages.length} public product/trust pages and ${COMMERCIAL_PAGES.length} commercial-intent pages`);

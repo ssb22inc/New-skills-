@@ -4,19 +4,25 @@ import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
-import { extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
+import { candidateCommercialPagesFromDist, candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 import { articleJsonLd } from "../ops/build-learn.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
 import { EXAM_ARTICLES } from "../ops/learn-exam.mjs";
+import { LOGISTICS_ARTICLES } from "../ops/learn-logistics.mjs";
 import { SKILL_ARTICLES } from "../ops/learn-skills.mjs";
 import { TYPE_ARTICLES } from "../ops/learn-types.mjs";
 import { SAMPLE_ARTICLES } from "../ops/learn-samples.mjs";
+import { HUB_ARTICLES } from "../ops/learn-hubs.mjs";
 import { sourcesFor } from "../ops/seo-content-policy.mjs";
 import { injectSearchVerification, verificationMeta } from "../ops/search-verification.mjs";
 import { runAppBoundary } from "../ops/seo-app-boundary.mjs";
 import { COMMERCIAL_PAGES, commercialEvidence } from "../ops/commercial-content.mjs";
 import { runCommercialCheck } from "../ops/seo-commercial-check.mjs";
+import { runExamRulesCheck } from "../ops/seo-exam-rules-check.mjs";
+import { runLiveRelease } from "../ops/seo-live-release.mjs";
+import { INDEXNOW_KEY, runIndexNow } from "../ops/seo-indexnow.mjs";
+import { auditProductImages } from "../ops/seo-product-images.mjs";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
@@ -41,6 +47,18 @@ describe("SEO guardian", () => {
     const pages = evidence.pages.map((page) => ({ route: page.route, identifiers: [`sha256:${page.contentSha256}`] }));
     const intents = { intents: Object.fromEntries(evidence.pages.map((page) => [page.route, page.intent])) };
     expect(auditCommercialGovernance({ evidence, intents, pages, now: new Date("2026-08-30T12:00:00Z") })).toEqual([]);
+  });
+
+  it("keeps the UWorld and Archer comparisons PulseRN-led without unsupported outcome claims", () => {
+    for (const slug of ["compare/pulsern-vs-uworld", "compare/pulsern-vs-archer"]) {
+      const page = COMMERCIAL_PAGES.find((item) => item.slug === slug);
+      expect(page.h1).toContain("why start with PulseRN?");
+      expect(page.body).toContain("Our recommendation: start with PulseRN.");
+      expect(page.body).toContain("PulseRN recommendation");
+      expect(page.body).toContain("Try PulseRN free");
+      expect(page.body).not.toMatch(/Where (?:UWorld|Archer) is the clearer fit/i);
+      expect(page.body).not.toMatch(/(?:guaranteed to pass|will pass the NCLEX|raises? your chance of passing)/i);
+    }
   });
 
   it("fails closed when a commercial claim cites an unresolved source", () => {
@@ -69,6 +87,125 @@ describe("SEO guardian", () => {
     const report = await runCommercialCheck({ evidenceFile, directory, outputFile, fetchImpl: async () => new Response("<html><body>changed product page</body></html>", { status: 200, headers: { "content-type": "text/html" } }) });
     expect(report.verdict).toBe("FAIL");
     expect(report.findings.some((item) => item.code === "COMMERCIAL_SOURCE_DRIFT")).toBe(true);
+  });
+
+  it("keeps eight distinct exam-logistics guides intent-mapped and bound to official rule markers", () => {
+    expect(LOGISTICS_ARTICLES).toHaveLength(8);
+    expect(new Set(LOGISTICS_ARTICLES.map((article) => article.slug)).size).toBe(8);
+    for (const article of LOGISTICS_ARTICLES) {
+      expect(article.topic).toBe("Registration and results");
+      expect(article.published).toBe("2026-08-31");
+      expect(article.updated).toBe("2026-08-31");
+      expect(article.body).toContain("source-");
+      const sources = sourcesFor(article);
+      expect(sources.length).toBeGreaterThanOrEqual(2);
+      expect(sources.some((source) => Array.isArray(source.expectedMarkers) && source.expectedMarkers.length)).toBe(true);
+      expect(sources.every((source) => new URL(source.url).protocol === "https:")).toBe(true);
+    }
+  });
+
+  it("keeps the two 2026 authority hubs distinct, source-bound, and internally connected", () => {
+    expect(HUB_ARTICLES).toHaveLength(2);
+    expect(new Set(HUB_ARTICLES.map((article) => article.slug)).size).toBe(2);
+    expect(HUB_ARTICLES.map((article) => article.slug)).toEqual(["2026-nclex-rn-test-plan", "nclex-clinical-judgment"]);
+    for (const article of HUB_ARTICLES) {
+      expect(article.topic).toBe("2026 NCLEX essentials");
+      expect(article.published).toBe("2026-09-02");
+      expect(article.updated).toBe("2026-09-02");
+      expect(article.body.match(/href="\/learn\//g)?.length).toBeGreaterThanOrEqual(8);
+      const sources = sourcesFor(article);
+      expect(sources).toHaveLength(3);
+      expect(sources.every((source) => new URL(source.url).protocol === "https:")).toBe(true);
+      expect(sources.some((source) => Array.isArray(source.expectedMarkers) && source.expectedMarkers.length >= 3)).toBe(true);
+    }
+    const testPlan = HUB_ARTICLES.find((article) => article.slug === "2026-nclex-rn-test-plan");
+    const clinicalJudgment = HUB_ARTICLES.find((article) => article.slug === "nclex-clinical-judgment");
+    expect(testPlan.body).toContain("15–21%");
+    expect(testPlan.body).toContain("13–19%");
+    expect(testPlan.body).toContain("/learn/nclex-clinical-judgment/");
+    expect(clinicalJudgment.body).toContain("was not constructed to replace");
+    expect(clinicalJudgment.body).toContain("/learn/next-generation-nclex-what-changed/");
+  });
+
+  it("fails closed when an official NCLEX rule marker drifts", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-exam-rules-"));
+    const provenanceFile = path.join(directory, "content-provenance.json");
+    const outputFile = path.join(directory, "exam-rules.json");
+    await fs.writeFile(provenanceFile, JSON.stringify({ schemaVersion: 1, guides: [{ sources: [{ id: "ncsbn-rule", url: "https://www.nclex.com/register.page", expectedMarkers: ["Authorization to Test"] }] }] }));
+    const report = await runExamRulesCheck({ provenanceFile, outputFile, fetchImpl: async () => new Response("<html><body>changed official page</body></html>", { status: 200, headers: { "content-type": "text/html" } }) });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.findings.some((item) => item.code === "EXAM_RULE_SOURCE_DRIFT")).toBe(true);
+  });
+
+  it("does not describe a pull-request candidate as already live", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-live-candidate-"));
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>');
+    const report = await runLiveRelease({ directory, outputFile: path.join(directory, "live-release.json"), expectedCommitSha: "a".repeat(40), expectedLive: false });
+    expect(report.verdict).toBe("PASS");
+    expect(report.expectedLive).toBe(false);
+    expect(report.status).toContain("candidate-artifact-only");
+    expect(report.deployedCommitSha).toBeNull();
+  });
+
+  it("fails closed when production is not bound to the exact merge commit", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-live-main-"));
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>');
+    const report = await runLiveRelease({
+      directory,
+      outputFile: path.join(directory, "live-release.json"),
+      expectedCommitSha: "a".repeat(40),
+      expectedLive: true,
+      maxAttempts: 1,
+      intervalMs: 0,
+      fetchImpl: async () => new Response(JSON.stringify({ commitSha: "b".repeat(40) }), { status: 200, headers: { "content-type": "application/json" } }),
+      runCrawlImpl: async () => { throw new Error("crawl must not run for the wrong commit"); },
+    });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.findings.some((item) => item.code === "LIVE_RELEASE_COMMIT")).toBe(true);
+  });
+
+  it("validates the exact public sitemap and IndexNow ownership file without submitting a PR candidate", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-indexnow-candidate-"));
+    await fs.writeFile(path.join(directory, `${INDEXNOW_KEY}.txt`), `${INDEXNOW_KEY}\n`);
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url><url><loc>https://www.pulsern.app/learn/</loc></url></urlset>');
+    const report = await runIndexNow({ directory, outputFile: path.join(directory, "reports/indexnow.json"), submit: false, expectedCommitSha: "a".repeat(40) });
+    expect(report).toMatchObject({ verdict: "PASS", mode: "candidate-validation", submitted: false, urls: 2, httpStatus: null });
+    expect(report.payload.urlList).toEqual(["https://www.pulsern.app/", "https://www.pulsern.app/learn/"]);
+    expect(report.payload.keyLocation).toBe(`https://www.pulsern.app/${INDEXNOW_KEY}.txt`);
+  });
+
+  it("rejects private routes in an IndexNow batch", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-indexnow-private-"));
+    await fs.writeFile(path.join(directory, `${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/app/</loc></url></urlset>');
+    const report = await runIndexNow({ directory, outputFile: path.join(directory, "reports/indexnow.json"), submit: false });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.findings.some((item) => item.code === "INDEXNOW_URL_SCOPE")).toBe(true);
+  });
+
+  it("blocks IndexNow submission until the exact production commit is verified", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-indexnow-live-block-"));
+    await fs.writeFile(path.join(directory, `${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>');
+    const liveReportFile = path.join(directory, "live-release.json");
+    await fs.writeFile(liveReportFile, JSON.stringify({ expectedLive: true, verdict: "PASS", deployedCommitSha: "b".repeat(40) }));
+    const report = await runIndexNow({ directory, liveReportFile, outputFile: path.join(directory, "reports/indexnow.json"), submit: true, expectedCommitSha: "a".repeat(40), fetchImpl: async () => { throw new Error("submission must remain blocked"); } });
+    expect(report.verdict).toBe("FAIL");
+    expect(report.submitted).toBe(false);
+    expect(report.findings.some((item) => item.code === "INDEXNOW_LIVE_COMMIT")).toBe(true);
+  });
+
+  it("submits only after exact-commit live evidence and accepts IndexNow 202", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-indexnow-live-pass-"));
+    const commit = "a".repeat(40);
+    await fs.writeFile(path.join(directory, `${INDEXNOW_KEY}.txt`), INDEXNOW_KEY);
+    await fs.writeFile(path.join(directory, "sitemap.xml"), '<urlset><url><loc>https://www.pulsern.app/</loc></url></urlset>');
+    const liveReportFile = path.join(directory, "live-release.json");
+    await fs.writeFile(liveReportFile, JSON.stringify({ expectedLive: true, verdict: "PASS", deployedCommitSha: commit }));
+    let submittedPayload;
+    const report = await runIndexNow({ directory, liveReportFile, outputFile: path.join(directory, "reports/indexnow.json"), submit: true, expectedCommitSha: commit, fetchImpl: async (_url, options) => { submittedPayload = JSON.parse(options.body); return new Response("Accepted", { status: 202 }); } });
+    expect(report).toMatchObject({ verdict: "PASS", mode: "production-submission", submitted: true, urls: 1, httpStatus: 202 });
+    expect(submittedPayload.urlList).toEqual(["https://www.pulsern.app/"]);
   });
 
   it("rejects a guide without an accountable Person reviewer", () => {
@@ -389,7 +526,7 @@ describe("SEO guardian", () => {
       "ramnanan-2024-distributed-retrieval-review",
       "khalafi-2024-spaced-learning-nursing",
     ]);
-    expect(sourcesFor(guide).slice(0, 3).every((source) => source.sourceUpdated === null && source.locator.includes("live page checked 2026-08-28"))).toBe(true);
+    expect(sourcesFor(guide).slice(0, 3).every((source) => source.sourceUpdated === null && /live page checked 2026-08-(?:28|31)/.test(source.locator))).toBe(true);
   });
 
   it("keeps pending Guide 13 NCLEX scoring accurate, accessible, and source-bound", () => {
@@ -608,9 +745,45 @@ describe("SEO guardian", () => {
     expect(() => parseReview(JSON.stringify({ ...base, guideCoverage: { ...coverage, approvedGuides: 0, pendingGuides: 2, approvedRoutes: [], pendingRoutes: ["/learn/approved/", "/learn/pending/"] } }), coverage)).toThrow(/deterministic evidence/i);
   });
 
+  it("binds exact current-release and pending guide HTML into the adversary packet", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-content-"));
+    await fs.mkdir(path.join(directory, "learn", "current"), { recursive: true });
+    await fs.mkdir(path.join(directory, "learn", "pending"), { recursive: true });
+    const currentDigest = "a".repeat(64);
+    const pendingDigest = "b".repeat(64);
+    await fs.writeFile(path.join(directory, "content-provenance.json"), JSON.stringify({ generatedAt: "2026-09-02T00:00:00.000Z", guides: [
+      { route: "/learn/current/", published: "2026-09-02", updated: "2026-09-02", risk: "exam", contentSha256: currentDigest, sourceSetSha256: "c".repeat(64), sources: [], review: { decision: "approved" } },
+      { route: "/learn/pending/", published: "2026-08-01", updated: "2026-08-01", risk: "exam", contentSha256: pendingDigest, sourceSetSha256: "d".repeat(64), sources: [], review: { decision: "pending" } },
+      { route: "/learn/old/", published: "2026-08-01", updated: "2026-08-01", risk: "exam", contentSha256: "e".repeat(64), sourceSetSha256: "f".repeat(64), sources: [], review: { decision: "approved" } },
+    ] }));
+    await fs.writeFile(path.join(directory, "learn", "current", "index.html"), `<article data-guide="current">sha256:${currentDigest}</article>`);
+    await fs.writeFile(path.join(directory, "learn", "pending", "index.html"), `<article data-guide="pending">sha256:${pendingDigest}</article>`);
+    const packet = await candidateGuidePagesFromDist({ coverage: { totalGuides: 3, pendingRoutes: ["/learn/pending/"] }, distDirectory: directory, generatedAt: "2026-09-02T12:00:00.000Z" });
+    expect(packet.pages.map((page) => page.route)).toEqual(["/learn/current/", "/learn/pending/"]);
+    expect(packet.pages.every((page) => /^[a-f0-9]{64}$/.test(page.htmlSha256))).toBe(true);
+    expect(packet.pages.find((page) => page.route === "/learn/current/").html).toContain('data-guide="current"');
+  });
+
+  it("binds exact current-release commercial HTML into the adversary packet", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-commercial-"));
+    await fs.mkdir(path.join(directory, "compare", "pulsern-vs-example"), { recursive: true });
+    const digest = "a".repeat(64);
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [
+      { route: "/compare/pulsern-vs-example/", published: "2026-08-30", updated: "2026-09-03", contentSha256: digest, sourceSetSha256: "b".repeat(64), intent: { primary: "PulseRN vs Example" }, claims: [], sources: [] },
+      { route: "/compare/old/", published: "2026-08-30", updated: "2026-08-30", contentSha256: "c".repeat(64), sourceSetSha256: "d".repeat(64), intent: { primary: "old" }, claims: [], sources: [] },
+    ] }));
+    await fs.writeFile(path.join(directory, "compare", "pulsern-vs-example", "index.html"), `<article data-comparison="example">sha256:${digest}</article>`);
+    const packet = await candidateCommercialPagesFromDist({ distDirectory: directory, generatedAt: "2026-09-03T12:00:00.000Z" });
+    expect(packet.pages.map((page) => page.route)).toEqual(["/compare/pulsern-vs-example/"]);
+    expect(packet.pages[0].html).toContain('data-comparison="example"');
+    expect(packet.pages[0].htmlSha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+
   it("fails closed when the secret or provider response is unavailable", async () => {
     await expect(runAdversary({ apiKey: "" })).rejects.toThrow(/OPENROUTER_API_KEY/);
-    await expect(runAdversary({ apiKey: "test", fetchImpl: async () => ({ ok: false, status: 503, text: async () => "provider unavailable" }) })).rejects.toThrow(/503/);
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-unavailable-"));
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [] }));
+    await expect(runAdversary({ apiKey: "test", reportDirectory: directory, distDirectory: directory, fetchImpl: async () => ({ ok: false, status: 503, text: async () => "provider unavailable" }) })).rejects.toThrow(/503/);
   });
 
   it("writes PASS evidence and rejects FAIL evidence at enforcement", async () => {
@@ -618,7 +791,8 @@ describe("SEO guardian", () => {
     const pass = { verdict: "PASS", summary: "All evidence passed.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] };
     const passFetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: JSON.stringify(pass) } }] }) });
     const passJson = path.join(directory, "adversary.json");
-    const result = await runAdversary({ reportDirectory: directory, outputFile: path.join(directory, "adversary.md"), jsonFile: passJson, apiKey: "test", fetchImpl: passFetch, now: () => "2026-08-26T00:00:00.000Z" });
+    await fs.writeFile(path.join(directory, "comparison-evidence.json"), JSON.stringify({ generatedAt: "2026-09-03T00:00:00.000Z", pages: [] }));
+    const result = await runAdversary({ reportDirectory: directory, outputFile: path.join(directory, "adversary.md"), jsonFile: passJson, apiKey: "test", distDirectory: directory, fetchImpl: passFetch, now: () => "2026-08-26T00:00:00.000Z" });
     expect(result.verdict).toBe("PASS");
     await expect(enforceAdversary(passJson)).resolves.toMatchObject({ verdict: "PASS" });
 
@@ -633,7 +807,50 @@ describe("SEO guardian", () => {
     expect(workflow).not.toContain("env.OPENROUTER_API_KEY != ''");
     expect(workflow).toContain('test "${{ steps.adversary.outcome }}" = "success"');
     expect(workflow).toContain('test "${{ steps.app_boundary.outcome }}" = "success"');
+    expect(workflow).toContain('test "${{ steps.product_images.outcome }}" = "success"');
     expect(workflow).toContain("npm run seo:enforce");
+  });
+
+  it("fails closed when an authentic product image, privacy assertion, or homepage binding drifts", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-product-images-"));
+    const publicDirectory = path.join(directory, "public");
+    const captureDirectory = path.join(directory, "capture");
+    await Promise.all([fs.mkdir(publicDirectory), fs.mkdir(captureDirectory)]);
+    const specs = [
+      ["pulsern-adaptive-practice.png", 720, 620, "PulseRN adaptive NCLEX practice screen with a pharmacology question and four answer choices", "Authentic adaptive NCLEX practice with answer-first review."],
+      ["pulsern-today-dashboard.png", 720, 1000, "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards", "A focused daily study plan with progress signals."],
+      ["pulsern-lab-reference.png", 430, 932, "PulseRN mobile lab-reference drawer open over an adaptive practice question", "Searchable educational lab-reference ranges inside the study workflow."],
+    ];
+    const images = [];
+    for (const [file, width, height, alt, caption] of specs) {
+      const buffer = Buffer.alloc(12000, file.length);
+      Buffer.from("89504e470d0a1a0a", "hex").copy(buffer, 0);
+      buffer.write("IHDR", 12, "ascii");
+      buffer.writeUInt32BE(width, 16);
+      buffer.writeUInt32BE(height, 20);
+      await fs.writeFile(path.join(publicDirectory, file), buffer);
+      images.push({ file, sha256: createHash("sha256").update(buffer).digest("hex"), bytes: buffer.byteLength, width, height, alt, caption });
+    }
+    const manifest = { schemaVersion: 1, sourceCommitSha: "a".repeat(40), renderer: "PulseRN App.jsx deterministic built-in-content harness", containsLearnerData: false, images };
+    const capture = { ...manifest, browser: "test-browser", images: images.map(({ alt, caption, ...image }) => image) };
+    const manifestFile = path.join(directory, "manifest.json");
+    const captureFile = path.join(captureDirectory, "capture.json");
+    const landingFile = path.join(directory, "index.html");
+    const markup = images.map((image) => `<figure><img src="/product/${image.file}" alt="${image.alt}" width="${image.width}" height="${image.height}"><figcaption>${image.caption}</figcaption></figure>`).join("");
+    await Promise.all([
+      fs.writeFile(manifestFile, JSON.stringify(manifest)),
+      fs.writeFile(captureFile, JSON.stringify(capture)),
+      fs.writeFile(landingFile, markup),
+    ]);
+    const options = { manifestFile, captureFile, publicDirectory, landingFile, outputFile: path.join(directory, "pass.json") };
+    await expect(auditProductImages(options)).resolves.toMatchObject({ verdict: "PASS", containsLearnerData: false });
+
+    capture.containsLearnerData = true;
+    capture.images[0].sha256 = "f".repeat(64);
+    await fs.writeFile(captureFile, JSON.stringify(capture));
+    const fail = await auditProductImages({ ...options, outputFile: path.join(directory, "fail.json") });
+    expect(fail.verdict).toBe("FAIL");
+    expect(fail.findings.map((item) => item.code)).toEqual(expect.arrayContaining(["PRODUCT_IMAGE_PRIVACY", "PRODUCT_IMAGE_STALE"]));
   });
 
   it("fails closed when the public/private app boundary regresses", async () => {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-26T00:00:00.000Z",
+  "generatedAt": "2026-09-02T00:00:00.000Z",
   "reviewer": {
     "id": "sheldon-bennett-rn",
     "displayName": "Sheldon Bennett",
@@ -13,7 +13,264 @@
   },
   "guides": [
     {
+      "route": "/learn/2026-nclex-rn-test-plan/",
+      "published": "2026-09-02",
+      "updated": "2026-09-02",
+      "risk": "exam",
+      "intent": {
+        "primary": "2026 NCLEX RN test plan",
+        "secondary": [
+          "NCLEX RN content categories 2026",
+          "NCLEX test plan percentages"
+        ],
+        "audience": "NCLEX-RN candidates and nursing educators",
+        "risk": "exam"
+      },
+      "contentSha256": "c7c31c7bc7a0b33324c79869b4833dadaa720f88ce861ec4ba174684ddff4cd0",
+      "sourceSetSha256": "de0e7d6629009d46b75b16980bdca9780a13b2a2cf0f5520bc0d4e61bd2384c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan-pdf",
+          "title": "NCSBN — 2026 NCLEX-RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_RN_Test%20Plan_English-F.pdf",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-09-02",
+          "locator": "Effective dates; Integrated Processes; Clinical Judgment; Distribution of Content; Administration and Examination Length"
+        },
+        {
+          "id": "ncsbn-2026-candidate-bulletin-pdf",
+          "title": "NCSBN — 2026 NCLEX Candidate Bulletin",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_NCLEX_Candidate_Bulletin_English.pdf",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "Identification Requirements; Candidate Rules; Check-In Process; Breaks; Results Reporting; live PDF checked 2026-08-28 and no publication-day field is displayed"
+        },
+        {
+          "id": "ncsbn-clinical-judgment-measurement-model",
+          "title": "NCSBN — Clinical Judgment Measurement Model",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/clinical-judgment-measurement-model.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-09-02",
+          "locator": "Measuring Clinical Judgment; A Closer Look at the NCJMM; nursing-process and model-purpose boundaries; live page checked 2026-09-02 and no page-level revision date is published",
+          "expectedMarkers": [
+            "framework for the valid measurement of clinical judgment",
+            "was not constructed to replace",
+            "neither defines nor redefines clinical judgment"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-03",
+        "scope": "Full RN exam-policy, educational, clinical-judgment, and source review of the exact 2026 NCLEX-RN Test Plan authority-hub content and source-set digests",
+        "claims": [
+          {
+            "id": "test-plan-purpose-effective-period-and-development",
+            "locator": "Opening paragraph; effective-date FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf"
+            ]
+          },
+          {
+            "id": "test-plan-blueprint-not-prediction-boundary",
+            "locator": "Use the plan as a blueprint, not a prediction",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "test-plan-client-needs-ranges-and-tolerance",
+            "locator": "2026 RN Client Needs percentages table and qualification",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "test-plan-integrated-processes",
+            "locator": "Integrated processes appear throughout the plan",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf"
+            ]
+          },
+          {
+            "id": "test-plan-clinical-judgment-case-and-standalone-items",
+            "locator": "Integrated processes appear throughout the plan; clinical-judgment FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-clinical-judgment-measurement-model"
+            ]
+          },
+          {
+            "id": "test-plan-study-interpretation-boundary",
+            "locator": "What the percentages mean for studying",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "test-plan-exam-structure-separation",
+            "locator": "Exam structure is a separate question",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "test-plan-education-and-no-result-guarantee",
+            "locator": "Description; CTA; blueprint boundary",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-clinical-judgment/",
+      "published": "2026-09-02",
+      "updated": "2026-09-02",
+      "risk": "exam",
+      "intent": {
+        "primary": "NCLEX clinical judgment",
+        "secondary": [
+          "NCSBN clinical judgment measurement model",
+          "six NCLEX clinical judgment skills"
+        ],
+        "audience": "NCLEX-RN candidates and nursing educators",
+        "risk": "exam"
+      },
+      "contentSha256": "86a8a3f3986e1f8fe23c8101f35a017796b81605dbc604bb2f462a6fa84efcd9",
+      "sourceSetSha256": "de0e7d6629009d46b75b16980bdca9780a13b2a2cf0f5520bc0d4e61bd2384c2",
+      "sources": [
+        {
+          "id": "ncsbn-2026-rn-test-plan-pdf",
+          "title": "NCSBN — 2026 NCLEX-RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_RN_Test%20Plan_English-F.pdf",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-09-02",
+          "locator": "Effective dates; Integrated Processes; Clinical Judgment; Distribution of Content; Administration and Examination Length"
+        },
+        {
+          "id": "ncsbn-2026-candidate-bulletin-pdf",
+          "title": "NCSBN — 2026 NCLEX Candidate Bulletin",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/files/2026_NCLEX_Candidate_Bulletin_English.pdf",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "Identification Requirements; Candidate Rules; Check-In Process; Breaks; Results Reporting; live PDF checked 2026-08-28 and no publication-day field is displayed"
+        },
+        {
+          "id": "ncsbn-clinical-judgment-measurement-model",
+          "title": "NCSBN — Clinical Judgment Measurement Model",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/clinical-judgment-measurement-model.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-09-02",
+          "locator": "Measuring Clinical Judgment; A Closer Look at the NCJMM; nursing-process and model-purpose boundaries; live page checked 2026-09-02 and no page-level revision date is published",
+          "expectedMarkers": [
+            "framework for the valid measurement of clinical judgment",
+            "was not constructed to replace",
+            "neither defines nor redefines clinical judgment"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-03",
+        "scope": "Full RN exam-policy, clinical-judgment, educational, and source review of the exact NCLEX clinical-judgment authority-hub content and source-set digests",
+        "claims": [
+          {
+            "id": "clinical-judgment-definition-and-iterative-process",
+            "locator": "Opening paragraph",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "ncjmm-purpose-and-nursing-process-boundary",
+            "locator": "What the NCJMM is—and is not; NCJMM FAQ",
+            "sourceIds": [
+              "ncsbn-clinical-judgment-measurement-model"
+            ]
+          },
+          {
+            "id": "six-clinical-judgment-skills",
+            "locator": "The six measurable clinical-judgment skills table; skills FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf",
+              "ncsbn-clinical-judgment-measurement-model"
+            ]
+          },
+          {
+            "id": "clinical-judgment-case-and-standalone-item-structure",
+            "locator": "How clinical judgment appears on the 2026 NCLEX-RN; case-study FAQ",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf"
+            ]
+          },
+          {
+            "id": "clinical-judgment-integrated-reasoning-boundary",
+            "locator": "How clinical judgment appears on the 2026 NCLEX-RN",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-clinical-judgment-measurement-model"
+            ]
+          },
+          {
+            "id": "clinical-judgment-practice-loop-as-pulsern-guidance",
+            "locator": "A disciplined practice loop and qualification",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-clinical-judgment-measurement-model"
+            ]
+          },
+          {
+            "id": "clinical-judgment-error-review-framework",
+            "locator": "Review mistakes by reasoning failure, not only topic",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-clinical-judgment-measurement-model"
+            ]
+          },
+          {
+            "id": "clinical-judgment-content-knowledge-connection",
+            "locator": "Keep content knowledge connected to judgment",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-clinical-judgment-measurement-model"
+            ]
+          },
+          {
+            "id": "clinical-judgment-education-and-no-prediction-boundary",
+            "locator": "Description; CTA; NCJMM boundary",
+            "sourceIds": [
+              "ncsbn-2026-rn-test-plan-pdf",
+              "ncsbn-2026-candidate-bulletin-pdf",
+              "ncsbn-clinical-judgment-measurement-model"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
       "route": "/learn/how-is-the-nclex-scored/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how is the NCLEX scored",
@@ -163,6 +420,8 @@
     },
     {
       "route": "/learn/how-many-questions-is-the-nclex/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how many questions are on the NCLEX",
@@ -319,12 +578,14 @@
     },
     {
       "route": "/learn/next-generation-nclex-what-changed/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "what changed on the Next Generation NCLEX",
         "secondary": [
           "NGN changes",
-          "NCLEX clinical judgment model"
+          "when did Next Generation NCLEX start"
         ],
         "audience": "NCLEX-RN candidates",
         "risk": "exam"
@@ -463,6 +724,8 @@
     },
     {
       "route": "/learn/nclex-test-day-what-to-expect/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "what to expect on NCLEX test day",
@@ -613,7 +876,957 @@
       }
     },
     {
+      "route": "/learn/how-to-register-for-the-nclex/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to register for the NCLEX",
+        "secondary": [
+          "NCLEX registration steps",
+          "apply for NCLEX RN"
+        ],
+        "audience": "prospective NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "93859d2b0462e9bf7e6484ce0de27c3c868398ea8eea289f0910295a87832c86",
+      "sourceSetSha256": "5dd7f6f56f8f680e3f9556dad905d18bf9db48585b4d80475f0ff22b1f6a78b2",
+      "sources": [
+        {
+          "id": "ncsbn-registration-process-2026",
+          "title": "NCSBN — How to Register to Take the NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/register.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Registration Process; Apply for Licensure/Registration; Register with Pearson; Authorization to Test; ATT Validity Dates; Find a Testing Location; Schedule Exam Appointment",
+          "expectedMarkers": [
+            "Apply for Licensure/Registration",
+            "Authorization to Test",
+            "ATT Validity Dates",
+            "Schedule Exam Appointment"
+          ]
+        },
+        {
+          "id": "ncsbn-pearson-registration-2026",
+          "title": "NCSBN — How to Register with Pearson",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/registration.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Program Codes; Pearson registration options; confirmation email; 365-day Registration Time Limit; duplicate registrations; Testing Accommodations",
+          "expectedMarkers": [
+            "Program Codes",
+            "Registration Time Limit",
+            "365 days",
+            "may not have two NCLEX registrations"
+          ]
+        },
+        {
+          "id": "ncsbn-scheduling-rules-2026",
+          "title": "NCSBN — How to Schedule an NCLEX Appointment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/scheduling.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "When to Schedule; Online and Telephone Scheduling; Missing an Appointment; Changing an Appointment; International and accommodated appointment changes",
+          "expectedMarkers": [
+            "may not schedule",
+            "one full business day",
+            "Leaving a message",
+            "Changing an International Exam Appointment"
+          ]
+        },
+        {
+          "id": "ncsbn-fees-payment-2026",
+          "title": "NCSBN — NCLEX Fees & Payment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/fees-payment.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Current registration, international scheduling, change, refund and announced February 1, 2027 fees",
+          "expectedMarkers": [
+            "Effective Feb. 1, 2027",
+            "$350",
+            "$570",
+            "Refund Policy"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, and source review of the exact how-to-register-for-the-nclex content and source-set digests",
+        "claims": [
+          {
+            "id": "registration-sequence-and-organizational-responsibility",
+            "locator": "Opening paragraph; six-step registration sequence",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "registration-name-program-code-email-and-acknowledgment",
+            "locator": "Name, program code and email checks",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "registration-eligibility-365-day-and-duplicate-boundaries",
+            "locator": "Registration does not equal eligibility; eligibility FAQ",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "registration-att-issuance-and-validity",
+            "locator": "What happens after eligibility; scheduling FAQ",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "registration-fee-and-jurisdiction-boundary",
+            "locator": "Registration sequence; regulator boundary; CTA",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-authorization-to-test-att/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
+      "risk": "exam",
+      "intent": {
+        "primary": "NCLEX authorization to test ATT",
+        "secondary": [
+          "when will I get NCLEX ATT",
+          "NCLEX ATT validity"
+        ],
+        "audience": "registered NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "0dabecd40c3f337b868082658eb54ac8247f368a0e064af153ab19dd3b684024",
+      "sourceSetSha256": "7066aa1e09e804df8b746e67cdf74644e2239d5c73bde3cd5baee38cca0e1a3e",
+      "sources": [
+        {
+          "id": "ncsbn-registration-process-2026",
+          "title": "NCSBN — How to Register to Take the NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/register.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Registration Process; Apply for Licensure/Registration; Register with Pearson; Authorization to Test; ATT Validity Dates; Find a Testing Location; Schedule Exam Appointment",
+          "expectedMarkers": [
+            "Apply for Licensure/Registration",
+            "Authorization to Test",
+            "ATT Validity Dates",
+            "Schedule Exam Appointment"
+          ]
+        },
+        {
+          "id": "ncsbn-pearson-registration-2026",
+          "title": "NCSBN — How to Register with Pearson",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/registration.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Program Codes; Pearson registration options; confirmation email; 365-day Registration Time Limit; duplicate registrations; Testing Accommodations",
+          "expectedMarkers": [
+            "Program Codes",
+            "Registration Time Limit",
+            "365 days",
+            "may not have two NCLEX registrations"
+          ]
+        },
+        {
+          "id": "ncsbn-scheduling-rules-2026",
+          "title": "NCSBN — How to Schedule an NCLEX Appointment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/scheduling.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "When to Schedule; Online and Telephone Scheduling; Missing an Appointment; Changing an Appointment; International and accommodated appointment changes",
+          "expectedMarkers": [
+            "may not schedule",
+            "one full business day",
+            "Leaving a message",
+            "Changing an International Exam Appointment"
+          ]
+        },
+        {
+          "id": "ncsbn-nclex-faqs",
+          "title": "NCSBN — NCLEX Frequently Asked Questions",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/faqs.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-28",
+          "locator": "How the NCLEX Works — item selection and initial difficulty; What the Exam Looks Like — partial-credit methods and unanswered-item prompt; live page checked 2026-08-28 and no page-level revision date is published"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, and source review of the exact nclex-authorization-to-test-att content and source-set digests",
+        "claims": [
+          {
+            "id": "att-definition-and-prerequisites",
+            "locator": "Opening paragraph; What must happen before the ATT",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-nclex-faqs"
+            ]
+          },
+          {
+            "id": "att-average-and-controlling-validity-dates",
+            "locator": "Your ATT controls your dates; validity FAQ",
+            "sourceIds": [
+              "ncsbn-registration-process-2026"
+            ]
+          },
+          {
+            "id": "att-verification-and-accommodated-scheduling",
+            "locator": "What to verify when it arrives",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "att-not-received-and-duplicate-registration-boundary",
+            "locator": "If the ATT has not arrived; contact FAQ",
+            "sourceIds": [
+              "ncsbn-nclex-faqs",
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "att-seat-availability-and-scheduling-window",
+            "locator": "Schedule before the window becomes narrow; scheduling FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/schedule-reschedule-cancel-nclex/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to reschedule the NCLEX",
+        "secondary": [
+          "cancel NCLEX appointment",
+          "schedule NCLEX exam"
+        ],
+        "audience": "NCLEX-RN candidates with an ATT",
+        "risk": "exam"
+      },
+      "contentSha256": "a2f8b7a9ca52aa44532ed378f9a5423a3380439ac9da3464ad3454897bdf4cd8",
+      "sourceSetSha256": "d2b4ce7f5fa92ea86bb85ee21a80ebf16fcd8225d66d9f696fb0abae08c462c8",
+      "sources": [
+        {
+          "id": "ncsbn-scheduling-rules-2026",
+          "title": "NCSBN — How to Schedule an NCLEX Appointment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/scheduling.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "When to Schedule; Online and Telephone Scheduling; Missing an Appointment; Changing an Appointment; International and accommodated appointment changes",
+          "expectedMarkers": [
+            "may not schedule",
+            "one full business day",
+            "Leaving a message",
+            "Changing an International Exam Appointment"
+          ]
+        },
+        {
+          "id": "ncsbn-registration-process-2026",
+          "title": "NCSBN — How to Register to Take the NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/register.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Registration Process; Apply for Licensure/Registration; Register with Pearson; Authorization to Test; ATT Validity Dates; Find a Testing Location; Schedule Exam Appointment",
+          "expectedMarkers": [
+            "Apply for Licensure/Registration",
+            "Authorization to Test",
+            "ATT Validity Dates",
+            "Schedule Exam Appointment"
+          ]
+        },
+        {
+          "id": "ncsbn-testing-locations-2026",
+          "title": "NCSBN — NCLEX Testing Locations",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/testing-locations.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Domestic and international test centers; appointment methods; international-change requirement; licensure-destination definitions",
+          "expectedMarkers": [
+            "domestic and international test centers",
+            "Changes to international appointments",
+            "Test Center Definitions"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, and source review of the exact schedule-reschedule-cancel-nclex content and source-set digests",
+        "claims": [
+          {
+            "id": "scheduling-att-channel-and-confirmation-requirements",
+            "locator": "Opening paragraph; Get a confirmation",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          },
+          {
+            "id": "scheduling-first-time-and-repeat-appointment-offers",
+            "locator": "Scheduling the first appointment",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "domestic-change-and-cancellation-deadlines",
+            "locator": "Changing or canceling a domestic appointment table; notice FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "international-appointment-change-and-fee-boundaries",
+            "locator": "International and accommodated appointments",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-testing-locations-2026"
+            ]
+          },
+          {
+            "id": "accommodated-appointment-change-path",
+            "locator": "International and accommodated appointments",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "missed-appointment-consequences",
+            "locator": "What happens after a missed appointment; missed-exam FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-fees-and-payment/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
+      "risk": "exam",
+      "intent": {
+        "primary": "how much does the NCLEX cost",
+        "secondary": [
+          "NCLEX registration fee",
+          "international NCLEX fee"
+        ],
+        "audience": "prospective NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "2a4fa78bd0f9de7a67976ead4283bca8ffa2cfce2a512303f86ae55edf7f1b5c",
+      "sourceSetSha256": "40fe2680d7b3cd5f92f42afc806ff667f037d3711505469688e3fc0cc1e65cb3",
+      "sources": [
+        {
+          "id": "ncsbn-fees-payment-2026",
+          "title": "NCSBN — NCLEX Fees & Payment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/fees-payment.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Current registration, international scheduling, change, refund and announced February 1, 2027 fees",
+          "expectedMarkers": [
+            "Effective Feb. 1, 2027",
+            "$350",
+            "$570",
+            "Refund Policy"
+          ]
+        },
+        {
+          "id": "ncsbn-pearson-registration-2026",
+          "title": "NCSBN — How to Register with Pearson",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/registration.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Program Codes; Pearson registration options; confirmation email; 365-day Registration Time Limit; duplicate registrations; Testing Accommodations",
+          "expectedMarkers": [
+            "Program Codes",
+            "Registration Time Limit",
+            "365 days",
+            "may not have two NCLEX registrations"
+          ]
+        },
+        {
+          "id": "ncsbn-scheduling-rules-2026",
+          "title": "NCSBN — How to Schedule an NCLEX Appointment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/scheduling.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "When to Schedule; Online and Telephone Scheduling; Missing an Appointment; Changing an Appointment; International and accommodated appointment changes",
+          "expectedMarkers": [
+            "may not schedule",
+            "one full business day",
+            "Leaving a message",
+            "Changing an International Exam Appointment"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, pricing, and source review of the exact nclex-fees-and-payment content and source-set digests",
+        "claims": [
+          {
+            "id": "fees-current-registration-international-and-change-table",
+            "locator": "Published fees before February 1, 2027",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026"
+            ]
+          },
+          {
+            "id": "fees-announced-february-2027-change",
+            "locator": "The announced 2027 change; price FAQ",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026"
+            ]
+          },
+          {
+            "id": "fees-payment-options-and-confirmation",
+            "locator": "Payment and duplicate-registration risk",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "fees-duplicate-registration-risk",
+            "locator": "Payment and duplicate-registration risk",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "fees-refund-and-missed-appointment-boundaries",
+            "locator": "Refund boundaries; refund FAQ",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026",
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "fees-nrb-tax-travel-and-pulsern-separation",
+            "locator": "Opening paragraph; time-sensitive prices; CTA",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-testing-accommodations/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
+      "risk": "exam",
+      "intent": {
+        "primary": "NCLEX testing accommodations",
+        "secondary": [
+          "request NCLEX accommodations",
+          "NCLEX comfort aids"
+        ],
+        "audience": "NCLEX-RN candidates requesting accommodations",
+        "risk": "exam"
+      },
+      "contentSha256": "d94cceac779e8ff59ec2bbc976efc7ec9ea12bf6902c059bd84030f01173a209",
+      "sourceSetSha256": "b03b9fd71a313021dd49aa8d63c93acff54f3bc1b4858eb15818f93ed47a0964",
+      "sources": [
+        {
+          "id": "ncsbn-pearson-registration-2026",
+          "title": "NCSBN — How to Register with Pearson",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/registration.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Program Codes; Pearson registration options; confirmation email; 365-day Registration Time Limit; duplicate registrations; Testing Accommodations",
+          "expectedMarkers": [
+            "Program Codes",
+            "Registration Time Limit",
+            "365 days",
+            "may not have two NCLEX registrations"
+          ]
+        },
+        {
+          "id": "pearson-vue-comfort-aid-list-2024",
+          "title": "Pearson VUE — Comfort Aid List",
+          "publisher": "Pearson VUE",
+          "url": "https://www.pearsonvue.com/us/en/test-takers/accommodations/comfort-aid-list.html",
+          "sourceUpdated": "2024-07-01",
+          "accessedAt": "2026-08-31",
+          "locator": "Items not requiring pre-approval; visual-inspection rule; medical-device qualifications; testing-channel qualifications",
+          "expectedMarkers": [
+            "do not require pre-approval",
+            "visual inspection",
+            "formal accommodation approval",
+            "Last update: July 1, 2024"
+          ]
+        },
+        {
+          "id": "ncsbn-registration-process-2026",
+          "title": "NCSBN — How to Register to Take the NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/register.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Registration Process; Apply for Licensure/Registration; Register with Pearson; Authorization to Test; ATT Validity Dates; Find a Testing Location; Schedule Exam Appointment",
+          "expectedMarkers": [
+            "Apply for Licensure/Registration",
+            "Authorization to Test",
+            "ATT Validity Dates",
+            "Schedule Exam Appointment"
+          ]
+        },
+        {
+          "id": "ncsbn-scheduling-rules-2026",
+          "title": "NCSBN — How to Schedule an NCLEX Appointment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/scheduling.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "When to Schedule; Online and Telephone Scheduling; Missing an Appointment; Changing an Appointment; International and accommodated appointment changes",
+          "expectedMarkers": [
+            "may not schedule",
+            "one full business day",
+            "Leaving a message",
+            "Changing an International Exam Appointment"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, accessibility-process, and source review of the exact nclex-testing-accommodations content and source-set digests",
+        "claims": [
+          {
+            "id": "accommodations-nrb-control-and-pre-registration-timing",
+            "locator": "Opening paragraph; timing FAQ",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "accommodations-published-process-sequence",
+            "locator": "The published sequence",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026",
+              "ncsbn-registration-process-2026",
+              "ncsbn-scheduling-rules-2026"
+            ]
+          },
+          {
+            "id": "accommodations-jurisdiction-and-legal-boundary",
+            "locator": "This is process information, not legal advice",
+            "sourceIds": [
+              "ncsbn-pearson-registration-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          },
+          {
+            "id": "accommodations-comfort-aid-distinction-and-inspection",
+            "locator": "Accommodations and comfort aids are not identical",
+            "sourceIds": [
+              "pearson-vue-comfort-aid-list-2024",
+              "ncsbn-pearson-registration-2026"
+            ]
+          },
+          {
+            "id": "accommodations-qualified-device-examples",
+            "locator": "Comfort-aid qualification paragraph",
+            "sourceIds": [
+              "pearson-vue-comfort-aid-list-2024"
+            ]
+          },
+          {
+            "id": "accommodations-appointment-change-contact-path",
+            "locator": "Scheduling and changing an accommodated appointment; change FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/nclex-quick-results-vs-official-results/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
+      "risk": "exam",
+      "intent": {
+        "primary": "NCLEX quick results vs official results",
+        "secondary": [
+          "when do NCLEX results come out",
+          "NCLEX quick results cost"
+        ],
+        "audience": "recent NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "7d67d0d3e04f874c2da39a86c96307cac61fb806cae4a33d6258335cfec63df0",
+      "sourceSetSha256": "87c8ab8dbee50a56e4771723044e1f9c2200385c476ac2a061201d539418f340",
+      "sources": [
+        {
+          "id": "ncsbn-quick-results-2026",
+          "title": "NCSBN — NCLEX Quick Results",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/quick-results.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Unofficial status; two-business-day availability; participating NRBs; access process; published $7.95 price",
+          "expectedMarkers": [
+            "unofficial",
+            "two business days",
+            "$7.95",
+            "does not authorize"
+          ]
+        },
+        {
+          "id": "ncsbn-nclex-results-2026-08-31",
+          "title": "NCSBN — Official Results, Quick Results, CPR, and Retake Details",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/results.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Official Results; Quick Results; Candidate Performance Report; Retake Policy and Steps; live page checked 2026-08-31 and no page-level revision date is published",
+          "expectedMarkers": [
+            "Official Results",
+            "within six weeks",
+            "45 test-free days"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, results-channel, and source review of the exact nclex-quick-results-vs-official-results content and source-set digests",
+        "claims": [
+          {
+            "id": "results-unofficial-quick-versus-official-nrb-boundary",
+            "locator": "Opening paragraph; Practice authorization boundary",
+            "sourceIds": [
+              "ncsbn-quick-results-2026",
+              "ncsbn-nclex-results-2026-08-31"
+            ]
+          },
+          {
+            "id": "results-channel-timing-availability-status-and-price",
+            "locator": "Quick Results compared with official results table",
+            "sourceIds": [
+              "ncsbn-quick-results-2026",
+              "ncsbn-nclex-results-2026-08-31"
+            ]
+          },
+          {
+            "id": "quick-results-account-purchase-process",
+            "locator": "How the published Quick Results process works",
+            "sourceIds": [
+              "ncsbn-quick-results-2026"
+            ]
+          },
+          {
+            "id": "quick-results-participation-and-no-unofficial-inference",
+            "locator": "Quick Results process qualification paragraph",
+            "sourceIds": [
+              "ncsbn-quick-results-2026"
+            ]
+          },
+          {
+            "id": "official-results-six-week-contact-path",
+            "locator": "When to contact the NRB; late-results FAQ",
+            "sourceIds": [
+              "ncsbn-nclex-results-2026-08-31"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/how-to-read-nclex-candidate-performance-report/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
+      "risk": "exam",
+      "intent": {
+        "primary": "how to read NCLEX candidate performance report",
+        "secondary": [
+          "NCLEX CPR below near above",
+          "NCLEX performance report retake plan"
+        ],
+        "audience": "NCLEX-RN retake candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "1233bad8d15c6db021aa72cf9a0bf3dea11776838318b6f8e309a8a99b0a7412",
+      "sourceSetSha256": "d8b27ccf2f6e707b4a617de61848e27b0542a29eaa8c5768ac163e6bc2e682ce",
+      "sources": [
+        {
+          "id": "ncsbn-candidate-performance-report-2026-08-31",
+          "title": "NCSBN — Candidate Performance Report",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/candidate-performance-report.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "CPR purpose, abbreviated report, overall pass/fail limitation, performance indicators, and remediation order; live page checked 2026-08-31 and no page-level revision date is published",
+          "expectedMarkers": [
+            "individualized, two-page document",
+            "Below the Passing Standard",
+            "Near the Passing Standard",
+            "Above the Passing Standard"
+          ]
+        },
+        {
+          "id": "ncsbn-nclex-results-2026-08-31",
+          "title": "NCSBN — Official Results, Quick Results, CPR, and Retake Details",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/results.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Official Results; Quick Results; Candidate Performance Report; Retake Policy and Steps; live page checked 2026-08-31 and no page-level revision date is published",
+          "expectedMarkers": [
+            "Official Results",
+            "within six weeks",
+            "45 test-free days"
+          ]
+        },
+        {
+          "id": "ncsbn-2026-rn-test-plan",
+          "title": "NCSBN — 2026 RN Test Plan",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/test-plans.page",
+          "sourceUpdated": "2026-04-01",
+          "accessedAt": "2026-08-26",
+          "locator": "2026 RN Test Plan; effective April 1, 2026–March 31, 2029"
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, remediation, and source review of the exact how-to-read-nclex-candidate-performance-report content and source-set digests",
+        "claims": [
+          {
+            "id": "cpr-purpose-audience-and-two-page-format",
+            "locator": "Opening paragraph; recipient FAQ",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31"
+            ]
+          },
+          {
+            "id": "cpr-overall-pass-fail-and-no-section-score-boundary",
+            "locator": "The NCLEX is not graded in sections; grading FAQ",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31"
+            ]
+          },
+          {
+            "id": "cpr-below-near-above-indicators-and-study-order",
+            "locator": "What the three indicators mean for planning; study-order FAQs",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31"
+            ]
+          },
+          {
+            "id": "cpr-abbreviated-report-boundary",
+            "locator": "When the CPR is abbreviated; recipient FAQ",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31"
+            ]
+          },
+          {
+            "id": "cpr-four-step-test-plan-remediation-workflow",
+            "locator": "A four-step retake workflow",
+            "sourceIds": [
+              "ncsbn-candidate-performance-report-2026-08-31",
+              "ncsbn-2026-rn-test-plan"
+            ]
+          },
+          {
+            "id": "cpr-retake-authorization-and-45-day-minimum",
+            "locator": "Retake administration is separate",
+            "sourceIds": [
+              "ncsbn-nclex-results-2026-08-31"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
+      "route": "/learn/international-nclex-testing/",
+      "published": "2026-08-31",
+      "updated": "2026-08-31",
+      "risk": "exam",
+      "intent": {
+        "primary": "international NCLEX testing",
+        "secondary": [
+          "NCLEX international test centers",
+          "take NCLEX outside the US"
+        ],
+        "audience": "international NCLEX-RN candidates",
+        "risk": "exam"
+      },
+      "contentSha256": "e220660fc053ec591aa1ea753bea7e2f350268fb2b612689f5a3638c5719423f",
+      "sourceSetSha256": "ba631518228419e071c5685412cbda7a7e65db569d9e7228375b7e5bd0ba2558",
+      "sources": [
+        {
+          "id": "ncsbn-testing-locations-2026",
+          "title": "NCSBN — NCLEX Testing Locations",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/testing-locations.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Domestic and international test centers; appointment methods; international-change requirement; licensure-destination definitions",
+          "expectedMarkers": [
+            "domestic and international test centers",
+            "Changes to international appointments",
+            "Test Center Definitions"
+          ]
+        },
+        {
+          "id": "ncsbn-scheduling-rules-2026",
+          "title": "NCSBN — How to Schedule an NCLEX Appointment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/scheduling.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "When to Schedule; Online and Telephone Scheduling; Missing an Appointment; Changing an Appointment; International and accommodated appointment changes",
+          "expectedMarkers": [
+            "may not schedule",
+            "one full business day",
+            "Leaving a message",
+            "Changing an International Exam Appointment"
+          ]
+        },
+        {
+          "id": "ncsbn-fees-payment-2026",
+          "title": "NCSBN — NCLEX Fees & Payment",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/fees-payment.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Current registration, international scheduling, change, refund and announced February 1, 2027 fees",
+          "expectedMarkers": [
+            "Effective Feb. 1, 2027",
+            "$350",
+            "$570",
+            "Refund Policy"
+          ]
+        },
+        {
+          "id": "ncsbn-registration-process-2026",
+          "title": "NCSBN — How to Register to Take the NCLEX",
+          "publisher": "National Council of State Boards of Nursing",
+          "url": "https://www.nclex.com/register.page",
+          "sourceUpdated": null,
+          "accessedAt": "2026-08-31",
+          "locator": "Registration Process; Apply for Licensure/Registration; Register with Pearson; Authorization to Test; ATT Validity Dates; Find a Testing Location; Schedule Exam Appointment",
+          "expectedMarkers": [
+            "Apply for Licensure/Registration",
+            "Authorization to Test",
+            "ATT Validity Dates",
+            "Schedule Exam Appointment"
+          ]
+        }
+      ],
+      "review": {
+        "decision": "approved",
+        "reviewerId": "sheldon-bennett-rn",
+        "reviewedAt": "2026-09-02",
+        "scope": "Full RN exam-policy, educational, international-scheduling, and source review of the exact international-nclex-testing content and source-set digests",
+        "claims": [
+          {
+            "id": "international-domestic-definition-by-licensure-destination",
+            "locator": "Opening paragraph; Domestic depends on the licensure destination table",
+            "sourceIds": [
+              "ncsbn-testing-locations-2026"
+            ]
+          },
+          {
+            "id": "international-live-location-and-advice-boundary",
+            "locator": "Verify the live location list; planning checklist",
+            "sourceIds": [
+              "ncsbn-testing-locations-2026"
+            ]
+          },
+          {
+            "id": "international-scheduling-fee-vat-and-separate-costs",
+            "locator": "Scheduling cost and tax; fee FAQ",
+            "sourceIds": [
+              "ncsbn-fees-payment-2026"
+            ]
+          },
+          {
+            "id": "international-appointment-change-and-fee-treatment",
+            "locator": "Changing an international appointment; change FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-testing-locations-2026"
+            ]
+          },
+          {
+            "id": "international-att-validity-not-automatically-extended",
+            "locator": "Changing an international appointment; ATT FAQ",
+            "sourceIds": [
+              "ncsbn-scheduling-rules-2026",
+              "ncsbn-registration-process-2026"
+            ]
+          },
+          {
+            "id": "international-eligibility-travel-and-booking-separation",
+            "locator": "Plan beyond the examination booking; CTA",
+            "sourceIds": [
+              "ncsbn-registration-process-2026",
+              "ncsbn-testing-locations-2026"
+            ]
+          }
+        ],
+        "evidenceMatchesContent": true
+      }
+    },
+    {
       "route": "/learn/bow-tie-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX bow-tie questions",
@@ -728,6 +1941,8 @@
     },
     {
       "route": "/learn/matrix-grid-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX matrix grid questions",
@@ -835,6 +2050,8 @@
     },
     {
       "route": "/learn/cloze-drop-down-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX cloze drop-down questions",
@@ -942,6 +2159,8 @@
     },
     {
       "route": "/learn/highlight-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX highlight questions",
@@ -1050,6 +2269,8 @@
     },
     {
       "route": "/learn/select-all-that-apply-strategy/",
+      "published": "2026-08-03",
+      "updated": "2026-08-29",
       "risk": "exam",
       "intent": {
         "primary": "NCLEX select all that apply strategy",
@@ -1157,6 +2378,8 @@
     },
     {
       "route": "/learn/drag-and-drop-ordering-questions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-29",
       "risk": "exam",
       "intent": {
         "primary": "how to answer NCLEX drag and drop ordering questions",
@@ -1264,6 +2487,8 @@
     },
     {
       "route": "/learn/lab-values-to-memorize/",
+      "published": "2026-08-03",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "lab values to memorize for the NCLEX",
@@ -1367,6 +2592,8 @@
     },
     {
       "route": "/learn/abg-interpretation/",
+      "published": "2026-08-03",
+      "updated": "2026-08-26",
       "risk": "clinical",
       "intent": {
         "primary": "ABG interpretation for the NCLEX",
@@ -1498,6 +2725,8 @@
     },
     {
       "route": "/learn/electrolyte-imbalances/",
+      "published": "2026-08-03",
+      "updated": "2026-08-26",
       "risk": "clinical",
       "intent": {
         "primary": "electrolyte imbalances for the NCLEX",
@@ -1704,6 +2933,8 @@
     },
     {
       "route": "/learn/infection-control-precautions/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "infection control precautions for the NCLEX",
@@ -1861,6 +3092,8 @@
     },
     {
       "route": "/learn/insulin-types-and-timing/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "insulin types onset and peak for the NCLEX",
@@ -2025,6 +3258,8 @@
     },
     {
       "route": "/learn/high-alert-medications/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "high alert medications and antidotes for the NCLEX",
@@ -2222,6 +3457,8 @@
     },
     {
       "route": "/learn/prioritization-abc-maslow/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "NCLEX prioritization ABC and Maslow",
@@ -2340,6 +3577,8 @@
     },
     {
       "route": "/learn/delegation-and-assignment/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "NCLEX delegation and assignment rules",
@@ -2459,6 +3698,8 @@
     },
     {
       "route": "/learn/therapeutic-communication/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "therapeutic communication NCLEX questions",
@@ -2591,6 +3832,8 @@
     },
     {
       "route": "/learn/dosage-calculation-formulas/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "clinical",
       "intent": {
         "primary": "dosage calculation formulas for the NCLEX",
@@ -2717,6 +3960,8 @@
     },
     {
       "route": "/learn/nclex-study-plan/",
+      "published": "2026-08-03",
+      "updated": "2026-08-27",
       "risk": "education",
       "intent": {
         "primary": "NCLEX study plan",
@@ -2839,6 +4084,8 @@
     },
     {
       "route": "/learn/spaced-repetition-for-nursing-students/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "education",
       "intent": {
         "primary": "spaced repetition for nursing students",
@@ -2960,6 +4207,8 @@
     },
     {
       "route": "/learn/failed-the-nclex-what-now/",
+      "published": "2026-08-03",
+      "updated": "2026-08-28",
       "risk": "education",
       "intent": {
         "primary": "failed the NCLEX what to do next",
@@ -2979,7 +4228,12 @@
           "url": "https://www.nclex.com/results.page",
           "sourceUpdated": null,
           "accessedAt": "2026-08-28",
-          "locator": "Candidate Performance Report; Retake Policy; Retake Steps; live page checked 2026-08-28 and no page-level revision date is published"
+          "locator": "Candidate Performance Report; Retake Policy; Retake Steps; live page checked 2026-08-28 and no page-level revision date is published",
+          "expectedMarkers": [
+            "Official Results",
+            "within six weeks",
+            "45 test-free days"
+          ]
         },
         {
           "id": "ncsbn-candidate-performance-report",
@@ -2988,7 +4242,13 @@
           "url": "https://www.nclex.com/candidate-performance-report.page",
           "sourceUpdated": null,
           "accessedAt": "2026-08-28",
-          "locator": "CPR purpose, abbreviated report, overall pass/fail limitation, performance indicators, and remediation order; live page checked 2026-08-28 and no page-level revision date is published"
+          "locator": "CPR purpose, abbreviated report, overall pass/fail limitation, performance indicators, and remediation order; live page checked 2026-08-28 and no page-level revision date is published",
+          "expectedMarkers": [
+            "individualized, two-page document",
+            "Below the Passing Standard",
+            "Near the Passing Standard",
+            "Above the Passing Standard"
+          ]
         },
         {
           "id": "ncsbn-computerized-adaptive-testing",
@@ -3123,6 +4383,8 @@
     },
     {
       "route": "/learn/nclex-pharmacology-practice-questions/",
+      "published": "2026-08-29",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "free NCLEX pharmacology practice questions",
@@ -3255,6 +4517,8 @@
     },
     {
       "route": "/learn/nclex-prioritization-practice-questions/",
+      "published": "2026-08-29",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "free NCLEX prioritization practice questions",
@@ -3355,6 +4619,8 @@
     },
     {
       "route": "/learn/nclex-dosage-calculation-practice-questions/",
+      "published": "2026-08-29",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "free NCLEX dosage calculation practice questions",
@@ -3451,6 +4717,8 @@
     },
     {
       "route": "/learn/ngn-bow-tie-practice-questions/",
+      "published": "2026-08-29",
+      "updated": "2026-08-29",
       "risk": "clinical",
       "intent": {
         "primary": "free NGN bow tie practice questions",
