@@ -27,6 +27,10 @@ on:
         description: "Wall-clock budget per job, kept under the 6h runner cap"
         required: true
         default: "300"
+      stop_at:
+        description: "Stop once the live bank reaches this many approved practice items (0 = no target)"
+        required: true
+        default: "7000"
 
 permissions:
   contents: read
@@ -108,6 +112,7 @@ jobs:
             --batch "${{ inputs.batch }}" \
             --loops "${{ inputs.loops }}" \
             --max-minutes "${{ inputs.max_minutes }}" \
+            --stop-at "${{ inputs.stop_at }}" \
             --publish
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

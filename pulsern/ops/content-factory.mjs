@@ -52,6 +52,7 @@ const DRY = flag("--dry-run");
 const NGN_ONLY = flag("--ngn");
 const LOOPS = Math.max(1, parseInt(opt("--loops", "1"), 10));      // repeat the pipeline in one process
 const MAX_MIN = parseInt(opt("--max-minutes", "300"), 10);          // stop before a CI job is killed
+const STOP_AT = parseInt(opt("--stop-at", "0"), 10);                // bank size to stop at (0 = no target)
 
 let _sb = null;
 const db = () => (_sb ??= createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY));
@@ -181,6 +182,16 @@ const KEY_CLASSES = [
 function keyClass(key) {
   const hit = KEY_CLASSES.find(([p]) => key.startsWith(p));
   return hit ? hit[1] : "unrecognised prefix";
+}
+
+/* Size of the live practice bank. Exam items sit in the same table but are
+   quarantined by exam_form, so they must not count toward a bank target. */
+async function bankSize() {
+  const { count, error } = await db().from("questions")
+    .select("id", { count: "exact", head: true })
+    .eq("approved", true).is("exam_form", null);
+  if (error) throw new Error(`Could not read bank size: ${error.message}`);
+  return count ?? 0;
 }
 
 async function preflightDb() {
@@ -349,10 +360,24 @@ async function runMany() {
   const started = Date.now();
   if (!DRY) await preflightDb(); // fail in seconds, before any model spend
   const total = { inserted: 0, dupes: 0, reviewed: 0, survived: 0 };
-  let attempted = 0, failed = 0;
+  let attempted = 0, failed = 0, hitTarget = false;
   for (let i = 1; i <= LOOPS; i++) {
     const mins = (Date.now() - started) / 60000;
     if (mins > MAX_MIN) { console.log(`Time budget reached after ${i - 1} loops.`); break; }
+
+    /* Stop at the target rather than burning the loop budget past it. Each
+       parallel job checks independently, so the bank can overshoot by at most
+       one loop per job — far cheaper than the alternative, which is paying for
+       thousands of items nobody asked for. */
+    if (STOP_AT > 0 && !DRY) {
+      const size = await bankSize();
+      if (size >= STOP_AT) {
+        console.log(`Target reached: bank holds ${size} approved practice items (target ${STOP_AT}).`);
+        hitTarget = true;
+        break;
+      }
+      if (i === 1) console.log(`Bank at ${size}; target ${STOP_AT}.`);
+    }
     console.log(`\n──── loop ${i}/${LOOPS} ────`);
     attempted++;
     try {
@@ -376,7 +401,7 @@ async function runMany() {
     console.error(`All ${attempted} loops failed — nothing was generated.`);
     process.exit(1);
   }
-  if (!DRY && total.inserted === 0) {
+  if (!DRY && total.inserted === 0 && !hitTarget) {
     console.error("Run finished without inserting a single item.");
     process.exit(1);
   }
