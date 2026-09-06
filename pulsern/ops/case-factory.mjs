@@ -19,7 +19,8 @@
    Env (server-side only): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENROUTER_API_KEY
    ------------------------------------------------------------------ */
 
-import { createClient } from "@supabase/supabase-js";
+import { db, preflightDb, publishedCount } from "./supabase-guard.mjs";
+import { llm } from "./llm.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -40,21 +41,8 @@ const FORCE_CAT = opt("--cat", null);
 const EXAM_FORM = opt("--exam-form", null) ? parseInt(opt("--exam-form", null), 10) : null;
 const POPULATION = opt("--population", null); // 'peds' | 'geriatric' | 'maternal' 
 const DRY = flag("--dry-run");
+const STOP_AT = parseInt(opt("--stop-at", "0"), 10); // library size to stop at (0 = no target)
 
-let _sb = null;
-const db = () => (_sb ??= createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY));
-
-async function llm(model, prompt, maxTokens = 6000) {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
-    body: JSON.stringify({ model, max_tokens: maxTokens, temperature: 0.7, messages: [{ role: "user", content: prompt }] }),
-  });
-  const data = await r.json();
-  const text = data?.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error(`Empty response from ${model}`);
-  return text;
-}
 const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
 /* ---------- schema gate (exported for tests) ---------- */
@@ -149,16 +137,35 @@ const failNotes = (rev) =>
 async function run() {
   console.log(`Case factory · count=${COUNT} · ${DRY ? "DRY RUN" : "live, auto-publish at ≥" + PASS_CONFIDENCE}`);
 
+  if (!DRY) await preflightDb("case_studies"); // fail in seconds, before any model spend
+
   let existingTitles = [];
   let counts = {};
   if (!DRY) {
-    const { data } = await db().from("case_studies").select("title, cat").limit(500);
+    /* These titles are what stops the generator rewriting cases the library
+       already holds, and the per-category counts are what steer it toward the
+       thinnest category. Swallowing this error does not degrade gracefully —
+       it silently turns both off. */
+    const { data, error } = await db().from("case_studies").select("title, cat").limit(1000);
+    if (error) throw new Error(`Could not read existing cases (duplicate avoidance would be off): ${error.message}`);
     existingTitles = (data ?? []).map((r) => r.title);
     for (const c of CATS) counts[c] = (data ?? []).filter((r) => r.cat === c).length;
   }
 
-  let published = 0;
+  let published = 0, hitTarget = false;
   for (let i = 0; i < COUNT; i++) {
+    /* Stop at the target rather than running out the count past it. Parallel
+       jobs each check independently, so the library can overshoot by at most
+       one case per job. */
+    if (STOP_AT > 0 && !DRY) {
+      const size = await publishedCount("case_studies");
+      if (size >= STOP_AT) {
+        console.log(`Target reached: library holds ${size} approved cases (target ${STOP_AT}).`);
+        hitTarget = true;
+        break;
+      }
+      if (i === 0) console.log(`Library at ${size}; target ${STOP_AT}.`);
+    }
     const cat = FORCE_CAT ?? CATS.slice().sort((a, b) => (counts[a] ?? 0) - (counts[b] ?? 0))[0];
     console.log(`\n[${i + 1}/${COUNT}] generating a "${cat}" case…`);
     try {
@@ -209,8 +216,18 @@ ${JSON.stringify(c)}`, 6000);
     }
   }
   console.log(`\nPublished ${published}/${COUNT} cases.`);
+
+  /* Reporting a totally dead run as success is how a broken factory stays
+     broken. Stopping because the target was already met is not that. */
+  if (!DRY && published === 0 && !hitTarget) {
+    console.error("Run finished without publishing a single case.");
+    process.exit(1);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  run().catch((e) => { console.error("CASE FACTORY FAILED:", e.message); process.exit(1); });
+  const job = flag("--check")
+    ? preflightDb("case_studies").then(() => console.log("Preflight OK."))
+    : run();
+  job.catch((e) => { console.error("CASE FACTORY FAILED:", e.message); process.exit(1); });
 }
