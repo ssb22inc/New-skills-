@@ -29,7 +29,7 @@
    ------------------------------------------------------------------ */
 
 import { db, preflightDb, publishedCount } from "./supabase-guard.mjs";
-import { llm } from "./llm.mjs";
+import { llm, FatalLlmError } from "./llm.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -304,6 +304,10 @@ async function runMany() {
       // run where EVERY loop failed is a failure, not a quiet success.
       failed++;
       console.error(`  loop ${i} failed: ${e.message}`);
+      /* Some failures cannot improve on the next attempt. Spending the rest of
+         the budget rediscovering an empty balance wastes runner time and fills
+         the log with the same sentence sixty times. */
+      if (e instanceof FatalLlmError) { console.error("  Stopping: this cannot succeed on a retry."); break; }
     }
   }
   const pct = total.reviewed ? Math.round((total.survived / total.reviewed) * 100) : 0;
