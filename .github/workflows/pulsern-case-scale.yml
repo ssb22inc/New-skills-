@@ -35,7 +35,12 @@ jobs:
     # Categories run independently, so one failing job never blocks the rest.
     strategy:
       fail-fast: false
-      max-parallel: 8
+      # OpenRouter reserves each in-flight request's maximum possible cost
+      # against the account balance, so eight jobs asking for large
+      # completions get refused with 402 while the credit is still unspent.
+      # Three keeps the reservation inside a modest balance; raise it only
+      # alongside the balance itself.
+      max-parallel: 3
       matrix:
         cat:
           - "Management of Care"

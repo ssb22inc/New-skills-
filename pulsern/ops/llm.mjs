@@ -24,6 +24,19 @@ const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const RETRY_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 const MAX_ATTEMPTS = 5;
 
+/* OpenRouter reserves the maximum possible cost of every in-flight request
+   against the balance, so N parallel jobs asking for large completions can be
+   refused with 402 while the money is still there and unspent. That 402 is
+   transient — it clears as soon as the in-flight requests settle — and is a
+   completely different condition from an actually empty balance, which no
+   amount of waiting fixes. The message is the only thing that distinguishes
+   them, so match on it. */
+const isReservationLimit = (msg = "") => /in-flight|in flight/i.test(msg);
+
+/* Signals the caller that no further attempt in this run can succeed, so a
+   60-loop budget is not spent rediscovering the same fatal answer. */
+export class FatalLlmError extends Error {}
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* Full jitter: without it, eight jobs that hit the same 429 all wake at the
@@ -76,14 +89,25 @@ export async function llm(model, prompt, maxTokens = 6000) {
     if (!r.ok || data?.error) {
       const detail = errorText(data, r.status);
       const err = new Error(`${model}: ${r.status} ${detail}`);
-      if (RETRY_STATUS.has(r.status) && attempt < MAX_ATTEMPTS) {
+
+      /* A balance that is genuinely empty stops the whole run. Retrying it
+         sixty times just prints the same sentence sixty times. */
+      if (r.status === 402 && !isReservationLimit(detail)) {
+        throw new FatalLlmError(
+          `${model}: 402 out of credits — ${detail}\n` +
+          `  Add credits at https://openrouter.ai/settings/credits, then re-run.`
+        );
+      }
+
+      const retryable = RETRY_STATUS.has(r.status) || (r.status === 402 && isReservationLimit(detail));
+      if (retryable && attempt < MAX_ATTEMPTS) {
         lastError = err;
         const wait = backoffMs(attempt, r.headers.get("retry-after"));
         console.log(`  ↻ ${model} ${r.status}; retrying in ${Math.round(wait / 1000)}s (attempt ${attempt}/${MAX_ATTEMPTS})`);
         await sleep(wait);
         continue;
       }
-      throw err; // 400/401/402/403 and the like: retrying changes nothing
+      throw err; // 400/401/403 and the like: retrying changes nothing
     }
 
     const text = data?.choices?.[0]?.message?.content ?? "";
