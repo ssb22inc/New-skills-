@@ -1,8 +1,14 @@
 name: content-factory
 
+# The twice-daily schedule was retired on 2026-09-07, at the owner's
+# instruction, once the libraries reached their targets: 10,034 practice
+# questions, 506 case studies, 1,145 flashcards. Topping up a bank of that
+# size by 12 items a day is not worth the standing model spend.
+#
+# The workflow itself is kept and still runs on demand, so a top-up is one
+# click away without having to rebuild any of this. Restoring the schedule
+# means putting the `schedule:` block back.
 on:
-  schedule:
-    - cron: "0 6,18 * * *" # twice daily
   workflow_dispatch: {}
 
 permissions:
