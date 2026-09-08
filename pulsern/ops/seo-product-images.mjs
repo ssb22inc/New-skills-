@@ -3,6 +3,8 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { chromium } from "playwright";
+import { createStaticServer } from "./seo-crawl.mjs";
 
 const REQUIRED_IMAGES = [
   "pulsern-adaptive-practice.png",
@@ -18,23 +20,52 @@ function pngDimensions(buffer) {
   return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
 }
 
+export async function renderReactLanding({ landingFile = "dist/index.html", browserType = chromium } = {}) {
+  const server = await createStaticServer(path.dirname(path.resolve(landingFile)));
+  let browser;
+  try {
+    browser = await browserType.launch({ headless: true });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
+    await page.goto(`${server.base}/`, { waitUntil: "networkidle" });
+    const renderedMain = page.locator('main[data-pulsern-landing="rendered-react"]');
+    await renderedMain.waitFor();
+    return await renderedMain.evaluate((element) => element.outerHTML);
+  } finally {
+    await browser?.close();
+    await server.close();
+  }
+}
+
 export async function auditProductImages({
   manifestFile = "public/product/product-screenshots.json",
   captureFile = "reports/seo/product-screenshots/capture.json",
   publicDirectory = "public/product",
   landingFile = "dist/index.html",
+  renderedLandingMarkup,
+  renderLanding = renderReactLanding,
   outputFile = "reports/seo/product-images.json",
 } = {}) {
   const findings = [];
   let manifest = null;
   let capture = null;
-  let landing = "";
+  let fallbackLanding = "";
+  let renderedLanding = "";
   try { manifest = JSON.parse(await fs.readFile(manifestFile, "utf8")); }
   catch { findings.push(finding("PRODUCT_IMAGE_MANIFEST", `Missing or malformed product-image manifest: ${manifestFile}`)); }
   try { capture = JSON.parse(await fs.readFile(captureFile, "utf8")); }
   catch { findings.push(finding("PRODUCT_IMAGE_CAPTURE", `Missing or malformed exact-run screenshot capture: ${captureFile}`)); }
-  try { landing = await fs.readFile(landingFile, "utf8"); }
-  catch { findings.push(finding("PRODUCT_IMAGE_LANDING", `Built landing page is unavailable: ${landingFile}`)); }
+  try { fallbackLanding = await fs.readFile(landingFile, "utf8"); }
+  catch { findings.push(finding("PRODUCT_IMAGE_LANDING_FALLBACK", `Built fallback landing page is unavailable: ${landingFile}`)); }
+  try {
+    renderedLanding = typeof renderedLandingMarkup === "string"
+      ? renderedLandingMarkup
+      : await renderLanding({ landingFile });
+  } catch (error) {
+    findings.push(finding("PRODUCT_IMAGE_LANDING_RENDER", `Rendered React landing page is unavailable: ${error.message}`));
+  }
+  if (renderedLanding && !renderedLanding.includes('data-pulsern-landing="rendered-react"')) {
+    findings.push(finding("PRODUCT_IMAGE_LANDING_RENDER", "Product-image checks did not receive the rendered React homepage."));
+  }
 
   if (manifest?.containsLearnerData !== false || capture?.containsLearnerData !== false) {
     findings.push(finding("PRODUCT_IMAGE_PRIVACY", "Product-image evidence must explicitly confirm that no learner data is present."));
@@ -64,14 +95,20 @@ export async function auditProductImages({
     if (!dimensions || dimensions.width !== expected.width || dimensions.height !== expected.height || current.width !== expected.width || current.height !== expected.height) {
       findings.push(finding("PRODUCT_IMAGE_DIMENSIONS", `${file} dimensions do not match reviewed capture evidence.`));
     }
-    if (typeof expected.alt !== "string" || expected.alt.trim().length < 30 || !landing.includes(`alt="${expected.alt}"`)) {
-      findings.push(finding("PRODUCT_IMAGE_ALT", `${file} lacks its reviewed descriptive alt text on the built homepage.`));
+    if (typeof expected.alt !== "string" || expected.alt.trim().length < 30 || !renderedLanding.includes(`alt="${expected.alt}"`)) {
+      findings.push(finding("PRODUCT_IMAGE_ALT", `${file} lacks its reviewed descriptive alt text on the rendered React homepage.`));
     }
-    if (typeof expected.caption !== "string" || expected.caption.trim().length < 20 || !landing.includes(expected.caption)) {
-      findings.push(finding("PRODUCT_IMAGE_CAPTION", `${file} lacks its reviewed visible caption on the built homepage.`));
+    if (typeof expected.caption !== "string" || expected.caption.trim().length < 20 || !renderedLanding.includes(expected.caption)) {
+      findings.push(finding("PRODUCT_IMAGE_CAPTION", `${file} lacks its reviewed visible caption on the rendered React homepage.`));
     }
-    if (!landing.includes(`src="/product/${file}"`) || !landing.includes(`width="${expected.width}"`) || !landing.includes(`height="${expected.height}"`)) {
-      findings.push(finding("PRODUCT_IMAGE_MARKUP", `${file} is not published with explicit dimensions on the built homepage.`));
+    if (!renderedLanding.includes(`src="/product/${file}"`) || !renderedLanding.includes(`width="${expected.width}"`) || !renderedLanding.includes(`height="${expected.height}"`)) {
+      findings.push(finding("PRODUCT_IMAGE_MARKUP", `${file} is not published with explicit dimensions on the rendered React homepage.`));
+    }
+    if (!fallbackLanding.includes(`alt="${expected.alt}"`) || !fallbackLanding.includes(expected.caption)) {
+      findings.push(finding("PRODUCT_IMAGE_FALLBACK_COPY", `${file} is missing its reviewed alt text or caption in the no-JavaScript fallback.`));
+    }
+    if (!fallbackLanding.includes(`src="/product/${file}"`) || !fallbackLanding.includes(`width="${expected.width}"`) || !fallbackLanding.includes(`height="${expected.height}"`)) {
+      findings.push(finding("PRODUCT_IMAGE_FALLBACK_MARKUP", `${file} lacks explicit image dimensions in the no-JavaScript fallback.`));
     }
     auditedImages.push({ file, sha256: digest, bytes: buffer.byteLength, ...dimensions, alt: expected.alt, caption: expected.caption });
   }
@@ -88,6 +125,10 @@ export async function auditProductImages({
     manifestSourceCommitSha: manifest?.sourceCommitSha ?? null,
     manifestSourceSetSha256: manifest?.sourceSetSha256 ?? null,
     captureSourceSetSha256: capture?.sourceSetSha256 ?? null,
+    landingEvidence: {
+      renderedReact: renderedLanding.includes('data-pulsern-landing="rendered-react"'),
+      fallbackChecked: Boolean(fallbackLanding),
+    },
     images: auditedImages,
     findings,
   };

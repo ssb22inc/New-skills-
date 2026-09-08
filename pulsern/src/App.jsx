@@ -2150,7 +2150,6 @@ Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a t
 function Style() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap');
       .app{
         /* LIGHT (default study theme) */
         --paper:#F3F6F4; --ink:#0F2E29; --card:#FFFFFF; --muted:#3B554F;

@@ -80,4 +80,12 @@ describe("workflow placement", () => {
     expect(workflow).toContain("run: npm run seo:product-images");
     expect(workflow).toContain('test "${{ steps.product_images.outcome }}" = "success"');
   });
+
+  it("proves the Supabase credential before any model spend", () => {
+    for (const name of ["pulsern-content-factory.yml", "pulsern-bank-scale.yml"]) {
+      const workflow = readFileSync(join(LIVE_DIR, name), "utf8");
+      expect(workflow).toContain("Preflight — credentials actually work");
+      expect(workflow).toContain("run: node ops/content-factory.mjs --check");
+    }
+  });
 });

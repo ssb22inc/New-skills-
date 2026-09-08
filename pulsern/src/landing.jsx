@@ -154,7 +154,7 @@ export default function LandingPage({ onSignIn, onStart }) {
         </nav>
       </header>
 
-      <main>
+      <main data-pulsern-landing="rendered-react">
         <section className="land-container land-hero">
           <div>
             <div className="land-eyebrow">Created by a licensed RN — for future RNs</div>
@@ -168,7 +168,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <p className="land-note" style={{ marginTop: 12 }}><a href="/app/">Open the study app</a> to install PulseRN from your browser.</p>
           </div>
           <figure className="land-product">
-            <img className="land-product-image" src="/product/pulsern-adaptive-practice.png" width="720" height="620" fetchPriority="high" alt="PulseRN adaptive NCLEX practice screen with a pharmacology question and four answer choices" />
+            <img className="land-product-image" src="/product/pulsern-adaptive-practice.png" width="720" height="620" fetchpriority="high" alt="PulseRN adaptive NCLEX practice screen with a pharmacology question and four answer choices" />
             <figcaption className="land-product-caption">Authentic adaptive NCLEX practice with answer-first review. Built-in demonstration content; no learner data.</figcaption>
           </figure>
         </section>
@@ -192,11 +192,11 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-screen-grid">
               <figure className="land-screen">
                 <img src="/product/pulsern-today-dashboard.png" width="720" height="1000" loading="lazy" alt="PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards" />
-                <figcaption><strong>A daily plan without guesswork</strong>See due flashcards, adaptive questions, study progress, and the next focused action in one place.</figcaption>
+                <figcaption><strong>A daily plan without guesswork</strong> See due flashcards, adaptive questions, study progress, and the next focused action in one place.</figcaption>
               </figure>
               <figure className="land-screen">
                 <img src="/product/pulsern-lab-reference.png" width="430" height="932" loading="lazy" alt="PulseRN mobile lab-reference drawer open over an adaptive practice question" />
-                <figcaption><strong>Lab reference at your fingertips</strong>Open searchable educational reference ranges while you study, then return to the question where you left off.</figcaption>
+                <figcaption><strong>Lab reference at your fingertips</strong> Open searchable educational reference ranges while you study, then return to the question where you left off.</figcaption>
               </figure>
             </div>
             <p className="land-screen-note">Screens captured from PulseRN’s real interface using built-in demonstration content. Reference ranges vary by source and clinical context; this study tool is not medical advice.</p>
