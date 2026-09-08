@@ -1,15 +1,24 @@
 /* PulseRN subscription packages — the single source of truth for pricing.
    Used by the paywall UI and by api/billing.js (server recomputes every
-   price; the client never sends an amount). Owner-set prices, 2026-07-15. */
+   price; the client never sends an amount). Owner-set prices, 2026-07-15.
+
+   Content volume is NOT a plan differentiator: every paid plan carries the
+   whole library (owner decision, 2026-09-08). Plans differ only in access
+   length and how many readiness self-assessments they include, so the blurbs
+   pull the library size from one place rather than restating a ladder of
+   counts that no longer differ. */
+import { LIBRARY } from "./library.js";
+
+const QS = `${LIBRARY.questions.published} practice questions`;
 
 export const PLANS = [
   { id: "pass1",  name: "1-Day Free Pass", days: 1,   cents: 0,     exams: 0, blurb: "Unlimited access to all study content for 24 hours. Readiness exams not included." },
-  { id: "sub30",  name: "30-Day",          days: 30,  cents: 9900,  exams: 1, blurb: "Full unlimited access · 1 readiness self-assessment" },
-  { id: "sub60",  name: "60-Day",          days: 60,  cents: 15900, exams: 2, blurb: "3,100+ practice questions · 2 self-assessments" },
-  { id: "sub90",  name: "90-Day",          days: 90,  cents: 21900, exams: 3, blurb: "3,100+ practice questions · 3 self-assessments" },
-  { id: "sub180", name: "180-Day",         days: 180, cents: 31900, exams: 4, blurb: "3,201+ practice questions · 4 self-assessments" },
-  { id: "sub360", name: "360-Day",         days: 360, cents: 37900, exams: 5, blurb: "3,401+ practice questions · 5 self-assessments" },
-  { id: "sub730", name: "730-Day",         days: 730, cents: 43900, exams: 6, blurb: "3,401+ practice questions · 6 self-assessments" },
+  { id: "sub30",  name: "30-Day",          days: 30,  cents: 9900,  exams: 1, blurb: `${QS} · 1 readiness self-assessment` },
+  { id: "sub60",  name: "60-Day",          days: 60,  cents: 15900, exams: 2, blurb: `${QS} · 2 self-assessments` },
+  { id: "sub90",  name: "90-Day",          days: 90,  cents: 21900, exams: 3, blurb: `${QS} · 3 self-assessments` },
+  { id: "sub180", name: "180-Day",         days: 180, cents: 31900, exams: 4, blurb: `${QS} · 4 self-assessments` },
+  { id: "sub360", name: "360-Day",         days: 360, cents: 37900, exams: 5, blurb: `${QS} · 5 self-assessments` },
+  { id: "sub730", name: "730-Day",         days: 730, cents: 43900, exams: 6, blurb: `${QS} · 6 self-assessments` },
   /* Post-subscription add-ons */
   { id: "renew7", name: "7-Day Renewal",   days: 7,   cents: 4500,  exams: 0, addon: true, blurb: "Need a little more time? Full content access — no new self-assessment." },
   { id: "exam1",  name: "Extra Self-Assessment", days: 0, cents: 4500, exams: 1, addon: true, blurb: "One more never-seen readiness exam on your current subscription." },

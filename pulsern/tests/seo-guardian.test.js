@@ -18,6 +18,7 @@ import { sourcesFor } from "../ops/seo-content-policy.mjs";
 import { injectSearchVerification, verificationMeta } from "../ops/search-verification.mjs";
 import { runAppBoundary } from "../ops/seo-app-boundary.mjs";
 import { COMMERCIAL_PAGES, commercialEvidence } from "../ops/commercial-content.mjs";
+import { LIBRARY } from "../src/library.js";
 import { runCommercialCheck } from "../ops/seo-commercial-check.mjs";
 import { runExamRulesCheck } from "../ops/seo-exam-rules-check.mjs";
 import { runLiveRelease } from "../ops/seo-live-release.mjs";
@@ -53,9 +54,26 @@ describe("SEO guardian", () => {
     for (const slug of ["compare/pulsern-vs-uworld", "compare/pulsern-vs-archer"]) {
       const page = COMMERCIAL_PAGES.find((item) => item.slug === slug);
       expect(page.h1).toContain("why start with PulseRN?");
-      expect(page.body).toContain("Our recommendation: start with PulseRN.");
+      /* "PulseRN-led" is a property of the page, not one sentence. Assert the
+         property: the lead names PulseRN before it names the competitor, and
+         the page still carries an explicit recommendation and trial call. */
+      const lead = page.body.slice(0, page.body.indexOf("</p>"));
+      const competitor = slug.endsWith("uworld") ? "UWorld" : "Archer";
+      expect(lead).toContain("PulseRN");
+      expect(lead.indexOf("PulseRN")).toBeLessThan(
+        lead.includes(competitor) ? lead.indexOf(competitor) : Number.MAX_SAFE_INTEGER
+      );
       expect(page.body).toContain("PulseRN recommendation");
       expect(page.body).toContain("Try PulseRN free");
+      /* The bank reached 10,034 while every page still advertised 3,401+,
+         which read as parity with UWorld's 3,400+ on our strongest dimension.
+         Bind the pages to the one library source so that cannot recur. */
+      expect(page.body).toContain(LIBRARY.questions.published);
+      /* 3,201+ and 3,401+ were only ever PulseRN's own tiered figures, and
+         "at 60/90 days" was the tiering phrasing. Archer's real 3,100+ and
+         UWorld's real 3,400+ must stay quotable, so they are not banned. */
+      expect(page.body).not.toMatch(/3,(?:201|401)\+/);
+      expect(page.body).not.toMatch(/questions at 60\/90 days/);
       expect(page.body).not.toMatch(/Where (?:UWorld|Archer) is the clearer fit/i);
       expect(page.body).not.toMatch(/(?:guaranteed to pass|will pass the NCLEX|raises? your chance of passing)/i);
     }
