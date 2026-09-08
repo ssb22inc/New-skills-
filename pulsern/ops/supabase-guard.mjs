@@ -66,9 +66,20 @@ export async function preflightDb(table = "questions") {
   console.log("Credentials verified: database readable and key has service-role rights.");
 }
 
-/* Live size of a published library. Exam items share the questions table but
-   are quarantined by exam_form, so they must never count toward a target. */
-export async function publishedCount(table, { excludeExamForm = false } = {}) {
+/* Live size of a published library, as a student would see it.
+
+   Both questions and case_studies keep readiness-exam items in the same table,
+   quarantined by a non-null exam_form so they can never appear in the study
+   library and never repeat inside an exam. Counting them toward a library
+   target silently undershoots it: a case run targeting 500 stopped at 500
+   rows while the student-visible library held only 446, because 60 of them
+   were exam-quarantined.
+
+   So the exclusion is the DEFAULT, not an opt-in. Forgetting the flag now
+   produces the conservative answer rather than the wrong one. Pass
+   { excludeExamForm: false } only to count every approved row including
+   quarantined exam content, which is an ops question, not a library one. */
+export async function publishedCount(table, { excludeExamForm = true } = {}) {
   let q = db().from(table).select("id", { count: "exact", head: true }).eq("approved", true);
   if (excludeExamForm) q = q.is("exam_form", null);
   const { count, error } = await q;

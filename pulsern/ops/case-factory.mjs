@@ -158,7 +158,7 @@ async function run() {
        jobs each check independently, so the library can overshoot by at most
        one case per job. */
     if (STOP_AT > 0 && !DRY) {
-      const size = await publishedCount("case_studies");
+      const size = await publishedCount("case_studies"); // library only — exam cases are quarantined
       if (size >= STOP_AT) {
         console.log(`Target reached: library holds ${size} approved cases (target ${STOP_AT}).`);
         hitTarget = true;
