@@ -26,15 +26,17 @@
     "product:screenshots:capture": "node ops/capture-product-screenshots.mjs"
   },
   "dependencies": {
+    "@fontsource/archivo": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "@supabase/supabase-js": "^2.45.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@vitejs/plugin-react": "^4.3.1",
+    "@vitejs/plugin-react": "6.1.1",
     "playwright": "^1.62.1",
-    "vite": "^5.4.0",
-    "vitest": "^2.0.0"
+    "vite": "8.2.2",
+    "vitest": "5.0.0"
   }
 }

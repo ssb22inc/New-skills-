@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import "@fontsource/archivo/latin-500.css";
+import "@fontsource/archivo/latin-700.css";
+import "@fontsource/archivo/latin-800.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import "@fontsource/ibm-plex-mono/latin-600.css";
 import AuthGate, { ErrorBoundary } from "./auth.jsx";
 import { enforceOneTimeAppRelogin } from "./app-routing.js";
 import { supabase } from "./supabase.js";

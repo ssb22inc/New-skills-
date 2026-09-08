@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
@@ -23,6 +25,7 @@ import { runExamRulesCheck } from "../ops/seo-exam-rules-check.mjs";
 import { runLiveRelease } from "../ops/seo-live-release.mjs";
 import { INDEXNOW_KEY, runIndexNow } from "../ops/seo-indexnow.mjs";
 import { auditProductImages } from "../ops/seo-product-images.mjs";
+import LandingPage from "../src/landing.jsx";
 
 describe("SEO guardian", () => {
   const emptyCoverage = { totalGuides: 0, approvedGuides: 0, pendingGuides: 0, approvedRoutes: [], pendingRoutes: [] };
@@ -818,8 +821,8 @@ describe("SEO guardian", () => {
     await Promise.all([fs.mkdir(publicDirectory), fs.mkdir(captureDirectory)]);
     const specs = [
       ["pulsern-adaptive-practice.png", 720, 620, "PulseRN adaptive NCLEX practice screen with a pharmacology question and four answer choices", "Authentic adaptive NCLEX practice with answer-first review."],
-      ["pulsern-today-dashboard.png", 720, 1000, "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards", "A focused daily study plan with progress signals."],
-      ["pulsern-lab-reference.png", 430, 932, "PulseRN mobile lab-reference drawer open over an adaptive practice question", "Searchable educational lab-reference ranges inside the study workflow."],
+      ["pulsern-today-dashboard.png", 720, 1000, "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards", "A daily plan without guesswork"],
+      ["pulsern-lab-reference.png", 430, 932, "PulseRN mobile lab-reference drawer open over an adaptive practice question", "Lab reference at your fingertips"],
     ];
     const images = [];
     for (const [file, width, height, alt, caption] of specs) {
@@ -837,13 +840,30 @@ describe("SEO guardian", () => {
     const captureFile = path.join(captureDirectory, "capture.json");
     const landingFile = path.join(directory, "index.html");
     const markup = images.map((image) => `<figure><img src="/product/${image.file}" alt="${image.alt}" width="${image.width}" height="${image.height}"><figcaption>${image.caption}</figcaption></figure>`).join("");
+    const renderedLandingMarkup = renderToStaticMarkup(React.createElement(LandingPage, { onSignIn() {}, onStart() {} }));
     await Promise.all([
       fs.writeFile(manifestFile, JSON.stringify(manifest)),
       fs.writeFile(captureFile, JSON.stringify(capture)),
       fs.writeFile(landingFile, markup),
     ]);
-    const options = { manifestFile, captureFile, publicDirectory, landingFile, outputFile: path.join(directory, "pass.json") };
+    const options = { manifestFile, captureFile, publicDirectory, landingFile, renderedLandingMarkup, outputFile: path.join(directory, "pass.json") };
     await expect(auditProductImages(options)).resolves.toMatchObject({ verdict: "PASS", containsLearnerData: false });
+
+    const fallbackOnly = await auditProductImages({
+      ...options,
+      renderedLandingMarkup: markup,
+      outputFile: path.join(directory, "fallback-only.json"),
+    });
+    expect(fallbackOnly.verdict).toBe("FAIL");
+    expect(fallbackOnly.findings.map((item) => item.code)).toContain("PRODUCT_IMAGE_LANDING_RENDER");
+
+    const renderedDrift = await auditProductImages({
+      ...options,
+      renderedLandingMarkup: renderedLandingMarkup.replace(images[1].caption, "A different rendered caption that was never reviewed."),
+      outputFile: path.join(directory, "rendered-drift.json"),
+    });
+    expect(renderedDrift.verdict).toBe("FAIL");
+    expect(renderedDrift.findings.map((item) => item.code)).toContain("PRODUCT_IMAGE_CAPTION");
 
     capture.containsLearnerData = true;
     capture.images[0].sha256 = "f".repeat(64);
@@ -851,6 +871,26 @@ describe("SEO guardian", () => {
     const fail = await auditProductImages({ ...options, outputFile: path.join(directory, "fail.json") });
     expect(fail.verdict).toBe("FAIL");
     expect(fail.findings.map((item) => item.code)).toEqual(expect.arrayContaining(["PRODUCT_IMAGE_PRIVACY", "PRODUCT_IMAGE_STALE"]));
+  });
+
+  it("bundles the screenshot fonts locally instead of relying on Google Fonts", async () => {
+    const [app, portableApp, appEntry, entry, packageJson] = await Promise.all([
+      fs.readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
+      fs.readFile(new URL("../assets/App.portable.jsx", import.meta.url), "utf8"),
+      fs.readFile(new URL("../src/app-main.jsx", import.meta.url), "utf8"),
+      fs.readFile(new URL("../ops/product-screenshot-entry.jsx", import.meta.url), "utf8"),
+      fs.readFile(new URL("../package.json", import.meta.url), "utf8").then(JSON.parse),
+    ]);
+    expect(app).not.toContain("fonts.googleapis.com");
+    expect(portableApp).not.toContain("fonts.googleapis.com");
+    expect(appEntry).toContain('@fontsource/archivo/latin-500.css');
+    expect(appEntry).toContain('@fontsource/ibm-plex-mono/latin-600.css');
+    expect(entry).toContain('@fontsource/archivo/latin-500.css');
+    expect(entry).toContain('@fontsource/ibm-plex-mono/latin-600.css');
+    expect(packageJson.dependencies).toMatchObject({
+      "@fontsource/archivo": "5.3.0",
+      "@fontsource/ibm-plex-mono": "5.3.0",
+    });
   });
 
   it("fails closed when the public/private app boundary regresses", async () => {
