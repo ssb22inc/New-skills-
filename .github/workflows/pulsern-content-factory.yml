@@ -90,15 +90,64 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
-      - name: Open an issue on failure
-        if: failure()
+      # Keep one durable incident instead of opening a dated duplicate after
+      # every failed attempt. A later successful recovery closes any open
+      # factory incidents so the tracker describes the current state.
+      - name: Reconcile factory incident
+        if: always()
         uses: actions/github-script@v7
+        env:
+          RUN_RESULT: ${{ job.status }}
         with:
           script: |
-            const date = new Date().toISOString().slice(0, 10);
-            await github.rest.issues.create({
+            const marker = "<!-- pulsern-content-factory-incident -->";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `content factory failed ${date}`,
-              body: `The scheduled content-factory run failed.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\nCheck the OpenRouter/Supabase secrets and the job log, then re-run the workflow.`,
+              state: "open",
+              per_page: 100,
             });
+            const incidents = openIssues.filter((issue) =>
+              !issue.pull_request &&
+              (/^content factory failed(?:\s|$)/i.test(issue.title) || issue.body?.includes(marker))
+            );
+
+            if (process.env.RUN_RESULT === "success") {
+              for (const issue of incidents) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `Recovered successfully in ${runUrl}. Closing this incident.`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: "closed",
+                  state_reason: "completed",
+                });
+              }
+              core.info(`Factory succeeded; closed ${incidents.length} open incident(s).`);
+              return;
+            }
+
+            const body = `${marker}\nThe on-demand content-factory run failed.\n\nRun: ${runUrl}\n\nInspect the failing step, correct the provider or database cause, and re-run the workflow. A successful recovery will close this incident automatically.`;
+            if (incidents.length) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: incidents[0].number,
+                body: `Another factory attempt failed: ${runUrl}`,
+              });
+              core.info(`Updated existing incident #${incidents[0].number}.`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "content factory failed",
+                body,
+              });
+              core.info(`Opened incident #${created.data.number}.`);
+            }
