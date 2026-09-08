@@ -88,4 +88,15 @@ describe("workflow placement", () => {
       expect(workflow).toContain("run: node ops/content-factory.mjs --check");
     }
   });
+
+  it("deduplicates content-factory incidents and closes them after recovery", () => {
+    const workflow = readFileSync(join(LIVE_DIR, "pulsern-content-factory.yml"), "utf8");
+    expect(workflow).toContain("name: Reconcile factory incident");
+    expect(workflow).toContain("if: always()");
+    expect(workflow).toContain("RUN_RESULT: ${{ job.status }}");
+    expect(workflow).toContain("github.paginate(github.rest.issues.listForRepo");
+    expect(workflow).toContain("state_reason: \"completed\"");
+    expect(workflow).toContain("A successful recovery will close this incident automatically.");
+    expect(workflow).not.toContain("The scheduled content-factory run failed.");
+  });
 });
