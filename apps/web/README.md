@@ -8,8 +8,9 @@ cockpit (`/cockpit`), and — only when a deployment asks for it — the demo in
 ## How it deploys
 
 The live instance is a git-linked Vercel project building this directory on
-every push to the Sycamore branch; `../../DEPLOY.md` has the URL, the database,
-and the single manual step. `instrumentation.ts` runs migrations and the
+every push to the Sycamore branch, which is that project's production branch:
+`https://sycamore-ssb22incs-projects.vercel.app`. `../../DEPLOY.md` has the
+database, the single manual step, and the two Vercel gotchas. `instrumentation.ts` runs migrations and the
 one-time demo seed at boot; `src/deploy-defaults.ts` is the one place that
 decides what a deployment does unless told otherwise.
 

@@ -15,8 +15,9 @@ So: deploy once, get an HTTPS URL, and every phone can install from it.
 | | |
 |---|---|
 | Vercel project | `sycamore` in team `ssb22incs-projects` — its own project, **not** the two that PulseRN uses |
-| Builds from | this branch, `claude/sycamore-prompts-build-chain-o5rqtu`, root directory `apps/web`, on every push |
-| Branch URL | `https://sycamore-git-claude-sycamore-prompts-3567d5-ssb22incs-projects.vercel.app` |
+| Builds from | this branch, `claude/sycamore-prompts-build-chain-o5rqtu` (the project's production branch), root directory `apps/web`, on every push |
+| Stable URL | `https://sycamore-ssb22incs-projects.vercel.app` |
+| Branch URL | `https://sycamore-git-claude-sycamore-prompts-3567d5-ssb22incs-projects.vercel.app` (same build; the branch alias) |
 | Database | Supabase project `sycamore` (`guwnrztetamljfodlybs`, us-east-1, free tier), role `sycamore` — its own project, never `Forge` |
 | Deployment protection | off, so the URL opens on any phone with no Vercel login |
 
@@ -40,8 +41,15 @@ After that, every push to the branch redeploys with no further steps, and the
 phone link is:
 
 ```
-https://sycamore-git-claude-sycamore-prompts-3567d5-ssb22incs-projects.vercel.app/demo
+https://sycamore-ssb22incs-projects.vercel.app/demo
 ```
+
+Two Vercel details that cost an afternoon, so they are written down: environment
+variables are scoped (Production / Preview / Development) and a build only sees
+the scopes it belongs to — which is why this branch is the project's
+*production* branch rather than a preview; and a commit that touches nothing
+under `apps/web` or its workspace packages is skipped by Vercel's monorepo
+heuristic, so a docs-only push will not redeploy.
 
 If boot logs say the pooler cluster was "corrected", that is
 `databaseUrlCandidates` doing its job: Supabase's shared pooler lives on
