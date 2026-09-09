@@ -52,6 +52,25 @@ human gates implemented up to the boundary and marked, never faked.
 | P35 | Channel sovereignty | ✅ gate-passed (channel-blindness is permanent CI law: zero WhatsApp refs in /core code + doors work with WhatsApp absent; sovereign PWA chat door at /c; identity escrow export+rebind; cost & quality-rating Watchman vitals with runbooks; eviction drill: blast → rebind → book on alternate door, 80% recovery vs ≥70% target) |
 | P36 | Asymmetric client strategy | ✅ code gate-passed-mock (installability criteria asserted against the real manifest + real PNGs; service worker precaches shell and network-first caches the seller's day; earned-install offer never fires during Genesis, never to a buyer identity, capped at two offers by code AND a DB check constraint; installed-client drill: 48h dark → cached day readable → 6 completions queued → replayed twice → exactly-once, ledger to the cent; eviction recovery split by lane — 3 installed sellers on the web-push fast path, rest on SMS; seller_install_rate is a Watchman vital and renders per market on /cockpit) · ⏸ HUMAN-GATE: Lighthouse audit against a deployed origin + manual install on Android Chrome and iOS Safari |
 
+## 2026-09-09 — the branch mishap, and the deploy
+
+A fresh clone of this branch came up pointing at `main`, which now carries a
+different product (PulseRN) — Sycamore was gone from the working tree. The
+remote branch was intact at `3ee5364`; only the local ref was stale. Two
+consequences, both on the record:
+
+1. **Isolation is now enforced, not assumed.** `main` and this branch have no
+   common ancestor and must never merge in either direction (CLAUDE.md, scope
+   law §5). The scope guard now fails on PulseRN vocabulary and on a `pulsern/`
+   directory existing in this tree.
+2. **The deploy is real.** A Vercel project of its own (`sycamore`), git-linked
+   to this branch, with a Supabase database of its own. The app migrates and
+   seeds itself at boot; `DEPLOY.md` Option 0 has the URL and the single manual
+   step (pasting the database secret — the repo is public, and the connector
+   has no env-var tool).
+
+251 tests green with the database required.
+
 ## Test counts
 
 250 tests green (last full run, SYCAMORE_REQUIRE_DB=1): core 137 · tests 66 (golden 6, markets 3, chaos 3, lifeline 5, sovereignty 4, pwa 10, scope 3, copy 7, design 5, constitution 9, observability 6, money 3, ci 2) · packs 11 · adapters 10 · gateway 10 · web 8 · design 7 · worker 1.

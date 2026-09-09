@@ -10,7 +10,46 @@ So: deploy once, get an HTTPS URL, and every phone can install from it.
 
 ---
 
-## Option 1 — Render (no CLI, ~5 minutes)
+## Option 0 — Vercel, already wired (this is the live one)
+
+| | |
+|---|---|
+| Vercel project | `sycamore` in team `ssb22incs-projects` — its own project, **not** the two that PulseRN uses |
+| Builds from | this branch, `claude/sycamore-prompts-build-chain-o5rqtu`, root directory `apps/web`, on every push |
+| Branch URL | `https://sycamore-git-claude-sycamore-prompts-3567d5-ssb22incs-projects.vercel.app` |
+| Database | Supabase project `sycamore` (`guwnrztetamljfodlybs`, us-east-1, free tier), role `sycamore` — its own project, never `Forge` |
+| Deployment protection | off, so the URL opens on any phone with no Vercel login |
+
+**What happens by itself on every deploy** (`apps/web/src/deploy-defaults.ts`):
+migrations run before the first request, the demo market seeds itself exactly
+once (an atomic one-row claim, so parallel cold starts cannot double-seed), and
+`/demo` is served. Any of the three can be switched off with an explicit `0`:
+`SYCAMORE_MIGRATE_ON_BOOT`, `SYCAMORE_DEMO_SEED`, `SYCAMORE_DEMO_INDEX`.
+
+**The one thing that has to be done by hand, once.** The database password
+cannot be committed — this repository is public — and the Vercel connector
+exposes no way to set project environment variables. So `DATABASE_URL` is
+pasted into the Vercel project by a human, one time:
+
+1. Vercel → `sycamore` → **Settings → Environment Variables**
+2. Add `DATABASE_URL` = the value handed over privately (never paste it into
+   git, a chat log, or this file)
+3. **Deployments → ⋯ on the latest → Redeploy** (env vars apply to the next build)
+
+After that, every push to the branch redeploys with no further steps, and the
+phone link is:
+
+```
+https://sycamore-git-claude-sycamore-prompts-3567d5-ssb22incs-projects.vercel.app/demo
+```
+
+If boot logs say the pooler cluster was "corrected", that is
+`databaseUrlCandidates` doing its job: Supabase's shared pooler lives on
+numbered clusters and only the dashboard says which; the app tries the sibling
+and keeps whichever answers.
+
+---
+## Option 1 — Render (no CLI, ~5 minutes) — alternative, not in use
 
 1. [render.com](https://render.com) → **New** → **Blueprint** → pick
    `ssb22inc/New-skills-`.
@@ -29,7 +68,7 @@ So: deploy once, get an HTTPS URL, and every phone can install from it.
 
 5. Open `https://<your-url>/demo` on your phone.
 
-## Option 2 — Fly.io (CLI, ~5 minutes, scales to zero)
+## Option 2 — Fly.io (CLI, ~5 minutes, scales to zero) — alternative, not in use
 
 ```bash
 fly launch --copy-config --no-deploy
