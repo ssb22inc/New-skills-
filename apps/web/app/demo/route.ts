@@ -32,7 +32,25 @@ export async function GET(): Promise<Response> {
     return new Response('not found', { status: 404 });
   }
 
-  const live = await marketsRegistry(db).listLive();
+  // A deploy whose database is not wired yet should say so in one plain
+  // sentence, not in a stack trace. This is the page the founder opens
+  // first; "DATABASE_URL is not set" is an instruction, a 500 is a puzzle.
+  let live: string[];
+  try {
+    live = await marketsRegistry(db).listLive();
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    const configured = Boolean(process.env.DATABASE_URL);
+    return new Response(
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sycamore — database</title><style>${darkTheme()}</style></head><body><main>` +
+        `<h1>Sycamore — not connected yet</h1>` +
+        (configured
+          ? `<p>DATABASE_URL is set but the database did not answer.</p><p class="muted">${esc(reason)}</p>`
+          : `<p>DATABASE_URL is not set on this deployment.</p><p class="muted">Add it in the host's environment variables and redeploy. Migrations and the demo seed run by themselves on the next boot.</p>`) +
+        `</main></body></html>`,
+      { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } },
+    );
+  }
   const rows: string[] = [];
   for (const market of live) {
     const sellers = await db
