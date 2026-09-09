@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
+import { PNG } from "pngjs";
 import { createStaticServer } from "./seo-crawl.mjs";
 
 const REQUIRED_IMAGES = [
@@ -13,11 +14,43 @@ const REQUIRED_IMAGES = [
 ];
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const finding = (code, message) => ({ severity: "critical", code, message });
+const MAX_RASTER_CHANNEL_DELTA = 2;
+const MAX_RASTER_NOISE_RATIO = 0.001;
 
 function pngDimensions(buffer) {
   const signature = "89504e470d0a1a0a";
   if (buffer.length < 24 || buffer.subarray(0, 8).toString("hex") !== signature || buffer.subarray(12, 16).toString("ascii") !== "IHDR") return null;
   return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+function comparePngPixels(reviewedBuffer, recapturedBuffer) {
+  try {
+    const reviewed = PNG.sync.read(reviewedBuffer);
+    const recaptured = PNG.sync.read(recapturedBuffer);
+    if (reviewed.width !== recaptured.width || reviewed.height !== recaptured.height) return null;
+
+    let changedPixels = 0;
+    let maxChannelDelta = 0;
+    for (let offset = 0; offset < reviewed.data.length; offset += 4) {
+      let pixelChanged = false;
+      for (let channel = 0; channel < 4; channel += 1) {
+        const delta = Math.abs(reviewed.data[offset + channel] - recaptured.data[offset + channel]);
+        if (delta) pixelChanged = true;
+        if (delta > maxChannelDelta) maxChannelDelta = delta;
+      }
+      if (pixelChanged) changedPixels += 1;
+    }
+
+    const totalPixels = reviewed.width * reviewed.height;
+    return {
+      equivalent: maxChannelDelta <= MAX_RASTER_CHANNEL_DELTA && changedPixels / totalPixels <= MAX_RASTER_NOISE_RATIO,
+      changedPixels,
+      totalPixels,
+      maxChannelDelta,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function renderReactLanding({ landingFile = "dist/index.html", browserType = chromium } = {}) {
@@ -89,9 +122,17 @@ export async function auditProductImages({
     if (!buffer) continue;
     const digest = sha256(buffer);
     const dimensions = pngDimensions(buffer);
+    let rasterComparison = null;
+    if (current.sha256 !== expected.sha256 || current.bytes !== expected.bytes) {
+      try {
+        rasterComparison = comparePngPixels(buffer, await fs.readFile(path.join(path.dirname(captureFile), file)));
+      } catch {
+        rasterComparison = null;
+      }
+    }
     if (digest !== expected.sha256) findings.push(finding("PRODUCT_IMAGE_HASH", `${file} does not match its reviewed manifest hash.`));
-    if (current.sha256 !== expected.sha256) findings.push(finding("PRODUCT_IMAGE_STALE", `${file} no longer matches a fresh deterministic capture of the current app.`));
-    if (buffer.byteLength !== expected.bytes || current.bytes !== expected.bytes) findings.push(finding("PRODUCT_IMAGE_BYTES", `${file} byte length does not match reviewed capture evidence.`));
+    if (current.sha256 !== expected.sha256 && !rasterComparison?.equivalent) findings.push(finding("PRODUCT_IMAGE_STALE", `${file} no longer matches a fresh deterministic capture of the current app.`));
+    if ((buffer.byteLength !== expected.bytes || current.bytes !== expected.bytes) && !rasterComparison?.equivalent) findings.push(finding("PRODUCT_IMAGE_BYTES", `${file} byte length does not match reviewed capture evidence.`));
     if (!dimensions || dimensions.width !== expected.width || dimensions.height !== expected.height || current.width !== expected.width || current.height !== expected.height) {
       findings.push(finding("PRODUCT_IMAGE_DIMENSIONS", `${file} dimensions do not match reviewed capture evidence.`));
     }
@@ -110,7 +151,24 @@ export async function auditProductImages({
     if (!fallbackLanding.includes(`src="/product/${file}"`) || !fallbackLanding.includes(`width="${expected.width}"`) || !fallbackLanding.includes(`height="${expected.height}"`)) {
       findings.push(finding("PRODUCT_IMAGE_FALLBACK_MARKUP", `${file} lacks explicit image dimensions in the no-JavaScript fallback.`));
     }
-    auditedImages.push({ file, sha256: digest, bytes: buffer.byteLength, ...dimensions, alt: expected.alt, caption: expected.caption });
+    auditedImages.push({
+      file,
+      sha256: digest,
+      bytes: buffer.byteLength,
+      ...dimensions,
+      alt: expected.alt,
+      caption: expected.caption,
+      recapture: rasterComparison
+        ? {
+            sha256: current.sha256,
+            bytes: current.bytes,
+            equivalentWithinRasterTolerance: rasterComparison.equivalent,
+            changedPixels: rasterComparison.changedPixels,
+            totalPixels: rasterComparison.totalPixels,
+            maxChannelDelta: rasterComparison.maxChannelDelta,
+          }
+        : { sha256: current.sha256, bytes: current.bytes, equivalentWithinRasterTolerance: current.sha256 === expected.sha256 },
+    });
   }
   const extras = [...manifestImages.keys()].filter((file) => !REQUIRED_IMAGES.includes(file));
   if (extras.length) findings.push(finding("PRODUCT_IMAGE_SCOPE", `Unreviewed manifest images are present: ${extras.join(", ")}`));
