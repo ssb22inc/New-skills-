@@ -11,7 +11,7 @@ import { CompletionProofSchema, loadContextPack, loadVerticalPack } from '@sycam
 
 export const dynamic = 'force-dynamic';
 
-const db = createDb(process.env.DATABASE_URL ?? databaseUrl());
+const db = createDb(databaseUrl());
 
 /** The installed client may queue exactly these — nothing money-shaped. */
 const ALLOWED_KINDS = new Set(['complete_order', 'client_installed', 'install_declined']);

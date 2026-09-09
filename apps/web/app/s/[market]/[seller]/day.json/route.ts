@@ -2,7 +2,7 @@ import { capacityEngine, createDb, databaseUrl, marketsRegistry } from '@sycamor
 
 export const dynamic = 'force-dynamic';
 
-const db = createDb(process.env.DATABASE_URL ?? databaseUrl());
+const db = createDb(databaseUrl());
 
 const SEVEN_DAYS_MS = 7 * 86_400_000;
 

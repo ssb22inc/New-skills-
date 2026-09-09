@@ -34,8 +34,17 @@ pasted into the Vercel project by a human, one time:
 
 1. Vercel → `sycamore` → **Settings → Environment Variables**
 2. Add `DATABASE_URL` = the value handed over privately (never paste it into
-   git, a chat log, or this file)
+   git, a chat log, or this file). **Tick Production** in the environment
+   picker — the branch builds as production, and a value saved only for
+   Preview is invisible to it.
 3. **Deployments → ⋯ on the latest → Redeploy** (env vars apply to the next build)
+
+The app also accepts the names hosted integrations write on your behalf —
+`POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`,
+`SUPABASE_DB_URL` — so connecting Supabase through Vercel's integration
+screen works too, with no renaming. If `/demo` still says "not connected", it
+now lists which database-looking variable names the build can actually see
+(names only, never values): that line is the diagnosis.
 
 After that, every push to the branch redeploys with no further steps, and the
 phone link is:
@@ -120,7 +129,7 @@ with how old it is, and completing an order queues locally until you reconnect.
 
 | Variable | Why |
 |---|---|
-| `DATABASE_URL` | Postgres. Required. |
+| `DATABASE_URL` | Postgres. Required. `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING` and `SUPABASE_DB_URL` are accepted as aliases, in that order, for hosts whose integrations name it themselves. |
 | `SYCAMORE_MIGRATE_ON_BOOT` | `1` runs migrations before the first request. Idempotent; the ledger is append-only so a restart can never rewrite history. |
 | `SYCAMORE_DEMO_INDEX` | `1` exposes `/demo`. **Leave it off for anything real.** |
 | `SYCAMORE_PACKS_DIR` | Where the pack YAML lives. The image sets it; only needed if you run the server outside the image. |

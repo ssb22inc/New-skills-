@@ -23,7 +23,7 @@ export async function register(): Promise<void> {
   if (!migrateOnBoot) return;
 
   const { createDb, databaseUrl, migrateToLatest, seedMarkets } = await import('@sycamore/core');
-  const configured = process.env.DATABASE_URL ?? databaseUrl();
+  const configured = databaseUrl();
 
   // Find a database that answers. Only Supabase pooler URLs get a second
   // candidate (see databaseUrlCandidates); everything else is tried once.

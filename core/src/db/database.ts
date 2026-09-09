@@ -21,7 +21,29 @@ export function createDb(connectionString: string): Kysely<Database> {
   });
 }
 
+/**
+ * The environment variable names a Postgres URL may arrive under, in
+ * precedence order. `DATABASE_URL` is ours. The rest are what hosted
+ * integrations write on the founder's behalf — the Supabase ↔ Vercel
+ * integration sets `POSTGRES_URL` (pooled) and its siblings, never
+ * `DATABASE_URL` — and a deploy should not stay dark because the secret
+ * landed under a vendor's spelling of the same thing.
+ */
+export const DATABASE_URL_NAMES = [
+  'DATABASE_URL',
+  'POSTGRES_URL',
+  'POSTGRES_PRISMA_URL',
+  'POSTGRES_URL_NON_POOLING',
+  'SUPABASE_DB_URL',
+] as const;
+
+/** Which of DATABASE_URL_NAMES is set (first wins), or undefined if none is. */
+export function databaseUrlSource(): string | undefined {
+  return DATABASE_URL_NAMES.find((name) => Boolean(process.env[name]));
+}
+
 /** Dev default matches docker-compose.yml / .env.example. */
 export function databaseUrl(): string {
-  return process.env.DATABASE_URL ?? 'postgres://sycamore:sycamore@localhost:5432/sycamore';
+  const source = databaseUrlSource();
+  return (source && process.env[source]) || 'postgres://sycamore:sycamore@localhost:5432/sycamore';
 }

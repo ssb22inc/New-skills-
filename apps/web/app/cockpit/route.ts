@@ -12,7 +12,7 @@ import { darkTheme } from '@sycamore/design';
 
 export const dynamic = 'force-dynamic';
 
-const db = createDb(process.env.DATABASE_URL ?? databaseUrl());
+const db = createDb(databaseUrl());
 
 function esc(s: string): string {
   return s

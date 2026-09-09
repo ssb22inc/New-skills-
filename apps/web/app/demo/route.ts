@@ -1,10 +1,17 @@
-import { createDb, databaseUrl, marketsRegistry, sellerInstallRate } from '@sycamore/core';
+import {
+  createDb,
+  databaseUrl,
+  databaseUrlSource,
+  DATABASE_URL_NAMES,
+  marketsRegistry,
+  sellerInstallRate,
+} from '@sycamore/core';
 import { darkTheme } from '@sycamore/design';
 import { deployDefaults } from '../../src/deploy-defaults.js';
 
 export const dynamic = 'force-dynamic';
 
-const db = createDb(process.env.DATABASE_URL ?? databaseUrl());
+const db = createDb(databaseUrl());
 
 function esc(s: string): string {
   return s
@@ -40,13 +47,27 @@ export async function GET(): Promise<Response> {
     live = await marketsRegistry(db).listLive();
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
-    const configured = Boolean(process.env.DATABASE_URL);
+    const source = databaseUrlSource();
+    // Names only, never values: which variables this build can see that
+    // look like they might be the database. When the secret was pasted
+    // under the wrong name or the wrong scope, this is the line that
+    // says so — on the phone, without a trip to the Vercel dashboard.
+    const lookalikes = Object.keys(process.env)
+      .filter((k) => /DATABASE|POSTGRES|SUPABASE|^PG/i.test(k))
+      .sort();
+    const scope = process.env.VERCEL_ENV ? `Vercel ${process.env.VERCEL_ENV}` : 'this host';
     return new Response(
       `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sycamore — database</title><style>${darkTheme()}</style></head><body><main>` +
         `<h1>Sycamore — not connected yet</h1>` +
-        (configured
-          ? `<p>DATABASE_URL is set but the database did not answer.</p><p class="muted">${esc(reason)}</p>`
-          : `<p>DATABASE_URL is not set on this deployment.</p><p class="muted">Add it in the host's environment variables and redeploy. Migrations and the demo seed run by themselves on the next boot.</p>`) +
+        (source
+          ? `<p>${esc(source)} is set but the database did not answer.</p><p class="muted">${esc(reason)}</p>`
+          : `<p>No database URL is set on this deployment (${esc(scope)}).</p>` +
+            `<p class="muted">Accepted names: ${DATABASE_URL_NAMES.map(esc).join(', ')}. ` +
+            `Add one in the host's environment variables — on Vercel, ticked for the <strong>Production</strong> environment — and redeploy. ` +
+            `Migrations and the demo seed run by themselves on the next boot.</p>` +
+            `<p class="muted">Database-looking variables this build can see: ${
+              lookalikes.length ? lookalikes.map(esc).join(', ') : 'none'
+            }.</p>`) +
         `</main></body></html>`,
       { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } },
     );
