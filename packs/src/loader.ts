@@ -1,6 +1,6 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { z } from 'zod';
 import { ContextPackSchema, type ContextPack } from './context.js';
@@ -15,11 +15,31 @@ export class PackLoadError extends Error {
 }
 
 export function packsRoot(): string {
-  // Bundlers (Next/webpack) relocate this module; the env override keeps
-  // pack files resolvable from any runtime. Dev/tests use import.meta.url.
+  // Packs are DATA read at runtime, so every deployment shape has to be
+  // able to find them: dev and tests (import.meta.url), the Docker
+  // image (SYCAMORE_PACKS_DIR), and serverless bundles (Vercel traces
+  // the YAML next to the function, but the module's own URL is rewritten
+  // by the bundler and no longer points anywhere useful). The env
+  // override wins; otherwise the first candidate that actually contains
+  // a `context/` directory is the root. Never a silent default.
   if (process.env.SYCAMORE_PACKS_DIR) return process.env.SYCAMORE_PACKS_DIR;
-  // src/loader.ts lives one level below the packs workspace root.
-  return fileURLToPath(new URL('..', import.meta.url));
+  const candidates: string[] = [];
+  try {
+    // src/loader.ts lives one level below the packs workspace root.
+    candidates.push(join(dirname(fileURLToPath(import.meta.url)), '..'));
+  } catch {
+    /* bundled: import.meta.url is not a file URL here */
+  }
+  const cwd = process.cwd();
+  candidates.push(join(cwd, 'packs'), join(cwd, '..', '..', 'packs'), join(cwd, '..', 'packs'));
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, 'context'))) return candidate;
+  }
+  throw new PackLoadError(
+    'packs',
+    `cannot locate the packs directory (looked in: ${candidates.join(', ')}). ` +
+      `Set SYCAMORE_PACKS_DIR to the directory that contains context/, vertical/ and copy/.`,
+  );
 }
 
 function parsePack<T>(schema: z.ZodType<T>, yamlText: string, source: string): T {

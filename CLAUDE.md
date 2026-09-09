@@ -138,7 +138,10 @@ the whole product. Nothing else gets built here.
    any unregistered `core/src` module or foreign-domain vocabulary. If it fails,
    do NOT edit the registry to make it pass — that is the mistake it exists to
    catch. Ask first.
-5. **`haven/` and any other project in this repo are off-limits.** Never read
+5. **`haven/`, `pulsern/`, and any other project in this repo are off-limits.** The
+   `main` branch of this repository carries a DIFFERENT product (PulseRN); Sycamore
+   lives on its own branch with no common ancestor, and the two must never be merged
+   or cherry-picked in either direction. Never read
    from, write to, or borrow patterns from them for Sycamore work.
 
 What this cost when it was violated: a full module (sign-up, daily study

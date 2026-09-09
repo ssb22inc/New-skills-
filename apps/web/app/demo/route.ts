@@ -1,5 +1,6 @@
 import { createDb, databaseUrl, marketsRegistry, sellerInstallRate } from '@sycamore/core';
 import { darkTheme } from '@sycamore/design';
+import { deployDefaults } from '../../src/deploy-defaults.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,11 +23,12 @@ function esc(s: string): string {
  * a phone has no link to arrive from, so this hands them the seeded
  * sellers to tap through.
  *
- * It is OFF unless `SYCAMORE_DEMO_INDEX=1`, and it 404s otherwise —
+ * It is OFF unless `SYCAMORE_DEMO_INDEX=1` (ON by default only on a
+ * Vercel deploy, see deploy-defaults.ts), and it 404s otherwise —
  * deliberately, so it cannot become a de-facto product page by accident.
  */
 export async function GET(): Promise<Response> {
-  if (process.env.SYCAMORE_DEMO_INDEX !== '1') {
+  if (!deployDefaults().demoIndex) {
     return new Response('not found', { status: 404 });
   }
 

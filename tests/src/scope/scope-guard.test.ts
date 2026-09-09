@@ -21,7 +21,7 @@
  * feature belongs to Sycamore at all — that question is the whole point
  * of this file.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -80,6 +80,16 @@ const FOREIGN_DOMAIN_TERMS = [
   'quizAttempt',
   'landlord', // haven/ is a separate project and must stay separate
   'listingMatch',
+  // pulsern/ is the OTHER product this repository's main branch carries.
+  // On 2026-09-09 a fresh clone of the Sycamore branch came up pointing
+  // at main, with PulseRN in the tree and Sycamore gone. The branch was
+  // intact on the remote; this list is what makes a merge in either
+  // direction fail loudly instead of quietly.
+  'pulsern',
+  'PulseRN',
+  'NCLEX',
+  'flashcard',
+  'ability-engine',
 ];
 
 function directoriesUnder(dir: string): string[] {
@@ -124,6 +134,20 @@ describe('THE SCOPE GUARD — Sycamore builds only Sycamore', () => {
       `Foreign domain vocabulary found:\n${offenders.join('\n')}\n` +
         `Sycamore is WhatsApp-first commerce. These words belong to a different product.`,
     ).toEqual([]);
+  });
+
+  it("no other product's directory exists in the Sycamore tree", () => {
+    // haven/ predates Sycamore and is tolerated but never imported;
+    // pulsern/ lives on main and must never appear here at all.
+    const repo = new URL('../../../', import.meta.url).pathname;
+    expect(existsSync(join(repo, 'pulsern')), 'pulsern/ is in the Sycamore tree').toBe(false);
+    const importsHaven: string[] = [];
+    for (const root of SOURCE_ROOTS) {
+      for (const file of sourceFilesUnder(root)) {
+        if (/from\s+['"][^'"]*haven\//.test(readFileSync(file, 'utf8'))) importsHaven.push(file);
+      }
+    }
+    expect(importsHaven).toEqual([]);
   });
 
   it('the spec files that define scope are present and non-empty', () => {

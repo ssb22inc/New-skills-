@@ -143,3 +143,20 @@ describe('P36 — ASYMMETRIC CLIENTS: sellers are offered, buyers are never aske
     }
   });
 });
+
+describe('deploy scaffolding — the pooler-cluster fallback', () => {
+  it('a Supabase pooler URL gets exactly one sibling; anything else passes through', async () => {
+    const { databaseUrlCandidates } = await import('./deploy-defaults.js');
+    const zero =
+      'postgresql://u.ref:pw@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=no-verify';
+    expect(databaseUrlCandidates(zero)).toEqual([
+      zero,
+      'postgresql://u.ref:pw@aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=no-verify',
+    ]);
+    const one = zero.replace('aws-0-', 'aws-1-');
+    expect(databaseUrlCandidates(one)[1]).toBe(zero);
+    expect(databaseUrlCandidates('postgres://sycamore@localhost:5432/sycamore')).toEqual([
+      'postgres://sycamore@localhost:5432/sycamore',
+    ]);
+  });
+});

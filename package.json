@@ -27,6 +27,7 @@
     "@sycamore/core": "workspace:*",
     "@sycamore/gateway": "workspace:*",
     "@sycamore/packs": "workspace:*",
+    "@sycamore/web": "workspace:*",
     "@types/node": "^26.1.0",
     "@vitest/coverage-v8": "^4.1.9",
     "eslint": "^10.6.0",
@@ -36,5 +37,6 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.1",
     "vitest": "4.1.9"
-  }
+  },
+  "packageManager": "pnpm@10.33.0"
 }
