@@ -20,6 +20,9 @@ importers:
       '@sycamore/packs':
         specifier: workspace:*
         version: link:packs
+      '@sycamore/web':
+        specifier: workspace:*
+        version: link:apps/web
       '@types/node':
         specifier: ^26.1.0
         version: 26.1.0
