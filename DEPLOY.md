@@ -122,6 +122,16 @@ with how old it is, and completing an order queues locally until you reconnect.
 
 ## What is verified, and what is not
 
+**Verified on Vercel, 2026-09-09, from a different machine over HTTPS:** the
+git-linked build succeeds; `/manifest.webmanifest`, `/sw.js`,
+`/icons/icon-192.png` and `/icons/icon-512.png` all answer 200 with the right
+types on the branch URL; `/` redirects to `/s/`; deployment protection is off so
+no Vercel login stands in the way; and `/demo` without a database answers the
+plain 503 page instead of a stack trace. A local build in Vercel mode traced all
+19 pack YAML files into the functions. What remains unverified until
+`DATABASE_URL` is pasted: the boot migration, the self-seed, and every
+database-backed page — on the real Supabase pooler.
+
 **Verified in this repo, by running it:** the standalone production server boots,
 runs migrations at startup, and serves every route plus `/sw.js`,
 `/icons/icon-192.png` and `/icons/icon-512.png` over the exact file layout the
