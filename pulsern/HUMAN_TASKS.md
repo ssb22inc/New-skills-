@@ -35,7 +35,10 @@ Claude Code executes everything else. These run in parallel with the build.
 
 - H8 · Review cadence — block 3–5 hrs/week for the queue. This is the growth throttle: your hours ≈ 100–150 approved items/week.
 
-- H9 · Legal texts — educational-use disclaimer, privacy policy, terms. "Prep for the NCLEX-RN examination®" phrasing; no NCSBN affiliation implied. Attorney review before paid marketing.
+- H9 · Legal review — **texts are implemented** at `/legal/`, including the
+  educational-use disclaimer, privacy terms, NCLEX trademark statement, and
+  no-affiliation language. Attorney review remains required before paid
+  marketing; a passing code or SEO audit is not legal approval.
 
 - H10 · Pass-rate loop — set up the 60-day post-exam email ask (one question: pass/fail). At n≥100 this becomes your strongest marketing asset.
 
