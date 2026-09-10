@@ -2,15 +2,22 @@
 
 Claude Code executes everything else. These run in parallel with the build.
 
-## Before Prompt 1 (blocking)
+## Initial account setup (completed)
 
-- H1 · Supabase — supabase.com → New project → strong DB password. Copy Project URL, anon key, service_role key. (~5 min)
+- H1 · Supabase — **completed.** The production project, schema, Auth,
+  RLS, and client/server credentials are in use.
 
-- H2 · OpenRouter — openrouter.ai → create key → load $10 credit. Covers thousands of factory items + tutor calls. (~5 min)
+- H2 · OpenRouter — **completed.** The tutor and on-demand content
+  workflows have used the configured provider credential successfully.
 
-- H3 · Vercel — vercel.com → connect the GitHub repo once Prompt 1 pushes it. Add env vars per PULSERN_BUILD.md §2 (both VITE_ client vars and the three server secrets). (~10 min)
+- H3 · Vercel — **completed.** `www.pulsern.app` is serving the Vercel
+  production project with the required Supabase and OpenRouter variables.
 
-- H4 · GitHub secrets — repo Settings → Secrets → Actions: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENROUTER_API_KEY. (~3 min)
+- H4 · GitHub secrets — **completed 2026-09-10.** The Actions
+  `SUPABASE_SERVICE_ROLE_KEY` was corrected and proved by the factory's
+  service-role preflight and a successful recovery run. The factory is now
+  intentionally on-demand because the content libraries reached their
+  targets; it is not failing on a disabled schedule.
 
 ## During the build
 
@@ -28,7 +35,10 @@ Claude Code executes everything else. These run in parallel with the build.
 
 - H8 · Review cadence — block 3–5 hrs/week for the queue. This is the growth throttle: your hours ≈ 100–150 approved items/week.
 
-- H9 · Legal texts — educational-use disclaimer, privacy policy, terms. "Prep for the NCLEX-RN examination®" phrasing; no NCSBN affiliation implied. Attorney review before paid marketing.
+- H9 · Legal review — **texts are implemented** at `/legal/`, including the
+  educational-use disclaimer, privacy terms, NCLEX trademark statement, and
+  no-affiliation language. Attorney review remains required before paid
+  marketing; a passing code or SEO audit is not legal approval.
 
 - H10 · Pass-rate loop — set up the 60-day post-exam email ask (one question: pass/fail). At n≥100 this becomes your strongest marketing asset.
 
@@ -40,20 +50,19 @@ Claude Code executes everything else. These run in parallel with the build.
   it does not publish the address or treat license verification as guide
   approval.
 
-- H16 · Guide-by-guide clinical attestation — review every public guide against
+- H16 · Guide-by-guide clinical attestation — **completed 2026-09-03.**
+  All 37 public guides have digest-bound approval records: 20 exam guides,
+  14 clinical guides, and 3 education guides, with 297 claim-to-source
+  mappings. The build still invalidates an approval automatically whenever
+  its content or source-set digest changes.
+
+  The governing requirement was to review every public guide against
   its listed authoritative sources. For each guide, record the reviewer ID,
   review date, scope, exact content SHA-256, exact source-set SHA-256, and at
   least one claim record with a page/section locator and supporting source IDs.
   A content or source edit changes the digest and automatically invalidates the
   old approval. The automated and model gates must both pass after attestation;
   neither is a substitute for this RN review.
-  - **Progress 2026-08-26:** Guide 1, “ABG interpretation made simple,” was
-    approved by Sheldon Bennett, RN, after source correction and independent
-    adversarial review. The approval is bound to content SHA-256
-    `4cc71368c819558ec37ee6c36257aaaea73c5389dc878ce31fed7b932e0c3166`
-    and source-set SHA-256
-    `897d728338a16872e1438b68ab3270ba4539f270cadc473183a2f823307fcc98`.
-    The remaining 22 guides are still pending and fail closed.
 
 ## Later (Expo phase)
 
