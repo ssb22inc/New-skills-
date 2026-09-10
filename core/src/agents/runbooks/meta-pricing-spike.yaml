@@ -1,0 +1,16 @@
+# Runbook (P35d): per-conversation cost jumps — a Meta pricing change.
+# The pre-modeled response: shift receipts to SMS (reroute) and pause
+# marketing sends while the Bursar re-prices the channel mix.
+id: meta-pricing-spike
+version: 1
+title: Per-conversation cost spiked
+trigger:
+  vital: per_conversation_cost
+  direction: up
+actions:
+  - reroute
+  - pause
+notes: >
+  Reroute receipts and confirmations to the SMS lane, pause marketing
+  and Mentor sends on the paid channel. The Bursar's monthly report
+  carries the swap proposal; the founder taps the final call.

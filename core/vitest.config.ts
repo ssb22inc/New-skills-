@@ -1,0 +1,17 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    // Integration suites share one Postgres and migrate it up/down;
+    // files must not race each other.
+    fileParallelism: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'json-summary'],
+      // The testing law is ~30% of build effort (BUILD §5); the number
+      // it produces should be reportable, not folklore.
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/db/migrations/**', 'src/index.ts'],
+    },
+  },
+});

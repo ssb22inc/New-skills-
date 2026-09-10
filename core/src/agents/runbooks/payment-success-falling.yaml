@@ -1,0 +1,14 @@
+# Runbook (P27): payment link success rate drifting down.
+id: payment-success-falling
+version: 1
+title: Payment success rate falling
+trigger:
+  vital: payment_success_rate
+  direction: down
+actions:
+  - reroute
+  - pause
+notes: >
+  Reroute new payment links to the fallback provider, then pause the
+  degraded provider so no new links land on it. Money already in flight
+  settles normally — the ledger is provider-agnostic.

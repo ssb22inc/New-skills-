@@ -1,0 +1,124 @@
+# Base Spanish copy catalogue (do, mx). Same keys as en.yaml — the
+# localization engine's completeness test fails the build if a language
+# catalogue is missing any key the base catalogue defines.
+
+shoebox:
+  header: 'Tu dinero de {month}, claro y sencillo:'
+  sold: 'Vendiste {sales}.'
+  refunds: 'Las devoluciones sumaron {refunds}.'
+  fees: 'Las comisiones fueron {fees}.'
+  paid_out: 'Se te pagaron {payouts}.'
+  tax_over: >-
+    Aviso: tus ventas de los últimos 12 meses ({rolling}) pasaron el umbral de
+    registro de impuestos. Habla con tu contador.
+  tax_approaching: >-
+    Aviso: tus ventas de los últimos 12 meses ({rolling}) se acercan al umbral de
+    registro de impuestos. Todavía no debes nada — pero ya viene.
+  tax_nothing: 'Impuestos: nada que hacer este mes.'
+  disclaimer: 'Estos son tus registros, no asesoría fiscal — llévalos a tu contador.'
+  pdf_title: 'Paquete de registros Sycamore — {month}'
+  pdf_sales: 'Ventas: {sales}'
+  pdf_refunds: 'Devoluciones: {refunds}'
+  pdf_fees: 'Comisiones: {fees}'
+  pdf_paid_out: 'Pagado: {payouts}'
+
+settlement:
+  payout: '{amount} van en camino hacia ti hoy.'
+
+hurricane:
+  freeze: 'Viene tormenta — las reservas están en pausa mientras cuidamos a quienes ya reservaron. Cuídate.'
+  were_safe: 'Salimos bien. Toda reserva fue movida o devuelta — revisa tu chat.'
+  were_open: 'Estamos ABIERTOS otra vez. Los vendedores ya están tomando reservas.'
+
+lifeline:
+  blackout_broadcast: 'Modo tormenta — tu dinero está seguro y retenido hasta que esto pase.'
+  media_stripped: '(Las fotos y notas de voz no te llegan ahora — escríbeme mejor.)'
+
+pulse:
+  kill: >-
+    Paramos un anuncio que gastó {spend} y casi nadie lo tocó. Ese dinero pasa a
+    tus anuncios que sí funcionan.
+  refresh: >-
+    Mucha gente ya vio este anuncio y los toques bajan, así que refrescamos la
+    imagen y las palabras. Misma oferta, nueva energía.
+  scale: >-
+    Tu anuncio va bien — buenos toques por el dinero. Le pusimos {allocated} hoy
+    (tu tope: {cap}).
+  hold: 'Dejamos {allocated} en este anuncio mientras encuentra su público.'
+  cross_pollinate: >-
+    El estilo que funciona en tu mejor anuncio ahora se prueba en {vertical}
+    también, con palabras escritas para ese público.
+
+mentor:
+  photo_freshness: >-
+    Tus fotos del menú ya están viejas — mándame una foto nueva y yo refresco
+    todo.
+  repeat_rate: '{repeaters} de tus {buyers} clientes volvieron — los clientes fieles son tu motor.'
+
+chairman:
+  memo_header: 'Memo semanal — lo que aguantó las pruebas:'
+  probes_header: 'Pruebas pequeñas que valen la pena:'
+
+install:
+  offer_fallback: >-
+    Tu negocio está creciendo. Pon Sycamore en tu pantalla de inicio — abre más
+    rápido y sigue funcionando cuando se cae el internet. {link}
+
+trust_page:
+  verified_badge: 'Verificado por Sycamore'
+  early_days: 'Recién empezando — {orders} pedidos completados'
+  guarantee_back_on_time: 'Garantía de regreso a tiempo: si vuelves tarde, te devolvemos el dinero.'
+  next_openings: 'Próximas fechas'
+  no_openings: 'Escríbenos para las próximas fechas.'
+  open_units: '{units} disponibles'
+  cta: 'Escríbenos por WhatsApp'
+  why_ranked: '¿Por qué veo a este vendedor?'
+  licences: 'Licencias'
+  licence_on_file: '{field}: en archivo'
+  reviews: 'Reseñas'
+  reviews_blurb: >-
+    Las reseñas verificadas vienen solo de reservas completadas. Este negocio
+    está construyendo su historial — mantente pendiente.
+
+why:
+  title: 'Por qué estás viendo esto'
+  intro: 'Cada decisión de orden se explica sola. Aquí está esta, completa.'
+  rating: 'Calificación hasta ahora: {rating} de 5, suavizada hasta que haya suficientes reseñas.'
+  response: 'Responde rápido: normalmente contesta en unos {minutes} minutos.'
+  acceptance: 'Acepta las reservas que le llegan: {acceptance}%.'
+  cancellation: 'Cumple las reservas que acepta: {cancellation}%.'
+  availability: 'Tiene espacio cuando preguntan: {availability}%.'
+  newcomer: 'Mostrado en un espacio de audición para recién llegados — siempre señalado, nunca el primer lugar.'
+  score: 'Puntaje combinado: {score} de 100.'
+  no_seller: 'Ese negocio no está en Sycamore.'
+  back: 'Volver al negocio'
+
+sovereign_door:
+  tagline: 'Chatea y reserva aquí mismo — misma conversación, tu propia puerta.'
+  input_placeholder: 'Pregunta por fechas, precios, lo que sea…'
+  send: 'Enviar'
+  footer: 'Funciona en cualquier conexión. Responde STOP cuando quieras para pausar los mensajes.'
+
+seller_day:
+  loading: 'Cargando tu día…'
+  install_pitch: >-
+    Ponlo en tu pantalla de inicio — abre más rápido y sigue funcionando cuando
+    se cae el internet.
+  install_accept: 'Agregar a la pantalla de inicio'
+  install_decline: 'Ahora no'
+  open_orders: 'Pedidos abiertos'
+  next_seven_days: 'Próximos 7 días'
+  your_people: 'Tu gente'
+  what_you_sell: 'Lo que vendes'
+  no_open_orders: 'Nada abierto ahora mismo.'
+  no_capacity: 'Sin fechas para los próximos 7 días.'
+  no_contacts: 'Todavía no hay clientes.'
+  no_catalog: 'Todavía no hay nada publicado.'
+  up_to_date: 'Al día.'
+  offline_as_of: 'Sin conexión — mostrando tu día del {when}'
+  offline_no_cache: 'Sin conexión — todavía no hay día guardado.'
+  done: 'Listo'
+  sent: 'Enviado'
+  launch_hint: 'Abre una vez el enlace que te mandamos por chat y este ícono te traerá directo aquí.'
+  opening: 'Abriendo tu día…'
+  queue_waiting: '{count} cambios esperando enviarse.'
