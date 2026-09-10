@@ -6,6 +6,14 @@ authorized owner; no Google credential or verification token belongs in git.
 
 ## One-time Search Console setup
 
+Status as of 2026-09-10: the `pulsern.app` Domain property is DNS-verified and
+`https://www.pulsern.app/sitemap.xml` has been submitted. The homepage is
+indexed. Google accepted a priority indexing request for
+`/learn/2026-nclex-rn-test-plan/`. The sitemap is independently verified as
+HTTP 200 XML with 53 unique canonical URLs and is declared in `robots.txt`;
+allow Search Console time to refresh before treating its initial "could not be
+read" display as a new deployment defect.
+
 1. Create a Domain property for `pulsern.app` in Google Search Console.
 2. Prefer the DNS TXT verification record supplied by Google. This verifies all
    protocols and subdomains without changing application code.
