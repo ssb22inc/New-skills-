@@ -1,6 +1,33 @@
 # PulseRN — Build & Verification Report
 
-**Production: https://pulsern.vercel.app · Review console: https://pulsern.vercel.app/review/**
+**Production: https://www.pulsern.app · Review console: https://www.pulsern.app/review/**
+
+## Current operational status (verified 2026-09-10)
+
+- Production `/release.json` reports merge commit
+  `8ba7a1391ca80ad1cc59046a9b378b92ac432cd8`.
+- Vercel reports the matching production deployment as `READY`, its PulseRN
+  commit status is successful, and there were no PulseRN runtime errors in the
+  seven-day window ending 2026-09-10.
+- The production sitemap returns HTTP 200 as XML, contains 53 unique canonical
+  URLs, and is declared in `robots.txt`. A six-user-agent live crawl passed all
+  53 routes with zero findings.
+- All 37 public guides have current digest-bound RN approval records and 297
+  claim-to-source mappings.
+- The content-factory Supabase credential was repaired and verified by a
+  successful recovery run. Its twice-daily schedule was retired after the
+  libraries reached their targets; the workflow remains available on demand.
+- Local verification on the production source commit: 201 tests pass, the
+  production build passes, the deterministic 53-page search audit passes, and
+  `npm audit --audit-level=high` reports zero vulnerabilities.
+- Search Console's Domain property is verified and the sitemap is submitted.
+  The homepage is indexed. Google accepted a priority indexing request for
+  `/learn/2026-nclex-rn-test-plan/`; its status should be rechecked after Google
+  recrawls it. Do not repeatedly resubmit while it is queued.
+
+The sections below preserve the original deployment evidence. Counts labelled
+as snapshots are historical rather than a statement of the current library
+size.
 
 Build executed per PULSERN_PROMPTS.md, prompts 0–13 complete with every
 verification gate green, including the post-deploy production smoke test:
@@ -36,7 +63,7 @@ The approval gate was verified from every direction: the factory writes
 `approved=false` only, students (anon/authenticated non-reviewers) can
 neither see nor flip pending items, and only the console path approves.
 
-## Database state right now
+## Initial deployment database snapshot (historical)
 
 - 25 approved items live (21 seed + 3 NGN samples + 1 console-approved factory item)
 - 2 factory items still pending review, 1 rejected with note (id 27)
@@ -58,9 +85,9 @@ reviewer-registered account.
 
 1. ~~H3 · Vercel~~ — **done**: deployed at https://pulsern.vercel.app with all
    five env vars; every `/api` route verified live.
-2. **H4 · GitHub secrets**: repo Settings → Secrets → Actions:
-   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENROUTER_API_KEY` —
-   the twice-daily factory workflow needs them.
+2. ~~H4 · GitHub secrets~~ — **done**: the Supabase service-role Actions
+   secret was corrected and verified by the on-demand factory preflight and a
+   successful recovery run.
 3. **H5 · Register yourself as reviewer** (Supabase SQL editor):
    `insert into reviewers (user_id, full_name, license_no) values ('<your auth uid>', '<name>, RN', '<license>');`
 4. **H7 · Formal review pass** of all 25 live items (3 NGN samples were
