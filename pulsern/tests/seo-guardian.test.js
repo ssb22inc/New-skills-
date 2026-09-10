@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import { PNG } from "pngjs";
 import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
 import { candidateCommercialPagesFromDist, candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
 import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
@@ -871,6 +872,58 @@ describe("SEO guardian", () => {
     const fail = await auditProductImages({ ...options, outputFile: path.join(directory, "fail.json") });
     expect(fail.verdict).toBe("FAIL");
     expect(fail.findings.map((item) => item.code)).toEqual(expect.arrayContaining(["PRODUCT_IMAGE_PRIVACY", "PRODUCT_IMAGE_STALE"]));
+  });
+
+  it("accepts negligible Chromium edge rasterization noise but rejects visible pixel drift", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-product-raster-"));
+    const publicDirectory = path.join(directory, "public");
+    const captureDirectory = path.join(directory, "capture");
+    await Promise.all([fs.mkdir(publicDirectory), fs.mkdir(captureDirectory)]);
+    const specs = [
+      ["pulsern-adaptive-practice.png", 720, 620, "PulseRN adaptive NCLEX practice screen with a pharmacology question and four answer choices", "Authentic adaptive NCLEX practice with answer-first review."],
+      ["pulsern-today-dashboard.png", 720, 1000, "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards", "A daily plan without guesswork"],
+      ["pulsern-lab-reference.png", 430, 932, "PulseRN mobile lab-reference drawer open over an adaptive practice question", "Lab reference at your fingertips"],
+    ];
+    const images = [];
+    for (const [file, width, height, alt, caption] of specs) {
+      const png = new PNG({ width, height });
+      png.data.fill(240);
+      for (let offset = 3; offset < png.data.length; offset += 4) png.data[offset] = 255;
+      const buffer = PNG.sync.write(png);
+      await fs.writeFile(path.join(publicDirectory, file), buffer);
+      await fs.writeFile(path.join(captureDirectory, file), buffer);
+      images.push({ file, sha256: createHash("sha256").update(buffer).digest("hex"), bytes: buffer.byteLength, width, height, alt, caption });
+    }
+    const manifest = { schemaVersion: 1, sourceCommitSha: "a".repeat(40), renderer: "PulseRN App.jsx deterministic built-in-content harness", containsLearnerData: false, images };
+    const capture = { ...manifest, browser: "test-browser", images: images.map(({ alt, caption, ...image }) => image) };
+    const manifestFile = path.join(directory, "manifest.json");
+    const captureFile = path.join(captureDirectory, "capture.json");
+    const landingFile = path.join(directory, "index.html");
+    const markup = images.map((image) => `<figure><img src="/product/${image.file}" alt="${image.alt}" width="${image.width}" height="${image.height}"><figcaption>${image.caption}</figcaption></figure>`).join("");
+    const renderedLandingMarkup = renderToStaticMarkup(React.createElement(LandingPage, { onSignIn() {}, onStart() {} }));
+    const options = { manifestFile, captureFile, publicDirectory, landingFile, renderedLandingMarkup, outputFile: path.join(directory, "report.json") };
+    await Promise.all([fs.writeFile(manifestFile, JSON.stringify(manifest)), fs.writeFile(landingFile, markup)]);
+
+    const recaptured = PNG.sync.read(await fs.readFile(path.join(captureDirectory, images[1].file)));
+    for (let pixel = 0; pixel < 151; pixel += 1) recaptured.data[pixel * 4] += pixel < 148 ? 1 : 2;
+    const negligibleBuffer = PNG.sync.write(recaptured);
+    await fs.writeFile(path.join(captureDirectory, images[1].file), negligibleBuffer);
+    capture.images[1].sha256 = createHash("sha256").update(negligibleBuffer).digest("hex");
+    capture.images[1].bytes = negligibleBuffer.byteLength;
+    await fs.writeFile(captureFile, JSON.stringify(capture));
+    const negligible = await auditProductImages(options);
+    expect(negligible.verdict).toBe("PASS");
+    expect(negligible.images[1].recapture).toMatchObject({ equivalentWithinRasterTolerance: true, changedPixels: 151, maxChannelDelta: 2 });
+
+    recaptured.data[0] = 0;
+    const visibleBuffer = PNG.sync.write(recaptured);
+    await fs.writeFile(path.join(captureDirectory, images[1].file), visibleBuffer);
+    capture.images[1].sha256 = createHash("sha256").update(visibleBuffer).digest("hex");
+    capture.images[1].bytes = visibleBuffer.byteLength;
+    await fs.writeFile(captureFile, JSON.stringify(capture));
+    const visible = await auditProductImages(options);
+    expect(visible.verdict).toBe("FAIL");
+    expect(visible.findings.map((item) => item.code)).toEqual(expect.arrayContaining(["PRODUCT_IMAGE_STALE", "PRODUCT_IMAGE_BYTES"]));
   });
 
   it("bundles the screenshot fonts locally instead of relying on Google Fonts", async () => {
