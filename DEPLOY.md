@@ -66,6 +66,17 @@ prints the error and the connection it attempted —
 the password dropped and the project reference masked. Between those two lines
 every failure so far would have been one glance instead of an afternoon.
 
+**To watch the machine rather than the product, open `/dev`.** The cockpit
+answers "how is the business doing"; the developer console answers "is any of
+this actually working". On one self-refreshing page: schema state and pending
+migrations, which environment variable the database URL came from and the
+connection it resolves to, every market and its status, the trial balance with
+each account as a natural balance, the last fifteen events off the outbox with
+how long ago each fired, row counts behind every page, and a live link to every
+surface. It answers 503 the moment it finds a problem, so a red page is visible
+without reading it, and it writes nothing. Like `/demo` it is scaffolding:
+`SYCAMORE_DEMO_INDEX=0` and it 404s.
+
 Two Vercel details that cost an afternoon, so they are written down: environment
 variables are scoped (Production / Preview / Development) and a build only sees
 the scopes it belongs to — which is why this branch is the project's
