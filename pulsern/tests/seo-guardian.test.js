@@ -270,7 +270,11 @@ describe("SEO guardian", () => {
     expect(html).toContain("20 items are original educational examples");
     expect(html).toMatch(/not live, recalled, or reproduced NCLEX questions/i);
     expect(html).toContain("cannot predict or guarantee an exam outcome");
-    for (const sample of SAMPLE_ARTICLES) expect(html).toContain(`/learn/${sample.slug}/`);
+    for (const sample of SAMPLE_ARTICLES) {
+      expect(html).toContain(`/learn/${sample.slug}/`);
+      const sampleHtml = await fs.readFile(new URL(`../public/learn/${sample.slug}/index.html`, import.meta.url), "utf8");
+      expect(sampleHtml).toContain('href="/free-nclex-practice-test/"');
+    }
   });
 
   it("injects Search Console verification only from a valid build-time token", () => {

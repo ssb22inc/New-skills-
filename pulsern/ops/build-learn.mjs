@@ -235,6 +235,9 @@ function renderArticle(a, all, provenance) {
     : "";
 
   const clinical = provenance.risk === "clinical";
+  const practiceHub = a.topic === "Practice questions"
+    ? `\n<div class="cta"><p><b>Want the complete free set?</b> <a href="/free-nclex-practice-test/">Open all 20 free NCLEX-RN practice questions</a> across pharmacology, prioritization, dosage calculations, and NGN bow-tie items.</p></div>`
+    : "";
   const reviewLine = provenance.review.decision === "approved"
     ? `${clinical ? "clinically reviewed" : "reviewed"} <time datetime="${esc(provenance.review.reviewedAt)}">${esc(provenance.review.reviewedAt)}</time> by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}, ${esc(REVIEW_LEDGER.reviewer.credential)}</a>`
     : `last updated <time datetime="${esc(a.updated)}">${esc(a.updated)}</time> &middot; ${clinical ? "clinical" : "editorial"} review evidence pending`;
@@ -245,7 +248,7 @@ function renderArticle(a, all, provenance) {
 <h1>${esc(a.h1 ?? a.title)}</h1>
 <p class="meta">${esc(a.topic)} &middot; published <time datetime="${esc(a.published)}">${esc(a.published)}</time> &middot; ${reviewLine}</p>
 
-<div class="card">${a.body}</div>
+<div class="card">${a.body}</div>${practiceHub}
 ${faq}
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
@@ -310,6 +313,7 @@ function renderIndex(all) {
 <main><a class="back" href="/">&larr; Back to PulseRN</a>
 <h1>NCLEX-RN <b>guides</b></h1>
 <p class="sub">Straight answers owned by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}</a>, with explicit source and clinical-review status. No fluff, no false promises.</p>
+<div class="cta"><p><b>Start with questions.</b> <a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN practice questions</a> with visible answers, rationales, sources, and RN-review status—no sign-in required.</p></div>
 ${sections}
 </main><footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms &middot; Privacy &middot; Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
