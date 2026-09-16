@@ -71,6 +71,40 @@ consequences, both on the record:
 
 251 tests green with the database required.
 
+## 2026-09-16 — three failures to connect one database
+
+The link is live and the build is green; what stayed dark was the database,
+and it failed three different ways in a row. Each one is now diagnosed by the
+app itself rather than by an afternoon of guessing.
+
+1. **The value was set for the wrong environment.** The branch builds as
+   *production*; the secret was saved for Preview, and a build sees only the
+   scopes it belongs to. The 503 page now names the environment it is running
+   in and lists which database-looking variable NAMES it can see — never
+   values — so "is it even there" is answered on the phone.
+2. **The value could have arrived under a vendor's name.** Vercel's Supabase
+   integration writes `POSTGRES_URL`, never `DATABASE_URL`. The resolver now
+   accepts four aliases after ours, in a fixed order, with a test pinning it.
+   An empty string counts as unset, because that is what a blank save becomes.
+3. **The credential was the project superuser, not the app's role.** Postgres
+   answered `password authentication failed for user "postgres"`. That is half
+   a diagnosis: a saved secret is write-only, so nobody can read back which URL
+   the deployment is using. `describeDatabaseUrl()` renders it as one safe line
+   — role, host, port, database — with the password dropped and the Supabase
+   project reference masked. A URL that will not parse at all gets its own
+   sentence, because a password with a raw `@` or `/` is a different mistake
+   from a placeholder pasted whole.
+
+Still open: the app role's password was re-issued as a URL-safe value and the
+founder pastes it once more. Nothing in this repository has ever held it — the
+repository is public, and the Vercel connector exposes no way to set an
+environment variable, so a human types it and only a human can.
+
+Also on the record: this Vercel project is linked to the whole repository, so
+every push to `main` or a `codex/*` branch starts a Sycamore build that fails.
+They are preview builds and cannot touch the production URL. `DEPLOY.md` has
+the one-line Ignored Build Step that stops them.
+
 ## Test counts
 
 250 tests green (last full run, SYCAMORE_REQUIRE_DB=1): core 137 · tests 66 (golden 6, markets 3, chaos 3, lifeline 5, sovereignty 4, pwa 10, scope 3, copy 7, design 5, constitution 9, observability 6, money 3, ci 2) · packs 11 · adapters 10 · gateway 10 · web 8 · design 7 · worker 1.
