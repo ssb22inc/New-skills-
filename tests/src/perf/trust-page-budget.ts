@@ -7,6 +7,7 @@
  *      && pnpm --filter @sycamore/tests perf:trust
  */
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { chromium } from 'playwright';
 import {
   capacityEngine,
@@ -94,11 +95,14 @@ async function main(): Promise<void> {
     server.on('exit', (code) => reject(new Error(`next start exited ${code}`)));
   });
 
-  // Preinstalled Chromium; env may pin a different playwright build id.
+  // This build container ships Chromium at a fixed path; a CI runner
+  // installs Playwright's own somewhere else entirely. Use the
+  // preinstalled binary when it is actually there and let Playwright
+  // find its own when it is not — pinning a path that does not exist is
+  // how a permanent gate turns into a permanent red.
+  const preinstalled = process.env.PLAYWRIGHT_CHROMIUM_PATH ?? '/opt/pw-browsers/chromium';
   const browser = await chromium.launch({
-    ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
-      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
-      : { executablePath: '/opt/pw-browsers/chromium' }),
+    ...(existsSync(preinstalled) ? { executablePath: preinstalled } : {}),
   });
   try {
     const page = await browser.newPage();

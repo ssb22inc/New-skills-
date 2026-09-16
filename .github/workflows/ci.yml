@@ -54,6 +54,10 @@ jobs:
       # is a product law, so it is a build step — not a script somebody
       # remembers to run.
       - run: pnpm --filter @sycamore/web build
+      # The budget gate drives a real browser, so the runner needs one.
+      # Without this the gate cannot run at all, which is worse than
+      # failing: a check that never executes still reports green.
+      - run: pnpm --filter @sycamore/tests exec playwright install --with-deps chromium
       - run: pnpm --filter @sycamore/tests perf:trust
       # Load profiles run against the real gateway on every push; k6 is
       # the heavy weekly profile, this is the always-on floor.
