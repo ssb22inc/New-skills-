@@ -22,7 +22,8 @@ export async function register(): Promise<void> {
   const { migrateOnBoot, demoSeedOnBoot, appOrigin } = deployDefaults();
   if (!migrateOnBoot) return;
 
-  const { createDb, databaseUrl, migrateToLatest, seedMarkets } = await import('@sycamore/core');
+  const { createDb, databaseUrl, describeDatabaseUrl, migrateToLatest, seedMarkets } =
+    await import('@sycamore/core');
   const configured = databaseUrl();
 
   // Find a database that answers. Only Supabase pooler URLs get a second
@@ -41,7 +42,9 @@ export async function register(): Promise<void> {
     } catch (err) {
       await attempt.destroy();
       if (!/tenant or user not found/i.test(String(err))) {
-        console.error('[sycamore] boot migration failed', err);
+        // The shape, not the secret — the same line /demo shows, so a
+        // log and a phone screen tell the same story.
+        console.error(`[sycamore] boot migration failed for ${describeDatabaseUrl(candidate)}`, err);
         return;
       }
     }

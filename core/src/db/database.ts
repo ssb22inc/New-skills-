@@ -42,6 +42,51 @@ export function databaseUrlSource(): string | undefined {
   return DATABASE_URL_NAMES.find((name) => Boolean(process.env[name]));
 }
 
+/**
+ * A one-line, safe-to-display summary of a connection string: who it
+ * connects as, to which host, port and database. THE PASSWORD IS NEVER
+ * PART OF THE RESULT, and a Supabase project reference — which appears
+ * in both the direct host and the pooler username — is masked to its
+ * first and last four characters.
+ *
+ * This exists because "password authentication failed for user
+ * postgres" is only half a diagnosis: the other half is which URL the
+ * deployment is actually using, and the founder cannot read a secret
+ * back out of a host's dashboard. The shape is enough to see that a
+ * direct host was pasted instead of the pooler, or the project's own
+ * superuser instead of the app role.
+ */
+export function describeDatabaseUrl(url: string = databaseUrl()): string {
+  const mask = (ref: string): string =>
+    ref.length > 10 ? `${ref.slice(0, 4)}\u2026${ref.slice(-4)}` : ref;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // Two different mistakes, two different sentences. A value with no
+    // scheme is usually the dashboard's placeholder pasted whole; a
+    // value that has one but will not parse is almost always a password
+    // containing punctuation that has to be percent-encoded first.
+    return url.includes('://')
+      ? `unparseable connection string (${url.length} characters) — a password containing ` +
+          '@ : / ? or # must be percent-encoded'
+      : `not a connection string (${url.length} characters)`;
+  }
+  // A pooler username is "<role>.<project ref>"; mask the ref only.
+  const user = decodeURIComponent(parsed.username).replace(
+    /^([^.]+)\.(.+)$/,
+    (_m, role: string, ref: string) => `${role}.${mask(ref)}`,
+  );
+  const host = parsed.hostname.replace(
+    /^db\.([a-z0-9]+)\.supabase\.co$/,
+    (_m, ref: string) => `db.${mask(ref)}.supabase.co`,
+  );
+  const port = parsed.port || '5432';
+  const database = parsed.pathname.replace(/^\//, '') || '(none)';
+  const ssl = parsed.searchParams.get('sslmode');
+  return `${user || '(no user)'}@${host}:${port}/${database}${ssl ? ` sslmode=${ssl}` : ''}`;
+}
+
 /** Dev default matches docker-compose.yml / .env.example. */
 export function databaseUrl(): string {
   const source = databaseUrlSource();

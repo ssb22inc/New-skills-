@@ -2,6 +2,7 @@ import {
   createDb,
   databaseUrl,
   databaseUrlSource,
+  describeDatabaseUrl,
   DATABASE_URL_NAMES,
   marketsRegistry,
   sellerInstallRate,
@@ -60,7 +61,12 @@ export async function GET(): Promise<Response> {
       `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sycamore — database</title><style>${darkTheme()}</style></head><body><main>` +
         `<h1>Sycamore — not connected yet</h1>` +
         (source
-          ? `<p>${esc(source)} is set but the database did not answer.</p><p class="muted">${esc(reason)}</p>`
+          ? `<p>${esc(source)} is set but the database did not answer.</p>` +
+            `<p class="muted">${esc(reason)}</p>` +
+            // The other half of the diagnosis: which connection was
+            // attempted. Password dropped, project reference masked.
+            `<p class="muted">Connecting as <span class="num">${esc(describeDatabaseUrl())}</span>, password hidden.</p>` +
+            `<p class="muted">The app expects its own role, <span class="num">sycamore</span>, on the Supabase pooler host — not the project's <span class="num">postgres</span> superuser on the direct host.</p>`
           : `<p>No database URL is set on this deployment (${esc(scope)}).</p>` +
             `<p class="muted">Accepted names: ${DATABASE_URL_NAMES.map(esc).join(', ')}. ` +
             `Add one in the host's environment variables — on Vercel, ticked for the <strong>Production</strong> environment — and redeploy. ` +

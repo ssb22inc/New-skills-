@@ -39,19 +39,32 @@ pasted into the Vercel project by a human, one time:
    Preview is invisible to it.
 3. **Deployments → ⋯ on the latest → Redeploy** (env vars apply to the next build)
 
+Three things about that value, each of which has already gone wrong once:
+
+- **The role is `sycamore`, not `postgres`.** The project's own superuser is
+  not the app's credential; the app has a dedicated login role with `CREATE`
+  on `public`, which is all the migrator needs.
+- **Use the pooler host, not the direct one.** `aws-N-<region>.pooler.supabase.com`
+  on port 6543 answers over IPv4, which is what a serverless function has. On
+  the pooler the username carries the project reference: `sycamore.<project-ref>`.
+  Whether the cluster is `aws-0-` or `aws-1-` only the dashboard knows, and boot
+  tries the sibling by itself if the first is wrong.
+- **Percent-encode punctuation in the password**, or avoid it entirely. A raw
+  `@`, `:`, `/`, `?` or `#` makes the whole URL unparseable, and the failure
+  looks nothing like a password problem.
+
 The app also accepts the names hosted integrations write on your behalf —
 `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`,
-`SUPABASE_DB_URL` — so connecting Supabase through Vercel's integration
-screen works too, with no renaming. If `/demo` still says "not connected", it
-now lists which database-looking variable names the build can actually see
-(names only, never values): that line is the diagnosis.
+`SUPABASE_DB_URL` — so connecting Supabase through Vercel's integration screen
+works too, with no renaming.
 
-After that, every push to the branch redeploys with no further steps, and the
-phone link is:
-
-```
-https://sycamore-ssb22incs-projects.vercel.app/demo
-```
+**When it is wrong, `/demo` says how.** With nothing set, it lists the accepted
+names, the environment the build is in, and which database-looking variable
+names it can actually see. With something set that the database refuses, it
+prints the error and the connection it attempted —
+`sycamore.guwn…lybs@aws-1-us-east-1.pooler.supabase.com:6543/postgres` — with
+the password dropped and the project reference masked. Between those two lines
+every failure so far would have been one glance instead of an afternoon.
 
 Two Vercel details that cost an afternoon, so they are written down: environment
 variables are scoped (Production / Preview / Development) and a build only sees
@@ -59,6 +72,18 @@ the scopes it belongs to — which is why this branch is the project's
 *production* branch rather than a preview; and a commit that touches nothing
 under `apps/web` or its workspace packages is skipped by Vercel's monorepo
 heuristic, so a docs-only push will not redeploy.
+
+One tidy-up worth doing: this Vercel project is linked to the whole repository,
+so every push to `main` or a `codex/*` branch — PulseRN's work, a different
+product with no `apps/web` — starts a Sycamore build that fails. Those are
+preview builds and cannot touch the production URL, but they are noise. Vercel
+→ Settings → Git → **Ignored Build Step** with
+
+```bash
+[ "$VERCEL_GIT_COMMIT_REF" != "claude/sycamore-prompts-build-chain-o5rqtu" ]
+```
+
+exits 0 (skip) for every other branch and builds only this one.
 
 If boot logs say the pooler cluster was "corrected", that is
 `databaseUrlCandidates` doing its job: Supabase's shared pooler lives on

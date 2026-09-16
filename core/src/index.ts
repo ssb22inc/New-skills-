@@ -1,6 +1,12 @@
 export const WORKSPACE = '@sycamore/core';
 
-export { createDb, databaseUrl, databaseUrlSource, DATABASE_URL_NAMES } from './db/database.js';
+export {
+  createDb,
+  databaseUrl,
+  databaseUrlSource,
+  describeDatabaseUrl,
+  DATABASE_URL_NAMES,
+} from './db/database.js';
 export type { Database } from './db/types.js';
 export type { Db } from './db/database.js';
 export { migrateToLatest, migrateDownAll, migrateDownOne, createMigrator } from './db/migrator.js';
