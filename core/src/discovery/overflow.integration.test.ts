@@ -172,7 +172,7 @@ describe.runIf(reachable)('P22 — overflow routing + bundles (Phase 3 exit gate
     expect(released.amounts!.referral).toBeGreaterThan(0);
 
     // 6. The referral credit appears in the INCUMBENT's next split/payout.
-    const balances = await settlement.ledger.sellerBalances(incumbentId);
+    const balances = await settlement.ledger.sellerBalances(incumbentId, 'JMD');
     expect(balances.referral).toBe(released.amounts!.referral);
     const payouts = await settlement.runPayoutBatch('overflow-batch');
     const incumbentPayout = payouts.find((p) => p.sellerId === incumbentId);

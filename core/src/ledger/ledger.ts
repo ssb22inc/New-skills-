@@ -1,4 +1,4 @@
-import type { Kysely, Transaction } from 'kysely';
+import { sql, type Kysely, type Transaction } from 'kysely';
 import type { Database } from '../db/types.js';
 
 export const LEDGER_ACCOUNTS = [
@@ -178,6 +178,20 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
       .select('id')
       .forUpdate()
       .execute();
+  }
+
+  /**
+   * One lock per market + seller + currency, held to the end of the
+   * transaction. `hashtext` collisions only serialise two sellers who
+   * would otherwise have run in parallel — slower, never wrong.
+   */
+  async function lockSellerBalance(
+    trx: Transaction<Database>,
+    sellerId: string,
+    currency: string,
+  ): Promise<void> {
+    const key = `sycamore:payout:${marketId}:${sellerId}:${currency}`;
+    await sql`select pg_advisory_xact_lock(hashtext(${key})::bigint)`.execute(trx);
   }
 
   async function orderSums(
@@ -406,11 +420,23 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
     },
 
     /** What a seller is owed right now: payable + referral credits. */
-    async sellerBalances(sellerId: string): Promise<{ payable: number; referral: number }> {
+    /**
+     * What a seller is owed IN ONE CURRENCY. The currency is required
+     * because the answer is meaningless without it: this fold used to
+     * run across every currency a seller held and return the total as a
+     * bare number, which is the reporting half of the payout defect the
+     * external review of 2026-09-16 found (money rules, CLAUDE.md:
+     * integer minor units AND a currency code, never a bare number).
+     */
+    async sellerBalances(
+      sellerId: string,
+      currency: string,
+    ): Promise<{ payable: number; referral: number; currency: string }> {
       const rows = await db
         .selectFrom('ledger_entries')
         .where('market_id', '=', marketId)
         .where('seller_id', '=', sellerId)
+        .where('currency', '=', currency)
         .select(['account', 'direction', 'amount_minor'])
         .execute();
       let payable = 0;
@@ -420,7 +446,7 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
         if (r.account === 'seller_payable') payable += signed;
         if (r.account === 'referral_credits') referral += signed;
       }
-      return { payable, referral };
+      return { payable, referral, currency };
     },
 
     /**
@@ -434,10 +460,33 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
       idempotencyKey: string;
     }): Promise<{ posted: boolean; amountMinor: number }> {
       return db.transaction().execute(async (trx) => {
+        // SERIALIZE THIS SELLER'S MONEY.
+        //
+        // The external review of 2026-09-16 found this function reading
+        // a balance and posting against it with nothing holding the
+        // seller still. The idempotency key stops the SAME key
+        // repeating; it does nothing about two batches with different
+        // keys, which is precisely what runPayoutBatch builds. Two
+        // workers read 900,000, two workers pay 900,000, and every
+        // individual transaction still balances — which is why a trial
+        // balance never noticed.
+        //
+        // A transaction-scoped advisory lock, because there is no single
+        // row that means "this seller's balance in this currency": the
+        // balance is a fold over entries. Every competing writer takes
+        // the same lock, and Postgres releases it at commit or rollback
+        // whatever happens to the process holding it.
+        await lockSellerBalance(trx, input.sellerId, input.currency);
         const rows = await trx
           .selectFrom('ledger_entries')
           .where('market_id', '=', marketId)
           .where('seller_id', '=', input.sellerId)
+          // ...AND IN THIS CURRENCY. Without this the fold summed a
+          // seller's JMD and DOP entries into one number and paid it out
+          // denominated in whichever currency the caller passed. Nothing
+          // concurrent about it — the second defect the review found in
+          // these same twenty lines.
+          .where('currency', '=', input.currency)
           .select(['account', 'direction', 'amount_minor'])
           .execute();
         let payable = 0;

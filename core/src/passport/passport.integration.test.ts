@@ -122,7 +122,7 @@ describe.runIf(reachable)('P33 — Credit Passport v1 (gate)', () => {
     const { passport, pdf } = await passports.exportFor(sellerId);
 
     // Recompute independently from the ledger itself.
-    const balances = await ledger.sellerBalances(sellerId);
+    const balances = await ledger.sellerBalances(sellerId, 'JMD');
     const expectedGross = N_ORDERS * Math.floor((PRICE * SPLIT.sellerBps) / 10000);
     expect(passport.payload.money.grossCapturedMinor).toBe(expectedGross);
     expect(passport.payload.money.paidOutMinor).toBe(expectedGross); // full balance paid out

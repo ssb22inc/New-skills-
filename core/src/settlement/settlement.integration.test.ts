@@ -175,7 +175,7 @@ describe.runIf(reachable)('P17 — splits, release, payouts (gate)', () => {
 
       // Per-seller ledger balances match local expectation to the cent.
       for (const sellerId of sellers) {
-        const balances = await ledger.sellerBalances(sellerId);
+        const balances = await ledger.sellerBalances(sellerId, 'JMD');
         expect(balances.payable, `payable ${sellerId}`).toBe(expectedPayable.get(sellerId) ?? 0);
         expect(balances.referral, `referral ${sellerId}`).toBe(expectedReferral.get(sellerId) ?? 0);
       }
@@ -199,7 +199,7 @@ describe.runIf(reachable)('P17 — splits, release, payouts (gate)', () => {
       // After payouts: seller accounts empty; platform+processor retained;
       // the WHOLE ledger still balances to the cent.
       for (const sellerId of sellers) {
-        const balances = await ledger.sellerBalances(sellerId);
+        const balances = await ledger.sellerBalances(sellerId, 'JMD');
         expect(balances.payable).toBe(0);
         expect(balances.referral).toBe(0);
       }
