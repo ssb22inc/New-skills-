@@ -190,9 +190,12 @@ seller's day that still renders with the network cut, both halves of the asymmet
 law, and the trust-page budget over the wire (1,973 B, interactive 532 ms on
 throttled 3G). `.github/workflows/deploy-audit.yml` carries it, and it takes
 `SYCAMORE_ORIGIN` to point at any other deployment. The workflow's nightly
-schedule does NOT fire yet: GitHub runs scheduled workflows only from a
-repository's default branch, and this product is not on it. Run it from the
-Actions tab, or locally, until that changes. All that remains of the P36
+schedule does NOT fire, and the workflow cannot be dispatched either: GitHub
+registers a workflow only when it exists on the repository's DEFAULT branch, and
+this product is not on it. A dispatch attempt returns 404, and the workflow does
+not appear in the Actions tab at all. Until Sycamore's branch becomes the default
+or the repository is split, the audit runs locally:
+`pnpm --filter @sycamore/tests deploy:audit`. All that remains of the P36
 gate is a human tapping "Add to home screen".
 
 **Verified on Vercel, 2026-09-09, from a different machine over HTTPS:** the

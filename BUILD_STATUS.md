@@ -159,10 +159,13 @@ timeout, reporting "none" on a slow install: a shrug, not a diagnosis, and a fal
 red on a permanent gate. It polls and names the state it reached.
 
 It belongs outside `ci`, because it answers a question whose answer can change
-without a commit. One correction to what was written when it shipped: the nightly
-schedule does not fire. GitHub runs scheduled workflows only from a repository's
-default branch, and Sycamore is not on it. The audit is on-demand until that
-changes, which is a smaller claim than the one originally made here.
+without a commit. Two corrections to what was written when it shipped. The
+nightly schedule does not fire, and the workflow cannot be dispatched either:
+GitHub registers a workflow only when it exists on the repository's DEFAULT
+branch, and Sycamore is not on it. Verified rather than assumed — a dispatch
+returns 404, and `deploy-audit` is absent from the 13 workflows the repository
+actually has. Until the branch becomes the default or the repository is split,
+the audit runs locally and nowhere else.
 
 ## 2026-09-16 — the boot migration, fixed rather than documented
 
@@ -250,9 +253,12 @@ exact sequence was then run locally before pushing: lint, format, typecheck, 263
 tests with no skips, the web build, the trust-page budget, and the load smoke —
 all green.
 
-A second correction while here: the deployed-origin audit's nightly schedule does
-not fire. GitHub runs scheduled workflows only from a repository's default branch,
-and Sycamore is not on it.
+Two more findings from the same look, both about living on a branch that is not
+the default. The deployed-origin audit is not registered with GitHub at all, so
+it neither schedules nor dispatches. And CI checks out this branch MERGED INTO
+the default branch, so the linter saw 54 PulseRN TypeScript files that are not
+ours to lint; `eslint` already ignored `haven/` for that reason and `pulsern/`
+was simply never added, because CI had been dying before lint ever ran.
 
 ## Test counts
 
