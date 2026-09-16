@@ -167,9 +167,16 @@ describe('deploy scaffolding — a serverless boot does not migrate', () => {
     // A serverless instance can be frozen mid-transaction, so twenty-two
     // migrations started at boot is a race it loses silently.
     expect(defaults.migrateOnBoot).toBe(false);
-    // The demo surfaces stay on: those are cheap and idempotent.
+    // The seed stays on: it is cheap, idempotent, and claims once.
     expect(defaults.demoSeedOnBoot).toBe(true);
-    expect(defaults.demoIndex).toBe(true);
+    // The scaffolding SURFACES do not. They list sellers and link to a
+    // seller's day, and the external review of 2026-09-16 found them ON
+    // by default on exactly the host a founder points at real data
+    // first. A demo deployment now says so out loud.
+    setEnv('SYCAMORE_DEMO_INDEX', undefined);
+    expect(deployDefaults().demoIndex).toBe(false);
+    setEnv('SYCAMORE_DEMO_INDEX', '1');
+    expect(deployDefaults().demoIndex).toBe(true);
   });
 
   it('a long-lived server still migrates when it says so — the image sets it', async () => {

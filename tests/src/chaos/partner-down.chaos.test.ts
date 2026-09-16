@@ -4,7 +4,12 @@
  * Run alone: `pnpm --filter @sycamore/tests chaos:partner-down`
  */
 import { describe, expect, it } from 'vitest';
-import { failoverPayments, mockPay, type PaymentAdapter } from '@sycamore/adapters';
+import {
+  failoverPayments,
+  mockPay,
+  PaymentFailoverRefused,
+  type PaymentAdapter,
+} from '@sycamore/adapters';
 
 function downAdapter(until: () => boolean): PaymentAdapter {
   const down = () => {
@@ -52,5 +57,38 @@ describe('chaos drill — payment partner down 30 minutes', () => {
     // After recovery the primary carries traffic again.
     expect(links[44]!.id.startsWith('p-')).toBe(true);
     expect(links[10]!.id.startsWith('p-')).toBe(false);
+  });
+
+  /**
+   * The other half of the drill, added after the external review of
+   * 2026-09-16. Rerouting a CHECKOUT during an outage saves an order.
+   * Rerouting a REFUND or a PAYOUT risks paying twice: the primary may
+   * have accepted the request and then timed out, and a refund belongs
+   * to the provider holding the original capture in any case.
+   */
+  it('GATE: a refund is never rerouted to the other provider', async () => {
+    const other = mockPay();
+    const failover = failoverPayments(
+      downAdapter(() => true),
+      other,
+    );
+    await expect(
+      failover.requestRefund({ orderRef: 'order-1', amountMinor: 150_000, currency: 'JMD' }),
+    ).rejects.toBeInstanceOf(PaymentFailoverRefused);
+    expect(other.refunded).toHaveLength(0);
+    expect(failover.reroutes).toBe(0);
+  });
+
+  it('GATE: a payout is never rerouted to the other provider', async () => {
+    const other = mockPay();
+    const failover = failoverPayments(
+      downAdapter(() => true),
+      other,
+    );
+    await expect(
+      failover.requestPayout({ sellerRef: 'seller-1', amountMinor: 900_000, currency: 'JMD' }),
+    ).rejects.toBeInstanceOf(PaymentFailoverRefused);
+    expect(other.paidOut).toHaveLength(0);
+    expect(failover.reroutes).toBe(0);
   });
 });

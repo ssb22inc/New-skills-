@@ -3,14 +3,17 @@
  *
  * On Vercel there is no image and no entrypoint script to carry
  * settings, and the founder should not need to type environment
- * variables to see the product work. So on Vercel the boot migration,
- * the one-time demo seed and the /demo index default ON, and any of them
- * can be switched off with an explicit `0`. Anywhere else they default
- * OFF and are switched on with `1` — the Docker image does exactly that.
+ * variables to see the product work. So on Vercel the one-time demo seed
+ * defaults ON and can be switched off with an explicit `0`. Anywhere
+ * else it defaults OFF and is switched on with `1` — the Docker image
+ * does exactly that.
  *
- * Every real deployment sets SYCAMORE_DEMO_INDEX=0 and
- * SYCAMORE_DEMO_SEED=0: Sycamore has no directory page by design, and
- * a real market is never seeded with Sea Breeze Boat Tours.
+ * The scaffolding SURFACES are the exception and are never defaulted on,
+ * anywhere: see `demoIndex` below.
+ *
+ * Every real deployment sets SYCAMORE_DEMO_SEED=0 and never sets
+ * SYCAMORE_DEMO_INDEX: Sycamore has no directory page by design, and a
+ * real market is never seeded with Sea Breeze Boat Tours.
  */
 export function deployDefaults(): {
   onVercel: boolean;
@@ -41,7 +44,14 @@ export function deployDefaults(): {
     // something that will still be alive at the end.
     migrateOnBoot: flag('SYCAMORE_MIGRATE_ON_BOOT', false),
     demoSeedOnBoot: flag('SYCAMORE_DEMO_SEED', true),
-    demoIndex: flag('SYCAMORE_DEMO_INDEX', true),
+    // Explicit opt-in ONLY, on every host including Vercel — the one
+    // exception to the pattern above, and the one that matters most.
+    // `/demo` and `/dev` list sellers and link to a seller's day; the
+    // external review of 2026-09-16 was right that a scaffolding surface
+    // carrying buyer names and phone numbers must not be ON because
+    // nobody typed a variable. A demo deployment says so out loud with
+    // SYCAMORE_DEMO_INDEX=1. See demo-guard.ts for the second layer.
+    demoIndex: process.env.SYCAMORE_DEMO_INDEX === '1',
     appOrigin:
       process.env.SYCAMORE_APP_ORIGIN ?? (host ? `https://${host}` : 'http://localhost:3000'),
   };

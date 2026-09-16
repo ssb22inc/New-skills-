@@ -9,6 +9,7 @@ import {
 } from '@sycamore/core';
 import { AMBER, darkTheme } from '@sycamore/design';
 import { deployDefaults } from '../../src/deploy-defaults.js';
+import { demoSurfaces } from '../../src/demo-guard.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,8 +39,12 @@ function esc(s: string): string {
  * It is scaffolding for the same reason /demo is. Sycamore has no
  * dashboard as a product — Constitution §1, one door, and that door is a
  * chat message. This exists so a DEVELOPER can watch the machine, and it
- * is gated behind the same `SYCAMORE_DEMO_INDEX` flag that hides /demo.
- * Any real deployment sets that to 0 and this route 404s.
+ * is gated behind the same guard that hides /demo: the flag, plus the
+ * data itself. It names sellers and links to their pages, so it closes
+ * for the whole deployment as soon as one seller here is real rather
+ * than seeded — an environment variable is a promise a human has to
+ * keep, and the review of 2026-09-16 was right that it should not be the
+ * only thing between a stranger and a seller's day.
  *
  * It is READ-ONLY. It writes nothing, queues nothing, and mutates
  * nothing — a diagnostic that can change the thing it diagnoses is not
@@ -63,7 +68,11 @@ function ago(when: Date | string | null | undefined): string {
 }
 
 export async function GET(req: Request): Promise<Response> {
-  if (!deployDefaults().demoIndex) {
+  const verdict = await demoSurfaces(db);
+  // An unreachable database holds no seller to protect and is exactly
+  // what this console exists to report, so it falls through; anything
+  // else closed is a closed door.
+  if (!verdict.open && verdict.why !== 'unreachable') {
     return new Response('not found', { status: 404 });
   }
   const origin = new URL(req.url).origin;

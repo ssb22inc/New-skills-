@@ -20,6 +20,16 @@ export interface GatewayServerOptions {
 
 const startedAt = Date.now();
 
+/**
+ * A webhook body has a shape and a size; anything larger is not a
+ * delivery, it is a way to make the gateway hold megabytes per
+ * connection until it dies. The buffer was previously unbounded, which
+ * the review of 2026-09-16 listed under gateway hardening. Meta's
+ * largest documented delivery is a few kilobytes; a megabyte is
+ * generous and still refuses a flood.
+ */
+const MAX_BODY_BYTES = Number(process.env.GATEWAY_MAX_BODY_BYTES ?? 1_048_576);
+
 export function createGatewayServer(options: GatewayServerOptions): Server {
   return createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -93,9 +103,29 @@ export function createGatewayServer(options: GatewayServerOptions): Server {
       return;
     }
 
+    const declared = Number(req.headers['content-length'] ?? 0);
+    if (declared > MAX_BODY_BYTES) {
+      res.writeHead(413).end();
+      req.destroy();
+      return;
+    }
     const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
+    let received = 0;
+    let tooLarge = false;
+    req.on('data', (c: Buffer) => {
+      received += c.length;
+      // A chunked delivery declares no length, so the cap is enforced
+      // again as the bytes actually arrive.
+      if (received > MAX_BODY_BYTES) {
+        tooLarge = true;
+        res.writeHead(413).end();
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
     req.on('end', () => {
+      if (tooLarge) return;
       const rawBody = Buffer.concat(chunks);
       const headers: Record<string, string | undefined> = {};
       for (const [k, v] of Object.entries(req.headers)) {

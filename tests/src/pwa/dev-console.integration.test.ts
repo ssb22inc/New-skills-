@@ -54,6 +54,19 @@ describe.runIf(reachable)('the developer console', () => {
       role: 'seller',
     });
     const seller = await identity.createSeller({ userId: owner.id, businessName: 'Console Tours' });
+    // This deployment is a DEMO deployment, and says so the way the
+    // seeder does. Without the claim the guard treats Console Tours as
+    // somebody's real business and closes the console — which is the
+    // point of the gate two tests below.
+    await db
+      .insertInto('feature_flags')
+      .values({
+        market_id: 'jm',
+        key: 'demo_seeded',
+        enabled: true,
+        description: 'fixture: this market is demo data',
+      })
+      .execute();
     const startsAt = new Date(Date.now() + 86_400_000);
     await capacityEngine(db, 'jm').createWindow(loadVerticalPack('tours'), {
       sellerId: seller.id,
@@ -86,8 +99,35 @@ describe.runIf(reachable)('the developer console', () => {
 
   it('GATE: it 404s unless the demo flag is on', async () => {
     process.env.SYCAMORE_DEMO_INDEX = '0';
-    const res = await devConsole(new Request('https://x/dev'));
-    expect(res.status).toBe(404);
+    expect((await devConsole(new Request('https://x/dev'))).status).toBe(404);
+    // Unset is the same answer as off. The flag defaults ON nowhere —
+    // the external review of 2026-09-16 found this surface open on a
+    // Vercel deployment because nobody had typed a variable.
+    delete process.env.SYCAMORE_DEMO_INDEX;
+    expect((await devConsole(new Request('https://x/dev'))).status).toBe(404);
+  });
+
+  it('GATE: the console closes when the deployment holds a real seller', async () => {
+    process.env.SYCAMORE_DEMO_INDEX = '1';
+    expect((await devConsole(new Request('https://x/dev'))).status).toBe(200);
+    // A market with sellers and no demo claim is somebody's live
+    // business. One is enough to close the scaffolding for everyone,
+    // flag or no flag — a developer's convenience does not outrank a
+    // buyer's phone number.
+    await seedMarkets(db);
+    await db.updateTable('markets').set({ status: 'live' }).where('market_id', '=', 'do').execute();
+    const identity = identityService(db, 'do');
+    const owner = await identity.findOrCreateUserByPhone({
+      phone: '+18095557100',
+      displayName: 'Real Owner',
+      role: 'seller',
+    });
+    await identity.createSeller({ userId: owner.id, businessName: 'Una Empresa Real' });
+    expect((await devConsole(new Request('https://x/dev'))).status).toBe(404);
+    // Removing the real seller reopens it — the check is about what the
+    // database holds right now, not a latch somebody has to reset.
+    await db.deleteFrom('sellers').where('market_id', '=', 'do').execute();
+    expect((await devConsole(new Request('https://x/dev'))).status).toBe(200);
   });
 
   it('GATE: money is shown as a natural balance, never as debits minus credits', async () => {

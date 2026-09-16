@@ -15,12 +15,18 @@ export interface WebhookDelivery {
  */
 export function mockPay(): PaymentAdapter & {
   links: PaymentLink[];
+  /** Every refund/payout actually asked of this provider. A test that
+   *  must prove a provider was NOT asked has something to assert on. */
+  refunded: { orderRef: string; amountMinor: number; currency: string }[];
+  paidOut: { sellerRef: string; amountMinor: number; currency: string }[];
   /** Craft a signed capture delivery for a link; call repeatedly to double-fire. */
   deliverCapture(linkId: string): WebhookDelivery;
   deliverRefund(orderRef: string, amountMinor: number, currency: string): WebhookDelivery;
   deliverPayout(sellerRef: string, amountMinor: number, currency: string): WebhookDelivery;
 } {
   const links: PaymentLink[] = [];
+  const refunded: { orderRef: string; amountMinor: number; currency: string }[] = [];
+  const paidOut: { sellerRef: string; amountMinor: number; currency: string }[] = [];
   const captureEventIds = new Map<string, string>(); // linkId → stable event id
   const refundEventIds = new Map<string, string>();
 
@@ -38,6 +44,8 @@ export function mockPay(): PaymentAdapter & {
   return {
     id: 'mock-pay',
     links,
+    refunded,
+    paidOut,
 
     createLink(input) {
       const link: PaymentLink = {
@@ -63,10 +71,12 @@ export function mockPay(): PaymentAdapter & {
       return parsed.events;
     },
 
-    requestRefund() {
-      return Promise.resolve(); // result arrives via deliverRefund webhook
+    requestRefund(input) {
+      refunded.push(input); // result arrives via deliverRefund webhook
+      return Promise.resolve();
     },
-    requestPayout() {
+    requestPayout(input) {
+      paidOut.push(input);
       return Promise.resolve();
     },
 

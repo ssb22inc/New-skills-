@@ -6,7 +6,29 @@ import { createInboundQueue, createRedis } from './queue.js';
 import type { ChannelAdapter } from './types.js';
 
 const adapters = new Map<string, ChannelAdapter>();
-adapters.set('mock', mockChannel());
+
+/**
+ * PRODUCTION IS NOT ALLOWED A MOCK DOOR.
+ *
+ * `mockChannel` accepts any body with a shared test secret and turns it
+ * into an inbound message — a real one, routed to real conversations and
+ * real orders. It exists so the build can run without Meta's approval,
+ * and until the review of 2026-09-16 it was registered unconditionally,
+ * including on a production gateway alongside the real WhatsApp channel.
+ *
+ * It now requires an explicit opt-in, and production may not opt in at
+ * all. `SYCAMORE_ALLOW_MOCK_CHANNEL=1` is how the demo, the tests and
+ * the load harness ask for it.
+ */
+const inProduction = process.env.NODE_ENV === 'production';
+const mockAllowed = process.env.SYCAMORE_ALLOW_MOCK_CHANNEL === '1';
+if (mockAllowed && inProduction) {
+  throw new Error(
+    'SYCAMORE_ALLOW_MOCK_CHANNEL=1 with NODE_ENV=production: a mock channel accepts ' +
+      'forged messages as real ones. Remove the variable or do not run this as production.',
+  );
+}
+if (mockAllowed || !inProduction) adapters.set('mock', mockChannel());
 
 // Real channel enters behind an env flag only (P5 is mock-first).
 if (process.env.WHATSAPP_ENABLED === 'true') {
@@ -19,6 +41,15 @@ if (process.env.WHATSAPP_ENABLED === 'true') {
     );
   }
   adapters.set('whatsapp', whatsappCloudChannel({ appSecret, accessToken, phoneNumberId }));
+}
+
+// Fail closed rather than listening with no way in: a gateway with no
+// channel accepts nothing, and starting one looks like success.
+if (adapters.size === 0) {
+  throw new Error(
+    'no channel adapters registered: set WHATSAPP_ENABLED=true with its credentials, ' +
+      'or SYCAMORE_ALLOW_MOCK_CHANNEL=1 outside production',
+  );
 }
 
 const connection = createRedis();

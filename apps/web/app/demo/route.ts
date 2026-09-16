@@ -9,7 +9,7 @@ import {
   sellerInstallRate,
 } from '@sycamore/core';
 import { darkTheme } from '@sycamore/design';
-import { deployDefaults } from '../../src/deploy-defaults.js';
+import { demoSurfaces } from '../../src/demo-guard.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,9 +35,18 @@ function esc(s: string): string {
  * It is OFF unless `SYCAMORE_DEMO_INDEX=1` (ON by default only on a
  * Vercel deploy, see deploy-defaults.ts), and it 404s otherwise —
  * deliberately, so it cannot become a de-facto product page by accident.
+ * It also closes on its own the moment this deployment holds a seller
+ * the demo seeder did not create (see demo-guard.ts): real sellers mean
+ * real buyers' names and phone numbers, and no environment variable
+ * should be the only thing keeping those off a public index.
  */
 export async function GET(): Promise<Response> {
-  if (!deployDefaults().demoIndex) {
+  const verdict = await demoSurfaces(db);
+  // A database this page cannot reach holds no seller data to protect,
+  // and the diagnostic below is the whole reason the page exists on a
+  // deployment that is not wired up yet — so `unreachable` falls through
+  // to it. Anything else is a closed door.
+  if (!verdict.open && verdict.why !== 'unreachable') {
     return new Response('not found', { status: 404 });
   }
 
