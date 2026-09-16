@@ -22,10 +22,16 @@ So: deploy once, get an HTTPS URL, and every phone can install from it.
 | Deployment protection | off, so the URL opens on any phone with no Vercel login |
 
 **What happens by itself on every deploy** (`apps/web/src/deploy-defaults.ts`):
-migrations run before the first request, the demo market seeds itself exactly
-once (an atomic one-row claim, so parallel cold starts cannot double-seed), and
-`/demo` is served. Any of the three can be switched off with an explicit `0`:
-`SYCAMORE_MIGRATE_ON_BOOT`, `SYCAMORE_DEMO_SEED`, `SYCAMORE_DEMO_INDEX`.
+the demo market seeds itself exactly once (an atomic one-row claim, so parallel
+cold starts cannot double-seed). Switch it off with `SYCAMORE_DEMO_SEED=0`.
+
+**What no longer happens by itself: `/demo` and `/dev`.** They list sellers and
+link to a seller's day — buyer names, buyer phone numbers — and until the
+external review of 16 September 2026 they were ON by default on Vercel, which
+is the host a founder points at real data first. They now need
+`SYCAMORE_DEMO_INDEX=1` set by hand on every host, **and** they close by
+themselves while the database holds a seller no demo seeder created. If your
+`/demo` link 404s after a deploy, this is why: add the variable.
 
 **The one thing that has to be done by hand, once.** The database password
 cannot be committed — this repository is public — and the Vercel connector
@@ -74,8 +80,9 @@ connection it resolves to, every market and its status, the trial balance with
 each account as a natural balance, the last fifteen events off the outbox with
 how long ago each fired, row counts behind every page, and a live link to every
 surface. It answers 503 the moment it finds a problem, so a red page is visible
-without reading it, and it writes nothing. Like `/demo` it is scaffolding:
-`SYCAMORE_DEMO_INDEX=0` and it 404s.
+without reading it, and it writes nothing. Like `/demo` it is scaffolding: it
+needs `SYCAMORE_DEMO_INDEX=1`, and it 404s without it or while the database
+holds a seller the demo seeder did not create.
 
 Two Vercel details that cost an afternoon, so they are written down: environment
 variables are scoped (Production / Preview / Development) and a build only sees
@@ -185,7 +192,9 @@ with how old it is, and completing an order queues locally until you reconnect.
 |---|---|
 | `DATABASE_URL` | Postgres. Required. `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING` and `SUPABASE_DB_URL` are accepted as aliases, in that order, for hosts whose integrations name it themselves. |
 | `SYCAMORE_MIGRATE_ON_BOOT` | `1` runs migrations before the first request. Idempotent; the ledger is append-only so a restart can never rewrite history. |
-| `SYCAMORE_DEMO_INDEX` | `1` exposes `/demo`. **Leave it off for anything real.** |
+| `SYCAMORE_DEMO_INDEX` | `1` exposes `/demo` and `/dev`. Never defaulted on, on any host. **Leave it unset for anything real** — and even set, both surfaces 404 while any market holds a seller the demo seeder did not create. |
+| `SYCAMORE_ALLOW_MOCK_CHANNEL` | Gateway only. `1` registers the mock channel, whose shared secret is a public constant in this repository. Refused outright when `NODE_ENV=production`. |
+| `GATEWAY_MAX_BODY_BYTES` | Gateway only. Largest accepted webhook body; defaults to 1 MiB. |
 | `SYCAMORE_PACKS_DIR` | Where the pack YAML lives. The image sets it; only needed if you run the server outside the image. |
 | `REDIS_URL` | Only the gateway and worker need this. The web app does not. |
 
