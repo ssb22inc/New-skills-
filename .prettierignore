@@ -6,3 +6,7 @@ dist/
 coverage/
 node_modules/
 pnpm-lock.yaml
+# Generated documents. These are rendered for print (scripts/source-listing.mjs,
+# the review pack), not hand-written, and reformatting them changes nothing a
+# reader sees.
+docs/*.html
