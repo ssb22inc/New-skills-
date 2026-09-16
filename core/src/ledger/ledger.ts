@@ -30,6 +30,13 @@ export class LedgerError extends Error {
   }
 }
 
+/**
+ * The largest amount whose basis-point split is exact in IEEE doubles:
+ * `amountMinor * 10_000` must stay under 2^53. Everything Sycamore
+ * actually handles is nine orders of magnitude below it.
+ */
+export const MAX_EXACT_SPLIT_MINOR = Math.floor(Number.MAX_SAFE_INTEGER / 10_000);
+
 export interface SplitBps {
   sellerBps: number;
   platformBps: number;
@@ -64,6 +71,18 @@ export function computeSplit(
   }
   if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
     throw new LedgerError(`amount must be a positive integer, got ${amountMinor}`);
+  }
+  // Above this, `amountMinor * bps` leaves the range where a double
+  // represents integers exactly, and `Math.floor` starts flooring a
+  // value that is already wrong: the §5.7 review produced a split whose
+  // platform share overshot its own floor by 2 and pushed the seller to
+  // −1. No real order is J$90 trillion, so the honest move is to refuse
+  // the amount rather than return arithmetic nobody can trust.
+  if (amountMinor > MAX_EXACT_SPLIT_MINOR) {
+    throw new LedgerError(
+      `amount ${amountMinor} exceeds the largest exactly-splittable value ` +
+        `${MAX_EXACT_SPLIT_MINOR}`,
+    );
   }
   const platform = Math.floor((amountMinor * bps.platformBps) / 10_000);
   const referral = Math.floor((amountMinor * bps.referralBps) / 10_000);
@@ -130,10 +149,41 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
     return { posted: true };
   }
 
+  /**
+   * Take an exclusive lock on everything already posted against this
+   * order, so that reading its sums and acting on them cannot be split
+   * by another worker.
+   *
+   * Without it, `refund` and `release` were a textbook time-of-check to
+   * time-of-use race: N callers each read "nothing released yet", each
+   * passed, and each posted. Idempotency keys do not help — they stop
+   * the SAME key twice, and the callers that collide here carry
+   * DIFFERENT keys by design (a hurricane sweep and a dispute
+   * resolution; a settlement batch and a lifeline replay). Proved on
+   * 2026-09-16: eight concurrent releases of one 900,000 capture paid
+   * out 4,500,000, and every posting was internally balanced, so the
+   * trial balance still read level.
+   *
+   * The capture row is what everyone contends on, and it always exists
+   * before there is anything to refund or release, so the first caller
+   * holds it and the rest queue behind — then re-read sums that include
+   * what the winner just did. Capacity, orders and identity have locked
+   * like this since P8; the ledger simply never did.
+   */
+  async function lockOrder(trx: Transaction<Database>, orderRef: string): Promise<void> {
+    await trx
+      .selectFrom('ledger_transactions')
+      .where('market_id', '=', marketId)
+      .where('reference', '=', orderRef)
+      .select('id')
+      .forUpdate()
+      .execute();
+  }
+
   async function orderSums(
     trx: Transaction<Database>,
     orderRef: string,
-  ): Promise<{ captured: number; refunded: number; released: number }> {
+  ): Promise<{ captured: number; refunded: number; released: number; currency?: string }> {
     const rows = await trx
       .selectFrom('ledger_transactions')
       .where('ledger_transactions.market_id', '=', marketId)
@@ -143,19 +193,41 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
         'ledger_transactions.kind',
         'ledger_entries.direction',
         'ledger_entries.amount_minor',
+        'ledger_entries.currency',
       ])
       .where('ledger_entries.account', '=', 'buyer_escrow')
       .execute();
     let captured = 0;
     let refunded = 0;
     let released = 0;
+    let currency: string | undefined;
     for (const r of rows) {
       const amount = Number(r.amount_minor);
-      if (r.kind === 'capture' && r.direction === 'credit') captured += amount;
+      if (r.kind === 'capture' && r.direction === 'credit') {
+        captured += amount;
+        // The currency the money actually arrived in. Everything that
+        // leaves escrow afterwards has to agree with it, or a JMD
+        // capture can be released in USD and the trial balance — which
+        // sums minor units across currencies — will still look level.
+        currency ??= r.currency;
+      }
       if (r.kind === 'refund' && r.direction === 'debit') refunded += amount;
       if (r.kind === 'release' && r.direction === 'debit') released += amount;
     }
-    return { captured, refunded, released };
+    return { captured, refunded, released, ...(currency === undefined ? {} : { currency }) };
+  }
+
+  /** Escrow leaves in the currency it arrived in, or it does not leave. */
+  function assertCurrencyMatches(
+    orderRef: string,
+    captured: string | undefined,
+    supplied: string,
+  ): void {
+    if (captured !== undefined && captured !== supplied) {
+      throw new LedgerError(
+        `order ${orderRef} was captured in ${captured}; cannot settle it in ${supplied}`,
+      );
+    }
   }
 
   return {
@@ -197,7 +269,9 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
       idempotencyKey: string;
     }): Promise<{ posted: boolean }> {
       return db.transaction().execute(async (trx) => {
+        await lockOrder(trx, input.orderRef);
         const sums = await orderSums(trx, input.orderRef);
+        assertCurrencyMatches(input.orderRef, sums.currency, input.currency);
         const available = sums.captured - sums.refunded - sums.released;
         if (input.amountMinor > available) {
           throw new LedgerError(
@@ -240,7 +314,9 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
       referralSellerId?: string;
     }): Promise<{ posted: boolean; amounts?: ReturnType<typeof computeSplit> }> {
       return db.transaction().execute(async (trx) => {
+        await lockOrder(trx, input.orderRef);
         const sums = await orderSums(trx, input.orderRef);
+        assertCurrencyMatches(input.orderRef, sums.currency, input.currency);
         if (sums.released > 0) {
           throw new LedgerError(`order ${input.orderRef} already settled — no double release`);
         }
@@ -249,6 +325,16 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
           throw new LedgerError(`nothing to release for ${input.orderRef}`);
         }
         const amounts = computeSplit(releasable, input.split);
+        if (amounts.seller <= 0) {
+          // Caught at the settlement layer rather than deep inside the
+          // entry writer, which used to reject this with "entry amounts
+          // are positive integers, got 0" — true, and no help at all in
+          // finding the split that caused it. Sycamore does not take the
+          // whole of an order.
+          throw new LedgerError(
+            `split pays the seller nothing for ${input.orderRef}; refusing to settle`,
+          );
+        }
         const entries: LedgerEntryInput[] = [
           {
             account: 'buyer_escrow',

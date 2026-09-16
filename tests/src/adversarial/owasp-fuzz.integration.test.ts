@@ -30,9 +30,10 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import pg from 'pg';
 import { hmacSha256Hex, verifyHmacSignature } from '@sycamore/gateway';
-import { loadContextPack } from '@sycamore/packs';
+import { loadContextPack, loadVerticalPack } from '@sycamore/packs';
 import { trustPage } from '@sycamore/web';
 import {
   createDb,
@@ -105,25 +106,51 @@ describe('§5.7 red team — auth fuzzing on the webhook signature', () => {
 });
 
 describe('§5.7 red team — path traversal through pack ids', () => {
-  it('GATE: a pack id cannot escape the packs directory', () => {
+  it('GATE: a pack id that is not a plain slug is refused before it becomes a path', () => {
+    // The first version of this test asserted only that nothing was
+    // read, and every payload it tried failed because the file did not
+    // exist — not because anything stopped it. The §5.7 review found the
+    // escape it was blind to: `../../pnpm-workspace` resolved INSIDE the
+    // repository, was read, and was parsed, surviving until zod rejected
+    // its shape. Reading the file at all is the bug.
+    //
+    // The sink is live: apps/web/app/t/[market]/[seller] hands the market
+    // segment straight from the URL to loadContextPack.
     for (const id of [
       '../../../etc/passwd',
       '..%2f..%2fetc%2fpasswd',
       '/etc/passwd',
       'jm/../../../etc/passwd',
       '....//....//etc/passwd',
+      '../../pnpm-workspace', // read and parsed before the guard existed
+      '../package',
+      'jm ',
+      'JM',
+      '',
+      '.',
+      '..',
     ]) {
-      // Either refused outright or simply not found — never a file read
-      // from outside the pack directory.
-      let leaked: string;
-      try {
-        leaked = JSON.stringify(loadContextPack(id));
-      } catch {
-        leaked = '';
-      }
-      expect(leaked, `pack id "${id}" read something`).not.toContain('root:');
-      expect(leaked).toBe('');
+      expect(() => loadContextPack(id), `pack id "${id}" was not refused`).toThrow(
+        /is not a valid context pack id/,
+      );
+      expect(() => loadVerticalPack(id), `vertical id "${id}" was not refused`).toThrow(
+        /is not a valid vertical pack id/,
+      );
     }
+  });
+
+  it('the guard refuses by shape, not by whether the file happens to exist', () => {
+    // The distinction that makes the test above meaningful: a traversal
+    // that WOULD resolve to a real, readable file is still refused, so
+    // the error cannot be coming from a missing file.
+    const real = new URL('../../../pnpm-workspace.yaml', import.meta.url).pathname;
+    expect(existsSync(real), 'fixture precondition: the escape target must exist').toBe(true);
+    expect(() => loadContextPack('../../pnpm-workspace')).toThrow(/is not a valid context pack id/);
+  });
+
+  it('an honest pack id still loads, so the guard has not simply broken loading', () => {
+    expect(loadContextPack('jm').market_id).toBe('jm');
+    expect(loadVerticalPack('tours').vertical_id).toBe('tours');
   });
 });
 

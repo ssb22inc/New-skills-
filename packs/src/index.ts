@@ -17,6 +17,7 @@ export {
   loadVerticalPack,
   parseContextPack,
   parseVerticalPack,
+  assertPackId,
 } from './loader.js';
 export { formatAmount, unitLabel } from './format.js';
 export {

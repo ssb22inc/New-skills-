@@ -270,8 +270,9 @@ worst shape for a suite to be in: it reported green over the parts nobody wrote.
 |---|---|---|
 | Review-fraud personas (no-booking, burst ring, competitor hit, device cluster) | ✅ 4 red-team tests | ✅ unchanged |
 | Prompt injection on Autopilot/Studio | ✅ 50-prompt corpus, STOP <5s | ✅ unchanged |
-| Refund-abuse farming | ⚠️ privilege downgrade only | ✅ over-refund, salami slices, post-refund release |
+| Refund-abuse farming | ⚠️ privilege downgrade only | ✅ over-refund, salami slices, post-refund release, **and the concurrent case** |
 | Stolen-card / chargeback patterns | ❌ absent | ✅ late reversal after payout cannot drain spent escrow |
+| Cross-currency settlement | ❌ absent, and broken | ✅ escrow leaves in the currency it arrived in |
 | Split manipulation | ❌ absent | ✅ bad bps, bad amounts, 5,000-amount rounding fuzz |
 | OWASP top-10 + auth fuzzing | ❌ absent | ✅ 14 forged signatures, byte-flip sweep, SQLi, XSS, cross-market access, path traversal |
 | External pen test | 🚧 human gate | 🚧 human gate (a purchase order, not code) |
@@ -293,14 +294,73 @@ off-platform drift measured on a cohort, to prove the value story retains. That
 needs real sellers over real weeks. It joins the human gates rather than being
 faked with synthetic data, which would prove nothing.
 
-**285 tests, 0 skipped.** 22 of them are new and all of them are attacks.
+**291 tests.** 28 are new and all of them are attacks. Zero skipped under
+`SYCAMORE_REQUIRE_DB=1`; one skips without it, by design.
+
+## 2026-09-16 — the adversarial review, and the two holes it found in the money
+
+The §5.7 suite was itself reviewed, adversarially, by a second model briefed to
+find vacuous tests and false claims. It found both, and the important findings
+were not in the new tests: they were in the ledger the new tests had just marked
+✅. Both were reproduced independently before anything was changed.
+
+**1. `release()` had no row lock, and settled an order as many times as it was
+asked.** Eight concurrent releases of one 900,000 capture paid out **4,500,000**.
+Every posting was internally balanced, so `trialBalance()` stayed level and
+nothing downstream noticed. `refund()` had the identical shape.
+
+This was never theoretical. Idempotency keys stop the SAME key twice; the callers
+that collide here carry DIFFERENT keys by design — `cancel-refund`,
+`dispute-refund`, `hurricane-refund` and the payment-webhook path are four keys
+for one order, and a hurricane sweep firing while a dispute resolves is two of
+them at the same instant. Capacity, orders and identity have used
+`SELECT … FOR UPDATE` since P8. The ledger — the one module the laws single
+out — had no lock anywhere.
+
+Fixed two ways, because money deserves both: `lockOrder()` takes an exclusive
+lock on everything already posted against the order before the sums are read, and
+migration 0023 adds a partial unique index making a second release impossible at
+the database level even if a future caller forgets the lock.
+
+**2. A JMD capture could be refunded and released in USD.** `orderSums` had no
+currency predicate, and `trialBalance()` sums minor units across currencies with
+no grouping — so the books would have read level while the money was wrong.
+Escrow now leaves in the currency it arrived in.
+
+**3. The gate that should have caught this could not fail.** The pre-existing
+"release racing refund never double-settles" test fired all three releases under
+one idempotency key and asserted at most one transaction per key — which is
+exactly what the unique index guarantees on its own, whatever the code does. It
+now uses distinct keys and asserts one release per ORDER. This is the same sin
+this file denounced two sections ago, committed by the money gate itself.
+
+**Also found and fixed:** `computeSplit` returned nonsense above 2^53 (a platform
+share overshooting its own floor by 2, seller −1) and now refuses amounts it
+cannot split exactly; the pack loader had no path sanitisation at all, and
+`../../pnpm-workspace` was read and parsed before zod rejected its shape, with a
+live sink in the trust-page route — pack ids are now validated by shape before
+becoming a path; a zero-seller split failed deep in the entry writer with an
+error naming the wrong cause; the new fuzz used unseeded randomness, so a CI
+failure could not be reproduced; and the split-manipulation tests were gated on
+Postgres despite being pure arithmetic, so they vanished when the database was
+down — the precise failure the CI database guard exists to stop.
+
+**What the reviewer checked and found sound**, so the silence is legible: the bps
+validation across 300,000 fuzzed pairs, the remainder-to-seller property across
+200,000 combinations, the XSS escaping over every interpolated value in the trust
+route, the append-only trigger, market scoping, the SQL-injection test, suite
+isolation, and the count claims.
 
 ## Test counts
 
-**285 tests green, 0 skipped** (2026-09-16, `SYCAMORE_REQUIRE_DB=1`): core 146 ·
-tests 89 (including 22 §5.7 red-team attacks) · packs 11 · adapters 10 ·
-gateway 10 · web 11 · design 7 · worker 1.
-Core coverage: 85.22% statements · 74.30% branches · 84.26% functions · 86.98% lines.
+**291 tests green** (2026-09-16, `SYCAMORE_REQUIRE_DB=1`): core 146 · tests 95
+(including 28 §5.7 red-team attacks) · packs 11 · adapters 10 · gateway 10 ·
+web 11 · design 7 · worker 1.
+With the flag: 0 skipped. Without it, a plain `pnpm test` skips exactly one — the
+CI-integrity guard in `tests/src/ci/database-required.test.ts`, which is
+`it.runIf` on that flag by design. Saying "0 skipped" without naming the flag was
+wrong and is corrected here.
+Core coverage: 85.12% statements · 74.25% branches · 84.33% functions · 86.87% lines.
 k6 load profiles (§5.5: normal day, Friday spike 20×, cruise surge 10×, viral
 seller 100×): `tests/src/load/k6-profiles.js` — **4/4 passed, zero drops**, the
 viral-seller profile taking 2,500 messages at 500/s with nothing rejected and

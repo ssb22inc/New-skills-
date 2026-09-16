@@ -21,6 +21,7 @@ import * as hurricane from './0019_hurricane.js';
 import * as lifeline from './0020_lifeline.js';
 import * as installPrompt from './0021_install_prompt.js';
 import * as reviewDevice from './0022_review_device.js';
+import * as releaseOnce from './0023_release_once.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -50,6 +51,7 @@ export const migrations: Record<string, Migration> = {
   '0020_lifeline': lifeline,
   '0021_install_prompt': installPrompt,
   '0022_review_device': reviewDevice,
+  '0023_release_once': releaseOnce,
 };
 
 export const migrationProvider: MigrationProvider = {

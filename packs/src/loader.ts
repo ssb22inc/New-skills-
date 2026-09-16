@@ -75,8 +75,32 @@ export function parseVerticalPack(yamlText: string, source: string): VerticalPac
   return parsePack(VerticalPackSchema, yamlText, source);
 }
 
+/**
+ * A pack id names a file on disk, so it is a path, so it is an attack
+ * surface. Ids come from URLs — `apps/web/app/t/[market]/[seller]` hands
+ * the market segment straight to `loadContextPack` — and before this
+ * guard the only thing stopping `../../pnpm-workspace` from being read
+ * and parsed was that the YAML happened to fail schema validation
+ * afterwards. Reading the file at all is the bug; the schema is the
+ * wrong place to find out.
+ *
+ * Ids are what they have always been in practice: a short lowercase
+ * slug. Anything else is refused by shape, before it can become a path.
+ * Found by the §5.7 red team, 2026-09-16, which also caught that the
+ * test written for this had proved nothing — every payload it tried
+ * failed for the unrelated reason that the file did not exist.
+ */
+const PACK_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+export function assertPackId(id: string, kind: 'context' | 'vertical'): void {
+  if (!PACK_ID.test(id)) {
+    throw new PackLoadError(`${kind}/${id}`, `"${id}" is not a valid ${kind} pack id`);
+  }
+}
+
 /** Load from an explicit packs root — chaos drills point this at a corrupted copy. */
 export function loadContextPackFrom(rootDir: string, marketId: string): ContextPack {
+  assertPackId(marketId, 'context');
   const path = join(rootDir, 'context', `${marketId}.yaml`);
   const pack = parseContextPack(readPackFile(path), path);
   if (pack.market_id !== marketId) {
@@ -102,6 +126,7 @@ export function loadAllContextPacks(rootDir = packsRoot()): ContextPack[] {
 }
 
 export function loadVerticalPack(verticalId: string): VerticalPack {
+  assertPackId(verticalId, 'vertical');
   const path = join(packsRoot(), 'vertical', `${verticalId}.yaml`);
   const pack = parseVerticalPack(readPackFile(path), path);
   if (pack.vertical_id !== verticalId) {

@@ -107,6 +107,7 @@ export {
 export {
   ledgerService,
   computeSplit,
+  MAX_EXACT_SPLIT_MINOR,
   LedgerError,
   LEDGER_ACCOUNTS,
   type LedgerService,

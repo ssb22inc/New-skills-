@@ -120,41 +120,50 @@ describe.runIf(reachable)('money under concurrency (gate)', () => {
       idempotencyKey: 'race:capture',
     });
 
-    // Both hit at once, each retried three times for good measure.
+    // Both hit at once, each with a DISTINCT idempotency key.
+    //
+    // This used to send all three releases under one key and all three
+    // refunds under another, then assert at most one transaction per
+    // key — which is what the (market_id, idempotency_key) unique index
+    // guarantees on its own. The assertion could not fail, whatever the
+    // code did. The §5.7 review caught it on 2026-09-16, and the same
+    // shape hid a real double-release: distinct keys on one order are
+    // not hypothetical (a hurricane sweep and a dispute resolution; a
+    // settlement batch and a lifeline replay), and eight of them paid
+    // out 4,500,000 against a 900,000 capture.
     const attempts = [
-      ...Array.from({ length: 3 }, () =>
+      ...Array.from({ length: 3 }, (_, i) =>
         ledger
           .release({
             orderRef: 'race-order',
             currency: 'JMD',
             split: SPLIT,
-            idempotencyKey: 'race:release',
+            idempotencyKey: `race:release:${i}`,
           })
           .catch((err: unknown) => err),
       ),
-      ...Array.from({ length: 3 }, () =>
+      ...Array.from({ length: 3 }, (_, i) =>
         ledger
           .refund({
             orderRef: 'race-order',
             amountMinor: PRICE,
             currency: 'JMD',
-            idempotencyKey: 'race:refund',
+            idempotencyKey: `race:refund:${i}`,
           })
           .catch((err: unknown) => err),
       ),
     ];
     await Promise.all(attempts);
 
-    // Whichever won, each key produced at most one transaction…
-    for (const key of ['race:release', 'race:refund']) {
-      const rows = await db
-        .selectFrom('ledger_transactions')
-        .where('market_id', '=', 'jm')
-        .where('idempotency_key', '=', key)
-        .selectAll()
-        .execute();
-      expect(rows.length, `${key} settled more than once`).toBeLessThanOrEqual(1);
-    }
+    // The order settles once no matter how many distinct keys arrive.
+    const releases = await db
+      .selectFrom('ledger_transactions')
+      .where('market_id', '=', 'jm')
+      .where('reference', '=', 'race-order')
+      .where('kind', '=', 'release')
+      .selectAll()
+      .execute();
+    expect(releases.length, 'the order released more than once').toBeLessThanOrEqual(1);
 
     // …and no refund exceeded the capture.
     const summary = await ledger.orderSummary('race-order');
