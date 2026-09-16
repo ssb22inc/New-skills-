@@ -188,6 +188,39 @@ deployment reports `migrateOnBoot: false` while an explicit `1` still migrates
 its schema is current, so the probe returns empty and boot proceeds exactly as
 before.
 
+## 2026-09-16 — the Dockerfile, built at last
+
+`DEPLOY.md` had carried the same admission since the image was written: "nobody
+has yet run `docker build` on it. Expect to fix a line or two on the first
+build." It has now been run, and it needed no fixes.
+
+The image builds from the unmodified `Dockerfile` at 396 MB. Run against an
+**empty** database it applied all 22 migrations at boot, seeded the demo market
+on request, and served every route and every static asset with the right status
+and content type — including `/sw.js` and both icons, which live in `public/`
+and which Next's standalone output does not carry, the exact omission that
+would ship a PWA with no icon and no offline mode.
+
+```
+[sycamore] applied 22 migration(s)
+[sycamore] schema up to date, markets seeded
+[sycamore] demo market seeded: 3 sellers, 14 buyers, ledger 31880000 = 31880000
+```
+
+That ledger figure is the third independent agreement on the same number: the
+local run, the hosted Supabase database, and now the container each settle at
+31,880,000 on both sides.
+
+It also exercised the half of this morning's migration change that the live
+deployment cannot: the container sets `SYCAMORE_MIGRATE_ON_BOOT=1` and migrates
+at boot, because a long-lived process outlives the request and cannot be frozen
+part-way through. Serverless does not, and now says so instead.
+
+The build needed one accommodation that is NOT in the artifact: behind a
+TLS-intercepting proxy, `pnpm install` fails on the certificate. The fix was to
+give the base image the CA and build with `--network=host`, leaving the
+`Dockerfile` clean of sandbox-specific arguments.
+
 ## Test counts
 
 250 tests green (last full run, SYCAMORE_REQUIRE_DB=1): core 137 · tests 66 (golden 6, markets 3, chaos 3, lifeline 5, sovereignty 4, pwa 10, scope 3, copy 7, design 5, constitution 9, observability 6, money 3, ci 2) · packs 11 · adapters 10 · gateway 10 · web 8 · design 7 · worker 1.

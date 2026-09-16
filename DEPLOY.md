@@ -198,9 +198,10 @@ git-linked build succeeds; `/manifest.webmanifest`, `/sw.js`,
 types on the branch URL; `/` redirects to `/s/`; deployment protection is off so
 no Vercel login stands in the way; and `/demo` without a database answers the
 plain 503 page instead of a stack trace. A local build in Vercel mode traced all
-19 pack YAML files into the functions. What remains unverified until
-`DATABASE_URL` is pasted: the boot migration, the self-seed, and every
-database-backed page — on the real Supabase pooler.
+19 pack YAML files into the functions. Since 2026-09-16 the database is wired
+too: `/demo`, the trust pages, the seller's day and the cockpit all serve real
+data over the Supabase pooler, and `pnpm --filter @sycamore/tests deploy:audit`
+re-checks the whole installability gate against the origin in a real browser.
 
 **Verified in this repo, by running it:** the standalone production server boots,
 runs migrations at startup, and serves every route plus `/sw.js`,
@@ -210,10 +211,29 @@ runs migrations at startup, and serves every route plus `/sw.js`,
 no icon and no offline mode. The `Dockerfile` copies it; the check that caught the
 omission was serving the built artifact and watching those three paths 404.
 
-**Not verified here:** `docker build` itself, and the hosted deploy. This
-container has no Docker daemon available and no route to the public internet
-(outbound is limited to HTTPS through a proxy — a Cloudflare tunnel cannot even
-connect, as it needs port 7844). The `Dockerfile` is written against a file layout
-that was reproduced and tested locally, but nobody has yet run `docker build` on
-it. Expect to fix a line or two on the first build; tell me what it says and I
-will fix it properly.
+**`docker build` — verified 2026-09-16, and it needed no fixes.** The image
+builds from this `Dockerfile` unmodified (396 MB), and run against an EMPTY
+database it applies all 22 migrations at boot, seeds the demo market when asked,
+and serves everything: `/manifest.webmanifest`, `/sw.js`, both icons, `/demo`,
+and the two redirects, each with the right status and content type. The seeded
+ledger balances to the cent — 31,880,000 debits against 31,880,000 credits, the
+same figure the local run and the hosted database produce. Its boot log reads:
+
+```
+[sycamore] applied 22 migration(s)
+[sycamore] schema up to date, markets seeded
+[sycamore] demo market seeded: 3 sellers, 14 buyers, ledger 31880000 = 31880000
+```
+
+This is the container path, where migrating at boot is correct: the process
+outlives the request, so nothing can freeze it half-way. That is why the image
+sets `SYCAMORE_MIGRATE_ON_BOOT=1` explicitly and a serverless deploy does not.
+
+One note for anyone rebuilding behind a TLS-intercepting proxy: `pnpm install`
+inside the build will fail on the certificate. Do not add proxy arguments to this
+`Dockerfile` — give the base image the CA instead and build with `--network=host`,
+so the artifact stays clean.
+
+**Still not verified here:** nothing about the image. What remains is the human
+half of the P36 gate — a person tapping "Add to home screen" on Android Chrome
+and iOS Safari.
