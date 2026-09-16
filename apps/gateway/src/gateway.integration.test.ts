@@ -3,7 +3,13 @@ import { Redis } from 'ioredis';
 import type { Queue, Worker } from 'bullmq';
 import { mockChannel } from './adapters/mock-channel.js';
 import { handleWebhook } from './ingress.js';
-import { createInboundQueue, createInboundWorker, createRedis, redisUrl } from './queue.js';
+import {
+  createInboundQueue,
+  createInboundWorker,
+  createRedis,
+  enqueueInbound,
+  redisUrl,
+} from './queue.js';
 import type { InboundMessage } from './types.js';
 
 async function redisReachable(): Promise<boolean> {
@@ -114,4 +120,50 @@ describe.runIf(reachable)('P5 — channel gateway (gate, against real Redis)', (
     await new Promise((r) => setTimeout(r, 300));
     expect(processed.some((m) => m.id === 'bad-sig')).toBe(false);
   });
+
+  /**
+   * C03 (external review, 2026-09-16). The worker used to mark a message
+   * processed BEFORE calling the handler, so a handler that threw left
+   * behind a marker saying the work was done. Every retry — BullMQ's own
+   * three attempts included — walked into that marker and returned
+   * without doing anything. The message was acknowledged to the channel
+   * and the booking never happened.
+   *
+   * The test that could not catch it is the one above: replaying a
+   * message five times gives one effect either way. This one injects the
+   * failure.
+   */
+  it('GATE: a handler that throws does not consume the message', async () => {
+    // Its own Redis database, because the shared worker in this file
+    // consumes the same queue name and would race for the job.
+    const url = `${redisUrl().split('/').slice(0, 3).join('/')}/3`;
+    const markerConn = createRedis(url);
+    const workerConn = createRedis(url);
+    const queueConn = createRedis(url);
+    connections.push(markerConn, workerConn, queueConn);
+    await markerConn.flushdb();
+    const ownQueue = createInboundQueue(queueConn);
+    const seen: string[] = [];
+    let failFirst = true;
+    const flaky = createInboundWorker(workerConn, markerConn, (m) => {
+      if (failFirst) {
+        failFirst = false;
+        return Promise.reject(new Error('worker died mid-handler'));
+      }
+      seen.push(m.id);
+      return Promise.resolve();
+    });
+    try {
+      await enqueueInbound(ownQueue, inbound('crash-1'));
+      // BullMQ retries with backoff; the second attempt must be allowed
+      // to do the work rather than find a 'processed' marker.
+      await waitUntil(() => seen.includes('crash-1'), 15000);
+      expect(seen).toEqual(['crash-1']);
+      // Only NOW is the message spent.
+      expect(await markerConn.get('processed:mock:crash-1')).toBe('done');
+    } finally {
+      await flaky.close();
+      await ownQueue.close();
+    }
+  }, 30000);
 });

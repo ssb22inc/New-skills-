@@ -18,6 +18,14 @@ export {
 } from './db/migrator.js';
 export { seedMarkets } from './db/seed.js';
 export { emitEvent, type OutboxEvent } from './db/outbox.js';
+export {
+  claimInbound,
+  confirmInbound,
+  releaseInbound,
+  stalledInbound,
+  INBOX_LEASE_MS,
+  type InboxClaim,
+} from './db/inbox.js';
 export { usersRepo, type User, type UsersRepo } from './db/repositories/users.js';
 export { flagsRepo, isEnabledFor, type FeatureFlag, type FlagsRepo } from './flags/flags.js';
 export { createLogger } from './observability/logger.js';
@@ -304,7 +312,10 @@ export {
   liteModeService,
   blackoutMode,
   replayOfflineQueue,
+  REPLAY_LEASE_MS,
   LifelineError,
+  type ReplayOutcome,
+  type ReplayResult,
   LITE_FLIP,
   type LiteModeService,
   type BlackoutMode,

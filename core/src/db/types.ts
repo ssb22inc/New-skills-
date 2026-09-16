@@ -382,6 +382,27 @@ export interface OfflineReplaysTable {
   market_id: string;
   idempotency_key: string;
   kind: string;
+  /** in_flight = claimed, unfinished. done = the effect happened. */
+  status: Generated<string>;
+  claimed_at: Generated<Date>;
+  completed_at: Date | string | null;
+  created_at: Generated<Date>;
+}
+
+/**
+ * The gateway's durable dedupe. A Redis marker with a TTL said
+ * "processed" before the handler ran and expired in seven days; this
+ * says who claimed what, when, and whether it finished.
+ */
+export interface InboundInboxTable {
+  id: Generated<string>;
+  channel: string;
+  message_id: string;
+  market_id: string | null;
+  status: Generated<string>;
+  attempts: Generated<number>;
+  claimed_at: Generated<Date>;
+  completed_at: Date | string | null;
   created_at: Generated<Date>;
 }
 
@@ -426,4 +447,5 @@ export interface Database {
   hurricane_states: HurricaneStatesTable;
   hurricane_impacts: HurricaneImpactsTable;
   offline_replays: OfflineReplaysTable;
+  inbound_inbox: InboundInboxTable;
 }

@@ -146,8 +146,30 @@ ${darkTheme()}
     if(!navigator.onLine) return;
     // Idempotency keys are generated ONCE, when the action happens, so a
     // resend after a crash is the same action, not a second one (P34).
-    fetch(ACTIONS_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({actions:q})})
-      .then(function(r){ if(r.ok){ localStorage.removeItem(QUEUE_KEY); if(el) el.textContent=''; } })
+    //
+    // ACKNOWLEDGE PER ACTION. This used to clear the whole queue on any
+    // 200, which threw away two things: actions the server did NOT
+    // apply, and actions this phone added while the request was in
+    // flight. The external review of 2026-09-16 found both. The server
+    // now answers with an outcome per idempotency key, and only the keys
+    // it actually settled are removed — from the queue as it is NOW, not
+    // as it was when the request left.
+    var sent=q.slice();
+    fetch(ACTIONS_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({actions:sent})})
+      .then(function(r){ return r.ok?r.json():null; })
+      .then(function(body){
+        if(!body||!body.results) return;
+        var settled={};
+        body.results.forEach(function(x){
+          // 'applied' and 'duplicate' are both finished business.
+          // 'in_flight' and 'failed' stay queued and go again.
+          if(x.outcome==='applied'||x.outcome==='duplicate') settled[x.idempotencyKey]=true;
+        });
+        var remaining=queue().filter(function(a){ return !settled[a.idempotencyKey]; });
+        if(remaining.length) localStorage.setItem(QUEUE_KEY,JSON.stringify(remaining));
+        else localStorage.removeItem(QUEUE_KEY);
+        if(el) el.textContent=remaining.length?COPY.queueWaiting.replace('{count}',remaining.length):'';
+      })
       .catch(function(){});
   }
   window.addEventListener('online',flush);

@@ -66,36 +66,126 @@ export type OfflineAction = {
 };
 
 /**
- * P34c — the PWA's offline queue replays here on reconnect. Every action
- * applies EXACTLY once: the dedupe row commits before the handler runs a
- * second time, so a queue synced twice (or a phone that crashed mid-sync
- * and resent everything) is harmless.
+ * P34c — the PWA's offline queue replays here on reconnect.
+ *
+ * CLAIM, DO, CONFIRM. This used to commit the dedupe row and then call
+ * the handler, so a crash in between left a row saying the action had
+ * been applied when it had not: the phone's retry was classified as a
+ * duplicate and the booking was gone. The external review of 2026-09-16
+ * found it next to the same mistake in the gateway.
+ *
+ * Now the row is a claim with a lifecycle. `in_flight` means somebody
+ * started it; `done` means the effect happened, and only a `done` row
+ * makes a later copy a duplicate. A failure hands the claim straight
+ * back, and a claim abandoned by a dead worker can be taken over once
+ * its lease expires — at-least-once for actions that are idempotent
+ * anyway (completing a completed order is refused; recording an install
+ * twice is one install), rather than at-most-once for actions somebody
+ * is waiting on.
+ *
+ * Every action gets its own outcome in the result, so the client can
+ * acknowledge what actually landed instead of clearing its whole queue
+ * on one 200.
  */
+export type ReplayOutcome = 'applied' | 'duplicate' | 'in_flight' | 'failed';
+
+export interface ReplayResult {
+  applied: number;
+  duplicates: number;
+  /** Per action, keyed by the client's own idempotency key. */
+  results: { idempotencyKey: string; outcome: ReplayOutcome; error?: string }[];
+}
+
+/** How long a claim may sit unfinished before another replay may take it. */
+export const REPLAY_LEASE_MS = 2 * 60_000;
+
 export async function replayOfflineQueue(
   db: Kysely<Database>,
   marketId: string,
   actions: OfflineAction[],
   handlers: Record<string, (payload: unknown) => Promise<void>>,
-): Promise<{ applied: number; duplicates: number }> {
+  options: { leaseMs?: number } = {},
+): Promise<ReplayResult> {
+  const results: ReplayResult['results'] = [];
   let applied = 0;
   let duplicates = 0;
+  const lease = options.leaseMs ?? REPLAY_LEASE_MS;
+
   for (const action of actions) {
-    const inserted = await db
+    const handler = handlers[action.kind];
+    if (!handler) throw new LifelineError(`no handler for offline action kind "${action.kind}"`);
+
+    const claimed = await db
       .insertInto('offline_replays')
-      .values({ market_id: marketId, idempotency_key: action.idempotencyKey, kind: action.kind })
+      .values({
+        market_id: marketId,
+        idempotency_key: action.idempotencyKey,
+        kind: action.kind,
+        status: 'in_flight',
+        completed_at: null,
+      })
       .onConflict((oc) => oc.columns(['market_id', 'idempotency_key']).doNothing())
       .returning('id')
       .executeTakeFirst();
-    if (!inserted) {
-      duplicates++;
+
+    let claimId = claimed?.id;
+    if (!claimId) {
+      const existing = await db
+        .selectFrom('offline_replays')
+        .where('market_id', '=', marketId)
+        .where('idempotency_key', '=', action.idempotencyKey)
+        .select(['id', 'status', 'claimed_at'])
+        .executeTakeFirstOrThrow();
+      if (existing.status === 'done') {
+        duplicates++;
+        results.push({ idempotencyKey: action.idempotencyKey, outcome: 'duplicate' });
+        continue;
+      }
+      const since = new Date(existing.claimed_at).getTime();
+      if (Date.now() - since < lease) {
+        // Another replay of the same queue is mid-flight. Not a
+        // duplicate and not a failure — the client keeps it and asks
+        // again, which is why it is not acknowledged here.
+        results.push({ idempotencyKey: action.idempotencyKey, outcome: 'in_flight' });
+        continue;
+      }
+      const takenOver = await db
+        .updateTable('offline_replays')
+        .set({ claimed_at: sql`now()` })
+        .where('id', '=', existing.id)
+        .where('status', '=', 'in_flight')
+        .where('claimed_at', '=', existing.claimed_at)
+        .returning('id')
+        .executeTakeFirst();
+      if (!takenOver) {
+        results.push({ idempotencyKey: action.idempotencyKey, outcome: 'in_flight' });
+        continue;
+      }
+      claimId = takenOver.id;
+    }
+
+    try {
+      await handler(action.payload);
+    } catch (err) {
+      // Hand the claim back: this action did NOT happen, and the next
+      // attempt must be free to do it rather than skip it.
+      await db.deleteFrom('offline_replays').where('id', '=', claimId).execute();
+      results.push({
+        idempotencyKey: action.idempotencyKey,
+        outcome: 'failed',
+        error: err instanceof Error ? err.message : String(err),
+      });
       continue;
     }
-    const handler = handlers[action.kind];
-    if (!handler) throw new LifelineError(`no handler for offline action kind "${action.kind}"`);
-    await handler(action.payload);
+    await db
+      .updateTable('offline_replays')
+      .set({ status: 'done', completed_at: sql`now()` })
+      .where('id', '=', claimId)
+      .execute();
     applied++;
+    results.push({ idempotencyKey: action.idempotencyKey, outcome: 'applied' });
   }
-  return { applied, duplicates };
+  return { applied, duplicates, results };
 }
 
 /**
