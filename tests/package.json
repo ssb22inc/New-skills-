@@ -14,7 +14,8 @@
     "chaos:whatsapp": "vitest run src/chaos/whatsapp-degraded.chaos.test.ts",
     "chaos:pg-failover": "vitest run src/chaos/pg-failover.chaos.test.ts",
     "load:smoke": "LOAD_RATE=100 LOAD_SECONDS=5 tsx src/load/gateway-load.ts",
-    "load:profiles": "tsx src/load/profiles.ts"
+    "load:profiles": "tsx src/load/profiles.ts",
+    "deploy:audit": "tsx src/deploy/live-origin.ts"
   },
   "dependencies": {
     "@sycamore/adapters": "workspace:*",

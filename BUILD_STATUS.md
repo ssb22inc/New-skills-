@@ -128,6 +128,39 @@ alphabetical order would have failed), and `kysely_migration` populated with the
 nothing; the `demo_seeded` flag stops the boot seeder for the same reason. The
 app role was granted what it needs on objects the connector created.
 
+## 2026-09-16 — the chain is complete, and the origin is audited
+
+Every prompt P0–P36 carries a gate commit; `SYCAMORE_PROMPTS.md` ends at P36 and
+defines no P37. What was left after the deploy was not more chain, it was the one
+gate that had never had anywhere to run.
+
+P36's gate reads "Lighthouse PWA installability audit passes" — and until this week
+there was no deployed origin, so the criteria were asserted against source files
+instead. Source assertions prove the code SAYS the right thing; they cannot prove
+the origin SERVES it. A dropped `public/` directory, a service worker that 404s, a
+manifest behind a login wall: each passes a string match and fails a phone.
+
+`pnpm --filter @sycamore/tests deploy:audit` now runs the criteria in a real browser
+against the real origin, 18 checks, all green:
+
+| Group | What it proves on the live origin |
+|---|---|
+| Installability | HTTPS, a linked manifest that parses, INK theme, 192/512 icons that are PNGs at the size they claim, one maskable |
+| Service worker | reaches `activated` and **controls** the page, not merely registers |
+| Lifeline (P34) | with the network cut, the seller's day still renders from the worker's cache |
+| Asymmetry (P36) | no seller sees the panel without `?offer=1`; the earned offer renders; a buyer's browser registers no worker and is never asked |
+| Budget (P14) | 1,973 B transferred, interactive 532 ms on throttled 3G — against 100 KB / 2 s |
+
+Two things the audit caught that a source test could not. The install panel is
+correctly **suppressed** for the seeded seller who already installed, which is the
+two-offer cap working — the first draft of the audit called that a failure, and the
+app was right. And the first draft raced `serviceWorker.ready` against a fixed
+timeout, reporting "none" on a slow install: a shrug, not a diagnosis, and a false
+red on a permanent gate. It polls and names the state it reached.
+
+It runs nightly rather than in `ci`, because it answers a question whose answer can
+change without a commit.
+
 ## Test counts
 
 250 tests green (last full run, SYCAMORE_REQUIRE_DB=1): core 137 · tests 66 (golden 6, markets 3, chaos 3, lifeline 5, sovereignty 4, pwa 10, scope 3, copy 7, design 5, constitution 9, observability 6, money 3, ci 2) · packs 11 · adapters 10 · gateway 10 · web 8 · design 7 · worker 1.
@@ -144,9 +177,14 @@ Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci
 5. Dummy Panel (5–8 people) + first 10 Genesis sellers → unlocks P13 gate.
 6. 100 real paid orders, zero reconciliation breaks → Phase-2 exit.
 7. Counsel verification per island before any dark market flips live.
-8. Lighthouse PWA installability audit on a deployed origin, plus a manual install on
-   Android Chrome and iOS Safari → unlocks the P36 install gate. A container cannot tap
-   "Add to home screen"; the criteria themselves are asserted in CI (apps/web/src/pwa.test.ts).
+8. ~~Lighthouse PWA installability audit on a deployed origin~~ **— done 2026-09-16**,
+   plus a manual install on Android Chrome and iOS Safari → unlocks the P36 install gate.
+   The machine half now runs against the live origin in a real browser
+   (`tests/src/deploy/live-origin.ts`, `pnpm --filter @sycamore/tests deploy:audit`,
+   nightly in `.github/workflows/deploy-audit.yml`): 18/18 checks, including a service
+   worker that activates and controls the page, a seller's day that still renders with the
+   network cut, and both halves of the asymmetry law. A container still cannot tap
+   "Add to home screen" — that one tap is all that remains of this gate.
 9. Real-model ASR accuracy on live patois voice notes. The 20-fixture gate measures the
    INTENT CLASSIFIER (19/20 = 95.0%); measuring the recogniser needs a real ASR vendor,
    which is a credential, not code.
