@@ -72,6 +72,8 @@ export async function GET(
     noCatalog: say('seller_day.no_catalog'),
     done: say('seller_day.done'),
     sent: say('seller_day.sent'),
+    askCode: say('seller_day.ask_code'),
+    codeMissing: say('seller_day.code_missing'),
     queueWaiting: say('seller_day.queue_waiting', { count: '{count}' }),
   };
 
@@ -188,7 +190,16 @@ ${darkTheme()}
     Array.prototype.forEach.call(document.querySelectorAll('[data-complete]'),function(b){
       b.addEventListener('click',function(){
         var id=b.getAttribute('data-complete');
-        enqueue({idempotencyKey:'complete:'+id,kind:'complete_order',payload:{orderId:id}});
+        // The buyer got a one-use code in their chat when the booking
+        // was confirmed. Asking for it is what makes an OFFLINE
+        // completion evidence rather than an assertion: the phone can
+        // queue it with no signal, and the server verifies it against
+        // the order on reconnect. A completion with no code is refused,
+        // so the client does not pretend to send one.
+        var code=window.prompt(COPY.askCode);
+        if(!code){ window.alert(COPY.codeMissing); return; }
+        enqueue({idempotencyKey:'complete:'+id,kind:'complete_order',
+          payload:{orderId:id,evidence:{type:'qr_scan',code:code.trim()}}});
         b.disabled=true; b.textContent=COPY.sent;
       });
     });

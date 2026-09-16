@@ -182,7 +182,11 @@ describe.runIf(reachable)('P36 — the installed client survives 48h dark (gate)
     const handlers = {
       complete_order: async (payload: unknown) => {
         const { orderId } = payload as { orderId: string };
-        await orders.complete(orderId, 'qr_scan', tours);
+        const { code } = await orders.issueCompletionCode({ orderId });
+        await orders.complete(orderId, { type: 'qr_scan', code }, tours, {
+          userId: null,
+          role: 'system',
+        });
         completions++;
       },
     };

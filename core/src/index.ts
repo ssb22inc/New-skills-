@@ -64,6 +64,14 @@ export {
   type OrderStatus,
   type OrdersService,
 } from './orders/orders.js';
+export {
+  completionEvidence,
+  EvidenceError,
+  type CompletionClaim,
+  type CompletionEvidenceService,
+  type EvidenceRefusal,
+  type VerifiedEvidence,
+} from './orders/evidence.js';
 export { detectIntent, buildIntentPrompt, INTENTS, type Intent } from './conversations/intents.js';
 export {
   authorizeToolCalls,
@@ -115,7 +123,12 @@ export {
   type LedgerEntryInput,
   type SplitBps,
 } from './ledger/ledger.js';
-export { settlementService, type SettlementService } from './settlement/settlement.js';
+export {
+  settlementService,
+  SettlementError,
+  type SettlementService,
+  type ReleaseRefusal,
+} from './settlement/settlement.js';
 export {
   shoeboxService,
   TAX_DISCLAIMER_KEY,

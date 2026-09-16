@@ -158,8 +158,17 @@ describe.runIf(reachable)('P22 — overflow routing + bundles (Phase 3 exit gate
       currency: 'JMD',
       idempotencyKey: `cap:${routed.orderId}`,
     });
-    await orders.complete(routed.orderId, 'qr_scan', tours);
-    const released = await settlement.releaseForOrder(routed.orderId);
+    const { code } = await orders.issueCompletionCode({ orderId: routed.orderId });
+    await orders.complete(routed.orderId, { type: 'qr_scan', code }, tours, {
+      userId: null,
+      role: 'system',
+    });
+    // Escrow releases when the 48h dispute window has closed, so the
+    // clock this call reads is three days on (C02).
+    const released = await settlement.releaseForOrder(
+      routed.orderId,
+      new Date(Date.now() + 3 * 86_400_000),
+    );
     expect(released.amounts!.referral).toBeGreaterThan(0);
 
     // 6. The referral credit appears in the INCUMBENT's next split/payout.

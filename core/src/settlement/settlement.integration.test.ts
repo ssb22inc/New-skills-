@@ -110,11 +110,31 @@ describe.runIf(reachable)('P17 — splits, release, payouts (gate)', () => {
             window_id: windows.get(sellerId)!,
             vertical_id: 'tours',
             units: 1,
-            status: 'confirmed',
+            // Escrow releases on a COMPLETED order whose dispute window
+            // has closed and whose completion has evidence behind it
+            // (C02). These thousand orders are history, so they are
+            // written as history rather than released from 'confirmed',
+            // which is what this fixture used to do — and what the
+            // external review of 2026-09-16 found production doing.
+            status: 'completed',
+            completed_at: new Date(Date.now() - 3 * 86_400_000),
+            completion_proof: 'qr_scan',
             referred_by_seller_id: referrer,
           })
           .returning('id')
           .executeTakeFirstOrThrow();
+        await db
+          .insertInto('completion_evidence')
+          .values({
+            market_id: 'jm',
+            order_id: order.id,
+            seller_id: sellerId,
+            proof_type: 'qr_scan',
+            actor_user_id: null,
+            actor_role: 'fixture',
+            reference: `fixture:${order.id}`,
+          })
+          .execute();
 
         const amount = 1_000 + Math.floor(rand() * 400_000);
         capturedTotal += amount;

@@ -43,6 +43,15 @@ export interface SellersTable {
   completed_orders: Generated<number>;
   /** Geography for co-op pools (P26); Genesis will collect it. */
   parish: string | null;
+  /**
+   * Where a geo check-in must happen, for the verticals that accept one
+   * as completion evidence (P9). Null until somebody records it, and a
+   * seller with no point cannot complete by check-in at all — an
+   * unverifiable claim is refused, never accepted on trust.
+   */
+  service_point_lat: number | null;
+  service_point_lng: number | null;
+  service_radius_m: number | null;
   /** P36b: none | offered | declined | installed — sellers only, ever. */
   install_prompt_state: Generated<string>;
   /** Hard cap: at most two offers in a seller's lifetime (DB-checked). */
@@ -188,6 +197,33 @@ export interface LedgerEntriesTable {
   currency: string;
   /** Stamped on seller_payable / referral_credits entries for payouts. */
   seller_id: string | null;
+  created_at: Generated<Date>;
+}
+
+export interface CompletionChallengesTable {
+  id: Generated<string>;
+  market_id: string;
+  order_id: string;
+  proof_type: string;
+  /** SHA-256 of the code. The code itself exists once, in the response. */
+  code_hash: string;
+  issued_to_user_id: string | null;
+  expires_at: Date | string;
+  consumed_at: Date | string | null;
+  created_at: Generated<Date>;
+}
+
+export interface CompletionEvidenceTable {
+  id: Generated<string>;
+  market_id: string;
+  order_id: string;
+  seller_id: string;
+  proof_type: string;
+  actor_user_id: string | null;
+  actor_role: string;
+  /** What it was checked against: challenge id, buyer id, or a point. */
+  reference: string | null;
+  verified_at: Generated<Date>;
   created_at: Generated<Date>;
 }
 
@@ -374,6 +410,8 @@ export interface Database {
   catalog_items: CatalogItemsTable;
   ledger_transactions: LedgerTransactionsTable;
   ledger_entries: LedgerEntriesTable;
+  completion_challenges: CompletionChallengesTable;
+  completion_evidence: CompletionEvidenceTable;
   disputes: DisputesTable;
   reviews: ReviewsTable;
   review_revisions: ReviewRevisionsTable;

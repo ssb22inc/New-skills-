@@ -264,7 +264,30 @@ export async function seedDemoMarket(db: Db, opts: { appOrigin: string }): Promi
 
     if (finish) {
       const pack = host.vertical === 'tours' ? tours : food;
-      await orders.complete(draft.id, pack.booking.completion_proof[0]!, pack);
+      // Completion takes verified evidence (P9/C02), and each vertical
+      // accepts its own kind: a tour is finished by scanning the code on
+      // the seller's phone, a food order by the buyer saying it arrived.
+      if (pack.booking.completion_proof.includes('qr_scan')) {
+        const { code } = await orders.issueCompletionCode({ orderId: draft.id });
+        await orders.complete(draft.id, { type: 'qr_scan', code }, pack, {
+          userId: null,
+          role: 'system',
+        });
+      } else {
+        await orders.complete(draft.id, { type: 'buyer_confirm', buyerUserId: buyer.id }, pack, {
+          userId: buyer.id,
+          role: 'buyer',
+        });
+      }
+      // Settled money in a demo market is money whose dispute window has
+      // closed, so these completions are dated to the past like the rest
+      // of the seeded history. Releasing a completion made one second
+      // ago would need the rule bent, and the rule is the product.
+      await db
+        .updateTable('orders')
+        .set({ completed_at: new Date(Date.now() - (3 + (i % 5)) * 86_400_000) })
+        .where('id', '=', draft.id)
+        .execute();
       await settlement.releaseForOrder(draft.id);
       completed++;
       // A few of them leave a verified review — only completed, paid

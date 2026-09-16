@@ -119,6 +119,8 @@ seller_day:
   offline_no_cache: 'Sin conexión — todavía no hay día guardado.'
   done: 'Listo'
   sent: 'Enviado'
+  ask_code: 'Pídele a tu cliente el código que le enviamos y escríbelo aquí.'
+  code_missing: 'Sin código no hay cierre — pídele a tu cliente que lo lea en su chat.'
   launch_hint: 'Abre una vez el enlace que te mandamos por chat y este ícono te traerá directo aquí.'
   opening: 'Abriendo tu día…'
   queue_waiting: '{count} cambios esperando enviarse.'

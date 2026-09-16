@@ -1,4 +1,5 @@
 import {
+  type CompletionClaim,
   createDb,
   databaseUrl,
   installOfferService,
@@ -7,7 +8,7 @@ import {
   replayOfflineQueue,
   type OfflineAction,
 } from '@sycamore/core';
-import { CompletionProofSchema, loadContextPack, loadVerticalPack } from '@sycamore/packs';
+import { loadContextPack, loadVerticalPack } from '@sycamore/packs';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,7 +65,10 @@ export async function POST(
 
   const result = await replayOfflineQueue(db, market, actions, {
     complete_order: async (payload) => {
-      const { orderId, proof } = payload as { orderId: string; proof?: string };
+      const { orderId, evidence } = payload as {
+        orderId: string;
+        evidence?: CompletionClaim;
+      };
       const order = await db
         .selectFrom('orders')
         .where('market_id', '=', market)
@@ -73,15 +77,17 @@ export async function POST(
         .select('vertical_id')
         .executeTakeFirstOrThrow();
       const pack = loadVerticalPack(order.vertical_id);
-      // The vertical pack decides what counts as proof; an unparseable
-      // client value falls back to the pack's first accepted proof
-      // rather than being trusted through.
-      const parsed = CompletionProofSchema.safeParse(proof);
-      await orders.complete(
-        orderId,
-        parsed.success ? parsed.data : pack.booking.completion_proof[0]!,
-        pack,
-      );
+      // NO FALLBACK. This line used to read "an unparseable client value
+      // falls back to the pack's first accepted proof rather than being
+      // trusted through", which meant a completion claim carrying no
+      // evidence at all was recorded as a scanned QR code — the exact
+      // record a dispute is later judged on. The evidence service now
+      // refuses missing, malformed, unsupported, stale, reused and
+      // mismatched claims, and the order does not move.
+      await orders.complete(orderId, evidence as CompletionClaim, pack, {
+        userId: null,
+        role: 'seller_client',
+      });
     },
     client_installed: async () => {
       await installs.recordInstalled(sellerId);

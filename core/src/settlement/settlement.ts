@@ -3,6 +3,23 @@ import type { ContextPack } from '@sycamore/packs';
 import { formatAmount, translator } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
 import { ledgerService, type SplitBps } from '../ledger/ledger.js';
+import { DISPUTE_WINDOW_MS } from '../trust/disputes.js';
+
+/**
+ * Why a release is refused. A settlement that cannot say why is a
+ * settlement nobody can appeal (Constitution §4 — show me why).
+ */
+export type ReleaseRefusal =
+  'not_completed' | 'no_evidence' | 'dispute_window_open' | 'dispute_open' | 'market_frozen';
+
+export class SettlementError extends Error {
+  readonly reason: ReleaseRefusal;
+  constructor(reason: ReleaseRefusal, message: string) {
+    super(message);
+    this.name = 'SettlementError';
+    this.reason = reason;
+  }
+}
 
 function toSplitBps(t: {
   seller_bps: number;
@@ -31,8 +48,110 @@ export function settlementService(db: Kysely<Database>, marketId: string, pack: 
   return {
     ledger,
 
-    /** Release escrow for a completed order, split per the pack tables. */
-    async releaseForOrder(orderId: string) {
+    /**
+     * Whether this order may release, and why not when it may not.
+     *
+     * The external review of 2026-09-16 found `releaseForOrder` moving
+     * money on nothing but the row existing: no completion check, no
+     * evidence, no dispute window, no freeze. The eligibility rules
+     * existed — in `disputeService.releaseEligible` — and a caller
+     * reaching this function simply went around them. Rules that live
+     * beside the door instead of in it are decoration, so they are in
+     * the door now, and the other entrypoint stays for the callers that
+     * only want to ask.
+     */
+    async releaseEligibility(
+      orderId: string,
+      now = new Date(),
+    ): Promise<{ ok: true } | { ok: false; reason: ReleaseRefusal; detail: string }> {
+      const order = await db
+        .selectFrom('orders')
+        .where('market_id', '=', marketId)
+        .where('id', '=', orderId)
+        .selectAll()
+        .executeTakeFirstOrThrow();
+      if (order.status !== 'completed' || !order.completed_at) {
+        return {
+          ok: false,
+          reason: 'not_completed',
+          detail: `order ${orderId} is ${order.status}; escrow releases on completion`,
+        };
+      }
+      // Completion is a claim; evidence is what makes it a fact (P9).
+      const evidence = await db
+        .selectFrom('completion_evidence')
+        .where('market_id', '=', marketId)
+        .where('order_id', '=', orderId)
+        .select('id')
+        .executeTakeFirst();
+      if (!evidence) {
+        return {
+          ok: false,
+          reason: 'no_evidence',
+          detail: `order ${orderId} is marked completed with no verified evidence behind it`,
+        };
+      }
+      // A market in a storm or a blackout does not move money on
+      // information that may be days stale (P32, P34d).
+      const frozen = await db
+        .selectFrom('hurricane_states')
+        .where('market_id', '=', marketId)
+        .where('active', '=', true)
+        .select('market_id')
+        .executeTakeFirst();
+      if (frozen) {
+        return {
+          ok: false,
+          reason: 'market_frozen',
+          detail: `${marketId} is under Hurricane Mode; releases are frozen`,
+        };
+      }
+      // Blackout shares hurricane_states: one row per market, two
+      // switches — a storm freezes bookings, a blackout only pauses
+      // money (P34d: record now, settle later).
+      const blackout = await db
+        .selectFrom('hurricane_states')
+        .where('market_id', '=', marketId)
+        .where('blackout', '=', true)
+        .select('market_id')
+        .executeTakeFirst();
+      if (blackout) {
+        return {
+          ok: false,
+          reason: 'market_frozen',
+          detail: `${marketId} is in Blackout Mode; escrow release is paused`,
+        };
+      }
+      const open = await db
+        .selectFrom('disputes')
+        .where('market_id', '=', marketId)
+        .where('order_id', '=', orderId)
+        .where('status', 'in', ['open', 'under_review'])
+        .select('id')
+        .executeTakeFirst();
+      if (open) {
+        return {
+          ok: false,
+          reason: 'dispute_open',
+          detail: `order ${orderId} has an open dispute`,
+        };
+      }
+      const elapsed = now.getTime() - new Date(order.completed_at).getTime();
+      if (elapsed < DISPUTE_WINDOW_MS) {
+        const hours = Math.ceil((DISPUTE_WINDOW_MS - elapsed) / 3_600_000);
+        return {
+          ok: false,
+          reason: 'dispute_window_open',
+          detail: `order ${orderId} is ${hours}h short of the 48h dispute window`,
+        };
+      }
+      return { ok: true };
+    },
+
+    /** Release escrow for an eligible completed order, split per the pack. */
+    async releaseForOrder(orderId: string, now = new Date()) {
+      const eligible = await this.releaseEligibility(orderId, now);
+      if (!eligible.ok) throw new SettlementError(eligible.reason, eligible.detail);
       const order = await db
         .selectFrom('orders')
         .where('market_id', '=', marketId)

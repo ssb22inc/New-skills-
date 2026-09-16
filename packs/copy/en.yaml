@@ -126,6 +126,8 @@ seller_day:
   offline_no_cache: 'Offline — no saved day yet.'
   done: 'Done'
   sent: 'Sent'
+  ask_code: 'Ask your customer for the code we sent them, and type it here.'
+  code_missing: 'No code, no completion — ask your customer to read it from their chat.'
   launch_hint: 'Open the link we sent you in chat once, and this icon will bring you straight back here.'
   opening: 'Opening your day…'
   queue_waiting: '{count} changes waiting to send.'

@@ -43,6 +43,21 @@ describe.runIf(reachable)('P9 — orders + completion verification (gate)', () =
   const orders = ordersService(db, 'jm');
   const engine = capacityEngine(db, 'jm');
   let sellerId: string;
+
+  /**
+   * Completion takes VERIFIED evidence now, so every test that finishes
+   * an order asks for the one-use code first — which is what a seller's
+   * phone does when it shows the QR. Nothing here can complete an order
+   * by naming a proof, and that is the point (C02, external review
+   * 2026-09-16).
+   */
+  async function completeByCode(orderId: string) {
+    const { code } = await orders.issueCompletionCode({ orderId });
+    return orders.complete(orderId, { type: 'qr_scan', code }, tours, {
+      userId: null,
+      role: 'system',
+    });
+  }
   const buyers: string[] = [];
 
   beforeAll(async () => {
@@ -143,10 +158,23 @@ describe.runIf(reachable)('P9 — orders + completion verification (gate)', () =
     const order = await draftOn(win.id, buyers[0]!);
     expect((await orders.placeHold(order.id)).status).toBe('held');
     await orders.confirm(order.id);
-    await orders.complete(order.id, 'geo_checkin', tours);
+    // A geo check-in verifies against the seller's recorded point.
+    await db
+      .updateTable('sellers')
+      .set({ service_point_lat: 18.4762, service_point_lng: -77.8939, service_radius_m: 250 })
+      .where('id', '=', sellerId)
+      .execute();
+    await orders.complete(
+      order.id,
+      { type: 'geo_checkin', lat: 18.4763, lng: -77.894, capturedAt: new Date() },
+      tours,
+      { userId: null, role: 'seller' },
+    );
     const done = await orders.get(order.id);
     expect(done?.status).toBe('completed');
     expect(done?.completion_proof).toBe('geo_checkin');
+    const evidence = await orders.completionEvidenceFor(order.id);
+    expect(evidence?.proof_type).toBe('geo_checkin');
   });
 
   it('completion proof is vertical-pack driven: food refuses geo_checkin', async () => {
@@ -155,14 +183,20 @@ describe.runIf(reachable)('P9 — orders + completion verification (gate)', () =
     await orders.placeHold(order.id);
     await orders.confirm(order.id);
     // tours order + food pack mismatch refuses outright
-    await expect(orders.complete(order.id, 'buyer_confirm', food)).rejects.toThrowError(
-      /order is tours/,
-    );
+    await expect(
+      orders.complete(order.id, { type: 'buyer_confirm', buyerUserId: buyers[1]! }, food, {
+        userId: buyers[1]!,
+        role: 'buyer',
+      }),
+    ).rejects.toThrowError(/order is tours/);
     // qr_scan is fine for tours; buyer_confirm is not in the tours pack
-    await expect(orders.complete(order.id, 'buyer_confirm', tours)).rejects.toThrowError(
-      /not accepted for tours/,
-    );
-    await orders.complete(order.id, 'qr_scan', tours);
+    await expect(
+      orders.complete(order.id, { type: 'buyer_confirm', buyerUserId: buyers[1]! }, tours, {
+        userId: buyers[1]!,
+        role: 'buyer',
+      }),
+    ).rejects.toThrowError(/is not accepted here/);
+    await completeByCode(order.id);
   });
 
   it('cancel releases capacity and the freed seat goes to the waitlist head', async () => {
@@ -247,7 +281,7 @@ describe.runIf(reachable)('P9 — orders + completion verification (gate)', () =
             const orderId = orderIds[Math.floor(rand() * orderIds.length)]!;
             if (op === 'hold') await orders.placeHold(orderId);
             else if (op === 'confirm') await orders.confirm(orderId);
-            else if (op === 'complete') await orders.complete(orderId, 'qr_scan', tours);
+            else if (op === 'complete') await completeByCode(orderId);
             else if (op === 'cancel') await orders.cancel(orderId);
             else if (op === 'dispute') await orders.dispute(orderId);
             else if (op === 'reschedule') {
@@ -260,7 +294,9 @@ describe.runIf(reachable)('P9 — orders + completion verification (gate)', () =
           // Invalid moves and full targets must throw typed errors — and
           // change nothing, which the invariant sweep below proves.
           expect(
-            (err as Error).name === 'OrderError' || (err as Error).name === 'CapacityError',
+            (err as Error).name === 'OrderError' ||
+              (err as Error).name === 'CapacityError' ||
+              (err as Error).name === 'EvidenceError',
             `unexpected error type: ${(err as Error).stack}`,
           ).toBe(true);
         }
@@ -274,7 +310,14 @@ describe.runIf(reachable)('P9 — orders + completion verification (gate)', () =
   it('invalid transitions refuse: complete a draft, dispute a draft, confirm twice', async () => {
     const win = await makeWindow(3, 22);
     const order = await draftOn(win.id, buyers[7]!);
-    await expect(orders.complete(order.id, 'qr_scan', tours)).rejects.toThrowError(OrderError);
+    // A draft is refused as a bad TRANSITION, before evidence is even
+    // looked at — the caller's actual mistake names itself.
+    await expect(
+      orders.complete(order.id, { type: 'qr_scan', code: 'anything' }, tours, {
+        userId: null,
+        role: 'system',
+      }),
+    ).rejects.toThrowError(OrderError);
     await expect(orders.dispute(order.id)).rejects.toThrowError(OrderError);
     await orders.placeHold(order.id);
     await orders.confirm(order.id);

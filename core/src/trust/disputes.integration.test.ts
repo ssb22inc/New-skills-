@@ -89,7 +89,13 @@ describe.runIf(reachable)('P18 — refunds, disputes, evidence (gate)', () => {
       currency: 'JMD',
       idempotencyKey: `cap:${order.id}`,
     });
-    if (opts.complete) await orders.complete(order.id, 'qr_scan', tours);
+    if (opts.complete) {
+      const { code } = await orders.issueCompletionCode({ orderId: order.id });
+      await orders.complete(order.id, { type: 'qr_scan', code }, tours, {
+        userId: null,
+        role: 'system',
+      });
+    }
     return order.id;
   }
 

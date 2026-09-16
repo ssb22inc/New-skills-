@@ -74,10 +74,27 @@ describe.runIf(reachable)('P19 — The Shoebox (gate)', () => {
           window_id: win.id,
           vertical_id: 'food',
           units: 1,
-          status: 'confirmed',
+          // A month that has already happened: completed, evidenced, and
+          // past its dispute window, because that is the only kind of
+          // order escrow releases for (C02).
+          status: 'completed',
+          completed_at: new Date(Date.now() - 3 * 86_400_000),
+          completion_proof: 'buyer_confirm',
         })
         .returning('id')
         .executeTakeFirstOrThrow();
+      await db
+        .insertInto('completion_evidence')
+        .values({
+          market_id: 'jm',
+          order_id: order.id,
+          seller_id: sellerId,
+          proof_type: 'buyer_confirm',
+          actor_user_id: buyer.id,
+          actor_role: 'fixture',
+          reference: buyer.id,
+        })
+        .execute();
       const amount = 100_000 + i * 1_000;
       seededSales += amount;
       await settlement.ledger.capture({

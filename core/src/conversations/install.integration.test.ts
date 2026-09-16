@@ -116,7 +116,11 @@ describe.runIf(reachable)('P36b — the earned-install offer', () => {
     });
     await orders.placeHold(draft.id);
     await orders.confirm(draft.id);
-    await orders.complete(draft.id, 'qr_scan', tours);
+    const { code } = await orders.issueCompletionCode({ orderId: draft.id });
+    await orders.complete(draft.id, { type: 'qr_scan', code }, tours, {
+      userId: null,
+      role: 'system',
+    });
     // The pure engine stamps `now()`; the rolling window is what is under
     // test, so the completion time is backdated explicitly.
     await db

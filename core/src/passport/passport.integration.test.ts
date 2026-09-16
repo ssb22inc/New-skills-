@@ -85,7 +85,11 @@ describe.runIf(reachable)('P33 — Credit Passport v1 (gate)', () => {
         currency: 'JMD',
         idempotencyKey: `pp-cap:${draft.id}`,
       });
-      await orders.complete(draft.id, 'qr_scan', tours);
+      const { code } = await orders.issueCompletionCode({ orderId: draft.id });
+      await orders.complete(draft.id, { type: 'qr_scan', code }, tours, {
+        userId: null,
+        role: 'system',
+      });
       await ledger.release({
         orderRef: draft.id,
         currency: 'JMD',
