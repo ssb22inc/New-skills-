@@ -136,7 +136,9 @@ a{color:inherit}
 &ldquo;Add to home screen&rdquo;. Buyers are never offered an install — only sellers.</p>
 ${rows.join('\n')}
 <h2>Founder</h2>
-<section><p><a href="/cockpit?market=jm">Cockpit</a></p></section>
+<section><p><a href="/cockpit?market=jm">Cockpit</a> <span class="muted">the business in five minutes</span></p></section>
+<h2>Developer</h2>
+<section><p><a href="/dev">Developer console</a> <span class="muted">schema, money, the event bus and every surface, refreshing itself</span></p></section>
 </main></body></html>`;
 
   return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });

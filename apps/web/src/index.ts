@@ -8,6 +8,8 @@ export const WORKSPACE = '@sycamore/web';
  * a string match.
  */
 export { GET as cockpitPage } from '../app/cockpit/route.js';
+/** Developer console — scaffolding, gated behind SYCAMORE_DEMO_INDEX. */
+export { GET as devConsole } from '../app/dev/route.js';
 export { GET as webManifest } from '../app/manifest.webmanifest/route.js';
 export { GET as whyPage } from '../app/why/[market]/[seller]/route.js';
 export { GET as trustPage } from '../app/t/[market]/[seller]/route.js';
