@@ -21,9 +21,10 @@
   production build passes, the deterministic 53-page search audit passes, and
   `npm audit --audit-level=high` reports zero vulnerabilities.
 - Search Console's Domain property is verified and the sitemap is submitted.
-  The homepage is indexed. Google accepted a priority indexing request for
-  `/learn/2026-nclex-rn-test-plan/`; its status should be rechecked after Google
-  recrawls it. Do not repeatedly resubmit while it is queued.
+  The homepage is indexed. A public Google result observed on 2026-09-16
+  confirms that the priority URL `/learn/2026-nclex-rn-test-plan/` is now
+  indexed; do not resubmit it. A fresh six-agent live crawl passed all 53
+  production routes, and the authoritative-source audit passed all 60 sources.
 
 The sections below preserve the original deployment evidence. Counts labelled
 as snapshots are historical rather than a statement of the current library
