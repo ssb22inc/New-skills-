@@ -3,6 +3,7 @@ import {
   databaseUrl,
   databaseUrlSource,
   describeDatabaseUrl,
+  pendingMigrations,
   DATABASE_URL_NAMES,
   marketsRegistry,
   sellerInstallRate,
@@ -49,6 +50,16 @@ export async function GET(): Promise<Response> {
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     const source = databaseUrlSource();
+    // A reachable database with no schema is a different problem from an
+    // unreachable one, and it has a different fix. Ask before guessing;
+    // if this throws too, the database is genuinely not answering and the
+    // sentence below is the right one.
+    let behind: string[] | undefined;
+    try {
+      behind = await pendingMigrations(db);
+    } catch {
+      behind = undefined;
+    }
     // Names only, never values: which variables this build can see that
     // look like they might be the database. When the secret was pasted
     // under the wrong name or the wrong scope, this is the line that
@@ -60,20 +71,28 @@ export async function GET(): Promise<Response> {
     return new Response(
       `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sycamore — database</title><style>${darkTheme()}</style></head><body><main>` +
         `<h1>Sycamore — not connected yet</h1>` +
-        (source
-          ? `<p>${esc(source)} is set but the database did not answer.</p>` +
-            `<p class="muted">${esc(reason)}</p>` +
-            // The other half of the diagnosis: which connection was
-            // attempted. Password dropped, project reference masked.
-            `<p class="muted">Connecting as <span class="num">${esc(describeDatabaseUrl())}</span>, password hidden.</p>` +
-            `<p class="muted">The app expects its own role, <span class="num">sycamore</span>, on the Supabase pooler host — not the project's <span class="num">postgres</span> superuser on the direct host.</p>`
-          : `<p>No database URL is set on this deployment (${esc(scope)}).</p>` +
-            `<p class="muted">Accepted names: ${DATABASE_URL_NAMES.map(esc).join(', ')}. ` +
-            `Add one in the host's environment variables — on Vercel, ticked for the <strong>Production</strong> environment — and redeploy. ` +
-            `Migrations and the demo seed run by themselves on the next boot.</p>` +
-            `<p class="muted">Database-looking variables this build can see: ${
-              lookalikes.length ? lookalikes.map(esc).join(', ') : 'none'
-            }.</p>`) +
+        (behind && behind.length > 0
+          ? `<p>The database is reachable, and its schema is behind by ${behind.length} ` +
+            `migration${behind.length === 1 ? '' : 's'}.</p>` +
+            `<p class="muted">Run <span class="num">pnpm --filter @sycamore/core migrate latest</span> ` +
+            `against it and reload. This deployment will not apply them itself: a serverless ` +
+            `process can be frozen mid-transaction and leave the schema half-built, which is ` +
+            `harder to recover from than an empty one.</p>` +
+            `<p class="muted">Pending: ${esc(behind.join(', '))}</p>`
+          : source
+            ? `<p>${esc(source)} is set but the database did not answer.</p>` +
+              `<p class="muted">${esc(reason)}</p>` +
+              // The other half of the diagnosis: which connection was
+              // attempted. Password dropped, project reference masked.
+              `<p class="muted">Connecting as <span class="num">${esc(describeDatabaseUrl())}</span>, password hidden.</p>` +
+              `<p class="muted">The app expects its own role, <span class="num">sycamore</span>, on the Supabase pooler host — not the project's <span class="num">postgres</span> superuser on the direct host.</p>`
+            : `<p>No database URL is set on this deployment (${esc(scope)}).</p>` +
+              `<p class="muted">Accepted names: ${DATABASE_URL_NAMES.map(esc).join(', ')}. ` +
+              `Add one in the host's environment variables — on Vercel, ticked for the <strong>Production</strong> environment — and redeploy. ` +
+              `Migrations and the demo seed run by themselves on the next boot.</p>` +
+              `<p class="muted">Database-looking variables this build can see: ${
+                lookalikes.length ? lookalikes.map(esc).join(', ') : 'none'
+              }.</p>`) +
         `</main></body></html>`,
       { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } },
     );

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import { sql } from 'kysely';
 import { createDb, databaseUrl } from './database.js';
-import { migrateDownAll, migrateToLatest } from './migrator.js';
+import { migrateDownAll, migrateToLatest, pendingMigrations } from './migrator.js';
 import { seedMarkets } from './seed.js';
 import { usersRepo } from './repositories/users.js';
 import { emitEvent } from './outbox.js';
@@ -37,6 +37,38 @@ describe.runIf(reachable)('P2 — database core (gate)', () => {
   afterAll(async () => {
     await migrateDownAll(db);
     await db.destroy();
+  });
+
+  /**
+   * The probe a serverless boot uses instead of migrating. It has to be
+   * honest about a schema that is behind AND write nothing while finding
+   * out — a boot that creates bookkeeping tables and then freezes is the
+   * failure this replaced (2026-09-16).
+   */
+  it('reports what is pending without touching the database', async () => {
+    await migrateDownAll(db);
+    const before = await db
+      .selectFrom('kysely_migration' as never)
+      .select(sql<number>`count(*)`.as('n'))
+      .executeTakeFirst()
+      .catch(() => undefined);
+
+    const pending = await pendingMigrations(db);
+    expect(pending.length).toBeGreaterThan(0);
+    expect(pending[0]).toBe('0001_base');
+
+    // Asking twice changes nothing, and asking at all applies nothing.
+    expect(await pendingMigrations(db)).toEqual(pending);
+    const after = await db
+      .selectFrom('kysely_migration' as never)
+      .select(sql<number>`count(*)`.as('n'))
+      .executeTakeFirst()
+      .catch(() => undefined);
+    expect(after?.n ?? 0).toBe(before?.n ?? 0);
+
+    await migrateToLatest(db);
+    expect(await pendingMigrations(db)).toEqual([]);
+    await migrateDownAll(db);
   });
 
   it('migrates up and down cleanly, twice', async () => {

@@ -12,7 +12,7 @@
  * CARRY NO INSTALL AFFORDANCE, EVER.
  */
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { GET as manifestRoute } from '../app/manifest.webmanifest/route.js';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -141,6 +141,44 @@ describe('P36 — ASYMMETRIC CLIENTS: sellers are offered, buyers are never aske
         'add to home screen',
       );
     }
+  });
+});
+
+describe('deploy scaffolding — a serverless boot does not migrate', () => {
+  const saved = new Map<string, string | undefined>();
+  const setEnv = (name: string, value: string | undefined): void => {
+    if (!saved.has(name)) saved.set(name, process.env[name]);
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  };
+  afterEach(() => {
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    saved.clear();
+  });
+
+  it('GATE: Vercel probes and reports; it never migrates at boot by itself', async () => {
+    const { deployDefaults } = await import('./deploy-defaults.js');
+    setEnv('VERCEL', '1');
+    setEnv('SYCAMORE_MIGRATE_ON_BOOT', undefined);
+    const defaults = deployDefaults();
+    // A serverless instance can be frozen mid-transaction, so twenty-two
+    // migrations started at boot is a race it loses silently.
+    expect(defaults.migrateOnBoot).toBe(false);
+    // The demo surfaces stay on: those are cheap and idempotent.
+    expect(defaults.demoSeedOnBoot).toBe(true);
+    expect(defaults.demoIndex).toBe(true);
+  });
+
+  it('a long-lived server still migrates when it says so — the image sets it', async () => {
+    const { deployDefaults } = await import('./deploy-defaults.js');
+    setEnv('VERCEL', undefined);
+    setEnv('SYCAMORE_MIGRATE_ON_BOOT', '1');
+    expect(deployDefaults().migrateOnBoot).toBe(true);
+    setEnv('SYCAMORE_MIGRATE_ON_BOOT', '0');
+    expect(deployDefaults().migrateOnBoot).toBe(false);
   });
 });
 

@@ -161,6 +161,33 @@ red on a permanent gate. It polls and names the state it reached.
 It runs nightly rather than in `ci`, because it answers a question whose answer can
 change without a commit.
 
+## 2026-09-16 — the boot migration, fixed rather than documented
+
+The post-mortem said "migrating from a request-scoped runtime is a race against
+the platform's freeze, and the app should never be the thing that notices." The
+code still raced. Now it does not.
+
+`pendingMigrations(db)` asks the cheapest question there is — which migrations
+have not run — in one read-only query that creates nothing. Boot always probes.
+It applies only where applying is safe: `SYCAMORE_MIGRATE_ON_BOOT=1`, which the
+Docker image sets and a long-lived server owns. On a serverless host the default
+is now **off**, and a schema that is behind produces one actionable sentence in
+the log and on `/demo`: how many migrations are pending, which ones, and the
+command to apply them from somewhere that will still be alive when it finishes.
+
+The difference is between a failure that explains itself and one that leaves two
+bookkeeping tables and no logs.
+
+Proved by test: the probe reports `0001_base` first on an empty schema, returns
+the same answer twice, leaves the migration table's row count unchanged, and
+returns `[]` once migrated (`core/src/db/db.integration.test.ts`). And a Vercel
+deployment reports `migrateOnBoot: false` while an explicit `1` still migrates
+(`apps/web/src/pwa.test.ts`).
+
+**263 tests, 0 skipped, database required.** The live deployment is unaffected:
+its schema is current, so the probe returns empty and boot proceeds exactly as
+before.
+
 ## Test counts
 
 250 tests green (last full run, SYCAMORE_REQUIRE_DB=1): core 137 · tests 66 (golden 6, markets 3, chaos 3, lifeline 5, sovereignty 4, pwa 10, scope 3, copy 7, design 5, constitution 9, observability 6, money 3, ci 2) · packs 11 · adapters 10 · gateway 10 · web 8 · design 7 · worker 1.
