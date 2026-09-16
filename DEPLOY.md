@@ -85,6 +85,24 @@ preview builds and cannot touch the production URL, but they are noise. Vercel
 
 exits 0 (skip) for every other branch and builds only this one.
 
+**Why the schema was loaded by hand, once.** Boot-time migration is right for a
+long-lived server and wrong for a cold start. On 2026-09-16 the first cold start
+with a working credential created Kysely's two bookkeeping tables, got no
+further, and logged nothing: a serverless instance began the work, answered the
+request, and froze mid-transaction, which rolls back. Repeating that gets the
+same two tables and the same empty schema every time. So the 22 migrations and
+the demo market were applied deliberately over HTTPS instead — the schema dumped
+from a local run of the real migrator, the data dumped in foreign-key order, both
+replayed through the database connector, with `kysely_migration` carrying the 22
+names so the app's own migrator sees a database that is already up to date and
+does nothing. The `demo_seeded` flag is set for the same reason: the boot seeder
+claims that flag before seeding and refuses when it exists.
+
+The lesson generalises. Migrating from a request-scoped runtime is a race
+against the platform's freeze, and the app should never be the thing that
+notices. If a future deploy needs a new migration, run it deliberately — not by
+hoping a cold start survives long enough.
+
 If boot logs say the pooler cluster was "corrected", that is
 `databaseUrlCandidates` doing its job: Supabase's shared pooler lives on
 numbered clusters and only the dashboard says which; the app tries the sibling

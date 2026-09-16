@@ -105,6 +105,29 @@ every push to `main` or a `codex/*` branch starts a Sycamore build that fails.
 They are preview builds and cannot touch the production URL. `DEPLOY.md` has
 the one-line Ignored Build Step that stops them.
 
+## 2026-09-16 — the link is live
+
+`https://sycamore-ssb22incs-projects.vercel.app/demo` serves the seeded Jamaican
+market: three sellers, seventeen users, fourteen orders, and a ledger whose
+debits and credits both total 31,880,000 minor units. The trust page, the
+seller's day with its earned install offer, and the founder cockpit all answer
+200 with real data.
+
+The fourth and last failure was the most interesting. With a working credential,
+the first cold start created Kysely's two bookkeeping tables and stopped — no
+log line, no migrations, no lock row. A serverless instance had started the work
+inside `register()`, served the request, and frozen mid-transaction, which rolls
+back. Every retry reproduced it exactly. Boot-time migration is a race against
+the platform's freeze, and 22 migrations is too long a race to win.
+
+So the database was migrated deliberately instead, over HTTPS through the
+database connector: the schema dumped from a local run of the real migrator, the
+demo data dumped in foreign-key order (the constraints were already in place, so
+alphabetical order would have failed), and `kysely_migration` populated with the
+22 names. The app's own migrator now sees a database that is up to date and does
+nothing; the `demo_seeded` flag stops the boot seeder for the same reason. The
+app role was granted what it needs on objects the connector created.
+
 ## Test counts
 
 250 tests green (last full run, SYCAMORE_REQUIRE_DB=1): core 137 · tests 66 (golden 6, markets 3, chaos 3, lifeline 5, sovereignty 4, pwa 10, scope 3, copy 7, design 5, constitution 9, observability 6, money 3, ci 2) · packs 11 · adapters 10 · gateway 10 · web 8 · design 7 · worker 1.
