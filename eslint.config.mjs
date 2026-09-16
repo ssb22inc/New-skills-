@@ -6,7 +6,13 @@ export default tseslint.config(
   {
     // haven/ is an unrelated project with its own toolchain
     ignores: [
+      // Other products living in this repository. CI checks out this
+      // branch MERGED INTO the default branch, which carries PulseRN, so
+      // both appear in the tree the linter sees even though neither is
+      // ours to lint. Scope law: they are off-limits, and that includes
+      // reformatting them.
       'haven/**',
+      'pulsern/**',
       '**/dist/**',
       '**/node_modules/**',
       '**/coverage/**',
