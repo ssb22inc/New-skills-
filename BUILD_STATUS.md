@@ -223,10 +223,20 @@ give the base image the CA and build with `--network=host`, leaving the
 
 ## Test counts
 
-250 tests green (last full run, SYCAMORE_REQUIRE_DB=1): core 137 · tests 66 (golden 6, markets 3, chaos 3, lifeline 5, sovereignty 4, pwa 10, scope 3, copy 7, design 5, constitution 9, observability 6, money 3, ci 2) · packs 11 · adapters 10 · gateway 10 · web 8 · design 7 · worker 1.
-Core coverage: 85.03% statements · 74.41% branches · 83.95% functions · 86.83% lines.
-k6 load profiles (§5.5: normal day, Friday spike 20×, cruise surge 10×, viral seller 100×): tests/src/load/k6-profiles.js.
-Load gate: 6000/6000 msgs at 100/s × 60 s, zero drops. CI: .github/workflows/ci.yml.
+**263 tests green, 0 skipped** (2026-09-16, `SYCAMORE_REQUIRE_DB=1`): core 146 ·
+tests 67 · packs 11 · adapters 10 · gateway 10 · web 11 · design 7 · worker 1.
+Core coverage: 85.22% statements · 74.30% branches · 84.26% functions · 86.98% lines.
+k6 load profiles (§5.5: normal day, Friday spike 20×, cruise surge 10×, viral
+seller 100×): `tests/src/load/k6-profiles.js` — **4/4 passed, zero drops**, the
+viral-seller profile taking 2,500 messages at 500/s with nothing rejected and
+nothing failed.
+Trust-page budget, local: 2,978 B transferred, interactive 445 ms. Over the wire
+against the live origin: 1,973 B, interactive 532 ms. Budget is 100 KB / 2 s.
+CI: `.github/workflows/ci.yml`; the deployed origin: `.github/workflows/deploy-audit.yml`.
+
+Everything in this section was re-run on 2026-09-16 rather than carried forward.
+The previous figure of 250 was recorded when 141 database-backed gates were
+skipping, which is a number that looks like a pass and is not one.
 
 ## Human gates (production-live checklist — founder-owned, run in parallel)
 
