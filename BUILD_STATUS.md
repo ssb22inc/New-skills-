@@ -260,10 +260,46 @@ the default branch, so the linter saw 54 PulseRN TypeScript files that are not
 ours to lint; `eslint` already ignored `haven/` for that reason and `pulsern/`
 was simply never added, because CI had been dying before lint ever ran.
 
+## 2026-09-16 — the adversarial suite (BUILD §5.7), and what it found
+
+The standing orders say "before every phase gate: adversarial suite §5.7", and
+§5.7 names five attack classes. Two were built and three were not, which is the
+worst shape for a suite to be in: it reported green over the parts nobody wrote.
+
+| §5.7 attack class | Before | Now |
+|---|---|---|
+| Review-fraud personas (no-booking, burst ring, competitor hit, device cluster) | ✅ 4 red-team tests | ✅ unchanged |
+| Prompt injection on Autopilot/Studio | ✅ 50-prompt corpus, STOP <5s | ✅ unchanged |
+| Refund-abuse farming | ⚠️ privilege downgrade only | ✅ over-refund, salami slices, post-refund release |
+| Stolen-card / chargeback patterns | ❌ absent | ✅ late reversal after payout cannot drain spent escrow |
+| Split manipulation | ❌ absent | ✅ bad bps, bad amounts, 5,000-amount rounding fuzz |
+| OWASP top-10 + auth fuzzing | ❌ absent | ✅ 14 forged signatures, byte-flip sweep, SQLi, XSS, cross-market access, path traversal |
+| External pen test | 🚧 human gate | 🚧 human gate (a purchase order, not code) |
+| Leakage probe (off-platform drift on a cohort) | ❌ absent | ❌ **needs live sellers** — see below |
+
+**It found a real hole on its first run.** `computeSplit` checked that the four
+basis-point shares sum to 10,000 and nothing else. So `sellerBps: -1000` with
+`platformBps: 11000` sums to exactly 10,000, passed, and returned **seller
+−10,000, platform 110,000 on a 100,000 capture** — the platform paid more than
+came in, out of the seller's pocket. The ledger's "entry amounts are positive"
+rule would have caught it one layer later while naming the wrong cause.
+
+Each share must now be a non-negative whole number of basis points, checked
+before the sum. The exact pair that broke it is pinned as a named test, because
+a regression there is silent: the parts still add up.
+
+**The one item still open, and it is not code.** The leakage probe asks for
+off-platform drift measured on a cohort, to prove the value story retains. That
+needs real sellers over real weeks. It joins the human gates rather than being
+faked with synthetic data, which would prove nothing.
+
+**285 tests, 0 skipped.** 22 of them are new and all of them are attacks.
+
 ## Test counts
 
-**263 tests green, 0 skipped** (2026-09-16, `SYCAMORE_REQUIRE_DB=1`): core 146 ·
-tests 67 · packs 11 · adapters 10 · gateway 10 · web 11 · design 7 · worker 1.
+**285 tests green, 0 skipped** (2026-09-16, `SYCAMORE_REQUIRE_DB=1`): core 146 ·
+tests 89 (including 22 §5.7 red-team attacks) · packs 11 · adapters 10 ·
+gateway 10 · web 11 · design 7 · worker 1.
 Core coverage: 85.22% statements · 74.30% branches · 84.26% functions · 86.98% lines.
 k6 load profiles (§5.5: normal day, Friday spike 20×, cruise surge 10×, viral
 seller 100×): `tests/src/load/k6-profiles.js` — **4/4 passed, zero drops**, the
@@ -294,7 +330,10 @@ skipping, which is a number that looks like a pass and is not one.
    worker that activates and controls the page, a seller's day that still renders with the
    network cut, and both halves of the asymmetry law. A container still cannot tap
    "Add to home screen" — that one tap is all that remains of this gate.
-9. Real-model ASR accuracy on live patois voice notes. The 20-fixture gate measures the
+9. Leakage probe (BUILD §5.7): off-platform drift measured on a real seller
+   cohort, proving escrow, the credit record and loyalty pricing actually retain.
+   Needs live sellers over live weeks; synthetic data would prove nothing.
+10. Real-model ASR accuracy on live patois voice notes. The 20-fixture gate measures the
    INTENT CLASSIFIER (19/20 = 95.0%); measuring the recogniser needs a real ASR vendor,
    which is a credential, not code.
 

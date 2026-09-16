@@ -45,6 +45,19 @@ export function computeSplit(
   amountMinor: number,
   bps: SplitBps,
 ): { seller: number; platform: number; referral: number; processor: number } {
+  // Each share must be a non-negative whole number of basis points
+  // BEFORE the sum is checked, because -1000 and 11000 sum to exactly
+  // 10000 and look honest. Found by the §5.7 red team, 2026-09-16: that
+  // pair paid the platform 110,000 out of a 100,000 capture and charged
+  // the seller 10,000. The ledger's own "entry amounts are positive"
+  // rule would have caught it one layer later, with an error naming the
+  // wrong thing; a split that cannot be expressed as a share of the
+  // money should be refused where the share is computed.
+  for (const [who, value] of Object.entries(bps)) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new LedgerError(`${who} must be a non-negative whole number of bps, got ${value}`);
+    }
+  }
   const total = bps.sellerBps + bps.platformBps + bps.referralBps + bps.processorBps;
   if (total !== 10_000) {
     throw new LedgerError(`split must sum to exactly 10000 bps, got ${total}`);
