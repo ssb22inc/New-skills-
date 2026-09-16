@@ -158,8 +158,11 @@ app was right. And the first draft raced `serviceWorker.ready` against a fixed
 timeout, reporting "none" on a slow install: a shrug, not a diagnosis, and a false
 red on a permanent gate. It polls and names the state it reached.
 
-It runs nightly rather than in `ci`, because it answers a question whose answer can
-change without a commit.
+It belongs outside `ci`, because it answers a question whose answer can change
+without a commit. One correction to what was written when it shipped: the nightly
+schedule does not fire. GitHub runs scheduled workflows only from a repository's
+default branch, and Sycamore is not on it. The audit is on-demand until that
+changes, which is a smaller claim than the one originally made here.
 
 ## 2026-09-16 — the boot migration, fixed rather than documented
 
@@ -220,6 +223,36 @@ The build needed one accommodation that is NOT in the artifact: behind a
 TLS-intercepting proxy, `pnpm install` fails on the certificate. The fix was to
 give the base image the CA and build with `--network=host`, leaving the
 `Dockerfile` clean of sandbox-specific arguments.
+
+## 2026-09-16 — CI had been red for a week, and nobody read the log
+
+Ten consecutive CI runs failed, including every commit of this session, and each
+died 26 seconds in at the same step. The cause was mine: on 2026-09-09 I added
+`"packageManager": "pnpm@10.33.0"` to `package.json` so Vercel would detect the
+package manager. `pnpm/action-setup` refuses when a version is specified twice,
+and `ci.yml` already pinned `version: 10`.
+
+```
+Error: Multiple versions of pnpm specified:
+  - version 10 in the GitHub Action config with the key "version"
+  - version pnpm@10.33.0 in the package.json with the key "packageManager"
+```
+
+Every step after it was skipped, so the suite had not run in CI since. The
+"263 tests green" in this file was true and was local. The scoreboard did not
+distinguish between the two, which is precisely the failure the green-build guard
+was written to prevent — and it happened one level up, in the workflow rather
+than in the tests.
+
+The fix is to delete the `version:` input from both workflows and let
+`packageManager` be the single source of truth, since Vercel reads it too. CI's
+exact sequence was then run locally before pushing: lint, format, typecheck, 263
+tests with no skips, the web build, the trust-page budget, and the load smoke —
+all green.
+
+A second correction while here: the deployed-origin audit's nightly schedule does
+not fire. GitHub runs scheduled workflows only from a repository's default branch,
+and Sycamore is not on it.
 
 ## Test counts
 

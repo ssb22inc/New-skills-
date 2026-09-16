@@ -16,6 +16,14 @@ on:
   schedule:
     # 06:00 UTC — 01:00 in Jamaica, after the quiet hours and before the
     # first seller opens their day.
+    #
+    # CAVEAT, and it matters: GitHub runs scheduled workflows ONLY from
+    # the repository's DEFAULT branch. Sycamore lives on its own branch
+    # and `main` carries a different product, so this schedule does not
+    # fire today. It starts firing the day Sycamore's branch becomes the
+    # default, or the day this repository is split. Until then the audit
+    # is on-demand below, and `pnpm --filter @sycamore/tests deploy:audit`
+    # runs it anywhere.
     - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
@@ -31,9 +39,12 @@ jobs:
       SYCAMORE_ORIGIN: ${{ inputs.origin || 'https://sycamore-ssb22incs-projects.vercel.app' }}
     steps:
       - uses: actions/checkout@v4
+      # No `version:` here on purpose. package.json's "packageManager"
+      # field is the single source of truth — Vercel reads it too — and
+      # pnpm/action-setup refuses outright when both are set:
+      #   "Multiple versions of pnpm specified". That error cost this
+      # repository 10 red CI runs before anybody read the log.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 22
