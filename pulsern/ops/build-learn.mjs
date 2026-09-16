@@ -344,6 +344,7 @@ writeFileSync("public/search-intents.json", JSON.stringify({ schemaVersion: POLI
 const urls = [
   { loc: `${SITE}/`, freq: "weekly", pri: "1.0" },
   { loc: `${SITE}/learn/`, freq: "weekly", pri: "0.9" },
+  { loc: `${SITE}/free-nclex-practice-test/`, freq: "weekly", pri: "0.9" },
   { loc: `${SITE}/pricing/`, freq: "monthly", pri: "0.9" },
   { loc: `${SITE}/how-it-works/`, freq: "monthly", pri: "0.8" },
   { loc: `${SITE}/methodology/`, freq: "monthly", pri: "0.8" },

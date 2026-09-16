@@ -58,6 +58,7 @@ dosing or treatment instructions.
 ## Pages
 
 - [Home](https://www.pulsern.app/) — product overview and sign-in
+- [Free NCLEX-RN practice test](https://www.pulsern.app/free-nclex-practice-test/) — 20 public questions across four reviewed sets
 - [How it works](https://www.pulsern.app/how-it-works/) — product workflow and limitations
 - [Pricing](https://www.pulsern.app/pricing/) — current plans in USD
 - [About](https://www.pulsern.app/about/) — who built it and the method behind it

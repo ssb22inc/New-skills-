@@ -264,6 +264,15 @@ describe("SEO guardian", () => {
     }
   });
 
+  it("publishes one truthful free-practice hub over all four reviewed sample sets", async () => {
+    const html = await fs.readFile(new URL("../public/free-nclex-practice-test/index.html", import.meta.url), "utf8");
+    expect(auditHtml("/free-nclex-practice-test/", html).findings).toEqual([]);
+    expect(html).toContain("20 items are original educational examples");
+    expect(html).toMatch(/not live, recalled, or reproduced NCLEX questions/i);
+    expect(html).toContain("cannot predict or guarantee an exam outcome");
+    for (const sample of SAMPLE_ARTICLES) expect(html).toContain(`/learn/${sample.slug}/`);
+  });
+
   it("injects Search Console verification only from a valid build-time token", () => {
     const token = "abcDEF_1234567890-search-console-token";
     expect(verificationMeta("")).toBe("");
