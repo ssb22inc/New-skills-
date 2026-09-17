@@ -48,6 +48,32 @@ const offers = PLANS.filter((p) => !p.addon).map((p) => ({
 
 const pages = [
   {
+    slug: "free-nclex-practice-test", title: "Free NCLEX-RN practice test: 20 questions", eyebrow: "Free practice", h1: "Try 20 free NCLEX-RN practice questions.",
+    description: "Try 20 free NCLEX-RN practice questions with visible answers, rationales, sources, and RN review across pharmacology, prioritization, dosage, and NGN.",
+    schema: {
+      "@type": "CollectionPage", "@id": `${SITE}/free-nclex-practice-test/#collection`, name: "Free NCLEX-RN practice test",
+      mainEntity: {
+        "@type": "ItemList", numberOfItems: 4,
+        itemListElement: [
+          ["NCLEX pharmacology practice questions", "nclex-pharmacology-practice-questions"],
+          ["NCLEX prioritization practice questions", "nclex-prioritization-practice-questions"],
+          ["NCLEX dosage calculation practice questions", "nclex-dosage-calculation-practice-questions"],
+          ["NGN bow-tie practice questions", "ngn-bow-tie-practice-questions"],
+        ].map(([name, slug], index) => ({ "@type": "ListItem", position: index + 1, name, url: `${SITE}/learn/${slug}/` })),
+      },
+    },
+    body: `<p class="lead">Work through four public five-question sets covering pharmacology, prioritization, dosage calculations, and an NGN bow-tie item. No account or credit card is required to read the questions, answers, and rationales.</p>
+      <div class="callout"><strong>Educational boundary:</strong> These 20 items are original educational examples. They are not live, recalled, or reproduced NCLEX questions, and a result here cannot predict or guarantee an exam outcome.</div>
+      <section aria-labelledby="practice-sets"><h2 id="practice-sets">Choose a five-question set</h2><div class="grid">
+        <article class="card"><h3><a href="/learn/nclex-pharmacology-practice-questions/">Pharmacology practice</a></h3><p>Five medication-focused questions with the answer and rationale shown after each prompt.</p></article>
+        <article class="card"><h3><a href="/learn/nclex-prioritization-practice-questions/">Prioritization practice</a></h3><p>Five questions about recognizing which patient, finding, or nursing action takes priority.</p></article>
+        <article class="card"><h3><a href="/learn/nclex-dosage-calculation-practice-questions/">Dosage-calculation practice</a></h3><p>Five calculation questions with worked rationales and the supporting educational sources.</p></article>
+        <article class="card"><h3><a href="/learn/ngn-bow-tie-practice-questions/">NGN bow-tie practice</a></h3><p>Five bow-tie examples that ask you to connect a likely condition, actions, and monitoring parameters.</p></article>
+      </div><p class="meta">Each linked set publishes its authoritative sources, content digest, named reviewer, and exact RN-review status.</p></section>
+      <section><h2>Use the free practice as a study loop</h2><ol><li>Commit to an answer before opening the rationale.</li><li>Identify whether a miss came from knowledge, calculation, prioritization, or reading the item format.</li><li>Read the cited support on the question set when a rationale is unfamiliar.</li><li>Return to the related <a href="/learn/2026-nclex-rn-test-plan/">2026 NCLEX-RN test-plan guide</a> or <a href="/learn/nclex-clinical-judgment/">clinical-judgment guide</a> before another practice round.</li></ol></section>
+      <section><h2>What this free test does—and does not—show</h2><div class="card"><p>The hub gives you a no-sign-in sample of PulseRN's question-and-rationale approach. Twenty questions are too few to measure NCLEX readiness, and the set is not a simulated adaptive exam. Read the <a href="/methodology/">methodology</a> for how PulseRN describes adaptive practice and readiness estimates, the <a href="/editorial-policy/">editorial policy</a> for review safeguards, or <a href="/pricing/">pricing</a> for current access options.</p></div></section>`,
+  },
+  {
     slug: "pricing", title: "NCLEX-RN prep pricing", eyebrow: "Clear pricing", h1: "Choose the study window that fits your plan.",
     description: "Compare PulseRN NCLEX-RN prep access from a free 1-day pass to 30-, 60-, 90-, 180-, 360-, and 730-day plans.",
     schema: { "@type": "Product", "@id": `${SITE}/#app`, name: "PulseRN", description: "Adaptive NCLEX-RN exam preparation", brand: { "@type": "Brand", name: "PulseRN" }, offers },
