@@ -53,7 +53,18 @@ function esc(s: string): string {
  */
 const REFRESH_SECONDS = 10;
 
+/**
+ * A place you can go, named the way a person would name it.
+ *
+ * `label` is what you READ; `path` is only ever what the link points at.
+ * They used to be the same string, so this page printed raw URLs, seller
+ * UUIDs and single-use sign-in tokens as visible text — the founder's
+ * words on 2026-09-17: "this creates an unnecessary barrier". A page
+ * whose job is to tell you whether the machine is working should not
+ * make you read a token to find out.
+ */
 interface Surface {
+  label: string;
   path: string;
   what: string;
 }
@@ -81,10 +92,9 @@ export async function GET(req: Request): Promise<Response> {
   const problems: string[] = [];
 
   // ── The deployment itself ────────────────────────────────────────
-  const { onVercel, migrateOnBoot, demoSeedOnBoot } = deployDefaults();
+  const { onVercel } = deployDefaults();
   const env = process.env.VERCEL_ENV ?? (onVercel ? 'vercel' : 'self-hosted');
   const commit = (process.env.VERCEL_GIT_COMMIT_SHA ?? 'unknown').slice(0, 7);
-  const branch = process.env.VERCEL_GIT_COMMIT_REF ?? 'unknown';
 
   // ── Schema ───────────────────────────────────────────────────────
   let schema = 'unreachable';
@@ -97,16 +107,29 @@ export async function GET(req: Request): Promise<Response> {
     problems.push(`database unreachable: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  rows.push(`<h2>Deployment</h2><section><table>
-<tr><td>environment</td><td class="num">${esc(env)}</td></tr>
-<tr><td>commit</td><td class="num">${esc(commit)}</td></tr>
-<tr><td>branch</td><td class="num">${esc(branch)}</td></tr>
-<tr><td>database</td><td class="num">${esc(describeDatabaseUrl())}</td></tr>
-<tr><td>url variable</td><td class="num">${esc(databaseUrlSource() ?? 'none set')}</td></tr>
-<tr><td>schema</td><td class="num ${pending.length === 0 && schema !== 'unreachable' ? 'ok' : 'bad'}">${esc(schema)}</td></tr>
-<tr><td>migrate on boot</td><td class="num">${migrateOnBoot ? 'on' : 'off (serverless)'}</td></tr>
-<tr><td>demo seed on boot</td><td class="num">${demoSeedOnBoot ? 'on' : 'off'}</td></tr>
-</table></section>`);
+  // PLAIN WORDS, AND THE CONNECTION STRING ONLY WHEN IT IS BROKEN.
+  //
+  // This table used to print the database host, the variable it came
+  // from, and two words of deployment jargon on every load. When the
+  // database is answering, none of that tells you anything you can act
+  // on — and the founder was right on 2026-09-17 that reading it is a
+  // barrier, not information. It appears when it is the ANSWER to a
+  // problem, and stays out of the way when it is not.
+  const healthy = pending.length === 0 && schema !== 'unreachable';
+  rows.push(
+    `<h2>This deployment</h2><section><table>
+<tr><td>Database</td><td class="num ${healthy ? 'ok' : 'bad'}">${esc(
+      schema === 'unreachable' ? 'not answering' : healthy ? 'ready' : schema,
+    )}</td></tr>
+<tr><td>Build</td><td class="num">${esc(commit)} <span class="muted">${esc(env)}</span></td></tr>
+${
+  healthy
+    ? ''
+    : `<tr><td>Connecting to</td><td class="num">${esc(describeDatabaseUrl())}</td></tr>` +
+      `<tr><td>From variable</td><td class="num">${esc(databaseUrlSource() ?? 'none set')}</td></tr>`
+}
+</table></section>`,
+  );
 
   // ── Markets ──────────────────────────────────────────────────────
   try {
@@ -156,14 +179,11 @@ export async function GET(req: Request): Promise<Response> {
       }
       money.push(
         `<section><p><strong>${esc(marketId)}</strong> ` +
-          `<span class="${level ? 'ok' : 'bad'}">trial balance ${balance.debits} = ${balance.credits}</span></p>` +
+          `<span class="${level ? 'ok' : 'bad'}">${level ? 'books balance' : `OUT BY ${balance.debits - balance.credits}`}</span></p>` +
           `<table>${accounts.join('')}</table></section>`,
       );
     }
-    rows.push(
-      `<h2>Money <span class="muted">minor units · credit-side accounts shown as ` +
-        `natural balances, not debits−credits</span></h2>${money.join('')}`,
-    );
+    rows.push(`<h2>Money</h2>${money.join('')}`);
   } catch {
     rows.push('<h2>Money</h2><section><p class="bad">unreadable</p></section>');
   }
@@ -182,7 +202,7 @@ export async function GET(req: Request): Promise<Response> {
       .select((eb) => eb.fn.countAll<string>().as('n'))
       .executeTakeFirst();
     rows.push(
-      `<h2>Event bus <span class="muted">newest first · ${esc(unpublished?.n ?? '0')} unpublished</span></h2>` +
+      `<h2>What just happened <span class="muted">${esc(unpublished?.n ?? '0')} waiting to send</span></h2>` +
         `<section><table>` +
         (events.length === 0
           ? '<tr><td class="muted">nothing has happened yet</td></tr>'
@@ -220,19 +240,23 @@ export async function GET(req: Request): Promise<Response> {
         .executeTakeFirst();
       counts.push(`<tr><td>${esc(table)}</td><td class="num">${esc(row?.n ?? '0')}</td></tr>`);
     }
-    rows.push(`<h2>Data</h2><section><table>${counts.join('')}</table></section>`);
+    rows.push(`<h2>How much there is</h2><section><table>${counts.join('')}</table></section>`);
   } catch {
-    rows.push('<h2>Data</h2><section><p class="bad">unreadable</p></section>');
+    rows.push('<h2>How much there is</h2><section><p class="bad">unreadable</p></section>');
   }
 
   // ── Every surface, with a live link to each ──────────────────────
   const surfaces: Surface[] = [
-    { path: '/demo', what: 'demo index — every seeded seller' },
-    { path: '/cockpit?market=jm', what: 'founder cockpit (P30) — money, agents, fairness' },
-    { path: '/s/', what: "installed client entry — the seller's own day" },
-    { path: '/manifest.webmanifest', what: 'PWA manifest (P36a)' },
-    { path: '/sw.js', what: 'service worker — offline cache (P34/P36)' },
-    { path: '/icons/icon-192.png', what: 'install icon' },
+    { label: 'Demo index', path: '/demo', what: 'every seeded seller' },
+    { label: 'Cockpit', path: '/cockpit?market=jm', what: 'money, agents, fairness' },
+    {
+      label: 'Installed client',
+      path: '/s/',
+      what: "opens whichever seller's day this phone holds",
+    },
+    { label: 'App manifest', path: '/manifest.webmanifest', what: 'what makes it installable' },
+    { label: 'Service worker', path: '/sw.js', what: 'the offline cache' },
+    { label: 'App icon', path: '/icons/icon-192.png', what: 'shown on the home screen' },
   ];
   try {
     const seller = await db
@@ -242,39 +266,43 @@ export async function GET(req: Request): Promise<Response> {
       .executeTakeFirst();
     if (seller) {
       const s = `${seller.market_id}/${seller.id}`;
-      // The seller surfaces need a session now (C01). This console is
-      // already gated twice over, so it mints the same single-use link
-      // the chat door would rather than pretending the pages are open.
+      const name = seller.business_name;
+      // The seller's day needs a session (C01). The link is still a
+      // single-use one — that rule has not moved — but it is BEHIND the
+      // words "Open their day", not printed as a token to squint at.
       try {
         const link = await sessionsService(db, seller.market_id).signInUrlFor({
           userId: seller.user_id,
           appOrigin: origin,
         });
         surfaces.push({
+          label: `Open ${name}'s day`,
           path: link.url.replace(origin, ''),
-          what: `sign in as ${seller.business_name} — single-use, 15 minutes`,
+          what: 'signs this device in as that seller',
         });
       } catch {
         /* the public surfaces still list */
       }
       surfaces.push(
-        { path: `/t/${s}`, what: `buyer trust page — ${seller.business_name}` },
-        { path: `/why/${s}`, what: 'show-me-why — Constitution §4' },
-        { path: `/c/${s}`, what: 'sovereign chat door (P35b)' },
-        { path: `/s/${s}`, what: "seller's day" },
-        { path: `/s/${s}?offer=1`, what: 'seller’s day with the earned install offer (P36b)' },
-        { path: `/s/${s}/day.json`, what: 'the JSON the installed client caches' },
+        { label: `${name} — trust page`, path: `/t/${s}`, what: 'what a buyer sees' },
+        { label: `${name} — show me why`, path: `/why/${s}`, what: 'how the ranking was decided' },
+        { label: `${name} — chat door`, path: `/c/${s}`, what: 'booking without WhatsApp' },
+        {
+          label: `${name} — install offer`,
+          path: `/s/${s}?offer=1`,
+          what: 'their day, with the earned offer showing',
+        },
       );
     }
   } catch {
     /* the surfaces list still renders without a seller */
   }
   rows.push(
-    `<h2>Every surface</h2><section><table>` +
+    `<h2>Go and look</h2><section><table>` +
       surfaces
         .map(
           (s) =>
-            `<tr><td><a href="${esc(s.path)}">${esc(s.path)}</a></td>` +
+            `<tr><td><a href="${esc(s.path)}">${esc(s.label)}</a></td>` +
             `<td class="muted">${esc(s.what)}</td></tr>`,
         )
         .join('') +
@@ -304,10 +332,9 @@ ul{margin:6px 0 0 18px;padding:0}
 </style>
 </head>
 <body><main>
-<h1>Developer console</h1>
-<p class="muted">Scaffolding, not product. Read-only, refreshing every ${REFRESH_SECONDS}s.
-Served from <span class="num">${esc(origin)}</span>. Set <span class="num">SYCAMORE_DEMO_INDEX=0</span>
-and this route 404s.</p>
+<h1>Is it working?</h1>
+<p class="muted">Refreshes itself every ${REFRESH_SECONDS} seconds. Reads only — nothing on this
+page changes anything.</p>
 ${banner}
 ${rows.join('\n')}
 </main></body></html>`;

@@ -76,6 +76,18 @@ export async function GET(req: Request): Promise<Response> {
     .selectAll()
     .execute();
 
+  /**
+   * `payment_success_rate` is a column name, not a sentence. The founder
+   * reads this page on a phone on a Monday morning, and on 2026-09-17
+   * asked for the machine's vocabulary to come off it — so anything that
+   * arrives here as an identifier is spelled out before it is shown.
+   */
+  const words = (identifier: string): string =>
+    identifier
+      .replaceAll('_', ' ')
+      .replace(/\bms\b/, 'delay')
+      .trim();
+
   const pct = (n: number): string => (n * 100).toFixed(0);
   /** "1 review", not "1 reviews" — the founder reads this every Monday. */
   const plural = (n: number, one: string, many = `${one}s`): string =>
@@ -118,7 +130,7 @@ ${darkTheme()}
 </section>
 
 <section data-panel="report-cards">
-<h2>Agent report cards</h2>
+<h2>Your crew</h2>
 <table>
 <tr><th>Agent</th><th>Record</th></tr>
 <tr data-agent="watchman"><td>Watchman</td><td>${plural(cards.watchman.incidentsOpened, 'incident')} opened</td></tr>
@@ -134,14 +146,14 @@ ${darkTheme()}
 </section>
 
 <section data-panel="complaints">
-<h2>Listener — what people are unhappy about</h2>
+<h2>What people are unhappy about</h2>
 ${
   patterns.length === 0
     ? '<p class="ok">Nothing recurring this month.</p>'
     : patterns
         .map(
           (p) =>
-            `<p data-complaint-lane="${esc(p.lane)}">${esc(p.lane)} — <span class="num">${p.count}</span></p>`,
+            `<p data-complaint-lane="${esc(p.lane)}">${esc(words(p.lane))} — <span class="num">${p.count}</span></p>`,
         )
         .join('\n')
 }
@@ -155,21 +167,21 @@ ${
     : incidents
         .map(
           (i) =>
-            `<p data-incident="${i.id}" class="${i.status === 'escalated' ? 'bad' : i.status === 'open' ? 'warn' : 'ok'}">${esc(i.vital)} ${esc(i.direction)} — ${esc(i.status)}${i.runbook_id ? ` (runbook ${esc(i.runbook_id)})` : ''}</p>`,
+            `<p data-incident="${i.id}" class="${i.status === 'escalated' ? 'bad' : i.status === 'open' ? 'warn' : 'ok'}">${esc(words(i.vital))} ${esc(i.direction)} — ${esc(i.status)}</p>`,
         )
         .join('\n')
 }
 </section>
 
 <section data-panel="radar">
-<h2>Scout radar (cleared)</h2>
+<h2>Worth looking into</h2>
 ${
   radar.length === 0
     ? '<p>Nothing cleared this week.</p>'
     : radar
         .map(
           (r) =>
-            `<p data-radar="${r.id}">${esc(r.lane)} — pain <span class="num">${r.pain_score}</span>, est. <span class="num money">${esc(cash(Number(r.revenue_estimate_minor ?? 0)))}</span>/mo</p>`,
+            `<p data-radar="${r.id}">${esc(words(r.lane))} — pain <span class="num">${r.pain_score}</span>, est. <span class="num money">${esc(cash(Number(r.revenue_estimate_minor ?? 0)))}</span>/mo</p>`,
         )
         .join('\n')
 }

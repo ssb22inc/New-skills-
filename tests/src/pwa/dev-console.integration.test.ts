@@ -140,17 +140,39 @@ describe.runIf(reachable)('the developer console', () => {
     expect(html).toContain('platform earned');
   });
 
-  it('reports the schema, the markets, the event bus and every surface', async () => {
+  it('reports the schema, the markets, the money and every surface', async () => {
     process.env.SYCAMORE_DEMO_INDEX = '1';
     const res = await devConsole(new Request('https://x/dev'));
     const html = await res.text();
     expect(res.status).toBe(200); // no problems found
-    expect(html).toContain('up to date'); // schema
-    expect(html).toContain('trial balance');
-    expect(html).toContain('Event bus');
-    expect(html).toContain('/cockpit?market=jm');
-    expect(html).toContain('/manifest.webmanifest');
+    expect(html).toContain('ready'); // the database
+    expect(html).toContain('books balance');
+    expect(html).toContain('What just happened');
     expect(html).toContain('Console Tours'); // the seeded seller's surfaces
+    // Every surface is still reachable — by NAME. The links are there;
+    // the page just stopped printing URLs at a person (2026-09-17).
+    expect(html).toContain('href="/cockpit?market=jm"');
+    expect(html).toContain('href="/manifest.webmanifest"');
+    expect(html).toContain('Demo index');
+  });
+
+  it('GATE: it prints no raw tokens, ids or connection strings', async () => {
+    process.env.SYCAMORE_DEMO_INDEX = '1';
+    const html = await (await devConsole(new Request('https://x/dev'))).text();
+    // Whatever appears between tags is what a person READS. A sign-in
+    // token or a seller UUID showing up there is the barrier the founder
+    // asked to have removed — and a token on screen is also a token in a
+    // screenshot.
+    const visible = html
+      .replace(/<style[\s\S]*?<\/style>/g, '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ');
+    expect(visible).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/); // no UUIDs
+    expect(visible).not.toContain('/i/'); // no sign-in link printed
+    expect(visible).not.toContain('pooler.supabase.com'); // no connection string
+    expect(visible).not.toContain('SYCAMORE_DEMO_INDEX'); // no variable names
+    // …while the links themselves still work.
+    expect(html).toMatch(/href="\/i\/[A-Za-z0-9_-]+/);
   });
 
   it('says so loudly when the schema is behind', async () => {

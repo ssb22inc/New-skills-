@@ -140,7 +140,7 @@ export async function GET(req: Request): Promise<Response> {
       }
       rows.push(`<section>
 <p><strong>${esc(s.business_name)}</strong> <span class="muted">${s.completed_orders} completed${newcomer ? ' · newcomer' : ' · verified'}</span></p>
-<p><a href="${dayLink}">Sign in as this seller — their day</a> <span class="muted">(single-use link, 15 minutes)</span></p>
+<p><a href="${dayLink}">Open their day</a></p>
 <p><a href="/t/${esc(market)}/${esc(s.id)}">Buyer trust page</a> · <a href="/why/${esc(market)}/${esc(s.id)}">show-me-why</a> · <a href="/c/${esc(market)}/${esc(s.id)}">chat door</a></p>
 </section>`);
     }
@@ -182,12 +182,12 @@ a{color:inherit}
 <body><main>
 <h1>Sycamore — demo</h1>
 <p class="muted">Seeded data. Install from a seller's day: open it, then use your browser's
-&ldquo;Add to home screen&rdquo;. Buyers are never offered an install — only sellers.</p>
+&ldquo;Add to home screen&rdquo;. Buyers are never offered an install — only sellers.
+Opening a day or the cockpit signs this device in and keeps it signed in.</p>
 ${rows.join('\n')}
 <h2>Founder</h2>
 <section>
-<p><a href="${founderLink}">Sign in as the founder</a> <span class="muted">single-use link, 15 minutes</span></p>
-<p><a href="/cockpit?market=jm">Cockpit</a> <span class="muted">the business in five minutes — needs that sign-in first</span></p>
+<p><a href="${founderLink}">Open the cockpit</a> <span class="muted">the business in five minutes</span></p>
 </section>
 <h2>Developer</h2>
 <section><p><a href="/dev">Developer console</a> <span class="muted">schema, money, the event bus and every surface, refreshing itself</span></p></section>
