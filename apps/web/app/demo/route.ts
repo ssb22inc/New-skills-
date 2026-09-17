@@ -146,6 +146,28 @@ export async function GET(req: Request): Promise<Response> {
     }
   }
 
+  // The cockpit is founder-only now (C01), and a demo has no WhatsApp to
+  // send the link through — so it is printed here, behind the same two
+  // gates as everything else on this page.
+  let founderLink = '/cockpit?market=jm';
+  try {
+    const founder = await db
+      .selectFrom('users')
+      .where('role', '=', 'founder')
+      .orderBy('created_at', 'asc')
+      .select(['id', 'market_id'])
+      .executeTakeFirst();
+    if (founder) {
+      const link = await sessionsService(db, founder.market_id).signInUrlFor({
+        userId: founder.id,
+        appOrigin: origin,
+      });
+      founderLink = esc(link.url);
+    }
+  } catch {
+    /* no founder, no link — the cockpit line says what it needs */
+  }
+
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -163,7 +185,10 @@ a{color:inherit}
 &ldquo;Add to home screen&rdquo;. Buyers are never offered an install — only sellers.</p>
 ${rows.join('\n')}
 <h2>Founder</h2>
-<section><p><a href="/cockpit?market=jm">Cockpit</a> <span class="muted">the business in five minutes</span></p></section>
+<section>
+<p><a href="${founderLink}">Sign in as the founder</a> <span class="muted">single-use link, 15 minutes</span></p>
+<p><a href="/cockpit?market=jm">Cockpit</a> <span class="muted">the business in five minutes — needs that sign-in first</span></p>
+</section>
 <h2>Developer</h2>
 <section><p><a href="/dev">Developer console</a> <span class="muted">schema, money, the event bus and every surface, refreshing itself</span></p></section>
 </main></body></html>`;
