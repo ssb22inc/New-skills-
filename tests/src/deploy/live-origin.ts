@@ -118,7 +118,7 @@ function pngSize(bytes: Buffer): { width: number; height: number } | undefined {
  * directory in the product, so a machine with no database access
  * discovers its subjects the same way a founder does.
  */
-async function discoverSellers(): Promise<{ market: string; seller: string }[]> {
+async function discoverSellers(): Promise<{ market: string; seller: string; signIn?: string }[]> {
   const res = await fetch(`${ORIGIN}/demo`);
   if (!res.ok) {
     throw new Error(
@@ -127,13 +127,36 @@ async function discoverSellers(): Promise<{ market: string; seller: string }[]> 
     );
   }
   const html = await res.text();
-  const found = new Map<string, { market: string; seller: string }>();
-  for (const m of html.matchAll(/\/s\/([a-z]{2})\/([0-9a-f-]{36})\?offer=1/g)) {
+  const found = new Map<string, { market: string; seller: string; signIn?: string }>();
+  // Public surfaces name the seller; the demo index also prints a
+  // single-use sign-in link per seller, because the seller's day needs
+  // a session now (C01). The audit walks in through the same door a
+  // seller does rather than being handed a back one.
+  for (const m of html.matchAll(/\/t\/([a-z]{2})\/([0-9a-f-]{36})/g)) {
     const [, market, seller] = m;
     if (market && seller) found.set(`${market}/${seller}`, { market, seller });
   }
-  if (found.size === 0) throw new Error('no seller link found on the demo index');
-  return [...found.values()];
+  const links = [...html.matchAll(/href="([^"]*\/i\/[A-Za-z0-9_-]+\?m=[a-z]{2})"/g)].map(
+    (m) => m[1]!,
+  );
+  const entries = [...found.values()];
+  entries.forEach((entry, i) => {
+    const link = links[i];
+    if (link) entry.signIn = link.startsWith('http') ? link : `${ORIGIN}${link}`;
+  });
+  if (entries.length === 0) throw new Error('no seller link found on the demo index');
+  return entries;
+}
+
+/**
+ * Sign a browser context in by tapping a sign-in link, the way a seller
+ * does. Returns false when there is no link to tap, so the caller can
+ * record an honest skip instead of a false red.
+ */
+async function signIn(page: Page, signInUrl: string | undefined): Promise<boolean> {
+  if (!signInUrl) return false;
+  await page.goto(signInUrl, { waitUntil: 'load', timeout: 60_000 });
+  return !page.url().includes('/i/');
 }
 
 /**
@@ -182,6 +205,7 @@ async function auditInstallability(
   browser: Browser,
   market: string,
   seller: string,
+  signInUrl?: string,
 ): Promise<void> {
   record(
     'served over HTTPS',
@@ -192,6 +216,18 @@ async function auditInstallability(
   const context = await browser.newContext();
   const page = await context.newPage();
   const dayUrl = `${ORIGIN}/s/${market}/${seller}?offer=1`;
+  const signedIn = await signIn(page, signInUrl);
+  record(
+    'the seller\u2019s day needs a session',
+    signedIn,
+    signedIn
+      ? 'signed in through a single-use link, as a seller does'
+      : 'no sign-in link on the demo index — the private surfaces cannot be audited',
+  );
+  if (!signedIn) {
+    await context.close();
+    return;
+  }
   await page.goto(dayUrl, { waitUntil: 'load', timeout: 60_000 });
 
   const manifestHref = await page.getAttribute('link[rel="manifest"]', 'href');
@@ -316,7 +352,7 @@ async function auditInstallability(
  */
 async function auditEarnedOffer(
   browser: Browser,
-  sellers: { market: string; seller: string }[],
+  sellers: { market: string; seller: string; signIn?: string }[],
 ): Promise<void> {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -324,8 +360,11 @@ async function auditEarnedOffer(
   const ambient: string[] = [];
   const offered: string[] = [];
   const suppressed: string[] = [];
-  for (const { market, seller } of sellers) {
+  for (const { market, seller, signIn: signInUrl } of sellers) {
     const base = `${ORIGIN}/s/${market}/${seller}`;
+    // Each seller's own session: the install rule is about what THEY
+    // are shown, and one seller's cookie cannot open another's day.
+    if (!(await signIn(page, signInUrl))) continue;
     await page.goto(base, { waitUntil: 'load', timeout: 60_000 });
     const name = (await page.textContent('h1'))?.trim() ?? seller;
     if (await page.locator('#install-offer').isVisible()) ambient.push(name);
@@ -464,7 +503,7 @@ async function main(): Promise<void> {
     ],
   });
   try {
-    await auditInstallability(browser, subject.market, subject.seller);
+    await auditInstallability(browser, subject.market, subject.seller, subject.signIn);
     await auditEarnedOffer(browser, sellers);
     await auditBuyerAsymmetry(browser, subject.market, subject.seller);
     await auditTrustBudget(browser, subject.market, subject.seller);

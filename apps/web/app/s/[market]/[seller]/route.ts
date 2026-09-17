@@ -1,4 +1,5 @@
 import { createDb, databaseUrl, marketsRegistry } from '@sycamore/core';
+import { requireSellerOwner } from '../../../../src/auth.js';
 import { loadContextPack, translator } from '@sycamore/packs';
 import { darkTheme, INK } from '@sycamore/design';
 
@@ -43,6 +44,12 @@ export async function GET(
   if ((await marketsRegistry(db).statusOf(market)) !== 'live') {
     return new Response('not found', { status: 404 });
   }
+
+  // The seller's OWN day (C01). Knowing the id is not permission to open
+  // it — that id is printed in public trust-page URLs.
+  const guard = await requireSellerOwner(db, market, sellerId, req);
+  if (!guard.ok) return guard.response;
+
   const seller = await db
     .selectFrom('sellers')
     .where('market_id', '=', market)
@@ -115,6 +122,9 @@ ${darkTheme()}
 <section data-panel="catalog"><p class="muted">…</p></section>
 
 <p class="muted" id="queue-state" data-queue-state></p>
+<form method="post" action="/logout?market=${esc(market)}" data-sign-out>
+<button type="submit">${esc(say('seller_day.sign_out'))}</button>
+</form>
 </main>
 <script>
 (function(){
@@ -173,6 +183,25 @@ ${darkTheme()}
       .catch(function(){});
   }
   window.addEventListener('online',flush);
+
+  // SIGNING OUT CLEARS THIS PHONE (C01). The server revokes the session;
+  // the client throws away the day it cached and anything still queued.
+  // Without this, the next person to pick up the phone opens the
+  // installed client and reads the previous seller's buyers offline —
+  // and the service worker would hand it to them with no network at all.
+  var signOut=document.querySelector('[data-sign-out]');
+  if(signOut){
+    signOut.addEventListener('submit',function(){
+      try{
+        localStorage.removeItem(DAY_KEY);
+        localStorage.removeItem(QUEUE_KEY);
+        localStorage.removeItem('sycamore-home');
+      }catch(_){}
+      if(window.caches&&caches.keys){
+        caches.keys().then(function(names){ names.forEach(function(n){ caches.delete(n); }); });
+      }
+    });
+  }
 
   var offer=document.getElementById('install-offer');
   if(offer){

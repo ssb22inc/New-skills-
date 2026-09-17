@@ -25,6 +25,7 @@ import {
 import { loadContextPack } from '@sycamore/packs';
 import type { LlmRouter } from '@sycamore/adapters';
 import { cockpitPage as cockpit } from '@sycamore/web';
+import { as, signedInAs } from './as-user.js';
 
 async function postgresReachable(): Promise<boolean> {
   const client = new pg.Client({ connectionString: databaseUrl(), connectionTimeoutMillis: 1500 });
@@ -62,11 +63,20 @@ describe('P36d — seller_install_rate is a golden vital', () => {
 
 describe.runIf(reachable)('P36d — the cockpit renders the install rate (gate)', () => {
   const db = createDb(databaseUrl());
+  /** The cockpit is founder-only now (C01). */
+  let founder = '';
 
   beforeAll(async () => {
     await migrateDownAll(db);
     await migrateToLatest(db);
     await seedMarkets(db);
+    founder = (
+      await signedInAs(db, 'jm', {
+        phone: '+18765550002',
+        displayName: 'The Founder',
+        role: 'founder',
+      })
+    ).cookie;
     const identity = identityService(db, 'jm');
     const installs = installOfferService(
       { db, router, pack: jm, appOrigin: 'https://sycamore.app' },
@@ -93,7 +103,7 @@ describe.runIf(reachable)('P36d — the cockpit renders the install rate (gate)'
   });
 
   it('GATE: the panel shows installed ÷ active sellers for the requested market', async () => {
-    const res = await cockpit(new Request('https://cockpit.sycamore.app/cockpit?market=jm'));
+    const res = await cockpit(as('https://cockpit.sycamore.app/cockpit?market=jm', founder));
     const html = await res.text();
     expect(html).toContain('data-panel="install-rate"');
     expect(html).toContain('data-install-rate="25"');
@@ -105,7 +115,7 @@ describe.runIf(reachable)('P36d — the cockpit renders the install rate (gate)'
   it('the rate is per market: a market with no sellers reads zero, never NaN', async () => {
     // `do` is a real registered market with no sellers of its own; the
     // panel must not leak `jm` rows into it (market scoping is law).
-    const res = await cockpit(new Request('https://cockpit.sycamore.app/cockpit?market=do'));
+    const res = await cockpit(as('https://cockpit.sycamore.app/cockpit?market=do', founder));
     const html = await res.text();
     expect(html).toContain('data-install-rate="0"');
     expect(html).toContain('0 of 0 active sellers');

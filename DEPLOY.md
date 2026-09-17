@@ -200,6 +200,43 @@ with how old it is, and completing an order queues locally until you reconnect.
 
 ---
 
+## Signing in (added 17 September 2026, after the external review)
+
+The seller's day, the day JSON, the seller action route and the founder cockpit
+are **private surfaces**. Until the review of 16 September 2026 they checked only
+that the market was live and the seller existed — neither of which is
+authorization — and seller ids are printed in public trust-page URLs, so nothing
+was secret.
+
+The door is the chat, because Constitution §1 says every user action can start as
+a WhatsApp message:
+
+1. A seller sends **"sign in"** (or `log in`, `my day`, `mi need fi log in` — the
+   words are matched exactly, never classified by a model, because this mints a
+   credential).
+2. They get a link: `https://<origin>/i/<token>?m=jm`. **Single use, fifteen
+   minutes.** Tapping it twice fails on purpose.
+3. Tapping it sets a `sycamore_session` cookie — HttpOnly, SameSite=Lax, Secure —
+   good for thirty days and **revocable**: signing out revokes the row, so a kept
+   cookie is worth nothing.
+4. Signing out also clears the cached day and the offline queue on that phone, so
+   the next person to pick it up cannot read the previous seller's buyers offline.
+
+The founder cockpit uses the same door with a `founder` user role, and a founder
+session opens any market's cockpit while a seller session opens none.
+
+**MFA on privileged access is NOT implemented.** The review asks for it and it is
+an open human gate, written here rather than faked: a TOTP enrolment flow nobody
+has enrolled in protects nothing. The founder account is protected today by the
+same single-use chat link as a seller.
+
+**Demo deployments print the links.** `pnpm demo` and `/demo` mint the same
+single-use links, because a demo has no WhatsApp to send them through. Both are
+gated behind `SYCAMORE_DEMO_INDEX=1` **and** a database holding only seeded
+sellers.
+
+---
+
 ## What is verified, and what is not
 
 **Audited on the live origin, 2026-09-16, in a real browser.**

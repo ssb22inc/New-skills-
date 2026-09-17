@@ -15,6 +15,9 @@ export type ConversationAction =
   | { type: 'escalate_to_owner'; userText: string; userId: string } // complaint: zero bot reply
   | { type: 'stopped_ack' } // one confirmation, then silence
   | { type: 'resumed_ack' }
+  /** A sign-in link, minted for this user and sent down their own channel. */
+  | { type: 'sign_in_link'; userId: string; url: string; expiresAt: Date }
+  | { type: 'sign_in_refused'; userId: string; reason: string }
   | { type: 'silent' }; // autopilot off: say nothing, do nothing
 
 export interface ConversationDeps {
@@ -23,10 +26,40 @@ export interface ConversationDeps {
   pack: ContextPack;
   /** Given the detected intent + user text, propose tool calls (LLM-driven later). */
   proposeToolCalls?: (intent: Intent, userText: string) => Promise<ToolCallRequest[]>;
+  /**
+   * Mint a single-use sign-in link for this user (C01). Absent means
+   * this deployment has no sign-in door, and the command says so rather
+   * than pretending.
+   */
+  signIn?: (userId: string) => Promise<{ url: string; expiresAt: Date }>;
 }
 
 const STOP_WORDS = new Set(['stop', 'stap']);
 const RESUME_WORDS = new Set(['resume', 'start back']);
+
+/**
+ * SIGN-IN IS A COMMAND, NOT AN INTENT (C01).
+ *
+ * It sits here with STOP and RESUME, matched on the exact words rather
+ * than classified by a model, for a reason worth stating: this mints a
+ * CREDENTIAL. Conversation-layer safety says user text is data and never
+ * instructions, so a model's opinion about what a message meant must
+ * never be what decides to hand somebody a way into an account. Patois
+ * is first-class here as everywhere — "mi need fi log in" reaches the
+ * same door as "sign in".
+ */
+const SIGN_IN_WORDS = new Set([
+  'sign in',
+  'signin',
+  'log in',
+  'login',
+  'my day',
+  'open my day',
+  'mi need fi log in',
+  'let mi in',
+  'send mi di link',
+  'send me the link',
+]);
 
 export function conversationEngine(deps: ConversationDeps, marketId: string) {
   async function getSession(userId: string) {
@@ -63,6 +96,36 @@ export function conversationEngine(deps: ConversationDeps, marketId: string) {
       if (RESUME_WORDS.has(normalized)) {
         await setAutopilot(input.userId, true);
         return { type: 'resumed_ack' };
+      }
+
+      // Sign-in outranks a stopped session too: a seller who silenced
+      // Autopilot still has to be able to open their own day, and a
+      // deliberate request for a link is not Autopilot talking.
+      if (SIGN_IN_WORDS.has(normalized)) {
+        if (!deps.signIn) {
+          return {
+            type: 'sign_in_refused',
+            userId: input.userId,
+            reason: 'this deployment has no sign-in door configured',
+          };
+        }
+        try {
+          const link = await deps.signIn(input.userId);
+          return {
+            type: 'sign_in_link',
+            userId: input.userId,
+            url: link.url,
+            expiresAt: link.expiresAt,
+          };
+        } catch (err) {
+          // A buyer asking to "log in" is not an error worth a stack
+          // trace at them — they have nothing to sign into.
+          return {
+            type: 'sign_in_refused',
+            userId: input.userId,
+            reason: err instanceof Error ? err.message : String(err),
+          };
+        }
       }
 
       const session = await getSession(input.userId);

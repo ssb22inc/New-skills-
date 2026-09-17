@@ -26,6 +26,7 @@ import {
 } from '@sycamore/core';
 import { loadVerticalPack } from '@sycamore/packs';
 import { cockpitPage } from '@sycamore/web';
+import { as, signedInAs } from './as-user.js';
 
 async function postgresReachable(): Promise<boolean> {
   const client = new pg.Client({ connectionString: databaseUrl(), connectionTimeoutMillis: 1500 });
@@ -48,11 +49,20 @@ const PRICE = 100_000;
 describe.runIf(reachable)('P30 — every agent reports to the cockpit (gate)', () => {
   const db = createDb(databaseUrl());
   let incumbentId = '';
+  /** The cockpit is founder-only now (C01), so these render as one. */
+  let founder = '';
 
   beforeAll(async () => {
     await migrateDownAll(db);
     await migrateToLatest(db);
     await seedMarkets(db);
+    founder = (
+      await signedInAs(db, 'jm', {
+        phone: '+18765550001',
+        displayName: 'The Founder',
+        role: 'founder',
+      })
+    ).cookie;
     const identity = identityService(db, 'jm');
     const engine = capacityEngine(db, 'jm');
     const orders = ordersService(db, 'jm');
@@ -136,7 +146,7 @@ describe.runIf(reachable)('P30 — every agent reports to the cockpit (gate)', (
   });
 
   it('GATE: all eight agents have a row on the report card', async () => {
-    const html = await (await cockpitPage(new Request('https://x/cockpit?market=jm'))).text();
+    const html = await (await cockpitPage(as('https://x/cockpit?market=jm', founder))).text();
     for (const agent of [
       'watchman',
       'fixer',
@@ -158,7 +168,7 @@ describe.runIf(reachable)('P30 — every agent reports to the cockpit (gate)', (
     expect(meter.newcomerShare).toBeCloseTo(0.25, 5);
     expect(meter.newcomerSellers).toBe(1);
 
-    const html = await (await cockpitPage(new Request('https://x/cockpit?market=jm'))).text();
+    const html = await (await cockpitPage(as('https://x/cockpit?market=jm', founder))).text();
     expect(html).toContain('data-panel="fairness"');
     expect(html).toContain('data-fairness="25"');
     expect(html).toContain('1 of 2 sellers');
@@ -168,7 +178,7 @@ describe.runIf(reachable)('P30 — every agent reports to the cockpit (gate)', (
     const money = await marketMoney(db, 'jm');
     expect(money.capturedMinor).toBe(4 * PRICE);
 
-    const html = await (await cockpitPage(new Request('https://x/cockpit?market=jm'))).text();
+    const html = await (await cockpitPage(as('https://x/cockpit?market=jm', founder))).text();
     expect(html).toContain('data-panel="money"');
     expect(html).toContain('data-money="captured"');
     // Plain numbers in the pack's currency — never a chart to interpret.
@@ -178,7 +188,7 @@ describe.runIf(reachable)('P30 — every agent reports to the cockpit (gate)', (
   });
 
   it("the Bursar's DPA block is visible to the founder, not just returned", async () => {
-    const html = await (await cockpitPage(new Request('https://x/cockpit?market=jm'))).text();
+    const html = await (await cockpitPage(as('https://x/cockpit?market=jm', founder))).text();
     expect(html).toContain('1 blocked on DPA');
     // Counts read as English, not as a template: "1 pilot", not "1 pilots".
     expect(html).toContain('1 pilot ·');
@@ -186,7 +196,7 @@ describe.runIf(reachable)('P30 — every agent reports to the cockpit (gate)', (
   });
 
   it('the cockpit is still pure HTML — the founder is on a phone too', async () => {
-    const res = await cockpitPage(new Request('https://x/cockpit?market=jm'));
+    const res = await cockpitPage(as('https://x/cockpit?market=jm', founder));
     const html = await res.text();
     expect(res.headers.get('content-type')).toContain('text/html');
     expect(html).not.toContain('<script');
@@ -194,7 +204,7 @@ describe.runIf(reachable)('P30 — every agent reports to the cockpit (gate)', (
   });
 
   it('every panel is market-scoped — a dark market shows its own zeroes', async () => {
-    const html = await (await cockpitPage(new Request('https://x/cockpit?market=do'))).text();
+    const html = await (await cockpitPage(as('https://x/cockpit?market=do', founder))).text();
     expect(html).toContain('data-fairness="0"');
     expect(html).toContain('data-install-rate="0"');
     expect(html).not.toContain('Old Reliable');

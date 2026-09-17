@@ -31,6 +31,7 @@ import {
   recordSwapReview,
   reviewsService,
   scoutService,
+  sessionsService,
   settlementService,
   watchmanService,
   type Db,
@@ -95,7 +96,15 @@ function daysFromNow(days: number, hour: number): Date {
 }
 
 export interface DemoSummary {
-  sellers: { id: string; business: string; role: 'installed' | 'open-orders' | 'newcomer' }[];
+  sellers: {
+    id: string;
+    business: string;
+    role: 'installed' | 'open-orders' | 'newcomer';
+    /** Single-use sign-in link: the private surfaces need one now (C01). */
+    signInUrl: string;
+  }[];
+  /** The demo's founder, so the cockpit can be opened at all. */
+  founderSignInUrl: string;
   buyers: number;
   completed: number;
   openNow: number;
@@ -383,12 +392,39 @@ export async function seedDemoMarket(db: Db, opts: { appOrigin: string }): Promi
     message: 'demo',
   });
 
+  // A founder to open the cockpit with. The cockpit is role-gated now
+  // (C01) and a demo with no founder is a demo with no cockpit.
+  const founder = await identity.findOrCreateUserByPhone({
+    phone: '+18765550100',
+    displayName: 'Demo Founder',
+    role: 'founder',
+  });
+  const sessions = sessionsService(db, MARKET);
+  const linkFor = async (userId: string): Promise<string> =>
+    (await sessions.signInUrlFor({ userId, appOrigin: opts.appOrigin })).url;
+
   const balance = await ledger.trialBalance();
   return {
+    founderSignInUrl: await linkFor(founder.id),
     sellers: [
-      { id: seaBreeze.seller.id, business: seaBreeze.seller.business_name, role: 'installed' },
-      { id: mamaJ.seller.id, business: mamaJ.seller.business_name, role: 'open-orders' },
-      { id: blueHole.seller.id, business: blueHole.seller.business_name, role: 'newcomer' },
+      {
+        id: seaBreeze.seller.id,
+        business: seaBreeze.seller.business_name,
+        role: 'installed',
+        signInUrl: await linkFor(seaBreeze.user.id),
+      },
+      {
+        id: mamaJ.seller.id,
+        business: mamaJ.seller.business_name,
+        role: 'open-orders',
+        signInUrl: await linkFor(mamaJ.user.id),
+      },
+      {
+        id: blueHole.seller.id,
+        business: blueHole.seller.business_name,
+        role: 'newcomer',
+        signInUrl: await linkFor(blueHole.user.id),
+      },
     ],
     buyers: buyers.length,
     completed,

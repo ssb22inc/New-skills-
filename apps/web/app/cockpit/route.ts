@@ -7,6 +7,7 @@ import {
   marketMoney,
   sellerInstallRate,
 } from '@sycamore/core';
+import { requireFounder } from '../../src/auth.js';
 import { formatAmount, loadContextPack } from '@sycamore/packs';
 import { darkTheme } from '@sycamore/design';
 
@@ -40,6 +41,15 @@ function esc(s: string): string {
  */
 export async function GET(req: Request): Promise<Response> {
   const marketId = new URL(req.url).searchParams.get('market') ?? 'jm';
+
+  // FOUNDER ONLY (C01). This page is every market's money, every
+  // agent's report card and every incident — and it had no caller check
+  // at all. A seller session reaching it is a privilege escalation, not
+  // a typo, so the role is checked rather than the existence of any
+  // session. MFA on privileged access remains an open human gate, named
+  // in DEPLOY.md rather than faked here.
+  const guard = await requireFounder(db, marketId, req);
+  if (!guard.ok) return guard.response;
   const pack = loadContextPack(marketId);
   const chairman = chairmanService(db, marketId, pack);
   const cards = await chairman.reportCards();

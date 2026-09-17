@@ -7,9 +7,11 @@ import {
   DATABASE_URL_NAMES,
   marketsRegistry,
   sellerInstallRate,
+  sessionsService,
 } from '@sycamore/core';
 import { darkTheme } from '@sycamore/design';
 import { demoSurfaces } from '../../src/demo-guard.js';
+import { deployDefaults } from '../../src/deploy-defaults.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +42,8 @@ function esc(s: string): string {
  * real buyers' names and phone numbers, and no environment variable
  * should be the only thing keeping those off a public index.
  */
-export async function GET(): Promise<Response> {
+export async function GET(req: Request): Promise<Response> {
+  const origin = deployDefaults().appOrigin || new URL(req.url).origin;
   const verdict = await demoSurfaces(db);
   // A database this page cannot reach holds no seller data to protect,
   // and the diagnostic below is the whole reason the page exists on a
@@ -118,11 +121,26 @@ export async function GET(): Promise<Response> {
     rows.push(
       `<h2>${esc(market)} — ${sellers.length} sellers, ${(rate.rate * 100).toFixed(0)}% installed</h2>`,
     );
+    const sessions = sessionsService(db, market);
     for (const s of sellers) {
       const newcomer = s.completed_orders < 10;
+      // A seller's day needs a SESSION now (C01), and the real way in is
+      // a link in the seller's own chat. This page cannot send WhatsApp
+      // messages, so for the demo it mints the same single-use link the
+      // chat door would and prints it — which is exactly what the demo
+      // is: the scaffolding that stands in for a channel nobody has
+      // verified yet. It is gated twice over (flag + demo-only data), so
+      // no real seller's day is ever behind one of these.
+      let dayLink = `/s/${esc(market)}/${esc(s.id)}?offer=1`;
+      try {
+        const link = await sessions.signInUrlFor({ userId: s.user_id, appOrigin: origin });
+        dayLink = esc(`${link.url}`);
+      } catch {
+        /* a seller with no sign-in door still shows their public pages */
+      }
       rows.push(`<section>
 <p><strong>${esc(s.business_name)}</strong> <span class="muted">${s.completed_orders} completed${newcomer ? ' · newcomer' : ' · verified'}</span></p>
-<p><a href="/s/${esc(market)}/${esc(s.id)}?offer=1">Seller's day — install offer</a> <span class="muted">(install this one)</span></p>
+<p><a href="${dayLink}">Sign in as this seller — their day</a> <span class="muted">(single-use link, 15 minutes)</span></p>
 <p><a href="/t/${esc(market)}/${esc(s.id)}">Buyer trust page</a> · <a href="/why/${esc(market)}/${esc(s.id)}">show-me-why</a> · <a href="/c/${esc(market)}/${esc(s.id)}">chat door</a></p>
 </section>`);
     }

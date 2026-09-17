@@ -5,6 +5,7 @@ import {
   describeDatabaseUrl,
   ledgerService,
   marketsRegistry,
+  sessionsService,
   pendingMigrations,
 } from '@sycamore/core';
 import { AMBER, darkTheme } from '@sycamore/design';
@@ -237,10 +238,25 @@ export async function GET(req: Request): Promise<Response> {
     const seller = await db
       .selectFrom('sellers')
       .orderBy('completed_orders', 'desc')
-      .select(['id', 'market_id', 'business_name'])
+      .select(['id', 'market_id', 'business_name', 'user_id'])
       .executeTakeFirst();
     if (seller) {
       const s = `${seller.market_id}/${seller.id}`;
+      // The seller surfaces need a session now (C01). This console is
+      // already gated twice over, so it mints the same single-use link
+      // the chat door would rather than pretending the pages are open.
+      try {
+        const link = await sessionsService(db, seller.market_id).signInUrlFor({
+          userId: seller.user_id,
+          appOrigin: origin,
+        });
+        surfaces.push({
+          path: link.url.replace(origin, ''),
+          what: `sign in as ${seller.business_name} — single-use, 15 minutes`,
+        });
+      } catch {
+        /* the public surfaces still list */
+      }
       surfaces.push(
         { path: `/t/${s}`, what: `buyer trust page — ${seller.business_name}` },
         { path: `/why/${s}`, what: 'show-me-why — Constitution §4' },

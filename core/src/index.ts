@@ -54,6 +54,17 @@ export {
   type SellerState,
 } from './identity/readiness.js';
 export {
+  sessionsService,
+  authenticateAnyMarket,
+  AuthError,
+  SESSION_COOKIE,
+  SESSION_TTL_MS,
+  SIGN_IN_LINK_TTL_MS,
+  type AuthRefusal,
+  type Principal,
+  type SessionsService,
+} from './identity/sessions.js';
+export {
   identityService,
   sellerStateOf,
   type IdentityService,

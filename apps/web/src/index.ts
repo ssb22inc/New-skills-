@@ -13,6 +13,19 @@ export { GET as devConsole } from '../app/dev/route.js';
 export { GET as webManifest } from '../app/manifest.webmanifest/route.js';
 export { GET as whyPage } from '../app/why/[market]/[seller]/route.js';
 export { GET as trustPage } from '../app/t/[market]/[seller]/route.js';
+/** C01 — the private surfaces and the door into them. */
+export { GET as sellerDayPage } from '../app/s/[market]/[seller]/route.js';
+export { GET as sellerDayJson } from '../app/s/[market]/[seller]/day.json/route.js';
+export { POST as sellerActions } from '../app/s/[market]/[seller]/actions/route.js';
+export { GET as signInLanding } from '../app/i/[token]/route.js';
+export { POST as signOut } from '../app/logout/route.js';
+export {
+  readCookie,
+  sessionCookie,
+  sameOrigin,
+  requireSellerOwner,
+  requireFounder,
+} from './auth.js';
 
 /** Demo scaffolding shared by `pnpm demo` and the boot-time seed. */
 export { seedDemoMarket, claimDemoSeed, releaseDemoSeed, type DemoSummary } from './demo-seed.js';

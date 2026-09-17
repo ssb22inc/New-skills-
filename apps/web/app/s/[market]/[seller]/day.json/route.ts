@@ -1,10 +1,13 @@
 import { capacityEngine, createDb, databaseUrl, marketsRegistry } from '@sycamore/core';
+import { requireSellerOwner } from '../../../../../src/auth.js';
 
 export const dynamic = 'force-dynamic';
 
 const db = createDb(databaseUrl());
 
 const SEVEN_DAYS_MS = 7 * 86_400_000;
+/** How far back "your people" reaches. Ninety days of working history. */
+const CONTACT_WINDOW_MS = 90 * 86_400_000;
 
 /**
  * P36a — the seller's day, as data. This is the ONE document the service
@@ -14,7 +17,7 @@ const SEVEN_DAYS_MS = 7 * 86_400_000;
  * say honestly how old the picture is instead of pretending it is live.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ market: string; seller: string }> },
 ): Promise<Response> {
   const { market, seller: sellerId } = await ctx.params;
@@ -23,6 +26,14 @@ export async function GET(
   if ((await marketsRegistry(db).statusOf(market)) !== 'live') {
     return new Response('not found', { status: 404 });
   }
+
+  // WHO IS ASKING. This document carries buyers' names and phone
+  // numbers, and until the external review of 2026-09-16 the only thing
+  // guarding it was knowing a seller id — an id printed in public
+  // trust-page URLs. Market status and seller existence are not
+  // authorization (C01).
+  const guard = await requireSellerOwner(db, market, sellerId, req);
+  if (!guard.ok) return guard.response;
   const seller = await db
     .selectFrom('sellers')
     .where('market_id', '=', market)
@@ -69,11 +80,17 @@ export async function GET(
     })),
   );
 
+  // "Your people", bounded. The seller needs to reach the customers
+  // they are actually working with; a full lifetime contact list cached
+  // on a phone is a bigger pile of other people's phone numbers than
+  // this page has a reason to hold (C01 — minimise what the client
+  // receives).
   const contacts = await db
     .selectFrom('orders')
     .innerJoin('users', 'users.id', 'orders.buyer_user_id')
     .where('orders.market_id', '=', market)
     .where('orders.seller_id', '=', sellerId)
+    .where('orders.created_at', '>=', new Date(now.getTime() - CONTACT_WINDOW_MS))
     .select(['users.id', 'users.display_name as name', 'users.phone'])
     .distinct()
     .execute();
@@ -104,6 +121,13 @@ export async function GET(
       contacts: contacts.map((c) => ({ userId: c.id, name: c.name, phone: c.phone })),
       catalog: catalog.map((c) => ({ id: c.id, name: c.name, priceMinor: Number(c.price_minor) })),
     },
-    { headers: { 'cache-control': 'no-store' } },
+    {
+      headers: {
+        // Private to one seller: no shared cache may keep a copy, and
+        // the service worker's own cache is cleared on sign-out.
+        'cache-control': 'private, no-store',
+        vary: 'Cookie',
+      },
+    },
   );
 }

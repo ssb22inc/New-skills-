@@ -200,6 +200,31 @@ export interface LedgerEntriesTable {
   created_at: Generated<Date>;
 }
 
+/** A single-use, short-lived sign-in link. Stored as a SHA-256. */
+export interface SignInLinksTable {
+  id: Generated<string>;
+  market_id: string;
+  user_id: string;
+  token_hash: string;
+  purpose: string;
+  expires_at: Date | string;
+  consumed_at: Date | string | null;
+  created_at: Generated<Date>;
+}
+
+/** What a redeemed link becomes: revocable, expiring, one row per phone. */
+export interface SessionsTable {
+  id: Generated<string>;
+  market_id: string;
+  user_id: string;
+  token_hash: string;
+  role: string;
+  expires_at: Date | string;
+  revoked_at: Date | string | null;
+  last_seen_at: Generated<Date>;
+  created_at: Generated<Date>;
+}
+
 export interface CompletionChallengesTable {
   id: Generated<string>;
   market_id: string;
@@ -431,6 +456,8 @@ export interface Database {
   catalog_items: CatalogItemsTable;
   ledger_transactions: LedgerTransactionsTable;
   ledger_entries: LedgerEntriesTable;
+  sign_in_links: SignInLinksTable;
+  sessions: SessionsTable;
   completion_challenges: CompletionChallengesTable;
   completion_evidence: CompletionEvidenceTable;
   disputes: DisputesTable;
