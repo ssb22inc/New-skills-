@@ -11,6 +11,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import { loadContextPack, loadVerticalPack } from '@sycamore/packs';
+import { mockPay } from '@sycamore/adapters';
+import { payoutService } from '../settlement/payouts.js';
 import type { LlmRouter } from '@sycamore/adapters';
 import { createDb, databaseUrl } from '../db/database.js';
 import { migrateDownAll, migrateToLatest } from '../db/migrator.js';
@@ -173,7 +175,14 @@ describe.runIf(reachable)('P36b — the earned-install offer', () => {
       idempotencyKey: 'install-rel:1',
       sellerId,
     });
-    await ledger.payoutSeller({ sellerId, currency: 'JMD', idempotencyKey: 'install-pay:1' });
+    const payouts = payoutService(db, 'jm');
+    const pay = mockPay();
+    const intent = await payouts.reserve({ sellerId, currency: 'JMD' });
+    const submitted = await payouts.submit(intent!.id, pay);
+    await payouts.settle({
+      intentId: submitted.id,
+      providerEventId: 'evt-payout-install',
+    });
 
     expect(await installs.firstPayoutSettled(sellerId)).toBe(true);
     expect(await installs.evaluate(sellerId, { duringGenesis: false, now: quiet })).toEqual({

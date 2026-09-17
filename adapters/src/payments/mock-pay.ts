@@ -1,5 +1,11 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
-import type { PaymentAdapter, PaymentLink, PaymentWebhookEvent } from './types.js';
+import type {
+  PaymentAdapter,
+  PaymentLink,
+  PaymentWebhookEvent,
+  PayoutRequest,
+  RefundRequest,
+} from './types.js';
 
 export const MOCK_PAY_SECRET = 'mock-pay-secret';
 
@@ -17,16 +23,16 @@ export function mockPay(): PaymentAdapter & {
   links: PaymentLink[];
   /** Every refund/payout actually asked of this provider. A test that
    *  must prove a provider was NOT asked has something to assert on. */
-  refunded: { orderRef: string; amountMinor: number; currency: string }[];
-  paidOut: { sellerRef: string; amountMinor: number; currency: string }[];
+  refunded: RefundRequest[];
+  paidOut: PayoutRequest[];
   /** Craft a signed capture delivery for a link; call repeatedly to double-fire. */
   deliverCapture(linkId: string): WebhookDelivery;
   deliverRefund(orderRef: string, amountMinor: number, currency: string): WebhookDelivery;
   deliverPayout(sellerRef: string, amountMinor: number, currency: string): WebhookDelivery;
 } {
   const links: PaymentLink[] = [];
-  const refunded: { orderRef: string; amountMinor: number; currency: string }[] = [];
-  const paidOut: { sellerRef: string; amountMinor: number; currency: string }[] = [];
+  const refunded: RefundRequest[] = [];
+  const paidOut: PayoutRequest[] = [];
   const captureEventIds = new Map<string, string>(); // linkId → stable event id
   const refundEventIds = new Map<string, string>();
 
@@ -72,12 +78,37 @@ export function mockPay(): PaymentAdapter & {
     },
 
     requestRefund(input) {
-      refunded.push(input); // result arrives via deliverRefund webhook
-      return Promise.resolve();
+      // Accepted, not arrived: the money moves when the webhook says so
+      // (C05). The same key twice is the same transfer, exactly as a
+      // real provider behaves.
+      const seen = refunded.find((r) => r.idempotencyKey === input.idempotencyKey);
+      if (!seen) refunded.push(input);
+      return Promise.resolve({
+        state: 'submitted' as const,
+        providerRef: `mockpay-ref-${input.idempotencyKey}`,
+        provider: 'mock-pay',
+      });
     },
     requestPayout(input) {
-      paidOut.push(input);
-      return Promise.resolve();
+      const seen = paidOut.find((p) => p.idempotencyKey === input.idempotencyKey);
+      if (!seen) paidOut.push(input);
+      return Promise.resolve({
+        state: 'submitted' as const,
+        providerRef: `mockpay-payout-${input.idempotencyKey}`,
+        provider: 'mock-pay',
+      });
+    },
+    getTransferStatus(input) {
+      // A provider that has seen the key reports the transfer it made;
+      // one that has not says so, and the caller may submit.
+      const known =
+        paidOut.some((p) => p.idempotencyKey === input.idempotencyKey) ||
+        refunded.some((r) => r.idempotencyKey === input.idempotencyKey);
+      return Promise.resolve({
+        state: known ? ('submitted' as const) : ('failed' as const),
+        providerRef: known ? `mockpay-payout-${input.idempotencyKey}` : null,
+        provider: 'mock-pay',
+      });
     },
 
     deliverCapture(linkId) {

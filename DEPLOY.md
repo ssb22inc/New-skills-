@@ -237,6 +237,40 @@ sellers.
 
 ---
 
+## Paying sellers (added 17 September 2026, after the external review)
+
+A ledger entry is not a payment. Settlement used to post `seller_payable`
+→ `external` and tell the seller they had been paid, without asking any
+provider to move anything — so the ledger and the seller's bank account
+could disagree and nothing in the system could tell.
+
+A payout is now an **intent** with a lifecycle:
+
+| State | Means |
+|---|---|
+| `reserved` | money left the seller's balance for `payout_in_flight`. Nothing has moved externally, and no second batch can reserve it again. |
+| `submitted` | a provider accepted the request, carrying this intent's own stable idempotency key. **Accepted is not arrived.** |
+| `succeeded` | a verified provider event said the money landed. Only this state moves `payout_in_flight` → `external`, and only this counts as "paid out" in the Shoebox. |
+| `failed` | the provider refused. The reservation goes back to the seller's balance. |
+| `unknown` | the request timed out and **may or may not** have been accepted. Nothing is retried, reversed or rerouted until the provider is asked what it did with the key. |
+
+`payouts.reconcile(adapter)` asks that question; `payouts.exceptions()` is
+the queue a human reads. An adapter that cannot answer returns `unknown`,
+which keeps the intent open rather than guessing.
+
+**Open human gates, unchanged and not faked:**
+
+- **No contracted payment provider.** Lynk and Azul are skeletons with
+  `.example` hosts. They now carry idempotency keys, tell a refusal apart
+  from a timeout, and **refuse to start in production** with placeholder
+  configuration — but a real sandbox needs a partner agreement and
+  custody sign-off (P16), which is a signature, not code.
+- **No reconciliation against provider statements.** Internal
+  reconciliation exists; comparing it to a provider's own statement needs
+  a provider.
+
+---
+
 ## What is verified, and what is not
 
 **Audited on the live origin, 2026-09-16, in a real browser.**

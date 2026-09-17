@@ -22,7 +22,13 @@ export type {
   PaymentLink,
   PaymentWebhookEvent,
   PaymentEventType,
+  PayoutRequest,
+  RefundRequest,
+  TransferAck,
+  TransferState,
 } from './payments/types.js';
+export { PaymentRefused, PaymentAmbiguous } from './payments/types.js';
+export { assertUsableInProduction, providerPost } from './payments/transport.js';
 export { mockPay, MOCK_PAY_SECRET, type WebhookDelivery } from './payments/mock-pay.js';
 export { lynkPayments, type LynkOptions } from './payments/lynk.js';
 export { azulPayments, type AzulOptions } from './payments/azul.js';

@@ -25,6 +25,7 @@ import * as releaseOnce from './0023_release_once.js';
 import * as completionEvidence from './0024_completion_evidence.js';
 import * as durableDelivery from './0025_durable_delivery.js';
 import * as sessions from './0026_sessions.js';
+import * as payoutIntents from './0027_payout_intents.js';
 
 /**
  * Static provider: migrations are imported code, not files discovered at
@@ -58,6 +59,7 @@ export const migrations: Record<string, Migration> = {
   '0024_completion_evidence': completionEvidence,
   '0025_durable_delivery': durableDelivery,
   '0026_sessions': sessions,
+  '0027_payout_intents': payoutIntents,
 };
 
 export const migrationProvider: MigrationProvider = {

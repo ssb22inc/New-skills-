@@ -431,6 +431,32 @@ export interface InboundInboxTable {
   created_at: Generated<Date>;
 }
 
+/**
+ * The provider conversation behind a payout (C05). A ledger entry says
+ * what we believe; this says what a provider was asked, told us, and
+ * whether we are still waiting to find out.
+ */
+export interface PayoutIntentsTable {
+  id: Generated<string>;
+  market_id: string;
+  seller_id: string;
+  currency: string;
+  amount_minor: string | number | bigint;
+  provider: string | null;
+  provider_ref: string | null;
+  /** Stable across every retry — derived from this intent, not a batch. */
+  idempotency_key: string;
+  /** pending | reserved | submitted | succeeded | failed | unknown */
+  state: Generated<string>;
+  attempts: Generated<number>;
+  last_error: string | null;
+  batch_key: string | null;
+  submitted_at: Date | string | null;
+  settled_at: Date | string | null;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
 export interface HurricaneImpactsTable {
   id: Generated<string>;
   market_id: string;
@@ -473,6 +499,7 @@ export interface Database {
   radar_items: RadarItemsTable;
   hurricane_states: HurricaneStatesTable;
   hurricane_impacts: HurricaneImpactsTable;
+  payout_intents: PayoutIntentsTable;
   offline_replays: OfflineReplaysTable;
   inbound_inbox: InboundInboxTable;
 }

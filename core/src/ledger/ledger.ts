@@ -9,6 +9,14 @@ export const LEDGER_ACCOUNTS = [
   'referral_credits',
   'processor_fees',
   'make_good_fund',
+  /**
+   * Money that has left a seller's payable balance and has NOT arrived
+   * anywhere yet (C05). A payout reserves into here, a confirmed
+   * provider event moves it to `external`, and a refusal moves it back.
+   * Its existence is what lets the ledger tell "we asked" apart from
+   * "they were paid" — before this account those were one row.
+   */
+  'payout_in_flight',
 ] as const;
 export type LedgerAccount = (typeof LEDGER_ACCOUNTS)[number];
 
@@ -450,42 +458,30 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
     },
 
     /**
-     * P17 payout: everything the seller is owed (payable + referral
-     * credits, settled inside the same batch — no inter-seller invoices)
-     * leaves in ONE transaction. Idempotent per batch key.
+     * RESERVE a payout: out of what the seller is owed, into flight.
+     *
+     * This used to be `payoutSeller`, which read the balance and posted
+     * `seller_payable` → `external` in one step — the ledger declaring
+     * money paid that no provider had been asked to move (C05). The
+     * money now stops in `payout_in_flight` until something verifiable
+     * says otherwise.
+     *
+     * Takes the same per-seller lock as before: two batches cannot both
+     * reserve the same balance (C04).
      */
-    async payoutSeller(input: {
+    async reservePayout(input: {
       sellerId: string;
       currency: string;
+      amountMinor: number;
+      reference: string;
       idempotencyKey: string;
-    }): Promise<{ posted: boolean; amountMinor: number }> {
+    }): Promise<{ posted: boolean }> {
       return db.transaction().execute(async (trx) => {
-        // SERIALIZE THIS SELLER'S MONEY.
-        //
-        // The external review of 2026-09-16 found this function reading
-        // a balance and posting against it with nothing holding the
-        // seller still. The idempotency key stops the SAME key
-        // repeating; it does nothing about two batches with different
-        // keys, which is precisely what runPayoutBatch builds. Two
-        // workers read 900,000, two workers pay 900,000, and every
-        // individual transaction still balances — which is why a trial
-        // balance never noticed.
-        //
-        // A transaction-scoped advisory lock, because there is no single
-        // row that means "this seller's balance in this currency": the
-        // balance is a fold over entries. Every competing writer takes
-        // the same lock, and Postgres releases it at commit or rollback
-        // whatever happens to the process holding it.
         await lockSellerBalance(trx, input.sellerId, input.currency);
         const rows = await trx
           .selectFrom('ledger_entries')
           .where('market_id', '=', marketId)
           .where('seller_id', '=', input.sellerId)
-          // ...AND IN THIS CURRENCY. Without this the fold summed a
-          // seller's JMD and DOP entries into one number and paid it out
-          // denominated in whichever currency the caller passed. Nothing
-          // concurrent about it — the second defect the review found in
-          // these same twenty lines.
           .where('currency', '=', input.currency)
           .select(['account', 'direction', 'amount_minor'])
           .execute();
@@ -497,41 +493,120 @@ export function ledgerService(db: Kysely<Database>, marketId: string) {
           if (r.account === 'seller_payable') payable += signed;
           if (r.account === 'referral_credits') referral += signed;
         }
-        const total = payable + referral;
-        if (total <= 0) return { posted: false, amountMinor: 0 };
+        const available = payable + referral;
+        if (input.amountMinor > available) {
+          throw new LedgerError(
+            `payout of ${input.amountMinor} exceeds ${available} owed to seller ${input.sellerId}`,
+          );
+        }
         const entries: LedgerEntryInput[] = [
           {
-            account: 'external',
+            account: 'payout_in_flight',
             direction: 'credit',
-            amountMinor: total,
-            currency: input.currency,
-          },
-        ];
-        if (payable > 0) {
-          entries.push({
-            account: 'seller_payable',
-            direction: 'debit',
-            amountMinor: payable,
+            amountMinor: input.amountMinor,
             currency: input.currency,
             sellerId: input.sellerId,
-          });
-        }
-        if (referral > 0) {
+          },
+        ];
+        // Referral credits are spent before payable, so a seller's
+        // earned credit leaves the books first.
+        const fromReferral = Math.min(Math.max(referral, 0), input.amountMinor);
+        const fromPayable = input.amountMinor - fromReferral;
+        if (fromReferral > 0) {
           entries.push({
             account: 'referral_credits',
             direction: 'debit',
-            amountMinor: referral,
+            amountMinor: fromReferral,
             currency: input.currency,
             sellerId: input.sellerId,
           });
         }
-        const res = await postTx(trx, {
+        if (fromPayable > 0) {
+          entries.push({
+            account: 'seller_payable',
+            direction: 'debit',
+            amountMinor: fromPayable,
+            currency: input.currency,
+            sellerId: input.sellerId,
+          });
+        }
+        return postTx(trx, {
           kind: 'payout',
-          reference: `payout:${input.sellerId}`,
+          reference: input.reference,
           idempotencyKey: input.idempotencyKey,
           entries,
         });
-        return { posted: res.posted, amountMinor: res.posted ? total : 0 };
+      });
+    },
+
+    /**
+     * SETTLE a reserved payout: the money actually left. Only a verified
+     * provider event reaches this, and the idempotency key is the
+     * provider's own event id, so a redelivery posts nothing twice.
+     */
+    async settlePayout(input: {
+      sellerId: string;
+      currency: string;
+      amountMinor: number;
+      reference: string;
+      idempotencyKey: string;
+    }): Promise<{ posted: boolean }> {
+      return db.transaction().execute(async (trx) => {
+        await lockSellerBalance(trx, input.sellerId, input.currency);
+        return postTx(trx, {
+          kind: 'payout',
+          reference: input.reference,
+          idempotencyKey: input.idempotencyKey,
+          entries: [
+            {
+              account: 'payout_in_flight',
+              direction: 'debit',
+              amountMinor: input.amountMinor,
+              currency: input.currency,
+              sellerId: input.sellerId,
+            },
+            {
+              account: 'external',
+              direction: 'credit',
+              amountMinor: input.amountMinor,
+              currency: input.currency,
+            },
+          ],
+        });
+      });
+    },
+
+    /** The provider refused: put the reservation back where it came from. */
+    async returnPayoutReservation(input: {
+      sellerId: string;
+      currency: string;
+      amountMinor: number;
+      reference: string;
+      idempotencyKey: string;
+    }): Promise<{ posted: boolean }> {
+      return db.transaction().execute(async (trx) => {
+        await lockSellerBalance(trx, input.sellerId, input.currency);
+        return postTx(trx, {
+          kind: 'payout',
+          reference: input.reference,
+          idempotencyKey: input.idempotencyKey,
+          entries: [
+            {
+              account: 'payout_in_flight',
+              direction: 'debit',
+              amountMinor: input.amountMinor,
+              currency: input.currency,
+              sellerId: input.sellerId,
+            },
+            {
+              account: 'seller_payable',
+              direction: 'credit',
+              amountMinor: input.amountMinor,
+              currency: input.currency,
+              sellerId: input.sellerId,
+            },
+          ],
+        });
       });
     },
 

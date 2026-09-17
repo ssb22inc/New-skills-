@@ -143,6 +143,14 @@ export {
   type SplitBps,
 } from './ledger/ledger.js';
 export {
+  payoutService,
+  PayoutError,
+  RECONCILE_AFTER_MS,
+  type PayoutIntent,
+  type PayoutService,
+  type PayoutState,
+} from './settlement/payouts.js';
+export {
   settlementService,
   SettlementError,
   type SettlementService,

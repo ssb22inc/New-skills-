@@ -26,11 +26,26 @@ function downAdapter(until: () => boolean): PaymentAdapter {
     },
     requestRefund() {
       down();
-      return Promise.resolve();
+      return Promise.resolve({
+        state: 'submitted' as const,
+        providerRef: 'primary-ref',
+        provider: 'primary-psp',
+      });
     },
     requestPayout() {
       down();
-      return Promise.resolve();
+      return Promise.resolve({
+        state: 'submitted' as const,
+        providerRef: 'primary-ref',
+        provider: 'primary-psp',
+      });
+    },
+    getTransferStatus() {
+      return Promise.resolve({
+        state: 'unknown' as const,
+        providerRef: null,
+        provider: 'primary-psp',
+      });
     },
   };
 }
@@ -73,7 +88,12 @@ describe('chaos drill — payment partner down 30 minutes', () => {
       other,
     );
     await expect(
-      failover.requestRefund({ orderRef: 'order-1', amountMinor: 150_000, currency: 'JMD' }),
+      failover.requestRefund({
+        orderRef: 'order-1',
+        amountMinor: 150_000,
+        currency: 'JMD',
+        idempotencyKey: 'refund-1',
+      }),
     ).rejects.toBeInstanceOf(PaymentFailoverRefused);
     expect(other.refunded).toHaveLength(0);
     expect(failover.reroutes).toBe(0);
@@ -86,7 +106,12 @@ describe('chaos drill — payment partner down 30 minutes', () => {
       other,
     );
     await expect(
-      failover.requestPayout({ sellerRef: 'seller-1', amountMinor: 900_000, currency: 'JMD' }),
+      failover.requestPayout({
+        sellerRef: 'seller-1',
+        amountMinor: 900_000,
+        currency: 'JMD',
+        idempotencyKey: 'payout-1',
+      }),
     ).rejects.toBeInstanceOf(PaymentFailoverRefused);
     expect(other.paidOut).toHaveLength(0);
     expect(failover.reroutes).toBe(0);

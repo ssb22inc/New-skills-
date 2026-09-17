@@ -112,13 +112,17 @@ export function installOfferService(deps: InstallOfferDeps, marketId: string) {
 
     /** Trigger (a): the seller's money has actually reached them once. */
     async firstPayoutSettled(sellerId: string): Promise<boolean> {
+      // SETTLED means the money left, not that we asked for it to (C05).
+      // This used to match any payout-kind ledger transaction, which
+      // since the payout lifecycle landed includes a mere RESERVATION —
+      // and offering a seller the install because their money is in
+      // flight would be celebrating the wrong moment.
       const row = await db
-        .selectFrom('ledger_entries')
-        .innerJoin('ledger_transactions', 'ledger_transactions.id', 'ledger_entries.transaction_id')
-        .where('ledger_entries.market_id', '=', marketId)
-        .where('ledger_entries.seller_id', '=', sellerId)
-        .where('ledger_transactions.kind', '=', 'payout')
-        .select('ledger_entries.id')
+        .selectFrom('payout_intents')
+        .where('market_id', '=', marketId)
+        .where('seller_id', '=', sellerId)
+        .where('state', '=', 'succeeded')
+        .select('id')
         .executeTakeFirst();
       return row !== undefined;
     },

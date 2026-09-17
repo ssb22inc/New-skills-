@@ -26,6 +26,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
+import { mockPay } from '@sycamore/adapters';
 import {
   createDb,
   databaseUrl,
@@ -33,6 +34,7 @@ import {
   ledgerService,
   migrateDownAll,
   migrateToLatest,
+  payoutService,
   seedMarkets,
 } from '@sycamore/core';
 
@@ -55,6 +57,11 @@ const OPENING_BALANCE = 900_000;
 describe.runIf(reachable)('C04 — a seller is paid what they are owed, once', () => {
   const db = createDb(databaseUrl());
   const ledger = ledgerService(db, 'jm');
+  // Since C05 a payout is an INTENT: reserving moves money out of the
+  // seller's balance into `payout_in_flight` and nowhere else. The race
+  // these gates describe is now a race to reserve, and it is the same
+  // race — two workers reading one balance.
+  const payouts = payoutService(db, 'jm');
   let sellerId = '';
   let nth = 0;
 
@@ -98,32 +105,37 @@ describe.runIf(reachable)('C04 — a seller is paid what they are owed, once', (
     await fundSeller(OPENING_BALANCE);
     expect((await ledger.sellerBalances(sellerId, 'JMD')).payable).toBe(OPENING_BALANCE);
 
-    // Distinct keys, so idempotency offers no protection at all — this
-    // is the batch-key shape runPayoutBatch actually produces.
+    // 120 batches at once, each asking for this seller's money. Every
+    // one of them used to build its own idempotency key, so idempotency
+    // offered no protection at all.
     const attempts = Array.from({ length: 120 }, (_, i) =>
-      ledger.payoutSeller({
-        sellerId,
-        currency: 'JMD',
-        idempotencyKey: `race:payout:${i}`,
-      }),
+      payouts.reserve({ sellerId, currency: 'JMD', batchKey: `race-${i}` }),
     );
     const results = await Promise.allSettled(attempts);
-    const posted = results.filter(
-      (r) => r.status === 'fulfilled' && r.value.posted && r.value.amountMinor > 0,
+    const intents = new Set(
+      results
+        .filter((r) => r.status === 'fulfilled' && r.value)
+        .map((r) => (r as PromiseFulfilledResult<{ id: string }>).value.id),
     );
-    const paid = posted.reduce(
-      (sum, r) => sum + (r as PromiseFulfilledResult<{ amountMinor: number }>).value.amountMinor,
-      0,
-    );
+    // ONE intent, for the whole balance, and no more.
+    expect(intents.size).toBe(1);
+    const rows = await db.selectFrom('payout_intents').selectAll().execute();
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0]!.amount_minor)).toBe(OPENING_BALANCE);
 
     // The whole finding, in two assertions: money out never exceeds the
     // balance, and the balance never goes negative.
-    expect(paid).toBeLessThanOrEqual(OPENING_BALANCE);
-    expect(paid).toBe(OPENING_BALANCE);
-    expect(posted).toHaveLength(1);
     const after = await ledger.sellerBalances(sellerId, 'JMD');
     expect(after.payable).toBe(0);
     expect(after.payable).toBeGreaterThanOrEqual(0);
+    // And it is IN FLIGHT, not paid. `external` is no use as a witness
+    // here — it already carries the capture that funded this seller — so
+    // the question is asked of the intent, which is the thing that knows
+    // whether a provider was ever told to move anything.
+    expect(-(await ledger.accountBalance('payout_in_flight'))).toBe(OPENING_BALANCE);
+    expect(rows[0]!.state).toBe('reserved');
+    expect(rows[0]!.settled_at).toBeNull();
+    expect(rows[0]!.provider).toBeNull();
 
     // And the ledger still balances, which it did even while wrong —
     // the reason a trial balance alone could never catch this.
@@ -136,30 +148,28 @@ describe.runIf(reachable)('C04 — a seller is paid what they are owed, once', (
     // Deliberately the narrow case, run many times: two workers, two
     // keys, launched together. Before the lock, one in a handful of
     // runs produced two payouts of the full balance.
+    const pay = mockPay();
     for (let round = 0; round < 12; round++) {
       const [a, b] = await Promise.allSettled([
-        ledger.payoutSeller({
-          sellerId,
-          currency: 'JMD',
-          idempotencyKey: `interleave:${round}:a`,
-        }),
-        ledger.payoutSeller({
-          sellerId,
-          currency: 'JMD',
-          idempotencyKey: `interleave:${round}:b`,
-        }),
+        payouts.reserve({ sellerId, currency: 'JMD', batchKey: `interleave-${round}-a` }),
+        payouts.reserve({ sellerId, currency: 'JMD', batchKey: `interleave-${round}-b` }),
       ]);
-      const paid = [a, b]
-        .filter((r) => r.status === 'fulfilled')
-        .reduce(
-          (sum, r) =>
-            sum + (r as PromiseFulfilledResult<{ amountMinor: number }>).value.amountMinor,
-          0,
-        );
-      expect(paid, `round ${round} paid ${paid}`).toBeLessThanOrEqual(OPENING_BALANCE);
+      const ids = new Set(
+        [a, b]
+          .filter((r) => r.status === 'fulfilled' && r.value)
+          .map((r) => (r as PromiseFulfilledResult<{ id: string }>).value.id),
+      );
+      expect(ids.size, `round ${round} opened ${ids.size} intents`).toBe(1);
       const balance = (await ledger.sellerBalances(sellerId, 'JMD')).payable;
       expect(balance, `round ${round} left ${balance}`).toBeGreaterThanOrEqual(0);
-      if (round === 0) expect(paid).toBe(OPENING_BALANCE);
+      // Settle it so the next round starts from a clean seller, the way
+      // a real week does.
+      const [id] = [...ids];
+      const submitted = await payouts.submit(id!, pay);
+      await payouts.settle({
+        intentId: submitted.id,
+        providerEventId: `evt-interleave-${round}`,
+      });
       await fundSeller(OPENING_BALANCE); // top up for the next round
     }
   });
@@ -183,28 +193,24 @@ describe.runIf(reachable)('C04 — a seller is paid what they are owed, once', (
     await fundSeller(500_000, 'JMD');
     await fundSeller(300_000, 'DOP');
 
-    const jmd = await ledger.payoutSeller({
-      sellerId,
-      currency: 'JMD',
-      idempotencyKey: 'currency:jmd',
-    });
-    expect(jmd.amountMinor).toBe(500_000);
+    const jmd = await payouts.reserve({ sellerId, currency: 'JMD' });
+    expect(jmd?.amountMinor).toBe(500_000);
 
-    const dop = await ledger.payoutSeller({
-      sellerId,
-      currency: 'DOP',
-      idempotencyKey: 'currency:dop',
-    });
-    expect(dop.amountMinor).toBe(300_000);
+    const dop = await payouts.reserve({ sellerId, currency: 'DOP' });
+    expect(dop?.amountMinor).toBe(300_000);
 
-    // Both are now settled, and neither took the other's money.
+    // Neither took the other's money, and the books still balance.
     const trial = await ledger.trialBalance();
     expect(trial.debits).toBe(trial.credits);
-    const third = await ledger.payoutSeller({
-      sellerId,
-      currency: 'JMD',
-      idempotencyKey: 'currency:jmd:again',
-    });
-    expect(third.posted).toBe(false);
+    // A seller with nothing left owed opens no intent at all.
+    const pay = mockPay();
+    for (const intent of [jmd!, dop!]) {
+      const submitted = await payouts.submit(intent.id, pay);
+      await payouts.settle({
+        intentId: submitted.id,
+        providerEventId: `evt-${intent.currency}`,
+      });
+    }
+    expect(await payouts.reserve({ sellerId, currency: 'JMD' })).toBeUndefined();
   });
 });

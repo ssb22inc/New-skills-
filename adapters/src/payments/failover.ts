@@ -1,4 +1,4 @@
-import type { PaymentAdapter, PaymentWebhookEvent } from './types.js';
+import type { PaymentAdapter, PaymentWebhookEvent, TransferAck } from './types.js';
 
 /**
  * Payment failover (BUILD §5.6 partner-down drill): try the primary,
@@ -71,19 +71,28 @@ export function failoverPayments(
         return fallback.verifyAndParseWebhook(rawBody, headers);
       }
     },
-    async requestRefund(input) {
+    async requestRefund(input): Promise<TransferAck> {
       try {
-        await primary.requestRefund(input);
+        return await primary.requestRefund(input);
       } catch (err) {
         throw new PaymentFailoverRefused('refund', primary.id, err);
       }
     },
-    async requestPayout(input) {
+    async requestPayout(input): Promise<TransferAck> {
       try {
-        await primary.requestPayout(input);
+        return await primary.requestPayout(input);
       } catch (err) {
         throw new PaymentFailoverRefused('payout', primary.id, err);
       }
+    },
+    /**
+     * Status is asked of the provider that HOLDS the transfer, and the
+     * primary is the only one that can hold one — nothing was ever
+     * rerouted. Asking the fallback would invite the same confusion the
+     * reroute caused.
+     */
+    getTransferStatus(input): Promise<TransferAck> {
+      return primary.getTransferStatus(input);
     },
   };
 }

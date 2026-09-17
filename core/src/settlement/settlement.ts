@@ -2,7 +2,9 @@ import type { Kysely } from 'kysely';
 import type { ContextPack } from '@sycamore/packs';
 import { formatAmount, translator } from '@sycamore/packs';
 import type { Database } from '../db/types.js';
+import type { PaymentAdapter } from '@sycamore/adapters';
 import { ledgerService, type SplitBps } from '../ledger/ledger.js';
+import { payoutService, type PayoutState } from './payouts.js';
 import { DISPUTE_WINDOW_MS } from '../trust/disputes.js';
 
 /**
@@ -171,37 +173,76 @@ export function settlementService(db: Kysely<Database>, marketId: string, pack: 
     },
 
     /**
-     * Batch payouts: one transaction per seller with a balance, one
-     * plain-language message each — "you sold X, your money is Y".
+     * Batch payouts: one INTENT per seller with a balance, submitted to
+     * the provider, settled only when the provider says the money left.
+     *
+     * This used to post `seller_payable` → `external` and tell the
+     * seller they had been paid, without asking any provider to move
+     * anything (C05). The message a seller gets now matches what has
+     * actually happened: "on its way" when the provider accepts it,
+     * "landed" when the provider confirms it.
      */
     async runPayoutBatch(
       batchKey: string,
-    ): Promise<{ sellerId: string; amountMinor: number; message: string }[]> {
+      adapter?: PaymentAdapter,
+    ): Promise<
+      {
+        sellerId: string;
+        intentId: string;
+        amountMinor: number;
+        state: PayoutState;
+        message: string;
+      }[]
+    > {
+      const payouts = payoutService(db, marketId);
       const sellers = await db
         .selectFrom('ledger_entries')
         .where('market_id', '=', marketId)
         .where('seller_id', 'is not', null)
+        .where('currency', '=', pack.currency.code)
         .select('seller_id')
         .distinct()
         .execute();
-      const results: { sellerId: string; amountMinor: number; message: string }[] = [];
+      const results: {
+        sellerId: string;
+        intentId: string;
+        amountMinor: number;
+        state: PayoutState;
+        message: string;
+      }[] = [];
       for (const row of sellers) {
         const sellerId = row.seller_id!;
-        const res = await ledger.payoutSeller({
+        const intent = await payouts.reserve({
           sellerId,
           currency: pack.currency.code,
-          idempotencyKey: `payout:${batchKey}:${sellerId}`,
+          batchKey,
         });
-        if (!res.posted || res.amountMinor <= 0) continue;
+        if (!intent) continue;
+        // Somebody else's open intent: this batch neither created it nor
+        // owns it, and reporting it would look like a second payment in
+        // the results. It is already in flight and already visible in
+        // the exception queue if it stays there.
+        if (!intent.created) continue;
+        let state = intent.state;
+        if (adapter && state === 'reserved') {
+          state = (await payouts.submit(intent.id, adapter)).state;
+        }
         results.push({
           sellerId,
-          amountMinor: res.amountMinor,
-          // Plain numbers, pack currency — never a chart (Constitution §1.3).
-          message: say('settlement.payout', { amount: formatAmount(pack, res.amountMinor) }),
+          intentId: intent.id,
+          amountMinor: intent.amountMinor,
+          state,
+          // Plain numbers, pack currency — never a chart (Constitution §3).
+          message: say('settlement.payout', {
+            amount: formatAmount(pack, intent.amountMinor),
+          }),
         });
       }
       return results;
     },
+
+    /** The provider conversation, for callers that need it directly. */
+    payouts: payoutService(db, marketId),
   };
 }
 

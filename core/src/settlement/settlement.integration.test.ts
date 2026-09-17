@@ -192,8 +192,19 @@ describe.runIf(reachable)('P17 — splits, release, payouts (gate)', () => {
         expect(p.message).toMatch(/^J\$[\d,]+\.\d{2} is on the way to you today\.$/);
       }
 
-      // Replaying the same batch key moves nothing (idempotent).
+      // Replaying the same batch key moves nothing. Since C05 "nothing"
+      // is checkable rather than assumed: no new intent, no new ledger
+      // transaction, and the batch reports no payouts because it created
+      // none — the money from the first run is still in flight.
+      const intentsBefore = await db.selectFrom('payout_intents').select('id').execute();
+      const txBefore = await db.selectFrom('ledger_transactions').select('id').execute();
       const replay = await settlement.runPayoutBatch('2026-11-30');
+      expect(await db.selectFrom('payout_intents').select('id').execute()).toHaveLength(
+        intentsBefore.length,
+      );
+      expect(await db.selectFrom('ledger_transactions').select('id').execute()).toHaveLength(
+        txBefore.length,
+      );
       expect(replay).toHaveLength(0);
 
       // After payouts: seller accounts empty; platform+processor retained;

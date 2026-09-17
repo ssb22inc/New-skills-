@@ -82,18 +82,21 @@ export function shoeboxService(db: Kysely<Database>, marketId: string, pack: Con
         fees += amount;
       }
     }
-    // Payouts reference `payout:<sellerId>`, not an order — query directly.
+    // WHAT ACTUALLY LEFT (C05). This used to sum every payout-kind
+    // transaction for the seller, which since the payout lifecycle
+    // landed includes a RESERVATION — money moved out of their balance
+    // and into flight, which is not money they received. A seller
+    // reading their own records must not be told they were paid while
+    // the transfer is still in the provider's hands, so this counts
+    // SETTLED intents and nothing else.
     const payoutRows = await db
-      .selectFrom('ledger_transactions')
-      .innerJoin('ledger_entries', 'ledger_entries.transaction_id', 'ledger_transactions.id')
-      .where('ledger_transactions.market_id', '=', marketId)
-      .where('ledger_transactions.kind', '=', 'payout')
-      .where('ledger_transactions.reference', '=', `payout:${sellerId}`)
-      .where('ledger_transactions.created_at', '>=', from)
-      .where('ledger_transactions.created_at', '<', to)
-      .where('ledger_entries.account', '=', 'external')
-      .where('ledger_entries.direction', '=', 'credit')
-      .select('ledger_entries.amount_minor')
+      .selectFrom('payout_intents')
+      .where('market_id', '=', marketId)
+      .where('seller_id', '=', sellerId)
+      .where('state', '=', 'succeeded')
+      .where('settled_at', '>=', from)
+      .where('settled_at', '<', to)
+      .select('amount_minor')
       .execute();
     const payouts = payoutRows.reduce((s, r) => s + Number(r.amount_minor), 0);
     return { salesMinor: sales, refundsMinor: refunds, feesMinor: fees, payoutsMinor: payouts };

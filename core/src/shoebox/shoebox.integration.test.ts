@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
+import { mockPay } from '@sycamore/adapters';
 import { loadContextPack, loadVerticalPack } from '@sycamore/packs';
 import { createDb, databaseUrl } from '../db/database.js';
 import { migrateDownAll, migrateToLatest } from '../db/migrator.js';
@@ -116,8 +117,17 @@ describe.runIf(reachable)('P19 — The Shoebox (gate)', () => {
       const released = await settlement.releaseForOrder(order.id);
       seededFees += released.amounts!.platform + released.amounts!.processor;
     }
-    const payouts = await settlement.runPayoutBatch('shoebox-month');
+    // A payout the seller can put in their records is one that ARRIVED
+    // (C05): reserved, submitted to a provider, and confirmed by it.
+    const pay = mockPay();
+    const payouts = await settlement.runPayoutBatch('shoebox-month', pay);
     seededPayout = payouts[0]?.amountMinor ?? 0;
+    for (const p of payouts) {
+      await settlement.payouts.settle({
+        intentId: p.intentId,
+        providerEventId: `evt-shoebox-${p.intentId}`,
+      });
+    }
   }, 120_000);
 
   afterAll(async () => {
