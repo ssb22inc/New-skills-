@@ -286,6 +286,12 @@ const pages = [
 
 export const COMMERCIAL_PAGES = pages.map((page) => ({ ...page, updated: COMMERCIAL_VERIFIED_AT, published: COMMERCIAL_VERIFIED_AT }));
 
+export function relatedCommercial(slug, all = COMMERCIAL_PAGES) {
+  const index = all.findIndex((page) => page.slug === slug);
+  if (index < 0 || all.length < 2) return [];
+  return Array.from({ length: Math.min(3, all.length - 1) }, (_, offset) => all[(index + offset + 1) % all.length]);
+}
+
 export function commercialEvidence() {
   return {
     schemaVersion: COMMERCIAL_POLICY_VERSION,
