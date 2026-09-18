@@ -2,7 +2,7 @@
    agents, and prospective learners need before entering the authenticated app. */
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { PLANS, fmtUsd } from "../src/pricing.js";
-import { COMMERCIAL_PAGES, COMMERCIAL_SOURCES, commercialEvidence } from "./commercial-content.mjs";
+import { COMMERCIAL_PAGES, COMMERCIAL_SOURCES, commercialEvidence, relatedCommercial } from "./commercial-content.mjs";
 
 const SITE = "https://www.pulsern.app";
 const AUTHOR = `${SITE}/about/#sheldon-bennett-rn`;
@@ -22,6 +22,8 @@ const CSS = `
 
 function page({ slug, title, description, eyebrow, h1, body, schema, published, updated, sources = [], faq = [], contentSha256 }) {
   const url = `${SITE}/${slug}/`;
+  const related = published ? relatedCommercial(slug) : [];
+  const relatedSection = related.length ? `<section aria-labelledby="related-comparisons"><h2 id="related-comparisons">Compare related NCLEX preparation options</h2><div class="grid">${related.map((item) => `<article class="card"><h3><a href="/${item.slug}/">${esc(item.title)}</a></h3><p>${esc(item.description)}</p></article>`).join("")}</div></section>` : "";
   const pageNode = { "@type": published ? "Article" : "WebPage", "@id": `${url}#page`, url, name: title, ...(published ? { headline: title } : {}), description, inLanguage: "en-US", isPartOf: { "@id": `${SITE}/#website` }, about: { "@id": `${SITE}/#app` }, author: { "@id": AUTHOR }, ...(published ? { datePublished: published, dateModified: updated, citation: sources.map((id) => COMMERCIAL_SOURCES[id]?.url).filter(Boolean), identifier: `sha256:${contentSha256}` } : {}) };
   const jsonld = {
     "@context": "https://schema.org",
@@ -35,7 +37,7 @@ function page({ slug, title, description, eyebrow, h1, body, schema, published, 
   };
   return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}</style></head><body>
   <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/pricing/">Pricing</a><a href="/?signin=1">Sign in</a></div></nav></header>
-  <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${published ? `<p class="meta">Published and last verified <time datetime="${esc(updated)}">${esc(updated)}</time> · editorial owner <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a></p>` : ""}${body}
+  <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${published ? `<p class="meta">Published and last verified <time datetime="${esc(updated)}">${esc(updated)}</time> · editorial owner <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a></p>` : ""}${body}${relatedSection}
   <div class="callout"><strong>Ready for a focused study session?</strong><br><a class="button" href="/?start=1">Start the 1-day free pass</a><a class="button alt" href="/learn/">Read the nursing-study guides</a></div></main>
   <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div><p>Educational exam preparation only — not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN. Competitor trademarks belong to their respective owners; no affiliation or endorsement is implied.</p></div></footer></body></html>`;
 }
