@@ -216,11 +216,16 @@ export function articleJsonLd(a, url, provenance) {
   return { "@context": "https://schema.org", "@graph": graph };
 }
 
-/* Three related guides, chosen by shared topic then filled from the rest, so
-   every page links onward and nothing is orphaned. */
-function related(a, all) {
-  const same = all.filter((x) => x.slug !== a.slug && x.topic === a.topic);
-  const rest = all.filter((x) => x.slug !== a.slug && x.topic !== a.topic);
+/* Rotate within each topic instead of sending every guide to the first three
+   entries. This gives every article contextual inbound links while retaining
+   deterministic output and preserving the RN-reviewed article bodies. */
+export function related(a, all) {
+  const topic = all.filter((x) => x.topic === a.topic);
+  const topicIndex = topic.findIndex((x) => x.slug === a.slug);
+  const same = Array.from({ length: Math.max(0, topic.length - 1) }, (_, offset) => topic[(topicIndex + offset + 1) % topic.length]);
+  const globalIndex = all.findIndex((x) => x.slug === a.slug);
+  const rest = Array.from({ length: Math.max(0, all.length - topic.length) }, (_, offset) => all[(globalIndex + offset + 1) % all.length])
+    .filter((x) => x.topic !== a.topic);
   return [...same, ...rest].slice(0, 3);
 }
 
