@@ -35,3 +35,25 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Node / monorepo #
+###################
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+
+# Next.js #
+###########
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Intermediate for scripts/source-listing.mjs; the PDF is the artefact.
+docs/sycamore-source-code.html
+
+# Redis writes its snapshot into whatever directory it was started from.
+# Test runs need a local Redis; its dump is not source.
+dump.rdb
+*.rdb

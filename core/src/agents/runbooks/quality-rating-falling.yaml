@@ -1,0 +1,15 @@
+# Runbook (P35d): Meta quality rating falling — the eviction signal.
+# Hard floor: pause promotional volume immediately; opt-in hygiene and
+# complaint escalation (already law) do the rest.
+id: quality-rating-falling
+version: 1
+title: Channel quality rating falling
+trigger:
+  vital: channel_quality_rating
+  direction: down
+actions:
+  - pause
+notes: >
+  Pause all non-transactional sends on the channel until the rating
+  recovers. Being a model citizen of the platform is the cheapest
+  insurance we own.

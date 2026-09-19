@@ -1,0 +1,47 @@
+# Sycamore on Render — the no-CLI path.
+#
+#   1. render.com → New → Blueprint → pick ssb22inc/New-skills-
+#   2. IMPORTANT: set the branch to the one this file lives on
+#      (claude/sycamore-prompts-build-chain-o5rqtu), or merge that
+#      branch into main first. Render reads render.yaml from the branch
+#      you select, and it is not on main yet.
+#   3. Render builds the Dockerfile, creates the database, wires
+#      DATABASE_URL, and hands back an HTTPS URL.
+#
+# HTTPS is automatic, which is exactly what the PWA install prompt needs.
+
+services:
+  - type: web
+    name: sycamore
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Deploy from the branch the build actually lives on. Change this to
+    # main once the work is merged.
+    branch: claude/sycamore-prompts-build-chain-o5rqtu
+    # Free tier: spins down after ~15 minutes idle and takes a few
+    # seconds to wake. Fine for showing the app on a phone. Swap to
+    # `starter` for an instance that stays warm.
+    plan: free
+    region: ohio
+    # Static, needs no database and no demo flag — a health check that
+    # depends on seeded data would report the app down before you seed.
+    healthCheckPath: /manifest.webmanifest
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sycamore-db
+          property: connectionString
+      # Bring the schema up before the first request (idempotent).
+      - key: SYCAMORE_MIGRATE_ON_BOOT
+        value: '1'
+      # The demo index at /demo. Turn this OFF for anything real —
+      # Sycamore has no directory by design; buyers arrive from a link.
+      - key: SYCAMORE_DEMO_INDEX
+        value: '1'
+
+databases:
+  - name: sycamore-db
+    # Free Postgres on Render expires after 30 days — fine for a demo,
+    # not for anything you care about. `basic-256mb` is the paid step up.
+    plan: free
+    postgresMajorVersion: '16'

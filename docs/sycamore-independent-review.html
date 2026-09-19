@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sycamore — Independent Review Pack</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 10.5pt; line-height: 1.5; color: #14212b; margin: 0;
+  }
+  h1 { font-size: 24pt; line-height: 1.15; margin: 0 0 4pt; letter-spacing: -0.4pt; }
+  h2 {
+    font-size: 13pt; margin: 20pt 0 6pt; padding-bottom: 3pt;
+    border-bottom: 1.5pt solid #14212b; page-break-after: avoid;
+  }
+  h3 { font-size: 11pt; margin: 13pt 0 3pt; page-break-after: avoid; }
+  p { margin: 0 0 7pt; }
+  .sub { font-size: 11pt; color: #4a5c68; margin: 0 0 14pt; }
+  .meta { font-size: 8.5pt; color: #4a5c68; border-top: 0.5pt solid #b9c4cc;
+          border-bottom: 0.5pt solid #b9c4cc; padding: 6pt 0; margin: 0 0 16pt; }
+  .meta span { display: inline-block; margin-right: 18pt; }
+  code, .mono { font-family: 'DejaVu Sans Mono', Consolas, monospace; font-size: 8.8pt; }
+  pre {
+    font-family: 'DejaVu Sans Mono', Consolas, monospace; font-size: 8.5pt;
+    background: #f2f5f7; border-left: 2pt solid #7b8e9b; padding: 6pt 8pt;
+    margin: 6pt 0 9pt; white-space: pre-wrap; page-break-inside: avoid;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 10pt; font-size: 9pt;
+          page-break-inside: avoid; }
+  th { text-align: left; border-bottom: 1pt solid #14212b; padding: 4pt 6pt 3pt; }
+  td { border-bottom: 0.5pt solid #d5dde2; padding: 4pt 6pt; vertical-align: top; }
+  td.n, th.n { text-align: right; white-space: nowrap; }
+  ul, ol { margin: 0 0 8pt; padding-left: 16pt; }
+  li { margin-bottom: 3pt; }
+  .callout {
+    border: 0.75pt solid #14212b; padding: 8pt 10pt; margin: 10pt 0;
+    page-break-inside: avoid; background: #fbfcfc;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .sev { font-family: 'DejaVu Sans Mono', monospace; font-size: 8pt; font-weight: bold;
+         letter-spacing: 0.5pt; }
+  .crit { color: #8f1d1d; }
+  .ok { color: #1d6b3f; }
+  .pagebreak { page-break-before: always; }
+  .foot { font-size: 8pt; color: #4a5c68; border-top: 0.5pt solid #b9c4cc;
+          margin-top: 18pt; padding-top: 5pt; }
+</style>
+</head>
+<body>
+
+<h1>Sycamore</h1>
+<p class="sub">Independent review pack — everything needed to check this work without trusting it.</p>
+<div class="meta">
+  <span><strong>Prepared</strong> 16 September 2026</span>
+  <span><strong>Commit</strong> <code>9c28a07</code></span>
+  <span><strong>Branch</strong> <code>claude/sycamore-prompts-build-chain-o5rqtu</code></span>
+  <span><strong>Repository</strong> <code>ssb22inc/New-skills-</code></span>
+</div>
+
+<div class="callout">
+<p><strong>Read this first.</strong> This document is written to be disbelieved. Every claim in it
+names the command that checks it, and the sections that matter most are the ones describing what
+was <em>wrong</em>. A reviewer who only reads one section should read §6, Defects found and fixed —
+including one that would have let a single order pay a seller five times over.</p>
+</div>
+
+<h2>1. What Sycamore is</h2>
+<p>WhatsApp-first commerce for Caribbean micro-entrepreneurs. A seller runs their business from chat
+or a voice note: catalogue, bookings, capacity, payments, reviews and payouts. A buyer arrives from a
+link, books, pays and leaves. There is no app to download and no dashboard anyone is required to use.</p>
+<p>Seven product laws govern it. The ones that matter to a reviewer:</p>
+<ul>
+  <li><strong>One door.</strong> Every action can start as a chat message or a voice note. No feature may <em>require</em> a dashboard, form, or app.</li>
+  <li><strong>Plain-number ledgers.</strong> Money is reported as "you spent X, it brought in Y", never as a chart the seller must interpret.</li>
+  <li><strong>Show-me-why.</strong> Every automated decision explains itself in one tap.</li>
+  <li><strong>Trust is never traded.</strong> No suppressed reviews, no fabricated imagery, no undisclosed AI voice, no personal data to unvetted vendors.</li>
+  <li><strong>Hold the trust, never the float.</strong> Licensed partners custody money; Sycamore owns the split logic, the ledger and the data.</li>
+</ul>
+<p>Money is always integer minor units and a currency code. The ledger is double-entry and
+append-only. Every table carries a market identifier and every query is scoped by it.</p>
+
+<h2>2. How to verify everything in this document</h2>
+<p>A reviewer with the repository and Docker can reproduce every number here. These are the only
+commands needed.</p>
+<pre>git clone &lt;repo&gt; &amp;&amp; git checkout claude/sycamore-prompts-build-chain-o5rqtu
+pnpm install --frozen-lockfile
+docker compose up -d                       # Postgres 16 + Redis 7
+
+export DATABASE_URL=postgres://sycamore:sycamore@localhost:5432/sycamore
+export REDIS_URL=redis://localhost:6379
+export SYCAMORE_REQUIRE_DB=1                # makes skipped gates a FAILURE
+
+pnpm lint &amp;&amp; pnpm format &amp;&amp; pnpm typecheck
+pnpm test                                   # 295 tests, 0 skipped
+pnpm test:coverage                          # core coverage
+pnpm --filter @sycamore/tests perf:trust    # trust-page budget
+pnpm --filter @sycamore/tests load:profiles # four load profiles
+pnpm --filter @sycamore/tests deploy:audit  # 18 checks against the live origin</pre>
+<p>The <code>SYCAMORE_REQUIRE_DB</code> flag exists because of a real incident: thirty-five test files
+skip when Postgres is unreachable, so a database that failed to start turned every money gate into
+"skipped" and the build went green. With the flag set, an unreachable database fails the build.
+Without it, exactly one test skips by design — the guard that enforces this.</p>
+
+<h2>3. Repository map</h2>
+<table>
+  <tr><th>Path</th><th>What lives there</th><th class="n">Files</th></tr>
+  <tr><td><code>/core</code></td><td>All business logic. Imports no vendor SDK.</td><td class="n">115 TypeScript files, 8,878 lines</td></tr>
+  <tr><td><code>/packs</code></td><td>Country and industry configuration as YAML data</td><td class="n">14 country, 2 industry</td></tr>
+  <tr><td><code>/adapters</code></td><td>Every external vendor: payments, channels, media, language models</td><td class="n">6</td></tr>
+  <tr><td><code>/apps/web</code></td><td>Trust pages, seller's day, chat door, cockpit, developer console</td><td class="n">12 routes</td></tr>
+  <tr><td><code>/apps/gateway</code></td><td>Webhook ingress, signature verification, queueing</td><td class="n">—</td></tr>
+  <tr><td><code>/tests</code></td><td>Cross-cutting gates: money, chaos, drills, adversarial, scope</td><td class="n">—</td></tr>
+  <tr><td>test code overall</td><td>Across every package</td><td class="n">68 files, 10,521 lines</td></tr>
+</table>
+<p>Test code exceeds production code in the core by a fifth. The build specification requires testing
+to be roughly thirty percent of effort; by line count it is more than half.</p>
+
+<div class="callout">
+<p><strong>The globalization rule, which a reviewer can check mechanically.</strong> A new country is
+one configuration file. A new industry is one configuration file. A new payment provider is one
+adapter. If core code must change to enter a new market, the abstraction is wrong. This is enforced:
+the difference between <code>/core</code> at the Jamaica-only commit and at the Jamaica-plus-Dominican-Republic
+commit must be empty, and continuous integration fails if it is not.</p>
+</div>
+
+<h2 class="pagebreak">4. Scope and completeness</h2>
+<p>The build follows a written chain of 37 prompts, P0 through P36, each with an explicit gate.
+All 37 carry a gate commit. The chain defines no P37; the file ends at P36.</p>
+<table>
+  <tr><th>Area</th><th>State</th></tr>
+  <tr><td>Prompt chain P0–P36</td><td>37 of 37 gated</td></tr>
+  <tr><td>Adversarial suite (spec §5.7)</td><td>6 of 7 machine-checkable classes; the seventh needs live sellers</td></tr>
+  <tr><td>Tests</td><td>295 passing, 0 skipped with the database-required flag</td></tr>
+  <tr><td>Container image</td><td>Builds and runs; migrates and seeds from an empty database</td></tr>
+  <tr><td>Deployed origin</td><td>Audited in a real browser, 18 of 18 checks</td></tr>
+  <tr><td>Continuous integration</td><td><span class="sev crit">BLOCKED</span> — see §8</td></tr>
+  <tr><td>Human gates</td><td>10 open; none can be closed by code</td></tr>
+</table>
+<p><strong>What "complete" does and does not mean here.</strong> Everything a machine can build without
+credentials or live sellers is built and tested. No real seller has ever used the system. No real
+money has moved. Ten gates need a payment partner agreement, WhatsApp Business verification,
+advertising accounts, counsel sign-off per island, ten Kingston sellers onboarded by voice note
+alone, and one person tapping "Add to home screen" on a phone.</p>
+
+<h2>5. What the tests actually prove</h2>
+<p>Test counts are worthless without knowing what each one holds down. These are the gates that
+would matter in a due-diligence review.</p>
+<table>
+  <tr><th>Gate</th><th>What it proves</th></tr>
+  <tr><td>Oversell storm</td><td>500 concurrent booking attempts on 12 seats produce exactly 12 confirmations. Permanent.</td></tr>
+  <tr><td>Ledger fuzz</td><td>10,000 randomised book/cancel/refund/dispute/retry sequences reconcile to the cent.</td></tr>
+  <tr><td>Ledger concurrency</td><td>A 200-way stampede on one key produces one transaction; 100 parallel orders are exact; release racing refund settles once.</td></tr>
+  <tr><td>Prompt injection</td><td>50 attack prompts against the conversation layer produce zero unauthorised tool calls. User text is data, never instructions.</td></tr>
+  <tr><td>Review fraud</td><td>Four red-team personas — no-booking, burst ring, competitor one-star, device cluster — all refused or held.</td></tr>
+  <tr><td>Blackout drill</td><td>48 simulated hours offline: orders land over SMS, a double-delivered backlog applies exactly once, the ledger balances.</td></tr>
+  <tr><td>Eviction drill</td><td>WhatsApp removed entirely: identities rebind to another channel, 80% of daily flow recovers against a 70% target.</td></tr>
+  <tr><td>Market isolation</td><td>All 13 dark markets' configuration corrupted; the live market is unaffected.</td></tr>
+  <tr><td>Trust-page budget</td><td>Under 100 KB and interactive under 2 seconds on throttled 3G. Measured at 2,978 bytes and 445 ms locally; 1,973 bytes and 532 ms over the wire.</td></tr>
+  <tr><td>Load profiles</td><td>Four traffic shapes including a seller going 100× viral: 2,500 messages at 500/second, zero drops.</td></tr>
+  <tr><td>No hardcoded copy</td><td>No user-facing sentence exists in code; all text resolves through the localization engine or the build fails.</td></tr>
+  <tr><td>No ad-hoc colour</td><td>A raw hex value anywhere in an app surface fails the build. It caught a violation during this session.</td></tr>
+</table>
+
+<h2 class="pagebreak">6. Defects found and fixed in this session</h2>
+<p>This is the section to read closely. Each defect was reproduced before being fixed and re-verified
+after. Three were found by an adversarial review of work completed an hour earlier.</p>
+
+<h3><span class="sev crit">CRITICAL</span> &nbsp;One order could be settled many times</h3>
+<p>The ledger's release path read "has this order been released?" and then acted on the answer,
+with no lock between the two. Eight concurrent releases of a single 900,000 capture paid out
+<strong>4,500,000</strong>. Refunds had the identical shape and could drain escrow past the capture.</p>
+<p>Idempotency keys did not help. They stop the <em>same</em> key twice; the callers that collide here
+carry <em>different</em> keys by design — a cancellation refund, a dispute refund, a hurricane sweep
+and the payment-provider webhook are four distinct keys for one order. A hurricane sweep firing while
+a dispute resolves is two of them at the same instant.</p>
+<p>What made it invisible: every posting is internally balanced, so the trial balance stayed level
+while the seller was credited eight times. No downstream check would have noticed.</p>
+<p><strong>Fixed twice over.</strong> An exclusive row lock is taken on everything already posted
+against the order before its sums are read, and a database migration adds a partial unique index so a
+second release is impossible even if a future caller forgets the lock. Verified by a test that fires
+eight concurrent releases with distinct keys and asserts exactly one succeeds.</p>
+
+<h3><span class="sev crit">CRITICAL</span> &nbsp;A gate that could not fail</h3>
+<p>The pre-existing test named "release racing refund on one order never double-settles" fired all
+three releases under a single idempotency key, then asserted at most one transaction per key. That is
+precisely what the database's unique index guarantees on its own, whatever the application code does.
+The assertion could not fail. It now uses distinct keys and asserts one release per <em>order</em>.</p>
+<p>This is the same failure mode the project had already written a guard against at a different
+level, committed by the money gate itself.</p>
+
+<h3><span class="sev crit">HIGH</span> &nbsp;Money could change currency between capture and payout</h3>
+<p>A capture in Jamaican dollars could be refunded or released in US dollars. The balance check sums
+minor units across currencies with no grouping, so the books would have read level while the money
+was wrong. Escrow now leaves in the currency it arrived in.</p>
+
+<h3><span class="sev crit">HIGH</span> &nbsp;A split could pay the platform more than came in</h3>
+<p>The split calculator checked that the four shares summed to 10,000 basis points and nothing else.
+A seller share of −1,000 with a platform share of 11,000 sums correctly, passed, and returned the
+seller −10,000 with the platform taking 110,000 out of a 100,000 capture. Shares must now be
+non-negative whole numbers, checked before the sum. Separately, amounts above the range where
+floating-point integers stay exact produced arithmetic that overshot its own floor; such amounts are
+now refused rather than silently mis-split.</p>
+
+<h3><span class="sev crit">HIGH</span> &nbsp;Arbitrary file read through configuration identifiers</h3>
+<p>Country and industry identifiers name files on disk and had no sanitisation. An identifier of
+<code>../../pnpm-workspace</code> resolved inside the repository, was read and was parsed, surviving
+until schema validation rejected its shape. Reading the file at all is the defect. The sink is live:
+the public trust page passes the market segment straight from the URL to the loader. Identifiers are
+now validated by shape before becoming a path.</p>
+
+<h3><span class="sev crit">HIGH</span> &nbsp;Continuous integration was red for eight days</h3>
+<p>Ten consecutive runs failed, each 26 seconds in, at the same step. The cause was a package-manager
+version declared in two places at once, added so a hosting provider would detect it. Every step after
+it was skipped, so the suite had not run in continuous integration since 9 September. Every report of
+"tests green" in that period was a local result on one machine — the exact distinction the
+database-required guard exists to destroy, reappearing one level up in the pipeline rather than in
+the tests.</p>
+
+<h3><span class="sev">MEDIUM</span> &nbsp;A migration racing a platform freeze</h3>
+<p>The application migrated its database at boot. On a serverless host an instance can be frozen the
+moment it answers the request that woke it, so a migration begun at boot was cut off mid-transaction
+and rolled back — leaving two bookkeeping tables, no schema, and not one line in the log. Every retry
+reproduced it exactly. Boot now <em>asks</em> which migrations are pending in one read-only query and
+reports a schema that is behind; it applies them only where the process outlives the request.</p>
+
+<h2 class="pagebreak">7. The adversarial review</h2>
+<p>The specification requires an adversarial suite before every phase gate, naming five attack
+classes. Two existed. Three did not — split manipulation, stolen-card and chargeback patterns, and
+web-application attacks with authentication fuzzing. A suite with holes is worse than a missing one,
+because it reports green over the part nobody wrote.</p>
+<p>Twenty-eight attacks now run on every commit, each aimed at behaviour that already existed:</p>
+<ul>
+  <li>Forged and malformed webhook signatures, including a byte-flip sweep of the signed body</li>
+  <li>SQL and script payloads through a seller's business name, checked in the rendered page</li>
+  <li>A Jamaican identifier offered to a Dominican-scoped service</li>
+  <li>Configuration identifiers climbing out of their directory</li>
+  <li>Refunds exceeding a capture, whole and sliced, sequential and concurrent</li>
+  <li>A chargeback landing after the seller has been paid</li>
+  <li>Forged ledger entries, and direct UPDATE and DELETE against the append-only trigger using a raw database handle rather than the service</li>
+</ul>
+<p><strong>The suite was then itself reviewed adversarially</strong> by a separate model briefed to find
+vacuous tests and unverifiable claims. It found both. The important findings were not in the new
+tests — they were in the ledger those tests had just marked as passing, and they are the two
+critical defects in §6. It also found that the first version of the path-traversal test proved
+nothing, that the fuzz used unseeded randomness so a failure could not be reproduced, that the split
+tests were gated on a database despite being pure arithmetic, and that a claim of "0 skipped" was
+true only with a flag the claim did not name.</p>
+<div class="callout">
+<p>A reviewer should treat this as the most useful signal in the pack: the second reading found real
+money defects in code that had just passed a first reading. The right conclusion is not that the
+suite is now complete. It is that adversarial review found things, and should be repeated.</p>
+</div>
+
+<h2>8. Open items a reviewer should press on</h2>
+<h3>Continuous integration cannot go green as configured</h3>
+<p>The project lives on a branch. The repository's default branch carries an entirely different
+product, with no common ancestor, which the project's own rules say must never be merged in either
+direction. A pull request nonetheless proposes exactly that merge, and continuous integration tests
+the <em>merged</em> tree. The scope guard — a test that fails if another product's directory appears
+in the tree — therefore fires on every run, correctly.</p>
+<p>This is a decision, not a defect: close the pull request, split the repository, or narrow the
+guard. The third option softens a rule written after a real incident. It has deliberately not been
+taken without instruction.</p>
+
+<h3>The deployment audit workflow is inert</h3>
+<p>A scheduled workflow was written to check the live origin nightly. It does not run and cannot be
+triggered: a workflow is registered with the platform only when it exists on the default branch,
+which this one does not. It returns "not found" when dispatched. Until the branch situation changes
+the audit runs locally and nowhere else. This was verified, not assumed.</p>
+
+<h3>The remaining specification item needs live sellers</h3>
+<p>The adversarial suite's leakage probe asks for off-platform drift measured on a real seller cohort
+over real weeks, proving that escrow, the credit record and loyalty pricing actually retain sellers.
+Synthetic data would prove nothing. It is a human gate, not code.</p>
+
+<h3>The ten human gates</h3>
+<p>Company registration and trademark clearance; a payment partner agreement with counsel custody
+sign-off; WhatsApp Business API verification; advertising accounts as agency of record; a dummy panel
+and the first ten sellers onboarded by voice note alone; 100 real paid orders with zero reconciliation
+breaks; counsel verification per island before any market goes live; a manual install on Android and
+iOS; speech recognition accuracy measured on live patois with a real vendor; and the leakage probe
+above.</p>
+
+<h2 class="pagebreak">9. Where a reviewer should look for what is still wrong</h2>
+<p>An honest list of where the author would look next, given more time.</p>
+<ol>
+  <li><strong>Other check-then-act pairs.</strong> The ledger's locking defect was a pattern, and the pattern may exist elsewhere. Capacity, orders and identity do lock. Everything else should be read with that question in mind.</li>
+  <li><strong>Branch coverage is 74%.</strong> Lower than statement coverage by eleven points, which means error paths are less exercised than happy paths. Error paths are where money goes missing.</li>
+  <li><strong>Every test that cannot fail.</strong> Two were found this session. The technique that found them — asking "could this assertion ever be false?" of each test in turn — has not been applied to the whole suite.</li>
+  <li><strong>The payment adapter is mock-complete.</strong> No real provider has been integrated. The ledger is proven against a simulation of a provider, not a provider.</li>
+  <li><strong>Security headers.</strong> Pages ship a content type and nothing else: no content security policy, no MIME-sniffing protection.</li>
+  <li><strong>Nobody has used it.</strong> Every behavioural claim rests on tests and drills, not on a seller in Kingston.</li>
+</ol>
+
+<h2>10. Session commit log</h2>
+<p>Every change since the deployment work began, newest first. Commit messages are written to explain
+why, not what, and are worth reading alongside the diff.</p>
+<table>
+  <tr><th>Commit</th><th>Subject</th></tr>
+  <tr><td class="mono">9c28a07</td><td>DEPLOY.md: where to look when the question is "is this working"</td></tr>
+  <tr><td class="mono">d9099fc</td><td>A developer console, because the cockpit cannot say whether anything works</td></tr>
+  <tr><td class="mono">1f5bc2f</td><td>The ledger settled one order eight times; an adversarial review caught it</td></tr>
+  <tr><td class="mono">8823a6f</td><td>The §5.7 adversarial suite, and the hole it found in the first run</td></tr>
+  <tr><td class="mono">24ab339</td><td>A gate pinned to a path that does not exist is a gate that never runs</td></tr>
+  <tr><td class="mono">421a5be</td><td>The audit workflow is not registered with GitHub at all; say so</td></tr>
+  <tr><td class="mono">6ce354b</td><td>Scope the linter and formatter to our own code, not the neighbour's</td></tr>
+  <tr><td class="mono">2ffea60</td><td>CI has been red for a week, and the cause was a line I added</td></tr>
+  <tr><td class="mono">110417f</td><td>Refresh every measured claim, because a carried-forward number is not evidence</td></tr>
+  <tr><td class="mono">5fc4b7b</td><td>The Dockerfile builds, and it needed no fixes</td></tr>
+  <tr><td class="mono">4ef2da3</td><td>Allowlist the read-only checks this build actually runs</td></tr>
+  <tr><td class="mono">8248fa1</td><td>A serverless boot probes the schema; it no longer races to migrate it</td></tr>
+  <tr><td class="mono">57d09b5</td><td>Audit the deployed origin in a real browser, closing the machine half of P36</td></tr>
+  <tr><td class="mono">9848181</td><td>The link is live: the database was migrated deliberately, not by a cold start</td></tr>
+  <tr><td class="mono">b46d04d</td><td>BUILD_STATUS: three failures to connect one database, and what each taught</td></tr>
+  <tr><td class="mono">67aaf83</td><td>When the database refuses, /demo names the connection it tried</td></tr>
+  <tr><td class="mono">61e3fe5</td><td>The database URL may arrive under a vendor's name; /demo says what it sees</td></tr>
+  <tr><td class="mono">29655d5</td><td>Deploy to Vercel: the app finds its data and seeds itself at boot</td></tr>
+</table>
+
+<h2>11. Documents in the repository a reviewer will want</h2>
+<table>
+  <tr><th>File</th><th>What it is</th></tr>
+  <tr><td><code>CLAUDE.md</code></td><td>The standing rules: product laws, money rules, data rules, scope law</td></tr>
+  <tr><td><code>SYCAMORE_BUILD.md</code></td><td>The engineering specification, including the stress-test master plan</td></tr>
+  <tr><td><code>SYCAMORE_PROMPTS.md</code></td><td>The 37-prompt build chain with a gate on each</td></tr>
+  <tr><td><code>BUILD_STATUS.md</code></td><td>The running record, including every audit and every failure on the way</td></tr>
+  <tr><td><code>DEPLOY.md</code></td><td>How the deployment works and the three things about it that have each gone wrong once</td></tr>
+  <tr><td><code>DEMO.md</code></td><td>How to run a seeded market locally and click through it</td></tr>
+</table>
+
+<p class="foot">Prepared for independent review. Every claim is reproducible with the commands in
+section 2. Where a claim could not be verified, this document says so rather than omitting it.</p>
+
+</body>
+</html>
