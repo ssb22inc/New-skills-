@@ -2,6 +2,12 @@
 
 **Status: Phase 0 OPEN. Gate RED. No PR. No dollar has ever been live.**
 
+> **STATE LIVES IN `/HANDOFF.md` (DONE.md §5).** This file is the narrative
+> history — rulings, per-round dispositions, numbers by commit. On any
+> disagreement about the current tree, open findings, owed sets or the next
+> command, the root file wins. Kept because its §0 tag rule and its record of
+> how each ruling was reached are what a new session reads to understand *why*.
+
 Rebuilt 2026-08-21 after R14-01 found that the previous version of this file
 asserted a property that had never been tested. Updated the same day with the
 R14-01 ruling implemented and its §4 proof executed.

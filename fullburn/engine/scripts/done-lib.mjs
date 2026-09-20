@@ -56,7 +56,14 @@ export function parseVitest(out) {
 export function parseMutate(out) {
   const s = out ?? "";
   const summary = /(\d+) mutations: (\d+) caught, (\d+) survived, (\d+) not found/.exec(s);
+  // The NAMES, not only the counts. The first phase-0 run reported "3 stale"
+  // and discarded which three; finding them again took a separate probe. A
+  // number without its members is a status, not a finding.
+  const STALE_LINE = /^PATTERN-NOT-FOUND\s+(.+?)\s+\([^)]*\)\s*$/gm;
+  const SURVIVED_LINE = /^\*\*\* SURVIVED \*\*\*\s+(.+?)\s*$/gm;
   return {
+    stale: [...s.matchAll(STALE_LINE)].map((m) => m[1]),
+    survivors: [...s.matchAll(SURVIVED_LINE)].map((m) => m[1]),
     metaNegative: /\bok\s+negative canary\b/.test(s),
     metaPositive: /\bok\s+positive canary\b/.test(s),
     total: summary ? Number(summary[1]) : null,
@@ -75,7 +82,14 @@ export function mutateCondition(parsed) {
     return { status: "FAIL", observed: "no summary line — the harness did not finish" };
   }
   if (p.survived > 0 || p.notFound > 0) {
-    return { status: "FAIL", observed: `${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale` };
+    const names = [
+      ...(p.survivors?.length ? [`survived: ${p.survivors.join("; ")}`] : []),
+      ...(p.stale?.length ? [`stale: ${p.stale.join("; ")}`] : []),
+    ];
+    return {
+      status: "FAIL",
+      observed: `${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale${names.length ? ` — ${names.join(" — ")}` : ""}`,
+    };
   }
   return { status: "PASS", observed: `meta-check ok; ${p.total} mutations: ${p.caught} caught, 0 survived, 0 stale` };
 }

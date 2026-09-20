@@ -52,6 +52,27 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(mutateCondition(null).status).toBe("FAIL");
   });
 
+  /** MUTATION: DN-16 — parseMutate stops collecting the stale names. */
+  it("a failing harness names every stale and surviving entry, not only their counts", () => {
+    const out =
+      "  ok   negative canary  |  got SURVIVED\n  ok   positive canary  |  got CAUGHT\n" +
+      "CAUGHT             R1-01 something  |  1 failed\n" +
+      "PATTERN-NOT-FOUND  AD-02 the root .claude tree is Class-2  (engine/scripts/gate-lib.mjs)\n" +
+      "*** SURVIVED ***   R9-09 a guard nobody tests\n" +
+      "PATTERN-NOT-FOUND  AD-03 the root .claude tree is in the CI scope  (engine/scripts/ci-scope.mjs)\n" +
+      "\n229 mutations: 226 caught, 1 survived, 2 not found\n";
+    const p = parseMutate(out);
+    expect(p.stale).toEqual(["AD-02 the root .claude tree is Class-2", "AD-03 the root .claude tree is in the CI scope"]);
+    expect(p.survivors).toEqual(["R9-09 a guard nobody tests"]);
+    const c = mutateCondition(p);
+    expect(c.status).toBe("FAIL");
+    for (const name of [...p.stale, ...p.survivors]) expect(c.observed, `the condition dropped ${name}`).toContain(name);
+    // A clean run names nothing, and a CAUGHT line is never mistaken for either.
+    const clean = parseMutate("  ok   negative canary\n  ok   positive canary\nCAUGHT   PATTERN-NOT-FOUND-looking name  |  x\n229 mutations: 229 caught, 0 survived, 0 not found\n");
+    expect(clean.stale).toEqual([]);
+    expect(clean.survivors).toEqual([]);
+  });
+
   it("reads the owed-approvals count, or null", () => {
     expect(parseOwed("No Class-2 paths changed. This PR owes no approval entries.")).toBe(0);
     expect(parseOwed("# Class-2 approvals owed — 65 entr(y|ies)\n# base-commit: x")).toBe(65);

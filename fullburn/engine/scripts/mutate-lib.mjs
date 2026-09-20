@@ -100,6 +100,36 @@ export function harnessVerdict(survived, notFound) {
   return { ok: true, reason: "every lock bites" };
 }
 
+/** Which entries of a mutation table cannot be applied to the tree as it stands.
+ *
+ * The harness reports these as PATTERN-NOT-FOUND, but only when it runs — two
+ * and a half hours, and never in the default suite. So three entries anchored
+ * on a neighbouring line went stale the moment a commit inserted a line there
+ * (AD-02/03/04, 2026-09-20), the suite stayed green for two commits, and the
+ * first `done` run was what found them. A stale entry is a lock that is not
+ * being tested while its name still appears in the table; the count that read
+ * "229 entries" was a count of 226. This is the same comparison the harness
+ * makes, taken before any suite runs, so `npm test` can fail on it in seconds.
+ *
+ * Pure: entries in, the names it cannot place out, with the reason. `read` is
+ * injected so a test can drive the missing, ambiguous and unreadable cases
+ * against fixtures the real tree does not contain. */
+export function staleEntries(entries, read, { selfFile = "", tableEnd = 0 } = {}) {
+  const stale = [];
+  for (const [name, file, from, to] of entries) {
+    let source;
+    try {
+      source = read(file);
+    } catch (e) {
+      stale.push({ name, file, why: `unreadable: ${e instanceof Error ? e.message : String(e)}` });
+      continue;
+    }
+    const r = applyEntry(source, from, to, { isSelf: file === selfFile, tableEnd });
+    if (r.at === -1) stale.push({ name, file, why: r.ambiguous ? "ambiguous target" : "pattern not found" });
+  }
+  return stale;
+}
+
 /** Where an entry's target text actually is, and what the mutated file becomes.
  *
  * PURE, AND DRIVEN BY A TEST, because the rule it implements has now been got

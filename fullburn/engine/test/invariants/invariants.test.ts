@@ -10,6 +10,8 @@ import { processLedger, resetProcessLedgerForTests } from "../../src/spend-ledge
 import { vaultForClient, MemoryVaultBackend, VaultError } from "../../src/vault.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../../scripts/scan-lib.mjs";
+// @ts-expect-error — plain .mjs module, typed loosely on purpose
+import { staleEntries, tableEndOf } from "../../scripts/mutate-lib.mjs";
 import { CANARY_SECRET, TEST_CLIENT, makeDeps, memoryMeter } from "../helpers.ts";
 import { e2eVarianceHolds, runnerTargets } from "../e2e-variance.ts";
 import { blockingCalls } from "../blocking-calls.ts";
@@ -1273,6 +1275,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const mutateLib = await import("../../scripts/mutate-lib.mjs");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const doneLib = await import("../../scripts/done-lib.mjs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const { walk: walkTree } = await import("../../scripts/leak-check.mjs");
     const { execFileSync } = await import("node:child_process");
     const { relative: relPath } = await import("node:path");
@@ -1394,6 +1398,21 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
             gateLib.VERIFIED_TREE_SCOPE.includes(".claude/")
           );
         },
+      },
+      {
+        row: "L40",
+        claim:
+          "the completion checker's decisions cannot be talked into a verdict: an empty result set is not a pass, " +
+          "a failing sub-condition fails the whole, a harness result without its meta-check is void, and a meta-check " +
+          "that cannot demonstrate PASS→FAIL is void, and a failing harness is reported by the NAMES of its stale and surviving entries",
+        holds: () =>
+          doneLib.verdict([]).ok === false &&
+          doneLib.verdict([{ id: "a", status: "PASS", sub: [{ id: "b", status: "FAIL" }] }]).ok === false &&
+          doneLib.mutateCondition(doneLib.parseMutate("214 mutations: 214 caught, 0 survived, 0 not found\n")).status === "FAIL" &&
+          doneLib.metaVerdict({ refusalTriggered: true, before: "FAIL", after: "FAIL" }).ok === false &&
+          doneLib.preflightRefusals({ porcelain: "?? x", markerExists: false }).length === 1 &&
+          doneLib.mutateCondition(doneLib.parseMutate("  ok   negative canary\n  ok   positive canary\nPATTERN-NOT-FOUND  AD-02 x  (f)\n*** SURVIVED ***   R0-00 y\n3 mutations: 1 caught, 1 survived, 1 not found\n")).observed.includes("AD-02 x") &&
+          mutateLib.staleEntries([["e", "f", "absent", "x"]], () => "present").length === 1,
       },
       {
         row: "L29",
@@ -2054,6 +2073,72 @@ describe("runner-decision sweep — no verdict is reached where the default suit
         ).toBe(true);
       }
     }
+  });
+
+  /** THE TABLE IS CHECKED AGAINST THE TREE ON EVERY RUN, NOT ONLY WHEN THE
+   * HARNESS RUNS. Measured 2026-09-20 by the first `npm run done` at tree
+   * 7a89aee2: AD-02, AD-03 and AD-04 — the entries that keep the adversary's
+   * discovery tree Class-2, in the CI scope and in the verified tree — had been
+   * stale since the commit that inserted a `DONE.md` line under each of their
+   * anchors, two commits earlier, with the suite green throughout. A stale
+   * entry is a lock the harness no longer tests while its name still counts
+   * toward "229 entries". The harness is a two-hour runner; this is the same
+   * comparison in seconds, in the suite every commit runs.
+   *
+   * The table is read as DATA from the harness source — it is never imported
+   * (locks-r7: importing the runner is how the harness once ran inside a test
+   * worker). `[LIMITATION]` this proves the target text is present exactly
+   * once; only the harness proves reverting it goes red.
+   *
+   * MUTATION: SE-01 — staleEntries stops reporting an ambiguous target. */
+  it("every mutation entry resolves to exactly one site in the tree it runs against", () => {
+    const harness = readWs("engine/scripts/mutate.mjs");
+    const start = harness.indexOf("const MUTATIONS = [");
+    expect(start, "the mutation table was not found").toBeGreaterThan(0);
+    const end = tableEndOf(harness) as number;
+    const literal = harness.slice(start + "const MUTATIONS = ".length, end).replace(/;\s*$/, "");
+    const entries = (0, eval)(`(${literal})`) as [string, string, string, string][];
+    expect(entries.length, "no entries parsed — this check would pass vacuously").toBeGreaterThan(100);
+    const repoRoot = new URL("../../../../", import.meta.url);
+    const read = (file: string) =>
+      readFileSync(new URL(file, /^\.(?:github|claude)\/|^DONE\.md$/.test(file) ? repoRoot : wsRoot), "utf8");
+    const stale = staleEntries(entries, read, { selfFile: "engine/scripts/mutate.mjs", tableEnd: end }) as { name: string; file: string; why: string }[];
+    expect(
+      stale.map((s) => `${s.name} (${s.file}): ${s.why}`),
+      "these entries no longer match the tree — the harness would report them PATTERN-NOT-FOUND and the locks they name are untested",
+    ).toEqual([]);
+  });
+
+  /** The check above has no negative case in the real tree, by design. These
+   * are its negatives, driven against fixtures: missing, ambiguous, unreadable,
+   * and a self-targeting entry whose text appears only in its own table row. */
+  it("staleEntries reports a missing, an ambiguous and an unreadable target, and nothing else", () => {
+    const files: Record<string, string> = {
+      "a.ts": "const x = 1;\nguard();\n",
+      "b.ts": "guard();\nguard();\n",
+      "self.mjs": '[\n  ["e", "self.mjs", "onlyInTable", "x"],\n];\nreal();\n',
+    };
+    const read = (f: string) => {
+      if (!(f in files)) throw new Error(`ENOENT ${f}`);
+      return files[f]!;
+    };
+    const table: [string, string, string, string][] = [
+      ["ok", "a.ts", "guard();", "void 0;"],
+      ["missing", "a.ts", "nothere();", "x"],
+      ["ambiguous", "b.ts", "guard();", "x"],
+      ["unreadable", "c.ts", "guard();", "x"],
+      ["self-only-in-table", "self.mjs", "onlyInTable", "x"],
+      ["self-real", "self.mjs", "real();", "x"],
+    ];
+    const selfEnd = tableEndOf(files["self.mjs"]) as number;
+    const stale = staleEntries(table, read, { selfFile: "self.mjs", tableEnd: selfEnd }) as { name: string; why: string }[];
+    expect(stale.map((s) => `${s.name}: ${s.why}`)).toEqual([
+      "missing: pattern not found",
+      "ambiguous: ambiguous target",
+      "unreadable: unreadable: ENOENT c.ts",
+      "self-only-in-table: pattern not found",
+    ]);
+    expect(staleEntries([], read)).toEqual([]);
   });
 
   /** THE SHAPE THE SEVEN SURVIVORS ACTUALLY HAD.

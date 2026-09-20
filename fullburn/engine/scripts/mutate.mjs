@@ -682,15 +682,20 @@ const MUTATIONS = [
   ["AD-01 the mirror cannot drift from the source", ".claude/agents/engine-adversary.md",
     "You are the adversary. You are not the builder's teammate",
     "You are the adversary. You are the builder's teammate"],
+  // AD-02/03/04 were anchored on the line BELOW `.claude`; the DONE.md commit
+  // inserted its own line there and all three went stale for two commits, unseen
+  // until the first `done` run's C5 (2026-09-20). The default suite now checks
+  // the table against the tree on every run — see invariants "every mutation
+  // entry resolves to exactly one site".
   ["AD-02 the root .claude tree is Class-2", "engine/scripts/gate-lib.mjs",
-    "  /^\\.claude\\//,\n  // Money, the grader",
-    "  // Money, the grader"],
+    "  /^\\.claude\\//,\n  // THE COMPLETION CONTRACT",
+    "  // THE COMPLETION CONTRACT"],
   ["AD-03 the root .claude tree is in the CI scope", "engine/scripts/ci-scope.mjs",
-    '  ".claude/**",\n]);',
-    "]);"],
+    '  ".claude/**",\n  "DONE.md",\n]);',
+    '  "DONE.md",\n]);'],
   ["AD-04 the root .claude tree is in the verified tree", "engine/scripts/gate-lib.mjs",
-    '  ".claude/",\n  ":!fullburn/reports/",',
-    '  ":!fullburn/reports/",'],
+    '  ".claude/",\n  "DONE.md",\n  ":!fullburn/reports/",',
+    '  "DONE.md",\n  ":!fullburn/reports/",'],
   ["AD-05 the root .claude tree has a CODEOWNER", ".github/CODEOWNERS",
     "/.claude/                           @ssb22inc\n",
     ""],
@@ -745,6 +750,13 @@ const MUTATIONS = [
   ["DN-14 the checker refuses before it measures", "engine/scripts/done.mjs",
     "    if (refusals.length > 0) {\n      console.error(\"DONE: REFUSED\\n  \" + refusals.join(\"\\n  \"));\n      process.exit(2);\n    }",
     "    if (refusals.length > 0) {\n      console.error(\"DONE: REFUSED\\n  \" + refusals.join(\"\\n  \"));\n    }"],
+  // The table-vs-tree check (2026-09-20) and the checker naming what it found.
+  ["SE-01 an ambiguous target is stale, not a coin flip", "engine/scripts/mutate-lib.mjs",
+    "    if (r.at === -1) stale.push({ name, file, why: r.ambiguous ? \"ambiguous target\" : \"pattern not found\" });",
+    "    if (r.at === -1 && !r.ambiguous) stale.push({ name, file, why: \"pattern not found\" });"],
+  ["DN-16 the checker names every stale entry", "engine/scripts/done-lib.mjs",
+    "    stale: [...s.matchAll(STALE_LINE)].map((m) => m[1]),",
+    "    stale: [],"],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],
