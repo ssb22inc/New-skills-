@@ -52,6 +52,20 @@ const REFUSAL_CANARY = `${REPO}/.done-refusal-canary`;
 const SEEDS = [7, 42, 1234, 2026, 9001];
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  /** THE CHECKER NEVER NESTS. Measured 2026-09-20: with the pre-flight exit
+   * mutated away (DN-14), the integration test that executes this file made
+   * it proceed into its meta-check, which ran the suite, which ran that test,
+   * which spawned this file again — five levels deep and growing, each
+   * planting canaries in the tree. R10-05's hazard, on the completion checker.
+   * So the first thing this file does, before parsing arguments, is refuse to
+   * exist inside a vitest worker or inside another `done` run. Every child it
+   * spawns inherits the marker. This is not a check on the recursion; it
+   * removes the capability. */
+  if (process.env.VITEST || process.env.FULLBURN_DONE_ACTIVE) {
+    console.error("DONE: REFUSED — the completion checker does not run inside a test worker or inside another done run");
+    process.exit(2);
+  }
+  const CHILD_ENV = { ...process.env, FULLBURN_DONE_ACTIVE: "1" };
   let current = null;
 
   /** Everything this checker may have planted. Called at start (recovery from
@@ -83,7 +97,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   /** Run a command asynchronously in its own process group, capturing output. */
   const run = (cmd, args, { cwd = ROOT, input = null } = {}) =>
     new Promise((res) => {
-      const child = spawn(cmd, args, { cwd, stdio: [input === null ? "ignore" : "pipe", "pipe", "pipe"], detached: true });
+      const child = spawn(cmd, args, { cwd, env: CHILD_ENV, stdio: [input === null ? "ignore" : "pipe", "pipe", "pipe"], detached: true });
       current = child;
       let out = "";
       let err = "";

@@ -737,6 +737,11 @@ const MUTATIONS = [
   ["DN-13 DONE.md has a CODEOWNER", ".github/CODEOWNERS",
     "/DONE.md                            @ssb22inc\n",
     ""],
+  // The runaway of 2026-09-20: without this guard, DN-14 made the checker
+  // nest inside its own suite five levels deep. Structural, not a check.
+  ["DN-15 the checker never runs inside a test worker or another done run", "engine/scripts/done.mjs",
+    "  if (process.env.VITEST || process.env.FULLBURN_DONE_ACTIVE) {",
+    "  if (false) {"],
   ["DN-14 the checker refuses before it measures", "engine/scripts/done.mjs",
     "    if (refusals.length > 0) {\n      console.error(\"DONE: REFUSED\\n  \" + refusals.join(\"\\n  \"));\n      process.exit(2);\n    }",
     "    if (refusals.length > 0) {\n      console.error(\"DONE: REFUSED\\n  \" + refusals.join(\"\\n  \"));\n    }"],
