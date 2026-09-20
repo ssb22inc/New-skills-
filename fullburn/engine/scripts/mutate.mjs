@@ -34,7 +34,7 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, ""
  * live outside the workspace, and a fix that lives there needs an entry here
  * just as much: R8-04 was two of them. */
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
-const resolveEntry = (file) => `${/^\.(?:github|claude)\//.test(file) ? REPO_ROOT : ROOT}/${file}`;
+const resolveEntry = (file) => `${/^\.(?:github|claude)\/|^DONE\.md$/.test(file) ? REPO_ROOT : ROOT}/${file}`;
 /** vitest's real entry point. Spawned directly so there is no shim to orphan. */
 const VITEST_BIN = `${ROOT}/node_modules/vitest/vitest.mjs`;
 
@@ -694,6 +694,52 @@ const MUTATIONS = [
   ["AD-05 the root .claude tree has a CODEOWNER", ".github/CODEOWNERS",
     "/.claude/                           @ssb22inc\n",
     ""],
+  // ---- DONE.md §3: the completion checker (2026-09-20) ----
+  //
+  // "A completion checker that cannot fail is the r9 defect at the top level."
+  // Every decision the checker makes has a negative case; these keep them.
+  ["DN-01 the verdict is not PASS with a failing sub-condition", "engine/scripts/done-lib.mjs",
+    "  const failing = flat.filter((r) => r.status !== \"PASS\").map((r) => r.id);",
+    "  const failing = (results ?? []).filter((r) => r.status !== \"PASS\").map((r) => r.id);"],
+  ["DN-02 an empty result set is not a pass", "engine/scripts/done-lib.mjs",
+    "  return { ok: flat.length > 0 && failing.length === 0, failing };",
+    "  return { ok: failing.length === 0, failing };"],
+  ["DN-03 the meta-check demands a demonstrated flip", "engine/scripts/done-lib.mjs",
+    "  if (before !== \"PASS\") problems.push(",
+    "  if (false) problems.push("],
+  ["DN-04 the meta-check demands the checker see a failure", "engine/scripts/done-lib.mjs",
+    "  if (after !== \"FAIL\") problems.push(",
+    "  if (false) problems.push("],
+  ["DN-05 a harness result without its meta-check is void", "engine/scripts/done-lib.mjs",
+    "  if (!p.metaNegative || !p.metaPositive) {",
+    "  if (false) {"],
+  ["DN-06 a dirty tree is refused", "engine/scripts/done-lib.mjs",
+    "  if (dirty.length > 0) {",
+    "  if (false) {"],
+  ["DN-07 a Claude family is not cross-family", "engine/scripts/done-lib.mjs",
+    "  return !/claude|anthropic/i.test(family);",
+    "  return true;"],
+  ["DN-08 a gate ack must name this tree", "engine/scripts/done-lib.mjs",
+    "  if (!tree.startsWith(t[1]) && !t[1].startsWith(tree)) return",
+    "  if (false) return"],
+  ["DN-09 the permitted sentence is the contract's", "engine/scripts/done-lib.mjs",
+    "Class-2 sets approved under your identity. Requesting gate ack.`;",
+    "Class-2 sets approved. Requesting gate ack.`;"],
+  ["DN-10 DONE.md is Class-2", "engine/scripts/gate-lib.mjs",
+    "  /^DONE\\.md$/,\n  // Money, the grader",
+    "  // Money, the grader"],
+  ["DN-11 DONE.md is in the CI scope", "engine/scripts/ci-scope.mjs",
+    '  ".claude/**",\n  "DONE.md",\n]);',
+    '  ".claude/**",\n]);'],
+  ["DN-12 DONE.md is in the verified tree", "engine/scripts/gate-lib.mjs",
+    '  ".claude/",\n  "DONE.md",\n  ":!fullburn/reports/",',
+    '  ".claude/",\n  ":!fullburn/reports/",'],
+  ["DN-13 DONE.md has a CODEOWNER", ".github/CODEOWNERS",
+    "/DONE.md                            @ssb22inc\n",
+    ""],
+  ["DN-14 the checker refuses before it measures", "engine/scripts/done.mjs",
+    "    if (refusals.length > 0) {\n      console.error(\"DONE: REFUSED\\n  \" + refusals.join(\"\\n  \"));\n      process.exit(2);\n    }",
+    "    if (refusals.length > 0) {\n      console.error(\"DONE: REFUSED\\n  \" + refusals.join(\"\\n  \"));\n    }"],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],

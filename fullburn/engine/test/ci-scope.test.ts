@@ -70,7 +70,10 @@ describe("ci-scope — whether a diff needs the fullburn gate", () => {
   });
 
   it("the scope is the one the trigger used to carry", () => {
-    expect([...CI_SCOPE_GLOBS].sort()).toEqual([".claude/**", ".github/**", "fullburn/**"]);
+    expect([...CI_SCOPE_GLOBS].sort()).toEqual([".claude/**", ".github/**", "DONE.md", "fullburn/**"]);
+    // The completion contract (DONE.md §3) — a change to what "done" means
+    // must run the gate.
+    expect(inScope(["DONE.md"])).toBe(true);
     // The agent-discovery tree is in scope: a change to the adversary's own
     // definition must run the gate that definition guards (2026-09-20).
     expect(inScope([".claude/agents/engine-adversary.md"])).toBe(true);

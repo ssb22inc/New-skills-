@@ -354,6 +354,22 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     for (const f of runners) {
       const src = readFileSync(new URL(f, dir), "utf8");
       const runner = src.slice(src.search(GUARD));
+      /** TWO KINDS OF WRITING RUNNER (2026-09-20). A SOURCE MUTATOR rewrites
+       * tracked files and must carry the crash-marker discipline below. A
+       * RECORDER creates files it owns — a report under reports/, an untracked
+       * canary during its own meta-check — and never rewrites a tracked path;
+       * its crash-safety is removing what it planted, at start and on every
+       * exit. `done.mjs` is the first recorder. The distinction is measured by
+       * the mutation table: only a runner that iterates MUTATIONS rewrites
+       * source. */
+      const mutatesSource = /for \(const \[name, file, from, to\] of MUTATIONS\)/.test(runner);
+      if (!mutatesSource) {
+        expect(runner, `${f} writes files but never removes what a crashed run left behind`).toMatch(/removeStaleCanary\(\)/);
+        expect(runner, `${f} registers no exit cleanup`).toMatch(/process\.on\("exit"/);
+        // A recorder must not have the source-mutation shape at all.
+        expect(runner.search(/writeFileSync\(\s*path\s*,/), `${f} rewrites a tracked path — that is a source mutator and needs the marker discipline`).toBe(-1);
+      }
+      if (mutatesSource) {
       /** THE SIGNAL GREPS ARE GONE, AND THEIR ABSENCE IS THE FIX.
        *
        * `expect(runner).toContain("SIGINT")` and
@@ -374,6 +390,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       expect(sourceBreak, `${f} no longer mutates source — this check is stale`).toBeGreaterThan(-1);
       expect(markerWrite, `${f} breaks source before recording how to repair it`).toBeLessThan(sourceBreak);
       expect(runner, `${f} never recovers a previous crashed run`).toMatch(/recoverInFlight\(/);
+      }
       /** ANY synchronous process API blocks the loop, not just `execSync` —
        * and not just under its own name. Matching call sites by NAME was
        * defeated twice: `spawnSync(` did not match `execSync\s*\(` (R10-09),
@@ -404,9 +421,12 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         `${f} blocks the event loop, so its signal handlers cannot run`,
       ).toEqual([]);
       // The LOOP's await, not any await — anchored to the loop body.
-      const loop = runner.slice(runner.search(/for \(const \[name, file, from, to\] of MUTATIONS\)/));
-      expect(loop, `${f}'s entry loop does not await, so a signal cannot be serviced`).toMatch(/await measure\(/);
+      if (mutatesSource) {
+        const loop = runner.slice(runner.search(/for \(const \[name, file, from, to\] of MUTATIONS\)/));
+        expect(loop, `${f}'s entry loop does not await, so a signal cannot be serviced`).toMatch(/await measure\(/);
+      }
     }
+    expect(runners, "the completion checker lost its entry-point guard or its writes").toContain("done.mjs");
 
     /** A LIBRARY claims it has no runner. That is a behaviour, so it is driven:
      * import it and watch a canary. This is safe in a way the runner's import
@@ -1850,6 +1870,21 @@ const RUNNER_BINDINGS: readonly RunnerBinding[] = [
     ],
   },
   {
+    // DONE.md §3 — the completion checker. Every verdict it reaches is a
+    // done-lib decision; the gate parsers it consults are gate-lib's.
+    runner: "engine/scripts/done.mjs",
+    decisions: ["./done-lib.mjs", "./gate-lib.mjs", "./mutate-lib.mjs"],
+    provenBy: [
+      "engine/test/done-lib.test.ts",
+      "engine/test/gates.test.ts",
+      "engine/test/locks-r7.test.ts",
+      "engine/test/integration/done-cli.test.ts",
+    ],
+    literalsDisclosed: [
+      { name: "SEEDS", why: "the five shuffle seeds §2.1.7 requires (≥5); data, and the count is what the condition measures" },
+    ],
+  },
+  {
     runner: "engine/scripts/mutate.mjs",
     decisions: ["./mutate-lib.mjs"],
     provenBy: ["engine/test/locks-r7.test.ts"],
@@ -2318,7 +2353,22 @@ describe("the adversary's discovery mirror — one source of truth, fully gated 
 
   /** Every gate that covers the source must cover the mirror, or the mirror is
    * the hole. Driven, not read: each is the real decision the CLI makes. */
-  it("the mirror's path is gated exactly as the source's is", async () => {
+  /** THE COMPLETION CONTRACT IS BOUND TO THE CODE THAT ENFORCES IT. DONE.md §3
+   * fixes the one sentence the builder may use; `completionSentence` is the
+   * only thing that prints it. If either drifts, the checker's output no
+   * longer matches the contract, and this fails. */
+  it("DONE.md exists at the repo root and carries exactly the sentence done-lib prints", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { completionSentence } = await import("../../scripts/done-lib.mjs");
+    const done = readFileSync(new URL("../../../../DONE.md", import.meta.url), "utf8");
+    expect(done, "DONE.md lost its authority line").toMatch(/^\*\*Authority: this file defines "complete\."\*\*/m);
+    expect(done, "DONE.md §3's permitted sentence differs from the one done-lib prints").toContain(
+      `> ${completionSentence("<target>", "<hash>", "<path>")}`,
+    );
+    expect(done).toMatch(/npm run done -- <phase\|engine>/);
+  });
+
+  it("the mirror's path — and DONE.md's — are gated exactly as the source's is", async () => {
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const { isClass2, codeownersCovers, VERIFIED_TREE_SCOPE } = await import("../../scripts/gate-lib.mjs");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
@@ -2327,7 +2377,7 @@ describe("the adversary's discovery mirror — one source of truth, fully gated 
     const repoRoot = new URL("../../../../", import.meta.url).pathname.replace(/\/$/, "");
     const owners = readFileSync(`${repoRoot}/.github/CODEOWNERS`, "utf8");
 
-    for (const p of [SRC_PATH, MIRROR_PATH]) {
+    for (const p of [SRC_PATH, MIRROR_PATH, "DONE.md"]) {
       expect(isClass2(p), `${p} is not Class-2 — editable with no approval`).toBe(true);
       expect(inScope([p]), `${p} is outside the CI scope — a change runs no gate`).toBe(true);
       expect(codeownersCovers(p, owners), `${p} has no CODEOWNER`).toBe(true);

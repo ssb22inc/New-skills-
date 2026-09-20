@@ -34,6 +34,7 @@ export const CI_SCOPE_GLOBS = Object.freeze([
   // The repo-root agent-discovery tree (2026-09-20): a change to the
   // adversary's definition must run the gate that definition guards.
   ".claude/**",
+  "DONE.md",
 ]);
 
 /** @param changedFiles paths relative to the repository root */

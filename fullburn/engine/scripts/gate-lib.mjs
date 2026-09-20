@@ -31,6 +31,10 @@ export const CLASS2_PATTERNS = [
   // exists because it is. Anything under a root `.claude/` configures how
   // agents behave in this repository; all of it is a human decision.
   /^\.claude\//,
+  // THE COMPLETION CONTRACT. DONE.md defines when to stop (its own §0: "done"
+  // is an exit code, never a sentence the builder writes). A contract editable
+  // with no approval, outside the verified tree, is not a contract.
+  /^DONE\.md$/,
   // Money, the grader, and the immutability primitive: values AND enforcing code.
   // The WHOLE engine source tree, not an enumeration (adversary finding R2-CP-04):
   // a list of seven files left index.ts — the deployed Worker entrypoint — free to
@@ -104,6 +108,7 @@ export const CLASS2_WITNESS_PATHS = [
   "fullburn/.claude/agents/engine-adversary.md",
   // Its discovery mirror at the repo root — Class-2 for the same reason.
   ".claude/agents/engine-adversary.md",
+  "DONE.md",
   "fullburn/config/src/caps.ts",
   "fullburn/engine/src/gateway.ts",
   ".github/workflows/fullburn-ci.yml",
@@ -412,6 +417,7 @@ export const VERIFIED_TREE_SCOPE = Object.freeze([
   // The agent-discovery tree (2026-09-20). A PASS that does not cover the
   // adversary's own definition asserts nothing about who produced it.
   ".claude/",
+  "DONE.md",
   ":!fullburn/reports/",
   ":!fullburn/APPROVALS/",
 ]);
