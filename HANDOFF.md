@@ -11,7 +11,7 @@ on any disagreement about *state*.
 
 ## Tree and branch
 
-- verified tree: `d82f5342d31da5262febcb11d4c867cc1f778708` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
+- verified tree: `860de6b6ac8ceab3cbd682910782a2317555d770` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
 - branch: `claude/fullburn-engine-spec-r7v5lg`
 - phase: `0`
 - latest `done` report: `fullburn/reports/DONE_phase0_7a89aee21e85.md` — **exit 1, INCOMPLETE** (previous tree; C5 there read `226 caught, 0 survived, 3 stale` — AD-02/03/04, repaired in the tree above)
@@ -63,4 +63,5 @@ Things asserted this session that are NOT backed by an executed check:
 3. **Adversary registration** was observed by spawning it once (2026-09-20); the `done` checker cannot re-measure registration, only the mirror's integrity.
 4. **The nested-run guard** (`VITEST` / `FULLBURN_DONE_ACTIVE`) is proven by the integration test with the worker's env; whether vitest sets `VITEST` in every pool mode used in CI is assumed from the forks pool used here.
 5. **Lint** — "no tool configured" is a fact; that §2.1.7 intends a specific linter is not known.
-6. **C5 at the current tree** is expected, not measured, until `reports/DONE_phase0_d82f5342d31d.md` exists.
+6. **C5 at the current tree** is expected, not measured, until `reports/DONE_phase0_860de6b6ac8c.md` exists.
+7. **Commit `298c9f9`'s message and the first push of this file named the tree `d82f5342…`.** That figure was computed with git's working directory at `fullburn/`, where the scope's root-relative pathspecs resolve to nothing; the checker computes from the repository root and prints `860de6b6…`. Corrected here; the commit message cannot be.
