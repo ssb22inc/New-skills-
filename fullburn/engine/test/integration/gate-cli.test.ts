@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+// @ts-expect-error — plain .mjs module, typed loosely on purpose
+import { VERIFIED_TREE_SCOPE } from "../../scripts/gate-lib.mjs";
 
 /** INTEGRATION — the gate CLIs, executed as CI executes them, against a real
  * git repository.
@@ -38,8 +40,9 @@ function gate(script: string, ...args: string[]): { code: number; out: string } 
  * scope, hashed. reports/ and APPROVALS/ are excluded, which is what lets a
  * report bind to the tree it is then committed into. */
 const currentTreeHash = () => {
-  const scope = ['fullburn/', '.github/', ':!fullburn/reports/', ':!fullburn/APPROVALS/'];
-  const listing = execFileSync("git", ["-C", repo, "ls-files", "-s", "--", ...scope], { encoding: "utf8" });
+  // ONE definition of the scope, read from gate-lib — a literal copy here
+  // silently diverged from the CLI's the day the scope changed (2026-09-20).
+  const listing = execFileSync("git", ["-C", repo, "ls-files", "-s", "--", ...VERIFIED_TREE_SCOPE], { encoding: "utf8" });
   return execFileSync("git", ["-C", repo, "hash-object", "--stdin"], { encoding: "utf8", input: listing }).trim();
 };
 

@@ -39,7 +39,7 @@ from inference. Re-derive or ask.
 | PR | Not opened. **Do not open.** | standing instruction, every round since r5 |
 | Latest commit | see `git log -1` | — |
 | Base for current Class-2 accounting | `eb0775f` | re-derived 2026-08-21 |
-| Class-2 approval entries owed | **63** | `node engine/scripts/owed-approvals.mjs . eb0775f` |
+| Class-2 approval entries owed | **65** | `node engine/scripts/owed-approvals.mjs . eb0775f` |
 | Tracked files / Class-2 by `isClass2()` | **488 / 115** | re-derived 2026-08-21 |
 | Live dollars exposed to date | 0 | no write path exists before Phase 6 |
 | Clients exposed to date | 0 | — |
@@ -51,7 +51,8 @@ cross-family brief, superseded) → `0877861` (r8 clean, 100/100) → `7516cd4` 
 `d73df4c` (binds `trustedClock()`, retires `Date.now`) → `cb48c05` (r13 fixes) →
 `a236e8f` (r14 report) → `0466154` (r14 fixes) → `34437d6` (R14-01 ruling) →
 `b42d6ba` (runner audit) → `e9cd2ad` (haven rulings) → `a3ddc1d` (§7.5/§7.6
-rulings) → this commit (§7.0 item 2 + the isolation exclusions named).
+rulings) → `4e4eef3` (§7.0 item 2 + L38) → this commit (L39: the adversary's
+discovery mirror; the container-contamination recovery).
 
 ---
 
@@ -193,11 +194,11 @@ the index with the reason each exists.
 Meta-check passed first, so the harness figures are trustworthy rather than
 decorative.
 
-- Mutations: **209 / 209 caught, 0 survived, 0 stale**
-- Suite: **405 / 405** across 32 files
-- Three shuffled seeds: **405 / 405**
-- `--no-isolate`: **402 / 402** — the three it skips are NAMED in L38
-- Single fork: **402 / 402** — same three
+- Mutations: **214 / 214 caught, 0 survived, 0 stale**
+- Suite: **407 / 407** across 31 files
+- Three shuffled seeds: **407 / 407**
+- `--no-isolate`: **404 / 404** — the three it skips are NAMED in L38
+- Single fork: **404 / 404** — same three
 
 **Read the row above against L37.** Every one of these numbers says what CI
 *computed*. None of them says what CI *prevented* — `main` is unprotected, so a
@@ -212,7 +213,7 @@ given the negative case it never had). Both are CAUGHT now. Recording that the
 first run failed is the point: a harness that only ever prints a clean number
 is the instrument this project distrusts.
 
-Prior high-water marks, for trend: 202/202 · 194/194 · runner audit 190/190 · r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
+Prior high-water marks, for trend: 209/209 · 202/202 · 194/194 · runner audit 190/190 · r14 174/174 · r8 100/100 at `0877861` · r10 119/119 ·
 r11 124/125 (`departed`) · r13 151/151 across eleven shuffle seeds, with 47/47
 guards individually disabled.
 
@@ -251,7 +252,7 @@ CODEOWNERS: a Class-2 approval must arrive via a PR approved by Sheldon's
 authenticated GitHub identity, and the approval commit must be pushed under that
 account, never agent-authored.
 
-- **63 approval entries owed** against base `eb0775f`, re-derived 2026-08-23 via
+- **65 approval entries owed** against base `eb0775f`, re-derived 2026-09-20 via
   `node engine/scripts/owed-approvals.mjs . eb0775f`. Note the script takes
   `<repoRoot> <baseRef>` as positional arguments; `npm run owed-approvals` with
   no arguments refuses, which is correct fail-closed behaviour and not a bug.
@@ -293,6 +294,25 @@ account, never agent-authored.
    `fullburn-ci` REPORTED (success, not pending) on that PR, because the new
    failure mode to watch for is a required check that never reports. If it still
    reads `clean`, that is r15's headline.
+0a. **THE ADVERSARY WAS NOT INVOKABLE — measured 2026-09-20, ledger L39.**
+   `Agent type 'engine-adversary' not found`, twice, from both working
+   directories. The definition lives at `fullburn/.claude/agents/`; the harness
+   discovers agents from the repo root. A discovery mirror now exists at
+   `.claude/agents/engine-adversary.md` — created only AFTER the root `.claude/`
+   tree was made Class-2, put in `CI_SCOPE_GLOBS`, `VERIFIED_TREE_SCOPE` and
+   CODEOWNERS, because a bare copy measured `class2=false, inCIScope=false`.
+   `[VERIFIED engine/test/invariants/invariants.test.ts — "discovery mirror"]`
+   `[LIMITATION]` registration is observable only at the NEXT session launch:
+   run the readiness check first thing and record the answer in L39.
+   `[LIMITATION]` this fixes discovery, not family (L8 stands): a registered
+   `engine-adversary` is still Claude. The non-Claude routes — `ox-alpha` on
+   `main` (needs `OPENROUTER_API_KEY`, absent here) and `codex` (26+ branches,
+   not callable from a builder session) — are H6b.
+   **Also 2026-09-20: this container started on `main` wearing the Fullburn
+   branch name** (`2f3f9ac`, PulseRN). The real head `4e4eef3` was safe on the
+   remote; the local ref carried nothing unique and was reset to it. First
+   action of every session: `git log -1` must show a `fix(`/`docs(phase0)`
+   commit and `fullburn/PHASE` must exist, or stop.
 1. **L4/H2 — configure the Gateway caps.** The Phase 0 blocker *for spend*.
    Until it lands, the primary spend control is designed and unprovisioned.
 2. ~~**Audit every drill, gate script and harness that runs under its own

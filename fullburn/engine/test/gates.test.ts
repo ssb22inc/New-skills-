@@ -596,6 +596,7 @@ describe("gate-CLI decisions, extracted so the default suite can drive them (run
   it("the verified tree covers the CI that enforces the gate, and excludes the record", () => {
     expect(VERIFIED_TREE_SCOPE, "the workflow definition left the adversary's scope (R2-18)").toContain(".github/");
     expect(VERIFIED_TREE_SCOPE).toContain("fullburn/");
+    expect(VERIFIED_TREE_SCOPE, "the agent-discovery tree left the adversary's scope").toContain(".claude/");
     // Excluded so a report cannot invalidate itself by being committed.
     expect(VERIFIED_TREE_SCOPE).toContain(":!fullburn/reports/");
     expect(VERIFIED_TREE_SCOPE).toContain(":!fullburn/APPROVALS/");

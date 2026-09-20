@@ -18,6 +18,19 @@ export const CLASS2_PATTERNS = [
   /^fullburn\/CLAUDE\.md$/,
   /^fullburn\/ENGINE_BUILD\.md$/,
   /^fullburn\/\.claude\//,
+  // THE REPO-ROOT `.claude/` TREE — where the harness actually DISCOVERS agents.
+  //
+  // The adversary's definition lives at `fullburn/.claude/agents/` and was
+  // Class-2 from r2. But the harness reads agent definitions from
+  // `<repo-root>/.claude/agents/`, so from a session rooted at the repository
+  // the adversary was NOT REGISTERED AT ALL (measured 2026-09-20: "Agent type
+  // 'engine-adversary' not found", twice, from both working directories). The
+  // obvious fix — a copy at the root — measured `class2=false, inCIScope=false`:
+  // the adversary's own definition would have been editable with no approval
+  // and no gate. So the root tree is covered here first, and the mirror only
+  // exists because it is. Anything under a root `.claude/` configures how
+  // agents behave in this repository; all of it is a human decision.
+  /^\.claude\//,
   // Money, the grader, and the immutability primitive: values AND enforcing code.
   // The WHOLE engine source tree, not an enumeration (adversary finding R2-CP-04):
   // a list of seven files left index.ts — the deployed Worker entrypoint — free to
@@ -89,6 +102,8 @@ export const CLASS2_WITNESS_PATHS = [
   "fullburn/CLAUDE.md",
   "fullburn/ENGINE_BUILD.md",
   "fullburn/.claude/agents/engine-adversary.md",
+  // Its discovery mirror at the repo root — Class-2 for the same reason.
+  ".claude/agents/engine-adversary.md",
   "fullburn/config/src/caps.ts",
   "fullburn/engine/src/gateway.ts",
   ".github/workflows/fullburn-ci.yml",
@@ -394,6 +409,9 @@ export function selectApprovalDocs(changedFiles) {
 export const VERIFIED_TREE_SCOPE = Object.freeze([
   "fullburn/",
   ".github/",
+  // The agent-discovery tree (2026-09-20). A PASS that does not cover the
+  // adversary's own definition asserts nothing about who produced it.
+  ".claude/",
   ":!fullburn/reports/",
   ":!fullburn/APPROVALS/",
 ]);

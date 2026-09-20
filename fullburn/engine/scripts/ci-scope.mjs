@@ -28,7 +28,13 @@ import { parseNameStatusZ } from "./diff-lib.mjs";
  * that used to sit in the trigger — the LOCATION changed, not the scope, and
  * `locks-r7` holds these to `CLASS2_PATTERNS` so a Class-2 path cannot fall
  * outside them (adversary finding R8-04b). */
-export const CI_SCOPE_GLOBS = Object.freeze(["fullburn/**", ".github/**"]);
+export const CI_SCOPE_GLOBS = Object.freeze([
+  "fullburn/**",
+  ".github/**",
+  // The repo-root agent-discovery tree (2026-09-20): a change to the
+  // adversary's definition must run the gate that definition guards.
+  ".claude/**",
+]);
 
 /** @param changedFiles paths relative to the repository root */
 export function inScope(changedFiles, globs = CI_SCOPE_GLOBS) {

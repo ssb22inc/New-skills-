@@ -1358,6 +1358,24 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         },
       },
       {
+        row: "L39",
+        claim:
+          "the adversary's discovery mirror at the repo root is byte-identical to the Class-2 source in " +
+          "fullburn/, and the mirror's path is itself Class-2, in the CI scope and in the verified tree",
+        holds: () => {
+          const src = readFileSync(new URL("../../../.claude/agents/engine-adversary.md", import.meta.url), "utf8");
+          const mirror = readFileSync(new URL("../../../../.claude/agents/engine-adversary.md", import.meta.url), "utf8");
+          const p = ".claude/agents/engine-adversary.md";
+          return (
+            src.length > 1000 &&
+            mirror === src &&
+            gateLib.isClass2(p) === true &&
+            scanLib !== undefined &&
+            gateLib.VERIFIED_TREE_SCOPE.includes(".claude/")
+          );
+        },
+      },
+      {
         row: "L29",
         claim: "mutate.mjs carries exactly three mutation entries of its own",
         holds: () => (harnessSrc.match(/"engine\/scripts\/mutate\.mjs"/g) ?? []).length === 3,
@@ -2256,5 +2274,67 @@ describe("isolation-variant stages — the excluded set is named, and cannot gro
       total,
       "the isolation stages now skip a different number of tests than the three this project has accounted for",
     ).toBe(3);
+  });
+});
+
+/** ─── THE ADVERSARY'S DISCOVERY MIRROR ──────────────────────────────────────
+ *
+ * Measured 2026-09-20: `engine-adversary` was not a registered agent type —
+ * "Agent type 'engine-adversary' not found", from both working directories.
+ * The definition has lived at `fullburn/.claude/agents/` since r2, and the
+ * harness discovers agents from `<repo-root>/.claude/agents/`. From a session
+ * rooted at the repository, the adversary was never invokable.
+ *
+ * The obvious fix was measured before it was made: a copy at the repo root
+ * read `class2=false, inCIScope=false` — the adversary's own definition would
+ * have been editable with no approval and no gate. So the root `.claude/` tree
+ * was made Class-2, put in the CI scope, in the verified tree and in
+ * CODEOWNERS FIRST, and the mirror exists only because it is now as gated as
+ * its source. The mirror is a plain file rather than a symlink because whether
+ * the harness's loader follows symlinks cannot be verified from inside a
+ * session — a plain file is discovered; drift is what this check catches.
+ *
+ * `[LIMITATION]` This proves the mirror is correct and gated. It cannot prove
+ * the harness REGISTERED it — that is observable only at the next session
+ * launch, and L39 records the result of that launch. */
+describe("the adversary's discovery mirror — one source of truth, fully gated (2026-09-20)", () => {
+  const SRC = new URL("../../../.claude/agents/engine-adversary.md", import.meta.url);
+  const MIRROR = new URL("../../../../.claude/agents/engine-adversary.md", import.meta.url);
+  const MIRROR_PATH = ".claude/agents/engine-adversary.md";
+  const SRC_PATH = "fullburn/.claude/agents/engine-adversary.md";
+
+  it("the mirror exists and is byte-identical to the Class-2 source", () => {
+    const src = readFileSync(SRC, "utf8");
+    expect(src.length, "the adversary definition is empty — nothing to mirror").toBeGreaterThan(1000);
+    expect(src, "the source lost its frontmatter — the harness would not recognise it as an agent").toMatch(/^---\nname: engine-adversary\n/);
+    let mirror: string;
+    try {
+      mirror = readFileSync(MIRROR, "utf8");
+    } catch {
+      throw new Error(`${MIRROR_PATH} is missing — the adversary is not discoverable from the repo root`);
+    }
+    expect(mirror === src, `${MIRROR_PATH} has drifted from ${SRC_PATH} — the discovered adversary is not the reviewed one`).toBe(true);
+  });
+
+  /** Every gate that covers the source must cover the mirror, or the mirror is
+   * the hole. Driven, not read: each is the real decision the CLI makes. */
+  it("the mirror's path is gated exactly as the source's is", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { isClass2, codeownersCovers, VERIFIED_TREE_SCOPE } = await import("../../scripts/gate-lib.mjs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { inScope } = await import("../../scripts/ci-scope.mjs");
+    const { execFileSync } = await import("node:child_process");
+    const repoRoot = new URL("../../../../", import.meta.url).pathname.replace(/\/$/, "");
+    const owners = readFileSync(`${repoRoot}/.github/CODEOWNERS`, "utf8");
+
+    for (const p of [SRC_PATH, MIRROR_PATH]) {
+      expect(isClass2(p), `${p} is not Class-2 — editable with no approval`).toBe(true);
+      expect(inScope([p]), `${p} is outside the CI scope — a change runs no gate`).toBe(true);
+      expect(codeownersCovers(p, owners), `${p} has no CODEOWNER`).toBe(true);
+      // In the VERIFIED tree: a PASS report's hash must move when it changes.
+      const listed = execFileSync("git", ["-C", repoRoot, "ls-files", "--", ...VERIFIED_TREE_SCOPE], { encoding: "utf8" })
+        .split("\n");
+      expect(listed, `${p} is outside the adversary's verified tree — a PASS says nothing about it`).toContain(p);
+    }
   });
 });

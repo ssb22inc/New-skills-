@@ -34,7 +34,7 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, ""
  * live outside the workspace, and a fix that lives there needs an entry here
  * just as much: R8-04 was two of them. */
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
-const resolveEntry = (file) => `${file.startsWith(".github/") ? REPO_ROOT : ROOT}/${file}`;
+const resolveEntry = (file) => `${/^\.(?:github|claude)\//.test(file) ? REPO_ROOT : ROOT}/${file}`;
 /** vitest's real entry point. Spawned directly so there is no shim to orphan. */
 const VITEST_BIN = `${ROOT}/node_modules/vitest/vitest.mjs`;
 
@@ -650,9 +650,12 @@ const MUTATIONS = [
   ["CS-01 an undeterminable diff runs the gate", "engine/scripts/ci-scope.mjs",
     "  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return true;",
     "  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return false;"],
+  // REPOINTED 2026-09-20, not deleted: the one-line array became a multi-line
+  // one when `.claude/**` joined it (L39), so the old target text ceased to
+  // exist. Same property — `.github` must be in the gate's scope — new address.
   ["CS-02 the gate's scope covers .github", "engine/scripts/ci-scope.mjs",
-    'export const CI_SCOPE_GLOBS = Object.freeze(["fullburn/**", ".github/**"]);',
-    'export const CI_SCOPE_GLOBS = Object.freeze(["fullburn/**"]);'],
+    '  "fullburn/**",\n  ".github/**",',
+    '  "fullburn/**",'],
   ["CS-03 a failed diff is null, not empty", "engine/scripts/ci-scope.mjs",
     "  } catch {\n    return null;\n  }",
     "  } catch {\n    return [];\n  }"],
@@ -671,6 +674,26 @@ const MUTATIONS = [
   ["CS-07 the isolation exclusions cannot grow quietly", "package.json",
     "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts'",
     "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts' --exclude '**/locks-r12.test.ts'"],
+  // ---- the adversary's discovery mirror (L39, 2026-09-20) ----
+  //
+  // The mirror at the repo root is discovered; the source in fullburn/ is
+  // reviewed. These keep them the same file and keep the mirror as gated as
+  // the source — the hole a bare copy would have opened.
+  ["AD-01 the mirror cannot drift from the source", ".claude/agents/engine-adversary.md",
+    "You are the adversary. You are not the builder's teammate",
+    "You are the adversary. You are the builder's teammate"],
+  ["AD-02 the root .claude tree is Class-2", "engine/scripts/gate-lib.mjs",
+    "  /^\\.claude\\//,\n  // Money, the grader",
+    "  // Money, the grader"],
+  ["AD-03 the root .claude tree is in the CI scope", "engine/scripts/ci-scope.mjs",
+    '  ".claude/**",\n]);',
+    "]);"],
+  ["AD-04 the root .claude tree is in the verified tree", "engine/scripts/gate-lib.mjs",
+    '  ".claude/",\n  ":!fullburn/reports/",',
+    '  ":!fullburn/reports/",'],
+  ["AD-05 the root .claude tree has a CODEOWNER", ".github/CODEOWNERS",
+    "/.claude/                           @ssb22inc\n",
+    ""],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],
