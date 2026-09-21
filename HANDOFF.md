@@ -15,7 +15,7 @@ on any disagreement about *state*.
 - branch: `claude/fullburn-engine-spec-r7v5lg`
 - phase: `0`
 - latest `done` report: `fullburn/reports/DONE_phase0_7a89aee21e85.md` — **exit 1, INCOMPLETE** (previous tree; C5 there read `226 caught, 0 survived, 3 stale` — AD-02/03/04, repaired in the tree above)
-- `done` run at the tree above: **PENDING** — launched after the record commit; its report is committed when it exits
+- `done` run at the tree above: `fullburn/reports/DONE_phase0_860de6b6ac8c.md` — **exit 1, INCOMPLETE**, 15 failing rows, all human-owned or unmeasurable here (C1 live halves, C2, C3, C4, C7-lint, C8-owed, C8-identity, C10); C5 **PASS** — `231 mutations: 231 caught, 0 survived, 0 stale`, meta-check ok (2026-09-21 00:29)
 
 ## Open findings (immutable IDs; nothing below is closed without the test that proves it)
 
@@ -52,7 +52,7 @@ on any disagreement about *state*.
 npm run done -- phase
 ```
 
-Expected today: exit 1, with C2, C3, C4, C7-lint, C8, C10 and the unmeasurable C1 rows failing; C5 is expected to PASS at 231/231 with the meta-check (the previous run's three stale entries are repointed and each measured CAUGHT by single-entry probe), but that expectation is not a measurement until the report says so. Then, in order: the human's H19 settings → re-measure §7.0 (`blocked`) → `Reviewer-family:`-bearing cross-family read on this tree → r15 → `npm run done -- phase` exits 0 → gate ack.
+Measured 2026-09-21 at this tree: exit 1, with C2, C3, C4, C7-lint, C8, C10 and the unmeasurable C1 rows failing; C5 PASS at 231/231 with the meta-check. Nothing left failing is the builder's to fix. Then, in order: the human's H19 settings → re-measure §7.0 (`blocked`) → `Reviewer-family:`-bearing cross-family read on this tree → r15 → `npm run done -- phase` exits 0 → gate ack.
 
 ## UNVERIFIED CLAIMS
 
@@ -63,5 +63,5 @@ Things asserted this session that are NOT backed by an executed check:
 3. **Adversary registration** was observed by spawning it once (2026-09-20); the `done` checker cannot re-measure registration, only the mirror's integrity.
 4. **The nested-run guard** (`VITEST` / `FULLBURN_DONE_ACTIVE`) is proven by the integration test with the worker's env; whether vitest sets `VITEST` in every pool mode used in CI is assumed from the forks pool used here.
 5. **Lint** — "no tool configured" is a fact; that §2.1.7 intends a specific linter is not known.
-6. **C5 at the current tree** is expected, not measured, until `reports/DONE_phase0_860de6b6ac8c.md` exists.
+6. ~~C5 at the current tree is expected, not measured~~ — MEASURED 2026-09-21: `reports/DONE_phase0_860de6b6ac8c.md`, C5 PASS 231/231.
 7. **Commit `298c9f9`'s message and the first push of this file named the tree `d82f5342…`.** That figure was computed with git's working directory at `fullburn/`, where the scope's root-relative pathspecs resolve to nothing; the checker computes from the repository root and prints `860de6b6…`. Corrected here; the commit message cannot be.
