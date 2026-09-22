@@ -27,6 +27,7 @@ import {
   PHASE0_REQUIREMENTS,
   gateAck,
   isNonClaudeFamily,
+  lintCondition,
   metaVerdict,
   mutateCondition,
   parseArgs,
@@ -235,7 +236,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
       const tsc = await run("node", [TSC, "-p", `${ROOT}/tsconfig.json`, "--noEmit"]);
       sub7.push({ id: "C7-typecheck", title: "typecheck", status: tsc.code === 0 ? "PASS" : "FAIL", command: "tsc -p tsconfig.json --noEmit", observed: tsc.code === 0 ? "clean" : (tsc.out + tsc.err).trim().split("\n").slice(0, 3).join(" | ") });
-      sub7.push({ id: "C7-lint", title: "lint", status: "FAIL", command: null, observed: "NOT CONFIGURED — no lint script or config exists in this workspace; §2.1.7 requires one and choosing it is a human decision" });
+      const lintConfigured = existsSync(`${ROOT}/eslint.config.mjs`) && typeof JSON.parse(readFileSync(`${ROOT}/package.json`, "utf8")).scripts?.lint === "string";
+      const lint = lintConfigured ? await run("node", [`${ROOT}/node_modules/eslint/bin/eslint.js`, "."]) : { code: null, out: "", err: "" };
+      const lc = lintCondition({ configured: lintConfigured, code: lint.code, out: lint.out + lint.err });
+      sub7.push({ id: "C7-lint", title: "lint (eslint, type-aware — human ruling 2026-09-22)", status: lc.status, command: lintConfigured ? "npm run lint" : null, observed: lc.observed });
       const leak = await run("node", [`${ROOT}/engine/scripts/leak-check.mjs`, REPO]);
       sub7.push({ id: "C7-leak", title: "leak + structural scan (advisory secrets, primary structure — L36)", status: leak.code === 0 ? "PASS" : "FAIL", command: "node engine/scripts/leak-check.mjs <repo>", observed: (leak.out + leak.err).trim().split("\n")[0] ?? "" });
       const drill = await run("node", [VITEST, "run", "--config", `${ROOT}/vitest.drill.config.ts`, "--reporter=dot"]);

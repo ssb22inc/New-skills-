@@ -67,6 +67,9 @@ jobs:
       - name: Typecheck
         if: steps.scope.outputs.relevant != 'false'
         run: npm run typecheck
+      - name: Lint (eslint, type-aware — no-floating-promises, no-misused-promises; ruling 2026-09-22)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run lint
       - name: Unit suite
         if: steps.scope.outputs.relevant != 'false'
         run: npm test

@@ -11,11 +11,12 @@ on any disagreement about *state*.
 
 ## Tree and branch
 
-- verified tree: `860de6b6ac8ceab3cbd682910782a2317555d770` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
+- verified tree: `0ef1ce04a421813705b32f00559b067950a969cf` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
 - branch: `claude/fullburn-engine-spec-r7v5lg`
 - phase: `0`
 - latest `done` report: `fullburn/reports/DONE_phase0_7a89aee21e85.md` — **exit 1, INCOMPLETE** (previous tree; C5 there read `226 caught, 0 survived, 3 stale` — AD-02/03/04, repaired in the tree above)
-- `done` run at the tree above: `fullburn/reports/DONE_phase0_860de6b6ac8c.md` — **exit 1, INCOMPLETE**, 15 failing rows, all human-owned or unmeasurable here (C1 live halves, C2, C3, C4, C7-lint, C8-owed, C8-identity, C10); C5 **PASS** — `231 mutations: 231 caught, 0 survived, 0 stale`, meta-check ok (2026-09-21 00:29)
+- latest `done` run, at the previous tree `860de6b6`: `fullburn/reports/DONE_phase0_860de6b6ac8c.md` — **exit 1, INCOMPLETE**, 15 failing rows, all human-owned or unmeasurable here (C1 live halves, C2, C3, C4, C7-lint, C8-owed, C8-identity, C10); C5 **PASS** — `231 mutations: 231 caught, 0 survived, 0 stale`, meta-check ok (2026-09-21 00:29)
+- `done` run at the tree above: **PENDING** — launched after the lint-gate commit; its report is committed when it exits
 
 ## Open findings (immutable IDs; nothing below is closed without the test that proves it)
 
@@ -27,7 +28,7 @@ on any disagreement about *state*.
 | L8 | 2 | Builder and adversary are both Claude (Law 11). `engine-adversary` self-reported "Claude Fable 5.1 — the rule is violated" on 2026-09-20. Needs a non-Claude route: `ox-alpha` (needs `OPENROUTER_API_KEY`) or a codex hand-off (H6b). |
 | L39 | 2 → discovery resolved | Adversary was not a registered agent from a repo-root session; a gated mirror at `.claude/agents/` fixed it and registration was OBSERVED (readiness check answered on 2026-09-20). Family half stays open under L8. |
 | L40 | 2 | The completion checker nested inside its own suite under DN-14 on its first run; removed structurally (DN-15). Its first complete run found three stale harness entries (AD-02/03/04) that two commits of green suite had not; the table is now checked against the tree in the default suite (`staleEntries`, SE-01) and the checker names what it finds (DN-16). Two builder process slips recorded in the row. |
-| DONE §2.1.7 lint | 3 | No lint tool is configured; C7-lint FAILS by construction until a human chooses one. |
+| DONE §2.1.7 lint | 3 → gate built | Ruled 2026-09-22: ESLint + typescript-eslint, type-aware, `no-floating-promises` and `no-misused-promises` at error; wired as `npm run lint`, a CI step, and C7-lint. 66 files, 0 findings at install; plants refused by name (L41). C7-lint PASS in a `done` report is pending the next run. |
 | DONE §2.1.3 cross-family | 1 | No report carries a `Reviewer-family:` line naming a non-Claude family against the current tree. |
 | DONE §2.1.8 identity | 1 | Approvals cannot be shown to carry the human's authenticated identity without branch protection + a merged PR. |
 | DONE §2.1.10 ack | — | `APPROVALS/GATE_ACK_phase0.md` does not exist. Silence is not consent. |
@@ -39,6 +40,7 @@ on any disagreement about *state*.
 15. **The completion checker never nests.** It refuses to exist inside a test worker or another `done` run before reading an argument; every child carries the marker. (2026-09-20, L40)
 16. **A gate that passes on empty output is not a gate.** The builder's own pre-commit probe stage crashed silently and its "no survivors" check passed vacuously (L40). Every shell gate must assert the positive evidence it expects, not the absence of failures.
 17. **A count of mutation entries is a count of entries that still match the tree.** Three entries went stale under a neighbouring-line edit and the suite stayed green for two commits; the table is now placed against the tree on every `npm test`, and a harness failure is reported by the names of its members, never only their number. (2026-09-20, L40)
+18. **Lint is a type-aware gate for one defect class.** ESLint with typescript-eslint, `no-floating-promises` and `no-misused-promises` at error, over exactly the type checker's files, as a CI gate; an unawaited settle/reserve is the class that reaches production paths and Biome cannot see it. (Human ruling 2026-09-22, L41)
 
 ## Class-2 sets owed
 
@@ -52,7 +54,7 @@ on any disagreement about *state*.
 npm run done -- phase
 ```
 
-Measured 2026-09-21 at this tree: exit 1, with C2, C3, C4, C7-lint, C8, C10 and the unmeasurable C1 rows failing; C5 PASS at 231/231 with the meta-check. Nothing left failing is the builder's to fix. Then, in order: the human's H19 settings → re-measure §7.0 (`blocked`) → `Reviewer-family:`-bearing cross-family read on this tree → r15 → `npm run done -- phase` exits 0 → gate ack.
+Measured 2026-09-21 at tree `860de6b6`: exit 1, with C2, C3, C4, C7-lint, C8, C10 and the unmeasurable C1 rows failing; C5 PASS at 231/231 with the meta-check. The lint gate landed 2026-09-22 (L41); the next run should read C7-lint PASS and 234 entries, and that is an expectation until its report exists. Order agreed with the human 2026-09-22: H19 first (approvals signed before protection would prove bytes, not identity — R7-07), then the §7.0 re-measurement requiring `blocked`, then the router-bound cross-family read in CI once `OPENROUTER_API_KEY` exists (report line 5 `Reviewer-family:` naming a non-Claude family against this exact tree), then r15 for C2/C4, then the 110 Class-2 entries and the gate ack. Then, in order: the human's H19 settings → re-measure §7.0 (`blocked`) → `Reviewer-family:`-bearing cross-family read on this tree → r15 → `npm run done -- phase` exits 0 → gate ack.
 
 ## UNVERIFIED CLAIMS
 

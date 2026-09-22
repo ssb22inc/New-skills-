@@ -1415,6 +1415,26 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           mutateLib.staleEntries([["e", "f", "absent", "x"]], () => "present").length === 1,
       },
       {
+        row: "L41",
+        claim:
+          "the lint gate is type-aware with no-floating-promises and no-misused-promises at error, over exactly the " +
+          "type checker's files, and the checker's lint decision fails on a non-zero exit, on an error line with exit 0, " +
+          "and when nothing is configured",
+        holds: () => {
+          const cfg = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8"));
+          const src = readFileSync(new URL("../../../eslint.config.mjs", import.meta.url), "utf8");
+          return (
+            cfg.scripts.lint === "eslint ." &&
+            /"@typescript-eslint\/no-floating-promises": "error"/.test(src) &&
+            /"@typescript-eslint\/no-misused-promises": "error"/.test(src) &&
+            doneLib.lintCondition({ configured: false, code: 0, out: "" }).status === "FAIL" &&
+            doneLib.lintCondition({ configured: true, code: 1, out: "x error y" }).status === "FAIL" &&
+            doneLib.lintCondition({ configured: true, code: 0, out: "1:1 error z" }).status === "FAIL" &&
+            doneLib.lintCondition({ configured: true, code: 0, out: "" }).status === "PASS"
+          );
+        },
+      },
+      {
         row: "L29",
         claim: "mutate.mjs carries exactly three mutation entries of its own",
         holds: () => (harnessSrc.match(/"engine\/scripts\/mutate\.mjs"/g) ?? []).length === 3,
@@ -2434,6 +2454,30 @@ describe("the adversary's discovery mirror — one source of truth, fully gated 
       throw new Error(`${MIRROR_PATH} is missing — the adversary is not discoverable from the repo root`);
     }
     expect(mirror === src, `${MIRROR_PATH} has drifted from ${SRC_PATH} — the discovered adversary is not the reviewed one`).toBe(true);
+  });
+
+  /** THE LINT GATE'S REACH IS THE TYPE CHECKER'S REACH, AND BOTH RULES ARE AT
+   * ERROR. Human ruling 2026-09-22 (§2.1.7). A type-aware rule on a file the
+   * program does not include reports nothing, so a drift between the config's
+   * `files` and tsconfig `include` is a silent hole; and a rule downgraded to
+   * "warn" exits 0. Both are read from the live config module, not from prose.
+   * Executed proof that the rules bite is engine/test/integration/lint-cli.test.ts.
+   *
+   * MUTATION: LT-01 / LT-02 (either rule off). */
+  it("the lint gate covers exactly the type checker's files, with both rules at error", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const cfg = await import("../../../eslint.config.mjs");
+    const include: string[] = JSON.parse(readFileSync(new URL("../../../tsconfig.json", import.meta.url), "utf8")).include;
+    expect([...cfg.LINTED_FILES].sort()).toEqual([...include].sort());
+    expect(cfg.REQUIRED_RULES).toEqual({
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+    });
+    const flat = cfg.default as { rules?: Record<string, unknown>; files?: string[] }[];
+    const block = flat.find((b) => b.rules && b.files);
+    expect(block, "no config block carries both files and rules").toBeDefined();
+    expect(block!.rules).toEqual(cfg.REQUIRED_RULES);
+    expect(JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")).scripts.lint).toBe("eslint .");
   });
 
   /** Every gate that covers the source must cover the mirror, or the mirror is

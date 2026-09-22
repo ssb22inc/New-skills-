@@ -757,6 +757,19 @@ const MUTATIONS = [
   ["DN-16 the checker names every stale entry", "engine/scripts/done-lib.mjs",
     "    stale: [...s.matchAll(STALE_LINE)].map((m) => m[1]),",
     "    stale: [],"],
+  // ---- §2.1.7 lint gate (human ruling 2026-09-22) ----
+  //
+  // Each rule is a lock only if turning it off goes red; the integration suite
+  // plants a floating and a misused promise and expects the linter to refuse.
+  ["LT-01 no-floating-promises is an error", "eslint.config.mjs",
+    '  "@typescript-eslint/no-floating-promises": "error",',
+    '  "@typescript-eslint/no-floating-promises": "off",'],
+  ["LT-02 no-misused-promises is an error", "eslint.config.mjs",
+    '  "@typescript-eslint/no-misused-promises": "error",',
+    '  "@typescript-eslint/no-misused-promises": "off",'],
+  ["DN-17 the checker's lint condition fails on a non-zero exit", "engine/scripts/done-lib.mjs",
+    "  if (code !== 0 || errorLines.length > 0) {",
+    "  if (errorLines.length > 0) {"],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],

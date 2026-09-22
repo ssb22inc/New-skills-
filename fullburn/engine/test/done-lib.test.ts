@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, PHASE0_REQUIREMENTS, completionSentence, gateAck, isNonClaudeFamily, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, PHASE0_REQUIREMENTS, completionSentence, gateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -71,6 +71,22 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     const clean = parseMutate("  ok   negative canary\n  ok   positive canary\nCAUGHT   PATTERN-NOT-FOUND-looking name  |  x\n229 mutations: 229 caught, 0 survived, 0 not found\n");
     expect(clean.stale).toEqual([]);
     expect(clean.survivors).toEqual([]);
+  });
+
+  /** MUTATION: DN-17 — lintCondition passes on a non-zero exit. */
+  it("lint is PASS only when configured, exit 0 and no error line", () => {
+    expect(lintCondition({ configured: false, code: 0, out: "" }).status).toBe("FAIL");
+    expect(lintCondition({ configured: false, code: 0, out: "" }).observed).toMatch(/NOT CONFIGURED/);
+    expect(lintCondition({ configured: true, code: 0, out: "" }).status).toBe("PASS");
+    const finding = "  3:3  error  Promises must be awaited  @typescript-eslint/no-floating-promises\n✖ 1 problem (1 error, 0 warnings)\n";
+    const failed = lintCondition({ configured: true, code: 1, out: finding });
+    expect(failed.status).toBe("FAIL");
+    expect(failed.observed).toContain("no-floating-promises");
+    // A clean exit code with an error line in the output is still a FAIL — a
+    // wrapper that swallowed the exit code cannot make the gate read green.
+    expect(lintCondition({ configured: true, code: 0, out: finding }).status).toBe("FAIL");
+    // A crash with no findings is a FAIL that says so.
+    expect(lintCondition({ configured: true, code: 2, out: "" }).observed).toMatch(/exit 2/);
   });
 
   it("reads the owed-approvals count, or null", () => {

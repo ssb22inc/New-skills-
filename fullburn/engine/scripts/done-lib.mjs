@@ -95,6 +95,27 @@ export function mutateCondition(parsed) {
 }
 
 /** `owed-approvals.mjs` output → the number owed, or null if unreadable. */
+/** §2.1.7 "lint clean". Human ruling 2026-09-22: ESLint with typescript-eslint,
+ * type-aware, `no-floating-promises` and `no-misused-promises` at error — the
+ * defect class this project keeps meeting is an unawaited settle/reserve. The
+ * decision: not configured is FAIL and says so; a non-zero exit is FAIL and
+ * quotes the first findings; zero problems is PASS. The linter's own verdict is
+ * never trusted from its exit code alone — the output must also carry no
+ * "error" line, so a crash that exits 0 (or a wrapper that swallows) cannot
+ * read as clean. */
+export function lintCondition({ configured, code, out }) {
+  if (!configured) {
+    return { status: "FAIL", observed: "NOT CONFIGURED — no lint script or eslint.config.mjs in this workspace; §2.1.7 requires one" };
+  }
+  const text = out ?? "";
+  const errorLines = text.split("\n").filter((l) => /\berror\b/.test(l));
+  if (code !== 0 || errorLines.length > 0) {
+    const shown = errorLines.slice(0, 3).map((l) => l.trim()).join(" | ") || text.trim().split("\n").slice(0, 3).join(" | ") || "no output";
+    return { status: "FAIL", observed: `exit ${code}: ${shown}` };
+  }
+  return { status: "PASS", observed: "clean (eslint, type-aware: no-floating-promises, no-misused-promises)" };
+}
+
 export function parseOwed(out) {
   const s = out ?? "";
   if (/No Class-2 paths changed/.test(s)) return 0;
