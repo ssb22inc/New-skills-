@@ -1277,6 +1277,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const doneLib = await import("../../scripts/done-lib.mjs");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const xfLib = await import("../../scripts/cross-family-lib.mjs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const { walk: walkTree } = await import("../../scripts/leak-check.mjs");
     const { execFileSync } = await import("node:child_process");
     const { relative: relPath } = await import("node:path");
@@ -1431,6 +1433,28 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
             doneLib.lintCondition({ configured: true, code: 1, out: "x error y" }).status === "FAIL" &&
             doneLib.lintCondition({ configured: true, code: 0, out: "1:1 error z" }).status === "FAIL" &&
             doneLib.lintCondition({ configured: true, code: 0, out: "" }).status === "PASS"
+          );
+        },
+      },
+      {
+        row: "L42",
+        claim:
+          "the cross-family reviewer is pinned to the exact non-Claude id and read back; a served mismatch refuses; " +
+          "a PASS with findings is a FAIL; any endpoint but the production router forces FAIL; the rendered header " +
+          "names a non-Claude family on line 5 and binds the tree where the gate reads it",
+        holds: () => {
+          const xf = xfLib;
+          const clean = { verdict: "PASS", findings: [], invariants_checked: [], limitations: [] };
+          const report = xf.renderCrossReport({ phase: "0", round: "x1", tree: "a".repeat(40), commit: "c", branch: "b", requestedModel: xf.REVIEWER_MODEL, servedModel: xf.REVIEWER_MODEL, endpoint: xf.PRODUCTION_ENDPOINT, review: clean, verdict: xf.crossVerdict(clean), bundle: { included: [], omitted: [], bytes: 0 }, usage: null, responseId: null, addendumHash: "h", definitionHash: "h", startedAt: "t" });
+          return (
+            xf.REVIEWER_MODEL === "openai/gpt-6-astra" &&
+            xf.servedModelAcceptable(xf.REVIEWER_MODEL, "openai/gpt-6-astra-pro").ok === false &&
+            xf.servedModelAcceptable(xf.REVIEWER_MODEL, "anthropic/claude-x").ok === false &&
+            xf.crossVerdict({ ...clean, findings: [{ id: "x", severity: 5, title: "t", file: "f", evidence: "e", reproduction: "r" }] }).verdict === "FAIL" &&
+            xf.crossVerdict(clean, "http://127.0.0.1:9/x").verdict === "FAIL" &&
+            xf.crossVerdict(clean).verdict === "PASS" &&
+            doneLib.isNonClaudeFamily(doneLib.reviewerFamily(report)) === true &&
+            gateLib.checkAdversaryReport({ phase: "0", reports: [{ name: "ADVERSARY_REPORT_phase0.x1.md", content: report }], currentTreeHash: "a".repeat(40) }).ok === true
           );
         },
       },
@@ -1921,6 +1945,19 @@ const RUNNER_BINDINGS: readonly RunnerBinding[] = [
     ],
     literalsDisclosed: [
       { name: "SEEDS", why: "the five shuffle seeds §2.1.7 requires (≥5); data, and the count is what the condition measures" },
+    ],
+  },
+  {
+    // DONE.md §2.1.3 — the cross-family read. The reviewer pin, the served-model
+    // check, the contract parse, the verdict and the report shape are all
+    // cross-family-lib decisions; the report is judged by gate-lib's parsers.
+    runner: "engine/scripts/cross-family-read.mjs",
+    decisions: ["./cross-family-lib.mjs", "./gate-lib.mjs", "./scan-lib.mjs"],
+    provenBy: [
+      "engine/test/cross-family-lib.test.ts",
+      "engine/test/integration/cross-family-cli.test.ts",
+      "engine/test/gates.test.ts",
+      "engine/test/credential-corpus.test.ts",
     ],
   },
   {

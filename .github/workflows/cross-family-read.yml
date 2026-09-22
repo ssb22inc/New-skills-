@@ -1,0 +1,58 @@
+# The cross-family read (DONE.md §2.1.3; ENGINE_BUILD §2.4). CLASS 2 — changing
+# this workflow requires an APPROVALS entry (class2-gate).
+#
+# Human ruling 2026-09-22: the non-Claude review runs IN CI, router-bound, on
+# GPT Astra through OpenRouter, so it is never a by-hand claim. It is
+# dispatched, not triggered on push: one read costs real money (the whole
+# verified tree, ~330k tokens, at the reviewer's price) and reviews a tree the
+# human chose. The job FAILS CLOSED without the secret — the runner exits 2
+# saying NOT CONFIGURED and writes nothing — and a report from any endpoint but
+# the production router can never carry Verdict: PASS (cross-family-lib).
+#
+# The report is uploaded as a workflow artifact and its sha256 is printed in
+# the log; committing it to reports/ is a separate, reviewable act, and the
+# committed bytes must hash to what the log printed. This workflow holds
+# `contents: read` only: it does not push, so no automation identity ever
+# authors a review artifact into the tree.
+name: cross-family-read
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross-family-read:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fullburn
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Cross-family read (pinned reviewer; fails closed without the secret)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: npm run cross-family-read
+      - name: Report to the job summary
+        if: always()
+        run: |
+          for f in reports/ADVERSARY_REPORT_phase*.x*.md; do
+            [ -f "$f" ] || continue
+            { echo "## $f"; echo; echo '```'; sha256sum "$f"; echo '```'; echo; cat "$f"; } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: cross-family-read
+          path: |
+            fullburn/reports/ADVERSARY_REPORT_phase*.x*.md
+            fullburn/reports/ADVERSARY_REPORT_phase*.x*.raw.json
+            fullburn/reports/cross-family-*-rejected-*.raw.json
+          if-no-files-found: ignore

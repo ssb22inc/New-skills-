@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 /** THE LINT GATE, EXECUTED. Human ruling 2026-09-22 (DONE.md §2.1.7): ESLint
@@ -30,6 +30,16 @@ const lint = (path: string) => {
   const r = spawnSync(process.execPath, [ESLINT, path], { cwd: ROOT, encoding: "utf8" });
   return { code: r.status, out: r.stdout + r.stderr };
 };
+
+/** A worker killed mid-test (a SIGINT to the checker, 2026-09-22) cannot run
+ * its afterEach, and a leftover plant fails the next `npm run lint` for a
+ * defect that is not in the tree. Every plant this file could have made, from
+ * any pid, is removed before the first test. */
+beforeAll(() => {
+  for (const n of readdirSync(`${ROOT}/engine/test`)) {
+    if (/^zz-lint-plant-\d+-\w+\.ts$/.test(n)) rmSync(`${ROOT}/engine/test/${n}`, { force: true });
+  }
+});
 
 afterEach(() => {
   for (const p of plants.splice(0)) rmSync(p, { force: true });

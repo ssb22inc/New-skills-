@@ -770,6 +770,28 @@ const MUTATIONS = [
   ["DN-17 the checker's lint condition fails on a non-zero exit", "engine/scripts/done-lib.mjs",
     "  if (code !== 0 || errorLines.length > 0) {",
     "  if (errorLines.length > 0) {"],
+  // ---- §2.1.3 cross-family read (human ruling 2026-09-22) ----
+  //
+  // The reviewer is pinned and read back; a stand-in cannot mint a PASS; a
+  // PASS with findings is a FAIL; the header is what the gate parsers read.
+  ["XF-01 the served model must be the pinned reviewer", "engine/scripts/cross-family-lib.mjs",
+    '  if (served !== requested) return { ok: false, reason: `served model "${served}" is not the pinned reviewer "${requested}"` };',
+    "  // (served-model check removed)"],
+  ["XF-02 a PASS with findings is a FAIL", "engine/scripts/cross-family-lib.mjs",
+    '  if (review.findings.length > 0) return { verdict: "FAIL", why:',
+    '  if (false) return { verdict: "FAIL", why:'],
+  ["XF-03 a stand-in endpoint cannot mint a PASS", "engine/scripts/cross-family-lib.mjs",
+    '  if (endpoint !== PRODUCTION_ENDPOINT) return { verdict: "FAIL", why:',
+    '  if (false) return { verdict: "FAIL", why:'],
+  ["XF-04 the report names the reviewer family on line 5", "engine/scripts/cross-family-lib.mjs",
+    '  lines.push(`Reviewer-family: ${REVIEWER_FAMILY_LINE}`);',
+    '  lines.push(`Reviewer: ${REVIEWER_FAMILY_LINE}`);'],
+  ["XF-06 allow-dirty is honoured only off the production router", "engine/scripts/cross-family-lib.mjs",
+    "  if (allowDirty && endpoint !== PRODUCTION_ENDPOINT) return null;",
+    "  if (allowDirty) return null;"],
+  ["XF-05 no key means no read and no report", "engine/scripts/cross-family-read.mjs",
+    "  if (!dryRun && !key) {",
+    "  if (false) {"],
   ["R14-01 a transport refusal is surfaced", "engine/src/gateway.ts",
     "      committedUsd = reservation.amountUsd;\n      throw redactError(err, secrets, GatewayError);",
     "      committedUsd = reservation.amountUsd;\n      return { greeting: \"swallowed\" };"],
