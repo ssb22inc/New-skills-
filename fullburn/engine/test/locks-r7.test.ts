@@ -12,7 +12,7 @@ import {
 import { capsOf, fixedCaps, memoryMeter } from "./helpers.ts";
 import { InMemorySpendLedger, resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { applyEntry, summaryLine } from "../scripts/mutate-lib.mjs";
+import { MARKER as HARNESS_MARKER, applyEntry, readThroughInFlight, summaryLine } from "../scripts/mutate-lib.mjs";
 
 /** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
  * one test's spend is the next test's opening balance unless the slate is
@@ -846,8 +846,20 @@ describe("control plane — an approval cannot be minted by the agent it restrai
 
     // Both targets must still exist, or the meta-check is stale and the run is
     // void — which the runner reports rather than silently skipping.
+    /** READ THROUGH THE HARNESS MARKER. This loop ran while the harness had a
+     * canary APPLIED, read the file directly, and failed on the rewrite
+     * canary's vanished `from` text — so the meta-check's own prover made the
+     * from-removing canary CAUGHT and the harness VOID on its first run
+     * (2026-09-24, measured: "1 failed | 457 passed" under that canary). The
+     * appending canary never tripped it because its text stays a prefix. The
+     * marker carries the committed bytes; a check inside the harness reads
+     * those, exactly as the staleness invariant now does (X-07). */
+    const { existsSync: markerExists } = await import("node:fs");
+    const marker = markerExists(HARNESS_MARKER as string) ? (JSON.parse(readFileSync(HARNESS_MARKER as string, "utf8")) as { path: string; original: string }) : null;
+    const readTree = (file: string) => readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
+    const read = readThroughInFlight(readTree, marker, (p: string) => (p.startsWith("/") ? p : new URL(`../../${p}`, import.meta.url).pathname)) as (f: string) => string;
     for (const c of [negative, rewrite, positive]) {
-      const src = readFileSync(new URL(`../../${c.file}`, import.meta.url), "utf8");
+      const src = read(c.file);
       expect(src.includes(c.from), `the ${c.expect} canary's target text is gone: ${c.file}`).toBe(true);
       expect(src.split(c.from).length, `the ${c.name} target is ambiguous`).toBe(2);
     }

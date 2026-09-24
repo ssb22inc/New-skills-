@@ -61,7 +61,12 @@ export function parseMutate(out) {
   // number without its members is a status, not a finding.
   const STALE_LINE = /^PATTERN-NOT-FOUND\s+(.+?)\s+\([^)]*\)\s*$/gm;
   const SURVIVED_LINE = /^\*\*\* SURVIVED \*\*\*\s+(.+?)\s*$/gm;
+  // The harness's own reason for stopping without a number (a failed
+  // meta-check names its canary) — the checker discarded it on 2026-09-24
+  // exactly as it once discarded the stale names.
+  const metaFailure = /^META-CHECK FAILED: ([^\n]*)/m.exec(s);
   return {
+    metaFailure: metaFailure ? metaFailure[1].trim() : null,
     stale: [...s.matchAll(STALE_LINE)].map((m) => m[1]),
     survivors: [...s.matchAll(SURVIVED_LINE)].map((m) => m[1]),
     metaNegative: /\bok\s+negative canary\b/.test(s),
@@ -75,8 +80,8 @@ export function parseMutate(out) {
 
 export function mutateCondition(parsed) {
   const p = parsed ?? {};
-  if (!p.metaNegative || !p.metaPositive) {
-    return { status: "FAIL", observed: "meta-check did not report both answers in this run — harness result is VOID (DONE.md §1)" };
+  if (!p.metaNegative || !p.metaPositive || p.metaFailure) {
+    return { status: "FAIL", observed: `meta-check did not report both answers in this run — harness result is VOID (DONE.md §1)${p.metaFailure ? `: ${p.metaFailure}` : ""}` };
   }
   if (p.total === null || p.survived === null || p.notFound === null) {
     return { status: "FAIL", observed: "no summary line — the harness did not finish" };

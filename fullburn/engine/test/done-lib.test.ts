@@ -99,6 +99,18 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(class2Condition({ ok: "yes" }, 0).status).toBe("FAIL");
   });
 
+  /** MUTATION: DN-18 — drop the meta-check reason from the row. */
+  it("a failed meta-check's reason reaches the C5 row, and a failed meta-check is never a PASS whatever else printed", () => {
+    const out = "  ok   negative canary — a comment-only edit must SURVIVE  |  got SURVIVED\n  FAIL negative canary — a comment REWRITE (from-text removed) must SURVIVE  |  got CAUGHT\n  ok   positive canary — a reverted guard must be CAUGHT  |  got CAUGHT\n\nMETA-CHECK FAILED: negative canary — a comment REWRITE (from-text removed) must SURVIVE expected SURVIVED, got CAUGHT.\nHARNESS RESULT IS VOID.\n";
+    const p = parseMutate(out);
+    expect(p.metaFailure).toMatch(/comment REWRITE/);
+    const c = mutateCondition(p);
+    expect(c.status).toBe("FAIL");
+    expect(c.observed).toContain("comment REWRITE");
+    // Even with a summary line present, a META-CHECK FAILED line is FAIL.
+    expect(mutateCondition(parseMutate(out + "3 mutations: 3 caught, 0 survived, 0 not found\n")).status).toBe("FAIL");
+  });
+
   it("reads the owed-approvals count, or null", () => {
     expect(parseOwed("No Class-2 paths changed. This PR owes no approval entries.")).toBe(0);
     expect(parseOwed("# Class-2 approvals owed — 65 entr(y|ies)\n# base-commit: x")).toBe(65);

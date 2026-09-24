@@ -11,14 +11,15 @@ on any disagreement about *state*.
 
 ## Tree and branch
 
-- verified tree: `9a05f8ae69b5356526262386f8c630d6bb959fbf` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
+- verified tree: `4c9e90440363311cc02ab8f6ff269554caf939fc` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
 - branch: `claude/fullburn-engine-spec-r7v5lg`
 - phase: `0`
 - latest `done` report: `fullburn/reports/DONE_phase0_7a89aee21e85.md` — **exit 1, INCOMPLETE** (previous tree; C5 there read `226 caught, 0 survived, 3 stale` — AD-02/03/04, repaired in the tree above)
 - latest `done` run, at the previous tree `860de6b6`: `fullburn/reports/DONE_phase0_860de6b6ac8c.md` — **exit 1, INCOMPLETE**, 15 failing rows, all human-owned or unmeasurable here (C1 live halves, C2, C3, C4, C7-lint, C8-owed, C8-identity, C10); C5 **PASS** — `231 mutations: 231 caught, 0 survived, 0 stale`, meta-check ok (2026-09-21 00:29)
 - `done` run at `0ef1ce04` (the lint-gate tree): INTERRUPTED by the builder (SIGINT, harness restored the tree, exit 130, no verdict) after editing began during its harness — recorded in L42; no report exists for that tree
 - `done` run at `abda5d88`: `fullburn/reports/DONE_phase0_abda5d88c24f.md` — **exit 1, INCOMPLETE** (2026-09-22 09:53). ~~C5 PASS 240/240~~ **VOID (X-07, ledger L43 correction)**;
-- `done` run at the tree above: **PENDING** — launched after the x1-fixes commit with the tree untouched; its C5 is the first honest harness count since `7a89aee2` (226/229) **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
+- `done` run at `9a05f8ae`: `fullburn/reports/DONE_phase0_9a05f8ae69b5.md` — exit 1; C5 "the harness did not finish": the new from-removing canary was CAUGHT by locks-r7's own target-exists check (L43 addendum), so the harness declared itself VOID and stopped — correct behaviour, and the checker's row now carries that reason (DN-18)
+- `done` run at the tree above: **PENDING** — meta-check passes all three canaries as of 05:58; the checker's C5 is the first honest harness count since `7a89aee2` (226/229) **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
 
 ## Open findings (immutable IDs; nothing below is closed without the test that proves it)
 
