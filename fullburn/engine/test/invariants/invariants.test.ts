@@ -548,6 +548,26 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         rmSync(rootOther, { force: true });
       }
 
+      /** X2-02 (cross-family, 2026-09-24): a marker whose writer is ALIVE is
+       * another run's, not a crash. It is neither restored nor removed, and
+       * the caller is told to refuse. A dead writer's marker is repaired.
+       * MUTATION: X2-02 — repair regardless of liveness. */
+      // @ts-expect-error — plain .mjs module, typed loosely on purpose
+      const { processAlive } = await import("../../scripts/mutate-lib.mjs");
+      expect(processAlive(process.pid), "this process is not alive?").toBe(true);
+      expect(processAlive(2 ** 22 - 7), "an impossible pid read as alive").toBe(false);
+      expect(processAlive(-1)).toBe(false);
+      write(victim, "if (false) { /* MUTATED */ }\n");
+      write(marker, JSON.stringify({ path: victim, original: "restored\n", workspace, pid: 4242 }));
+      const live = recoverInFlight(marker, undefined, () => true);
+      expect(live?.live, "a live writer's marker was treated as a crash").toBe(true);
+      expect(live?.repaired).toBe(false);
+      expect(readFileSync(victim, "utf8"), "a running harness's mutation was torn out from under it").toContain("MUTATED");
+      expect(existsSync(marker), "a live marker was removed").toBe(true);
+      const dead = recoverInFlight(marker, undefined, () => false);
+      expect(dead?.repaired, "a dead writer's marker was not repaired").toBe(true);
+      expect(readFileSync(victim, "utf8")).toBe("restored\n");
+
       // A corrupt marker is cleared rather than crashing the next run forever.
       write(marker, "{ not json");
       expect(recoverInFlight(marker)?.repaired).toBe(false);
@@ -1321,6 +1341,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const doneLib = await import("../../scripts/done-lib.mjs");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const xfLib = await import("../../scripts/cross-family-lib.mjs");
+    const redactMod = await import("../../src/redact.ts");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const { walk: walkTree } = await import("../../scripts/leak-check.mjs");
     const { execFileSync } = await import("node:child_process");
@@ -1456,7 +1477,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           doneLib.mutateCondition(doneLib.parseMutate("214 mutations: 214 caught, 0 survived, 0 not found\n")).status === "FAIL" &&
           doneLib.metaVerdict({ refusalTriggered: true, before: "FAIL", after: "FAIL" }).ok === false &&
           doneLib.preflightRefusals({ porcelain: "?? x", markerExists: false }).length === 1 &&
-          doneLib.mutateCondition(doneLib.parseMutate("  ok   negative canary\n  ok   positive canary\nPATTERN-NOT-FOUND  AD-02 x  (f)\n*** SURVIVED ***   R0-00 y\n3 mutations: 1 caught, 1 survived, 1 not found\n")).observed.includes("AD-02 x") &&
+          doneLib.mutateCondition(doneLib.parseMutate(doneLib.META_CANARY_NAMES.map((n: string) => `  ok   ${n}  |  got x\n`).join("") + "PATTERN-NOT-FOUND  AD-02 x  (f)\n*** SURVIVED ***   R0-00 y\n3 mutations: 1 caught, 1 survived, 1 not found\n")).observed.includes("AD-02 x") &&
           mutateLib.staleEntries([["e", "f", "absent", "x"]], () => "present").length === 1,
       },
       {
@@ -1519,6 +1540,32 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
             gateLib.isClass2("fullburn/reports/HANDOFF.md") === false &&
             mutateLib.META_CANARIES.filter((c: { expect: string }) => c.expect === "SURVIVED").length === 2 &&
             /typeof process !== "undefined"/.test(clockSrc) === true
+          );
+        },
+      },
+      {
+        row: "L44",
+        claim:
+          "a live marker is refused rather than repaired; the scanner's configuration is Class-2; a credential at any depth is " +
+          "detected; a money error is rebuilt with its class only; C5 requires every canary and a reconciled, zero-exit summary; " +
+          "same-family and cross-family reports are disjoint populations",
+        holds: () => {
+          const { containsSecret, redactMoneyError } = redactMod;
+          const CapErr = caps.CapError as new (m: string) => Error;
+          const frozen = Object.freeze(Object.assign(new CapErr("m SECRET"), { extra: "SECRET" }));
+          const rebuilt = redactMoneyError(frozen, ["SECRET"]) as Error & { extra?: unknown };
+          let deep: Record<string, unknown> = { k: "SECRET" };
+          for (let i = 0; i < 12; i++) deep = { d: deep };
+          const three = doneLib.META_CANARY_NAMES.map((n: string) => `  ok   ${n}\n`).join("") + "2 mutations: 2 caught, 0 survived, 0 not found\n";
+          return (
+            mutateLib.recoverInFlight("/nonexistent-marker", { existsSync: () => true, readFileSync: () => JSON.stringify({ path: "/x", original: "o", pid: 1 }), writeFileSync: () => {}, rmSync: () => {} }, () => true)?.live === true &&
+            gateLib.isClass2(".gitleaks.toml") === true &&
+            containsSecret(deep, ["SECRET"]) === true &&
+            rebuilt !== frozen && rebuilt instanceof CapErr && !("extra" in rebuilt) && !rebuilt.message.includes("SECRET") &&
+            doneLib.mutateCondition(doneLib.parseMutate(three), 0).status === "PASS" &&
+            doneLib.mutateCondition(doneLib.parseMutate(three), 1).status === "FAIL" &&
+            doneLib.mutateCondition(doneLib.parseMutate(three.replace("2 caught", "1 caught")), 0).status === "FAIL" &&
+            doneLib.splitReportsByFamily([{ name: "x", content: "Reviewer-family: OpenAI\n" }]).same.length === 0
           );
         },
       },

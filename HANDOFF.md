@@ -11,7 +11,7 @@ on any disagreement about *state*.
 
 ## Tree and branch
 
-- verified tree: `c69931a45743502b49c99fb6907a04d65a2e5e1b` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
+- verified tree: `4cb6640e23eddbedf2a930384afa2d63109d83cf` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
 - branch: `claude/fullburn-engine-spec-r7v5lg`
 - phase: `0`
 - latest `done` report: `fullburn/reports/DONE_phase0_7a89aee21e85.md` — **exit 1, INCOMPLETE** (previous tree; C5 there read `226 caught, 0 survived, 3 stale` — AD-02/03/04, repaired in the tree above)
@@ -20,7 +20,8 @@ on any disagreement about *state*.
 - `done` run at `abda5d88`: `fullburn/reports/DONE_phase0_abda5d88c24f.md` — **exit 1, INCOMPLETE** (2026-09-22 09:53). ~~C5 PASS 240/240~~ **VOID (X-07, ledger L43 correction)**;
 - `done` run at `9a05f8ae`: `fullburn/reports/DONE_phase0_9a05f8ae69b5.md` — exit 1; C5 "the harness did not finish": the new from-removing canary was CAUGHT by locks-r7's own target-exists check (L43 addendum), so the harness declared itself VOID and stopped — correct behaviour, and the checker's row now carries that reason (DN-18)
 - `done` run at `4c9e9044`: `fullburn/reports/DONE_phase0_4c9e90440363.md` — exit 1; **C5 `252 mutations: 251 caught, 1 survived` — the first honest count since `7a89aee2`**; the survivor R9-10 was an entry whose target drifted past git's 8000-byte binary window (L43 addendum), repointed and probed CAUGHT
-- `done` run at the tree above: **PENDING** — after the x2 read (the human's order 2026-09-24: x2 after the done report) **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
+- x2 ran 2026-09-24 at `c69931a4` (`reports/ADVERSARY_REPORT_phase0.x2.md`, FAIL, 20 findings; eleven fixed — dispositions below)
+- `done` run at the tree above: **PENDING** — launched after the x2-fixes commit **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
 
 ## Open findings (immutable IDs; nothing below is closed without the test that proves it)
 
@@ -34,7 +35,7 @@ on any disagreement about *state*.
 | L40 | 2 | The completion checker nested inside its own suite under DN-14 on its first run; removed structurally (DN-15). Its first complete run found three stale harness entries (AD-02/03/04) that two commits of green suite had not; the table is now checked against the tree in the default suite (`staleEntries`, SE-01) and the checker names what it finds (DN-16). Two builder process slips recorded in the row. |
 | DONE §2.1.7 lint | 3 → gate built | Ruled 2026-09-22: ESLint + typescript-eslint, type-aware, `no-floating-promises` and `no-misused-promises` at error; wired as `npm run lint`, a CI step, and C7-lint. 66 files, 0 findings at install; plants refused by name (L41). C7-lint PASS in a `done` report is pending the next run. |
 | C7-leak / Law 9 | **2, needs a ruling** | The cross-family runner calls OpenRouter directly and the Class-2 structural scan flags the hostname under Law 9 (every LLM call through AI Gateway). The builder does not exempt or respell. Two lawful resolutions, the human's to pick: (a) route the read through the AI Gateway's OpenRouter provider endpoint once H2 exists — the read then waits on H2 as well as the key; (b) a written ruling that review tooling is outside Law 9, with the scan rule amended by the human (scan-lib is Class-2). Until then C7-leak is FAIL at this tree and the read must not be dispatched. |
-| DONE §2.1.3 cross-family | 1 → x1 RAN: FAIL, 17 findings | Ruled 2026-09-22: GPT Astra via OpenRouter, in CI. `cross-family-read.mjs` + `.github/workflows/cross-family-read.yml` (dispatch-only, fails closed without `OPENROUTER_API_KEY`), reviewer pinned to `openai/gpt-6-astra` and read back, stand-in cannot mint a PASS (L42). x1 ran 2026-09-24 by hand with the human's key (rotated after): `reports/ADVERSARY_REPORT_phase0.x1.md`, FAIL, 17 findings, dispositions below. C3 stays FAIL until a read PASSES against a later tree. |
+| DONE §2.1.3 cross-family | 1 → x1 and x2 RAN: FAIL, 17 then 20 findings | Ruled 2026-09-22: GPT Astra via OpenRouter, in CI. `cross-family-read.mjs` + `.github/workflows/cross-family-read.yml` (dispatch-only, fails closed without `OPENROUTER_API_KEY`), reviewer pinned to `openai/gpt-6-astra` and read back, stand-in cannot mint a PASS (L42). x1 ran 2026-09-24 by hand with the human's key (rotated after): `reports/ADVERSARY_REPORT_phase0.x1.md`, FAIL, 17 findings, dispositions below. C3 stays FAIL until a read PASSES against a later tree. |
 | DONE §2.1.8 identity | 1 | Approvals cannot be shown to carry the human's authenticated identity without branch protection + a merged PR. |
 | DONE §2.1.10 ack | — | `APPROVALS/GATE_ACK_phase0.md` does not exist. Silence is not consent. |
 
@@ -63,6 +64,35 @@ Report: `fullburn/reports/ADVERSARY_REPORT_phase0.x1.md` (Verdict FAIL, 17 findi
 | X-17 | 5 | FIXED: no Node API at module load; refuses at construction without `process.hrtime`; driven in a process without `process`. Whether the Worker declares `nodejs_compat` is the human's stack call. X1-17. | trusted-clock |
 
 Probe re-measurement 2026-09-24 (marker-writing probe, failing tests named): 26 of 26 CAUGHT, each by a named test other than the staleness invariant (R14-01 as the sanity case; X1-07/04/02/03/05/10/08a/08b/13/17/12; SE-01; DN-16; AD-02/03/04; LT-01/02; DN-17; XF-01..06). Two of them — X1-08b and X1-12 — SURVIVED on the first honest pass: nothing drove the redacted error name, and C8's predicate lived in the runner; both gained a driven red-proof (hardening.test.ts; done-lib `class2Condition`) and were re-probed CAUGHT. Log: probe-28.log in the session scratchpad; the harness re-run is the authoritative count.
+
+## Cross-family round x2 (GPT-6 Astra, 2026-09-24, by the human's order) — dispositions
+
+Report: `fullburn/reports/ADVERSARY_REPORT_phase0.x2.md` (Verdict FAIL, 20 findings, bound to `c69931a4`).
+
+| ID | Sev | Disposition |
+|---|---|---|
+| X2-01 | 1 | Already open — H19/L37. Human-owned. |
+| X2-02 | 1 | FIXED: live marker refused, harness refuses to start beside a running one. Entry X2-02. |
+| X2-03 | 1 | Already open — L4/H2. Human-owned. |
+| X2-04 | 2 | FIXED: gitleaks config Class-2 + CODEOWNER + CI scope. Entry X2-04. |
+| X2-05 | 2 | FIXED: the runner scrubs the key from every print and every artifact. Entry X2-05. |
+| X2-06 | 2 | FIXED: `containsSecret`, no depth limit. Entry X2-06. |
+| X2-07 | 2 | FIXED: money errors rebuilt, class only. Entry X2-07. |
+| X2-08 | 2 | Already open — vault rotation unmet since F10. |
+| X2-09 | 3 | ESCALATED: serving accepts any valid map; requiring bindRole provenance changes every fixture. Ruling needed. |
+| X2-10 | 3 | ESCALATED — Law 9 vs the router (same as X-11). |
+| X2-11 | 3 | FIXED: every canary, non-empty, reconciled, exit 0. Entries X2-11a/b. |
+| X2-12 | 3 | FIXED: disjoint same-family / cross-family populations. Entry X2-12. |
+| X2-13 | 3 | FIXED: origin check before the priming read; test counts reads. Entry X2-13. The X-05 proof proved the wrong property — recorded. |
+| X2-14 | 3 | ESCALATED: grade-registry decisions untraced; a traced boundary is proposed. |
+| X2-15 | 3 | FIXED: audit entries frozen. Entry X2-15. |
+| X2-16 | 3 | Already open — AC1-live, H2–H6. |
+| X2-17 | 3 | FIXED: every import statement per line; unresolved imports refused. Entry X2-17. |
+| X2-18 | 5 | Already open — H1. |
+| X2-19 | 5 | FIXED: clock bound deterministic. |
+| X2-20 | 5 | ESCALATED: `nodejs_compat` is the human's stack call. |
+
+Probe measurement 2026-09-24 (marker-writing probe): 10 of 11 CAUGHT by a named test on the first pass; X2-17 SURVIVED honestly (the red-proof drove the function, not its wiring into `moneyPathRefusals`) and gained a fixture-root test that drives the wiring, then re-probed CAUGHT by "moneyPathRefusals refuses a root whose money path imports a file that does not exist" — 11 of 11.
 
 ## Standing rulings issued since the last handoff (for the human to append to DONE.md §4)
 

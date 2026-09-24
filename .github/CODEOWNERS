@@ -43,6 +43,11 @@
 # The lint gate's configuration (X-02) and every review artifact (X-03):
 # what decides a gate's reach, and what the gates read as evidence.
 /fullburn/eslint.config.mjs         @ssb22inc
+# The primary secret scanner's configuration (X2-04).
+/.gitleaks.toml                     @ssb22inc
+/.gitleaksignore                    @ssb22inc
+/fullburn/.gitleaks.toml            @ssb22inc
+/fullburn/.gitleaksignore           @ssb22inc
 /fullburn/reports/ADVERSARY_REPORT_* @ssb22inc
 /fullburn/reports/DONE_*            @ssb22inc
 

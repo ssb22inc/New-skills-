@@ -44,6 +44,11 @@ export const CLASS2_PATTERNS = [
   // The gates themselves and everything that decides whether they run
   /^\.github\//,
   /^fullburn\/engine\/scripts\//,
+  // THE PRIMARY SECRET SCANNER'S CONFIGURATION (cross-family finding X2-04,
+  // 2026-09-24): a root .gitleaks.toml or .gitleaksignore decides what the
+  // PRIMARY detector reports and could land as an out-of-scope Class-1 change.
+  /^\.gitleaks(?:\.toml|ignore)$/,
+  /^fullburn\/\.gitleaks(?:\.toml|ignore)$/,
   // THE LINT GATE'S CONTROLLING CONFIGURATION. Its `ignores` can exclude
   // engine/src/** while the rules and the file globs read unchanged and the
   // plants under engine/test/ still fire (cross-family finding X-02,
@@ -116,6 +121,9 @@ export function isClass2(path) {
  * some entry — `locks-r5.test.ts` asserts both directions, so neutering a
  * pattern or adding one without a witness turns the suite red. */
 export const CLASS2_WITNESS_PATHS = [
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  "fullburn/.gitleaks.toml",
   "fullburn/eslint.config.mjs",
   "fullburn/reports/ADVERSARY_REPORT_phase0.x1.md",
   "fullburn/reports/DONE_phase0_abda5d88c24f.md",

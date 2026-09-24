@@ -44,7 +44,19 @@ export const ROOT_TARGETS = /^\.(?:github|claude)\/|^DONE\.md$/;
 export const MARKER = fileURLToPath(new URL("./.mutate-inflight.json", import.meta.url));
 
 /** Restores whatever a previous run left mutated. Returns what it repaired. */
-export function recoverInFlight(markerPath = MARKER, fs = { existsSync, readFileSync, writeFileSync, rmSync }) {
+/** Is the process that wrote a marker still alive? Injected so the negative
+ * case can be driven; the default asks the kernel with signal 0. */
+export function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e && e.code === "EPERM";
+  }
+}
+
+export function recoverInFlight(markerPath = MARKER, fs = { existsSync, readFileSync, writeFileSync, rmSync }, isAlive = processAlive) {
   if (!fs.existsSync(markerPath)) return null;
   let record;
   try {
@@ -59,6 +71,15 @@ export function recoverInFlight(markerPath = MARKER, fs = { existsSync, readFile
   if (typeof record?.path !== "string" || typeof record?.original !== "string") {
     fs.rmSync(markerPath, { force: true });
     return { path: null, repaired: false };
+  }
+  /** A LIVE MARKER IS ANOTHER RUN, NOT A CRASH (cross-family finding X2-02,
+   * 2026-09-24). Every invocation recovered on sight, so a second harness —
+   * or a probe — started beside a running one "restored" the first run's
+   * active mutation from under it, then both wrote source and removed the
+   * same marker. The marker carries the writer's pid: if that process is
+   * alive, this is not ours to repair, and the caller must refuse to start. */
+  if (isAlive(record.pid)) {
+    return { path: record.path, repaired: false, live: true, pid: record.pid, refused: "another run is in flight" };
   }
   /** THE MARKER NAMES A PATH, AND A PATH IS NOT A CAPABILITY.
    *

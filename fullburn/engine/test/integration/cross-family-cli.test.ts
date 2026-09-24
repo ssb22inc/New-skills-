@@ -114,6 +114,29 @@ describe("cross-family runner — fails closed at every step before a report exi
     expect(newReports().filter((n) => n.endsWith(".md"))).toEqual([]);
   });
 
+  /** X2-05 (cross-family, 2026-09-24): the key must appear in NOTHING the
+   * runner prints or saves — an error body, a non-JSON body, a rejected answer,
+   * a valid answer's text, the raw response. MUTATION: X2-05 — scrub is identity. */
+  it("a key echoed by the upstream never reaches the log, the report or the raw artifact", async () => {
+    const KEY = "test-key-XyZ123-echoed-back";
+    let n = 0;
+    const url = await serve(() => {
+      n += 1;
+      if (n === 1) return { status: 401, json: { error: { message: `bad token ${KEY}` } } };
+      return { status: 200, json: answer("openai/gpt-6-astra", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [`saw ${KEY}`], limitations: [`token ${KEY} quoted`] })) };
+    });
+    const r1 = await run({ OPENROUTER_API_KEY: KEY, FULLBURN_CROSS_FAMILY_ENDPOINT: url });
+    expect(r1.code).toBe(1);
+    expect(r1.out, "the key was printed in the error path").not.toContain(KEY);
+    expect(r1.out).toContain("[redacted]");
+    const r2 = await run({ OPENROUTER_API_KEY: KEY, FULLBURN_CROSS_FAMILY_ENDPOINT: url });
+    expect(r2.out, "the key was printed on the success path").not.toContain(KEY);
+    for (const f of newReports()) {
+      expect(readFileSync(`${REPORTS}/${f}`, "utf8"), `${f} carries the key`).not.toContain(KEY);
+    }
+    expect(newReports().some((f) => f.endsWith(".raw.json")), "no raw artifact was written").toBe(true);
+  });
+
   it("a router error writes no report", async () => {
     const url = await serve(() => ({ status: 402, json: { error: { message: "insufficient credits" } } }));
     const r = await run({ OPENROUTER_API_KEY: "test-key", FULLBURN_CROSS_FAMILY_ENDPOINT: url });

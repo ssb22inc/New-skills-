@@ -35,6 +35,10 @@ export const CI_SCOPE_GLOBS = Object.freeze([
   // adversary's definition must run the gate that definition guards.
   ".claude/**",
   "DONE.md",
+  // The primary secret scanner's configuration (X2-04): a change to what
+  // gitleaks reports must run the gate that gitleaks is part of.
+  ".gitleaks.toml",
+  ".gitleaksignore",
 ]);
 
 /** @param changedFiles paths relative to the repository root */

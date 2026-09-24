@@ -115,7 +115,11 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     const { deps, transport } = makeDeps();
     // Scoped to the right client (the scope check precedes everything), and
     // throwing on any read: the refusal seen must be the origin's.
-    const vault = { clientId: TEST_CLIENT, get() { throw new Error("VAULT READ — the origin check did not come first"); } } as unknown as typeof deps.vault;
+    // X2-13 (cross-family, 2026-09-24): a vault that only THREW proved the
+    // wrong property — the priming read had already happened and its throw was
+    // swallowed. The vault now COUNTS: zero reads is the claim.
+    let reads = 0;
+    const vault = { clientId: TEST_CLIENT, get() { reads += 1; throw new Error("VAULT READ — the origin check did not come first"); } } as unknown as typeof deps.vault;
     const call = (gatewayBaseUrl: string) =>
       llm({ ...deps, vault, gatewayBaseUrl, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: new TraceContext("x05", TEST_CLIENT) });
     await expect(call("https://receiver.example.invalid/v1/a/b/")).rejects.toThrow(/is not the AI Gateway/);
@@ -124,6 +128,7 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     await expect(call("https://user:pw@gateway.ai.cloudflare.com/v1/a/b/")).rejects.toThrow(/is not the AI Gateway/);
     await expect(call("https://gateway.ai.cloudflare.com/v2/a/b/")).rejects.toThrow(/is not the AI Gateway/);
     await expect(call("nonsense")).rejects.toThrow(/is not a URL/);
+    expect(reads, "the vault was read before the origin was checked").toBe(0);
     expect(transport.requests.length, "a refused base still reached the transport").toBe(0);
     // The real base, with the real vault, serves.
     await expect(llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: new TraceContext("x05-ok", TEST_CLIENT) })).resolves.toBeDefined();

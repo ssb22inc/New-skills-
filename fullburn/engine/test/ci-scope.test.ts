@@ -17,6 +17,9 @@ describe("ci-scope — whether a diff needs the fullburn gate", () => {
     expect(inScope(["fullburn/config/src/caps.ts"])).toBe(true);
     expect(inScope([".github/CODEOWNERS"])).toBe(true);
     expect(inScope([".github/workflows/fullburn-ci.yml"])).toBe(true);
+    // X2-04: the primary scanner's configuration runs the gate it configures.
+    expect(inScope([".gitleaks.toml"])).toBe(true);
+    expect(inScope([".gitleaksignore"])).toBe(true);
     expect(inScope(["fullburn/PHASE"])).toBe(true);
     // One relevant file among many irrelevant ones is still relevant.
     expect(inScope(["haven/README.md", "pulsern/x.ts", "fullburn/engine/src/gateway.ts"])).toBe(true);
@@ -70,7 +73,9 @@ describe("ci-scope — whether a diff needs the fullburn gate", () => {
   });
 
   it("the scope is the one the trigger used to carry", () => {
-    expect([...CI_SCOPE_GLOBS].sort()).toEqual([".claude/**", ".github/**", "DONE.md", "fullburn/**"]);
+    // Widened 2026-09-24 by the primary scanner's configuration (X2-04): what
+    // gitleaks reports is decided by these two files, so they run the gate.
+    expect([...CI_SCOPE_GLOBS].sort()).toEqual([".claude/**",".github/**",".gitleaks.toml",".gitleaksignore","DONE.md","fullburn/**"]);
     // The completion contract (DONE.md §3) — a change to what "done" means
     // must run the gate.
     expect(inScope(["DONE.md"])).toBe(true);

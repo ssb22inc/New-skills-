@@ -40,6 +40,14 @@ const DEFINITION = `${REPO}/.claude/agents/engine-adversary.md`;
 
 const sha256 = (s) => createHash("sha256").update(s, "utf8").digest("hex");
 
+/** EVERYTHING PRINTED OR SAVED PASSES THROUGH HERE (cross-family finding
+ * X2-05, 2026-09-24): the router's error bodies, a non-JSON body, a rejected
+ * answer and the raw response were written verbatim, and an upstream that
+ * echoes the bearer would have put the key into a log line, a job summary and
+ * a committed artifact. The key is the one secret this process holds. */
+const KEY = process.env.OPENROUTER_API_KEY ?? "";
+const scrub = (text) => (KEY.length >= 8 ? String(text).split(KEY).join("[redacted]") : String(text));
+
 /** Anything a crashed run could have left: a `.partial` report. */
 function removeStaleCanary() {
   if (!existsSync(REPORTS)) return;
@@ -105,11 +113,11 @@ async function main(argv) {
   try {
     json = JSON.parse(raw);
   } catch {
-    console.error(`CROSS-FAMILY READ: the router answered ${res.status} with a non-JSON body; no report written.\n${raw.slice(0, 500)}`);
+    console.error(scrub(`CROSS-FAMILY READ: the router answered ${res.status} with a non-JSON body; no report written.\n${raw.slice(0, 500)}`));
     return 1;
   }
   if (!res.ok || json.error) {
-    console.error(`CROSS-FAMILY READ: router error ${res.status}: ${JSON.stringify(json.error ?? json).slice(0, 500)}; no report written.`);
+    console.error(scrub(`CROSS-FAMILY READ: router error ${res.status}: ${JSON.stringify(json.error ?? json).slice(0, 500)}; no report written.`));
     return 1;
   }
   const served = servedModelAcceptable(REVIEWER_MODEL, json.model);
@@ -121,10 +129,13 @@ async function main(argv) {
   const parsed = parseReview(text);
   if (!parsed.ok) {
     console.error(`CROSS-FAMILY READ: REFUSED — the reviewer's answer is not the contract (${parsed.reason}); no report written. Raw answer saved for inspection.`);
-    writeFileSync(`${REPORTS}/cross-family-${round}-rejected-${Date.now()}.raw.json`, raw);
+    writeFileSync(`${REPORTS}/cross-family-${round}-rejected-${Date.now()}.raw.json`, scrub(raw));
     return 1;
   }
   const verdict = crossVerdict(parsed.value, endpoint);
+  // The reviewer's own text is scrubbed too: an answer quoting the bearer from
+  // a request echo must not reach the report.
+  const scrubbed = JSON.parse(scrub(JSON.stringify(parsed.value)));
   const report = renderCrossReport({
     phase,
     round,
@@ -134,7 +145,7 @@ async function main(argv) {
     requestedModel: REVIEWER_MODEL,
     servedModel: json.model,
     endpoint,
-    review: parsed.value,
+    review: scrubbed,
     verdict,
     bundle,
     usage: json.usage,
@@ -146,7 +157,7 @@ async function main(argv) {
   const name = `ADVERSARY_REPORT_phase${phase}.${round}.md`;
   const partial = `${REPORTS}/${name}.partial`;
   writeFileSync(partial, report);
-  writeFileSync(`${REPORTS}/${name.replace(/\.md$/, ".raw.json")}`, raw);
+  writeFileSync(`${REPORTS}/${name.replace(/\.md$/, ".raw.json")}`, scrub(raw));
   renameSync(partial, `${REPORTS}/${name}`);
   console.log(`report: reports/${name}  sha256 ${sha256(report)}\nVerdict: ${verdict.verdict} — ${verdict.why}\n${parsed.value.findings.length} finding(s); ${parsed.value.limitations.length} limitation(s).`);
   return verdict.verdict === "PASS" ? 0 : 1;
@@ -162,7 +173,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (e) => {
-      console.error(`CROSS-FAMILY READ: crashed — ${e instanceof Error ? e.stack ?? e.message : String(e)}; no report written.`);
+      console.error(scrub(`CROSS-FAMILY READ: crashed — ${e instanceof Error ? e.stack ?? e.message : String(e)}; no report written.`));
       process.exit(1);
     },
   );

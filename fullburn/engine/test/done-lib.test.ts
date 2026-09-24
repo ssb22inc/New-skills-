@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, PHASE0_REQUIREMENTS, class2Condition, completionSentence, gateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, class2Condition, splitReportsByFamily, completionSentence, gateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -39,8 +39,18 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
 
   /** MUTATION: drop the meta-check requirement from mutateCondition. */
   it("the harness counts only when BOTH canaries reported in the same run", () => {
-    const good = "  ok   negative canary — a comment-only edit must SURVIVE  |  got SURVIVED\n  ok   positive canary — a reverted guard must be CAUGHT  |  got CAUGHT\n214 mutations: 214 caught, 0 survived, 0 not found\n";
+    const good = "  ok   negative canary — a comment-only edit must SURVIVE  |  got SURVIVED\n  ok   negative canary — a comment REWRITE (from-text removed) must SURVIVE  |  got SURVIVED\n  ok   positive canary — a reverted guard must be CAUGHT  |  got CAUGHT\n214 mutations: 214 caught, 0 survived, 0 not found\n";
     expect(mutateCondition(parseMutate(good)).status).toBe("PASS");
+    /** X2-11 (cross-family, 2026-09-24): the parser knew two canaries after the
+     * harness had three, accepted an empty table, never reconciled the counts,
+     * and never saw the exit code. MUTATION: X2-11a/b. */
+    expect(META_CANARY_NAMES.length, "the canary names are not read from the harness's table").toBe(3);
+    const twoCanaries = "  ok   negative canary — a comment-only edit must SURVIVE  |  got SURVIVED\n  ok   positive canary — a reverted guard must be CAUGHT  |  got CAUGHT\n214 mutations: 214 caught, 0 survived, 0 not found\n";
+    expect(mutateCondition(parseMutate(twoCanaries)).status, "a transcript missing a canary passed").toBe("FAIL");
+    expect(mutateCondition(parseMutate(good.replace("214 mutations: 214 caught", "0 mutations: 0 caught"))).status, "an empty table passed").toBe("FAIL");
+    expect(mutateCondition(parseMutate(good.replace("214 caught", "200 caught"))).status, "a summary that does not add up passed").toBe("FAIL");
+    expect(mutateCondition(parseMutate(good), 1).status, "a non-zero harness exit passed").toBe("FAIL");
+    expect(mutateCondition(parseMutate(good), 0).status).toBe("PASS");
     // A perfect summary with no meta-check is VOID, not a pass (DONE.md §1).
     expect(mutateCondition(parseMutate("214 mutations: 214 caught, 0 survived, 0 not found\n")).status).toBe("FAIL");
     expect(mutateCondition(parseMutate("  ok   positive canary\n214 mutations: 214 caught, 0 survived, 0 not found\n")).status).toBe("FAIL");
@@ -55,7 +65,7 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
   /** MUTATION: DN-16 — parseMutate stops collecting the stale names. */
   it("a failing harness names every stale and surviving entry, not only their counts", () => {
     const out =
-      "  ok   negative canary  |  got SURVIVED\n  ok   positive canary  |  got CAUGHT\n" +
+      "  ok   negative canary — a comment-only edit must SURVIVE  |  got SURVIVED\n  ok   negative canary — a comment REWRITE (from-text removed) must SURVIVE  |  got SURVIVED\n  ok   positive canary — a reverted guard must be CAUGHT  |  got CAUGHT\n" +
       "CAUGHT             R1-01 something  |  1 failed\n" +
       "PATTERN-NOT-FOUND  AD-02 the root .claude tree is Class-2  (engine/scripts/gate-lib.mjs)\n" +
       "*** SURVIVED ***   R9-09 a guard nobody tests\n" +
@@ -68,7 +78,7 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(c.status).toBe("FAIL");
     for (const name of [...p.stale, ...p.survivors]) expect(c.observed, `the condition dropped ${name}`).toContain(name);
     // A clean run names nothing, and a CAUGHT line is never mistaken for either.
-    const clean = parseMutate("  ok   negative canary\n  ok   positive canary\nCAUGHT   PATTERN-NOT-FOUND-looking name  |  x\n229 mutations: 229 caught, 0 survived, 0 not found\n");
+    const clean = parseMutate("  ok   negative canary — a comment-only edit must SURVIVE  |  got SURVIVED\n  ok   negative canary — a comment REWRITE (from-text removed) must SURVIVE  |  got SURVIVED\n  ok   positive canary — a reverted guard must be CAUGHT  |  got CAUGHT\n" + "CAUGHT   PATTERN-NOT-FOUND-looking name  |  x\n229 mutations: 229 caught, 0 survived, 0 not found\n");
     expect(clean.stale).toEqual([]);
     expect(clean.survivors).toEqual([]);
   });
@@ -109,6 +119,18 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(c.observed).toContain("comment REWRITE");
     // Even with a summary line present, a META-CHECK FAILED line is FAIL.
     expect(mutateCondition(parseMutate(out + "3 mutations: 3 caught, 0 survived, 0 not found\n")).status).toBe("FAIL");
+  });
+
+  /** X2-12 (cross-family, 2026-09-24): one non-Claude PASS satisfied both C2
+   * and C3. The two reviews take two disjoint populations. MUTATION: X2-12. */
+  it("same-family and cross-family reports are two disjoint populations", () => {
+    const r9 = { name: "ADVERSARY_REPORT_phase0.r9.md", content: "# r9\nVerdict: PASS\nverified-tree: abc\n" };
+    const claude = { name: "ADVERSARY_REPORT_phase0.r15.md", content: "# r15\nVerdict: PASS\nverified-tree: abc\n\nReviewer-family: Claude (same family as the builder)\n" };
+    const x1 = { name: "ADVERSARY_REPORT_phase0.x1.md", content: "# x1\nVerdict: PASS\nverified-tree: abc\n\nReviewer-family: OpenAI (gpt-6-astra via OpenRouter)\n" };
+    const { same, cross } = splitReportsByFamily([r9, claude, x1]);
+    expect(same.map((r: { name: string }) => r.name)).toEqual([r9.name, claude.name]);
+    expect(cross.map((r: { name: string }) => r.name)).toEqual([x1.name]);
+    expect(splitReportsByFamily([x1]).same, "a cross-family report answered for the same-family review").toEqual([]);
   });
 
   it("reads the owed-approvals count, or null", () => {

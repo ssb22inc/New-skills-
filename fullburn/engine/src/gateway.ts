@@ -25,7 +25,7 @@ import {
   type SpendMeter,
   type SpendReservation,
 } from "./spend-meter.ts";
-import { redactError, redactInPlace, redactText, redactValue } from "./redact.ts";
+import { containsSecret, redactError, redactMoneyError, redactText, redactValue } from "./redact.ts";
 import { TraceContext, TraceEmitError, emitOrFail, type TraceEvent, type TraceSink } from "./tracing.ts";
 
 /** THE only LLM call path (Law 11, §2.4). Everything below is deterministic
@@ -240,6 +240,15 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       throw new GatewayError("vault scope mismatch — cross-client secret access refused (Law 3)");
     }
 
+    /** THE ORIGIN CHECK PRECEDES THE FIRST VAULT READ, WHICH IS THIS ONE
+     * (cross-family finding X2-13, 2026-09-24): the X-05 fix put the check
+     * before the AUTHORITATIVE read at dispatch, but this priming read had
+     * already touched the vault, and the test that "proved" the order used a
+     * vault that threw — so the eventual error was the origin's and the read
+     * had happened anyway. The check is here, before any credential is read,
+     * and the test now counts reads. */
+    assertGatewayBase(deps.gatewayBaseUrl);
+
     // Prime the redaction set before the money checks (adversary finding A1's
     // residue): a meter or caps error thrown while `secrets` was still empty
     // went out verbatim, redaction having nothing to redact against. This read
@@ -296,7 +305,6 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // future meter implementation, and this one has none — `reserve` either
     // returns the branded handle or throws.
 
-    assertGatewayBase(deps.gatewayBaseUrl);
     const key = deps.vault.get("ai-gateway-key");
     secrets = [key.value];
     const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
@@ -380,7 +388,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
      * caller receives is never altered, and a secret never leaves this frame.
      * `redactValue` with no secrets is the same walk with nothing to redact,
      * so the two serialisations differ exactly when a secret was present. */
-    if (JSON.stringify(redactValue(output, secrets)) !== JSON.stringify(redactValue(output, []))) {
+    if (containsSecret(output, secrets)) {
       throw new GatewayError("provider output carried a credential — refused, not returned (Law 9)");
     }
     return output;
@@ -407,8 +415,12 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // caps module is a collaborator whose error text we do not control, and it
     // was being written verbatim into the trace AND thrown to the caller with
     // its original stack (adversary finding A1).
+    // REBUILT, not patched (cross-family finding X2-07): `redactInPlace` kept
+    // the original object — its name, cause and custom properties — and gave
+    // it back unchanged when it was frozen. The class survives so a caller can
+    // still discriminate a cap breach from an outage; nothing else does.
     const safe = err instanceof CapError || err instanceof MeterUnavailableError
-      ? redactInPlace(err, secrets)
+      ? redactMoneyError(err, secrets)
       : redactError(err, secrets, errorClassFor(err));
     await traceFailure(
       releaseLeak === null

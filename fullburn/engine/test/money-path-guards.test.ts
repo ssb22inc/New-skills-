@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { codeOnly, moneyPathModules, unfollowable, withoutComments } from "./money-path-guards.ts";
+import { codeOnly, moneyPathModules, moneyPathRefusals, unfollowable, unresolvedImports, withoutComments } from "./money-path-guards.ts";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /** THE DERIVATION'S OWN RED-PROOFS.
  *
@@ -18,6 +22,42 @@ describe("the money-path derivation refuses what it cannot follow (R14-03)", () 
       "engine/src/side-effect.ts": "export const x = 1;",
     });
     expect(pop, "a side-effect import was invisible to the population").toContain("engine/src/side-effect.ts");
+  });
+
+  /** X2-17 (cross-family, 2026-09-24): two imports on one line followed the
+   * first and dropped the second; a missing module was skipped in silence. */
+  it("follows every import statement on a line, not only the first", () => {
+    const pop = files({
+      "engine/src/gateway.ts": "import './a.ts'; import './b.ts';\nexport { x } from './c.ts'; import { y } from './d.ts';",
+      "engine/src/a.ts": "", "engine/src/b.ts": "", "engine/src/c.ts": "", "engine/src/d.ts": "",
+    });
+    expect(pop).toEqual(["engine/src/a.ts", "engine/src/b.ts", "engine/src/c.ts", "engine/src/d.ts", "engine/src/gateway.ts"]);
+  });
+
+  it("REFUSES an import that resolves to nothing, rather than shrinking the population", () => {
+    const map: Record<string, string> = { "engine/src/gateway.ts": "import './present.ts';\nimport { q } from './missing.ts';", "engine/src/present.ts": "" };
+    const refusals = unresolvedImports("engine/src/gateway.ts", map["engine/src/gateway.ts"]!, (f) => f in map);
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]).toMatch(/missing\.ts/);
+    expect(unresolvedImports("engine/src/gateway.ts", "import './present.ts';", (f) => f in map)).toEqual([]);
+  });
+
+  /** The WIRING, not the function: the probe of 2026-09-24 reported the entry
+   * that unwires `unresolvedImports` from `moneyPathRefusals` SURVIVED,
+   * because the test above drove the function directly. This drives the
+   * refusal list on a real (temporary) root. MUTATION: X2-17. */
+  it("moneyPathRefusals refuses a root whose money path imports a file that does not exist", () => {
+    const root = mkdtempSync(join(tmpdir(), "mp-root-"));
+    try {
+      mkdirSync(join(root, "engine", "src"), { recursive: true });
+      writeFileSync(join(root, "engine", "src", "gateway.ts"), "import { q } from './vanished.ts';\nexport const g = 1;\n");
+      const refusals = moneyPathRefusals(pathToFileURL(root + "/"));
+      expect(refusals.some((r) => /vanished\.ts/.test(r)), `the missing import was not refused: ${JSON.stringify(refusals)}`).toBe(true);
+      writeFileSync(join(root, "engine", "src", "vanished.ts"), "export const q = 1;\n");
+      expect(moneyPathRefusals(pathToFileURL(root + "/")).filter((r) => /vanished/.test(r))).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("does NOT invent a module from a specifier inside a comment or a string", () => {

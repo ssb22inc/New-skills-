@@ -373,7 +373,10 @@ export class InMemorySpendLedger implements SpendLedger {
       }
       this.#down.delete(clientId);
     } else this.#down.set(clientId, reason);
-    this.#audit.push({ clientId, available, reason, seq: this.nextSeq() });
+    // FROZEN, and handed out as copies (cross-family finding X2-15): the
+    // returned array was a copy but its entries were the live objects, so a
+    // caller could rewrite a halt's reason or flip `available` in the record.
+    this.#audit.push(Object.freeze({ clientId, available, reason, seq: this.nextSeq() }));
   }
 
   availabilityAudit(): readonly AvailabilityEvent[] {

@@ -253,7 +253,7 @@ describe("class-2 protection — every pattern is load-bearing under test (H-03)
     for (const p of ["fullburn/HUMAN_TASKS.md", "fullburn/reports/HANDOFF.md", "README.md"]) {
       expect(isClass2(p), `${p} was classified Class 2`).toBe(false);
     }
-    for (const p of ["fullburn/reports/ADVERSARY_REPORT_phase0.md", "fullburn/reports/ADVERSARY_REPORT_phase0.x1.md", "fullburn/reports/DONE_phase0_abda5d88c24f.md", "fullburn/eslint.config.mjs"]) {
+    for (const p of ["fullburn/reports/ADVERSARY_REPORT_phase0.md", "fullburn/reports/ADVERSARY_REPORT_phase0.x1.md", "fullburn/reports/DONE_phase0_abda5d88c24f.md", "fullburn/eslint.config.mjs", ".gitleaks.toml", ".gitleaksignore", "fullburn/.gitleaks.toml"]) {
       expect(isClass2(p), `${p} is a review artifact or the lint config and must be Class 2 (X-02, X-03)`).toBe(true);
     }
   });

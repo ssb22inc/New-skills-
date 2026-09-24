@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { redactValue } from "../src/redact.ts";
+import { containsSecret, redactValue } from "../src/redact.ts";
+import { CapError } from "@fullburn/config/caps";
 import { llm } from "../src/gateway.ts";
 import { FrozenCapsSpendMeter, MemorySpendMeter } from "../src/spend-meter.ts";
 import { TraceContext } from "../src/tracing.ts";
@@ -243,4 +244,71 @@ describe("an error's NAME is a leak surface too (cross-family finding X-08, 2026
     const nested = JSON.stringify(redactValue({ a: [{ e: err }] }, [CANARY_SECRET]));
     expect(nested).not.toContain(CANARY_SECRET);
   });
+
+describe("a credential anywhere in a provider output, at any depth (cross-family finding X2-06)", () => {
+  /** MUTATION: X2-06 — compare two depth-limited redactions again. */
+  it("a secret nested below the redactor's depth limit is still refused", async () => {
+    const { deps, transport } = makeDeps();
+    let deep: Record<string, unknown> = { leak: CANARY_SECRET };
+    for (let i = 0; i < 12; i++) deep = { d: deep };
+    transport.response = { greeting: "ok", extra: deep };
+    const outcome = await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-deep") }).then(
+      (v) => ({ ok: true as const, v }),
+      (e: Error) => ({ ok: false as const, e }),
+    );
+    expect(outcome.ok, "a deeply nested credential was returned").toBe(false);
+    if (!outcome.ok) expect(outcome.e.message).toMatch(/carried a credential/);
+  });
+
+  it("containsSecret sees strings, keys, binary, Error fields, Map/Set entries and cycles", () => {
+    const S = "s3cr3t-value";
+    expect(containsSecret({ a: [{ b: S }] }, [S])).toBe(true);
+    expect(containsSecret({ [S]: 1 }, [S])).toBe(true);
+    expect(containsSecret(new TextEncoder().encode(`x${S}y`), [S])).toBe(true);
+    const e = new Error("m"); (e as unknown as { cause: unknown }).cause = { x: S };
+    expect(containsSecret(e, [S])).toBe(true);
+    expect(containsSecret(new Map([["k", new Set([S])]]), [S])).toBe(true);
+    const cyc: Record<string, unknown> = { a: 1 }; cyc["self"] = cyc;
+    expect(containsSecret(cyc, [S])).toBe(false);
+    expect(containsSecret({ greeting: "ok" }, [S])).toBe(false);
+    expect(containsSecret({ greeting: S }, [])).toBe(false);
+    // A value too large to clear is refused rather than trusted.
+    expect(containsSecret(Array.from({ length: 10 }, () => "x"), [S], 5)).toBe(true);
+  });
+});
+
+describe("a money error is rebuilt, never handed back (cross-family finding X2-07)", () => {
+  /** MUTATION: X2-07 — return the original error object. */
+  it("a frozen CapError carrying the secret in message, name, cause and a custom field reaches the caller with none of them", async () => {
+    const { deps } = makeDeps();
+    const hostile = new CapError(`cap breached by ${CANARY_SECRET}`);
+    hostile.name = `Cap-${CANARY_SECRET}`;
+    (hostile as unknown as { cause: unknown }).cause = { token: CANARY_SECRET };
+    (hostile as unknown as { extra: string }).extra = CANARY_SECRET;
+    Object.freeze(hostile);
+    // The production meter is branded and frozen, so the throw is injected the
+    // way this repo's other tests do it: on the prototype the instance resolves
+    // through, restored in `finally`.
+    const proto = Object.getPrototypeOf(Object.getPrototypeOf(deps.meter)) as Record<string, unknown>;
+    const realReserve = proto["reserve"];
+    let outcome: { ok: true; v: unknown } | { ok: false; e: Error };
+    try {
+      proto["reserve"] = () => { throw hostile; };
+      outcome = await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-frozen") }).then(
+        (v) => ({ ok: true as const, v }),
+        (e: Error) => ({ ok: false as const, e }),
+      );
+    } finally {
+      proto["reserve"] = realReserve;
+    }
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      const e = outcome.e as Error & { cause?: unknown; extra?: unknown };
+      expect(e).not.toBe(hostile);
+      expect(e).toBeInstanceOf(CapError);
+      expect(`${e.name} ${e.message} ${e.stack ?? ""} ${JSON.stringify(e.cause ?? null)} ${String(e.extra ?? "")}`).not.toContain(CANARY_SECRET);
+      expect(e.message).toContain("[redacted]");
+    }
+  });
+});
 });

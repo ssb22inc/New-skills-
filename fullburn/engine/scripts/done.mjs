@@ -39,6 +39,7 @@ import {
   renderReport,
   reportPath,
   reviewerFamily,
+  splitReportsByFamily,
   verdict,
 } from "./done-lib.mjs";
 import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkClass2Approvals, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
@@ -196,9 +197,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const reportsDir = `${ROOT}/reports`;
       const names = existsSync(reportsDir) ? selectPhaseReports(phase, readdirSync(reportsDir)) : [];
       const reports = names.map((n) => ({ name: n, content: readFileSync(`${reportsDir}/${n}`, "utf8") }));
-      const same = checkAdversaryReport({ phase, reports, currentTreeHash: tree });
+      const { same: sameFamily, cross } = splitReportsByFamily(reports);
+      const same = sameFamily.length === 0 ? { ok: false, reason: "no same-family report under reports/" } : checkAdversaryReport({ phase, reports: sameFamily, currentTreeHash: tree });
       results.push({ id: "C2", title: "§2.1.2 same-family adversary round PASS against this tree", status: same.ok ? "PASS" : "FAIL", command: `checkAdversaryReport(phase ${phase}, ${reports.length} report(s), tree ${tree.slice(0, 12)})`, observed: same.reason });
-      const cross = reports.filter((r) => isNonClaudeFamily(reviewerFamily(r.content)));
       let crossRes;
       let artifact = null;
       if (cross.length === 0) {
@@ -223,7 +224,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       } else {
         console.log("running the mutation harness (this takes ~50 minutes)…");
         const r = await run("node", [`${ROOT}/engine/scripts/mutate.mjs`]);
-        const mc = mutateCondition(parseMutate(r.out + r.err));
+        const mc = mutateCondition(parseMutate(r.out + r.err), r.code);
         results.push({ id: "C5", title: "§2.1.5 mutation harness: 0 survived, 0 stale, meta-check passed in the same run", status: mc.status, command: "node engine/scripts/mutate.mjs", observed: mc.observed });
       }
 

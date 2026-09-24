@@ -80,6 +80,21 @@ const NOT_A_GUARD: ReadonlyArray<{ readonly pattern: RegExp; readonly why: strin
  * path may not contain a construct the population cannot see. Extending the
  * parser and restructuring the code are both legitimate answers; silently
  * missing the guard is not. */
+/** A RELATIVE IMPORT THAT RESOLVES TO NOTHING IS REFUSED, NOT SKIPPED
+ * (cross-family finding X2-17): `moneyPathModules` dropped a missing file
+ * silently, so a typo in a specifier — or a module renamed out from under an
+ * importer — shrank the population with nothing said. */
+export function unresolvedImports(file: string, source: string, exists: (f: string) => boolean): string[] {
+  const src = withoutComments(source);
+  const out: string[] = [];
+  for (const m of src.matchAll(/(?:^|;)[ \t]*(?:import|export)\b[^;]*?from[ \t]+["']([^"']+)["']|(?:^|;)[ \t]*import[ \t]+["']([^"']+)["']/gm)) {
+    const spec = m[1] ?? m[2]!;
+    const next = resolveSpecifier(spec, file);
+    if (next !== null && !exists(next)) out.push(`${file}: import "${spec}" resolves to ${next}, which does not exist`);
+  }
+  return out;
+}
+
 export function unfollowable(file: string, source: string): string[] {
   const src = codeOnly(source);
   const out: string[] = [];
@@ -133,7 +148,11 @@ export function moneyPathModules(root: URL, exists: (f: string) => boolean, read
       // `[^;]*?` spans newlines on purpose: a braced import list is routinely
       // multi-line, and requiring `from` on the import's own line dropped the
       // population from 76 modules' worth of guards to 47.
-      /^[ \t]*(?:import|export)\b[^;]*?from[ \t]+["']([^"']+)["']|^[ \t]*import[ \t]+["']([^"']+)["']/gm,
+      // ANCHORED TO A STATEMENT START, NOT A LINE START (cross-family finding
+      // X2-17, 2026-09-24): `import './a.ts'; import './b.ts';` on one line
+      // followed a.ts and silently dropped b.ts. A statement starts at a line
+      // start OR after a `;`.
+      /(?:^|;)[ \t]*(?:import|export)\b[^;]*?from[ \t]+["']([^"']+)["']|(?:^|;)[ \t]*import[ \t]+["']([^"']+)["']/gm,
     )) {
       const spec = m[1] ?? m[2]!;
       const next0 = resolveSpecifier(spec, file);
@@ -263,7 +282,7 @@ export function enumerateThrowGuards(file: string, source: string): ThrowGuard[]
 export function moneyPathRefusals(root: URL): string[] {
   const exists = (f: string) => existsSync(new URL(f, root));
   const read = (f: string) => readFileSync(new URL(f, root), "utf8");
-  return moneyPathModules(root, exists, read).flatMap((f) => unfollowable(f, read(f)));
+  return moneyPathModules(root, exists, read).flatMap((f) => [...unfollowable(f, read(f)), ...unresolvedImports(f, read(f), exists)]);
 }
 
 /** Every money-path guard, read from the tree. `root` is the workspace root. */

@@ -58,6 +58,74 @@ export function redactError(err: unknown, secrets: readonly string[], ErrorClass
   return safe;
 }
 
+/** Does a value carry a secret ANYWHERE — any depth, any key, any error
+ * field, binary decoded? `redactValue` stops at MAX_DEPTH with a marker, so
+ * comparing two of its serialisations could not see a credential nested below
+ * it (cross-family finding X2-06, 2026-09-24). This walk has no depth limit;
+ * it has a cycle guard and a size guard, and it errs towards "yes". */
+export function containsSecret(value: unknown, secrets: readonly string[], limit = 200_000): boolean {
+  const live = secrets.filter((s) => typeof s === "string" && s.length > 0);
+  if (live.length === 0) return false;
+  const seen = new Set<object>();
+  let visited = 0;
+  const hit = (text: string): boolean => live.some((s) => text.includes(s));
+  const walk = (v: unknown): boolean => {
+    if (++visited > limit) return true; // too large to clear: refuse
+    if (typeof v === "string") return hit(v);
+    if (typeof v === "number" || typeof v === "boolean" || v === null || v === undefined || typeof v === "bigint") return false;
+    if (typeof v === "symbol") return hit(String(v.description ?? ""));
+    if (typeof v === "function") return hit(String(v));
+    if (typeof v !== "object") return true;
+    if (seen.has(v)) return false;
+    seen.add(v);
+    if (v instanceof Uint8Array) return hit(decodeBinary(v));
+    if (ArrayBuffer.isView(v)) return hit(decodeBinary(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)));
+    if (v instanceof ArrayBuffer) return hit(decodeBinary(new Uint8Array(v)));
+    if (v instanceof Error) {
+      return hit(String(v.name)) || hit(String(v.message)) || hit(String(v.stack ?? "")) || walk((v as { cause?: unknown }).cause) || Object.getOwnPropertyNames(v).some((k) => walk((v as unknown as Record<string, unknown>)[k]));
+    }
+    if (v instanceof Map) return [...v.entries()].some(([k, x]) => walk(k) || walk(x));
+    if (v instanceof Set) return [...v].some(walk);
+    if (v instanceof Date) return false;
+    if (Array.isArray(v)) return v.some(walk);
+    for (const k of Object.getOwnPropertyNames(v)) {
+      if (hit(k)) return true;
+      let x: unknown;
+      try {
+        x = (v as Record<string, unknown>)[k];
+      } catch {
+        return true; // a throwing getter is not clearable
+      }
+      if (walk(x)) return true;
+    }
+    return false;
+  };
+  return walk(value);
+}
+
+/** A money error, REBUILT with its class and a redacted message and nothing
+ * else (cross-family finding X2-07): `redactInPlace` returned the thrower's
+ * own object, so its name, cause and any custom property crossed unredacted,
+ * and a frozen error came back untouched. The class is what a caller
+ * discriminates on; it is the only thing carried. */
+export function redactMoneyError<E extends Error>(err: E, secrets: readonly string[]): E {
+  const Ctor = err.constructor as new (m: string) => E;
+  let message = "";
+  try {
+    message = typeof err.message === "string" ? err.message : "";
+  } catch {
+    message = UNPRINTABLE;
+  }
+  let safe: E;
+  try {
+    safe = new Ctor(redactText(message, secrets));
+  } catch {
+    safe = new Error(redactText(message, secrets)) as E;
+  }
+  safe.stack = `${safe.name}: ${safe.message}`;
+  return safe;
+}
+
 /** Rewrites an error's message in place-safe fashion, preserving its class.
  * Used for errors the caller must still be able to discriminate — a CapError
  * has to stay a CapError — whose message nonetheless came from a collaborator

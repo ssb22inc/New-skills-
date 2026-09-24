@@ -8,6 +8,24 @@
  * failure rate near 100% on this codebase (DONE.md §0). */
 
 export const TARGETS = Object.freeze(["phase", "engine"]);
+import { META_CANARIES } from "./mutate-lib.mjs";
+export const META_CANARY_NAMES = Object.freeze(META_CANARIES.map((c) => c.name));
+
+/** Which reports answer for WHICH review (cross-family finding X2-12): a
+ * single non-Claude PASS satisfied both C2 (same-family) and C3
+ * (cross-family), because C2 took every report. A same-family report is one
+ * with no `Reviewer-family:` line (the r-series) or one naming the builder's
+ * family; a cross-family report names another. Two populations, no overlap. */
+export function splitReportsByFamily(reports) {
+  const same = [];
+  const cross = [];
+  for (const r of reports) {
+    const family = reviewerFamily(r.content);
+    if (family !== null && isNonClaudeFamily(family)) cross.push(r);
+    else same.push(r);
+  }
+  return { same, cross };
+}
 const KNOWN_FLAGS = new Set(["--skip-mutate"]);
 
 /** `npm run done -- <phase|engine> [--skip-mutate]`. `--skip-mutate` exists so
@@ -53,8 +71,13 @@ export function parseVitest(out) {
 /** The mutation harness's own output: BOTH meta-check canaries must have
  * reported the expected answer in THIS run, and the summary must read 0
  * survived, 0 stale. Any missing line is a FAIL. */
-export function parseMutate(out) {
+/** The canaries the harness must have reported `ok` — read from the same
+ * table the harness runs, so a canary added there is required here the same
+ * day (cross-family finding X2-11: the parser knew two canaries after the
+ * harness had three). */
+export function parseMutate(out, canaryNames = META_CANARY_NAMES) {
   const s = out ?? "";
+  const canariesOk = canaryNames.every((n) => new RegExp(`^\\s*ok\\s+${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "m").test(s));
   const summary = /(\d+) mutations: (\d+) caught, (\d+) survived, (\d+) not found/.exec(s);
   // The NAMES, not only the counts. The first phase-0 run reported "3 stale"
   // and discarded which three; finding them again took a separate probe. A
@@ -66,6 +89,7 @@ export function parseMutate(out) {
   // exactly as it once discarded the stale names.
   const metaFailure = /^META-CHECK FAILED: ([^\n]*)/m.exec(s);
   return {
+    canariesOk,
     metaFailure: metaFailure ? metaFailure[1].trim() : null,
     stale: [...s.matchAll(STALE_LINE)].map((m) => m[1]),
     survivors: [...s.matchAll(SURVIVED_LINE)].map((m) => m[1]),
@@ -78,14 +102,19 @@ export function parseMutate(out) {
   };
 }
 
-export function mutateCondition(parsed) {
+export function mutateCondition(parsed, exitCode = 0) {
   const p = parsed ?? {};
-  if (!p.metaNegative || !p.metaPositive || p.metaFailure) {
-    return { status: "FAIL", observed: `meta-check did not report both answers in this run — harness result is VOID (DONE.md §1)${p.metaFailure ? `: ${p.metaFailure}` : ""}` };
+  if (!p.metaNegative || !p.metaPositive || p.metaFailure || p.canariesOk === false) {
+    return { status: "FAIL", observed: `meta-check did not report every canary ok in this run — harness result is VOID (DONE.md §1)${p.metaFailure ? `: ${p.metaFailure}` : ""}` };
   }
   if (p.total === null || p.survived === null || p.notFound === null) {
     return { status: "FAIL", observed: "no summary line — the harness did not finish" };
   }
+  // X2-11: a summary that does not add up, an empty table, or a harness that
+  // exited non-zero behind a green-looking line are each a FAIL.
+  if (p.total === 0) return { status: "FAIL", observed: "0 mutations — an empty table proves nothing" };
+  if (p.caught + p.survived + p.notFound !== p.total) return { status: "FAIL", observed: `summary does not reconcile: ${p.caught} + ${p.survived} + ${p.notFound} ≠ ${p.total}` };
+  if (exitCode !== 0) return { status: "FAIL", observed: `harness exited ${exitCode} — ${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale` };
   if (p.survived > 0 || p.notFound > 0) {
     const names = [
       ...(p.survivors?.length ? [`survived: ${p.survivors.join("; ")}`] : []),

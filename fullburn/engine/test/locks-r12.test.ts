@@ -290,6 +290,12 @@ describe("storage availability is per client and audited (R12-07)", () => {
     // The audit is a COPY: a caller cannot rewrite the record it was handed.
     (audit as unknown as unknown[]).length = 0;
     expect(ledger.availabilityAudit(), "the audit log was editable through its own return value").toHaveLength(1);
+    // …and neither is an ENTRY (X2-15): rewriting a returned record must not
+    // rewrite history. MUTATION: X2-15 — push a mutable object.
+    const entry = ledger.availabilityAudit()[0] as { reason: string; available: boolean };
+    expect(() => { entry.reason = "rewritten"; }).toThrow();
+    expect(() => { entry.available = true; }).toThrow();
+    expect(ledger.availabilityAudit()[0]).toMatchObject({ available: false, reason: "simulated storage outage" });
   });
 
   /** The contract no longer hands a caller every tenant's open reservations.
