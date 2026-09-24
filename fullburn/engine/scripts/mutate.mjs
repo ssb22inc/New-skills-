@@ -235,7 +235,14 @@ const MUTATIONS = [
   ["R10-01 an empty meta-check is void", "engine/scripts/mutate-lib.mjs", "  if (!Array.isArray(results) || results.length === 0) {", "  if (false) {"],
   ["R9-05 production meter binds its own clock", "engine/src/spend-meter.ts", "  constructor(narrowing?: CapsNarrowingTable) {", "  constructor(now?: () => number, narrowing?: CapsNarrowingTable) {"],
   ["R9-09 marker cannot write outside the workspace", "engine/scripts/mutate-lib.mjs", "  if (!inWorkspace || !sameWorkspace || !fs.existsSync(record.path)) {", "  if (false) {"],
-  ["R9-10 no Class-2 file is git-binary", "engine/test/hardening.test.ts", "backend.set(\"acme\\u0000corp\", \"meta-oauth\", \"nul-secret\");", "backend.set(\"acme\u0000corp\", \"meta-oauth\", \"nul-secret\");"],
+  // Repointed 2026-09-24: the \u0000 fixture drifted to byte 8708 as tests were
+  // appended, git samples only the first 8000 bytes, and the entry stopped
+  // making the file binary (the first honest harness run reported it SURVIVED,
+  // and git's own numstat agreed). A raw NUL in an early comment is a semantic
+  // no-op inside the window; git renders the file "- -" and the lock fires.
+  ["R9-10 no Class-2 file is git-binary", "engine/test/hardening.test.ts",
+    "// @ts-expect-error — plain .mjs module, typed loosely on purpose\nimport { parseNameStatus } from \"../scripts/diff-lib.mjs\";",
+    "// @ts-expect-error — plain .mjs module, typed loosely on purpose \u0000\nimport { parseNameStatus } from \"../scripts/diff-lib.mjs\";"],
   ["R9-11 runtime skip/fail refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*(?:skip|fixme|fail)\\s*\\(/.test(real)) return false;", "      void real;"],
   ["R9-11 bare return refused", "engine/test/e2e-variance.ts", "      if (/\\breturn\\b\\s*;/.test(real)) return false;", "      void 0;"],
   ["R9-11 skipped describe refused", "engine/test/e2e-variance.ts", "      if (/\\b(?:test|it)\\s*\\.\\s*describe\\s*\\.\\s*(?:skip|fixme)\\s*\\(/.test(stripped)) return false;", "      void stripped;"],
