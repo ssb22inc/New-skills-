@@ -246,8 +246,15 @@ describe("class-2 protection — every pattern is load-bearing under test (H-03)
     }
     // And the negative half: a genuinely Class-1 path must not need approval,
     // or the gate becomes noise a human learns to click through.
-    for (const p of ["fullburn/HUMAN_TASKS.md", "fullburn/reports/ADVERSARY_REPORT_phase0.md", "README.md"]) {
+    // A review artifact WAS the not-Class-2 example here until cross-family
+    // finding X-03 (2026-09-24): a handwritten report satisfied both C2 and C3.
+    // Review artifacts are Class-2 now; the narrative handoff under reports/
+    // is the ordinary file.
+    for (const p of ["fullburn/HUMAN_TASKS.md", "fullburn/reports/HANDOFF.md", "README.md"]) {
       expect(isClass2(p), `${p} was classified Class 2`).toBe(false);
+    }
+    for (const p of ["fullburn/reports/ADVERSARY_REPORT_phase0.md", "fullburn/reports/ADVERSARY_REPORT_phase0.x1.md", "fullburn/reports/DONE_phase0_abda5d88c24f.md", "fullburn/eslint.config.mjs"]) {
+      expect(isClass2(p), `${p} is a review artifact or the lint config and must be Class 2 (X-02, X-03)`).toBe(true);
     }
   });
 });

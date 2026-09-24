@@ -1,5 +1,23 @@
 import { CapError } from "@fullburn/config/caps";
-import { MODELS, ROLE_CARDS, ownEntry, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
+import { MODELS, ROLE_CARDS, ownEntry, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
+
+/** THE ONLY ORIGIN A CREDENTIAL IS EVER SENT TO. `gatewayBaseUrl` was
+ * caller-controlled and unchecked: any origin received the vault key and the
+ * request, which bypasses the AI Gateway cap that L31 makes the PRIMARY spend
+ * control (cross-family finding X-05, 2026-09-24). Checked BEFORE the vault is
+ * read, so a wrong base never touches a credential. */
+export const AI_GATEWAY_ORIGIN = "https://gateway.ai.cloudflare.com";
+export function assertGatewayBase(base: string): void {
+  let u: URL;
+  try {
+    u = new URL(base);
+  } catch {
+    throw new GatewayError(`gatewayBaseUrl is not a URL — refusing to dispatch (Law 9)`);
+  }
+  if (u.origin !== AI_GATEWAY_ORIGIN || !u.pathname.startsWith("/v1/") || u.username !== "" || u.password !== "") {
+    throw new GatewayError(`gatewayBaseUrl origin ${u.origin} is not the AI Gateway — refusing to dispatch or read a credential (Law 9)`);
+  }
+}
 import { type ClientVault } from "./vault.ts";
 import {
   MeterUnavailableError,
@@ -7,7 +25,7 @@ import {
   type SpendMeter,
   type SpendReservation,
 } from "./spend-meter.ts";
-import { redactError, redactInPlace, redactValue } from "./redact.ts";
+import { redactError, redactInPlace, redactText, redactValue } from "./redact.ts";
 import { TraceContext, TraceEmitError, emitOrFail, type TraceEvent, type TraceSink } from "./tracing.ts";
 
 /** THE only LLM call path (Law 11, §2.4). Everything below is deterministic
@@ -185,7 +203,8 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       // file claimed every exit is traced. Law 11 calls an untraced decision a
       // bug, so the loss is recorded on the error that does reach the caller
       // rather than swallowed (adversary finding R7-09).
-      traceLost = sinkErr instanceof Error ? sinkErr.name : "a non-error";
+      // The NAME is a string an outside party chose (X-08): redact it too.
+      traceLost = sinkErr instanceof Error ? redactText(String(sinkErr.name), secrets) : "a non-error";
     }
   };
 
@@ -193,11 +212,21 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     startedAtMs = deps.now();
     const card = ownEntry(ROLE_CARDS, role);
     if (card === undefined) throw new BindingError(`unknown role "${role}"`);
-    const bound = ownEntry(deps.bindings, role);
-    if (bound === undefined) throw new BindingError(`role "${role}" has no binding`);
+    /** The bindings served under must be a VALID map — complete, every model
+     * known, every building domain attacked by a different family. `llm()`
+     * took any map it was handed (cross-family finding X-10, 2026-09-24), so
+     * the family-diversity rule was a property of config/models.ts's default
+     * export and not of the serving path. A BindingError here is not caught
+     * and re-thrown as a gateway failure: it is a configuration refusal. */
+    validateBindings(deps.bindings);
+    // The unbound-role and unknown-model refusals that stood here are GONE, not
+    // shadowed: `validateBindings` refuses both first (a complete map, every
+    // model known), so they could no longer fire and the unreachable-guard
+    // sweep said so. A guard that cannot fire is deleted, never left as
+    // coverage it does not provide.
+    const bound = ownEntry(deps.bindings, role) as string;
     modelId = bound;
-    const model = ownEntry(MODELS, bound);
-    if (model === undefined) throw new BindingError(`bound model "${bound}" not in registry`);
+    const model = ownEntry(MODELS, bound) as (typeof MODELS)[string];
 
     // Tracing is not optional (Law 11): a real TraceContext, scoped to this client.
     if (!(req.trace instanceof TraceContext)) throw new TraceEmitError("llm() requires a TraceContext");
@@ -267,6 +296,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // future meter implementation, and this one has none — `reserve` either
     // returns the branded handle or throws.
 
+    assertGatewayBase(deps.gatewayBaseUrl);
     const key = deps.vault.get("ai-gateway-key");
     secrets = [key.value];
     const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
@@ -320,13 +350,13 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
         throw err;
       }
       // Anything else may have been billed upstream: SETTLE, never release (F3).
-      settleOrFailClosed(meter, reservation);
+      settleOrFailClosed(meter, reservation, secrets);
       committedUsd = reservation.amountUsd;
       throw redactError(err, secrets, GatewayError);
     }
 
     // Billable regardless of what we think of the response.
-    settleOrFailClosed(meter, reservation);
+    settleOrFailClosed(meter, reservation, secrets);
     committedUsd = reservation.amountUsd;
 
     validateOutput(card.outputSchema, output);
@@ -344,6 +374,15 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       outcome: "ok",
     });
 
+    /** A PROVIDER THAT ECHOES THE CREDENTIAL IS A LEAK, and the value was
+     * returned to the caller unredacted while only the trace copy was cleaned
+     * (cross-family finding X-08). Refuse rather than rewrite: the structure a
+     * caller receives is never altered, and a secret never leaves this frame.
+     * `redactValue` with no secrets is the same walk with nothing to redact,
+     * so the two serialisations differ exactly when a secret was present. */
+    if (JSON.stringify(redactValue(output, secrets)) !== JSON.stringify(redactValue(output, []))) {
+      throw new GatewayError("provider output carried a credential — refused, not returned (Law 9)");
+    }
     return output;
   } catch (err) {
     // Anything that threw before the request left the building never became
@@ -374,7 +413,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     await traceFailure(
       releaseLeak === null
         ? safe.message
-        : `${safe.message} [reservation leaked: meter.release threw ${releaseLeak instanceof Error ? releaseLeak.name : "a non-error"}; ` +
+        : `${safe.message} [reservation leaked: meter.release threw ${releaseLeak instanceof Error ? redactText(String(releaseLeak.name), secrets) : "a non-error"}; ` +
           `$${reservation?.amountUsd ?? 0} of headroom remains consumed for a request that never departed]`,
     );
     if (traceLost !== null) {
@@ -398,12 +437,13 @@ function randomEventId(): string {
 function settleOrFailClosed(
   meter: Required<Pick<SpendMeter, "reserve" | "settle" | "release">>,
   reservation: SpendReservation,
+  secrets: readonly string[],
 ): void {
   try {
     meter.settle(reservation);
   } catch (err) {
     throw new MeterUnavailableError(
-      `spend was incurred but could not be recorded — refusing to release the reservation (fail closed): ${err instanceof Error ? err.name : "settle failed"}`,
+      `spend was incurred but could not be recorded — refusing to release the reservation (fail closed): ${err instanceof Error ? redactText(String(err.name), secrets) : "settle failed"}`,
     );
   }
 }

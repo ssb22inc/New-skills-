@@ -16,6 +16,10 @@ import { resolve } from "node:path";
 /** The workspace this harness belongs to. A marker may only name a path inside
  * it, and only the workspace it was written in. */
 const WORKSPACE = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
+/** The root-relative paths the harness resolves to the repository root — the
+ * same expression `mutate.mjs` uses; a marker may name nothing else there. */
+export const ROOT_TARGETS = /^\.(?:github|claude)\/|^DONE\.md$/;
 
 /** THE IN-FLIGHT MARKER — how a crashed run is made harmless.
  *
@@ -67,7 +71,17 @@ export function recoverInFlight(markerPath = MARKER, fs = { existsSync, readFile
    * Three conditions, all fail-closed: the path must resolve INSIDE this
    * workspace, the file must already exist (a repair restores, it never
    * creates), and the marker must name the workspace it was written in. */
-  const inWorkspace = resolve(record.path).startsWith(`${WORKSPACE}/`);
+  /** REPO-ROOT TARGETS ARE LEGITIMATE, AND WERE UNRECOVERABLE. The harness
+   * deliberately mutates `.github/`, `.claude/` and `DONE.md` at the
+   * repository root (AD-, CS-, DN- entries), but this check accepted only
+   * paths inside `fullburn/`: a crash during one of those entries deleted the
+   * marker and left CODEOWNERS, the adversary's definition or the completion
+   * contract mutated on disk (cross-family finding X-04, 2026-09-24). The
+   * capability R9-09 removed — writing anywhere a marker names — stays
+   * removed: a root path is honoured only if it is one of the three root
+   * targets the harness itself resolves there, by the same expression. */
+  const rootRel = resolve(record.path).startsWith(`${REPO_ROOT}/`) ? resolve(record.path).slice(REPO_ROOT.length + 1) : null;
+  const inWorkspace = resolve(record.path).startsWith(`${WORKSPACE}/`) || (rootRel !== null && ROOT_TARGETS.test(rootRel));
   const sameWorkspace = record.workspace === undefined || record.workspace === WORKSPACE;
   if (!inWorkspace || !sameWorkspace || !fs.existsSync(record.path)) {
     fs.rmSync(markerPath, { force: true });
@@ -114,6 +128,27 @@ export function harnessVerdict(survived, notFound) {
  * Pure: entries in, the names it cannot place out, with the reason. `read` is
  * injected so a test can drive the missing, ambiguous and unreadable cases
  * against fixtures the real tree does not contain. */
+/** THE TABLE IS PLACED AGAINST THE COMMITTED BYTES, EVEN MID-MUTATION.
+ *
+ * Cross-family finding X-07 (GPT-6 Astra, 2026-09-24), confirmed by execution:
+ * the staleness invariant ran inside every harness mutation, the mutated
+ * entry's `from` text was — by construction — absent from the mutated file,
+ * the invariant went red, and the harness printed CAUGHT for every entry
+ * whether or not any behavioural lock existed. Two full runs (231/231 and
+ * 240/240) were void. It is R9-01 in the check written to prevent stale
+ * entries, and the negative canary could not see it because it appended a
+ * comment and left its `from` text in place.
+ *
+ * The marker the harness writes before touching a file carries that file's
+ * ORIGINAL bytes. So the staleness check reads the in-flight file through the
+ * marker: what it places the table against is the committed tree, exactly.
+ * This exempts nothing — it reads the bytes the harness recorded. */
+export function readThroughInFlight(read, marker, resolvePath = (p) => p) {
+  if (!marker || typeof marker.path !== "string" || typeof marker.original !== "string") return read;
+  const inFlight = resolvePath(marker.path);
+  return (file) => (resolvePath(file) === inFlight ? marker.original : read(file));
+}
+
 export function staleEntries(entries, read, { selfFile = "", tableEnd = 0 } = {}) {
   const stale = [];
   for (const [name, file, from, to] of entries) {
@@ -200,6 +235,18 @@ export const META_CANARIES = Object.freeze([
     file: "engine/src/spend-meter.ts",
     from: "const MICROS_PER_USD = 1_000_000;",
     to: "const MICROS_PER_USD = 1_000_000; // meta-check canary",
+    expect: "SURVIVED",
+  }),
+  // THE CANARY X-07 NEEDED. The first negative canary APPENDS, so its `from`
+  // text survives the edit and a check that fails on missing `from` text is
+  // invisible to it. This one REWRITES a comment: no behaviour changes and the
+  // original text is gone. A harness that reports CAUGHT here is red for a
+  // reason that is not a lock, and its result is void.
+  Object.freeze({
+    name: "negative canary — a comment REWRITE (from-text removed) must SURVIVE",
+    file: "engine/src/spend-meter.ts",
+    from: " * ALL INTERNAL ACCOUNTING IS INTEGER MICRO-DOLLARS (adversary finding R2-01).",
+    to: " * All internal accounting is integer micro-dollars (adversary finding R2-01; meta-check canary).",
     expect: "SURVIVED",
   }),
   Object.freeze({

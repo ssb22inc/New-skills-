@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CapError, assertCapsUsable, getCaps } from "@fullburn/config/caps";
 import { ROLE_BINDINGS, validateBindings } from "@fullburn/config/models";
@@ -11,7 +11,7 @@ import { vaultForClient, MemoryVaultBackend, VaultError } from "../../src/vault.
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { scanContent } from "../../scripts/scan-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { staleEntries, tableEndOf } from "../../scripts/mutate-lib.mjs";
+import { MARKER as HARNESS_MARKER, readThroughInFlight, staleEntries, tableEndOf } from "../../scripts/mutate-lib.mjs";
 import { CANARY_SECRET, TEST_CLIENT, makeDeps, memoryMeter } from "../helpers.ts";
 import { e2eVarianceHolds, runnerTargets } from "../e2e-variance.ts";
 import { blockingCalls } from "../blocking-calls.ts";
@@ -521,6 +521,33 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       write(marker, JSON.stringify({ path: victim, original: "restored\n", workspace: "/some/other/checkout" }));
       expect(recoverInFlight(marker)?.repaired, "another checkout's marker was honoured").toBe(false);
 
+      /** X-04 (cross-family, 2026-09-24): the harness mutates three targets at
+       * the REPOSITORY root, and a marker naming one of them was refused as
+       * "outside the workspace" — marker deleted, file left mutated. A root
+       * target the harness itself resolves there is repaired; any other root
+       * path is still refused (R9-09 stays closed).
+       *
+       * MUTATION: X1-04 — drop the root-target clause. */
+      const repoRootDir = new URL("../../../../", import.meta.url).pathname.replace(/\/$/, "");
+      const rootVictim = join(repoRootDir, ".claude", ".recover-fixture-root.md");
+      write(rootVictim, "MUTATED\n");
+      write(marker, JSON.stringify({ path: rootVictim, original: "ORIGINAL\n", workspace }));
+      try {
+        expect(recoverInFlight(marker)?.repaired, "a repo-root harness target was not repaired").toBe(true);
+        expect(readFileSync(rootVictim, "utf8")).toBe("ORIGINAL\n");
+      } finally {
+        rmSync(rootVictim, { force: true });
+      }
+      const rootOther = join(repoRootDir, ".recover-fixture-other.md");
+      write(rootOther, "current\n");
+      write(marker, JSON.stringify({ path: rootOther, original: "stale\n", workspace }));
+      try {
+        expect(recoverInFlight(marker)?.repaired, "a non-target root path was written").toBe(false);
+        expect(readFileSync(rootOther, "utf8")).toBe("current\n");
+      } finally {
+        rmSync(rootOther, { force: true });
+      }
+
       // A corrupt marker is cleared rather than crashing the next run forever.
       write(marker, "{ not json");
       expect(recoverInFlight(marker)?.repaired).toBe(false);
@@ -748,10 +775,10 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         expect: /output field .* is not/, fire: () => viaLlm({ transport: { async post() { return { greeting: 1 }; } } }) },
       { name: "an unknown role is refused", file: "engine/src/gateway.ts", type: BindingError,
         expect: /unknown role/, fire: () => viaLlm({ role: "no-such-role" }) },
-      { name: "a role with no binding is refused", file: "engine/src/gateway.ts", type: BindingError,
-        expect: /has no binding/, fire: () => viaLlm({ bindings: {} }) },
-      { name: "a binding to an unregistered model is refused", file: "engine/src/gateway.ts", type: BindingError,
-        expect: /not in registry/, fire: () => viaLlm({ bindings: { "hello-world": "no-such-model" } }) },
+      // "a role with no binding" and "a binding to an unregistered model" stood
+      // here against two guards in llm(); `validateBindings` at entry (X-10,
+      // 2026-09-24) refuses both first, the guards were deleted as unreachable,
+      // and the refusals are driven through llm() in eval-rebind.test.ts.
       { name: "a missing TraceContext is refused", file: "engine/src/gateway.ts", type: TraceEmitError,
         expect: /llm\(\) requires a TraceContext/, fire: () => viaLlm({ trace: null }) },
       { name: "a trace scoped to another client is refused", file: "engine/src/gateway.ts", type: TraceEmitError,
@@ -766,6 +793,14 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           viaLlm({ meter: memoryMeter(() => 0, () => effectiveAiCapsUsd("fixture-testco")) }) },
       { name: "a transport with no post() is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /transport has no post\(\)/, fire: () => viaLlm({ transport: {} }) },
+      // X-05 (cross-family, 2026-09-24): the gateway base is pinned, and checked before the vault.
+      { name: "a gateway base that is not a URL is refused", file: "engine/src/gateway.ts", type: GatewayError,
+        expect: /gatewayBaseUrl is not a URL/, fire: () => viaLlm({ gatewayBaseUrl: "not a url" }) },
+      { name: "a gateway base off the AI Gateway is refused", file: "engine/src/gateway.ts", type: GatewayError,
+        expect: /is not the AI Gateway/, fire: () => viaLlm({ gatewayBaseUrl: "https://receiver.example.invalid/v1/x/y/" }) },
+      // X-08: a provider that echoes the credential is refused, never returned.
+      { name: "a provider output carrying a credential is refused", file: "engine/src/gateway.ts", type: GatewayError,
+        expect: /provider output carried a credential/, fire: () => viaLlm({ transport: { async post() { return { greeting: CANARY_SECRET }; } } }) },
       { name: "a settle that cannot record refuses to release", file: "engine/src/gateway.ts", type: MeterUnavailableError,
         expect: /spend was incurred but could not be recorded/, fire: async () => {
           const { deps, ledger } = mkDeps();
@@ -1009,6 +1044,14 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
      * "Deleted or disclosed, never left in place" — this is the disclosed half,
      * and the row is checked to exist rather than taken on trust. */
     const DISCLOSED: ReadonlyArray<{ signature: RegExp; row: string; why: string }> = [
+      {
+        signature: /no monotonic clock on this runtime/,
+        row: "L43",
+        why:
+          "reachable only in a runtime with no process.hrtime — never this Node worker. Driven for real in " +
+          "engine/test/workers-runtime.test.ts, which spawns a Node child with its process global deleted and " +
+          "asserts the clock refuses at construction with this message (cross-family finding X-17)",
+      },
       {
         signature: /slot is occupied by an object this module did not create/,
         row: "L31",
@@ -1459,6 +1502,27 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         },
       },
       {
+        row: "L43",
+        claim:
+          "the staleness check reads the in-flight file through the harness marker; a repo-root harness target is " +
+          "recoverable and any other root path is refused; the lint config and review artifacts are Class-2; the " +
+          "gateway origin is pinned; expected eval fields compare structurally; the clock binds no Node API at load",
+        holds: () => {
+          const viaMarker = mutateLib.readThroughInFlight((f: string) => "MUTATED", { path: "/x/a", original: "ORIGINAL" });
+          const clockSrc = readFileSync(new URL("../../src/trusted-clock.ts", import.meta.url), "utf8");
+          return (
+            viaMarker("/x/a") === "ORIGINAL" &&
+            mutateLib.ROOT_TARGETS.test(".github/CODEOWNERS") === true &&
+            mutateLib.ROOT_TARGETS.test("README.md") === false &&
+            gateLib.isClass2("fullburn/eslint.config.mjs") === true &&
+            gateLib.isClass2("fullburn/reports/ADVERSARY_REPORT_phase0.x1.md") === true &&
+            gateLib.isClass2("fullburn/reports/HANDOFF.md") === false &&
+            mutateLib.META_CANARIES.filter((c: { expect: string }) => c.expect === "SURVIVED").length === 2 &&
+            /typeof process !== "undefined"/.test(clockSrc) === true
+          );
+        },
+      },
+      {
         row: "L29",
         claim: "mutate.mjs carries exactly three mutation entries of its own",
         holds: () => (harnessSrc.match(/"engine\/scripts\/mutate\.mjs"/g) ?? []).length === 3,
@@ -1635,6 +1699,45 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     ).toEqual(["L19: deliberately false"]);
     expect(staleClaims([{ row: "L19", claim: "true", holds: () => true }]), "it reports rows that DO hold").toEqual([]);
     expect(CLAIMS.length, "the claims list was emptied — this check proves nothing").toBeGreaterThan(6);
+  });
+
+  /** X-15 (cross-family, 2026-09-24), the half that can be checked mechanically:
+   * a `[VERIFIED <path>…]` tag is a claim that a named test keeps a row honest.
+   * Every path such a tag names must exist and be a file the default suite
+   * runs — a tag naming a deleted or never-written test is a row with a false
+   * citation, the exact shape the ledger rule forbids. The other half — binding
+   * the row's TEXT to its claim — is open, and L43 says so.
+   *
+   * MUTATION: none — this is a record check with no runtime capability. */
+  it("every [VERIFIED] tag in the ledger names test files that exist in the default suite", async () => {
+    const ledgerText = readFileSync(new URL("../../../reports/LIVE_VERIFICATION_LEDGER.md", import.meta.url), "utf8");
+    const { default: suiteCfg } = await import("../../../vitest.config.ts");
+    const include: string[] = suiteCfg.test?.include ?? [];
+    // `**/` may match NOTHING (a top-level test file), so it becomes an optional
+    // directory run rather than a mandatory one.
+    const matches = (glob: string, path: string) =>
+      new RegExp(`^${glob.replace(/\*\*\//g, "\u0000").replace(/\*/g, "[^/]*").replace(/\u0000/g, "(?:.*/)?")}$`).test(path);
+    expect(matches("engine/test/**/*.test.ts", "engine/test/a.test.ts"), "the matcher rejects a top-level test").toBe(true);
+    expect(matches("engine/test/**/*.test.ts", "engine/test/sub/a.test.ts")).toBe(true);
+    expect(matches("engine/test/**/*.test.ts", "engine/test/a.ts")).toBe(false);
+    const tags = [...ledgerText.matchAll(/\[VERIFIED ([^\]]+)\]/g)].map((m) => m[1]!);
+    expect(tags.length, "no [VERIFIED] tags found — the ledger format changed or this check is broken").toBeGreaterThan(5);
+    const bad: string[] = [];
+    let named = 0;
+    for (const tag of tags) {
+      for (const m of tag.matchAll(/\b((?:engine|config)\/test\/[\w./-]+\.ts)\b/g)) {
+        named += 1;
+        const p = m[1]!;
+        if (!existsSync(new URL(`../../../${p}`, import.meta.url))) bad.push(`${p}: does not exist`);
+        else if (!/\.test\.ts$/.test(p) && !/\/drill\//.test(p)) {
+          // A helper module (money-path-guards.ts, credential-corpus.ts) is fine
+          // when a default-suite file imports it; a bare non-test path is not.
+          continue;
+        } else if (/\.test\.ts$/.test(p) && !include.some((g) => matches(g, p))) bad.push(`${p}: not in the default suite's include globs`);
+      }
+    }
+    expect(named, "no test paths parsed from any tag — this check would pass vacuously").toBeGreaterThan(10);
+    expect(bad, "[VERIFIED] tags naming tests the suite does not run").toEqual([]);
   });
 
   /** MOCKING A MONEY-PATH MODULE IS BOUNDED, AND EVERY BOUND IS NAMED.
@@ -2157,13 +2260,41 @@ describe("runner-decision sweep — no verdict is reached where the default suit
     const entries = (0, eval)(`(${literal})`) as [string, string, string, string][];
     expect(entries.length, "no entries parsed — this check would pass vacuously").toBeGreaterThan(100);
     const repoRoot = new URL("../../../../", import.meta.url);
-    const read = (file: string) =>
-      readFileSync(new URL(file, /^\.(?:github|claude)\/|^DONE\.md$/.test(file) ? repoRoot : wsRoot), "utf8");
+    const toUrl = (file: string) => new URL(file, /^\.(?:github|claude)\/|^DONE\.md$/.test(file) ? repoRoot : wsRoot);
+    const readTree = (file: string) => readFileSync(toUrl(file), "utf8");
+    /** X-07: inside a harness run the in-flight file holds `to`, not `from`.
+     * The marker holds the committed bytes; read through it, so this test
+     * places the table against the tree the harness will restore — and cannot
+     * turn a mutation into a CAUGHT by itself. */
+    const marker = existsSync(HARNESS_MARKER as string) ? (JSON.parse(readFileSync(HARNESS_MARKER as string, "utf8")) as { path: string; original: string }) : null;
+    const read = readThroughInFlight(readTree, marker, (p: string) => (p.startsWith("/") ? p : toUrl(p).pathname)) as (f: string) => string;
     const stale = staleEntries(entries, read, { selfFile: "engine/scripts/mutate.mjs", tableEnd: end }) as { name: string; file: string; why: string }[];
     expect(
       stale.map((s) => `${s.name} (${s.file}): ${s.why}`),
       "these entries no longer match the tree — the harness would report them PATTERN-NOT-FOUND and the locks they name are untested",
     ).toEqual([]);
+  });
+
+  /** X-07's red-proof: with a marker naming a file, the read returns the
+   * marker's ORIGINAL for that file and the tree's bytes for every other, so an
+   * applied mutation does not read as a stale entry. Without a marker, or with
+   * a malformed one, the read is untouched.
+   *
+   * MUTATION: X1-07 — readThroughInFlight returns `read` unchanged. */
+  it("the staleness check reads the in-flight file through the harness marker", () => {
+    const tree: Record<string, string> = { "/ws/a.ts": "MUTATED", "/ws/b.ts": "b" };
+    const read = (f: string) => tree[f]!;
+    const viaMarker = readThroughInFlight(read, { path: "/ws/a.ts", original: "ORIGINAL" }) as (f: string) => string;
+    expect(viaMarker("/ws/a.ts")).toBe("ORIGINAL");
+    expect(viaMarker("/ws/b.ts")).toBe("b");
+    expect((readThroughInFlight(read, null) as (f: string) => string)("/ws/a.ts")).toBe("MUTATED");
+    expect((readThroughInFlight(read, { path: 1 }) as (f: string) => string)("/ws/a.ts")).toBe("MUTATED");
+    // Relative entry paths resolve to the marker's absolute path.
+    const rel = readThroughInFlight((f: string) => tree[`/ws/${f}`]!, { path: "/ws/a.ts", original: "ORIGINAL" }, (p: string) => (p.startsWith("/") ? p : `/ws/${p}`)) as (f: string) => string;
+    expect(rel("a.ts")).toBe("ORIGINAL");
+    // And the real thing: an applied entry is NOT stale when read through its marker.
+    const stale = staleEntries([["e", "a.ts", "ORIGINAL", "MUTATED"]], rel) as unknown[];
+    expect(stale).toEqual([]);
   });
 
   /** The check above has no negative case in the real tree, by design. These
@@ -2515,6 +2646,15 @@ describe("the adversary's discovery mirror — one source of truth, fully gated 
     expect(block, "no config block carries both files and rules").toBeDefined();
     expect(block!.rules).toEqual(cfg.REQUIRED_RULES);
     expect(JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8")).scripts.lint).toBe("eslint .");
+    /** X-02 (cross-family, 2026-09-24): the config's `ignores` could exclude
+     * engine/src/** while LINTED_FILES and REQUIRED_RULES read unchanged and
+     * the plants under engine/test/ still fired. Ask ESLint itself whether a
+     * production source path is ignored. */
+    const { ESLint } = await import("eslint");
+    const es = new ESLint({ cwd: new URL("../../../", import.meta.url).pathname.replace(/\/$/, "") });
+    for (const p of ["engine/src/gateway.ts", "engine/src/spend-meter.ts", "config/src/caps.ts"]) {
+      expect(await es.isPathIgnored(p), `${p} is ignored by the lint config — production code outside the gate`).toBe(false);
+    }
   });
 
   /** Every gate that covers the source must cover the mirror, or the mirror is

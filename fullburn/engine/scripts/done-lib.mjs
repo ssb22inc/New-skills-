@@ -116,6 +116,18 @@ export function lintCondition({ configured, code, out }) {
   return { status: "PASS", observed: "clean (eslint, type-aware: no-floating-promises, no-misused-promises)" };
 }
 
+/** §2.1.8's approval half: the class-2 gate's own verdict, never a count of
+ * transitions (cross-family finding X-12, 2026-09-24 — a fully approved phase
+ * with any Class-2 change failed C8). `gate` is `checkClass2Approvals`'s
+ * result; `owed` is the transition count, reported as information only. The
+ * probe of 2026-09-24 showed the choice of predicate living in the runner,
+ * where no default-suite test could see it — so it lives here. */
+export function class2Condition(gate, owed) {
+  const ok = gate !== null && typeof gate === "object" && gate.ok === true;
+  const reason = gate && typeof gate.reason === "string" ? gate.reason : "no gate verdict";
+  return { status: ok ? "PASS" : "FAIL", observed: `${reason}${Number.isInteger(owed) ? ` — ${owed} transition(s) in range` : ""}` };
+}
+
 export function parseOwed(out) {
   const s = out ?? "";
   if (/No Class-2 paths changed/.test(s)) return 0;

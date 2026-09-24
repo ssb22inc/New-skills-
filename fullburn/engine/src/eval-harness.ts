@@ -1,4 +1,18 @@
-import { GOLDEN_SET_CASE_IDS, ROLE_CARDS, attestEvalRun, ownEntry, type EvalAttestation } from "@fullburn/config/models";
+import { GOLDEN_SET_CASE_IDS, ROLE_BINDINGS, ROLE_CARDS, attestEvalRun, ownEntry, type EvalAttestation } from "@fullburn/config/models";
+
+/** Structural equality for an expected field (cross-family finding X-13,
+ * 2026-09-24): `===` compared the adversary golden set's `reasons` arrays by
+ * identity, so a perfect structured answer scored 0/3 and could never bind.
+ * JSON-shaped values only — that is what a schema-validated output is. */
+export function structurallyEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null || typeof a !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) return a.length === (b as unknown[]).length && a.every((v, i) => structurallyEqual(v, (b as unknown[])[i]));
+  const ka = Object.keys(a as object).sort();
+  const kb = Object.keys(b as object).sort();
+  return ka.length === kb.length && ka.every((k, i) => k === kb[i] && structurallyEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
 import { type LlmDeps, llm, type GatewayTransport } from "./gateway.ts";
 import { TraceContext } from "./tracing.ts";
 
@@ -90,7 +104,11 @@ export async function runEval(
     }
   }
 
-  const bindings = { [role]: modelId };
+  // The FULL map with the candidate substituted (cross-family finding X-10):
+  // `llm()` now validates the bindings it serves under, so a candidate that
+  // would break family diversity fails its eval here, with the reason — "no
+  // pass, no bind" includes "cannot be bound at all".
+  const bindings = { ...ROLE_BINDINGS, [role]: modelId };
   const outcomes: { caseId: string; passed: boolean }[] = [];
   const failures: string[] = [];
 
@@ -102,7 +120,7 @@ export async function runEval(
         { ...baseDeps, transport: recorded, bindings },
         { role, clientId, input: gcase.input, trace },
       )) as Record<string, unknown>;
-      const ok = Object.entries(gcase.expected).every(([k, v]) => output[k] === v);
+      const ok = Object.entries(gcase.expected).every(([k, v]) => structurallyEqual(output[k], v));
       outcomes.push({ caseId: gcase.id, passed: ok });
       if (!ok) failures.push(`${gcase.id}: field mismatch`);
     } catch (err) {

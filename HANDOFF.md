@@ -11,13 +11,14 @@ on any disagreement about *state*.
 
 ## Tree and branch
 
-- verified tree: `abda5d88c24fa81a8675c3519b7181e110cf585e` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
+- verified tree: `9a05f8ae69b5356526262386f8c630d6bb959fbf` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
 - branch: `claude/fullburn-engine-spec-r7v5lg`
 - phase: `0`
 - latest `done` report: `fullburn/reports/DONE_phase0_7a89aee21e85.md` — **exit 1, INCOMPLETE** (previous tree; C5 there read `226 caught, 0 survived, 3 stale` — AD-02/03/04, repaired in the tree above)
 - latest `done` run, at the previous tree `860de6b6`: `fullburn/reports/DONE_phase0_860de6b6ac8c.md` — **exit 1, INCOMPLETE**, 15 failing rows, all human-owned or unmeasurable here (C1 live halves, C2, C3, C4, C7-lint, C8-owed, C8-identity, C10); C5 **PASS** — `231 mutations: 231 caught, 0 survived, 0 stale`, meta-check ok (2026-09-21 00:29)
 - `done` run at `0ef1ce04` (the lint-gate tree): INTERRUPTED by the builder (SIGINT, harness restored the tree, exit 130, no verdict) after editing began during its harness — recorded in L42; no report exists for that tree
-- `done` run at the tree above: `fullburn/reports/DONE_phase0_abda5d88c24f.md` — **exit 1, INCOMPLETE** (2026-09-22 09:53). C5 PASS 240/240 with meta-check; **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
+- `done` run at `abda5d88`: `fullburn/reports/DONE_phase0_abda5d88c24f.md` — **exit 1, INCOMPLETE** (2026-09-22 09:53). ~~C5 PASS 240/240~~ **VOID (X-07, ledger L43 correction)**;
+- `done` run at the tree above: **PENDING** — launched after the x1-fixes commit with the tree untouched; its C5 is the first honest harness count since `7a89aee2` (226/229) **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
 
 ## Open findings (immutable IDs; nothing below is closed without the test that proves it)
 
@@ -31,9 +32,35 @@ on any disagreement about *state*.
 | L40 | 2 | The completion checker nested inside its own suite under DN-14 on its first run; removed structurally (DN-15). Its first complete run found three stale harness entries (AD-02/03/04) that two commits of green suite had not; the table is now checked against the tree in the default suite (`staleEntries`, SE-01) and the checker names what it finds (DN-16). Two builder process slips recorded in the row. |
 | DONE §2.1.7 lint | 3 → gate built | Ruled 2026-09-22: ESLint + typescript-eslint, type-aware, `no-floating-promises` and `no-misused-promises` at error; wired as `npm run lint`, a CI step, and C7-lint. 66 files, 0 findings at install; plants refused by name (L41). C7-lint PASS in a `done` report is pending the next run. |
 | C7-leak / Law 9 | **2, needs a ruling** | The cross-family runner calls OpenRouter directly and the Class-2 structural scan flags the hostname under Law 9 (every LLM call through AI Gateway). The builder does not exempt or respell. Two lawful resolutions, the human's to pick: (a) route the read through the AI Gateway's OpenRouter provider endpoint once H2 exists — the read then waits on H2 as well as the key; (b) a written ruling that review tooling is outside Law 9, with the scan rule amended by the human (scan-lib is Class-2). Until then C7-leak is FAIL at this tree and the read must not be dispatched. |
-| DONE §2.1.3 cross-family | 1 → route built, not run | Ruled 2026-09-22: GPT Astra via OpenRouter, in CI. `cross-family-read.mjs` + `.github/workflows/cross-family-read.yml` (dispatch-only, fails closed without `OPENROUTER_API_KEY`), reviewer pinned to `openai/gpt-6-astra` and read back, stand-in cannot mint a PASS (L42). No report exists yet: the secret is not provisioned. |
+| DONE §2.1.3 cross-family | 1 → x1 RAN: FAIL, 17 findings | Ruled 2026-09-22: GPT Astra via OpenRouter, in CI. `cross-family-read.mjs` + `.github/workflows/cross-family-read.yml` (dispatch-only, fails closed without `OPENROUTER_API_KEY`), reviewer pinned to `openai/gpt-6-astra` and read back, stand-in cannot mint a PASS (L42). x1 ran 2026-09-24 by hand with the human's key (rotated after): `reports/ADVERSARY_REPORT_phase0.x1.md`, FAIL, 17 findings, dispositions below. C3 stays FAIL until a read PASSES against a later tree. |
 | DONE §2.1.8 identity | 1 | Approvals cannot be shown to carry the human's authenticated identity without branch protection + a merged PR. |
 | DONE §2.1.10 ack | — | `APPROVALS/GATE_ACK_phase0.md` does not exist. Silence is not consent. |
+
+## Cross-family round x1 (GPT-6 Astra, 2026-09-24) — dispositions
+
+Report: `fullburn/reports/ADVERSARY_REPORT_phase0.x1.md` (Verdict FAIL, 17 findings, bound to `abda5d88`). Each disposition is the builder's; the reviewer's verdict stands until a read PASSES against a later tree.
+
+| ID | Sev | Disposition | Where |
+|---|---|---|---|
+| X-01 | 1 | Already open — H19/L37. Human-owned. | — |
+| X-02 | 1 | FIXED: lint config Class-2 + CODEOWNER; ESLint asked whether production paths are ignored. X1-02. | gate-lib, CODEOWNERS, invariants |
+| X-03 | 1 | HALF-FIXED: review artifacts Class-2 + CODEOWNER (human review on every report commit). Provenance from bytes is impossible; ESCALATED: a router-side generation lookup in CI is proposed. X1-03. | gate-lib, CODEOWNERS |
+| X-04 | 1 | FIXED: repo-root harness targets recoverable after a crash; other root paths still refused. X1-04. | mutate-lib |
+| X-05 | 1 | FIXED: gateway origin pinned to `gateway.ai.cloudflare.com/v1/`, checked before the vault. X1-05. | gateway.ts |
+| X-06 | 1 | Already open — L4/H2. Human-owned. | — |
+| X-07 | 1 | CONFIRMED BY EXECUTION AND FIXED. All C5 counts since `298c9f9` VOID (ledger correction). Staleness check reads through the marker; third meta-canary; probe rewritten. X1-07. | mutate-lib, invariants, locks-r7 |
+| X-08 | 2 | FIXED: output carrying a credential refused, not returned; error names redacted. X1-08a/b. | gateway.ts, redact.ts |
+| X-09 | 2 | Already open — D-vault-rotation unmet since F10. | — |
+| X-10 | 3 | FIXED: `llm()` validates its binding map; two shadowed guards deleted; refusals driven through llm. X1-10. | gateway.ts, eval-rebind |
+| X-11 | 3 | ESCALATED — Law 9 vs the router. Needs the human's ruling (options in the open-findings table). | — |
+| X-12 | 3 | FIXED: C8 is `checkClass2Approvals`, not a transition count. X1-12. | done.mjs |
+| X-13 | 3 | FIXED: structural comparison; adversary golden set 0/3 → 3/3. X1-13. | eval-harness |
+| X-14 | 3 | Already open — AC1-live, H2/H5. | — |
+| X-15 | 3 | PARTIAL: every `[VERIFIED]` tag must name tests the suite runs. Row-text binding still open. | invariants |
+| X-16 | 5 | Already open — H1/H3/H4/H9. Human-owned. | — |
+| X-17 | 5 | FIXED: no Node API at module load; refuses at construction without `process.hrtime`; driven in a process without `process`. Whether the Worker declares `nodejs_compat` is the human's stack call. X1-17. | trusted-clock |
+
+Probe re-measurement 2026-09-24 (marker-writing probe, failing tests named): 26 of 26 CAUGHT, each by a named test other than the staleness invariant (R14-01 as the sanity case; X1-07/04/02/03/05/10/08a/08b/13/17/12; SE-01; DN-16; AD-02/03/04; LT-01/02; DN-17; XF-01..06). Two of them — X1-08b and X1-12 — SURVIVED on the first honest pass: nothing drove the redacted error name, and C8's predicate lived in the runner; both gained a driven red-proof (hardening.test.ts; done-lib `class2Condition`) and were re-probed CAUGHT. Log: probe-28.log in the session scratchpad; the harness re-run is the authoritative count.
 
 ## Standing rulings issued since the last handoff (for the human to append to DONE.md §4)
 
@@ -45,6 +72,8 @@ on any disagreement about *state*.
 18. **Lint is a type-aware gate for one defect class.** ESLint with typescript-eslint, `no-floating-promises` and `no-misused-promises` at error, over exactly the type checker's files, as a CI gate; an unawaited settle/reserve is the class that reaches production paths and Biome cannot see it. (Human ruling 2026-09-22, L41)
 19. **The cross-family read runs in CI, router-bound, on a pinned reviewer that is read back; a stand-in endpoint can never mint a PASS; a PASS with findings is a FAIL.** (Human ruling 2026-09-22, L42)
 20. **No edit to the tree while a checker run is in flight.** (Builder slip 2026-09-22, L42.)
+21. **A check that runs inside the harness reads the tree through the harness marker, and the meta-check carries a from-removing negative canary.** (Cross-family finding X-07, 2026-09-24, L43.) Every C5 count and every single-entry probe verdict between `298c9f9` and `e74cb36` is void.
+22. **Review artifacts and the lint configuration are Class-2 and CODEOWNER-covered.** (X-02/X-03, 2026-09-24, L43.) Provenance of a review from bytes alone is impossible; a router-side generation lookup in CI is proposed and awaits a ruling.
 
 ## Class-2 sets owed
 

@@ -44,6 +44,19 @@ export const CLASS2_PATTERNS = [
   // The gates themselves and everything that decides whether they run
   /^\.github\//,
   /^fullburn\/engine\/scripts\//,
+  // THE LINT GATE'S CONTROLLING CONFIGURATION. Its `ignores` can exclude
+  // engine/src/** while the rules and the file globs read unchanged and the
+  // plants under engine/test/ still fire (cross-family finding X-02,
+  // 2026-09-24). Any lint config at the workspace root, by shape.
+  /^fullburn\/(?:eslint|biome)\.config\.[cm]?[jt]s$/,
+  // REVIEW ARTIFACTS. A handwritten file with `Verdict: PASS`, the current
+  // tree hash and a non-Claude `Reviewer-family:` line satisfied both C2 and
+  // C3 with no review having occurred (cross-family finding X-03). Provenance
+  // is not provable from bytes; what CAN be done is to put every review
+  // artifact behind the human's identity: Class-2, CODEOWNER-reviewed, owed an
+  // approval like any other gate input. Reports stay outside the verified
+  // tree so a record commit does not move the hash a report binds to.
+  /^fullburn\/reports\/(?:ADVERSARY_REPORT_|DONE_)/,
   // Any test-runner or deploy config, by shape rather than by name: vitest
   // honours vitest.workspace.ts OVER vitest.config.ts, so protecting only the
   // latter left a sibling filename that silenced 145 of 148 tests (R3-CP-03).
@@ -103,6 +116,9 @@ export function isClass2(path) {
  * some entry — `locks-r5.test.ts` asserts both directions, so neutering a
  * pattern or adding one without a witness turns the suite red. */
 export const CLASS2_WITNESS_PATHS = [
+  "fullburn/eslint.config.mjs",
+  "fullburn/reports/ADVERSARY_REPORT_phase0.x1.md",
+  "fullburn/reports/DONE_phase0_abda5d88c24f.md",
   "fullburn/CLAUDE.md",
   "fullburn/ENGINE_BUILD.md",
   "fullburn/.claude/agents/engine-adversary.md",

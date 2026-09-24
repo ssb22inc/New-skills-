@@ -40,6 +40,11 @@
 # ── The gates, and everything that decides whether they run ─────────────────
 /fullburn/engine/scripts/           @ssb22inc
 /.github/                           @ssb22inc
+# The lint gate's configuration (X-02) and every review artifact (X-03):
+# what decides a gate's reach, and what the gates read as evidence.
+/fullburn/eslint.config.mjs         @ssb22inc
+/fullburn/reports/ADVERSARY_REPORT_* @ssb22inc
+/fullburn/reports/DONE_*            @ssb22inc
 
 # ── The phase marker. It decides whether the H20 expiry fires. ──────────────
 /fullburn/PHASE                     @ssb22inc

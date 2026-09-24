@@ -40,7 +40,13 @@ const ANCHOR_TOLERANCE_MS = 5_000;
 const NATIVE = Object.freeze({
   dateNow: Date.now,
   DateCtor: Date,
-  hrtime: process.hrtime.bigint.bind(process.hrtime),
+  /** NOT dereferenced at module load (cross-family finding X-17, 2026-09-24):
+   * `process.hrtime` is a Node API, and `index.ts` reaches this file at
+   * import, so under workerd without nodejs_compat the Worker failed to
+   * INITIALISE — the scaffold's "no Node APIs" comment was false. Absent a
+   * monotonic source, the clock refuses at construction (fail closed), which
+   * is the meter refusing spend; it never runs on a clock it cannot trust. */
+  hrtime: typeof process !== "undefined" && typeof process.hrtime?.bigint === "function" ? process.hrtime.bigint.bind(process.hrtime) : null,
   timeOrigin: () => performance.timeOrigin,
   perfNow: () => performance.now(),
 });
@@ -97,11 +103,15 @@ export function assertMonotonic(mono: bigint, last: bigint): void {
 
 /** A clock the meter owns. Anchored once, advanced monotonically thereafter. */
 export function trustedClock(): () => number {
+  const hrtime = NATIVE.hrtime;
+  if (hrtime === null) {
+    throw new MeterUnavailableError("no monotonic clock on this runtime (process.hrtime absent) — refusing spend (fail closed)");
+  }
   const anchorWall = anchorWallMs();
-  const anchorMono = NATIVE.hrtime();
+  const anchorMono = hrtime();
   let lastMono = anchorMono;
   return () => {
-    const mono = NATIVE.hrtime();
+    const mono = hrtime();
     assertMonotonic(mono, lastMono);
     lastMono = mono;
     return anchorWall + Number((mono - anchorMono) / 1_000_000n);

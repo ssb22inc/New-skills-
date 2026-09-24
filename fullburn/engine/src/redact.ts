@@ -110,7 +110,8 @@ export function redactValue(value: unknown, secrets: readonly string[], depth = 
 
     if (obj instanceof Date) return Number.isNaN(obj.getTime()) ? "[invalid date]" : obj.toISOString();
     if (obj instanceof Error) {
-      return { name: obj.name, message: redactText(typeof obj.message === "string" ? obj.message : "", secrets) };
+      // The name too (X-08): `err.name` is any string the thrower chose.
+      return { name: redactText(typeof obj.name === "string" ? obj.name : "Error", secrets), message: redactText(typeof obj.message === "string" ? obj.message : "", secrets) };
     }
     if (obj instanceof Map) {
       return {

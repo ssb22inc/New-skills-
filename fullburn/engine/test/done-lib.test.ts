@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, PHASE0_REQUIREMENTS, completionSentence, gateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, PHASE0_REQUIREMENTS, class2Condition, completionSentence, gateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -87,6 +87,16 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(lintCondition({ configured: true, code: 0, out: finding }).status).toBe("FAIL");
     // A crash with no findings is a FAIL that says so.
     expect(lintCondition({ configured: true, code: 2, out: "" }).observed).toMatch(/exit 2/);
+  });
+
+  /** MUTATION: X1-12 — pass when the transition count is zero instead. */
+  it("C8 is the class-2 gate's verdict; the transition count is information, never the decision", () => {
+    expect(class2Condition({ ok: true, reason: "all approved" }, 3).status).toBe("PASS");
+    expect(class2Condition({ ok: true, reason: "all approved" }, 3).observed).toContain("3 transition(s)");
+    expect(class2Condition({ ok: false, reason: "2 unapproved" }, 0).status).toBe("FAIL");
+    expect(class2Condition({ ok: false, reason: "2 unapproved" }, 0).observed).toContain("2 unapproved");
+    expect(class2Condition(null, 0).status).toBe("FAIL");
+    expect(class2Condition({ ok: "yes" }, 0).status).toBe("FAIL");
   });
 
   it("reads the owed-approvals count, or null", () => {

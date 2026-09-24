@@ -823,11 +823,19 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const { META_CANARIES, metaCheckVerdict } = await import("../scripts/mutate-lib.mjs");
 
-    // Both directions must be represented, or the check is half a check.
-    expect(META_CANARIES.map((c: { expect: string }) => c.expect).sort()).toEqual(["CAUGHT", "SURVIVED"]);
+    // Both directions must be represented, or the check is half a check — and
+    // the negative direction twice: an APPENDING comment (from-text kept) and a
+    // REWRITING comment (from-text gone). X-07 (2026-09-24) was a check that
+    // went red on missing from-text; only the second shape can see that.
+    expect(META_CANARIES.map((c: { expect: string }) => c.expect).sort()).toEqual(["CAUGHT", "SURVIVED", "SURVIVED"]);
 
-    const negative = META_CANARIES.find((c: { expect: string }) => c.expect === "SURVIVED");
+    const negative = META_CANARIES.find((c: { expect: string; to: string; from: string }) => c.expect === "SURVIVED" && c.to.startsWith(c.from));
+    const rewrite = META_CANARIES.find((c: { expect: string; to: string; from: string }) => c.expect === "SURVIVED" && !c.to.includes(c.from));
     const positive = META_CANARIES.find((c: { expect: string }) => c.expect === "CAUGHT");
+    expect(rewrite, "no from-removing negative canary — a staleness-shaped red suite is invisible to the meta-check").toBeDefined();
+    // The rewrite changes a COMMENT only: both sides start as a doc-comment line.
+    expect(rewrite.from.trim().startsWith("*"), "the rewrite canary's target is not a comment line").toBe(true);
+    expect(rewrite.to.trim().startsWith("*"), "the rewrite canary's replacement is not a comment line").toBe(true);
 
     // The negative canary must genuinely change no behaviour — a comment. If it
     // ever became a real edit, it would be caught, the meta-check would fail,
@@ -838,9 +846,10 @@ describe("control plane — an approval cannot be minted by the agent it restrai
 
     // Both targets must still exist, or the meta-check is stale and the run is
     // void — which the runner reports rather than silently skipping.
-    for (const c of [negative, positive]) {
+    for (const c of [negative, rewrite, positive]) {
       const src = readFileSync(new URL(`../../${c.file}`, import.meta.url), "utf8");
       expect(src.includes(c.from), `the ${c.expect} canary's target text is gone: ${c.file}`).toBe(true);
+      expect(src.split(c.from).length, `the ${c.name} target is ambiguous`).toBe(2);
     }
 
     // And the verdict function refuses every disagreement.

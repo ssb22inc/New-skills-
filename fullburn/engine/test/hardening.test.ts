@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { redactValue } from "../src/redact.ts";
 import { llm } from "../src/gateway.ts";
 import { FrozenCapsSpendMeter, MemorySpendMeter } from "../src/spend-meter.ts";
 import { TraceContext } from "../src/tracing.ts";
@@ -172,16 +173,27 @@ describe("secret containment (R2-14, R2-27)", () => {
     expect(msg).not.toContain(CANARY_SECRET);
   });
 
-  it("trace payloads are redacted, not just error messages", async () => {
+  it("trace payloads are redacted, not just error messages — and an echoed credential is refused, not returned", async () => {
     const { deps, transport, sink } = makeDeps();
     // A provider that echoes the auth header back inside the response body.
+    // Until 2026-09-24 this call RESOLVED with the secret in its return value
+    // while only the trace copy was cleaned (cross-family finding X-08). The
+    // output is refused now; the trace is still redacted; nothing carries it.
     transport.response = { greeting: `ok ${CANARY_SECRET}` };
-    await llm({ ...deps, bindings: ROLE_BINDINGS }, {
+    const outcome = await llm({ ...deps, bindings: ROLE_BINDINGS }, {
       role: "hello-world",
       clientId: TEST_CLIENT,
       input: { note: `carrying ${CANARY_SECRET}` },
       trace: trace("h-trace"),
-    });
+    }).then(
+      (v) => ({ ok: true as const, v }),
+      (e: Error) => ({ ok: false as const, e }),
+    );
+    expect(outcome.ok, "a provider output carrying the credential was returned to the caller").toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.e.message).toMatch(/provider output carried a credential/);
+      expect(`${outcome.e.name} ${outcome.e.message} ${outcome.e.stack ?? ""}`).not.toContain(CANARY_SECRET);
+    }
     expect(JSON.stringify(sink.events)).not.toContain(CANARY_SECRET);
     expect(JSON.stringify(sink.events)).toContain("[redacted]");
   });
@@ -211,5 +223,24 @@ describe("diff parsing feeds every gate (R2-06)", () => {
   it("adds, deletes and modifies still parse", () => {
     const parsed = parseNameStatus(["A\ta.ts", "D\tb.ts", "M\tc.ts"].join("\n"));
     expect(parsed.map((p: { status: string }) => p.status)).toEqual(["added", "deleted", "modified"]);
+  });
+});
+
+describe("an error's NAME is a leak surface too (cross-family finding X-08, 2026-09-24)", () => {
+  /** `redactValue` cleaned an Error's message and copied its name verbatim; a
+   * thrower chooses the name as freely as the message. The probe of 2026-09-24
+   * reported this lock SURVIVED its mutation because nothing drove it — this
+   * is that drive.
+   *
+   * MUTATION: X1-08b — copy the name unredacted. */
+  it("redactValue redacts a secret carried in an Error's name", () => {
+    const err = new Error("plain message");
+    err.name = `Leak-${CANARY_SECRET}-Error`;
+    const out = JSON.stringify(redactValue(err, [CANARY_SECRET]));
+    expect(out).not.toContain(CANARY_SECRET);
+    expect(out).toContain("[redacted]");
+    // Nested inside a payload, the same.
+    const nested = JSON.stringify(redactValue({ a: [{ e: err }] }, [CANARY_SECRET]));
+    expect(nested).not.toContain(CANARY_SECRET);
   });
 });

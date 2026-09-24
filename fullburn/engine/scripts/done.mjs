@@ -26,6 +26,7 @@ import {
   ENGINE_REQUIREMENTS,
   PHASE0_REQUIREMENTS,
   gateAck,
+  class2Condition,
   isNonClaudeFamily,
   lintCondition,
   metaVerdict,
@@ -40,7 +41,9 @@ import {
   reviewerFamily,
   verdict,
 } from "./done-lib.mjs";
-import { VERIFIED_TREE_SCOPE, checkAdversaryReport, codeownersCovers, isClass2, selectPhaseReports } from "./gate-lib.mjs";
+import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkClass2Approvals, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { parseNameStatusZ } from "./diff-lib.mjs";
+import { createHash } from "node:crypto";
 import { MARKER } from "./mutate-lib.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
@@ -253,9 +256,34 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       if (!base) {
         sub8.push({ id: "C8-owed", title: "Class-2 approvals owed in this phase's commit range", status: "FAIL", command: "git merge-base origin/main HEAD", observed: "no merge-base with origin/main — the commit range cannot be determined" });
       } else {
+        /** X-12 (cross-family, 2026-09-24): this row passed only when the
+         * number of Class-2 TRANSITIONS was zero — a fully approved phase with
+         * any Class-2 change failed it. The decision is the class-2 gate's own
+         * `checkClass2Approvals`, fed exactly as class2-gate.mjs feeds it; the
+         * owed count is reported alongside as information. */
         const owed = await run("node", [`${ROOT}/engine/scripts/owed-approvals.mjs`, REPO, base]);
         const n = parseOwed(owed.out);
-        sub8.push({ id: "C8-owed", title: `Class-2 approvals owed against base ${base.slice(0, 12)}`, status: n === 0 ? "PASS" : "FAIL", command: `node engine/scripts/owed-approvals.mjs <repo> ${base.slice(0, 12)}`, observed: n === null ? `unreadable (exit ${owed.code})` : `${n} entr(y|ies) owed` });
+        const diffZ = (await git(["diff", "--name-status", "-z", "-M", `${base}...HEAD`])).out;
+        const changedFiles = parseNameStatusZ(diffZ);
+        const sha = (buf) => createHash("sha256").update(buf).digest("hex");
+        const approvalDocs = [];
+        for (const f of selectApprovalDocs(changedFiles)) {
+          approvalDocs.push({ path: f.path, status: f.status, content: readFileSync(`${REPO}/${f.path}`, "utf8"), authoredBy: (await git(["log", "-1", "--format=%an <%ae>", "--", f.path])).out.trim() });
+        }
+        const baseBlobs = new Map();
+        for (const f of changedFiles) {
+          const r = await git(["show", `${base}:${f.path}`]);
+          if (r.code === 0) baseBlobs.set(f.path, sha(Buffer.from(r.out, "utf8")));
+        }
+        const c2 = checkClass2Approvals({
+          changedFiles,
+          approvalDocs,
+          hashOf: (p) => sha(readFileSync(`${REPO}/${p}`)),
+          baseHashOf: (p) => baseBlobs.get(p) ?? sha(Buffer.alloc(0)),
+          baseCommit: base,
+        });
+        const c8 = class2Condition(c2, n);
+        sub8.push({ id: "C8-owed", title: `Class-2 approvals against base ${base.slice(0, 12)} — the class-2 gate's own decision`, status: c8.status, command: `checkClass2Approvals(diff ${base.slice(0, 12)}...HEAD, APPROVALS/)`, observed: c8.observed });
       }
       const tracked = (await git(["ls-files"])).out.split("\n").filter((p) => p.length > 0);
       const owners = readFileSync(`${REPO}/.github/CODEOWNERS`, "utf8");
