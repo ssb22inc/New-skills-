@@ -3,8 +3,9 @@ import { ROLE_BINDINGS, ROLE_CARDS, bindRole } from "@fullburn/config/models";
 import { GOLDEN } from "../evals/genome-tagger/golden.ts";
 import { GOLDEN as ADVERSARY_GOLDEN } from "../evals/creative-decision-adversary/golden.ts";
 import { RECORDED_CLAUDE_SONNET as ADV_CLAUDE, RECORDED_LLAMA_70B as ADV_LLAMA } from "../evals/creative-decision-adversary/recorded-outputs.ts";
-import { RECORDED_LLAMA_70B, RECORDED_QWEN_72B } from "../evals/genome-tagger/recorded-outputs.ts";
+import { RECORDED_GPT_5, RECORDED_LLAMA_70B, RECORDED_QWEN_72B } from "../evals/genome-tagger/recorded-outputs.ts";
 import { RecordedTransport, runEval, structurallyEqual } from "../src/eval-harness.ts";
+import { claimRecordedRegistrar, isRecordedTransport } from "../src/transport-brand.ts";
 import { llm } from "../src/gateway.ts";
 import { TraceContext } from "../src/tracing.ts";
 import { TEST_CLIENT, makeDeps } from "./helpers.ts";
@@ -25,7 +26,9 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     // binding and move the role to an open-source model on the evidence of an
     // actual harness run.
     const { deps, transport } = makeDeps();
-    const frontier = { ...ROLE_BINDINGS, "genome-tagger": "gpt-5" };
+    // The frontier binding is EARNED too (X2-09): a hand-built map is not servable.
+    const frontierEval = await runEval(deps, "genome-tagger", "gpt-5", GOLDEN, new RecordedTransport(RECORDED_GPT_5), TEST_CLIENT);
+    const frontier = bindRole(ROLE_BINDINGS, "genome-tagger", "gpt-5", frontierEval.attestation);
     transport.response = { hook: "pov", angle: "x", emotion: "y", format: "z", offer: "none" };
     await llm({ ...deps, bindings: frontier }, {
       role: "genome-tagger",
@@ -101,8 +104,9 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     const builderRole = Object.keys(ROLE_CARDS).find((r) => ROLE_CARDS[r]!.side === "builder" && ROLE_CARDS[r]!.domain === ROLE_CARDS["creative-decision-adversary"]!.domain)!;
     await expect(call({ ...ROLE_BINDINGS, [builderRole]: ROLE_BINDINGS["creative-decision-adversary"]! })).rejects.toThrow(/family-diversity violation/);
     expect(transport.requests.length, "a refused map still reached the transport").toBe(0);
-    // And the valid map serves.
-    await expect(call({ ...ROLE_BINDINGS })).resolves.toBeDefined();
+    // And the launch table serves; a SPREAD COPY of it does not (X2-09).
+    await expect(call(ROLE_BINDINGS)).resolves.toBeDefined();
+    await expect(call({ ...ROLE_BINDINGS })).rejects.toThrow(/not produced by bindRole or the launch table/);
   });
 
   /** X-05 (cross-family, 2026-09-24): `gatewayBaseUrl` was caller-controlled
@@ -132,5 +136,35 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     expect(transport.requests.length, "a refused base still reached the transport").toBe(0);
     // The real base, with the real vault, serves.
     await expect(llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: new TraceContext("x05-ok", TEST_CLIENT) })).resolves.toBeDefined();
+  });
+
+  /** X2-09 (cross-family, 2026-09-24), the recorded-transport half: a
+   * candidate map is servable only through recorded outputs, so the brand
+   * must be unforgeable. MUTATION: XB-03 (final), XB-05 (registrar once). */
+  it("the recorded brand cannot be forged: the class is final and the registrar is claimed once", () => {
+    const genuine = new RecordedTransport({});
+    expect(isRecordedTransport(genuine)).toBe(true);
+    expect(isRecordedTransport({ post: async () => ({}) }), "a look-alike carried the brand").toBe(false);
+    class Live extends RecordedTransport {
+      override async post(): Promise<unknown> { return { greeting: "from the network" }; }
+    }
+    expect(() => new Live({}), "a subclass carried the recorded brand to a live post()").toThrow(/final/);
+    // The eval harness claimed the registrar when it loaded; nobody else can.
+    expect(claimRecordedRegistrar(), "the registrar was handed out twice").toBe(null);
+    // And the prototype cannot be patched to a live post().
+    expect(() => { (RecordedTransport.prototype as unknown as { post: unknown }).post = async () => ({}); }).toThrow();
+  });
+
+  /** X2-09, the golden-set half: ids and required fields matched, so a set
+   * whose EXPECTED values were rewritten to the candidate's wrong answers
+   * scored a failing model 1.0. MUTATION: XB-04. */
+  it("runEval refuses a golden set whose expectations were rewritten to the candidate's answers", async () => {
+    const { deps } = makeDeps();
+    const rigged = GOLDEN.map((c) => ({ ...c, expected: RECORDED_LLAMA_70B[c.id] as Record<string, unknown> }));
+    await expect(runEval(deps, "genome-tagger", "llama-70b", rigged, new RecordedTransport(RECORDED_LLAMA_70B), TEST_CLIENT)).rejects.toThrow(/not the role's canonical set/);
+    // The canonical set, structurally copied, is accepted.
+    const copy = JSON.parse(JSON.stringify(GOLDEN));
+    const res = await runEval(deps, "genome-tagger", "llama-70b", copy, new RecordedTransport(RECORDED_LLAMA_70B), TEST_CLIENT);
+    expect(res.score).toBeLessThan(0.5);
   });
 });

@@ -1,7 +1,10 @@
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ROLE_BINDINGS } from "@fullburn/config/models";
+import { ROLE_BINDINGS, bindRole } from "@fullburn/config/models";
+import { RecordedTransport, runEval } from "../src/eval-harness.ts";
+import { GOLDEN as TAGGER_GOLDEN } from "../evals/genome-tagger/golden.ts";
+import { RECORDED_GPT_5, RECORDED_QWEN_72B } from "../evals/genome-tagger/recorded-outputs.ts";
 import { effectiveAiCapsUsd, type ClientCaps } from "@fullburn/config/caps";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { isClass2 } from "../scripts/gate-lib.mjs";
@@ -244,8 +247,16 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
   it("routes to the open-source gateway path after rebinding, same llm() call site", async () => {
     // Encoded because the existing eval-rebind test rebinds qwen-72b → qwen-72b,
     // which is a no-op and does not demonstrate AC 2's frontier → open-source move.
+    // Both bindings are earned by an eval run (X2-09): a hand-built map is refused.
+    // The evals run on the default caps — under this test's low cap the meter
+    // refuses case 3 and a refusal is a failed case, which is correct and not
+    // what this test measures — and the ledger is reset before serving.
+    const evalDeps = makeDeps().deps;
+    const gpt5 = await runEval(evalDeps, "genome-tagger", "gpt-5", TAGGER_GOLDEN, new RecordedTransport(RECORDED_GPT_5), TEST_CLIENT);
+    const qwen = await runEval(evalDeps, "genome-tagger", "qwen-72b", TAGGER_GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
+    resetProcessLedgerForTests();
     const { deps, transport } = makeDeps({ capsTable: LOW_AI_CAP });
-    const frontier = { ...ROLE_BINDINGS, "genome-tagger": "gpt-5" };
+    const frontier = bindRole(ROLE_BINDINGS, "genome-tagger", "gpt-5", gpt5.attestation);
     transport.response = { hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" };
     await llm({ ...deps, bindings: frontier }, {
       role: "genome-tagger",
@@ -255,7 +266,7 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
     });
     expect(transport.requests.at(-1)!.url).toContain("openai/gpt-5");
 
-    const openSource = { ...frontier, "genome-tagger": "qwen-72b" };
+    const openSource = bindRole(frontier, "genome-tagger", "qwen-72b", qwen.attestation);
     await llm({ ...deps, bindings: openSource }, {
       role: "genome-tagger",
       clientId: TEST_CLIENT,

@@ -1206,7 +1206,8 @@ describe("grade registry — enforcement acts on evidence, not on assertion (R7-
 
     // A truncated copy of a genuine result is not the genuine result.
     expect(() => enforcement(real.slice(0, 1))).toThrow(GradeRegistryError);
-    const { actions } = gradeAndEnforce({});
+    const { MemoryTraceSink, TraceContext } = await import("../src/tracing.ts");
+    const { actions } = await gradeAndEnforce({}, { sink: new MemoryTraceSink(), trace: new TraceContext("r7-grades", "engine"), now: () => 0 });
     expect(actions.length).toBeGreaterThan(0);
   });
 });

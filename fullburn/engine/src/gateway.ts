@@ -1,5 +1,6 @@
 import { CapError } from "@fullburn/config/caps";
-import { MODELS, ROLE_CARDS, ownEntry, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
+import { MODELS, ROLE_CARDS, bindingsProvenance, ownEntry, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
+import { isRecordedTransport } from "./transport-brand.ts";
 
 /** THE ONLY ORIGIN A CREDENTIAL IS EVER SENT TO. `gatewayBaseUrl` was
  * caller-controlled and unchecked: any origin received the vault key and the
@@ -219,6 +220,17 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
      * export and not of the serving path. A BindingError here is not caught
      * and re-thrown as a gateway failure: it is a configuration refusal. */
     validateBindings(deps.bindings);
+    /** NO PASS, NO BIND — ON THE SERVING PATH TOO (cross-family finding
+     * X2-09). A valid shape is not an evaluated one: the map must be the
+     * launch table or a `bindRole` result, or an eval candidate served only
+     * through recorded outputs. A hand-built or spread copy is refused. */
+    const provenance = bindingsProvenance(deps.bindings);
+    if (provenance === null) {
+      throw new BindingError("binding map was not produced by bindRole or the launch table — an unevaluated map is not servable (§2.4, no pass no bind)");
+    }
+    if (provenance === "candidate" && !isRecordedTransport(deps.transport)) {
+      throw new BindingError("an eval-candidate binding is servable only through recorded outputs — it has not passed its eval (§2.4)");
+    }
     // The unbound-role and unknown-model refusals that stood here are GONE, not
     // shadowed: `validateBindings` refuses both first (a complete map, every
     // model known), so they could no longer fire and the unreachable-guard

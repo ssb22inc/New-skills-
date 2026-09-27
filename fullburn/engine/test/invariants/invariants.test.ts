@@ -813,6 +813,14 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           viaLlm({ meter: memoryMeter(() => 0, () => effectiveAiCapsUsd("fixture-testco")) }) },
       { name: "a transport with no post() is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /transport has no post\(\)/, fire: () => viaLlm({ transport: {} }) },
+      // X2-09 (cross-family, 2026-09-24): no pass, no bind — on the serving path too.
+      { name: "an unevaluated (spread) binding map is refused", file: "engine/src/gateway.ts", type: BindingError,
+        expect: /not produced by bindRole or the launch table/, fire: () => viaLlm({ bindings: { ...ROLE_BINDINGS } }) },
+      { name: "an eval-candidate map through a live transport is refused", file: "engine/src/gateway.ts", type: BindingError,
+        expect: /servable only through recorded outputs/, fire: async () => {
+          const { evalCandidateBindings } = await import("@fullburn/config/models");
+          return viaLlm({ bindings: evalCandidateBindings("genome-tagger", "gpt-5") });
+        } },
       // X-05 (cross-family, 2026-09-24): the gateway base is pinned, and checked before the vault.
       { name: "a gateway base that is not a URL is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /gatewayBaseUrl is not a URL/, fire: () => viaLlm({ gatewayBaseUrl: "not a url" }) },
@@ -1342,6 +1350,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const xfLib = await import("../../scripts/cross-family-lib.mjs");
     const redactMod = await import("../../src/redact.ts");
+    const modelsMod = await import("@fullburn/config/models");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const { walk: walkTree } = await import("../../scripts/leak-check.mjs");
     const { execFileSync } = await import("node:child_process");
@@ -1566,6 +1575,23 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
             doneLib.mutateCondition(doneLib.parseMutate(three), 1).status === "FAIL" &&
             doneLib.mutateCondition(doneLib.parseMutate(three.replace("2 caught", "1 caught")), 0).status === "FAIL" &&
             doneLib.splitReportsByFamily([{ name: "x", content: "Reviewer-family: OpenAI\n" }]).same.length === 0
+          );
+        },
+      },
+      {
+        row: "L45",
+        claim:
+          "a spread copy of the launch bindings has no serving provenance while the launch table and bindRole results do, " +
+          "an eval candidate map is marked candidate, and the Worker entry exports the traced grade boundary only",
+        holds: () => {
+          const mdl = modelsMod;
+          const entrySrc = readFileSync(new URL("../../src/index.ts", import.meta.url), "utf8");
+          return (
+            mdl.bindingsProvenance(mdl.ROLE_BINDINGS) === "servable" &&
+            mdl.bindingsProvenance({ ...mdl.ROLE_BINDINGS }) === null &&
+            mdl.bindingsProvenance(mdl.evalCandidateBindings("genome-tagger", "gpt-5")) === "candidate" &&
+            /export \{ computeGrades, gradeAndEnforce \} from "\.\/grade-registry\.ts";/.test(entrySrc) &&
+            !/\benforcement\b/.test(entrySrc.split("\n").filter((l) => l.startsWith("export")).join("\n"))
           );
         },
       },

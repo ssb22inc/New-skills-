@@ -11,7 +11,7 @@ on any disagreement about *state*.
 
 ## Tree and branch
 
-- verified tree: `4cb6640e23eddbedf2a930384afa2d63109d83cf` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
+- verified tree: `1ac5fce506a37a5f71f272921acefbefdaf7c92a` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
 - branch: `claude/fullburn-engine-spec-r7v5lg`
 - phase: `0`
 - latest `done` report: `fullburn/reports/DONE_phase0_7a89aee21e85.md` — **exit 1, INCOMPLETE** (previous tree; C5 there read `226 caught, 0 survived, 3 stale` — AD-02/03/04, repaired in the tree above)
@@ -21,7 +21,9 @@ on any disagreement about *state*.
 - `done` run at `9a05f8ae`: `fullburn/reports/DONE_phase0_9a05f8ae69b5.md` — exit 1; C5 "the harness did not finish": the new from-removing canary was CAUGHT by locks-r7's own target-exists check (L43 addendum), so the harness declared itself VOID and stopped — correct behaviour, and the checker's row now carries that reason (DN-18)
 - `done` run at `4c9e9044`: `fullburn/reports/DONE_phase0_4c9e90440363.md` — exit 1; **C5 `252 mutations: 251 caught, 1 survived` — the first honest count since `7a89aee2`**; the survivor R9-10 was an entry whose target drifted past git's 8000-byte binary window (L43 addendum), repointed and probed CAUGHT
 - x2 ran 2026-09-24 at `c69931a4` (`reports/ADVERSARY_REPORT_phase0.x2.md`, FAIL, 20 findings; eleven fixed — dispositions below)
-- `done` run at the tree above: **PENDING** — launched after the x2-fixes commit **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
+- `done` run at `4cb6640e`: `fullburn/reports/DONE_phase0_4cb6640e23ed.md` — exit 1; C5 **PASS 263/263**, meta-check ok; human-owned rows and C7-leak (Law 9) failing
+- x3: **BLOCKED** — OpenRouter answered 402 (balance −$2.04); no read made, nothing written
+- `done` run at the tree above: **PENDING** — launched after the X2-09/X2-14 commit **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
 
 ## Open findings (immutable IDs; nothing below is closed without the test that proves it)
 
@@ -79,12 +81,12 @@ Report: `fullburn/reports/ADVERSARY_REPORT_phase0.x2.md` (Verdict FAIL, 20 findi
 | X2-06 | 2 | FIXED: `containsSecret`, no depth limit. Entry X2-06. |
 | X2-07 | 2 | FIXED: money errors rebuilt, class only. Entry X2-07. |
 | X2-08 | 2 | Already open — vault rotation unmet since F10. |
-| X2-09 | 3 | ESCALATED: serving accepts any valid map; requiring bindRole provenance changes every fixture. Ruling needed. |
+| X2-09 | 3 | FIXED 2026-09-27 (L45): serving requires provenance; candidate maps only via recorded outputs; canonical golden sets enforced. `attestEvalRun` minting stays an in-process narrowing. Entries XB-01..06. |
 | X2-10 | 3 | ESCALATED — Law 9 vs the router (same as X-11). |
 | X2-11 | 3 | FIXED: every canary, non-empty, reconciled, exit 0. Entries X2-11a/b. |
 | X2-12 | 3 | FIXED: disjoint same-family / cross-family populations. Entry X2-12. |
 | X2-13 | 3 | FIXED: origin check before the priming read; test counts reads. Entry X2-13. The X-05 proof proved the wrong property — recorded. |
-| X2-14 | 3 | ESCALATED: grade-registry decisions untraced; a traced boundary is proposed. |
+| X2-14 | 3 | FIXED 2026-09-27 (L45): `gradeAndEnforce` traces before returning, fails closed; Worker surface exports only it. Entries GR-01..04. |
 | X2-15 | 3 | FIXED: audit entries frozen. Entry X2-15. |
 | X2-16 | 3 | Already open — AC1-live, H2–H6. |
 | X2-17 | 3 | FIXED: every import statement per line; unresolved imports refused. Entry X2-17. |

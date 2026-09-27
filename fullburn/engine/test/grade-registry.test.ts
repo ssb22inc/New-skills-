@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GRADE_AREAS } from "@fullburn/config/grade-thresholds";
-import { computeGrades, enforcement, publishGradeReport, type MetricSnapshot } from "../src/grade-registry.ts";
+import { computeGrades, enforcement, gradeAndEnforce, publishGradeReport, type MetricSnapshot } from "../src/grade-registry.ts";
+import { MemoryTraceSink, TraceContext, TraceEmitError } from "../src/tracing.ts";
 
 const ALL_A: MetricSnapshot = {
   "marketing-engine": {
@@ -135,5 +136,50 @@ describe("grade registry (AC 3, §12, Law 14)", () => {
     const { "data-truth": _omitted, ...rest } = ALL_A;
     const g = computeGrades(rest).find((x) => x.area === "data-truth")!;
     expect(g.grade).toBe("BELOW_A");
+  });
+
+  /** X2-14 (cross-family, 2026-09-24): grade decisions produced step-downs,
+   * halts and alerts with no trace. The boundary now traces every decision
+   * and fails closed. MUTATION: GR-01, GR-02, GR-03, GR-04. */
+  it("gradeAndEnforce traces the snapshot, grades and actions before returning them", async () => {
+    const sink = new MemoryTraceSink();
+    const dipped = { ...ALL_A, "data-truth": { stripe_warehouse_drift_pct: 6.2 } };
+    const out = await gradeAndEnforce(dipped, { sink, trace: new TraceContext("grades-1", "engine"), now: () => 42 });
+    expect(out.actions.map((a) => a.type)).toEqual(["STEP_DOWN_TRUST_LADDER", "HALT_AUTO_IMPROVEMENTS", "ALERT_HUMAN"]);
+    expect(sink.events).toHaveLength(1);
+    const e = sink.events[0]!;
+    expect(e).toMatchObject({ traceId: "grades-1", role: "grade-registry", outcome: "ok", startedAtMs: 42, costUsd: 0 });
+    expect(e.input).toEqual(dipped);
+    expect((e.output as { actions: unknown[] }).actions).toEqual(out.actions);
+    expect(JSON.parse(out.report).grades).toHaveLength(GRADE_AREAS.length);
+  });
+
+  it("a sink outage refuses the decision — nothing is returned untraced", async () => {
+    const sink = new MemoryTraceSink();
+    sink.setFailing(true);
+    await expect(gradeAndEnforce(ALL_A, { sink, trace: new TraceContext("grades-2", "engine"), now: () => 0 })).rejects.toThrow(TraceEmitError);
+  });
+
+  it("no TraceContext, no decision", async () => {
+    const sink = new MemoryTraceSink();
+    await expect(gradeAndEnforce(ALL_A, { sink, trace: null as unknown as TraceContext, now: () => 0 })).rejects.toThrow(/requires a TraceContext/);
+    expect(sink.events).toHaveLength(0);
+  });
+
+  it("a failure inside the computation is traced as an error and re-thrown", async () => {
+    const sink = new MemoryTraceSink();
+    const boom = () => { throw new RangeError("hostile snapshot"); };
+    const hostile = new Proxy({}, { ownKeys: boom, get: boom, has: boom, getOwnPropertyDescriptor: boom }) as MetricSnapshot;
+    await expect(gradeAndEnforce(hostile, { sink, trace: new TraceContext("grades-3", "engine"), now: () => 0 })).rejects.toThrow();
+    expect(sink.events).toHaveLength(1);
+    expect(sink.events[0]!.outcome).toBe("error");
+    expect(sink.events[0]!.errorMessage).not.toContain("hostile snapshot");
+  });
+
+  it("the Worker entry exports the traced boundary and not the untraced decision helpers", async () => {
+    const entry = (await import("../src/index.ts")) as Record<string, unknown>;
+    expect(typeof entry["gradeAndEnforce"]).toBe("function");
+    expect(entry["enforcement"], "an untraced enforcement path is on the Worker surface").toBeUndefined();
+    expect(entry["publishGradeReport"], "an untraced publication path is on the Worker surface").toBeUndefined();
   });
 });

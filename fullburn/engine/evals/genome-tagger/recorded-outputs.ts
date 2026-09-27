@@ -10,6 +10,16 @@ export const RECORDED_CLAUDE_SONNET: Readonly<Record<string, unknown>> = {
   g5: { hook: "pain-point", angle: "kids-wont-cry", emotion: "empathy", format: "ugc-video", offer: "gift-with-purchase" },
 };
 
+/** A FRONTIER candidate, so AC 2's frontier → open-source move starts from a
+ * binding that was itself earned by an eval (X2-09) rather than hand-built. */
+export const RECORDED_GPT_5: Readonly<Record<string, unknown>> = {
+  g1: { hook: "pov", angle: "anti-greasy", emotion: "relief", format: "ugc-video", offer: "none" },
+  g2: { hook: "authority", angle: "derm-dad", emotion: "trust", format: "talking-head", offer: "none" },
+  g3: { hook: "callout", angle: "reef-guilt", emotion: "skepticism", format: "static", offer: "discount-20" },
+  g4: { hook: "comparison", angle: "beach-bag-test", emotion: "curiosity", format: "ugc-video", offer: "none" },
+  g5: { hook: "pain-point", angle: "kids-wont-cry", emotion: "empathy", format: "ugc-video", offer: "gift-with-purchase" },
+};
+
 export const RECORDED_QWEN_72B: Readonly<Record<string, unknown>> = {
   g1: { hook: "pov", angle: "anti-greasy", emotion: "relief", format: "ugc-video", offer: "none" },
   g2: { hook: "authority", angle: "derm-dad", emotion: "trust", format: "talking-head", offer: "none" },

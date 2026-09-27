@@ -1,4 +1,13 @@
-import { GOLDEN_SET_CASE_IDS, ROLE_BINDINGS, ROLE_CARDS, attestEvalRun, ownEntry, type EvalAttestation } from "@fullburn/config/models";
+import { GOLDEN_SET_CASE_IDS, ROLE_CARDS, attestEvalRun, evalCandidateBindings, ownEntry, type EvalAttestation } from "@fullburn/config/models";
+import { claimRecordedRegistrar } from "./transport-brand.ts";
+import { CANONICAL_GOLDEN_SETS } from "../evals/index.ts";
+
+const registerRecorded = claimRecordedRegistrar();
+if (registerRecorded === null) {
+  // Someone claimed the registrar before this module loaded: it could have
+  // branded a live transport as "recorded". Refuse to exist (fail closed).
+  throw new Error("the recorded-transport registrar was claimed before the eval harness loaded — refusing to load (X2-09)");
+}
 
 /** Structural equality for an expected field (cross-family finding X-13,
  * 2026-09-24): `===` compared the adversary golden set's `reasons` arrays by
@@ -38,7 +47,12 @@ export class RecordedTransport implements GatewayTransport {
   #currentCase: string | null = null;
 
   constructor(outputs: Readonly<Record<string, unknown>>) {
+    // FINAL (X2-09): a subclass could override `post()` with a live call and
+    // still carry the recorded brand. Only this exact class is branded.
+    if (new.target !== RecordedTransport) throw new Error("RecordedTransport is final — a subclass could carry the recorded brand to a live post()");
     this.#outputs = outputs;
+    registerRecorded!(this);
+    Object.freeze(this);
   }
 
   setCase(id: string): void {
@@ -54,6 +68,9 @@ export class RecordedTransport implements GatewayTransport {
     return out;
   }
 }
+
+// The prototype cannot be patched to swap in a live post() either.
+Object.freeze(RecordedTransport.prototype);
 
 export interface EvalResult {
   readonly role: string;
@@ -108,7 +125,19 @@ export async function runEval(
   // `llm()` now validates the bindings it serves under, so a candidate that
   // would break family diversity fails its eval here, with the reason — "no
   // pass, no bind" includes "cannot be bound at all".
-  const bindings = { ...ROLE_BINDINGS, [role]: modelId };
+  // CANDIDATE provenance (X2-09): servable only through this recorded
+  // transport. Built per case inside the try below, so a candidate that breaks
+  // family diversity fails its eval with the reason rather than aborting it.
+  /** THE SET IS THE ROLE'S OWN, NOT A CALLER'S COPY (cross-family finding
+   * X2-09): the id and field checks above passed a golden set whose EXPECTED
+   * values had been rewritten to the candidate's wrong answers, so a failing
+   * model scored 1.0 and bound. The expectations must equal the canonical set
+   * in engine/evals/ — which is Class-2 and CODEOWNER-reviewed. */
+  const canonical = ownEntry(CANONICAL_GOLDEN_SETS, role);
+  if (canonical === undefined || !structurallyEqual(JSON.parse(JSON.stringify(goldenSet)), JSON.parse(JSON.stringify(canonical)))) {
+    throw new Error(`golden set for "${role}" is not the role's canonical set in engine/evals/ — expectations may not be supplied by the caller`);
+  }
+
   const outcomes: { caseId: string; passed: boolean }[] = [];
   const failures: string[] = [];
 
@@ -116,6 +145,7 @@ export async function runEval(
     recorded.setCase(gcase.id);
     const trace = new TraceContext(`eval-${role}-${gcase.id}`, clientId);
     try {
+      const bindings = evalCandidateBindings(role, modelId);
       const output = (await llm(
         { ...baseDeps, transport: recorded, bindings },
         { role, clientId, input: gcase.input, trace },

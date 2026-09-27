@@ -104,6 +104,35 @@ export const ROLE_BINDINGS: RoleBindings = deepFreeze({
   "creative-decision-adversary": "claude-sonnet",
 });
 
+/** WHERE A BINDING MAP CAME FROM (cross-family finding X2-09, 2026-09-24).
+ * `llm()` validated a map's SHAPE — complete, known models, family diversity —
+ * but any caller-built map passed, so an unevaluated model could be served
+ * with no eval having run: "no pass, no bind" held for `bindRole` and not for
+ * serving. Identity now carries provenance: the launch table and every map
+ * `bindRole` returns are SERVABLE; an eval run's candidate map is a CANDIDATE,
+ * servable only through recorded outputs. A spread copy is neither. */
+const SERVABLE = new WeakSet<object>([ROLE_BINDINGS]);
+const CANDIDATE = new WeakSet<object>();
+
+export type BindingProvenance = "servable" | "candidate" | null;
+export function bindingsProvenance(bindings: unknown): BindingProvenance {
+  if (typeof bindings !== "object" || bindings === null) return null;
+  if (SERVABLE.has(bindings)) return "servable";
+  if (CANDIDATE.has(bindings)) return "candidate";
+  return null;
+}
+
+/** The map an eval run serves under: the launch table with one role swapped
+ * to the candidate. Validated like any other map — a candidate that would break
+ * family diversity cannot even be evaluated — and marked CANDIDATE, which the
+ * gateway serves only through recorded outputs. */
+export function evalCandidateBindings(role: string, modelId: string): RoleBindings {
+  const next = deepFreeze({ ...ROLE_BINDINGS, [role]: modelId });
+  validateBindings(next);
+  CANDIDATE.add(next);
+  return next;
+}
+
 export class BindingError extends Error {}
 
 /** Own-property lookup: inherited/polluted prototype entries never resolve. */
@@ -279,6 +308,7 @@ export function bindRole(
   }
   const next = deepFreeze({ ...bindings, [role]: modelId });
   validateBindings(next, cards);
+  SERVABLE.add(next);
   return next;
 }
 

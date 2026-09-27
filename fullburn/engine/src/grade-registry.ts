@@ -1,4 +1,5 @@
 import { GRADE_AREAS, type MetricThreshold } from "@fullburn/config/grade-thresholds";
+import { TraceContext, TraceEmitError, emitOrFail, type TraceSink } from "./tracing.ts";
 
 /** Grade Registry scaffold (ENGINE_BUILD.md §12, Law 14). Grades are code:
  * computed from metrics against Class-2 thresholds. Below-A triggers typed
@@ -108,14 +109,52 @@ export function computeGrades(snapshot: MetricSnapshot): AreaGrade[] {
  * point of §12, so the input has to be evidence rather than assertion. */
 const COMPUTED = new WeakSet<readonly AreaGrade[]>();
 
-/** The one authority: compute, then enforce, on the same snapshot. Callers that
- * want both should use this rather than pairing the two by hand. */
-export function gradeAndEnforce(snapshot: MetricSnapshot): {
-  grades: AreaGrade[];
-  actions: EnforcementAction[];
-} {
-  const grades = computeGrades(snapshot);
-  return { grades, actions: enforcement(grades) };
+export interface GradeTraceDeps {
+  readonly sink: TraceSink;
+  readonly trace: TraceContext;
+  readonly now: () => number;
+}
+
+/** THE ONE AUTHORITY, AND IT IS TRACED: compute, enforce and publish on the
+ * same snapshot, and emit one trace carrying the snapshot, the grades and the
+ * enforcement actions before any of them is returned.
+ *
+ * Cross-family finding X2-14 (2026-09-24): a below-A snapshot produced
+ * trust-step-down, improvement-halt and human-alert decisions with no trace at
+ * all — Law 11 says every DECISION is traced, not only every LLM call. FAIL
+ * CLOSED like `llm()`: if the trace cannot be written, the caller gets a
+ * TraceEmitError and no decision; a failure inside the computation is traced
+ * as an error and re-thrown. The pure helpers stay exported for their own
+ * red-proofs; the Worker entry exports only this boundary. */
+export async function gradeAndEnforce(
+  snapshot: MetricSnapshot,
+  deps: GradeTraceDeps,
+): Promise<{ grades: AreaGrade[]; actions: EnforcementAction[]; report: string }> {
+  if (!(deps?.trace instanceof TraceContext)) {
+    throw new TraceEmitError("gradeAndEnforce requires a TraceContext — an untraced grade decision is a bug (Law 11)");
+  }
+  const startedAtMs = deps.now();
+  const base = { traceId: deps.trace.traceId, clientId: deps.trace.clientId, role: "grade-registry", model: "deterministic", startedAtMs, costUsd: 0 };
+  let grades: AreaGrade[];
+  let actions: EnforcementAction[];
+  let report: string;
+  try {
+    grades = computeGrades(snapshot);
+    actions = enforcement(grades);
+    report = publishGradeReport(grades, startedAtMs);
+  } catch (err) {
+    await emitOrFail(deps.sink, {
+      ...base,
+      input: snapshot,
+      output: null,
+      outcome: "error",
+      // A GradeRegistryError's message is ours; anything else is named by class only.
+      errorMessage: err instanceof GradeRegistryError ? err.message : `grade computation failed: ${err instanceof Error ? err.constructor.name : "non-error"}`,
+    });
+    throw err;
+  }
+  await emitOrFail(deps.sink, { ...base, input: snapshot, output: { grades, actions }, outcome: "ok" });
+  return { grades, actions, report };
 }
 
 export function enforcement(grades: readonly AreaGrade[]): EnforcementAction[] {
