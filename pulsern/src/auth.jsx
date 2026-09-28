@@ -7,6 +7,7 @@ import App from "./App.jsx";
 import InstallCard from "./install.jsx";
 import { APP_ROOT, authModeFromUrl, authRedirectUrl } from "./app-routing.js";
 import { suggestEmail } from "./email-typo.js";
+import { captureAttribution, flushAttribution } from "./attribution.js";
 
 export function AuthScreen({ initialMode = "signin", onBack }) {
   const [mode, setMode] = useState(initialMode); // signin | signup | forgot
@@ -291,6 +292,9 @@ export default function AuthGate() {
   const [authMode] = useState(() => authModeFromUrl());
 
   useEffect(() => {
+    /* An ad can point straight at /app/, so the tags must be captured here too
+       and not only on the marketing site. */
+    captureAttribution();
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
@@ -298,6 +302,15 @@ export default function AuthGate() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  /* Write the first touch once there is a user to attach it to. The sign-up
+     that an ad paid for often happens on a later visit than the click, so the
+     tags are carried in localStorage until an account exists to own them. The
+     table's primary key makes a repeat call a no-op, so this can run on every
+     sign-in without tracking whether it has already happened. */
+  useEffect(() => {
+    if (session?.user?.id) flushAttribution(supabase, session.user.id);
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (!session || recovering || window.location.pathname === APP_ROOT) return;
