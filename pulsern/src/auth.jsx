@@ -6,6 +6,7 @@ import { supabase } from "./supabase.js";
 import App from "./App.jsx";
 import InstallCard from "./install.jsx";
 import { APP_ROOT, authModeFromUrl, authRedirectUrl } from "./app-routing.js";
+import { suggestEmail } from "./email-typo.js";
 
 export function AuthScreen({ initialMode = "signin", onBack }) {
   const [mode, setMode] = useState(initialMode); // signin | signup | forgot
@@ -16,6 +17,9 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  /* Recomputed per keystroke: the check is a couple of short string compares,
+     far cheaper than the state a debounce would need. */
+  const typoSuggestion = suggestEmail(email);
 
   /* Messages render above the form, but the buttons that produce them sit at
      the bottom of the card. On a phone — especially with the keyboard up — the
@@ -133,6 +137,12 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
         .auth-switch { background: none; border: 0; color: #0e6e5c; cursor: pointer; font-size: 14px; padding: 0; }
         .auth-err { color: #b42318; font-size: 13px; margin: 0 0 10px; }
         .auth-note { color: #067647; font-size: 13px; margin: 0 0 10px; }
+        /* Amber, per the design system's caution role: this is a suggestion to
+           check something, not an error and not a success. */
+        .auth-typo { color: #8a5a00; font-size: 13px; margin: -6px 0 10px; }
+        .auth-typo-fix { background: none; border: 0; padding: 0; font: inherit;
+          color: #0e7c6b; font-weight: 600; text-decoration: underline; cursor: pointer; }
+        .auth-typo-fix:focus-visible { outline: 2px solid #0e7c6b; outline-offset: 2px; border-radius: 3px; }
         .auth-foot { color: #5b6472; font-size: 12px; margin-top: 18px; line-height: 1.5; }
       `}</style>
       <div className="auth-card">
@@ -150,6 +160,18 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
         <form onSubmit={submit}>
           <input className="auth-field" type="email" required placeholder="Email" autoComplete="email"
             value={email} onChange={(e) => setEmail(e.target.value)} />
+          {/* A near-miss domain is offered, never imposed: the address is
+              valid, it just probably is not theirs. One signup was already
+              lost to yaoo.com, and nothing in the product could tell them. */}
+          {typoSuggestion && (
+            <p className="auth-typo">
+              Did you mean{" "}
+              <button type="button" className="auth-typo-fix" onClick={() => setEmail(typoSuggestion)}>
+                {typoSuggestion}
+              </button>
+              ?
+            </p>
+          )}
           {mode !== "forgot" && (
             <div className="auth-pw-wrap">
               <input className="auth-field" type={showPw ? "text" : "password"} required minLength={6} placeholder="Password (6+ characters)"

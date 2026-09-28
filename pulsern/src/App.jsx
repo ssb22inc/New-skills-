@@ -466,7 +466,20 @@ export default function App() {
   const refreshEnt = async () => {
     try {
       let e = await fetchEntitlement();
-      if (e.status === "none") { try { e = await grantFreePass(); } catch { /* index says they had one */ } }
+      if (e.status === "none") {
+        /* The grant is best-effort for the student — a failure here must not
+           block the app — but it must not vanish either. It used to be
+           swallowed by a bare catch, and one student ended up answering
+           questions with no access row and no trace of why. Re-read the
+           entitlement so a race (two tabs, a retry) still lands on the truth,
+           and leave the reason in the console for the owner diagnostics. */
+        try {
+          e = await grantFreePass();
+        } catch (err) {
+          console.warn("free pass not granted:", err?.message ?? err);
+          try { e = await fetchEntitlement(); } catch { /* keep the first read */ }
+        }
+      }
       setEnt(e);
     } catch {
       setEnt({ status: "offline", expiresAt: null, hadPaid: false, examsLeft: 0, attempted: [] });

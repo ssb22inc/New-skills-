@@ -59,7 +59,16 @@ export default async function handler(req, res) {
   const people = Object.fromEntries(STEPS.map((s) => [s.key, new Set()]));
   let purchases = 0;
   let cents = 0;
+  let internalPurchases = 0;
   for (const r of rows ?? []) {
+    /* Owner comps and launch-check transactions are real Stripe rows but not
+       customers. Counting them as conversions is how a product convinces
+       itself it has demand it has not got, which is the most expensive
+       mistake available when the next step is buying ads. */
+    if (r.event === "purchase" && r.props?.internal === true) {
+      internalPurchases += 1;
+      continue;
+    }
     people[r.event]?.add(r.user_id);
     if (r.event === "purchase") {
       purchases += 1;
@@ -91,7 +100,7 @@ export default async function handler(req, res) {
     windowDays: window,
     generatedAt: new Date().toISOString(),
     steps,
-    revenue: { purchases, cents, usd: Math.round(cents) / 100 },
+    revenue: { purchases, cents, usd: Math.round(cents) / 100, excludedInternal: internalPurchases },
     /* The numbers an ad budget is actually judged against. Break-even CAC is
        what you may pay for one activated student before the spend stops paying
        for itself, given how many activated students go on to buy and what they
@@ -102,7 +111,9 @@ export default async function handler(req, res) {
       revenuePerActivatedUsd: activated > 0 ? Math.round(cents / activated) / 100 : null,
       breakEvenCacPerActivatedUsd: activated > 0 && paid > 0 ? Math.round(cents / activated) / 100 : null,
       note: paid === 0
-        ? "No purchases in this window, so there is nothing to judge ad spend against yet. Widen the window or wait for a sale before committing a budget."
+        ? (internalPurchases > 0
+            ? `No customer purchases in this window. ${internalPurchases} internal transaction(s) (owner comps or launch checks) were excluded, because treating them as demand is how a product talks itself into an ad budget it cannot justify.`
+            : "No purchases in this window, so there is nothing to judge ad spend against yet. Widen the window or wait for a sale before committing a budget.")
         : "Paying more than the break-even figure for one activated student loses money at current conversion.",
     },
   });
