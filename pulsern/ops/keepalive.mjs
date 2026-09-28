@@ -93,6 +93,26 @@ async function main() {
   }
   console.log("✓ Auth reachable — students can sign in.");
 
+  /* 3. Funnel milestones. Signup, trial and purchase are recorded live, but
+        first_answer and activated are derived from each student's answer log,
+        which only the product writes — so something has to notice when a
+        student crosses the line. This is that something.
+
+        It rides on the keepalive rather than getting its own schedule because
+        it needs exactly the same credentials and the same daily cadence, and a
+        second cron is a second thing that can silently stop.
+
+        A failure here does NOT fail the job: the funnel going stale is a
+        reporting problem, while a red keepalive means "students cannot reach
+        PulseRN" and must keep meaning only that. */
+  try {
+    const { error } = await db().rpc("refresh_funnel_events");
+    if (error) console.warn(`  ! funnel refresh skipped: ${error.message}`);
+    else console.log("✓ Funnel milestones refreshed.");
+  } catch (e) {
+    console.warn(`  ! funnel refresh skipped: ${e.message}`);
+  }
+
   /* Size is not the point of this job, but it is free once connected and it
      makes the daily log a record of the library rather than a bare tick. */
   const { count } = await db().from("questions")
