@@ -2,6 +2,11 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import LandingPage from "./landing.jsx";
 import { authCallbackAppUrl } from "./app-routing.js";
+import { captureAttribution } from "./attribution.js";
+
+/* Before any redirect: an ad landing on the marketing site must still have its
+   tags recorded, even when the visitor is bounced straight into the app. */
+captureAttribution();
 
 const callbackTarget = authCallbackAppUrl();
 if (callbackTarget) {

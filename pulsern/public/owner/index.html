@@ -98,6 +98,29 @@
   <div class="tabs">
     <button class="tab on" id="tabCheck" onclick="showTab('check')">System check</button>
     <button class="tab" id="tabUsers" onclick="showTab('users')">Accounts</button>
+    <button class="tab" id="tabFunnel" onclick="showTab('funnel')">Funnel</button>
+  </div>
+
+  <!-- ---------------- funnel ----------------
+       The count Finance reads. Deliberately plain: how many people reached
+       each step, how many were lost between steps, and which source they came
+       from. Owner comps and launch-check transactions are excluded from
+       revenue, and the page says so rather than quietly dropping them. -->
+  <div id="funnelView" style="display:none">
+    <p class="foot" style="margin-top:0">
+      People who reached each step. Counted once each, however many times they did it.
+      Test accounts, owner comps and launch-check transactions are excluded.
+    </p>
+    <div style="margin:10px 0">
+      <label for="win" style="font-size:13px">Window</label>
+      <select id="win" onchange="runFunnel()" style="margin-left:8px;padding:6px 10px;border-radius:8px;border:1px solid var(--line)">
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="0" selected>All time</option>
+      </select>
+      <button class="ghost" onclick="runFunnel()" id="funnelAgain" style="margin-left:8px">Refresh</button>
+    </div>
+    <div id="funnelBody"></div>
   </div>
 
   <!-- ---------------- system check ---------------- -->
@@ -184,8 +207,68 @@ async function signIn() {
 function showTab(t) {
   document.getElementById('checkView').style.display = t === 'check' ? 'block' : 'none';
   document.getElementById('usersView').style.display = t === 'users' ? 'block' : 'none';
+  document.getElementById('funnelView').style.display = t === 'funnel' ? 'block' : 'none';
   document.getElementById('tabCheck').className = 'tab' + (t === 'check' ? ' on' : '');
   document.getElementById('tabUsers').className = 'tab' + (t === 'users' ? ' on' : '');
+  document.getElementById('tabFunnel').className = 'tab' + (t === 'funnel' ? ' on' : '');
+  if (t === 'funnel') runFunnel();
+}
+
+/* ---------------- funnel ---------------- */
+
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function runFunnel() {
+  const btn = document.getElementById('funnelAgain');
+  btn.disabled = true; btn.textContent = 'Loading…';
+  const body = document.getElementById('funnelBody');
+  try {
+    const days = Number(document.getElementById('win').value);
+    const d = await api('/api/funnel', { days });
+    const top = d.steps[0]?.people ?? 0;
+
+    let html = '<table><thead><tr><th>Step</th><th>People</th><th>Of signups</th><th>Lost here</th></tr></thead><tbody>';
+    for (const s of d.steps) {
+      /* Amber on the biggest single drop: the point to fix is the one that
+         loses the most people, not the one with the lowest absolute count. */
+      const worst = Math.max(...d.steps.map((x) => x.lostHere));
+      const flag = s.lostHere > 0 && s.lostHere === worst;
+      html += '<tr' + (flag ? ' style="background:#fdf6e7"' : '') + '>'
+        + '<td><strong>' + esc(s.label) + '</strong></td>'
+        + '<td>' + s.people + '</td>'
+        + '<td>' + s.ofSignups + '%</td>'
+        + '<td>' + (s.lostHere ? '&minus;' + s.lostHere + (flag ? ' \u2190 biggest drop' : '') : '&mdash;') + '</td>'
+        + '</tr>';
+    }
+    html += '</tbody></table>';
+
+    html += '<p class="foot" style="margin-top:12px"><strong>Free passes ended:</strong> ' + (d.trialsEnded ?? 0)
+      + ' \u00b7 counted separately from the steps above, because every trial ends and that is not a step anyone fails to reach.</p>';
+
+    const r = d.revenue;
+    html += '<p class="foot"><strong>Revenue:</strong> $' + r.usd
+      + ' from ' + r.purchases + ' customer purchase' + (r.purchases === 1 ? '' : 's')
+      + (r.excludedInternal ? ' \u00b7 ' + r.excludedInternal + ' internal transaction(s) excluded (owner comps and launch checks)' : '')
+      + '</p>';
+    html += '<p class="foot">' + esc(d.unitEconomics.note) + '</p>';
+
+    if (d.bySource && d.bySource.length) {
+      html += '<h3 style="margin-top:20px;font-size:15px">Where they came from</h3>'
+        + '<table><thead><tr><th>Source</th><th>Signups</th><th>Activated</th><th>Paid</th></tr></thead><tbody>';
+      for (const s of d.bySource) {
+        html += '<tr><td>' + esc(s.source) + '</td><td>' + s.signup + '</td><td>'
+          + s.activated + '</td><td>' + s.purchase + '</td></tr>';
+      }
+      html += '</tbody></table>'
+        + '<p class="foot">First touch: the campaign someone arrived from the first time, even if they signed up on a later visit. '
+        + '&ldquo;direct&rdquo; means no campaign tags and no external referrer.</p>';
+    }
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<p class="foot" style="color:#b42318">Could not load the funnel: ' + esc(e.message) + '</p>';
+  }
+  btn.disabled = false; btn.textContent = 'Refresh';
 }
 
 /* ---------------- system check ---------------- */

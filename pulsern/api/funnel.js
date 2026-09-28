@@ -30,6 +30,10 @@ const STEPS = [
 
 const pct = (n, of) => (of > 0 ? Math.round((n / of) * 1000) / 10 : 0);
 
+/* A referring host is the useful part of a referrer; the full URL is noise in
+   a table and can carry a query string we have no reason to store or show. */
+const hostOf = (url) => { try { return new URL(url).host; } catch { return "referral"; } };
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   const { token, days } = req.body || {};
@@ -50,8 +54,22 @@ export default async function handler(req, res) {
 
   let q = sb.from("funnel_events").select("event, user_id, occurred_at, props");
   if (since) q = q.gte("occurred_at", since);
-  const { data: rows, error } = await q;
+  const [{ data: rows, error }, { data: attrRows }] = await Promise.all([
+    q,
+    sb.from("user_attribution").select("user_id, utm_source, utm_medium, utm_campaign, referrer"),
+  ]);
   if (error) return res.status(502).json({ error: `Could not read the funnel: ${error.message}` });
+
+  /* First touch per user. A student with no tags and no external referrer is
+     "direct" rather than missing: leaving them out would make the source table
+     disagree with the funnel totals, which is how a report loses trust. */
+  const sourceOf = new Map();
+  for (const a of attrRows ?? []) {
+    const label = a.utm_source
+      ? (a.utm_campaign ? `${a.utm_source} / ${a.utm_campaign}` : a.utm_source)
+      : (a.referrer ? hostOf(a.referrer) : "direct");
+    sourceOf.set(a.user_id, label);
+  }
 
   /* Count distinct people per step, not rows: one student buying twice is one
      converted student and two purchases, and conflating them inflates the
@@ -96,10 +114,37 @@ export default async function handler(req, res) {
   const activated = people.activated.size;
   const paid = people.purchase.size;
 
+  /* Trial ends are counted but deliberately kept OUT of the step chain. Every
+     trial ends eventually, so it is not a stage someone fails to reach, and
+     slotting it between two real steps would make the "lost here" figures
+     below it meaningless. It belongs beside the funnel, not inside it. */
+  const trialsEnded = new Set(
+    (rows ?? []).filter((r) => r.event === "trial_end").map((r) => r.user_id)
+  ).size;
+
+  /* Signups, activations and sales per first-touch source. These three are
+     what an ad decision turns on: traffic that signs up but never activates is
+     the wrong traffic, and traffic that activates but never buys is the wrong
+     offer. Reported only for the steps that carry that meaning, rather than
+     every step, so the table stays readable. */
+  const bySourceMap = new Map();
+  const bump = (uid, key) => {
+    const src = sourceOf.get(uid) ?? "direct";
+    const row = bySourceMap.get(src) ?? { source: src, signup: 0, activated: 0, purchase: 0 };
+    row[key] += 1;
+    bySourceMap.set(src, row);
+  };
+  for (const key of ["signup", "activated", "purchase"]) {
+    for (const uid of people[key]) bump(uid, key);
+  }
+  const bySource = [...bySourceMap.values()].sort((a, b) => b.signup - a.signup || b.purchase - a.purchase);
+
   return res.status(200).json({
     windowDays: window,
     generatedAt: new Date().toISOString(),
     steps,
+    bySource,
+    trialsEnded,
     revenue: { purchases, cents, usd: Math.round(cents) / 100, excludedInternal: internalPurchases },
     /* The numbers an ad budget is actually judged against. Break-even CAC is
        what you may pay for one activated student before the spend stops paying
