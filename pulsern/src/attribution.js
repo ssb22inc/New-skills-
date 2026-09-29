@@ -25,6 +25,24 @@ const CLICK_IDS = { gclid: "google", fbclid: "facebook", ttclid: "tiktok", msclk
 
 const clip = (s, n = 200) => (typeof s === "string" ? s.slice(0, n) : null);
 
+/* Hosts that are part of OUR OWN flows, not places a student came from.
+   Returning from Stripe checkout sets document.referrer to checkout.stripe.com,
+   and the first real purchase was duly attributed to "checkout.stripe.com" as
+   though Stripe had sent us a customer. Any redirect we send people through
+   and back — payments, auth, email link handlers — would do the same, and the
+   effect is worst exactly where it matters: on the users who convert, because
+   they are the ones who pass through a checkout. */
+const OWN_FLOW_HOSTS = [
+  /(^|\.)stripe\.com$/i,
+  /(^|\.)checkout\.stripe\.com$/i,
+  /(^|\.)supabase\.co$/i,
+  /(^|\.)pulsern\.app$/i,
+  /(^|\.)accounts\.google\.com$/i,
+  /(^|\.)vercel\.app$/i,
+];
+
+const isOwnFlow = (host) => OWN_FLOW_HOSTS.some((re) => re.test(host));
+
 /* Reads the tags from a URL without deciding anything about storage, so it can
    be unit-tested without a browser. Returns null when there is nothing worth
    recording — an untagged organic visit should not overwrite a real first
@@ -52,7 +70,10 @@ export function readAttribution(href, referrer = "") {
        within our own site and say nothing about acquisition. */
     let ref = null;
     if (referrer) {
-      try { if (new URL(referrer).host !== url.host) ref = clip(referrer); } catch { /* malformed */ }
+      try {
+        const host = new URL(referrer).host;
+        if (host !== url.host && !isOwnFlow(host)) ref = clip(referrer);
+      } catch { /* malformed */ }
     }
     if (!Object.keys(out).length && !ref) return null;
     return { ...out, referrer: ref, landing_path: clip(url.pathname, 300) };
