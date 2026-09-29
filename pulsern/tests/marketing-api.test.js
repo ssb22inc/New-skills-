@@ -82,6 +82,27 @@ describe("claims check against the live catalogue", () => {
     expect(checkClaims([{ id: "x", blurb: "10,034 practice questions" }], counts)).toEqual([]);
   });
 
+  /* A "+" is a floor, and a floor that is met is not a fault. Flagging it
+     would make this section cry wolf on every read until nobody looked at it
+     — which is how "3,100+" survived to 10,034 in the first place. */
+  it("accepts a floor the bank clears", () => {
+    expect(checkClaims([{ id: "x", blurb: "10,000+ practice questions" }], counts)).toEqual([]);
+  });
+
+  it("still fails a floor the bank does not clear", () => {
+    const [f] = checkClaims([{ id: "x", blurb: "11,000+ practice questions" }], counts);
+    expect(f.direction).toBe("overstated");
+  });
+
+  it("speaks up once a floor has fallen far enough behind to be worth rewriting", () => {
+    expect(checkClaims([{ id: "x", blurb: "3,100+ practice questions" }], counts)[0].direction)
+      .toBe("understated");
+  });
+
+  it("holds an exact claim to the exact number, with no latitude", () => {
+    expect(checkClaims([{ id: "x", blurb: "10,000 practice questions" }], counts)).toHaveLength(1);
+  });
+
   it("matches each noun to its own bank, not to questions", () => {
     const [f] = checkClaims([{ id: "x", blurb: "400 case studies" }], counts);
     expect(f.live).toBe(508);
@@ -220,5 +241,49 @@ describe("the marketing endpoint refuses before it does any work", () => {
     process.env.MARKETING_API_KEY = KEY;
     const res = await call({ method: "GET", headers: {} });
     expect(res.code).toBe(401);
+  });
+});
+
+/* The copy that actually ships.
+   ------------------------------------------------------------------
+   Five paid plans spent months advertising "3,100+" while 10,034 questions
+   were live — selling roughly a third of the product, quietly, to every
+   prospect who read a price. Nobody complains about being undersold, which is
+   why it lasted. These two rules are what stop it recurring. */
+import { PLANS } from "../src/pricing.js";
+
+describe("shipped plan copy", () => {
+  // Verified against the student-visible tables on 2026-09-29.
+  const LIVE = { questions: 10034, cases: 505, flashcards: 1145 };
+
+  it("promises nothing the bank cannot cover", () => {
+    const overstated = checkClaims(PLANS, LIVE).filter((c) => c.direction === "overstated");
+    expect(overstated).toEqual([]);
+  });
+
+  it("agrees with the live catalogue today", () => {
+    expect(checkClaims(PLANS, LIVE)).toEqual([]);
+  });
+
+  /* An exact number in a price blurb is wrong the day after it is written,
+     because the bank only grows. A floor stays true. This is the rule that
+     makes the fix permanent rather than another snapshot to go stale. */
+  it("states content as a floor, never as an exact count", () => {
+    const exact = [];
+    for (const p of PLANS) {
+      for (const m of String(p.blurb ?? "").matchAll(/([\d,]+)\s*(\+?)\s*(practice questions|questions|case studies|flashcards|cards)/gi)) {
+        if (m[2] !== "+") exact.push(`${p.id}: ${m[0]}`);
+      }
+    }
+    expect(exact).toEqual([]);
+  });
+
+  /* Every paid plan opens the same library; only duration and the number of
+     self-assessments differ. The old copy implied otherwise by quoting a
+     bigger bank on longer plans, which was never true. */
+  it("offers every paid plan the same library", () => {
+    const paid = PLANS.filter((p) => p.cents > 0 && !p.addon);
+    const catalogues = new Set(paid.map((p) => (p.blurb.match(/^[^·]+·[^·]+·[^·]+/) ?? [""])[0].trim()));
+    expect(catalogues.size).toBe(1);
   });
 });

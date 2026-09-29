@@ -88,19 +88,32 @@ export function presentedKey(headers = {}) {
      UNDERSTATED is a money problem. It is quiet, nobody complains, and it
      sells the product as a third of what it is.
 
-   A tolerance band would only hide small drift until it became large drift, so
-   there isn't one: any disagreement is reported, and the reader decides. */
+   A "+" changes what the copy promised. "10,000+" with 10,034 live is simply
+   true, and flagging it would make this section cry wolf on every read until
+   nobody looks at it — which is how the 3,100+ blurbs survived to 10,034 in
+   the first place. So a floor claim is only reported when it is actually
+   wrong (fewer live than promised) or when it has fallen far enough behind
+   that a materially better number is sitting there unused. An exact claim has
+   no such latitude: it is either right or it is not. */
+export const FLOOR_SLACK = 1.25;
+
 export function checkClaims(plans, counts) {
   const out = [];
   for (const p of plans) {
-    for (const m of String(p.blurb ?? "").matchAll(/([\d,]+)\s*\+?\s*(practice questions|questions|case studies|flashcards|cards)/gi)) {
+    for (const m of String(p.blurb ?? "").matchAll(/([\d,]+)\s*(\+?)\s*(practice questions|questions|case studies|flashcards|cards)/gi)) {
       const claimed = Number(m[1].replace(/,/g, ""));
       if (!Number.isFinite(claimed) || claimed === 0) continue;
-      const noun = m[2].toLowerCase();
+      const isFloor = m[2] === "+";
+      const noun = m[3].toLowerCase();
       const live = /case/.test(noun) ? counts.cases
         : /card|flashcard/.test(noun) ? counts.flashcards
         : counts.questions;
-      if (live == null || claimed === live) continue;
+      if (live == null) continue;
+      if (isFloor) {
+        // Promised "at least N": true whenever live >= N, and worth raising
+        // only once the gap is big enough to be worth rewriting copy for.
+        if (live >= claimed && live < claimed * FLOOR_SLACK) continue;
+      } else if (claimed === live) continue;
       out.push({
         where: `plan "${p.id}" blurb`,
         text: m[0],
