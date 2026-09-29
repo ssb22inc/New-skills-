@@ -7,6 +7,7 @@ import App from "./App.jsx";
 import InstallCard from "./install.jsx";
 import { APP_ROOT, authModeFromUrl, authRedirectUrl } from "./app-routing.js";
 import { suggestEmail } from "./email-typo.js";
+import { explainAuthError } from "./auth-messages.js";
 import { captureAttribution, flushAttribution } from "./attribution.js";
 
 export function AuthScreen({ initialMode = "signin", onBack }) {
@@ -52,7 +53,12 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
         if (error) throw error;
       }
     } catch (err) {
-      setError(err.message || "Something went wrong. Try again.");
+      /* A throttle after a successful signup is not a failure, and colouring it
+         red is what cost us a live prospect. Let the translator decide whether
+         this is something the student must fix or simply something that has
+         already worked. */
+      const m = explainAuthError(err.message, mode);
+      if (m.tone === "notice") setNotice(m.text); else setError(m.text);
     } finally {
       setBusy(false);
     }
@@ -89,15 +95,8 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
       if (error) throw error;
       setNotice("Check your email — tap the link and you're in. No password needed.");
     } catch (err) {
-      /* GoTrue throttles one email per address per minute. Its raw wording
-         ("For security purposes...") reads like a rejection, so say plainly
-         that the first link is already on its way. */
-      const wait = /only request this after (\d+)/.exec(err.message || "");
-      setError(
-        wait
-          ? `A link was just sent to that address — check your inbox and spam. You can request another in ${wait[1]} seconds.`
-          : err.message || "Could not send the link. Try again."
-      );
+      const m = explainAuthError(err.message, "signin");
+      if (m.tone === "notice") setNotice(m.text); else setError(m.text);
     } finally {
       setLinkBusy(false);
     }

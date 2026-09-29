@@ -113,6 +113,43 @@ async function main() {
     console.warn(`  ! funnel refresh skipped: ${e.message}`);
   }
 
+  /* 4. Signup friction. A student who creates an account and never signs in is
+        the most expensive failure the product has: they wanted it enough to
+        type their email, and something in the way stopped them. It is also
+        completely silent -- nobody complains, they just leave. On 2026-09-29 a
+        live prospect was lost this way, and it was found only because they
+        happened to send a screenshot.
+
+        This is deliberately a deterministic check rather than a job for the
+        adversarial reviewer. "Did anyone sign up and never get in" is a
+        counting question with a right answer; a model asked to judge it would
+        produce a confident opinion instead. The adversarial reviewer earns its
+        place on the WORDS those students read -- see the friction pass in
+        ops/copy-audit.mjs -- which is a language judgement it is genuinely
+        better at than a regex. */
+  const DAYS = 3;
+  const since = new Date(Date.now() - DAYS * 86400_000).toISOString();
+  const { data: stuck, error: stuckErr } = await db()
+    .from("funnel_events").select("user_id").eq("event", "signup").gte("occurred_at", since);
+  if (stuckErr) {
+    console.warn(`  ! signup check skipped: ${stuckErr.message}`);
+  } else if (stuck?.length) {
+    const ids = stuck.map((r) => r.user_id);
+    const { data: started } = await db()
+      .from("funnel_events").select("user_id").eq("event", "trial_start").in("user_id", ids);
+    const gotIn = new Set((started ?? []).map((r) => r.user_id));
+    const blocked = ids.filter((id) => !gotIn.has(id));
+    if (blocked.length) {
+      /* A GitHub warning rather than a failure: people do sign up and drift
+         away for their own reasons, and a red keepalive must keep meaning
+         "PulseRN is unreachable". But it must not be invisible either. */
+      console.log(`::warning::${blocked.length} of ${ids.length} signup(s) in the last ${DAYS} days never reached the app. Check /owner/ -> Funnel, and whether email confirmation is still switched on.`);
+    }
+    console.log(`Signups in the last ${DAYS} days: ${ids.length} · reached the app: ${ids.length - blocked.length}`);
+  } else {
+    console.log(`No signups in the last ${DAYS} days.`);
+  }
+
   /* Size is not the point of this job, but it is free once connected and it
      makes the daily log a record of the library rather than a bare tick. */
   const { count } = await db().from("questions")
