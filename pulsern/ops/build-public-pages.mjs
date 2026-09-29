@@ -79,7 +79,7 @@ const pages = [
     slug: "pricing", title: "NCLEX-RN prep pricing", eyebrow: "Clear pricing", h1: "Choose the study window that fits your plan.",
     description: "Compare PulseRN NCLEX-RN prep access from a free 1-day pass to 30-, 60-, 90-, 180-, 360-, and 730-day plans.",
     schema: { "@type": "Product", "@id": `${SITE}/#app`, name: "PulseRN", description: "Adaptive NCLEX-RN exam preparation", brand: { "@type": "Brand", name: "PulseRN" }, offers },
-    body: `<p class="lead">Every paid plan includes full study access and a stated number of readiness self-assessments. The free pass includes study content but no readiness self-assessment.</p>
+    body: `<p class="lead">Every paid plan includes the full study library and one to six readiness self-assessments, by plan length. The free pass includes study content but no readiness self-assessment.</p>
       <section aria-labelledby="plans"><h2 id="plans">Access plans</h2><div class="grid">
       <article class="card"><span class="tag">Free</span><h3>1-Day Free Pass</h3><p class="price">$0</p><p>Unlimited study-content access for 24 hours. Readiness self-assessments are not included.</p></article>
       ${paid.map((p) => `<article class="card${p.id === "sub90" ? " best" : ""}">${p.id === "sub90" ? '<span class="tag">Popular study window</span>' : ""}<h3>${esc(p.name)}</h3><p class="price">${esc(fmtUsd(p.cents))} <small>USD</small></p><p>${esc(p.blurb)}</p><p class="meta">${p.exams} readiness self-assessment${p.exams === 1 ? "" : "s"}</p></article>`).join("")}</div></section>
