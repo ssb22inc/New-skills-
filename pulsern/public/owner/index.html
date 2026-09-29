@@ -174,7 +174,7 @@
 const SUPABASE_URL = 'https://xlfdywudgamrnzjwtrtd.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_wH9FG2HgmC9hrvqNO4hZiQ_eJi86SUd';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const when = (t) => t ? new Date(t).toLocaleString() : '—';
 const day  = (t) => t ? new Date(t).toLocaleDateString() : '—';
 const usd  = (c) => '$' + ((c ?? 0) / 100).toFixed(2);
@@ -215,9 +215,6 @@ function showTab(t) {
 }
 
 /* ---------------- funnel ---------------- */
-
-const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 async function runFunnel() {
   const btn = document.getElementById('funnelAgain');
