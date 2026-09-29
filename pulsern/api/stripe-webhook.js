@@ -78,11 +78,30 @@ export default async function handler(req, res) {
      granted, Stripe would retry, and the refresh job would fill this gap
      anyway. Losing a funnel row is a reporting problem; refusing the webhook
      after granting access is a customer problem. */
+  /* The internal flag must be resolved HERE, not left to the nightly refresh.
+     The refresh only fills gaps, so a row this wrote without the flag stays
+     unflagged forever — and the first live test purchase duly appeared as
+     "$0.50 from 1 customer purchase", which is precisely the false demand
+     signal the flag exists to prevent. A lookup failure defaults to counting
+     it as a real sale, which is the safe direction: an over-reported test is
+     visible and gets questioned, a silently dropped customer is not. */
+  let internal = false;
+  if (meta.code) {
+    const { data: codeRow } = await sb.from("discount_codes")
+      .select("internal").eq("code", meta.code).maybeSingle();
+    internal = codeRow?.internal === true;
+  }
+
   const { error: funnelErr } = await sb.from("funnel_events").insert({
     user_id: meta.user_id,
     event: "purchase",
     dedup_key: s.id,
-    props: { plan: plan.id, cents: Number(meta.amount) || plan.cents, code: meta.code || null },
+    props: {
+      plan: plan.id,
+      cents: Number(meta.amount) || plan.cents,
+      code: meta.code || null,
+      internal,
+    },
   });
   if (funnelErr && !String(funnelErr.message).includes("duplicate")) {
     console.error("funnel purchase event not recorded", funnelErr);
