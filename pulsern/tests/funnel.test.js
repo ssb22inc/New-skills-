@@ -8,31 +8,19 @@
      - dividing by the wrong denominator, so a step reads as a healthy rate of
        signups when it is actually a poor rate of the step above it.
 
-   The endpoint needs a service role and a live database, so the reducer logic
-   is exercised here against fixed rows rather than by booting the handler. */
+   This exercises the SHIPPED reducer, not a copy of it. It used to hold its
+   own reimplementation with a comment saying it mirrored the endpoint, which
+   is a test that stays green while the thing it describes drifts away from it.
+   The reducer was pulled out to src/funnel-report.js precisely so the real one
+   could be tested, and so /api/funnel and /api/marketing cannot answer the
+   same question differently. */
 import { describe, it, expect } from "vitest";
+import { buildFunnelReport } from "../src/funnel-report.js";
 
-const STEPS = ["signup", "trial_start", "first_answer", "activated", "purchase"];
-const pct = (n, of) => (of > 0 ? Math.round((n / of) * 1000) / 10 : 0);
-
-/* Mirrors api/funnel.js: distinct people per step, every purchase for revenue. */
-function summarise(rows) {
-  const people = Object.fromEntries(STEPS.map((s) => [s, new Set()]));
-  let purchases = 0, cents = 0;
-  for (const r of rows) {
-    people[r.event]?.add(r.user_id);
-    if (r.event === "purchase") { purchases += 1; cents += Number(r.props?.cents) || 0; }
-  }
-  const top = people.signup.size;
-  return {
-    steps: STEPS.map((key, i) => {
-      const n = people[key].size;
-      const prev = i === 0 ? n : people[STEPS[i - 1]].size;
-      return { key, people: n, ofSignups: pct(n, top), ofPrevious: i === 0 ? 100 : pct(n, prev), lostHere: i === 0 ? 0 : Math.max(0, prev - n) };
-    }),
-    purchases, cents,
-  };
-}
+const summarise = (rows) => {
+  const out = buildFunnelReport({ rows, attrRows: [], windowDays: 30 });
+  return { ...out, purchases: out.revenue.purchases, cents: out.revenue.cents };
+};
 
 const at = (user_id, event, cents) => ({ user_id, event, props: cents ? { cents } : {} });
 
@@ -88,5 +76,49 @@ describe("funnel arithmetic", () => {
     for (let i = 0; i < 6; i++) rows.push(at(`u${i}`, "signup"));
     for (let i = 0; i < 6; i++) rows.push(at(`u${i}`, "trial_start"), at(`u${i}`, "trial_start"));
     for (const s of summarise(rows).steps) expect(s.ofPrevious).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("what must never be counted as demand", () => {
+  /* The first live test purchase was reported as "$0.50 from 1 customer
+     purchase". Comps and launch checks are real Stripe rows and not customers,
+     and treating them as demand is the most expensive mistake available when
+     the next step is buying ads. */
+  it("excludes internal purchases from people, revenue and conversion", () => {
+    const out = buildFunnelReport({
+      rows: [
+        { user_id: "a", event: "signup" },
+        { user_id: "a", event: "purchase", props: { cents: 50, internal: true } },
+      ],
+      attrRows: [],
+      windowDays: 30,
+    });
+    expect(out.steps.find((s) => s.key === "purchase").people).toBe(0);
+    expect(out.revenue.cents).toBe(0);
+    expect(out.revenue.excludedInternal).toBe(1);
+    expect(out.unitEconomics.note).toMatch(/internal transaction/i);
+  });
+
+  /* Returning from Stripe checkout once made "checkout.stripe.com" look like a
+     traffic source, and it did it worst on the people who converted. */
+  it("calls an untagged student direct rather than dropping them", () => {
+    const out = buildFunnelReport({
+      rows: [{ user_id: "a", event: "signup" }],
+      attrRows: [],
+      windowDays: 30,
+    });
+    expect(out.bySource).toEqual([{ source: "direct", signup: 1, activated: 0, purchase: 0 }]);
+  });
+
+  /* Every trial ends. Putting it in the chain would make every "lost here"
+     figure below it meaningless. */
+  it("keeps trial ends beside the funnel, not inside it", () => {
+    const out = buildFunnelReport({
+      rows: [{ user_id: "a", event: "signup" }, { user_id: "a", event: "trial_end" }],
+      attrRows: [],
+      windowDays: 30,
+    });
+    expect(out.trialsEnded).toBe(1);
+    expect(out.steps.map((s) => s.key)).not.toContain("trial_end");
   });
 });
