@@ -1,3 +1,5 @@
+import { CapError } from "@fullburn/config/caps";
+import { MeterUnavailableError } from "./money-errors.ts";
 /** Secret redaction for error paths and trace payloads (F7; R2-14, R2-27; and
  * adversary findings A1, A2, C2).
  *
@@ -108,20 +110,20 @@ export function containsSecret(value: unknown, secrets: readonly string[], limit
  * own object, so its name, cause and any custom property crossed unredacted,
  * and a frozen error came back untouched. The class is what a caller
  * discriminates on; it is the only thing carried. */
-export function redactMoneyError<E extends Error>(err: E, secrets: readonly string[]): E {
-  const Ctor = err.constructor as new (m: string) => E;
+export function redactMoneyError(err: Error, secrets: readonly string[]): CapError | MeterUnavailableError {
   let message = "";
   try {
     message = typeof err.message === "string" ? err.message : "";
   } catch {
     message = UNPRINTABLE;
   }
-  let safe: E;
-  try {
-    safe = new Ctor(redactText(message, secrets));
-  } catch {
-    safe = new Error(redactText(message, secrets)) as E;
-  }
+  // The class is chosen HERE, from the two money classes, by `instanceof` —
+  // never `err.constructor`, which the thrower controls: an instance can
+  // override it, and a constructor can reinstall secret-bearing fields or
+  // return the original object (cross-family finding X3-08, 2026-10-04).
+  const safe = err instanceof MeterUnavailableError
+    ? new MeterUnavailableError(redactText(message, secrets))
+    : new CapError(redactText(message, secrets));
   safe.stack = `${safe.name}: ${safe.message}`;
   return safe;
 }

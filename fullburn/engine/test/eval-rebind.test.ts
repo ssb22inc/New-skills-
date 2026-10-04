@@ -5,7 +5,8 @@ import { GOLDEN as ADVERSARY_GOLDEN } from "../evals/creative-decision-adversary
 import { RECORDED_CLAUDE_SONNET as ADV_CLAUDE, RECORDED_LLAMA_70B as ADV_LLAMA } from "../evals/creative-decision-adversary/recorded-outputs.ts";
 import { RECORDED_GPT_5, RECORDED_LLAMA_70B, RECORDED_QWEN_72B } from "../evals/genome-tagger/recorded-outputs.ts";
 import { RecordedTransport, runEval, structurallyEqual } from "../src/eval-harness.ts";
-import { claimRecordedRegistrar, isRecordedTransport } from "../src/transport-brand.ts";
+import * as transportBrand from "../src/transport-brand.ts";
+const { isRecordedTransport } = transportBrand;
 import { llm } from "../src/gateway.ts";
 import { TraceContext } from "../src/tracing.ts";
 import { TEST_CLIENT, makeDeps } from "./helpers.ts";
@@ -149,8 +150,9 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
       override async post(): Promise<unknown> { return { greeting: "from the network" }; }
     }
     expect(() => new Live({}), "a subclass carried the recorded brand to a live post()").toThrow(/final/);
-    // The eval harness claimed the registrar when it loaded; nobody else can.
-    expect(claimRecordedRegistrar(), "the registrar was handed out twice").toBe(null);
+    // X3-14: there is no registrar to claim — the brand set is module-private
+    // and only the class's own constructor writes it.
+    expect(Object.keys(transportBrand).sort(), "the brand module exports a way to brand a transport").toEqual(["RecordedTransport", "isRecordedTransport"]);
     // And the prototype cannot be patched to a live post().
     expect(() => { (RecordedTransport.prototype as unknown as { post: unknown }).post = async () => ({}); }).toThrow();
   });
@@ -166,5 +168,24 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     const copy = JSON.parse(JSON.stringify(GOLDEN));
     const res = await runEval(deps, "genome-tagger", "llama-70b", copy, new RecordedTransport(RECORDED_LLAMA_70B), TEST_CLIENT);
     expect(res.score).toBeLessThan(0.5);
+  });
+
+  /** X3-10: bindRole marked its whole result servable after checking only the
+   * role it changed. MUTATION: X3-10. */
+  it("bindRole refuses to launder an unevaluated base map through one attested role", async () => {
+    const { deps } = makeDeps();
+    const res = await runEval(deps, "genome-tagger", "qwen-72b", GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
+    const unearned = { ...ROLE_BINDINGS, "creative-decision-adversary": "llama-70b" };
+    expect(() => bindRole(unearned, "genome-tagger", "qwen-72b", res.attestation)).toThrow(/no serving provenance/);
+    expect(() => bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", res.attestation)).not.toThrow();
+  });
+
+  /** X3-11: only the outer record was frozen. MUTATION: X3-11. */
+  it("the canonical golden expectations cannot be rewritten at runtime", async () => {
+    const { CANONICAL_GOLDEN_SETS } = await import("../evals/index.ts");
+    const c = CANONICAL_GOLDEN_SETS["genome-tagger"]![0]!;
+    expect(() => { (c.expected as Record<string, unknown>)["hook"] = "unknown"; }).toThrow();
+    expect(() => { (CANONICAL_GOLDEN_SETS["genome-tagger"] as unknown as unknown[]).push({}); }).toThrow();
+    expect(c.expected["hook"]).toBe("pov");
   });
 });

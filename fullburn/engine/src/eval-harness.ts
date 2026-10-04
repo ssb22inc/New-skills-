@@ -1,13 +1,7 @@
 import { GOLDEN_SET_CASE_IDS, ROLE_CARDS, attestEvalRun, evalCandidateBindings, ownEntry, type EvalAttestation } from "@fullburn/config/models";
-import { claimRecordedRegistrar } from "./transport-brand.ts";
+import { RecordedTransport } from "./transport-brand.ts";
 import { CANONICAL_GOLDEN_SETS } from "../evals/index.ts";
 
-const registerRecorded = claimRecordedRegistrar();
-if (registerRecorded === null) {
-  // Someone claimed the registrar before this module loaded: it could have
-  // branded a live transport as "recorded". Refuse to exist (fail closed).
-  throw new Error("the recorded-transport registrar was claimed before the eval harness loaded — refusing to load (X2-09)");
-}
 
 /** Structural equality for an expected field (cross-family finding X-13,
  * 2026-09-24): `===` compared the adversary golden set's `reasons` arrays by
@@ -41,36 +35,9 @@ export interface GoldenCase {
   readonly expected: Readonly<Record<string, unknown>>;
 }
 
-/** Transport that replays recorded model outputs keyed by golden-case id. */
-export class RecordedTransport implements GatewayTransport {
-  #outputs: Readonly<Record<string, unknown>>;
-  #currentCase: string | null = null;
+/** Re-exported: the class lives beside its brand (X3-14). */
+export { RecordedTransport };
 
-  constructor(outputs: Readonly<Record<string, unknown>>) {
-    // FINAL (X2-09): a subclass could override `post()` with a live call and
-    // still carry the recorded brand. Only this exact class is branded.
-    if (new.target !== RecordedTransport) throw new Error("RecordedTransport is final — a subclass could carry the recorded brand to a live post()");
-    this.#outputs = outputs;
-    registerRecorded!(this);
-    Object.freeze(this);
-  }
-
-  setCase(id: string): void {
-    this.#currentCase = id;
-  }
-
-  async post(): Promise<unknown> {
-    if (this.#currentCase === null) throw new Error("no golden case selected");
-    // Own-property lookup (adversary finding R2-24): a polluted prototype must
-    // not supply a recording for a case the candidate never answered.
-    const out = Object.hasOwn(this.#outputs, this.#currentCase) ? this.#outputs[this.#currentCase] : undefined;
-    if (out === undefined) throw new Error(`no recorded output for case "${this.#currentCase}"`);
-    return out;
-  }
-}
-
-// The prototype cannot be patched to swap in a live post() either.
-Object.freeze(RecordedTransport.prototype);
 
 export interface EvalResult {
   readonly role: string;

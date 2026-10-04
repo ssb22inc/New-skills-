@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GRADE_AREAS } from "@fullburn/config/grade-thresholds";
 import { computeGrades, enforcement, gradeAndEnforce, publishGradeReport, type MetricSnapshot } from "../src/grade-registry.ts";
 import { MemoryTraceSink, TraceContext, TraceEmitError } from "../src/tracing.ts";
+import { CANARY_SECRET } from "./helpers.ts";
 
 const ALL_A: MetricSnapshot = {
   "marketing-engine": {
@@ -149,7 +150,10 @@ describe("grade registry (AC 3, §12, Law 14)", () => {
     expect(sink.events).toHaveLength(1);
     const e = sink.events[0]!;
     expect(e).toMatchObject({ traceId: "grades-1", role: "grade-registry", outcome: "ok", startedAtMs: 42, costUsd: 0 });
-    expect(e.input).toEqual(dipped);
+    // X3-07: the trace carries the GRADED metrics only — the dipped area's
+    // missing readings appear as null, never the caller's raw object.
+    expect((e.input as Record<string, Record<string, unknown>>)["data-truth"]).toMatchObject({ stripe_warehouse_drift_pct: 6.2 });
+    expect(e.input).not.toBe(dipped);
     expect((e.output as { actions: unknown[] }).actions).toEqual(out.actions);
     expect(JSON.parse(out.report).grades).toHaveLength(GRADE_AREAS.length);
   });
@@ -181,5 +185,26 @@ describe("grade registry (AC 3, §12, Law 14)", () => {
     expect(typeof entry["gradeAndEnforce"]).toBe("function");
     expect(entry["enforcement"], "an untraced enforcement path is on the Worker surface").toBeUndefined();
     expect(entry["publishGradeReport"], "an untraced publication path is on the Worker surface").toBeUndefined();
+  });
+
+  /** X3-07 (cross-family, 2026-10-04): the trace copied the caller's snapshot,
+   * so an ungraded extra field carrying a credential reached the sink; and the
+   * error path re-threw the thrower's own error. MUTATION: X3-07. */
+  it("an ungraded field never reaches the trace, and a hostile error never reaches the caller", async () => {
+    const sink = new MemoryTraceSink();
+    const withExtra = { ...ALL_A, "data-truth": { ...ALL_A["data-truth"], api_key: CANARY_SECRET } } as unknown as MetricSnapshot;
+    await gradeAndEnforce(withExtra, { sink, trace: new TraceContext("grades-x3", "engine"), now: () => 0 });
+    expect(JSON.stringify(sink.events), "an ungraded credential field was traced").not.toContain(CANARY_SECRET);
+    const hostileArea = {} as Record<string, unknown>;
+    Object.defineProperty(hostileArea, "stripe_warehouse_drift_pct", { enumerable: true, get() { const e = new Error(`boom ${CANARY_SECRET}`); (e as unknown as { cause: unknown }).cause = CANARY_SECRET; throw e; } });
+    const hostile = { ...ALL_A, "data-truth": hostileArea } as unknown as MetricSnapshot;
+    const sink2 = new MemoryTraceSink();
+    const outcome = await gradeAndEnforce(hostile, { sink: sink2, trace: new TraceContext("grades-x3b", "engine"), now: () => 0 }).then(
+      () => ({ ok: true as const }),
+      (e: Error & { cause?: unknown }) => ({ ok: false as const, e }),
+    );
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(`${outcome.e.name} ${outcome.e.message} ${String(outcome.e.cause ?? "")} ${outcome.e.stack ?? ""}`).not.toContain(CANARY_SECRET);
+    expect(JSON.stringify(sink2.events)).not.toContain(CANARY_SECRET);
   });
 });

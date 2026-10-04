@@ -19,6 +19,12 @@ describe("ci-scope — whether a diff needs the fullburn gate", () => {
     expect(inScope([".github/workflows/fullburn-ci.yml"])).toBe(true);
     // X2-04: the primary scanner's configuration runs the gate it configures.
     expect(inScope([".gitleaks.toml"])).toBe(true);
+    // X3-02 (2026-10-04): a Class-2 path is in scope wherever it lives.
+    // MUTATION: X3-02.
+    expect(inScope(["package.json"]), "a root package.json skipped the gate").toBe(true);
+    expect(inScope([".npmrc"]), "a root .npmrc skipped the gate").toBe(true);
+    expect(inScope(["vitest.config.ts"])).toBe(true);
+    expect(inScope(["README.md"]), "an ordinary root file entered the scope").toBe(false);
     expect(inScope([".gitleaksignore"])).toBe(true);
     expect(inScope(["fullburn/PHASE"])).toBe(true);
     // One relevant file among many irrelevant ones is still relevant.
@@ -82,5 +88,15 @@ describe("ci-scope — whether a diff needs the fullburn gate", () => {
     // The agent-discovery tree is in scope: a change to the adversary's own
     // definition must run the gate that definition guards (2026-09-20).
     expect(inScope([".claude/agents/engine-adversary.md"])).toBe(true);
+  });
+});
+
+describe("the verified tree covers the scanner configuration (X3-06)", () => {
+  /** MUTATION: X3-06. A change to what gitleaks reports must stale a PASS. */
+  it("VERIFIED_TREE_SCOPE includes the root gitleaks files", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { VERIFIED_TREE_SCOPE } = await import("../scripts/gate-lib.mjs");
+    expect(VERIFIED_TREE_SCOPE).toContain(".gitleaks.toml");
+    expect(VERIFIED_TREE_SCOPE).toContain(".gitleaksignore");
   });
 });

@@ -109,6 +109,25 @@ export function computeGrades(snapshot: MetricSnapshot): AreaGrade[] {
  * point of §12, so the input has to be evidence rather than assertion. */
 const COMPUTED = new WeakSet<readonly AreaGrade[]>();
 
+/** The graded metrics only, primitive readings only. Never throws. */
+function snapshotForTrace(snapshot: unknown): unknown {
+  try {
+    const out: Record<string, Record<string, number | boolean | null>> = {};
+    for (const areaDef of GRADE_AREAS) {
+      const area = Object.getOwnPropertyDescriptor(snapshot as object, areaDef.area)?.value as unknown;
+      const row: Record<string, number | boolean | null> = {};
+      for (const t of areaDef.metrics) {
+        const v = area !== null && typeof area === "object" ? (Object.getOwnPropertyDescriptor(area, t.key)?.value as unknown) : undefined;
+        row[t.key] = typeof v === "number" || typeof v === "boolean" ? v : null;
+      }
+      out[areaDef.area] = row;
+    }
+    return out;
+  } catch {
+    return "[unreadable snapshot]";
+  }
+}
+
 export interface GradeTraceDeps {
   readonly sink: TraceSink;
   readonly trace: TraceContext;
@@ -134,6 +153,11 @@ export async function gradeAndEnforce(
     throw new TraceEmitError("gradeAndEnforce requires a TraceContext — an untraced grade decision is a bug (Law 11)");
   }
   const startedAtMs = deps.now();
+  // X3-07 (2026-10-04): the trace carried the caller's snapshot verbatim, and
+  // computeGrades ignores fields it does not grade, so an extra credential-
+  // bearing field reached the sink. Only the metrics the thresholds name, and
+  // only primitive readings, are traced; an unreadable snapshot is named, not copied.
+  const traced = snapshotForTrace(snapshot);
   const base = { traceId: deps.trace.traceId, clientId: deps.trace.clientId, role: "grade-registry", model: "deterministic", startedAtMs, costUsd: 0 };
   let grades: AreaGrade[];
   let actions: EnforcementAction[];
@@ -142,18 +166,15 @@ export async function gradeAndEnforce(
     grades = computeGrades(snapshot);
     actions = enforcement(grades);
     report = publishGradeReport(grades, startedAtMs);
-  } catch (err) {
-    await emitOrFail(deps.sink, {
-      ...base,
-      input: snapshot,
-      output: null,
-      outcome: "error",
-      // A GradeRegistryError's message is ours; anything else is named by class only.
-      errorMessage: err instanceof GradeRegistryError ? err.message : `grade computation failed: ${err instanceof Error ? err.constructor.name : "non-error"}`,
-    });
-    throw err;
+  } catch {
+    // Nothing of the thrown value crosses (X3-07): a hostile getter chooses its
+    // error's message, name, cause and class. A fixed message is traced and a
+    // fresh GradeRegistryError carrying it is thrown.
+    const safe = "grade computation failed — the snapshot could not be graded (fail closed)";
+    await emitOrFail(deps.sink, { ...base, input: traced, output: null, outcome: "error", errorMessage: safe });
+    throw new GradeRegistryError(safe);
   }
-  await emitOrFail(deps.sink, { ...base, input: snapshot, output: { grades, actions }, outcome: "ok" });
+  await emitOrFail(deps.sink, { ...base, input: traced, output: { grades, actions }, outcome: "ok" });
   return { grades, actions, report };
 }
 

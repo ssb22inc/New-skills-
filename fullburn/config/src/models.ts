@@ -295,8 +295,17 @@ export function bindRole(
   role: string,
   modelId: string,
   evalResult: EvalAttestation,
-  cards: Readonly<Record<string, RoleCard>> = ROLE_CARDS,
 ): RoleBindings {
+  /** THE INPUT MAP MUST ITSELF BE EARNED (cross-family finding X3-10,
+   * 2026-10-04): bindRole checked evidence only for the role it changed and
+   * marked the WHOLE result servable, so a hand-built base with an unevaluated
+   * model in another role came out laundered. And it took caller-supplied role
+   * cards, so the caller chose the threshold. Both are gone: the base must be
+   * servable, and the threshold is the registry's. */
+  if (bindingsProvenance(bindings) !== "servable") {
+    throw new BindingError("bindRole: the base binding map has no serving provenance — an unevaluated base cannot be laundered through one attested role (§2.4)");
+  }
+  const cards = ROLE_CARDS;
   const card = ownEntry(cards, role);
   if (card === undefined) throw new BindingError(`bindRole: unknown role "${role}"`);
   if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`bindRole: unknown model "${modelId}"`);

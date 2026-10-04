@@ -11,7 +11,7 @@ on any disagreement about *state*.
 
 ## Tree and branch
 
-- verified tree: `1ac5fce506a37a5f71f272921acefbefdaf7c92a` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
+- verified tree: `7a5644495fc3624bc151d7bb51c68f8a8041fc94` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
 - branch: `claude/fullburn-engine-spec-r7v5lg`
 - phase: `0`
 - latest `done` report: `fullburn/reports/DONE_phase0_7a89aee21e85.md` — **exit 1, INCOMPLETE** (previous tree; C5 there read `226 caught, 0 survived, 3 stale` — AD-02/03/04, repaired in the tree above)
@@ -23,7 +23,9 @@ on any disagreement about *state*.
 - x2 ran 2026-09-24 at `c69931a4` (`reports/ADVERSARY_REPORT_phase0.x2.md`, FAIL, 20 findings; eleven fixed — dispositions below)
 - `done` run at `4cb6640e`: `fullburn/reports/DONE_phase0_4cb6640e23ed.md` — exit 1; C5 **PASS 263/263**, meta-check ok; human-owned rows and C7-leak (Law 9) failing
 - x3: **BLOCKED** — OpenRouter answered 402 (balance −$2.04); no read made, nothing written
-- `done` run at the tree above: **PENDING** — launched after the X2-09/X2-14 commit **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
+- `done` run at `1ac5fce5`: `fullburn/reports/DONE_phase0_1ac5fce506a3.md` — exit 1; C5 **PASS 273/273**
+- x3 ran 2026-10-04 at `1ac5fce5` (FAIL, 17 findings; ten fixed — dispositions below)
+- `done` run at the tree above: **PENDING** — launched after the x3-fixes commit **C7-lint PASS** (measured); **C7-leak FAIL — NEW**: the structural scan refuses `openrouter.ai` in `cross-family-lib.mjs` under its Law 9 rule ("LLM provider hostname — all LLM traffic goes through AI Gateway"). The remaining rows are the human-owned ones.
 
 ## Open findings (immutable IDs; nothing below is closed without the test that proves it)
 
@@ -37,7 +39,7 @@ on any disagreement about *state*.
 | L40 | 2 | The completion checker nested inside its own suite under DN-14 on its first run; removed structurally (DN-15). Its first complete run found three stale harness entries (AD-02/03/04) that two commits of green suite had not; the table is now checked against the tree in the default suite (`staleEntries`, SE-01) and the checker names what it finds (DN-16). Two builder process slips recorded in the row. |
 | DONE §2.1.7 lint | 3 → gate built | Ruled 2026-09-22: ESLint + typescript-eslint, type-aware, `no-floating-promises` and `no-misused-promises` at error; wired as `npm run lint`, a CI step, and C7-lint. 66 files, 0 findings at install; plants refused by name (L41). C7-lint PASS in a `done` report is pending the next run. |
 | C7-leak / Law 9 | **2, needs a ruling** | The cross-family runner calls OpenRouter directly and the Class-2 structural scan flags the hostname under Law 9 (every LLM call through AI Gateway). The builder does not exempt or respell. Two lawful resolutions, the human's to pick: (a) route the read through the AI Gateway's OpenRouter provider endpoint once H2 exists — the read then waits on H2 as well as the key; (b) a written ruling that review tooling is outside Law 9, with the scan rule amended by the human (scan-lib is Class-2). Until then C7-leak is FAIL at this tree and the read must not be dispatched. |
-| DONE §2.1.3 cross-family | 1 → x1 and x2 RAN: FAIL, 17 then 20 findings | Ruled 2026-09-22: GPT Astra via OpenRouter, in CI. `cross-family-read.mjs` + `.github/workflows/cross-family-read.yml` (dispatch-only, fails closed without `OPENROUTER_API_KEY`), reviewer pinned to `openai/gpt-6-astra` and read back, stand-in cannot mint a PASS (L42). x1 ran 2026-09-24 by hand with the human's key (rotated after): `reports/ADVERSARY_REPORT_phase0.x1.md`, FAIL, 17 findings, dispositions below. C3 stays FAIL until a read PASSES against a later tree. |
+| DONE §2.1.3 cross-family | 1 → x1, x2, x3 RAN: FAIL, 17, 20, 17 findings | Ruled 2026-09-22: GPT Astra via OpenRouter, in CI. `cross-family-read.mjs` + `.github/workflows/cross-family-read.yml` (dispatch-only, fails closed without `OPENROUTER_API_KEY`), reviewer pinned to `openai/gpt-6-astra` and read back, stand-in cannot mint a PASS (L42). x1 ran 2026-09-24 by hand with the human's key (rotated after): `reports/ADVERSARY_REPORT_phase0.x1.md`, FAIL, 17 findings, dispositions below. C3 stays FAIL until a read PASSES against a later tree. |
 | DONE §2.1.8 identity | 1 | Approvals cannot be shown to carry the human's authenticated identity without branch protection + a merged PR. |
 | DONE §2.1.10 ack | — | `APPROVALS/GATE_ACK_phase0.md` does not exist. Silence is not consent. |
 
@@ -95,6 +97,32 @@ Report: `fullburn/reports/ADVERSARY_REPORT_phase0.x2.md` (Verdict FAIL, 20 findi
 | X2-20 | 5 | ESCALATED: `nodejs_compat` is the human's stack call. |
 
 Probe measurement 2026-09-24 (marker-writing probe): 10 of 11 CAUGHT by a named test on the first pass; X2-17 SURVIVED honestly (the red-proof drove the function, not its wiring into `moneyPathRefusals`) and gained a fixture-root test that drives the wiring, then re-probed CAUGHT by "moneyPathRefusals refuses a root whose money path imports a file that does not exist" — 11 of 11.
+
+## Cross-family round x3 (GPT-6 Astra, 2026-10-04, by the human's order) — dispositions
+
+Report: `fullburn/reports/ADVERSARY_REPORT_phase0.x3.md` (Verdict FAIL, 17 findings, bound to `1ac5fce5`).
+
+| ID | Sev | Disposition |
+|---|---|---|
+| X3-01 | 1 | H19 human-owned; its instructions now list `mutation-harness` as a required check. |
+| X3-02 | 1 | FIXED: Class-2 paths anywhere run the gate. Entry X3-02. |
+| X3-03 | 1 | FIXED: O_EXCL run lock for the whole run. Entry X3-03. |
+| X3-04 | 1 | Owned — L4/H2. |
+| X3-05 | 2 | FIXED: every upstream field and the finished report scrubbed. Entry X3-05. |
+| X3-06 | 2 | FIXED: scanner config in the verified tree. Entry X3-06. |
+| X3-07 | 2 | FIXED: graded metrics only in the trace; fresh error thrown. Entry X3-07. |
+| X3-08 | 2 | FIXED: money errors rebuilt from our class. Entry X3-08. |
+| X3-09 | 2 | Owned — vault rotation. |
+| X3-10 | 3 | FIXED: bindRole requires a servable base; registry thresholds only. Entry X3-10. |
+| X3-11 | 3 | FIXED: canonical golden sets deep-frozen. Entry X3-11. |
+| X3-12 | 3 | ESCALATED — Law 9 vs the router (as X-11, X2-10). |
+| X3-13 | 3 | FIXED: credential output refused before the success trace; one error event. |
+| X3-14 | 3 | FIXED: RecordedTransport beside its brand; no registrar. Entries XB-03, XB-05. |
+| X3-15 | 5 | Owned — H1/H3/H4/H5/H9. |
+| X3-16 | 5 | Owned — production Gateway transport and Langfuse sink need H2/H5 to contract-test. |
+| X3-17 | 5 | ESCALATED — `nodejs_compat` (as X2-20). |
+
+Probe measurement 2026-10-04: 15 of 15 entries (8 new, 7 repointed) CAUGHT by named tests.
 
 ## Standing rulings issued since the last handoff (for the human to append to DONE.md §4)
 

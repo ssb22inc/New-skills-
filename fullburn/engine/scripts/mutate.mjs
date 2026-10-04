@@ -25,8 +25,7 @@ import {
   metaCheckVerdict,
   recoverInFlight,
   summaryLine,
-  tableEndOf,
-} from "./mutate-lib.mjs";
+  tableEndOf, acquireRunLock, releaseRunLock } from "./mutate-lib.mjs";
 
 /** The fullburn workspace root, two levels up from engine/scripts/. */
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
@@ -327,7 +326,7 @@ const MUTATIONS = [
   ["H-17 shared touched list", "engine/scripts/gate-lib.mjs", "  const touched = class2TouchedPaths(changedFiles);", "  const touched = changedFiles.filter((f) => isClass2(f.path)).map((f) => ({ path: f.path, status: f.status }));"],
   ["H-07 typeof guard", "engine/src/grade-registry.ts", 'return typeof actual === "number" && Number.isFinite(actual);', "return Number.isFinite(Number(actual));"],
   ["DT-03 inDomain", "engine/src/grade-registry.ts", "  if (t.domainMin !== undefined && actual < t.domainMin) return false;", "  if (false) return false;"],
-  ["H-12 own-property recording", "engine/src/eval-harness.ts", "Object.hasOwn(this.#outputs, this.#currentCase) ? this.#outputs[this.#currentCase] : undefined", "this.#outputs[this.#currentCase]"],
+  ["H-12 own-property recording", "engine/src/transport-brand.ts", "Object.hasOwn(this.#outputs, this.#currentCase) ? this.#outputs[this.#currentCase] : undefined", "this.#outputs[this.#currentCase]"],
   ["R3-CP-08 -z diff (class2)", "engine/scripts/class2-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
   ["R3-CP-08 -z diff (adversary)", "engine/scripts/adversary-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
 
@@ -701,8 +700,8 @@ const MUTATIONS = [
     '  ".claude/**",\n  "DONE.md",\n  // The primary secret scanner',
     '  "DONE.md",\n  // The primary secret scanner'],
   ["AD-04 the root .claude tree is in the verified tree", "engine/scripts/gate-lib.mjs",
-    '  ".claude/",\n  "DONE.md",\n  ":!fullburn/reports/",',
-    '  "DONE.md",\n  ":!fullburn/reports/",'],
+    '  ".claude/",\n  "DONE.md",\n  // The primary scanner\'s configuration (X3-06)',
+    '  "DONE.md",\n  // The primary scanner\'s configuration (X3-06)'],
   ["AD-05 the root .claude tree has a CODEOWNER", ".github/CODEOWNERS",
     "/.claude/                           @ssb22inc\n",
     ""],
@@ -744,8 +743,8 @@ const MUTATIONS = [
     '  "DONE.md",\n  // The primary secret scanner',
     '  // The primary secret scanner'],
   ["DN-12 DONE.md is in the verified tree", "engine/scripts/gate-lib.mjs",
-    '  ".claude/",\n  "DONE.md",\n  ":!fullburn/reports/",',
-    '  ".claude/",\n  ":!fullburn/reports/",'],
+    '  ".claude/",\n  "DONE.md",\n  // The primary scanner\'s configuration (X3-06)',
+    '  ".claude/",\n  // The primary scanner\'s configuration (X3-06)'],
   ["DN-13 DONE.md has a CODEOWNER", ".github/CODEOWNERS",
     "/DONE.md                            @ssb22inc\n",
     ""],
@@ -873,6 +872,31 @@ const MUTATIONS = [
   ["X2-17 an unresolved import is refused, not skipped", "engine/test/money-path-guards.ts",
     "  return moneyPathModules(root, exists, read).flatMap((f) => [...unfollowable(f, read(f)), ...unresolvedImports(f, read(f), exists)]);",
     "  return moneyPathModules(root, exists, read).flatMap((f) => unfollowable(f, read(f)));"],
+  // ---- cross-family round x3 (GPT-6 Astra, 2026-10-04) ----
+  ["X3-02 a Class-2 path anywhere is in CI scope", "engine/scripts/ci-scope.mjs",
+    '  return changedFiles.some((f) => typeof f === "string" && (isClass2(f) || globs.some((g) => globsAdmit([g], f))));',
+    '  return changedFiles.some((f) => typeof f === "string" && globs.some((g) => globsAdmit([g], f)));'],
+  ["X3-03 a live run-lock holder is refused", "engine/scripts/mutate-lib.mjs",
+    "      if (isAlive(holder)) return { ok: false, holder,",
+    "      if (false) return { ok: false, holder,"],
+  ["X3-05 the finished cross-family report is scrubbed", "engine/scripts/cross-family-read.mjs",
+    "  report = scrub(report);",
+    "  void scrub;"],
+  ["X3-06 the scanner configuration is in the verified tree", "engine/scripts/gate-lib.mjs",
+    '  ".gitleaks.toml",\n  ".gitleaksignore",\n  ":!fullburn/reports/",',
+    '  ":!fullburn/reports/",'],
+  ["X3-07 the grade trace carries graded metrics only", "engine/src/grade-registry.ts",
+    "  const traced = snapshotForTrace(snapshot);",
+    "  const traced = snapshot;"],
+  ["X3-08 a money error is rebuilt from a class we choose", "engine/src/redact.ts",
+    "    : new CapError(redactText(message, secrets));",
+    "    : new (err.constructor as new (m: string) => CapError)(redactText(message, secrets));"],
+  ["X3-10 bindRole refuses an unearned base map", "config/src/models.ts",
+    '  if (bindingsProvenance(bindings) !== "servable") {',
+    "  if (false) {"],
+  ["X3-11 canonical golden sets are deep-frozen", "engine/evals/index.ts",
+    "export const CANONICAL_GOLDEN_SETS: Readonly<Record<string, readonly GoldenCase[]>> = deepFreeze({",
+    "export const CANONICAL_GOLDEN_SETS: Readonly<Record<string, readonly GoldenCase[]>> = Object.freeze({"],
   // ---- X2-09: no pass, no bind on the serving path (2026-09-27) ----
   ["XB-01 an unevaluated binding map is not servable", "engine/src/gateway.ts",
     "    if (provenance === null) {",
@@ -880,28 +904,28 @@ const MUTATIONS = [
   ["XB-02 a candidate map is served only through recorded outputs", "engine/src/gateway.ts",
     "    if (provenance === \"candidate\" && !isRecordedTransport(deps.transport)) {",
     "    if (false) {"],
-  ["XB-03 RecordedTransport is final", "engine/src/eval-harness.ts",
-    "    if (new.target !== RecordedTransport) throw new Error(",
-    "    if (false) throw new Error("],
+  ["XB-03 RecordedTransport is final", "engine/src/transport-brand.ts",
+    "    if (new.target !== RecordedTransport) throw new TypeError(",
+    "    if (false) throw new TypeError("],
   ["XB-04 the golden set is the role's canonical set", "engine/src/eval-harness.ts",
     "  if (canonical === undefined || !structurallyEqual(JSON.parse(JSON.stringify(goldenSet)), JSON.parse(JSON.stringify(canonical)))) {",
     "  if (false) {"],
-  ["XB-05 the recorded registrar is handed out once", "engine/src/transport-brand.ts",
-    "  if (claimed) return null;",
-    "  void claimed;"],
+  ["XB-05 the recorded brand belongs to the class alone (X3-14)", "engine/src/transport-brand.ts",
+    '  return typeof t === "object" && t !== null && RECORDED.has(t);',
+    '  return typeof t === "object" && t !== null;'],
   ["XB-06 bindRole results are servable", "config/src/models.ts",
     "  validateBindings(next, cards);\n  SERVABLE.add(next);",
     "  validateBindings(next, cards);"],
   // ---- X2-14: grade decisions are traced (2026-09-27) ----
   ["GR-01 a grade decision is traced before it is returned", "engine/src/grade-registry.ts",
-    "  await emitOrFail(deps.sink, { ...base, input: snapshot, output: { grades, actions }, outcome: \"ok\" });",
+    "  await emitOrFail(deps.sink, { ...base, input: traced, output: { grades, actions }, outcome: \"ok\" });",
     "  void base;"],
   ["GR-02 no TraceContext, no grade decision", "engine/src/grade-registry.ts",
     "  if (!(deps?.trace instanceof TraceContext)) {\n    throw new TraceEmitError(\"gradeAndEnforce requires",
     "  if (false) {\n    throw new TraceEmitError(\"gradeAndEnforce requires"],
   ["GR-03 a failed grade computation is traced", "engine/src/grade-registry.ts",
-    "  } catch (err) {\n    await emitOrFail(deps.sink, {\n      ...base,",
-    "  } catch (err) {\n    if (false) await emitOrFail(deps.sink, {\n      ...base,"],
+    '    await emitOrFail(deps.sink, { ...base, input: traced, output: null, outcome: "error", errorMessage: safe });',
+    "    void base;"],
   ["GR-04 the Worker surface carries no untraced enforcement", "engine/src/index.ts",
     "export { computeGrades, gradeAndEnforce } from \"./grade-registry.ts\";",
     "export { computeGrades, gradeAndEnforce, enforcement } from \"./grade-registry.ts\";"],
@@ -965,6 +989,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // A marker here means the PREVIOUS run died mid-mutation. Repair before
   // measuring anything, and say so — a silent repair would hide the fact that a
   // run left the tree weakened.
+  const lock = acquireRunLock();
+  if (!lock.ok) {
+    console.error(`MUTATION HARNESS REFUSED: ${lock.reason} — two harnesses cannot share a tree (X3-03)`);
+    process.exit(2);
+  }
+  process.on("exit", () => releaseRunLock());
   const recovered = recoverInFlight();
   if (recovered?.live) {
     // X2-02: refuse rather than tear a running harness's mutation out from

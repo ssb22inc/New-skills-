@@ -21,7 +21,7 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
-import { globsAdmit } from "./gate-lib.mjs";
+import { globsAdmit, isClass2 } from "./gate-lib.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 
 /** The paths a fullburn verdict is a statement about. Identical to the globs
@@ -45,7 +45,11 @@ export const CI_SCOPE_GLOBS = Object.freeze([
 export function inScope(changedFiles, globs = CI_SCOPE_GLOBS) {
   // UNKNOWN IS IN SCOPE. Not an empty result, not a guess.
   if (!Array.isArray(changedFiles) || changedFiles.length === 0) return true;
-  return changedFiles.some((f) => typeof f === "string" && globs.some((g) => globsAdmit([g], f)));
+  // A CLASS-2 PATH IS IN SCOPE WHEREVER IT LIVES (cross-family finding X3-02,
+  // 2026-10-04): isClass2 matched a root `package.json`, `.npmrc` or runner
+  // config by basename at any depth, but the globs covered only the listed
+  // directories, so a PR touching only such a path skipped every gate.
+  return changedFiles.some((f) => typeof f === "string" && (isClass2(f) || globs.some((g) => globsAdmit([g], f))));
 }
 
 /** The changed files between two refs, or null when that cannot be determined. */

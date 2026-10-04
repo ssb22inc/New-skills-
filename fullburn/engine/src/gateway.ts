@@ -381,6 +381,15 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
 
     validateOutput(card.outputSchema, output);
 
+    /** A PROVIDER THAT ECHOES THE CREDENTIAL IS A LEAK (X-08, X2-06). Checked
+     * BEFORE the success trace (cross-family finding X3-13, 2026-10-04): it ran
+     * after, so a refused call emitted an "ok" event and then an "error" event,
+     * each carrying the cost of the one settled charge. Now a refusal is traced
+     * exactly once, as the error it is. */
+    if (containsSecret(output, secrets)) {
+      throw new GatewayError("provider output carried a credential — refused, not returned (Law 9)");
+    }
+
     // Fail closed on trace loss (R8): not a success until it is traced.
     await emitOrFail(deps.sink, {
       traceId: req.trace.traceId,
@@ -394,15 +403,6 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       outcome: "ok",
     });
 
-    /** A PROVIDER THAT ECHOES THE CREDENTIAL IS A LEAK, and the value was
-     * returned to the caller unredacted while only the trace copy was cleaned
-     * (cross-family finding X-08). Refuse rather than rewrite: the structure a
-     * caller receives is never altered, and a secret never leaves this frame.
-     * `redactValue` with no secrets is the same walk with nothing to redact,
-     * so the two serialisations differ exactly when a secret was present. */
-    if (containsSecret(output, secrets)) {
-      throw new GatewayError("provider output carried a credential — refused, not returned (Law 9)");
-    }
     return output;
   } catch (err) {
     // Anything that threw before the request left the building never became

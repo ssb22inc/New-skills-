@@ -311,4 +311,29 @@ describe("a money error is rebuilt, never handed back (cross-family finding X2-0
     }
   });
 });
+
+describe("x3 leak boundaries (cross-family, 2026-10-04)", () => {
+  /** X3-08: `err.constructor` is the thrower's to choose. MUTATION: X3-08. */
+  it("a money error is rebuilt from a class we choose, not from err.constructor", async () => {
+    const { redactMoneyError } = await import("../src/redact.ts");
+    const hostile = new CapError(`over by ${CANARY_SECRET}`);
+    (hostile as unknown as { extra: string }).extra = CANARY_SECRET;
+    Object.defineProperty(hostile, "constructor", { value: function () { return hostile; } });
+    const safe = redactMoneyError(hostile, [CANARY_SECRET]);
+    expect(safe, "the thrower's own object came back").not.toBe(hostile);
+    expect(safe).toBeInstanceOf(CapError);
+    expect(`${safe.message} ${String((safe as unknown as { extra?: string }).extra ?? "")}`).not.toContain(CANARY_SECRET);
+  });
+
+  /** X3-13: a credential-bearing output emitted "ok" then "error", each with
+   * the cost of one settled charge. Now: one event, the error, and its cost
+   * reconciles with the meter. */
+  it("a refused credential-bearing output is traced once, as an error, and costs reconcile", async () => {
+    const { deps, transport, sink, meter } = makeDeps();
+    transport.response = { greeting: CANARY_SECRET };
+    await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-x3-13") }).catch(() => undefined);
+    expect(sink.events.map((e) => e.outcome), "a refused call was traced as a success").toEqual(["error"]);
+    expect(sink.events.reduce((n, e) => n + e.costUsd, 0)).toBeCloseTo(meter.todayUsd(TEST_CLIENT), 10);
+  });
+});
 });

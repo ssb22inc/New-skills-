@@ -9,7 +9,7 @@
  * start, so importing it can do nothing at all.
  *
  * Nothing here weakens the tree: `recoverInFlight` only ever RESTORES. */
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync, openSync, writeSync, closeSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
@@ -44,6 +44,43 @@ export const ROOT_TARGETS = /^\.(?:github|claude)\/|^DONE\.md$/;
 export const MARKER = fileURLToPath(new URL("./.mutate-inflight.json", import.meta.url));
 
 /** Restores whatever a previous run left mutated. Returns what it repaired. */
+/** ONE HARNESS PER CHECKOUT, ATOMICALLY (cross-family finding X3-03,
+ * 2026-10-04). The X2-02 fix checked the marker once at startup, and the marker
+ * itself is written and removed per entry, so two runs could both pass the
+ * check before either wrote, or a second could start between entries. The run
+ * lock is created with O_EXCL — the kernel guarantees exactly one creator — and
+ * held for the whole run. A lock whose holder is dead is stale and is taken over
+ * once; a live holder is refused. Pure: `fs` and `isAlive` are injected. */
+export const RUN_LOCK = fileURLToPath(new URL("./.mutate-run.lock", import.meta.url));
+export function acquireRunLock(lockPath = RUN_LOCK, fs = { openSync, writeSync, closeSync, readFileSync, rmSync }, isAlive = processAlive, pid = process.pid) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = fs.openSync(lockPath, "wx");
+      fs.writeSync(fd, String(pid));
+      fs.closeSync(fd);
+      return { ok: true };
+    } catch (e) {
+      if (!e || e.code !== "EEXIST") return { ok: false, reason: `run lock could not be created: ${e && e.code ? e.code : "error"}` };
+      let holder = NaN;
+      try {
+        holder = Number.parseInt(String(fs.readFileSync(lockPath, "utf8")).trim(), 10);
+      } catch {
+        // unreadable: treat as stale
+      }
+      if (isAlive(holder)) return { ok: false, holder, reason: `another harness (pid ${holder}) holds the run lock` };
+      fs.rmSync(lockPath, { force: true });
+    }
+  }
+  return { ok: false, reason: "run lock is contended — refusing to start" };
+}
+export function releaseRunLock(lockPath = RUN_LOCK, fs = { readFileSync, rmSync }, pid = process.pid) {
+  try {
+    if (Number.parseInt(String(fs.readFileSync(lockPath, "utf8")).trim(), 10) === pid) fs.rmSync(lockPath, { force: true });
+  } catch {
+    // not ours, or already gone
+  }
+}
+
 /** Is the process that wrote a marker still alive? Injected so the negative
  * case can be driven; the default asks the kernel with signal 0. */
 export function processAlive(pid) {

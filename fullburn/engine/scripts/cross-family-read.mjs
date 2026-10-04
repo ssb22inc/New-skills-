@@ -122,13 +122,13 @@ async function main(argv) {
   }
   const served = servedModelAcceptable(REVIEWER_MODEL, json.model);
   if (!served.ok) {
-    console.error(`CROSS-FAMILY READ: REFUSED — ${served.reason}; no report written.`);
+    console.error(scrub(`CROSS-FAMILY READ: REFUSED — ${served.reason}; no report written.`));
     return 1;
   }
   const text = json.choices?.[0]?.message?.content;
   const parsed = parseReview(text);
   if (!parsed.ok) {
-    console.error(`CROSS-FAMILY READ: REFUSED — the reviewer's answer is not the contract (${parsed.reason}); no report written. Raw answer saved for inspection.`);
+    console.error(scrub(`CROSS-FAMILY READ: REFUSED — the reviewer's answer is not the contract (${parsed.reason}); no report written. Raw answer saved for inspection.`));
     writeFileSync(`${REPORTS}/cross-family-${round}-rejected-${Date.now()}.raw.json`, scrub(raw));
     return 1;
   }
@@ -136,7 +136,7 @@ async function main(argv) {
   // The reviewer's own text is scrubbed too: an answer quoting the bearer from
   // a request echo must not reach the report.
   const scrubbed = JSON.parse(scrub(JSON.stringify(parsed.value)));
-  const report = renderCrossReport({
+  let report = renderCrossReport({
     phase,
     round,
     tree: treeHash,
@@ -154,12 +154,15 @@ async function main(argv) {
     definitionHash: sha256(definition),
     startedAt,
   });
+  // The FINISHED report is scrubbed too (X3-05): the response id, usage and
+  // served model are interpolated from the upstream's own fields.
+  report = scrub(report);
   const name = `ADVERSARY_REPORT_phase${phase}.${round}.md`;
   const partial = `${REPORTS}/${name}.partial`;
   writeFileSync(partial, report);
   writeFileSync(`${REPORTS}/${name.replace(/\.md$/, ".raw.json")}`, scrub(raw));
   renameSync(partial, `${REPORTS}/${name}`);
-  console.log(`report: reports/${name}  sha256 ${sha256(report)}\nVerdict: ${verdict.verdict} — ${verdict.why}\n${parsed.value.findings.length} finding(s); ${parsed.value.limitations.length} limitation(s).`);
+  console.log(scrub(`report: reports/${name}  sha256 ${sha256(report)}\nVerdict: ${verdict.verdict} — ${verdict.why}\n${parsed.value.findings.length} finding(s); ${parsed.value.limitations.length} limitation(s).`));
   return verdict.verdict === "PASS" ? 0 : 1;
 }
 

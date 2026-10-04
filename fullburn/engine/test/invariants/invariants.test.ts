@@ -568,6 +568,22 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       expect(dead?.repaired, "a dead writer's marker was not repaired").toBe(true);
       expect(readFileSync(victim, "utf8")).toBe("restored\n");
 
+      /** X3-03 (cross-family, 2026-10-04): one harness per checkout, by an
+       * O_EXCL lock held for the whole run — not a one-time marker check.
+       * MUTATION: X3-03. */
+      // @ts-expect-error — plain .mjs module, typed loosely on purpose
+      const { acquireRunLock, releaseRunLock } = await import("../../scripts/mutate-lib.mjs");
+      const lockPath = join(mkdtempSync(join(tmpdir(), "lock-")), "run.lock");
+      expect(acquireRunLock(lockPath, undefined, () => true, 111).ok, "the first run could not take the lock").toBe(true);
+      const second = acquireRunLock(lockPath, undefined, () => true, 222);
+      expect(second.ok, "a second run took a lock whose holder is alive").toBe(false);
+      expect(second.holder).toBe(111);
+      expect(acquireRunLock(lockPath, undefined, () => false, 333).ok, "a dead holder's stale lock was not taken over").toBe(true);
+      releaseRunLock(lockPath, undefined, 111);
+      expect(existsSync(lockPath), "a non-holder released the lock").toBe(true);
+      releaseRunLock(lockPath, undefined, 333);
+      expect(existsSync(lockPath)).toBe(false);
+
       // A corrupt marker is cleared rather than crashing the next run forever.
       write(marker, "{ not json");
       expect(recoverInFlight(marker)?.repaired).toBe(false);
@@ -963,6 +979,29 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       { name: "bindRole refuses an unknown model", file: "config/src/models.ts", type: BindingError,
         expect: /bindRole: unknown model/, fire: () =>
           bindRole(ROLE_BINDINGS, "genome-tagger", "no-such-model", genuineAttestation()) },
+      // X3-10: an unearned base map cannot be laundered through one attested role.
+      { name: "bindRole refuses a base map with no serving provenance", file: "config/src/models.ts", type: BindingError,
+        expect: /base binding map has no serving provenance/, fire: () =>
+          bindRole({ ...ROLE_BINDINGS }, "genome-tagger", "qwen-72b", genuineAttestation()) },
+      // X3-14: the recorded transport's own guards, now on the money path beside its brand.
+      { name: "RecordedTransport refuses a subclass", file: "engine/src/transport-brand.ts", type: TypeError,
+        expect: /RecordedTransport is final/, fire: async () => {
+          const { RecordedTransport } = await import("../../src/transport-brand.ts");
+          class Sub extends RecordedTransport {}
+          return new Sub({});
+        } },
+      { name: "RecordedTransport refuses a post with no case selected", file: "engine/src/transport-brand.ts", type: TypeError,
+        expect: /no golden case selected/, fire: async () => {
+          const { RecordedTransport } = await import("../../src/transport-brand.ts");
+          return new RecordedTransport({}).post();
+        } },
+      { name: "RecordedTransport refuses a case it has no recording for", file: "engine/src/transport-brand.ts", type: TypeError,
+        expect: /no recorded output for case/, fire: async () => {
+          const { RecordedTransport } = await import("../../src/transport-brand.ts");
+          const t = new RecordedTransport({});
+          t.setCase("absent");
+          return t.post();
+        } },
       { name: "a model below the role threshold does not bind", file: "config/src/models.ts", type: BindingError,
         expect: /no pass, no bind/, fire: () =>
           bindRole(
@@ -1352,6 +1391,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const redactMod = await import("../../src/redact.ts");
     const modelsMod = await import("@fullburn/config/models");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const ciScopeMod = await import("../../scripts/ci-scope.mjs");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const { walk: walkTree } = await import("../../scripts/leak-check.mjs");
     const { execFileSync } = await import("node:child_process");
     const { relative: relPath } = await import("node:path");
@@ -1592,6 +1633,28 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
             mdl.bindingsProvenance(mdl.evalCandidateBindings("genome-tagger", "gpt-5")) === "candidate" &&
             /export \{ computeGrades, gradeAndEnforce \} from "\.\/grade-registry\.ts";/.test(entrySrc) &&
             !/\benforcement\b/.test(entrySrc.split("\n").filter((l) => l.startsWith("export")).join("\n"))
+          );
+        },
+      },
+      {
+        row: "L46",
+        claim:
+          "a root Class-2 path is in CI scope; the root scanner config is in the verified tree; bindRole refuses an unearned base; " +
+          "the brand module exports no way to brand a transport",
+        holds: () => {
+          const brandSrc = readFileSync(new URL("../../src/transport-brand.ts", import.meta.url), "utf8");
+          const exported = [...brandSrc.matchAll(/^export (?:class|function|const) (\w+)/gm)].map((m) => m[1]).sort();
+          let refused = false;
+          try {
+            modelsMod.bindRole({ ...modelsMod.ROLE_BINDINGS }, "genome-tagger", "qwen-72b", null as never);
+          } catch (e) {
+            refused = /no serving provenance/.test(String((e as Error).message));
+          }
+          return (
+            ciScopeMod.inScope(["package.json"]) === true &&
+            gateLib.VERIFIED_TREE_SCOPE.includes(".gitleaks.toml") &&
+            refused &&
+            JSON.stringify(exported) === JSON.stringify(["RecordedTransport", "isRecordedTransport"])
           );
         },
       },

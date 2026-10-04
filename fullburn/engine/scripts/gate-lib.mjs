@@ -442,6 +442,11 @@ export const VERIFIED_TREE_SCOPE = Object.freeze([
   // adversary's own definition asserts nothing about who produced it.
   ".claude/",
   "DONE.md",
+  // The primary scanner's configuration (X3-06): Class-2 and in CI scope since
+  // X2-04, but outside the hash a review binds to, so changing what gitleaks
+  // reports left a PASS fresh.
+  ".gitleaks.toml",
+  ".gitleaksignore",
   ":!fullburn/reports/",
   ":!fullburn/APPROVALS/",
 ]);

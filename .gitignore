@@ -40,3 +40,4 @@ Thumbs.db
 # path and holds pre-crash bytes, and a committed one would turn every later
 # checkout red until someone deleted it.
 fullburn/engine/scripts/.mutate-inflight.json
+fullburn/engine/scripts/.mutate-run.lock
