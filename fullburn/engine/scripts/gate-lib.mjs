@@ -13,6 +13,14 @@ import { createHash } from "node:crypto";
  * touching caps.ts; and `fullburn/package.json` redefined `npm test` so the
  * whole invariant suite became a no-op. Patterns cover the directory, so a
  * rename lands inside the protected set rather than outside it. */
+/** ANY-DEPTH PATTERNS ARE FULLBURN-DEPTH (2026-10-04). The basename rules below
+ * (runner configs, lockfiles, package.json, .npmrc, .gitignore, tsconfig, e2e/)
+ * matched at ANY depth in the repository, so the sibling builds haven/ and
+ * pulsern/ were "Fullburn Class-2": a change to haven/package.json demanded a
+ * Fullburn approval and — after X3-02 — ran Fullburn's gates. That couples
+ * builds this project was told never to cross-contaminate. Each rule now
+ * matches at the repository root or anywhere under fullburn/, and nowhere else;
+ * nothing Fullburn owns left the protected set. */
 export const CLASS2_PATTERNS = [
   // The constitution
   /^fullburn\/CLAUDE\.md$/,
@@ -74,7 +82,7 @@ export const CLASS2_PATTERNS = [
   // now ANY config-shaped file at ANY depth whose basename starts with vitest.
   // or vite. — extension-agnostic, because the next runner version decides the
   // extension list, not us.
-  /(?:^|\/)vite(?:st)?[._\-][^/]*$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?vite(?:st)?[._\-][^/]*$/,
   // The Playwright runner and everything it points at. Adding the §10.3 e2e
   // stage without this left BOTH halves Class-1: `playwright.config.ts` chooses
   // `testDir`, so a two-file Class-1 diff repointed it at a new `fullburn/e2e/`
@@ -83,20 +91,20 @@ export const CLASS2_PATTERNS = [
   // because it read the directory and never the runner that executes it
   // (adversary finding R5-02). Same defect class as R3-CP-03 and N-02, fourth
   // round, through a filename the H20 commit itself introduced.
-  /(?:^|\/)playwright[._\-][^/]*$/,
-  /(?:^|\/)e2e\//,
+  /^(?:fullburn\/(?:[^/]+\/)*)?playwright[._\-][^/]*$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?e2e\//,
   // `npm ci` reads these; the lockfile was made Class-2 on exactly this
   // reasoning (N-11).
-  /(?:^|\/)\.npmrc$/,
-  /(?:^|\/)\.nvmrc$/,
-  /(?:^|\/)wrangler\.[^/]*$/,
-  /(?:^|\/)\.gitignore$/,
-  /(?:^|\/)package\.json$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?\.npmrc$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?\.nvmrc$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?wrangler\.[^/]*$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?\.gitignore$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?package\.json$/,
   // npm ci resolves STRICTLY from the lockfile — `resolved` and `integrity` both
   // live there — so the lockfile decides what `vitest` actually is. It was the
   // only executable thing left in the Class-1 surface (adversary finding N-11).
-  /(?:^|\/)package-lock\.json$/,
-  /(?:^|\/)tsconfig[^/]*\.json$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?package-lock\.json$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?tsconfig[^/]*\.json$/,
   /^fullburn\/PHASE$/,
   // The evidence: tests are the only thing standing between a defect and a
   // green gate, so silencing one is a human decision.
@@ -447,6 +455,10 @@ export const VERIFIED_TREE_SCOPE = Object.freeze([
   // reports left a PASS fresh.
   ".gitleaks.toml",
   ".gitleaksignore",
+  // Root Class-2 files (X4-02): every tracked Class-2 path outside reports/ and
+  // APPROVALS/ must be inside this hash, and the invariant suite derives that
+  // from `git ls-files` so a new root config fails the build until added here.
+  ".gitignore",
   ":!fullburn/reports/",
   ":!fullburn/APPROVALS/",
 ]);

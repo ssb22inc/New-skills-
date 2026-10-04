@@ -15,7 +15,7 @@ import { MARKER as HARNESS_MARKER, readThroughInFlight, staleEntries, tableEndOf
 import { CANARY_SECRET, TEST_CLIENT, makeDeps, memoryMeter } from "../helpers.ts";
 import { e2eVarianceHolds, runnerTargets } from "../e2e-variance.ts";
 import { blockingCalls } from "../blocking-calls.ts";
-import { moneyPathGuards, moneyPathRefusals } from "../money-path-guards.ts";
+import { enumerateThrowGuards, moneyPathGuards, moneyPathModules, moneyPathRefusals } from "../money-path-guards.ts";
 
 /** The complete §10.2 standing-invariant checklist, enumerated (R10). Every
  * bullet appears here by name every CI run, and every LIVE entry carries a real
@@ -583,6 +583,27 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       expect(existsSync(lockPath), "a non-holder released the lock").toBe(true);
       releaseRunLock(lockPath, undefined, 333);
       expect(existsSync(lockPath)).toBe(false);
+      /** X4-03: the lock is created WITH its pid (never empty), and a takeover
+       * that finds a different lock than the dead one it judged puts it back
+       * and refuses. MUTATION: X4-03. */
+      const fsMod = await import("node:fs");
+      expect(acquireRunLock(lockPath, undefined, () => true, 555).ok).toBe(true);
+      expect(readFileSync(lockPath, "utf8"), "the lock existed without its owner").toBe("555");
+      // Simulate the race: between our read (sees dead 555) and our rename, a
+      // live 666 replaces the lock. renameSync moves 666's lock aside.
+      let reads = 0;
+      const racing = {
+        ...fsMod,
+        readFileSync: (p: string, enc: BufferEncoding) => {
+          reads += 1;
+          if (reads === 1) { fsMod.writeFileSync(lockPath, "666"); return "555"; }
+          return fsMod.readFileSync(p, enc);
+        },
+      };
+      const stolen = acquireRunLock(lockPath, racing, (pid: number) => pid === 666, 777);
+      expect(stolen.ok, "a live lock was taken during takeover").toBe(false);
+      expect(fsMod.readFileSync(lockPath, "utf8"), "the live holder's lock was not put back").toBe("666");
+      fsMod.rmSync(lockPath, { force: true });
 
       // A corrupt marker is cleared rather than crashing the next run forever.
       write(marker, "{ not json");
@@ -843,6 +864,9 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       { name: "a gateway base off the AI Gateway is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /is not the AI Gateway/, fire: () => viaLlm({ gatewayBaseUrl: "https://receiver.example.invalid/v1/x/y/" }) },
       // X-08: a provider that echoes the credential is refused, never returned.
+      // X4-06: the output is cloned through JSON; what cannot be, is refused.
+      { name: "a provider output that is not plain JSON is refused", file: "engine/src/gateway.ts", type: GatewayError,
+        expect: /provider output is not plain JSON data/, fire: () => viaLlm({ transport: { async post() { return { greeting: "ok", n: BigInt(1) }; } } }) },
       { name: "a provider output carrying a credential is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /provider output carried a credential/, fire: () => viaLlm({ transport: { async post() { return { greeting: CANARY_SECRET }; } } }) },
       { name: "a settle that cannot record refuses to release", file: "engine/src/gateway.ts", type: MeterUnavailableError,
@@ -1659,6 +1683,24 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         },
       },
       {
+        row: "L47",
+        claim:
+          "sibling builds are not Fullburn Class-2; the root .gitignore is in the verified tree; a TraceContext is frozen; " +
+          "a canary is removable only if its writer is dead or is this process",
+        holds: () => {
+          const tc = new TraceContext("claim-l47", "c");
+          let frozen = false;
+          try { (tc as unknown as { traceId: string }).traceId = "x"; } catch { frozen = true; }
+          return (
+            gateLib.isClass2("haven/package.json") === false &&
+            gateLib.isClass2("fullburn/engine/package.json") === true &&
+            gateLib.VERIFIED_TREE_SCOPE.includes(".gitignore") &&
+            frozen &&
+            doneLib.canaryIsStale("/x/zz-done-meta-canary-99.test.ts", 1, () => true) === false
+          );
+        },
+      },
+      {
         row: "L29",
         claim: "mutate.mjs carries exactly three mutation entries of its own",
         holds: () => (harnessSrc.match(/"engine\/scripts\/mutate\.mjs"/g) ?? []).length === 3,
@@ -2409,6 +2451,53 @@ describe("runner-decision sweep — no verdict is reached where the default suit
       stale.map((s) => `${s.name} (${s.file}): ${s.why}`),
       "these entries no longer match the tree — the harness would report them PATTERN-NOT-FOUND and the locks they name are untested",
     ).toEqual([]);
+  });
+
+  /** X4-02 (2026-10-04): a Class-2 file outside the verified tree can change
+   * with every review still bound and fresh. Derived from `git ls-files`, so a
+   * new root config fails here until VERIFIED_TREE_SCOPE covers it. Reports and
+   * approvals are excluded by design: a record commit must not move the hash a
+   * report binds to. */
+  it("every tracked Class-2 file outside reports/ and APPROVALS/ is inside the verified tree", async () => {
+    const { execFileSync } = await import("node:child_process");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const gl = await import("../../scripts/gate-lib.mjs");
+    const repo = new URL("../../../../", import.meta.url).pathname;
+    const all = execFileSync("git", ["-C", repo, "ls-files"], { encoding: "utf8" }).split("\n").filter(Boolean);
+    const inTree = new Set(execFileSync("git", ["-C", repo, "ls-files", "--", ...gl.VERIFIED_TREE_SCOPE], { encoding: "utf8" }).split("\n").filter(Boolean));
+    const outside = all.filter((p: string) => gl.isClass2(p) && !inTree.has(p) && !/^fullburn\/(?:reports|APPROVALS)\//.test(p));
+    expect(outside, "Class-2 files a review does not bind to").toEqual([]);
+  });
+
+  /** DONE.md §2.1.6, MECHANICALLY (cross-family finding X4-10, 2026-10-04).
+   * "Each enumerated guard has been disabled individually and caught" was a
+   * sentence in C6's output, not a check, and 50 of 85 guards had no entry. A
+   * guard is covered when some entry for its file changes its throw line or a
+   * line of its condition (up to three lines above). This proves an entry
+   * EXISTS; C5 proves each entry is CAUGHT. Every file is read THROUGH THE
+   * HARNESS MARKER, so this check runs inside a mutation without becoming the
+   * reason it is caught (the X-07 lesson).
+   *
+   * MUTATION: delete any G6 entry. */
+  it("every enumerated money-path guard has its own disabling mutation entry", () => {
+    const harness = readWs("engine/scripts/mutate.mjs");
+    const start = harness.indexOf("const MUTATIONS = [");
+    const end = tableEndOf(harness) as number;
+    const entries = (0, eval)(`(${harness.slice(start + "const MUTATIONS = ".length, end).replace(/;\s*$/, "")})`) as [string, string, string, string][];
+    const root = new URL("../../../", import.meta.url);
+    const marker = existsSync(HARNESS_MARKER as string) ? (JSON.parse(readFileSync(HARNESS_MARKER as string, "utf8")) as { path: string; original: string }) : null;
+    const read = readThroughInFlight((f: string) => readFileSync(new URL(f, root), "utf8"), marker, (p: string) => (p.startsWith("/") ? p : new URL(p, root).pathname)) as (f: string) => string;
+    const exists = (f: string) => existsSync(new URL(f, root));
+    const guards = moneyPathModules(root, exists, read).flatMap((f) => enumerateThrowGuards(f, read(f)));
+    expect(guards.length, "no guards enumerated — vacuous").toBeGreaterThan(60);
+    const uncovered: string[] = [];
+    for (const g of guards) {
+      const lines = read(g.file).split("\n");
+      const window = lines.slice(Math.max(0, g.line - 4), g.line).join("\n");
+      const hit = entries.some(([, f, from]) => f === g.file && from.split("\n").some((l) => l.trim().length > 8 && window.includes(l.trim())));
+      if (!hit) uncovered.push(`${g.file}:${g.line} ${g.signature.slice(0, 70)}`);
+    }
+    expect(uncovered, "enumerated guards with no entry that disables them (DONE.md §2.1.6)").toEqual([]);
   });
 
   /** X-07's red-proof: with a marker naming a file, the read returns the

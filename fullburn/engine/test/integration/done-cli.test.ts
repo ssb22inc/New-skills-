@@ -44,7 +44,16 @@ afterEach(() => {
   // A checker that got past pre-flight would have written a report and maybe
   // left a canary; neither may outlive this test.
   for (const f of readdirSync(`${ROOT}/reports`)) if (!reportsBefore.includes(f) && f.startsWith("DONE_")) rmSync(`${ROOT}/reports/${f}`, { force: true });
-  for (const p of [`${ROOT}/engine/test/zz-done-meta-canary.test.ts`, `${REPO}/.done-refusal-canary`]) if (existsSync(p)) rmSync(p, { force: true });
+  // Only canaries whose writer is DEAD (X4-12): this file runs inside the
+  // checker's own meta-check suite run, and the live parent's canary is the
+  // failing test that run is measuring.
+  const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (e) { return (e as { code?: string }).code === "EPERM"; } };
+  for (const [dir, re] of [[`${ROOT}/engine/test`, /^zz-done-meta-canary(?:-(\d+))?\.test\.ts$/], [REPO, /^\.done-refusal-canary(?:-(\d+))?$/]] as const) {
+    for (const n of readdirSync(dir)) {
+      const m = re.exec(n);
+      if (m && (!m[1] || !alive(Number(m[1])))) rmSync(`${dir}/${n}`, { force: true });
+    }
+  }
 });
 
 describe("done CLI — refuses before it measures", () => {

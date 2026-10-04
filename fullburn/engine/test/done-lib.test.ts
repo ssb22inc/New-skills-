@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, class2Condition, splitReportsByFamily, completionSentence, gateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, gateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -131,6 +131,17 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(same.map((r: { name: string }) => r.name)).toEqual([r9.name, claude.name]);
     expect(cross.map((r: { name: string }) => r.name)).toEqual([x1.name]);
     expect(splitReportsByFamily([x1]).same, "a cross-family report answered for the same-family review").toEqual([]);
+  });
+
+  /** X4-12: a nested checker or done-cli's cleanup deleted the PARENT's live
+   * canary mid-measurement. MUTATION: X4-12. */
+  it("a canary is removable only if it names no writer, this process, or a dead writer", () => {
+    const alive = (p: number) => p === 4242;
+    expect(canaryIsStale("/x/zz-done-meta-canary-4242.test.ts", 1, alive), "a live parent's canary was removed").toBe(false);
+    expect(canaryIsStale("/x/zz-done-meta-canary-777.test.ts", 1, alive)).toBe(true);
+    expect(canaryIsStale("/x/zz-done-meta-canary-1.test.ts", 1, alive)).toBe(true);
+    expect(canaryIsStale("/x/.done-refusal-canary-4242", 1, alive)).toBe(false);
+    expect(canaryIsStale("/x/zz-done-meta-canary.test.ts", 1, alive)).toBe(true);
   });
 
   it("reads the owed-approvals count, or null", () => {

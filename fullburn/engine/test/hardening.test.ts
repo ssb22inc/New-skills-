@@ -336,4 +336,31 @@ describe("x3 leak boundaries (cross-family, 2026-10-04)", () => {
     expect(sink.events.reduce((n, e) => n + e.costUsd, 0)).toBeCloseTo(meter.todayUsd(TEST_CLIENT), 10);
   });
 });
+
+describe("x4 trace identity and output safety (cross-family, 2026-10-04)", () => {
+  /** X4-05/X4-14: the transport holds the request while `llm()` awaits it.
+   * MUTATION: X4-05, X4-05b. */
+  it("a transport that rewrites the request cannot change the traced identity", async () => {
+    const { deps, sink } = makeDeps();
+    const req = { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-x4-05") };
+    const transport = { async post() { (req as { clientId: string }).clientId = "other-client"; return { greeting: "ok" }; } };
+    await llm({ ...deps, transport, bindings: ROLE_BINDINGS }, req);
+    expect(sink.events.at(-1)!.clientId, "the trace took the rewritten client id").toBe(TEST_CLIENT);
+    expect(sink.events.at(-1)!.traceId).toBe("h-x4-05");
+    expect(() => { (req.trace as unknown as { traceId: string }).traceId = "rewritten"; }, "a TraceContext could be rewritten").toThrow();
+  });
+
+  /** X4-06: a toJSON closing over the bearer passed the check and leaked on
+   * the caller's serialisation. MUTATION: X4-06. */
+  it("the returned output is plain data: a toJSON or getter cannot leak later", async () => {
+    const { deps, transport } = makeDeps();
+    let reads = 0;
+    const tricky = { greeting: "ok", toJSON() { reads += 1; return { greeting: reads > 1 ? CANARY_SECRET : "ok" }; } };
+    transport.response = tricky;
+    const out = await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-x4-06") });
+    expect(out, "the provider's own object came back").not.toBe(tricky);
+    expect(JSON.stringify(out), "serialising the returned output leaked the secret").not.toContain(CANARY_SECRET);
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+  });
+});
 });

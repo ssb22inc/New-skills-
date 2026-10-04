@@ -25,6 +25,11 @@ describe("ci-scope — whether a diff needs the fullburn gate", () => {
     expect(inScope([".npmrc"]), "a root .npmrc skipped the gate").toBe(true);
     expect(inScope(["vitest.config.ts"])).toBe(true);
     expect(inScope(["README.md"]), "an ordinary root file entered the scope").toBe(false);
+    // X4-02 (2026-10-04): sibling builds are not Fullburn's — their configs are
+    // neither Class-2 nor in Fullburn's CI scope. MUTATION: X4-02.
+    expect(inScope(["haven/package.json"]), "a sibling build's package.json ran Fullburn's gates").toBe(false);
+    expect(inScope(["pulsern/vite.config.js"])).toBe(false);
+    expect(inScope(["fullburn/engine/package.json"])).toBe(true);
     expect(inScope([".gitleaksignore"])).toBe(true);
     expect(inScope(["fullburn/PHASE"])).toBe(true);
     // One relevant file among many irrelevant ones is still relevant.
@@ -98,5 +103,7 @@ describe("the verified tree covers the scanner configuration (X3-06)", () => {
     const { VERIFIED_TREE_SCOPE } = await import("../scripts/gate-lib.mjs");
     expect(VERIFIED_TREE_SCOPE).toContain(".gitleaks.toml");
     expect(VERIFIED_TREE_SCOPE).toContain(".gitleaksignore");
+    // X4-02b: the root .gitignore is Class-2 and decides what is tracked.
+    expect(VERIFIED_TREE_SCOPE).toContain(".gitignore");
   });
 });

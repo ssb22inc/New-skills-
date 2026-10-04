@@ -37,6 +37,10 @@ export class TraceContext {
     if (!traceId || !clientId) throw new TraceEmitError("trace context requires traceId and clientId");
     this.traceId = traceId;
     this.clientId = clientId;
+    // FROZEN (cross-family findings X4-05, X4-14): a transport holds the bearer
+    // and the request object while `llm()` awaits it, and could rewrite the
+    // context's identity before the success trace read it back.
+    Object.freeze(this);
   }
 }
 

@@ -187,8 +187,8 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
   const traceFailure = async (message: string, output: unknown = null): Promise<void> => {
     try {
       await deps.sink.emit({
-        traceId,
-        clientId,
+        traceId: redactText(traceId, secrets),
+        clientId: redactText(clientId, secrets),
         role,
         model: modelId,
         startedAtMs,
@@ -301,7 +301,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     meter = requireReservingMeter(deps.meter);
 
     // ATOMIC: read + cap-check + write, no await in between.
-    reservation = meter.reserve(req.clientId, card.costBudgetUsdPerCall);
+    reservation = meter.reserve(clientId, card.costBudgetUsdPerCall);
     // THE POST-RESERVE VALIDATION IS GONE, AND ITS ABSENCE IS THE FIX.
     //
     // It checked that the returned reservation was an object, for this client,
@@ -360,7 +360,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       output = await deps.transport.post(
         url,
         { role, input: req.input, contextBudgetTokens: card.contextBudgetTokens },
-        { authorization: `Bearer ${key.value}`, "x-fullburn-client": req.clientId },
+        { authorization: `Bearer ${key.value}`, "x-fullburn-client": clientId },
       );
     } catch (err) {
       if (err instanceof PreDispatchError) {
@@ -379,6 +379,19 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     settleOrFailClosed(meter, reservation, secrets);
     committedUsd = reservation.amountUsd;
 
+    /** PLAIN DATA ONLY (cross-family finding X4-06, 2026-10-04): the object
+     * returned was the provider's own, so a `toJSON` closing over the bearer or
+     * a getter that changes on a later read could pass the secret check and
+     * leak when the caller serialised it. The output is cloned through JSON —
+     * running any toJSON/getter exactly once, here — and only the clone is
+     * checked, traced and returned. */
+    let plain: unknown;
+    try {
+      plain = JSON.parse(JSON.stringify(output));
+    } catch {
+      throw new GatewayError("provider output is not plain JSON data — refused (Law 9)");
+    }
+    output = plain;
     validateOutput(card.outputSchema, output);
 
     /** A PROVIDER THAT ECHOES THE CREDENTIAL IS A LEAK (X-08, X2-06). Checked
@@ -392,8 +405,10 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
 
     // Fail closed on trace loss (R8): not a success until it is traced.
     await emitOrFail(deps.sink, {
-      traceId: req.trace.traceId,
-      clientId: req.clientId,
+      // ENTRY SNAPSHOTS, REDACTED (X4-05, X4-14): `req` is mutable while the
+      // transport is awaited; the identity traced is the one checked at entry.
+      traceId: redactText(traceId, secrets),
+      clientId: redactText(clientId, secrets),
       role,
       model: bound,
       startedAtMs,

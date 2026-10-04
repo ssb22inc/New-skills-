@@ -163,7 +163,12 @@ export async function gradeAndEnforce(
   let actions: EnforcementAction[];
   let report: string;
   try {
-    grades = computeGrades(snapshot);
+    // GRADE WHAT WAS TRACED (cross-family finding X4-11, 2026-10-04): grading
+    // the caller's object ran its accessors a second time, so a getter could
+    // grade A while the trace recorded null. The traced copy is plain data; an
+    // accessor-backed reading is null in both, and null grades BELOW_A.
+    if (traced === null || typeof traced !== "object") throw new GradeRegistryError("snapshot unreadable");
+    grades = computeGrades(traced as MetricSnapshot);
     actions = enforcement(grades);
     report = publishGradeReport(grades, startedAtMs);
   } catch {

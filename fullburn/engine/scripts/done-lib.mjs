@@ -162,6 +162,16 @@ export function class2Condition(gate, owed) {
   return { status: ok ? "PASS" : "FAIL", observed: `${reason}${Number.isInteger(owed) ? ` — ${owed} transition(s) in range` : ""}` };
 }
 
+/** Is a planted canary safe to remove? (cross-family finding X4-12) Only if it
+ * names no writer (a legacy fixed name), names THIS process, or names a writer
+ * that is dead. A live writer's canary is the failing test its run is measuring. */
+export function canaryIsStale(path, selfPid, isAlive) {
+  const m = /-(\d+)(?:\.test\.ts)?$/.exec(String(path));
+  if (!m) return true;
+  const pid = Number(m[1]);
+  return pid === selfPid || !isAlive(pid);
+}
+
 export function parseOwed(out) {
   const s = out ?? "";
   if (/No Class-2 paths changed/.test(s)) return 0;

@@ -26,6 +26,7 @@ import {
   ENGINE_REQUIREMENTS,
   PHASE0_REQUIREMENTS,
   gateAck,
+  canaryIsStale,
   class2Condition,
   isNonClaudeFamily,
   lintCondition,
@@ -45,15 +46,20 @@ import {
 import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkClass2Approvals, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 import { createHash } from "node:crypto";
-import { MARKER } from "./mutate-lib.mjs";
+import { MARKER, processAlive } from "./mutate-lib.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
 const REPO = fileURLToPath(new URL("../../../", import.meta.url)).replace(/\/$/, "");
 const VITEST = `${ROOT}/node_modules/vitest/vitest.mjs`;
 const TSC = `${ROOT}/node_modules/typescript/bin/tsc`;
 /** Untracked, planted only during the meta-check, removed on every exit. */
-const CANARY = `${ROOT}/engine/test/zz-done-meta-canary.test.ts`;
-const REFUSAL_CANARY = `${REPO}/.done-refusal-canary`;
+/** PID-SCOPED (cross-family finding X4-12, 2026-10-04): the names were fixed,
+ * so a nested checker's start-up cleanup — or done-cli's afterEach, which the
+ * meta-check's own suite run executes — deleted the PARENT's live canary
+ * mid-measurement. Each canary now names its writer, and cleanup removes only
+ * a canary whose writer is dead (or this process's own). */
+const CANARY = `${ROOT}/engine/test/zz-done-meta-canary-${process.pid}.test.ts`;
+const REFUSAL_CANARY = `${REPO}/.done-refusal-canary-${process.pid}`;
 const SEEDS = [7, 42, 1234, 2026, 9001];
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -77,7 +83,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
    * a crashed run) and on every exit path. Removes; never rewrites. */
   const removeStaleCanary = () => {
     let removed = [];
-    for (const p of [CANARY, REFUSAL_CANARY]) {
+    const planted = [
+      ...readdirSync(`${ROOT}/engine/test`).filter((n) => /^zz-done-meta-canary(?:-\d+)?\.test\.ts$/.test(n)).map((n) => `${ROOT}/engine/test/${n}`),
+      ...readdirSync(REPO).filter((n) => /^\.done-refusal-canary(?:-\d+)?$/.test(n)).map((n) => `${REPO}/${n}`),
+    ].filter((p) => canaryIsStale(p, process.pid, processAlive));
+    for (const p of planted) {
       if (existsSync(p)) {
         rmSync(p, { force: true });
         removed.push(p);
@@ -229,8 +239,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       }
 
       // 6 — the guard sweep
-      const c6 = await vit(["engine/test/invariants/invariants.test.ts", "-t", "every money-path guard is still reachable"]);
-      results.push({ id: "C6", title: "§2.1.6 guard population enumerated from source, one-to-one coverage, every guard driven", status: c6.status, command: "vitest run engine/test/invariants -t 'every money-path guard is still reachable'", observed: `${c6.observed}; the 'disabled individually and caught' half is C5's per-guard entries` });
+      // X4-10: both halves of §2.1.6 are CHECKS now — every guard driven, and
+      // every guard with its own disabling entry (C5 then proves each is caught).
+      const c6 = await vit(["engine/test/invariants/invariants.test.ts", "-t", "every money-path guard is still reachable|every enumerated money-path guard has its own disabling mutation entry"]);
+      results.push({ id: "C6", title: "§2.1.6 guard population enumerated from source, one-to-one coverage, every guard driven", status: c6.status, command: "vitest run engine/test/invariants -t 'every money-path guard is still reachable|every enumerated money-path guard has its own disabling mutation entry'", observed: `${c6.observed}; each guard's own entry is CAUGHT in C5` });
 
       // 7 — suite under ≥5 seeds, typecheck, lint, leak-check, drill
       const sub7 = [];

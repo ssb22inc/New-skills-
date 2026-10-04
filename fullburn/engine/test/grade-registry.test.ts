@@ -199,12 +199,12 @@ describe("grade registry (AC 3, §12, Law 14)", () => {
     Object.defineProperty(hostileArea, "stripe_warehouse_drift_pct", { enumerable: true, get() { const e = new Error(`boom ${CANARY_SECRET}`); (e as unknown as { cause: unknown }).cause = CANARY_SECRET; throw e; } });
     const hostile = { ...ALL_A, "data-truth": hostileArea } as unknown as MetricSnapshot;
     const sink2 = new MemoryTraceSink();
-    const outcome = await gradeAndEnforce(hostile, { sink: sink2, trace: new TraceContext("grades-x3b", "engine"), now: () => 0 }).then(
-      () => ({ ok: true as const }),
-      (e: Error & { cause?: unknown }) => ({ ok: false as const, e }),
-    );
-    expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(`${outcome.e.name} ${outcome.e.message} ${String(outcome.e.cause ?? "")} ${outcome.e.stack ?? ""}`).not.toContain(CANARY_SECRET);
+    // X4-11: the accessor is never RUN — grading uses the traced plain copy,
+    // where an accessor-backed reading is null — so the area grades BELOW_A,
+    // the trace and the grade agree, and nothing the getter would throw exists.
+    const out = await gradeAndEnforce(hostile, { sink: sink2, trace: new TraceContext("grades-x3b", "engine"), now: () => 0 });
+    expect(out.grades.find((g) => g.area === "data-truth")!.grade).toBe("BELOW_A");
+    expect((sink2.events[0]!.input as Record<string, Record<string, unknown>>)["data-truth"]!["stripe_warehouse_drift_pct"]).toBe(null);
     expect(JSON.stringify(sink2.events)).not.toContain(CANARY_SECRET);
   });
 });
