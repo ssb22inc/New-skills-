@@ -189,9 +189,9 @@ describe("owed-approvals CLI prints what class2-gate demands (H-17)", () => {
   it("its output, pasted verbatim into APPROVALS/, opens the gate", () => {
     const base = git("rev-parse", "HEAD").trim();
     write("fullburn/config/src/caps.ts", "export const CAPS = { dailyAiSpendUsd: 500 };\n");
-    write("fullburn/config/src/models.ts", "export const MODELS = [];\n");
+    write("fullburn/config/src/freeze.ts", "export const deepFreeze = (x) => x;\n");
     git("add", "-A");
-    git("commit", "-q", "-m", "touch two Class-2 files");
+    git("commit", "-q", "-m", "touch two money-cap files");
 
     const blocked = gate("class2-gate.mjs", repo, base);
     expect(blocked.code).toBe(1);
@@ -199,7 +199,7 @@ describe("owed-approvals CLI prints what class2-gate demands (H-17)", () => {
     const printed = gate("owed-approvals.mjs", repo, base);
     expect(printed.code, printed.out).toBe(0);
     expect(printed.out).toContain("caps.ts");
-    expect(printed.out).toContain("models.ts");
+    expect(printed.out).toContain("freeze.ts");
 
     write("fullburn/APPROVALS/2026-08-16-generated.md", `Approved-by: human\n${printed.out}`);
     git("add", "-A");

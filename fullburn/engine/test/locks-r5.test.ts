@@ -279,10 +279,12 @@ describe("owed approvals — the list a human signs is the list the gate demands
 
     const changedFiles = [
       { status: "modified", path: "fullburn/config/src/caps.ts" },
-      { status: "added", path: "fullburn/engine/src/new-module.ts" },
-      { status: "deleted", path: "fullburn/engine/test/old.test.ts" },
-      { status: "renamed", oldPath: "fullburn/engine/src/a.ts", path: "fullburn/engine/src/b.ts" },
+      { status: "added", path: "fullburn/config/src/caps-extra.ts" },
+      { status: "deleted", path: "fullburn/engine/scripts/diff-lib.mjs" },
+      { status: "renamed", oldPath: "fullburn/config/src/caps-a.ts", path: "fullburn/config/src/caps-b.ts" },
       { status: "modified", path: "fullburn/HUMAN_TASKS.md" }, // Class 1 — owes nothing
+      // Class 2 but not a money cap: owes nothing since the ruling of 2026-10-06 (L50).
+      { status: "modified", path: "fullburn/engine/src/gateway.ts" },
     ];
     const BASE = "1111111111111111111111111111111111111111";
     const hashOf = (p: string) => `now-${p}`;
@@ -291,9 +293,10 @@ describe("owed approvals — the list a human signs is the list the gate demands
     const touched = class2TouchedPaths(changedFiles) as { path: string; status: string }[];
     // The Class-1 path must not appear, or the human signs work they did not do.
     expect(touched.map((t) => t.path)).not.toContain("fullburn/HUMAN_TASKS.md");
+    expect(touched.map((t) => t.path), "a non-cap Class-2 path still owed a human approval").not.toContain("fullburn/engine/src/gateway.ts");
     // A rename owes on both sides: the path it left and the path it arrived at.
     expect(touched.map((t) => `${t.path}:${t.status}`)).toEqual(
-      expect.arrayContaining(["fullburn/engine/src/a.ts:renamed-away", "fullburn/engine/src/b.ts:renamed-to"]),
+      expect.arrayContaining(["fullburn/config/src/caps-a.ts:renamed-away", "fullburn/config/src/caps-b.ts:renamed-to"]),
     );
 
     // Exactly what owed-approvals.mjs prints, in the format the gate parses.

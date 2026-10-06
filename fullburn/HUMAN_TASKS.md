@@ -20,6 +20,8 @@ Claude Code executes everything else. Spec references in parentheses. Nothing he
 
 ## Class-2 approvals owed for the Phase 0 fix commit
 
+**AMENDED BY RULING 2026-10-06 (ledger L50): only the money caps still need your approval.** Every other Class-2 change — code, tests, gates, the contract — is decided by the automated gates (four required CI checks, the mutation harness, a cross-family PASS at the exact tree). The command below now prints only money-cap paths: the cap values (`config/src/*caps*`), `config/src/freeze.ts`, `config/package.json`, and the gate machinery that enforces this rule (`gate-lib.mjs`, `class2-gate.mjs`, `diff-lib.mjs`, `.github/workflows/fullburn-ci.yml`). Measured 2026-10-06 against `origin/main`: **7 entries owed, down from 110.** Run it again on the final tree before signing — the hashes move with every commit. The text below is the original context and is kept as history.
+
 The Phase 0 adversary fixes touch files that are Class 2 by their own rule, so this PR needs approval entries from you before it can merge. Nothing here changes a *value* you own — caps and thresholds keep their pending-sign-off state — but the rule is the rule, and the builder must never write its own approval.
 
 **Get the list by running it, not by reading it:**
@@ -54,6 +56,6 @@ This section used to carry the list by hand and it drifted inside one commit (ad
 ## Standing (forever)
 
 - H15 · **The gavel** — one daily 15-minute human-queue session; severity 1–2 same day, 3–5 within 72h (§5.1). Past SLA the engine waits — your latency is the throttle, by design.
-- H16 · **Phase gates** — each phase needs your ack on a green adversary report before the next begins (§10.1). Never pre-approve.
-- H17 · **Class 2 approvals** — Laws, caps, money paths, pricing, the Grade Registry, the improvement loop's own code: only you, forever (Law 15, §13).
+- H16 · **Phase gates** — each phase needs your ack on a green adversary report before the next begins (§10.1). Never pre-approve. **REMOVED BY RULING 2026-10-06 (L50):** the ack is automated — the cross-family adversary's PASS at the exact tree is the gate (DONE.md §2.1.10 as amended).
+- H17 · **Class 2 approvals** — Laws, caps, money paths, pricing, the Grade Registry, the improvement loop's own code: only you, forever (Law 15, §13). **NARROWED FOR THE BUILD BY RULING 2026-10-06 (L50):** in this repository's CI only money-cap changes owe your approval (`HUMAN_APPROVAL_PATTERNS`). The runtime improvement loop's Class-2 rules in ENGINE_BUILD.md §13 (what the running engine may change about itself) were not part of the ruling and are unchanged.
 - H18 · **Quarterly drills** — backup restore, Meta account recovery, red button <60s, model failover; results are graded (§15, §12).

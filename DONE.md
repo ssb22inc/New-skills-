@@ -47,9 +47,9 @@ All ten conditions hold simultaneously against **one single tree hash**:
 5. `npm run mutate` reports 0 survived, 0 stale, **preceded in the same run by a passing meta-check** (negative canary SURVIVED, positive canary CAUGHT).
 6. The guard sweep's population is programmatically enumerated, entry count matches the enumerated count, and **each enumerated guard has been disabled individually and caught**.
 7. Full suite green under **≥5 shuffled seeds**; typecheck, lint, leak-check clean; no source file mutated after a SIGINT drill.
-8. Every Class-2 path in the phase's commit range is approved in `APPROVALS/`, **authored and pushed by Sheldon's authenticated GitHub identity**, through a PR gated by CODEOWNERS covering **100%** of tracked Class-2 files, with CI failing closed if CODEOWNERS itself is touched.
+8. *(Amended by Sheldon's ruling of 2026-10-06, ledger L50.)* Every **money-cap** path in the phase's commit range (`HUMAN_APPROVAL_PATTERNS` in `engine/scripts/gate-lib.mjs`: the cap values, their freeze and export map, and the gate machinery that enforces this rule) is approved in `APPROVALS/` by Sheldon; CODEOWNERS still covers **100%** of tracked Class-2 files for enumeration. Every other Class-2 change is decided by the automated gates. In this single-maintainer repository an approval proves authenticated authorship and that the gate blocked — not independent review (L49).
 9. Every ledger / CLAUDE.md row asserting code behavior carries a test that fails when the assertion goes stale. Untestable rows state limitations, never conclusions.
-10. Sheldon has given explicit written gate ack. **No ack, no completion — silence is not consent.**
+10. *(Amended by Sheldon's ruling of 2026-10-06, ledger L50.)* The gate ack is automated: it is granted exactly when condition 3 — the cross-family adversary — returns PASS at this tree. **No PASS, no completion.**
 
 ### 2.2 ENGINE COMPLETE (v1 software)
 
@@ -90,7 +90,7 @@ Claude Code builds `npm run done -- <phase|engine>`: a single command that check
 
 **The only sentence Claude Code may use to report completion:**
 
-> `npm run done -- <target>` exits 0 at tree `<hash>`. Cross-family read PASS at the same tree, artifact `<path>`. Class-2 sets approved under your identity. Requesting gate ack.
+> `npm run done -- <target>` exits 0 at tree `<hash>`. Cross-family read PASS at the same tree, artifact `<path>`. Money-cap changes approved under your identity; every other gate decided by the automated adversary.
 
 Anything less specific is a status update, not a completion claim. If a condition cannot be satisfied in this environment, say so plainly and leave the target incomplete.
 
@@ -141,4 +141,4 @@ Do not build these. Do not touch them before the gate is green. Then apply as sp
 
 ## 7. The stop condition, in one paragraph
 
-The build is 100% complete when `npm run done -- engine` exits 0 at a tree a non-Claude reviewer has passed, every one of the nineteen Laws has a test that fails when the Law is broken, all Class-2 approvals carry Sheldon's authenticated identity through a CODEOWNERS-gated PR, and PulseRN's sealed `VERDICT.md` has been answered by thirty days of real spend that reconciled to the cent — with the verdict honored whichever way it reads. Until every clause of that sentence is true and re-measured, the correct report is the honest FAIL and the list of what is still open.
+The build is 100% complete when `npm run done -- engine` exits 0 at a tree a non-Claude reviewer has passed, every one of the nineteen Laws has a test that fails when the Law is broken, every money-cap change carries Sheldon's approval through a gated PR (ruling 2026-10-06, L50 — every other gate is automated), and PulseRN's sealed `VERDICT.md` has been answered by thirty days of real spend that reconciled to the cent — with the verdict honored whichever way it reads. Until every clause of that sentence is true and re-measured, the correct report is the honest FAIL and the list of what is still open.

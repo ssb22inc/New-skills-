@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, gateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -162,15 +162,14 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(isNonClaudeFamily(null)).toBe(false);
   });
 
-  /** MUTATION: accept an ack for a different tree. */
-  it("a gate ack must name THIS tree and say yes", () => {
-    const tree = "abcdef1234567890abcdef1234567890abcdef12";
-    expect(gateAck(`tree: ${tree}\nack: yes\n`, tree).ok).toBe(true);
-    expect(gateAck(`tree: ${tree.slice(0, 12)}\nack: yes\n`, tree).ok).toBe(true);
-    expect(gateAck(`tree: 0000000000000000\nack: yes\n`, tree).ok, "an ack for another tree was accepted").toBe(false);
-    expect(gateAck(`tree: ${tree}\n`, tree).ok, "silence was taken as consent").toBe(false);
-    expect(gateAck(`tree: ${tree}\nack: no\n`, tree).ok).toBe(false);
-    expect(gateAck("", tree).ok).toBe(false);
+  /** MUTATION: grant the automated ack without a C3 PASS. Ruling 2026-10-06
+   * (L50) replaced the human ack with the cross-family adversary's verdict. */
+  it("the automated gate ack is granted only by a cross-family PASS at this tree", () => {
+    expect(automatedGateAck({ id: "C3", status: "PASS" }).ok).toBe(true);
+    expect(automatedGateAck({ id: "C3", status: "FAIL" }).ok, "a failing adversary acked the gate").toBe(false);
+    expect(automatedGateAck(undefined).ok, "a missing C3 row acked the gate").toBe(false);
+    expect(automatedGateAck(null).ok).toBe(false);
+    expect(automatedGateAck({ id: "C3" }).ok, "an unmeasured C3 acked the gate").toBe(false);
   });
 
   /** MUTATION: make verdict() ignore sub-results, or pass an empty list. */
@@ -213,7 +212,7 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     const failing = renderReport({ ...base, results: [{ id: "C1", title: "t1", status: "FAIL", command: "c", observed: "o" }], verdictOut: { ok: false, failing: ["C1"] }, artifact: null });
     expect(failing).toContain("INCOMPLETE");
     expect(failing).toContain("| C1 |");
-    expect(failing, "a FAIL report printed the completion sentence").not.toContain("Requesting gate ack");
+    expect(failing, "a FAIL report printed the completion sentence").not.toContain("every other gate decided by the automated adversary");
     expect(failing).toContain("status update, not a completion claim");
     const passing = renderReport({ ...base, results: [{ id: "C1", title: "t1", status: "PASS", command: "c", observed: "o" }], verdictOut: { ok: true, failing: [] }, artifact: "reports/x.md" });
     expect(passing).toContain(completionSentence("phase", "abc123", "reports/x.md"));

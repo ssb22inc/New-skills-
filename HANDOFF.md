@@ -34,6 +34,7 @@ on any disagreement about *state*.
 | ID | Severity | Status |
 |---|---|---|
 | L37 / H19 | **1** → protection measured | Ruleset live; re-measured 2026-10-06 (L48): throwaway PR #129 reads `mergeable_state: blocked`. Open human decisions: PulseRN's `pulsern-sms-reminders.yml` fails the Fullburn workflow-permissions invariant inside the PR merge ref; all PRs to `main` wait on checks that exist only on this branch; the author is also the sole code owner and cannot self-approve — RULED 2026-10-06 (L49): code-owner review off, no second identity, independent review unavailable until a second human joins. Pending human: set required approvals to 0 (else still deadlocked), tick "branches up to date" (stored as off), then re-read the ruleset. |
+| L50 | ruling | 2026-10-06: every human gate removed except money-cap approvals; the gate ack is the cross-family PASS (C10 = C3). 7 approvals owed (was 110). |
 | L4 / H2 | 1 | PRIMARY spend control (AI Gateway cap) designed, unprovisioned. Human/infrastructure. |
 | R14-01 | 1 → ruled | Ledger demoted to advisory; §4 red-proof executed (`gateway-cap-primary.test.ts`); still BLOCKING on L4/H2. |
 | L8 | 2 | Builder and adversary are both Claude (Law 11). `engine-adversary` self-reported "Claude Fable 5.1 — the rule is violated" on 2026-09-20. Needs a non-Claude route: `ox-alpha` (needs `OPENROUTER_API_KEY`) or a codex hand-off (H6b). |

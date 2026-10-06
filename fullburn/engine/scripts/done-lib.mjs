@@ -192,16 +192,17 @@ export function isNonClaudeFamily(family) {
   return !/claude|anthropic/i.test(family);
 }
 
-/** DONE.md §2.1.10 — the ack is a file naming THIS tree. Authorship is
- * CODEOWNERS' job (condition 8), not this parser's. */
-export function gateAck(content, tree) {
-  const s = content ?? "";
-  const t = /^tree:\s*([0-9a-f]{7,64})\s*$/m.exec(s);
-  const a = /^ack:\s*(yes)\s*$/mi.exec(s);
-  if (!t) return { ok: false, reason: "no `tree:` line" };
-  if (!tree.startsWith(t[1]) && !t[1].startsWith(tree)) return { ok: false, reason: `ack names tree ${t[1].slice(0, 12)}, current tree is ${tree.slice(0, 12)}` };
-  if (!a) return { ok: false, reason: "no `ack: yes` line — silence is not consent" };
-  return { ok: true, reason: `ack for tree ${t[1].slice(0, 12)}` };
+/** DONE.md §2.1.10 AS AMENDED BY THE HUMAN'S RULING OF 2026-10-06 (ledger
+ * L50): the human gate ack is removed; the automated adversary's verdict is the
+ * ack. The phase gate passes exactly when the cross-family read (C3) passed at
+ * THIS tree — the same predicate, not a second opinion, so the two rows cannot
+ * disagree. Anything other than a PASS from C3, including a missing row, is a
+ * FAIL: the ack is never granted by default. */
+export function automatedGateAck(crossFamily) {
+  if (!crossFamily || crossFamily.status !== "PASS") {
+    return { ok: false, reason: `the cross-family adversary has not passed this tree (C3 ${crossFamily?.status ?? "absent"}) — no automated ack` };
+  }
+  return { ok: true, reason: "automated ack: the cross-family adversary passed this exact tree (C3)" };
 }
 
 /** A condition PASSES only when every sub-result passes. Anything else — FAIL,
@@ -233,9 +234,9 @@ export function metaVerdict({ refusalTriggered, before, after }) {
     : { ok: false, reason: `META-CHECK FAILED: ${problems.join("; ")}. RESULT IS VOID.` };
 }
 
-/** The one sentence DONE.md §3 permits, and only `done.mjs` may print it. */
+/** The one sentence DONE.md §3 permits (as amended 2026-10-06), and only `done.mjs` may print it. */
 export function completionSentence(target, tree, artifact) {
-  return `\`npm run done -- ${target}\` exits 0 at tree \`${tree}\`. Cross-family read PASS at the same tree, artifact \`${artifact}\`. Class-2 sets approved under your identity. Requesting gate ack.`;
+  return `\`npm run done -- ${target}\` exits 0 at tree \`${tree}\`. Cross-family read PASS at the same tree, artifact \`${artifact}\`. Money-cap changes approved under your identity; every other gate decided by the automated adversary.`;
 }
 
 export function reportPath(target, phase, tree) {

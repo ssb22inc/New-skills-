@@ -25,7 +25,7 @@ import { resolve } from "node:path";
 import {
   ENGINE_REQUIREMENTS,
   PHASE0_REQUIREMENTS,
-  gateAck,
+  automatedGateAck,
   canaryIsStale,
   class2Condition,
   isNonClaudeFamily,
@@ -296,24 +296,26 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
           baseCommit: base,
         });
         const c8 = class2Condition(c2, n);
-        sub8.push({ id: "C8-owed", title: `Class-2 approvals against base ${base.slice(0, 12)} — the class-2 gate's own decision`, status: c8.status, command: `checkClass2Approvals(diff ${base.slice(0, 12)}...HEAD, APPROVALS/)`, observed: c8.observed });
+        sub8.push({ id: "C8-owed", title: `money-cap approvals against base ${base.slice(0, 12)} — the class-2 gate's own decision`, status: c8.status, command: `checkClass2Approvals(diff ${base.slice(0, 12)}...HEAD, APPROVALS/)`, observed: c8.observed });
       }
       const tracked = (await git(["ls-files"])).out.split("\n").filter((p) => p.length > 0);
       const owners = readFileSync(`${REPO}/.github/CODEOWNERS`, "utf8");
       const class2 = tracked.filter((p) => isClass2(p));
       const unowned = class2.filter((p) => !codeownersCovers(p, owners));
       sub8.push({ id: "C8-codeowners", title: "CODEOWNERS covers 100% of tracked Class-2 files", status: unowned.length === 0 && class2.length > 0 ? "PASS" : "FAIL", command: "git ls-files | isClass2 | codeownersCovers", observed: `${class2.length - unowned.length}/${class2.length} covered${unowned.length ? `; unowned: ${unowned.slice(0, 5).join(", ")}` : ""}` });
-      sub8.push({ id: "C8-identity", title: "approvals authored and pushed by Sheldon's authenticated identity through a CODEOWNERS-gated PR; CI fails closed on a CODEOWNERS touch", status: "FAIL", command: null, observed: "NOT MEASURABLE IN THIS ENVIRONMENT: requires branch protection (main is unprotected — L37) and a merged PR; no API surface here" });
-      results.push({ id: "C8", title: "§2.1.8 every Class-2 path approved under the human's identity, CODEOWNERS 100%, CI fails closed", status: sub8.every((s) => s.status === "PASS") ? "PASS" : "FAIL", command: null, observed: `${sub8.filter((s) => s.status === "PASS").length}/${sub8.length} sub-conditions passing`, sub: sub8 });
+      // C8-identity was removed by the human's ruling of 2026-10-06 (ledger
+      // L49/L50): in a single-maintainer repository an approval proves
+      // authenticated authorship and that the gate blocked, never independent
+      // review, and only money-cap paths still owe one at all.
+      results.push({ id: "C8", title: "§2.1.8 (amended 2026-10-06) every money-cap path approved by the human, CODEOWNERS 100% of Class-2", status: sub8.every((s) => s.status === "PASS") ? "PASS" : "FAIL", command: null, observed: `${sub8.filter((s) => s.status === "PASS").length}/${sub8.length} sub-conditions passing`, sub: sub8 });
 
       // 9 — ledger rows carry tests
       const c9 = await vit(["engine/test/invariants/invariants.test.ts", "-t", "every behavioural claim in the ledger still holds"]);
       results.push({ id: "C9", title: "§2.1.9 every ledger/CLAUDE.md behavioural row carries a test that fails when stale", status: c9.status, command: "vitest run engine/test/invariants -t 'every behavioural claim in the ledger still holds'", observed: c9.observed });
 
-      // 10 — gate ack
-      const ackPath = `${ROOT}/APPROVALS/GATE_ACK_phase${phase}.md`;
-      const ack = existsSync(ackPath) ? gateAck(readFileSync(ackPath, "utf8"), tree) : { ok: false, reason: `${ackPath.replace(ROOT + "/", "")} does not exist — no ack, no completion; silence is not consent` };
-      results.push({ id: "C10", title: "§2.1.10 explicit written gate ack from the human, naming this tree", status: ack.ok ? "PASS" : "FAIL", command: `APPROVALS/GATE_ACK_phase${phase}.md: tree: <hash>, ack: yes`, observed: ack.reason });
+      // 10 — gate ack, automated by the human's ruling of 2026-10-06 (L50)
+      const ack = automatedGateAck(results.find((r) => r.id === "C3"));
+      results.push({ id: "C10", title: "§2.1.10 (amended 2026-10-06) gate ack = the cross-family adversary's PASS at this tree", status: ack.ok ? "PASS" : "FAIL", command: "automatedGateAck(C3)", observed: ack.reason });
 
       if (target === "engine") {
         for (let p = 0; p <= 7; p++) {

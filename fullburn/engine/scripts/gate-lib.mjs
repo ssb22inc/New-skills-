@@ -116,6 +116,41 @@ export function isClass2(path) {
   return CLASS2_PATTERNS.some((re) => re.test(path));
 }
 
+/** HUMAN APPROVAL IS OWED FOR THE MONEY CAPS ONLY (human ruling 2026-10-06,
+ * ledger L50). The human removed every other human gate: a Class-2 change to
+ * code, tests, gates or the contract is now decided by the automated gates —
+ * the four required CI checks, the mutation harness and a cross-family PASS at
+ * the exact tree. `CLASS2_PATTERNS` still defines the protected SCOPE (what
+ * runs CI, what the verified tree covers, what CODEOWNERS must enumerate); this
+ * narrower list is what still needs a human-signed transition approval.
+ *
+ * It is the cap VALUES plus everything that decides whether this requirement
+ * is enforced at all. Without the second half the requirement would be one
+ * unapproved edit to this list away from gone, and the agent that may not
+ * raise its own budget could first delete the rule that says so. What this
+ * does NOT cover, stated as a limitation: the engine code that ENFORCES the
+ * caps (`engine/src/**`) and the tests that pin it. Those are guarded by the
+ * suite, the mutation harness and the cross-family read — not by a human. */
+export const HUMAN_APPROVAL_PATTERNS = [
+  // The values, the module that freezes them, and the export map that decides
+  // which module `@fullburn/config/caps` is (R2-08: a redirect there replaced
+  // caps.ts without touching it).
+  // Any caps-named module under config/src, not only caps.ts: a new file there
+  // holding cap values must not be the way around the list (R2-04 by name).
+  /^fullburn\/config\/src\/[^/]*caps[^/]*$/,
+  /^fullburn\/config\/src\/freeze\.ts$/,
+  /^fullburn\/config\/package\.json$/,
+  // The machinery that enforces this list.
+  /^fullburn\/engine\/scripts\/gate-lib\.mjs$/,
+  /^fullburn\/engine\/scripts\/class2-gate\.mjs$/,
+  /^fullburn\/engine\/scripts\/diff-lib\.mjs$/,
+  /^\.github\/workflows\/fullburn-ci\.yml$/,
+];
+
+export function needsHumanApproval(path) {
+  return HUMAN_APPROVAL_PATTERNS.some((re) => re.test(path));
+}
+
 /** A concrete path per pattern, so `isClass2` — the authority — is what the
  * lock tests drive. This replaces the old exported `CLASS2_FILES` array
  * (adversary finding H-03): once `isClass2` became the authority, that list was
@@ -588,7 +623,7 @@ function parseApprovalBlocks(content) {
   return blocks;
 }
 
-/** Every Class-2 path a diff touches, including the source side of a rename,
+/** Every money-cap path (`needsHumanApproval`, ruling 2026-10-06) a diff touches, including the source side of a rename,
  * tagged with the transition it represents. This is the ONE definition of "what
  * this PR owes an approval for": `checkClass2Approvals` enforces against it and
  * `owed-approvals.mjs` prints from it, so the list a human is told to sign can
@@ -597,8 +632,8 @@ function parseApprovalBlocks(content) {
 export function class2TouchedPaths(changedFiles) {
   const touched = [];
   for (const f of changedFiles) {
-    if (isClass2(f.path)) touched.push({ path: f.path, status: f.status === "renamed" ? "renamed-to" : f.status });
-    if (f.oldPath && isClass2(f.oldPath)) touched.push({ path: f.oldPath, status: "renamed-away" });
+    if (needsHumanApproval(f.path)) touched.push({ path: f.path, status: f.status === "renamed" ? "renamed-to" : f.status });
+    if (f.oldPath && needsHumanApproval(f.oldPath)) touched.push({ path: f.oldPath, status: "renamed-away" });
   }
   return touched;
 }
