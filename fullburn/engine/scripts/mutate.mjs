@@ -1312,6 +1312,9 @@ const MUTATIONS = [
   ["DN-19 a survivor is named even when the harness exits non-zero", "engine/scripts/done-lib.mjs",
     "  if (exitCode !== 0) return { status: \"FAIL\", observed: `harness exited ${exitCode} — ${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale${names.length ? ` — ${names.join(\" — \")}` : \"\"}` };",
     "  if (exitCode !== 0) return { status: \"FAIL\", observed: `harness exited ${exitCode} — ${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale` };"],
+  ["X6-01 a report is attested whatever its verdict", ".github/workflows/cross-family-read.yml",
+    "      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0\n        if: steps.new.outputs.report != ''",
+    "      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0\n        if: success()"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

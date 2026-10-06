@@ -48,10 +48,16 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      # A FAIL verdict exits 1, and a FAIL report is evidence too: the x6 read
+      # (run 37544742946) wrote one that the success()-gated steps below never
+      # attested or committed, so its findings were lost with the runner. The
+      # exit code is recorded here and re-raised at the end, AFTER the report —
+      # whatever its verdict — is attested and committed.
       - name: Cross-family read (pinned reviewer; fails closed without the secret)
+        id: read
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: npm run cross-family-read
+        run: npm run cross-family-read || echo "rc=$?" >> "$GITHUB_OUTPUT"
       - name: Report to the job summary
         if: always()
         run: |
@@ -61,17 +67,15 @@ jobs:
           done
       - name: Name the new report
         id: new
-        if: success()
         run: |
           NEW=$(git ls-files --others --exclude-standard reports/ | grep -E '^reports/ADVERSARY_REPORT_phase[^/]*\.x[0-9]+\.md$' | head -1)
-          [ -n "$NEW" ] || { echo "no new report was written"; exit 1; }
-          echo "report=fullburn/$NEW" >> "$GITHUB_OUTPUT"
+          if [ -n "$NEW" ]; then echo "report=fullburn/$NEW" >> "$GITHUB_OUTPUT"; else echo "no new report was written"; fi
       - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
-        if: success()
+        if: steps.new.outputs.report != ''
         with:
           subject-path: ${{ steps.new.outputs.report }}
       - name: Commit the attested report to the dispatched branch
-        if: success()
+        if: steps.new.outputs.report != ''
         env:
           REPORT: ${{ steps.new.outputs.report }}
         run: |
@@ -80,6 +84,12 @@ jobs:
           git add -- "../$REPORT" "../${REPORT%.md}.raw.json"
           git commit -m "Record attested cross-family read: ${REPORT##*/}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: The read's own verdict decides the job
+        if: always()
+        env:
+          RC: ${{ steps.read.outputs.rc }}
+        run: |
+          if [ -n "$RC" ]; then echo "cross-family read exited $RC (a FAIL verdict, or no report)"; exit "$RC"; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

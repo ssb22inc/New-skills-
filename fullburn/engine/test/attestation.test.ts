@@ -79,3 +79,18 @@ describe("attestation readers (X5-02)", () => {
     }
   });
 });
+
+/** The x6 read (run 37544742946) wrote a FAIL report that the success()-gated
+ * attest and commit steps skipped, so its findings were lost with the runner.
+ * A report is attested and committed WHATEVER its verdict.
+ * MUTATION: X6-01 — gate the attest step on success() again. */
+describe("the review workflow keeps every report it writes", () => {
+  it("attests and commits on report presence, not on the read's exit code", () => {
+    const wf = readFileSync(new URL("../../../.github/workflows/cross-family-read.yml", import.meta.url), "utf8");
+    expect(wf, "a step is still gated on the read succeeding").not.toMatch(/if: success\(\)/);
+    const attest = wf.slice(wf.indexOf("actions/attest-build-provenance@"));
+    expect(attest.split("\n")[1], "the attestation is not gated on a report existing").toMatch(/if: steps\.new\.outputs\.report != ''/);
+    expect(wf).toMatch(/run: npm run cross-family-read \|\| echo "rc=\$\?" >> "\$GITHUB_OUTPUT"/);
+    expect(wf, "the read's verdict no longer decides the job").toMatch(/exit "\$RC"/);
+  });
+});
