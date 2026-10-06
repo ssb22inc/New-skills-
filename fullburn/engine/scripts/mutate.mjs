@@ -1096,9 +1096,11 @@ const MUTATIONS = [
   ["X3-10 bindRole refuses an unearned base map", "config/src/models.ts",
     '  if (bindingsProvenance(bindings) !== "servable") {',
     "  if (false) {"],
-  ["X3-11 canonical golden sets are deep-frozen", "engine/evals/index.ts",
-    "export const CANONICAL_GOLDEN_SETS: Readonly<Record<string, readonly GoldenCase[]>> = deepFreeze({",
-    "export const CANONICAL_GOLDEN_SETS: Readonly<Record<string, readonly GoldenCase[]>> = Object.freeze({"],
+  // X3-11 re-targeted 2026-10-06: the sets moved to config (X5-10) and were
+  // frozen twice, so the engine-side entry SURVIVED (measured at 0988a0f1).
+  ["X3-11 canonical golden sets are deep-frozen", "config/src/golden-sets.ts",
+    "export const GOLDEN_SETS: Readonly<Record<string, readonly GoldenCase[]>> = deepFreeze({",
+    "export const GOLDEN_SETS: Readonly<Record<string, readonly GoldenCase[]>> = Object.freeze({"],
   // ---- X2-09: no pass, no bind on the serving path (2026-09-27) ----
   ["XB-01 an unevaluated binding map is not servable", "engine/src/gateway.ts",
     "    if (provenance === null) {",
