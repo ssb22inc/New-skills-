@@ -21,6 +21,13 @@ name: cross-family-read
 
 on:
   workflow_dispatch:
+  # A dispatch needs the workflow on the default branch, which does not carry
+  # Fullburn yet. Pushing a commit to `review-request/<anything>` requests one
+  # read of exactly that commit's tree; the attested report is committed back
+  # to that same branch.
+  push:
+    branches:
+      - "review-request/**"
 
 permissions:
   contents: write
