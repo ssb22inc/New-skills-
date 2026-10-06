@@ -28,8 +28,40 @@ const git = (...args: string[]) => execFileSync("git", ["-C", repo, ...args], { 
 
 /** Runs a gate exactly as CI does. Returns exit code and combined output. */
 function gate(script: string, ...args: string[]): { code: number; out: string } {
+  return gateEnv({}, script, ...args);
+}
+
+/** A stand-in for `gh attestation verify` (X5-02), put first on PATH: it
+ * reports the file it is asked about as attested by this repository's
+ * cross-family-read workflow — unless FAKE_GH says otherwise. Real GitHub
+ * verification is CI's; this drives the CLI's wiring and the decision. */
+let fakeGhDir = "";
+function fakeGh(): string {
+  if (fakeGhDir) return fakeGhDir;
+  fakeGhDir = mkdtempSync(join(tmpdir(), "fake-gh-"));
+  writeFileSync(
+    join(fakeGhDir, "gh"),
+    [
+      "#!/usr/bin/env bash",
+      '[ "$1" = attestation ] && [ "$2" = verify ] || exit 2',
+      'mode="${FAKE_GH:-ok}"',
+      '[ "$mode" = fail ] && { echo "no attestation" >&2; exit 1; }',
+      'sha=$(sha256sum "$3" | cut -d" " -f1)',
+      '[ "$mode" = wrongdigest ] && sha=$(printf x | sha256sum | cut -d" " -f1)',
+      'signer="https://github.com/o/r/.github/workflows/cross-family-read.yml@refs/heads/main"',
+      '[ "$mode" = wrongsigner ] && signer="https://github.com/o/r/.github/workflows/other.yml@refs/heads/main"',
+      'printf \'[{"verificationResult":{"statement":{"subject":[{"digest":{"sha256":"%s"}}]},"signature":{"certificate":{"buildSignerURI":"%s"}}}}]\' "$sha" "$signer"',
+      "",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  return fakeGhDir;
+}
+
+function gateEnv(extra: Record<string, string>, script: string, ...args: string[]): { code: number; out: string } {
   try {
-    const out = execFileSync("node", [join(SCRIPTS, script), ...args], { encoding: "utf8", stdio: "pipe" });
+    const env = { ...process.env, PATH: `${fakeGh()}:${process.env.PATH ?? ""}`, GITHUB_REPOSITORY: "o/r", ...extra };
+    const out = execFileSync("node", [join(SCRIPTS, script), ...args], { encoding: "utf8", stdio: "pipe", env });
     return { code: 0, out };
   } catch (e) {
     const err = e as { status?: number; stdout?: string; stderr?: string };
@@ -431,6 +463,27 @@ describe("class2-gate CLI — an approval must ARRIVE with the change it approve
 });
 
 describe("adversary-gate CLI", () => {
+  /** X5-02 (GPT-6 Astra, 2026-10-06): a handwritten PASS with the current tree
+   * and a non-Claude family opened the gate. Now its exact bytes need the
+   * review workflow's verified attestation. MUTATION: X5-02a (CLI), X5-02b
+   * (decision: signer), X5-02c (decision: digest). */
+  it("a PASS without the review workflow's attestation of its exact bytes does not open the gate", () => {
+    const base = git("rev-parse", "HEAD").trim();
+    write("fullburn/PHASE", "0\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "declare the phase");
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.x9.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "a handwritten PASS");
+    expect(gateEnv({}, "adversary-gate.mjs", repo, base).code, "an attested PASS was refused").toBe(0);
+    for (const mode of ["fail", "wrongsigner", "wrongdigest"]) {
+      const res = gateEnv({ FAKE_GH: mode }, "adversary-gate.mjs", repo, base);
+      expect(res.code, `a PASS opened the gate with attestation mode ${mode}:\n${res.out}`).toBe(1);
+      expect(res.out).toMatch(/attestation/);
+    }
+    expect(gateEnv({ GITHUB_REPOSITORY: "" }, "adversary-gate.mjs", repo, base).code, "a PASS opened the gate with no repository to bind the signer to").toBe(1);
+  });
+
   it("a FAIL report bound to the current tree blocks the gate", () => {
     const base = git("rev-parse", "HEAD").trim();
     write("fullburn/PHASE", "0\n");

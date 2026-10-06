@@ -574,7 +574,7 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
   // the dangerous direction. The family line is the runner's line 5, read
   // through the same visible-header rules as the verdict and the binding.
   const pass = judged.find((j) => j.ok && isNonClaudeReviewer(j.content));
-  if (pass) return { ok: true, reason: `${pass.name}: ${pass.reason}` };
+  if (pass) return { ok: true, report: pass.name, reason: `${pass.name}: ${pass.reason}` };
   const sameFamilyPass = judged.find((j) => j.ok);
   if (sameFamilyPass) {
     return {
@@ -585,6 +585,38 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
 
   const first = judged[0];
   return { ok: false, reason: `${first.name}: ${first.reason}` };
+}
+
+/** A PASS REPORT MUST BE THE RUNNER'S OWN OUTPUT, PROVEN BY SIGNATURE
+ * (cross-family finding X5-02, GPT-6 Astra, 2026-10-06). Without the human
+ * gate on reports, a handwritten file with `Verdict: PASS`, the current tree
+ * and a non-Claude family line opened the gate. Now the passing report's exact
+ * bytes must carry a GitHub artifact attestation whose signer is THIS
+ * repository's `cross-family-read.yml` workflow — the only place the pinned
+ * reviewer runs. The runner that fetched the attestation verified its
+ * signature (in CI, `gh attestation verify`: the full Sigstore chain); this
+ * decides whether what was verified is the right file from the right
+ * workflow. */
+export const REVIEW_SIGNER_WORKFLOW = ".github/workflows/cross-family-read.yml";
+
+export function checkReportProvenance({ fileSha256, attestations, repo }) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(String(repo))) return { ok: false, reason: "no repository to bind the signer to — refusing (fail closed)" };
+  if (!/^[0-9a-f]{64}$/.test(String(fileSha256))) return { ok: false, reason: "the report's digest could not be computed — refusing" };
+  const signer = `https://github.com/${repo}/${REVIEW_SIGNER_WORKFLOW}@`;
+  const list = Array.isArray(attestations) ? attestations : [];
+  const good = list.find(
+    (a) =>
+      a && a.signatureVerified === true &&
+      typeof a.signerUri === "string" && a.signerUri.startsWith(signer) &&
+      Array.isArray(a.subjectDigests) && a.subjectDigests.includes(fileSha256),
+  );
+  if (good) return { ok: true, reason: `attested by ${good.signerUri}` };
+  return {
+    ok: false,
+    reason: list.length === 0
+      ? "the PASS report carries no attestation — only the cross-family-read workflow can produce a PASS"
+      : `no verified attestation of these exact bytes by ${REVIEW_SIGNER_WORKFLOW} (${list.length} attestation(s) examined)`,
+  };
 }
 
 /** Append-only reports: a PR may add ADVERSARY_REPORT files, never modify,

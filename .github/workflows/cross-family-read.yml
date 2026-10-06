@@ -9,18 +9,23 @@
 # saying NOT CONFIGURED and writes nothing — and a report from any endpoint but
 # the production router can never carry Verdict: PASS (cross-family-lib).
 #
-# The report is uploaded as a workflow artifact and its sha256 is printed in
-# the log; committing it to reports/ is a separate, reviewable act, and the
-# committed bytes must hash to what the log printed. This workflow holds
-# `contents: read` only: it does not push, so no automation identity ever
-# authors a review artifact into the tree.
+# PROVENANCE BY SIGNATURE (cross-family finding X5-02, 2026-10-06). With the
+# human gate on review artifacts removed, a handwritten PASS could open the
+# adversary gate. Now this workflow ATTESTS the new report's exact bytes with
+# GitHub's artifact attestation (Sigstore, keyless, bound to this workflow
+# file), and the adversary gate opens only on a PASS whose bytes carry that
+# attestation. The workflow then commits the attested report to the branch it
+# was dispatched on — the commit's author is irrelevant; the signature is the
+# evidence. It is also uploaded as an artifact.
 name: cross-family-read
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   cross-family-read:
@@ -47,6 +52,27 @@ jobs:
             [ -f "$f" ] || continue
             { echo "## $f"; echo; echo '```'; sha256sum "$f"; echo '```'; echo; cat "$f"; } >> "$GITHUB_STEP_SUMMARY"
           done
+      - name: Name the new report
+        id: new
+        if: success()
+        run: |
+          NEW=$(git ls-files --others --exclude-standard reports/ | grep -E '^reports/ADVERSARY_REPORT_phase[^/]*\.x[0-9]+\.md$' | head -1)
+          [ -n "$NEW" ] || { echo "no new report was written"; exit 1; }
+          echo "report=fullburn/$NEW" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        if: success()
+        with:
+          subject-path: ${{ steps.new.outputs.report }}
+      - name: Commit the attested report to the dispatched branch
+        if: success()
+        env:
+          REPORT: ${{ steps.new.outputs.report }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "../$REPORT" "../${REPORT%.md}.raw.json"
+          git commit -m "Record attested cross-family read: ${REPORT##*/}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

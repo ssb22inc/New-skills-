@@ -5,11 +5,15 @@
  *   and read PASS; any fresh FAIL blocks regardless
  * - PRs may not modify, delete or rename existing ADVERSARY_REPORT files */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { attestationsFromGhVerify } from "./attestation.mjs";
 import {
+  REVIEW_SIGNER_WORKFLOW,
   VERIFIED_TREE_SCOPE,
   checkAdversaryReport,
+  checkReportProvenance,
   checkReportsAppendOnly,
   dirtyWorktreeLines,
   selectPhaseReports,
@@ -74,6 +78,34 @@ if (!res.ok) {
   process.exit(1);
 }
 console.log(`adversary gate: ${res.reason}`);
+
+// THE PASS MUST BE THE RUNNER'S, PROVEN BY SIGNATURE (X5-02). `gh attestation
+// verify` checks the Sigstore chain, the transparency log and the signer
+// workflow; anything it cannot verify yields no attestation, which refuses.
+{
+  const repo = process.env.GITHUB_REPOSITORY ?? "";
+  const reportPath = join(reportsDir, String(res.report));
+  let verified = "";
+  try {
+    verified = execFileSync(
+      "gh",
+      ["attestation", "verify", reportPath, "--repo", repo, "--signer-workflow", `${repo}/${REVIEW_SIGNER_WORKFLOW}`, "--format", "json"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+  } catch {
+    verified = "";
+  }
+  const prov = checkReportProvenance({
+    fileSha256: createHash("sha256").update(readFileSync(reportPath)).digest("hex"),
+    attestations: attestationsFromGhVerify(verified),
+    repo,
+  });
+  if (!prov.ok) {
+    console.error(`ADVERSARY GATE FAIL: ${res.report}: ${prov.reason}`);
+    process.exit(1);
+  }
+  console.log(`adversary gate: ${res.report} ${prov.reason}`);
+}
 
 if (baseRef) {
   // -z: NUL-separated, never quoted. A report path containing a space or a

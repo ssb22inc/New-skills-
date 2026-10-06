@@ -44,8 +44,9 @@ import {
   splitReportsByFamily,
   verdict,
 } from "./done-lib.mjs";
-import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
 import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "./github-auth.mjs";
+import { attestationsFromApi } from "./attestation.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 import { createHash } from "node:crypto";
 import { MARKER, processAlive } from "./mutate-lib.mjs";
@@ -218,6 +219,28 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       } else {
         crossRes = checkAdversaryReport({ phase, reports: cross, currentTreeHash: tree });
         if (crossRes.ok) artifact = `reports/${cross.find((r) => checkAdversaryReport({ phase, reports: [r], currentTreeHash: tree }).ok)?.name}`;
+      }
+      // X5-02: the PASS must carry the review workflow's attestation over its
+      // exact bytes. Here the REST listing is read and each DSSE signature is
+      // checked against its certificate; the Sigstore chain is CI's to verify.
+      if (crossRes.ok && crossRes.report) {
+        const repoName = process.env.GITHUB_REPOSITORY || repoFromRemote((await git(["remote", "get-url", "origin"])).out) || "";
+        const digest = createHash("sha256").update(readFileSync(`${reportsDir}/${crossRes.report}`)).digest("hex");
+        let body = null;
+        if (process.env.GITHUB_TOKEN) {
+          try {
+            const r = await fetch(`${process.env.GITHUB_API_URL || "https://api.github.com"}/repos/${repoName}/attestations/sha256:${digest}`, { headers: { authorization: `Bearer ${process.env.GITHUB_TOKEN}`, accept: "application/vnd.github+json" } });
+            body = r.status === 200 ? await r.json() : null;
+          } catch { body = null; }
+        } else {
+          const r = await run("gh", ["api", `repos/${repoName}/attestations/sha256:${digest}`]);
+          try { body = r.code === 0 ? JSON.parse(r.out) : null; } catch { body = null; }
+        }
+        const prov = checkReportProvenance({ fileSha256: digest, attestations: attestationsFromApi(body), repo: repoName });
+        crossRes = prov.ok
+          ? { ...crossRes, reason: `${crossRes.reason}; ${prov.reason} (DSSE signature checked here; Sigstore chain verified by CI's gate)` }
+          : { ok: false, reason: `${crossRes.report}: ${prov.reason}` };
+        if (!prov.ok) artifact = null;
       }
       const c2 = astraRoundCondition(crossRes);
       results.push({ id: "C2", title: "§2.1.2 (amended 2026-10-06) adversary round by GPT Astra PASS against this tree", status: c2.status, command: "astraRoundCondition(C3)", observed: c2.observed });

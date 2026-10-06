@@ -31,6 +31,8 @@ on:
 # the invariant suite fails on any workflow that grants it.
 permissions:
   contents: read
+  # X5-02: the adversary gate reads the review report's attestation.
+  attestations: read
 
 jobs:
   verify:
@@ -275,6 +277,10 @@ jobs:
           node-version: 22
       - name: Adversary report present, PASS, fresh, append-only (Law 9)
         if: steps.scope.outputs.relevant != 'false' && github.event_name == 'pull_request'
+        # X5-02: a PASS opens the gate only with a verified attestation of its
+        # exact bytes signed by the cross-family-read workflow.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: node fullburn/engine/scripts/adversary-gate.mjs . "origin/${{ github.base_ref }}"
 
   class2-gate:

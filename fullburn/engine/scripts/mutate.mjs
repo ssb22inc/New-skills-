@@ -1260,6 +1260,22 @@ const MUTATIONS = [
   ["MC-11 the GitHub record reader still owes a human approval", "engine/scripts/gate-lib.mjs",
     "  /^fullburn\\/engine\\/scripts\\/github-auth\\.mjs$/,",
     "  /^NEVER-MATCHES$/,"],
+  // ---- X5-02: a PASS needs the review workflow's attestation (2026-10-06) ----
+  ["X5-02a the adversary CLI refuses an unattested PASS", "engine/scripts/adversary-gate.mjs",
+    "  if (!prov.ok) {\n    console.error(`ADVERSARY GATE FAIL: ${res.report}: ${prov.reason}`);",
+    "  if (false) {\n    console.error(`ADVERSARY GATE FAIL: ${res.report}: ${prov.reason}`);"],
+  ["X5-02b the attestation must be signed by the review workflow", "engine/scripts/gate-lib.mjs",
+    "      typeof a.signerUri === \"string\" && a.signerUri.startsWith(signer) &&",
+    "      true &&"],
+  ["X5-02c the attestation must cover these exact bytes", "engine/scripts/gate-lib.mjs",
+    "      Array.isArray(a.subjectDigests) && a.subjectDigests.includes(fileSha256),",
+    "      true,"],
+  ["X5-02d a REST bundle's DSSE signature is verified", "engine/scripts/attestation.mjs",
+    "        signatureVerified = verifier.verify(cert.publicKey, sig);",
+    "        signatureVerified = true;"],
+  ["X5-02e only a verified signature counts", "engine/scripts/gate-lib.mjs",
+    "      a && a.signatureVerified === true &&",
+    "      a &&"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
