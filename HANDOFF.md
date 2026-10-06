@@ -33,7 +33,7 @@ on any disagreement about *state*.
 
 | ID | Severity | Status |
 |---|---|---|
-| L37 / H19 | **1** | `main` is unprotected; a gate-free PR reports `mergeable_state: clean`. Human-only. Outranks L4 by ruling. Re-measure after the settings land: require `blocked`. |
+| L37 / H19 | **1** → protection measured | Ruleset live; re-measured 2026-10-06 (L48): throwaway PR #129 reads `mergeable_state: blocked`. Open human decisions: PulseRN's `pulsern-sms-reminders.yml` fails the Fullburn workflow-permissions invariant inside the PR merge ref; all PRs to `main` wait on checks that exist only on this branch; the author is also the sole code owner and cannot self-approve. |
 | L4 / H2 | 1 | PRIMARY spend control (AI Gateway cap) designed, unprovisioned. Human/infrastructure. |
 | R14-01 | 1 → ruled | Ledger demoted to advisory; §4 red-proof executed (`gateway-cap-primary.test.ts`); still BLOCKING on L4/H2. |
 | L8 | 2 | Builder and adversary are both Claude (Law 11). `engine-adversary` self-reported "Claude Fable 5.1 — the rule is violated" on 2026-09-20. Needs a non-Claude route: `ox-alpha` (needs `OPENROUTER_API_KEY`) or a codex hand-off (H6b). |
