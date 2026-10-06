@@ -867,6 +867,10 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       // X4-06: the output is cloned through JSON; what cannot be, is refused.
       { name: "a provider output that is not plain JSON is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /provider output is not plain JSON data/, fire: () => viaLlm({ transport: { async post() { return { greeting: "ok", n: BigInt(1) }; } } }) },
+      // X5-05: a buffer, view, Map or Set has no faithful JSON form; the clone
+      // would hide an echoed credential as byte numbers.
+      { name: "a provider output carrying binary or collection data is refused", file: "engine/src/gateway.ts", type: GatewayError,
+        expect: /carries binary or collection data/, fire: () => viaLlm({ transport: { async post() { return { greeting: "ok", b: new Uint8Array([1]) }; } } }) },
       { name: "a provider output carrying a credential is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /provider output carried a credential/, fire: () => viaLlm({ transport: { async post() { return { greeting: CANARY_SECRET }; } } }) },
       { name: "a settle that cannot record refuses to release", file: "engine/src/gateway.ts", type: MeterUnavailableError,

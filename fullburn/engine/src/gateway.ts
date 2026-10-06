@@ -385,11 +385,31 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
      * leak when the caller serialised it. The output is cloned through JSON —
      * running any toJSON/getter exactly once, here — and only the clone is
      * checked, traced and returned. */
+    /** BINARY IS NOT PLAIN DATA (cross-family finding X5-05, 2026-10-06). The
+     * clone turned a Uint8Array into an object of byte numbers, so the secret
+     * check — whose binary decoder only sees real buffers — saw numbers and
+     * passed a credential echoed as bytes. A buffer, view, Map or Set has no
+     * faithful JSON form; the replacer refuses it before the clone exists. */
     let plain: unknown;
+    let opaque = false;
     try {
-      plain = JSON.parse(JSON.stringify(output));
+      plain = JSON.parse(
+        JSON.stringify(output, (_key, value: unknown) => {
+          if (
+            typeof value === "object" && value !== null &&
+            (ArrayBuffer.isView(value) || value instanceof ArrayBuffer || value instanceof Map || value instanceof Set)
+          ) {
+            opaque = true;
+            return null;
+          }
+          return value;
+        }),
+      );
     } catch {
       throw new GatewayError("provider output is not plain JSON data — refused (Law 9)");
+    }
+    if (opaque) {
+      throw new GatewayError("provider output carries binary or collection data the secret check cannot clear — refused (Law 9)");
     }
     output = plain;
     validateOutput(card.outputSchema, output);

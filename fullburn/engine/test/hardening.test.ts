@@ -362,5 +362,29 @@ describe("x4 trace identity and output safety (cross-family, 2026-10-04)", () =>
     expect(JSON.stringify(out), "serialising the returned output leaked the secret").not.toContain(CANARY_SECRET);
     expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
   });
+
+  /** X5-05 (GPT-6 Astra, 2026-10-06): the JSON clone turned an echoed
+   * credential in a Uint8Array into a map of byte numbers, which the secret
+   * check could not see. MUTATION: X5-05. */
+  it("a credential echoed as bytes is refused, not returned or traced", async () => {
+    for (const wrap of [
+      (b: Uint8Array) => b,
+      (b: Uint8Array) => b.buffer,
+      (b: Uint8Array) => new DataView(b.buffer),
+      (b: Uint8Array) => new Map([["k", b]]),
+      (b: Uint8Array) => new Set([b]),
+    ]) {
+      const { deps, transport, sink } = makeDeps();
+      transport.response = { greeting: "ok", extra: wrap(new TextEncoder().encode(CANARY_SECRET)) };
+      const outcome = await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-x5-05") }).then(
+        (out) => ({ ok: true as const, out }),
+        (e: unknown) => ({ ok: false as const, e }),
+      );
+      expect(outcome.ok, "a binary echo of the credential was returned").toBe(false);
+      if (!outcome.ok) expect(String((outcome.e as Error).message)).toMatch(/binary or collection data/);
+      expect(JSON.stringify(sink.events)).not.toContain(JSON.stringify([...new TextEncoder().encode(CANARY_SECRET)]).slice(1, 20));
+      expect(sink.events.map((e) => e.outcome)).toEqual(["error"]);
+    }
+  });
 });
 });
