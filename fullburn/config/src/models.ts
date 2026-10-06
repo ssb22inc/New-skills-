@@ -1,4 +1,7 @@
 import { deepFreeze } from "./freeze.ts";
+import { GOLDEN_SETS, gradeCase } from "./golden-sets.ts";
+
+export { GOLDEN_SETS, gradeCase, structurallyEqual, type GoldenCase } from "./golden-sets.ts";
 
 /** Model abstraction layer (ENGINE_BUILD.md §2.4). Roles are permanent; models
  * are config. Bindings change only through bindRole(), which is eval-gated and
@@ -143,13 +146,21 @@ export function ownEntry<T>(table: Readonly<Record<string, T>>, key: string): T 
 /** The ids of every case in a role's golden set. Declared HERE, next to the
  * role card, so the harness cannot be pointed at a friendlier set and a
  * fabricated run cannot invent its own coverage (adversary finding R2-23). */
-export const GOLDEN_SET_CASE_IDS: Readonly<Record<string, readonly string[]>> = deepFreeze({
-  "hello-world": ["h1"],
-  "genome-tagger": ["g1", "g2", "g3", "g4", "g5"],
-  "creative-decision-adversary": ["a1", "a2", "a3"],
-});
+/** DERIVED from the canonical golden sets (X5-10), so the ids a run must cover
+ * and the cases it is graded against cannot drift apart. */
+export const GOLDEN_SET_CASE_IDS: Readonly<Record<string, readonly string[]>> = deepFreeze(
+  Object.fromEntries(Object.entries(GOLDEN_SETS).map(([role, cases]) => [role, cases.map((c) => c.id)])),
+);
 
-/** Per-case outcome from an executed eval run. */
+/** What an eval run hands `attestEvalRun` per case: the model's OUTPUT for
+ * that case, or null when the call failed. The pass/fail is computed by
+ * `attestEvalRun` itself against the canonical golden set (X5-10). */
+export interface EvalCaseResult {
+  readonly caseId: string;
+  readonly output: unknown;
+}
+
+/** Per-case outcome, as GRADED by attestEvalRun. */
 export interface EvalCaseOutcome {
   readonly caseId: string;
   readonly passed: boolean;
@@ -207,13 +218,13 @@ export function requireGoldenSet(role: string, declared: readonly string[] | und
 
 /** The one factory. Verifies the run covers exactly the role's declared golden
  * set — no substituted set, no partial run, no duplicated case padding a score. */
-export function attestEvalRun(role: string, modelId: string, outcomes: readonly EvalCaseOutcome[]): EvalAttestation {
+export function attestEvalRun(role: string, modelId: string, results: readonly EvalCaseResult[]): EvalAttestation {
   const card = ownEntry(ROLE_CARDS, role);
   if (card === undefined) throw new BindingError(`attestEvalRun: unknown role "${role}"`);
   if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`attestEvalRun: unknown model "${modelId}"`);
   const declared = requireGoldenSet(role, ownEntry(GOLDEN_SET_CASE_IDS, role));
-  if (!Array.isArray(outcomes)) throw new BindingError("eval outcomes must be an array");
-  const seen = outcomes.map((o) => o?.caseId);
+  if (!Array.isArray(results)) throw new BindingError("eval outcomes must be an array");
+  const seen = results.map((o) => o?.caseId);
   if (new Set(seen).size !== seen.length) throw new BindingError("eval run repeats a case id");
   const expected = [...declared].sort();
   const actual = [...seen].sort();
@@ -222,9 +233,23 @@ export function attestEvalRun(role: string, modelId: string, outcomes: readonly 
       `eval run does not cover role "${role}"'s declared golden set (expected ${expected.join(",")}; got ${actual.join(",")})`,
     );
   }
-  for (const o of outcomes) {
-    if (typeof o.passed !== "boolean") throw new BindingError("eval outcome must record a boolean pass/fail per case");
-  }
+  /** GRADED HERE, NOT REPORTED BY THE CALLER (cross-family finding X5-10,
+   * GPT-6 Astra, 2026-10-06). This took `{ caseId, passed }` from its caller,
+   * so marking every case `passed: true` minted a binding attestation with no
+   * model output at all — llama-70b, whose recorded answers fail the
+   * threshold, could be attested and served. The caller now hands over each
+   * case's OUTPUT, and the pass is computed against the canonical set this
+   * package owns. NARROWING, stated: a caller can still hand over outputs that
+   * equal the expected answers without calling a model — an in-process API
+   * cannot prove where its arguments came from (L12). What is gone is
+   * asserting a pass over outputs that do not pass. */
+  // The ids were just checked to equal the declared set, which is derived from
+  // these cases — so every result has its case.
+  const byId = new Map((ownEntry(GOLDEN_SETS, role) ?? []).map((c) => [c.id, c]));
+  const outcomes: EvalCaseOutcome[] = results.map((r) => {
+    const gcase = byId.get(r.caseId);
+    return { caseId: r.caseId, passed: gcase !== undefined && gradeCase(gcase, r.output) };
+  });
   const att = new EvalAttestation(ATTESTATION_BRAND, role, modelId, outcomes);
   GENUINE.add(att);
   return att;

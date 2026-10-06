@@ -668,6 +668,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const {
       EvalAttestation,
       GOLDEN_SET_CASE_IDS,
+      GOLDEN_SETS,
       MODELS: MODEL_REGISTRY,
       ROLE_CARDS,
       attestEvalRun,
@@ -682,7 +683,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       attestEvalRun(
         "genome-tagger",
         "qwen-72b",
-        GOLDEN_SET_CASE_IDS["genome-tagger"]!.map((caseId) => ({ caseId, passed: true })),
+        GOLDEN_SETS["genome-tagger"]!.map((c) => ({ caseId: c.id, output: c.expected })),
       );
     const { effectiveAiCapsUsd, assertUsableZone, assertCapsCoherent, assertCapsUsable, getCaps, CapError } =
       await import("@fullburn/config/caps");
@@ -964,22 +965,15 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         expect: /eval run repeats a case id/, fire: () => {
           const id = GOLDEN_SET_CASE_IDS["genome-tagger"]![0]!;
           attestEvalRun("genome-tagger", "qwen-72b", [
-            { caseId: id, passed: true },
-            { caseId: id, passed: true },
+            { caseId: id, output: {} },
+            { caseId: id, output: {} },
           ]);
         } },
       { name: "an eval run must cover the declared golden set", file: "config/src/models.ts", type: BindingError,
         expect: /does not cover role/, fire: () =>
           attestEvalRun("genome-tagger", "qwen-72b", [
-            { caseId: GOLDEN_SET_CASE_IDS["genome-tagger"]![0]!, passed: true },
+            { caseId: GOLDEN_SET_CASE_IDS["genome-tagger"]![0]!, output: {} },
           ]) },
-      { name: "every eval outcome records a boolean", file: "config/src/models.ts", type: BindingError,
-        expect: /boolean pass\/fail per case/, fire: () =>
-          attestEvalRun(
-            "genome-tagger",
-            "qwen-72b",
-            GOLDEN_SET_CASE_IDS["genome-tagger"]!.map((caseId) => ({ caseId, passed: "yes" as never })),
-          ) },
       { name: "a literal is not evidence an eval ran", file: "config/src/models.ts", type: BindingError,
         expect: /a literal is not evidence an eval ran/, fire: () =>
           bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", { role: "genome-tagger", modelId: "qwen-72b" } as never) },
@@ -1055,7 +1049,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
             attestEvalRun(
               "genome-tagger",
               "qwen-72b",
-              GOLDEN_SET_CASE_IDS["genome-tagger"]!.map((caseId) => ({ caseId, passed: false })),
+              GOLDEN_SETS["genome-tagger"]!.map((c) => ({ caseId: c.id, output: {} })),
             ),
           ) },
 

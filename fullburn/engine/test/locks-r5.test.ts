@@ -49,7 +49,7 @@ describe("eval harness — a golden set must actually assert something (DT-01, H
     await expect(
       runEval(deps, "genome-tagger", "llama-70b", swapped, new RecordedTransport(RECORDED_LLAMA_70B), TEST_CLIENT),
     ).rejects.toThrow(/declared on its role card/);
-    expect(() => attestEvalRun("genome-tagger", "qwen-72b", [{ caseId: "g1", passed: true }])).toThrow(/declared golden set/);
+    expect(() => attestEvalRun("genome-tagger", "qwen-72b", [{ caseId: "g1", output: {} }])).toThrow(/declared golden set/);
   });
 
   // MUTATION: revert RecordedTransport to prototype-chain lookup (H-12).

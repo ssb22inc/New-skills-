@@ -1,21 +1,11 @@
-import { GOLDEN_SET_CASE_IDS, ROLE_CARDS, attestEvalRun, evalCandidateBindings, ownEntry, type EvalAttestation } from "@fullburn/config/models";
+import { GOLDEN_SET_CASE_IDS, ROLE_CARDS, attestEvalRun, evalCandidateBindings, ownEntry, structurallyEqual, type EvalAttestation, type GoldenCase } from "@fullburn/config/models";
 import { RecordedTransport } from "./transport-brand.ts";
 import { CANONICAL_GOLDEN_SETS } from "../evals/index.ts";
 
 
-/** Structural equality for an expected field (cross-family finding X-13,
- * 2026-09-24): `===` compared the adversary golden set's `reasons` arrays by
- * identity, so a perfect structured answer scored 0/3 and could never bind.
- * JSON-shaped values only — that is what a schema-validated output is. */
-export function structurallyEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b || a === null || b === null || typeof a !== "object") return false;
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  if (Array.isArray(a)) return a.length === (b as unknown[]).length && a.every((v, i) => structurallyEqual(v, (b as unknown[])[i]));
-  const ka = Object.keys(a as object).sort();
-  const kb = Object.keys(b as object).sort();
-  return ka.length === kb.length && ka.every((k, i) => k === kb[i] && structurallyEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
-}
+/** Moved to config with the golden sets (X5-10); re-exported for callers. */
+export { structurallyEqual };
+
 import { type LlmDeps, llm, type GatewayTransport } from "./gateway.ts";
 import { TraceContext } from "./tracing.ts";
 
@@ -28,12 +18,7 @@ import { TraceContext } from "./tracing.ts";
  * fresh outputs needs live keys (H6, ledger L2); the scoring logic does not.
  * Langfuse eval push sits behind the TraceSink adapter (H5, ledger L3). */
 
-export interface GoldenCase {
-  readonly id: string;
-  readonly input: unknown;
-  /** Expected fields; a case passes when every expected field matches exactly. */
-  readonly expected: Readonly<Record<string, unknown>>;
-}
+export type { GoldenCase };
 
 /** Re-exported: the class lives beside its brand (X3-14). */
 export { RecordedTransport };
@@ -105,7 +90,7 @@ export async function runEval(
     throw new Error(`golden set for "${role}" is not the role's canonical set in engine/evals/ — expectations may not be supplied by the caller`);
   }
 
-  const outcomes: { caseId: string; passed: boolean }[] = [];
+  const results: { caseId: string; output: unknown }[] = [];
   const failures: string[] = [];
 
   for (const gcase of goldenSet) {
@@ -118,15 +103,16 @@ export async function runEval(
         { role, clientId, input: gcase.input, trace },
       )) as Record<string, unknown>;
       const ok = Object.entries(gcase.expected).every(([k, v]) => structurallyEqual(output[k], v));
-      outcomes.push({ caseId: gcase.id, passed: ok });
+      results.push({ caseId: gcase.id, output });
       if (!ok) failures.push(`${gcase.id}: field mismatch`);
     } catch (err) {
-      outcomes.push({ caseId: gcase.id, passed: false });
+      results.push({ caseId: gcase.id, output: null });
       failures.push(`${gcase.id}: ${err instanceof Error ? err.message : "error"}`);
     }
   }
 
-  const attestation = attestEvalRun(role, modelId, outcomes);
+  // The outputs, not a verdict: attestEvalRun grades them itself (X5-10).
+  const attestation = attestEvalRun(role, modelId, results);
   return {
     role,
     modelId,

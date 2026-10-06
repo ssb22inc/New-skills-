@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CapError, effectiveAiCapsUsd, getCaps } from "@fullburn/config/caps";
-import { GOLDEN_SET_CASE_IDS, ROLE_BINDINGS, bindRole, attestEvalRun, type EvalAttestation } from "@fullburn/config/models";
+import { GOLDEN_SET_CASE_IDS, GOLDEN_SETS, ROLE_BINDINGS, bindRole, attestEvalRun, type EvalAttestation } from "@fullburn/config/models";
 import { llm } from "../src/gateway.ts";
 import { MemorySpendMeter, MeterUnavailableError, type SpendMeter } from "../src/spend-meter.ts";
 import { computeGrades, type MetricSnapshot } from "../src/grade-registry.ts";
@@ -212,7 +212,7 @@ describe("data truth — the guards that make grades and bindings honest (H-04, 
     const real = attestEvalRun(
       "genome-tagger",
       "qwen-72b",
-      GOLDEN_SET_CASE_IDS["genome-tagger"]!.map((caseId) => ({ caseId, passed: true })),
+      GOLDEN_SETS["genome-tagger"]!.map((c) => ({ caseId: c.id, output: c.expected })),
     );
     expect(() => bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", real)).not.toThrow();
   });

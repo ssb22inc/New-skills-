@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BindingError,
-  GOLDEN_SET_CASE_IDS,
+  GOLDEN_SETS,
   ROLE_BINDINGS,
   type EvalAttestation,
   attestEvalRun,
@@ -17,7 +17,7 @@ const att = (role: string, modelId: string, passedCount: number): EvalAttestatio
   attestEvalRun(
     role,
     modelId,
-    GOLDEN_SET_CASE_IDS[role]!.map((caseId, i) => ({ caseId, passed: i < passedCount })),
+    GOLDEN_SETS[role]!.map((c, i) => ({ caseId: c.id, output: i < passedCount ? c.expected : {} })),
   );
 
 describe("model layer (Law 13, §2.4, R9a)", () => {
@@ -76,5 +76,29 @@ describe("model layer (Law 13, §2.4, R9a)", () => {
     expect(() =>
       bindRole(ROLE_BINDINGS, "genome-tagger", "nonexistent-model", att("genome-tagger", "qwen-72b", 5)),
     ).toThrow(BindingError);
+  });
+});
+
+/** X5-10 (GPT-6 Astra, 2026-10-06): `attestEvalRun` took per-case booleans, so
+ * marking every case passed with no model output minted a binding attestation
+ * for a model whose real answers fail. It now grades the outputs itself. */
+describe("an eval attestation is graded, not reported (X5-10)", () => {
+  it("booleans with no outputs earn nothing, and cannot bind", () => {
+    const claimed = attestEvalRun(
+      "genome-tagger",
+      "llama-70b",
+      GOLDEN_SETS["genome-tagger"]!.map((c) => ({ caseId: c.id, passed: true }) as unknown as { caseId: string; output: unknown }),
+    );
+    expect(claimed.passed, "a claimed pass with no output was counted").toBe(0);
+    expect(() => bindRole(ROLE_BINDINGS, "genome-tagger", "llama-70b", claimed)).toThrow(BindingError);
+  });
+
+  it("outputs are graded field by field against the canonical set", () => {
+    const set = GOLDEN_SETS["genome-tagger"]!;
+    const nearMiss = attestEvalRun("genome-tagger", "qwen-72b", set.map((c) => ({ caseId: c.id, output: { ...c.expected, hook: "wrong" } })));
+    expect(nearMiss.passed).toBe(0);
+    const right = attestEvalRun("genome-tagger", "qwen-72b", set.map((c) => ({ caseId: c.id, output: c.expected })));
+    expect(right.passed).toBe(set.length);
+    expect(attestEvalRun("genome-tagger", "qwen-72b", set.map((c) => ({ caseId: c.id, output: null }))).passed).toBe(0);
   });
 });

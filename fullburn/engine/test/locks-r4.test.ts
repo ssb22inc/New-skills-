@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { EvalAttestation, ROLE_BINDINGS, attestEvalRun, bindRole } from "@fullburn/config/models";
+import { EvalAttestation, GOLDEN_SETS, ROLE_BINDINGS, attestEvalRun, bindRole } from "@fullburn/config/models";
 import { CapError, getCaps } from "@fullburn/config/caps";
 import { PreDispatchError, llm } from "../src/gateway.ts";
 import { MemorySpendMeter, MeterUnavailableError, SpendReservation, type SpendCeilings } from "../src/spend-meter.ts";
@@ -759,7 +759,7 @@ describe("model layer — a forged attestation cannot bind a model (r4 lock 8 / 
     const real = attestEvalRun(
       "genome-tagger",
       "qwen-72b",
-      ["g1", "g2", "g3", "g4", "g5"].map((caseId) => ({ caseId, passed: true })),
+      GOLDEN_SETS["genome-tagger"]!.map((c) => ({ caseId: c.id, output: c.expected })),
     );
     expect(() => bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", real)).not.toThrow();
   });
