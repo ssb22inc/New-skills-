@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VaultError, vaultForClient } from "../src/vault.ts";
-import { EncryptedVaultBackend, MemoryCipherStore, importKek, slotKey } from "../src/vault-crypto.ts";
+import { EncryptedVaultBackend, MemoryCipherStore, importKek, manifestKey, slotKey, type CipherStore } from "../src/vault-crypto.ts";
 
 const rawKey = (fill: number) => new Uint8Array(32).fill(fill);
 const DAY = 86_400_000;
@@ -164,15 +164,69 @@ describe("vault auto-rotation (§15 'auto-rotated', breach runbook)", () => {
     expect(backend.read("b", "k")).toEqual({ value: "b1", version: 1 });
   });
 
-  /** MUTATION: swallow the issuer failure in revokeAndRotate. */
-  it("revokeAndRotate replaces a compromised secret, and a failed re-issue is an error", async () => {
+  /** MUTATION: let a failed re-issue leave the secret readable (X5-07). */
+  it("revokeAndRotate replaces and revokes; a failed re-issue QUARANTINES the secret", async () => {
     const { backend } = await setup();
+    const revoked: string[] = [];
+    const revoke = async (_c: string, _n: string, v: string) => { revoked.push(v); };
     await backend.put("a", "k", "leaked");
-    const rec = await backend.revokeAndRotate("a", "k", async () => "replacement");
+    await backend.unlock("a");
+    const rec = await backend.revokeAndRotate("a", "k", async () => "replacement", revoke);
     expect(rec).toEqual({ value: "replacement", version: 2 });
-    await expect(backend.revokeAndRotate("a", "k", async () => { throw new Error("x"); })).rejects.toThrow(/compromised/);
-    await expect(backend.revokeAndRotate("a", "k", async (_c, _n, cur) => cur)).rejects.toThrow(/compromised/);
-    await expect(backend.revokeAndRotate("a", "absent", async () => "n")).rejects.toThrow(/not found/);
+    expect(revoked, "the old value was never revoked at the provider").toEqual(["leaked"]);
+    expect(backend.read("a", "k")?.value).toBe("replacement");
+
+    await backend.put("a", "k2", "leaked-2");
+    await backend.unlock("a");
+    await expect(backend.revokeAndRotate("a", "k2", async () => { throw new Error("x"); }, revoke)).rejects.toThrow(/QUARANTINED/);
+    expect(backend.read("a", "k2"), "a compromised secret stayed readable in the unlocked session").toBeNull();
+    await backend.unlock("a");
+    expect(backend.read("a", "k2"), "a compromised secret came back on the next unlock").toBeNull();
+    await expect(backend.revokeAndRotate("a", "k2", async () => "n", revoke)).rejects.toThrow(/already quarantined/);
+
+    await backend.put("a", "k3", "same");
+    await expect(backend.revokeAndRotate("a", "k3", async (_c, _n, cur) => cur, revoke)).rejects.toThrow(/QUARANTINED/);
+    await expect(backend.revokeAndRotate("a", "absent", async () => "n", revoke)).rejects.toThrow(/not found/);
+  });
+
+  it("a provider revocation failure is an error naming the secret, with the replacement in place", async () => {
+    const { backend } = await setup();
+    await backend.put("a", "k", "old");
+    await expect(backend.revokeAndRotate("a", "k", async () => "new", async () => { throw new Error("provider down"); })).rejects.toThrow(/revoking the old value at the provider failed/);
+    await backend.unlock("a");
+    expect(backend.read("a", "k")?.value).toBe("new");
+  });
+
+  /** MUTATION: drop the timestamp from the AAD (X5-06). */
+  it("an edited write time fails authentication instead of skipping rotation", async () => {
+    const { store, backend, now } = await setup();
+    await backend.put("a", "k", "v");
+    const rec = JSON.parse(store.raw.get(slotKey("a", "k"))!);
+    store.raw.set(slotKey("a", "k"), JSON.stringify({ ...rec, at: rec.at + 365 * DAY }));
+    now.t += 40 * DAY;
+    const report = await backend.rotateDue("a", { k: { maxAgeMs: DAY } }, async () => "n");
+    expect(report.failed, "an edited timestamp silently skipped rotation").toEqual(["k"]);
+    await expect(backend.unlock("a")).rejects.toThrow(/failed authentication/);
+  });
+
+  /** MUTATION: skip the manifest comparison on unlock (X5-06). */
+  it("a whole old record restored over a newer one is refused as a rollback", async () => {
+    const { store, backend } = await setup();
+    await backend.put("a", "k", "v1");
+    const old = store.raw.get(slotKey("a", "k"))!;
+    await backend.put("a", "k", "v2");
+    store.raw.set(slotKey("a", "k"), old);
+    await expect(backend.unlock("a")).rejects.toThrow(/rolled-back record/);
+  });
+
+  it("a record ahead of the manifest (a crash between the two writes) still unlocks", async () => {
+    const { store, backend } = await setup();
+    await backend.put("a", "k", "v1");
+    const manifestV1 = store.raw.get(manifestKey("a"))!;
+    await backend.put("a", "k", "v2");
+    store.raw.set(manifestKey("a"), manifestV1);
+    await backend.unlock("a");
+    expect(backend.read("a", "k")).toEqual({ value: "v2", version: 2 });
   });
 
   /** MUTATION: let rekey skip records or keep the old KEK id. */
@@ -189,7 +243,95 @@ describe("vault auto-rotation (§15 'auto-rotated', breach runbook)", () => {
     await after.unlock("a");
     expect(after.read("a", "k")).toEqual({ value: "survives-rekey", version: 1 });
     // Without the old key, an un-rekeyed record is refused, not silently empty.
-    await before.put("a", "k2only", "x");
+    const elsewhere = new MemoryCipherStore();
+    await new EncryptedVaultBackend(elsewhere, k1).put("a", "k1only", "x");
+    store.raw.set(slotKey("a", "k1only"), elsewhere.raw.get(slotKey("a", "k1only"))!);
     await expect(after.unlock("a")).rejects.toThrow(/unknown key/);
+  });
+});
+
+/** A store whose reads can be paused, to interleave async operations
+ * deterministically. */
+class PausableStore implements CipherStore {
+  readonly inner = new MemoryCipherStore();
+  gate: { key: string; release: Promise<void>; hit: () => void } | null = null;
+  async get(key: string): Promise<string | null> {
+    const v = await this.inner.get(key);
+    const g = this.gate;
+    if (g && key === g.key) {
+      this.gate = null;
+      g.hit();
+      await g.release;
+    }
+    return v;
+  }
+  compareAndSwap(key: string, expected: string | null, next: string): Promise<boolean> {
+    return this.inner.compareAndSwap(key, expected, next);
+  }
+  list(prefix: string): Promise<string[]> {
+    return this.inner.list(prefix);
+  }
+  pauseNextGet(key: string): { reached: Promise<void>; release: () => void } {
+    let release!: () => void;
+    let hit!: () => void;
+    const releaseP = new Promise<void>((r) => (release = r));
+    const reached = new Promise<void>((r) => (hit = r));
+    this.gate = { key, release: releaseP, hit };
+    return { reached, release };
+  }
+}
+
+describe("vault concurrency (X5-08, X5-09)", () => {
+  /** MUTATION: write the re-key unconditionally. */
+  it("a re-key racing a rotation cannot restore the old credential", async () => {
+    const store = new PausableStore();
+    const k1 = await importKek("k1", rawKey(1));
+    const k2 = await importKek("k2", rawKey(2));
+    await new EncryptedVaultBackend(store, k1).put("a", "k", "old");
+    const rekeyer = new EncryptedVaultBackend(store, k2, { previous: [k1] });
+    const writer = new EncryptedVaultBackend(store, k2, { previous: [k1] });
+    const p = store.pauseNextGet(slotKey("a", "k"));
+    const rekeying = rekeyer.rekey("a");
+    await p.reached; // the re-key has read version 1
+    await writer.put("a", "k", "rotated");
+    p.release();
+    await rekeying;
+    const fresh = new EncryptedVaultBackend(store, k2);
+    await fresh.unlock("a");
+    expect(fresh.read("a", "k"), "the re-key restored the rotated-away credential").toEqual({ value: "rotated", version: 2 });
+  });
+
+  /** MUTATION: replace compare-and-swap with an unconditional write. */
+  it("two concurrent writers never mint the same version", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const a = new EncryptedVaultBackend(store, k);
+    const b = new EncryptedVaultBackend(store, k);
+    await a.put("c", "s", "v0");
+    const p = store.pauseNextGet(slotKey("c", "s"));
+    const first = a.put("c", "s", "from-a");
+    await p.reached; // a has read version 1
+    const second = await b.put("c", "s", "from-b");
+    p.release();
+    const firstRec = await first;
+    expect(new Set([firstRec.version, second.version]).size, "two writers minted the same version").toBe(2);
+    const fresh = new EncryptedVaultBackend(store, k);
+    await fresh.unlock("c");
+    expect(fresh.read("c", "s")?.version).toBe(3);
+  });
+
+  /** MUTATION: drop the generation check from unlock(). */
+  it("a lock during an in-flight unlock is not undone when the unlock completes", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "secret");
+    const p = store.pauseNextGet(slotKey("a", "s"));
+    const unlocking = backend.unlock("a");
+    await p.reached;
+    backend.lock();
+    p.release();
+    await expect(unlocking).rejects.toThrow(/locked or re-unlocked while this unlock was in flight/);
+    expect(() => backend.read("a", "s"), "an explicit lock was undone by a slower unlock").toThrow(/locked/);
   });
 });
