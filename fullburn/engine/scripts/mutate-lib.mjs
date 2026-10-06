@@ -54,48 +54,58 @@ export const MARKER = fileURLToPath(new URL("./.mutate-inflight.json", import.me
 export const RUN_LOCK = fileURLToPath(new URL("./.mutate-run.lock", import.meta.url));
 export function acquireRunLock(lockPath = RUN_LOCK, fs = { writeFileSync, linkSync, unlinkSync, renameSync, readFileSync, rmSync }, isAlive = processAlive, pid = process.pid) {
   /** CREATED WITH ITS CONTENT, ATOMICALLY (cross-family finding X4-03,
-   * 2026-10-04). The X3-03 lock was `open('wx')` then a separate write, so a
-   * contender could read the new, still-EMPTY file, parse NaN, call it stale and
-   * unlink a live run's lock. Now the pid is written to a private temp file
-   * first and `link()`ed into place — the lock never exists without its owner.
-   * A stale takeover RENAMES the lock aside and checks it renamed the dead
-   * holder's file; if it took a live one, it puts it back and refuses. */
+   * 2026-10-04): the pid is written to a private temp file first and `link()`ed
+   * into place — the lock never exists without its owner.
+   *
+   * A STALE TAKEOVER NEVER LEAVES THE LOCK PATH EMPTY (cross-family finding
+   * X5-11, 2026-10-06). The old takeover renamed the lock ASIDE and checked what
+   * it had moved; in the gap the path was absent, a third contender could link
+   * its own lock in, and the restore then failed and deleted a live lock — two
+   * owners. Now a takeover first takes a separate TAKEOVER MUTEX by the same
+   * O_EXCL link, so at most one takeover runs; under it the holder is re-read,
+   * and a dead holder's lock is REPLACED by an atomic rename of our own file
+   * over it. The path always holds some lock, so no contender can link in, and
+   * no live holder can appear under the mutex (a fresh link needs the path
+   * absent; a takeover needs the mutex). A taker that crashes inside that window
+   * leaves the mutex behind: it is never removed automatically — the harness
+   * refuses and names the file, which fails closed rather than risking two
+   * owners. */
   const tmp = `${lockPath}.${pid}.tmp`;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    fs.writeFileSync(tmp, String(pid));
+  const mutex = `${lockPath}.takeover`;
+  const gone = (p) => { try { fs.unlinkSync(p); } catch { /* already gone */ } };
+  fs.writeFileSync(tmp, String(pid));
+  try {
     try {
       fs.linkSync(tmp, lockPath);
-      fs.unlinkSync(tmp);
       return { ok: true };
     } catch (e) {
-      try { fs.unlinkSync(tmp); } catch { /* already gone */ }
       if (!e || e.code !== "EEXIST") return { ok: false, reason: `run lock could not be created: ${e && e.code ? e.code : "error"}` };
     }
-    let observed = "";
     try {
-      observed = String(fs.readFileSync(lockPath, "utf8")).trim();
-    } catch {
-      continue; // vanished between link and read: retry
+      fs.linkSync(tmp, mutex);
+    } catch (e) {
+      if (e && e.code === "EEXIST") {
+        return { ok: false, reason: `another harness is taking over the run lock — or one crashed doing so; if no harness is running, remove ${mutex}` };
+      }
+      return { ok: false, reason: `run-lock takeover mutex could not be created: ${e && e.code ? e.code : "error"}` };
     }
-    const holder = Number.parseInt(observed, 10);
-    if (isAlive(holder)) return { ok: false, holder, reason: `another harness (pid ${holder}) holds the run lock` };
-    const aside = `${lockPath}.stale.${pid}`;
     try {
-      fs.renameSync(lockPath, aside);
-    } catch {
-      continue; // someone else moved it first: retry
+      let observed = "";
+      try {
+        observed = String(fs.readFileSync(lockPath, "utf8")).trim();
+      } catch {
+        observed = "";
+      }
+      const holder = Number.parseInt(observed, 10);
+      if (observed !== "" && isAlive(holder)) return { ok: false, holder, reason: `another harness (pid ${holder}) holds the run lock` };
+      fs.renameSync(tmp, lockPath);
+      return { ok: true };
+    } finally {
+      gone(mutex);
     }
-    let took = "";
-    try { took = String(fs.readFileSync(aside, "utf8")).trim(); } catch { /* treat as mismatch */ }
-    if (took !== observed) {
-      // We moved a lock that was not the dead one we judged: restore and refuse.
-      try { fs.linkSync(aside, lockPath); } catch { /* a live lock is back in place */ }
-      try { fs.unlinkSync(aside); } catch { /* gone */ }
-      return { ok: false, reason: "run lock changed hands during takeover — refusing to start" };
-    }
-    try { fs.unlinkSync(aside); } catch { /* gone */ }
+  } finally {
+    gone(tmp);
   }
-  return { ok: false, reason: "run lock is contended — refusing to start" };
 }
 export function releaseRunLock(lockPath = RUN_LOCK, fs = { readFileSync, rmSync }, pid = process.pid) {
   try {

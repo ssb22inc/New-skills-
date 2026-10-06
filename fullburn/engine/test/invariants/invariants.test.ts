@@ -583,26 +583,42 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       expect(existsSync(lockPath), "a non-holder released the lock").toBe(true);
       releaseRunLock(lockPath, undefined, 333);
       expect(existsSync(lockPath)).toBe(false);
-      /** X4-03: the lock is created WITH its pid (never empty), and a takeover
-       * that finds a different lock than the dead one it judged puts it back
-       * and refuses. MUTATION: X4-03. */
+      /** X4-03: the lock is created WITH its pid (never empty). MUTATION: X4-03. */
       const fsMod = await import("node:fs");
       expect(acquireRunLock(lockPath, undefined, () => true, 555).ok).toBe(true);
       expect(readFileSync(lockPath, "utf8"), "the lock existed without its owner").toBe("555");
-      // Simulate the race: between our read (sees dead 555) and our rename, a
-      // live 666 replaces the lock. renameSync moves 666's lock aside.
-      let reads = 0;
-      const racing = {
+      /** X5-11 (GPT-6 Astra, 2026-10-06): three contenders. A takes over 555's
+       * stale lock; at the moment A replaces it, B and C both try. Neither may
+       * succeed, the lock path must never be absent, and only A owns the run.
+       * MUTATION: X5-11a (no mutex), X5-11b (re-read skipped under the mutex). */
+      const contenders: { b?: { ok: boolean }; c?: { ok: boolean } } = {};
+      let absentSeen = false;
+      const duringTakeover = {
         ...fsMod,
-        readFileSync: (p: string, enc: BufferEncoding) => {
-          reads += 1;
-          if (reads === 1) { fsMod.writeFileSync(lockPath, "666"); return "555"; }
-          return fsMod.readFileSync(p, enc);
+        renameSync: (from: string, to: string) => {
+          if (!fsMod.existsSync(lockPath)) absentSeen = true;
+          contenders.b = acquireRunLock(lockPath, undefined, (p: number) => p !== 555, 888);
+          contenders.c = acquireRunLock(lockPath, undefined, (p: number) => p !== 555, 999);
+          fsMod.renameSync(from, to);
         },
       };
-      const stolen = acquireRunLock(lockPath, racing, (pid: number) => pid === 666, 777);
-      expect(stolen.ok, "a live lock was taken during takeover").toBe(false);
-      expect(fsMod.readFileSync(lockPath, "utf8"), "the live holder's lock was not put back").toBe("666");
+      const a = acquireRunLock(lockPath, duringTakeover, (p: number) => p !== 555, 777);
+      expect(a.ok, "the takeover of a dead holder's lock failed").toBe(true);
+      expect(contenders.b?.ok, "a second contender took the lock during a takeover").toBe(false);
+      expect(contenders.c?.ok, "a third contender took the lock during a takeover").toBe(false);
+      expect(absentSeen, "the lock path was absent during a takeover").toBe(false);
+      expect(fsMod.readFileSync(lockPath, "utf8"), "the lock is not the taker's").toBe("777");
+      expect(fsMod.existsSync(`${lockPath}.takeover`), "the takeover mutex was left behind").toBe(false);
+      // A live holder is re-checked UNDER the mutex: no takeover.
+      const liveHeld = acquireRunLock(lockPath, undefined, (p: number) => p === 777, 1001);
+      expect(liveHeld.ok, "a live holder's lock was taken over").toBe(false);
+      expect(fsMod.readFileSync(lockPath, "utf8")).toBe("777");
+      // A crashed taker's mutex is never removed automatically: refuse, and name it.
+      fsMod.writeFileSync(`${lockPath}.takeover`, "4242");
+      const blocked = acquireRunLock(lockPath, undefined, () => false, 1002);
+      expect(blocked.ok, "a takeover ran while another taker's mutex existed").toBe(false);
+      expect(blocked.reason).toContain(".takeover");
+      fsMod.rmSync(`${lockPath}.takeover`, { force: true });
       fsMod.rmSync(lockPath, { force: true });
 
       // A corrupt marker is cleared rather than crashing the next run forever.
