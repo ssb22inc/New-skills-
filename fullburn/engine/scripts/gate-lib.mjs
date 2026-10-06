@@ -147,6 +147,8 @@ export const HUMAN_APPROVAL_PATTERNS = [
   // Decides whether the gates run at all; the base's copy judges each PR
   // (X5-01), so a change to it governs every later PR — the cap rule included.
   /^fullburn\/engine\/scripts\/ci-scope\.mjs$/,
+  // Reads who added each approval from GitHub (X5-03).
+  /^fullburn\/engine\/scripts\/github-auth\.mjs$/,
   /^\.github\/workflows\/fullburn-ci\.yml$/,
 ];
 
@@ -817,6 +819,47 @@ export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseH
     };
   }
   return { ok: true, reason: "Class-2 changes carry transition approvals" };
+}
+
+/** WHO APPROVED A MONEY CAP, AS GITHUB RECORDS IT (cross-family finding X5-03,
+ * GPT-6 Astra, 2026-10-06). `checkApprovalAuthorship` reads a self-asserted git
+ * author and refuses only the automation's own names; any other name passed.
+ * Now every approval document added in the range must come from a commit that
+ * GitHub reports as signature-VERIFIED and authored by the repository's
+ * MAINTAINER account. `auth` is what the GitHub API returned for the commit
+ * that added the document — fetched by the runner, decided here.
+ *
+ * LIMITATION, stated (and the reason L49 says "authenticated authorship", not
+ * "independent review"): a commit GitHub signs on the maintainer's behalf —
+ * the web editor, or an API client holding the maintainer's own credentials —
+ * passes. This session's agent commits through git, unsigned, as "Claude", and
+ * fails. */
+export function checkApprovalAuthentication(approvalDocs, maintainer) {
+  if (typeof maintainer !== "string" || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(maintainer)) {
+    return { ok: false, reason: "no maintainer account is configured, so no approval can be authenticated — refusing (fail closed)" };
+  }
+  const want = maintainer.toLowerCase();
+  const bad = [];
+  for (const d of approvalDocs ?? []) {
+    const a = d?.auth;
+    if (!a || a.verified !== true || typeof a.authorLogin !== "string" || a.authorLogin.toLowerCase() !== want) {
+      bad.push(`${d?.path ?? "(unnamed)"} (${!a ? "no GitHub record" : a.verified !== true ? "commit not signature-verified" : `authored by ${a.authorLogin ?? "no account"}`})`);
+    }
+  }
+  if (bad.length > 0) {
+    return { ok: false, reason: `money-cap approvals must be added by a verified commit authored by @${maintainer}: ${bad.join(", ")}` };
+  }
+  return { ok: true, reason: `approvals added by verified commits authored by @${maintainer}` };
+}
+
+/** The money-cap gate as CI and `done` run it: the transition approvals AND,
+ * when any money-cap path is touched, their authentication. */
+export function checkMoneyCapGate({ maintainer, ...args }) {
+  const res = checkClass2Approvals(args);
+  if (!res.ok || class2TouchedPaths(args.changedFiles).length === 0) return res;
+  const added = (args.approvalDocs ?? []).filter((d) => d && typeof d === "object" && (d.status === undefined || d.status === "added"));
+  const auth = checkApprovalAuthentication(added, maintainer);
+  return auth.ok ? { ok: true, reason: `${res.reason}; ${auth.reason}` } : auth;
 }
 
 /** A hash that cannot be computed (deleted file, unreadable base) must not

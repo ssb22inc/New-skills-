@@ -1,4 +1,5 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,6 +35,45 @@ function gate(script: string, ...args: string[]): { code: number; out: string } 
     const err = e as { status?: number; stdout?: string; stderr?: string };
     return { code: err.status ?? 1, out: `${err.stdout ?? ""}${err.stderr ?? ""}` };
   }
+}
+
+/** A stand-in for GitHub's "get a commit" API (X5-03): every commit is
+ * reported as signature-verified and authored by `maintainer`, unless the
+ * test overrides a sha. The CLI is run ASYNC against it — a synchronous child
+ * would block the event loop this server answers on. */
+async function withGithub<T>(
+  fn: (env: Record<string, string>, override: Map<string, { verified: boolean; login: string | null }>) => Promise<T>,
+): Promise<T> {
+  const override = new Map<string, { verified: boolean; login: string | null }>();
+  const server = createServer((req, res) => {
+    const m = /\/repos\/o\/r\/commits\/([0-9a-f]{40})$/.exec(req.url ?? "");
+    if (!m || req.headers.authorization !== "Bearer test-token") {
+      res.writeHead(404).end();
+      return;
+    }
+    const o = override.get(m[1]!) ?? { verified: true, login: "maintainer" };
+    res.writeHead(200, { "content-type": "application/json" }).end(
+      JSON.stringify({ sha: m[1], commit: { verification: { verified: o.verified } }, author: o.login === null ? null : { login: o.login } }),
+    );
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  try {
+    return await fn(
+      { GITHUB_API_URL: `http://127.0.0.1:${port}`, GITHUB_TOKEN: "test-token", GITHUB_REPOSITORY: "o/r", FULLBURN_MAINTAINER: "maintainer" },
+      override,
+    );
+  } finally {
+    await new Promise<void>((r) => server.close(() => r()));
+  }
+}
+
+function gateAsync(env: Record<string, string>, script: string, ...args: string[]): Promise<{ code: number; out: string }> {
+  return new Promise((resolve) => {
+    execFile("node", [join(SCRIPTS, script), ...args], { encoding: "utf8", env: { ...process.env, ...env } }, (err, stdout, stderr) => {
+      resolve({ code: err ? ((err as { code?: number }).code ?? 1) : 0, out: `${stdout}${stderr}` });
+    });
+  });
 }
 
 /** The tree hash the gate itself computes: `git ls-files -s` over the verified
@@ -106,7 +146,7 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
 
   /** The CLI must hand the library a base commit. Renaming that one property
    * restored full approval replay with every unit test green (N-03 leg B). */
-  it("a replayed approval from another pull request does not authorize the change", () => {
+  it("a replayed approval from another pull request does not authorize the change", () => withGithub(async (env) => {
     const base = git("rev-parse", "HEAD").trim();
     const sha = (path: string) =>
       execFileSync("sha256sum", [join(repo, path)], { encoding: "utf8" }).split(" ")[0];
@@ -122,7 +162,7 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     );
     git("add", "-A");
     git("commit", "-q", "-m", "raise the cap with a replayed approval");
-    const replayed = gate("class2-gate.mjs", repo, base);
+    const replayed = await gateAsync(env, "class2-gate.mjs", repo, base);
     expect(replayed.code, `a replayed approval opened the gate:\n${replayed.out}`).toBe(1);
 
     // The same approval, naming THIS pull request's base, is honoured.
@@ -134,10 +174,10 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     );
     git("add", "-A");
     git("commit", "-q", "-m", "correct the approval");
-    const honoured = gate("class2-gate.mjs", repo, base);
+    const honoured = await gateAsync(env, "class2-gate.mjs", repo, base);
     expect(honoured.code, honoured.out).toBe(0);
     expect(honoured.out).toContain(base);
-  });
+  }));
 
   /** R7-07. The gate verified the approval's BYTES and never its author, so the
    * same agent raising the cap could commit a conforming approval beside it and
@@ -151,7 +191,7 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
    * every test that drives the library directly.
    *
    * MUTATION: drop `authoredBy:` from class2-gate.mjs. */
-  it("an approval the automation principal committed does not open the gate", () => {
+  it("an approval the automation principal committed does not open the gate", () => withGithub(async (env, override) => {
     const base = git("rev-parse", "HEAD").trim();
     const sha = (path: string) =>
       execFileSync("sha256sum", [join(repo, path)], { encoding: "utf8" }).split(" ")[0];
@@ -167,7 +207,7 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     write("fullburn/APPROVALS/2026-08-17-self-approved.md", approval);
     git("add", "-A");
     git("-c", "user.name=Claude", "-c", "user.email=noreply@anthropic.com", "commit", "-q", "-m", "raise the cap");
-    const selfApproved = gate("class2-gate.mjs", repo, base);
+    const selfApproved = await gateAsync(env, "class2-gate.mjs", repo, base);
     expect(selfApproved.code, `the agent approved its own Class-2 change:\n${selfApproved.out}`).toBe(1);
     expect(selfApproved.out).toMatch(/automation principal/);
 
@@ -176,9 +216,27 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     write("fullburn/APPROVALS/2026-08-17-human-approved.md", approval);
     git("add", "-A");
     git("-c", "user.name=A Human", "-c", "user.email=human@example.invalid", "commit", "-q", "-m", "approve");
-    const honoured = gate("class2-gate.mjs", repo, base);
+    const approvalCommit = git("rev-parse", "HEAD").trim();
+    const honoured = await gateAsync(env, "class2-gate.mjs", repo, base);
     expect(honoured.code, honoured.out).toBe(0);
-  });
+
+    /** X5-03 (GPT-6 Astra, 2026-10-06): the same bytes under ANY self-asserted
+     * human name used to open the gate. Now GitHub's record decides: an
+     * unverified commit, another account, or no record at all is refused.
+     * MUTATION: X5-03a (decision), X5-03b (CLI wiring). */
+    override.set(approvalCommit, { verified: false, login: "maintainer" });
+    const unsigned = await gateAsync(env, "class2-gate.mjs", repo, base);
+    expect(unsigned.code, `an unverified commit's approval opened the gate:\n${unsigned.out}`).toBe(1);
+    expect(unsigned.out).toMatch(/not signature-verified/);
+    override.set(approvalCommit, { verified: true, login: "someone-else" });
+    const other = await gateAsync(env, "class2-gate.mjs", repo, base);
+    expect(other.code, `another account's approval opened the gate:\n${other.out}`).toBe(1);
+    expect(other.out).toMatch(/authored by someone-else/);
+    const noRecord = await gateAsync({ ...env, GITHUB_TOKEN: "" }, "class2-gate.mjs", repo, base);
+    expect(noRecord.code, "an approval with no GitHub record opened the gate").toBe(1);
+    const noMaintainer = await gateAsync({ ...env, FULLBURN_MAINTAINER: "" }, "class2-gate.mjs", repo, base);
+    expect(noMaintainer.code, "the gate opened with no maintainer configured").toBe(1);
+  }));
 
   it("refuses to run at all without a base ref", () => {
     expect(gate("class2-gate.mjs", repo).code).toBe(1);
@@ -186,7 +244,7 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
 });
 
 describe("owed-approvals CLI prints what class2-gate demands (H-17)", () => {
-  it("its output, pasted verbatim into APPROVALS/, opens the gate", () => {
+  it("its output, pasted verbatim into APPROVALS/, opens the gate", () => withGithub(async (env) => {
     const base = git("rev-parse", "HEAD").trim();
     write("fullburn/config/src/caps.ts", "export const CAPS = { dailyAiSpendUsd: 500 };\n");
     write("fullburn/config/src/freeze.ts", "export const deepFreeze = (x) => x;\n");
@@ -204,9 +262,9 @@ describe("owed-approvals CLI prints what class2-gate demands (H-17)", () => {
     write("fullburn/APPROVALS/2026-08-16-generated.md", `Approved-by: human\n${printed.out}`);
     git("add", "-A");
     git("commit", "-q", "-m", "add the generated approvals");
-    const opened = gate("class2-gate.mjs", repo, base);
+    const opened = await gateAsync(env, "class2-gate.mjs", repo, base);
     expect(opened.code, `the generated approvals did not satisfy the gate:\n${opened.out}`).toBe(0);
-  });
+  }));
 });
 
 describe("adversary-gate CLI — the tree hash reads the index, so the worktree must be clean", () => {

@@ -318,4 +318,10 @@ jobs:
           node-version: 22
       - name: Class-2 changes carry human approvals (Law 2/14/15)
         if: steps.scope.outputs.relevant != 'false' && github.event_name == 'pull_request'
+        # X5-03: a money-cap approval counts only if GitHub reports the commit
+        # that added it as signature-verified and authored by the repository
+        # owner. The job's own token reads that record; it writes nothing.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FULLBURN_MAINTAINER: ${{ github.repository_owner }}
         run: node fullburn/engine/scripts/class2-gate.mjs . "origin/${{ github.base_ref }}"

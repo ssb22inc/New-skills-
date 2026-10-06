@@ -44,7 +44,8 @@ import {
   splitReportsByFamily,
   verdict,
 } from "./done-lib.mjs";
-import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkClass2Approvals, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "./github-auth.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 import { createHash } from "node:crypto";
 import { MARKER, processAlive } from "./mutate-lib.mjs";
@@ -290,7 +291,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
           const r = await git(["show", `${base}:${f.path}`]);
           if (r.code === 0) baseBlobs.set(f.path, sha(Buffer.from(r.out, "utf8")));
         }
-        const c2 = checkClass2Approvals({
+        // X5-03: who added each approval, as GitHub records it — through the
+        // Actions token when there is one, else the `gh` client if present.
+        const repoName = process.env.GITHUB_REPOSITORY || repoFromRemote((await git(["remote", "get-url", "origin"])).out) || "";
+        for (const d of approvalDocs) {
+          const addedIn = (await git(["log", "--diff-filter=A", "--format=%H", "-1", `${base}..HEAD`, "--", d.path])).out.trim();
+          if (process.env.GITHUB_TOKEN) {
+            d.auth = await fetchCommitAuth({ repo: repoName, sha: addedIn, token: process.env.GITHUB_TOKEN, apiUrl: process.env.GITHUB_API_URL || "https://api.github.com" });
+          } else {
+            const r = /^[0-9a-f]{40}$/.test(addedIn) ? await run("gh", ["api", `repos/${repoName}/commits/${addedIn}`]) : { code: 1, out: "" };
+            let body = null;
+            try { body = r.code === 0 ? JSON.parse(r.out) : null; } catch { body = null; }
+            d.auth = commitAuthFromApi(body);
+          }
+        }
+        const c2 = checkMoneyCapGate({
+          maintainer: process.env.FULLBURN_MAINTAINER || repoName.split("/")[0] || "",
           changedFiles,
           approvalDocs,
           hashOf: (p) => sha(readFileSync(`${REPO}/${p}`)),
@@ -298,7 +314,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
           baseCommit: base,
         });
         const c8 = class2Condition(c2, n);
-        sub8.push({ id: "C8-owed", title: `money-cap approvals against base ${base.slice(0, 12)} — the class-2 gate's own decision`, status: c8.status, command: `checkClass2Approvals(diff ${base.slice(0, 12)}...HEAD, APPROVALS/)`, observed: c8.observed });
+        sub8.push({ id: "C8-owed", title: `money-cap approvals against base ${base.slice(0, 12)} — the class-2 gate's own decision`, status: c8.status, command: `checkMoneyCapGate(diff ${base.slice(0, 12)}...HEAD, APPROVALS/, GitHub commit verification)`, observed: c8.observed });
       }
       const tracked = (await git(["ls-files"])).out.split("\n").filter((p) => p.length > 0);
       const owners = readFileSync(`${REPO}/.github/CODEOWNERS`, "utf8");

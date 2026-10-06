@@ -8,7 +8,8 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
-import { checkClass2Approvals, selectApprovalDocs } from "./gate-lib.mjs";
+import { checkMoneyCapGate, selectApprovalDocs } from "./gate-lib.mjs";
+import { fetchCommitAuth } from "./github-auth.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 
 const repoRoot = process.argv[2] ?? ".";
@@ -49,7 +50,21 @@ const resolvedBase = execSync(`git -C ${JSON.stringify(repoRoot)} rev-parse ${JS
   encoding: "utf8",
 }).trim();
 
-const res = checkClass2Approvals({
+// WHO added each approval, as GitHub records it (X5-03): the commit in this
+// range that added the document, its signature verification and its author's
+// account. Fetched here; decided by checkMoneyCapGate.
+for (const d of approvalDocs) {
+  const addedIn = git(`log --diff-filter=A --format=%H -1 ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).trim();
+  d.auth = await fetchCommitAuth({
+    repo: process.env.GITHUB_REPOSITORY ?? "",
+    sha: addedIn,
+    token: process.env.GITHUB_TOKEN ?? "",
+    apiUrl: process.env.GITHUB_API_URL || "https://api.github.com",
+  });
+}
+
+const res = checkMoneyCapGate({
+  maintainer: process.env.FULLBURN_MAINTAINER ?? "",
   changedFiles,
   approvalDocs,
   hashOf: (p) => sha(readFileSync(join(repoRoot, p))),

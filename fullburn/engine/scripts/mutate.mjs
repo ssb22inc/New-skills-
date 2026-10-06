@@ -1244,6 +1244,22 @@ const MUTATIONS = [
   ["X5-05 binary output is refused before the clone", "engine/src/gateway.ts",
     "    if (opaque) {\n      throw new GatewayError(\"provider output carries binary",
     "    if (false) {\n      throw new GatewayError(\"provider output carries binary"],
+  // ---- X5-03: cap approvals authenticated by GitHub's commit record (2026-10-06) ----
+  ["X5-03a an approval needs a verified commit by the maintainer", "engine/scripts/gate-lib.mjs",
+    "    if (!a || a.verified !== true || typeof a.authorLogin !== \"string\" || a.authorLogin.toLowerCase() !== want) {",
+    "    if (!a) {"],
+  ["X5-03b the class-2 CLI reads each approval's GitHub record", "engine/scripts/class2-gate.mjs",
+    "  d.auth = await fetchCommitAuth({",
+    "  d.auth = { verified: true, authorLogin: process.env.FULLBURN_MAINTAINER }; void ({"],
+  ["X5-03c no maintainer, no authenticated approval", "engine/scripts/gate-lib.mjs",
+    "  if (typeof maintainer !== \"string\" || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(maintainer)) {",
+    "  if (false) {"],
+  ["X5-03d the cap gate authenticates when a cap path changed", "engine/scripts/gate-lib.mjs",
+    "  const auth = checkApprovalAuthentication(added, maintainer);",
+    "  const auth = { ok: true, reason: \"\" };"],
+  ["MC-11 the GitHub record reader still owes a human approval", "engine/scripts/gate-lib.mjs",
+    "  /^fullburn\\/engine\\/scripts\\/github-auth\\.mjs$/,",
+    "  /^NEVER-MATCHES$/,"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
