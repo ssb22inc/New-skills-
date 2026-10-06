@@ -831,9 +831,12 @@ const MUTATIONS = [
   ["X1-08b an error's name is redacted", "engine/src/redact.ts",
     "      return { name: redactText(typeof obj.name === \"string\" ? obj.name : \"Error\", secrets), message:",
     "      return { name: typeof obj.name === \"string\" ? obj.name : \"Error\", message:"],
-  ["X1-13 expected fields compare structurally", "engine/src/eval-harness.ts",
-    "      const ok = Object.entries(gcase.expected).every(([k, v]) => structurallyEqual(output[k], v));",
-    "      const ok = Object.entries(gcase.expected).every(([k, v]) => output[k] === v);"],
+  // X1-13 re-targeted 2026-10-06: since X5-10 the pass that binds is graded in
+  // config, and runEval's own comparison only words the failure messages, so
+  // the entry on it SURVIVED (measured: full harness at 8aea8f0).
+  ["X1-13 expected fields compare structurally", "config/src/golden-sets.ts",
+    "  return Object.entries(gcase.expected).every(([k, v]) => structurallyEqual((output as Record<string, unknown>)[k], v));",
+    "  return Object.entries(gcase.expected).every(([k, v]) => (output as Record<string, unknown>)[k] === v);"],
   ["X1-17 no Node API at module load in the clock", "engine/src/trusted-clock.ts",
     "  hrtime: typeof process !== \"undefined\" && typeof process.hrtime?.bigint === \"function\" ? process.hrtime.bigint.bind(process.hrtime) : null,",
     "  hrtime: process.hrtime.bigint.bind(process.hrtime),"],
@@ -1304,6 +1307,9 @@ const MUTATIONS = [
   ["X5-12f a reply that is not a JSON object is refused", "engine/src/gateway-http.ts",
     "    if (typeof output !== \"object\" || output === null || Array.isArray(output)) {",
     "    if (false) {"],
+  ["DN-19 a survivor is named even when the harness exits non-zero", "engine/scripts/done-lib.mjs",
+    "  if (exitCode !== 0) return { status: \"FAIL\", observed: `harness exited ${exitCode} — ${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale${names.length ? ` — ${names.join(\" — \")}` : \"\"}` };",
+    "  if (exitCode !== 0) return { status: \"FAIL\", observed: `harness exited ${exitCode} — ${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale` };"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

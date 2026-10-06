@@ -50,6 +50,10 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(mutateCondition(parseMutate(good.replace("214 mutations: 214 caught", "0 mutations: 0 caught"))).status, "an empty table passed").toBe("FAIL");
     expect(mutateCondition(parseMutate(good.replace("214 caught", "200 caught"))).status, "a summary that does not add up passed").toBe("FAIL");
     expect(mutateCondition(parseMutate(good), 1).status, "a non-zero harness exit passed").toBe("FAIL");
+    // MUTATION: DN-19 — the survivor's NAME must reach the row even when the
+    // harness exits non-zero, which it always does when something survives.
+    const withSurvivor = good.replace("214 mutations: 214 caught, 0 survived", "*** SURVIVED ***   X1-13 expected fields compare structurally\n214 mutations: 213 caught, 1 survived");
+    expect(mutateCondition(parseMutate(withSurvivor), 1).observed, "a survivor was reported without its name").toContain("X1-13 expected fields compare structurally");
     expect(mutateCondition(parseMutate(good), 0).status).toBe("PASS");
     // A perfect summary with no meta-check is VOID, not a pass (DONE.md §1).
     expect(mutateCondition(parseMutate("214 mutations: 214 caught, 0 survived, 0 not found\n")).status).toBe("FAIL");

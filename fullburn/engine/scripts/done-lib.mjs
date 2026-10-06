@@ -114,12 +114,15 @@ export function mutateCondition(parsed, exitCode = 0) {
   // exited non-zero behind a green-looking line are each a FAIL.
   if (p.total === 0) return { status: "FAIL", observed: "0 mutations — an empty table proves nothing" };
   if (p.caught + p.survived + p.notFound !== p.total) return { status: "FAIL", observed: `summary does not reconcile: ${p.caught} + ${p.survived} + ${p.notFound} ≠ ${p.total}` };
-  if (exitCode !== 0) return { status: "FAIL", observed: `harness exited ${exitCode} — ${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale` };
+  // THE NAMES ARE PART OF EVERY FAIL (2026-10-06): the harness exits non-zero
+  // whenever anything survives, and this branch used to return first — so the
+  // one row meant to say WHICH lock is untested printed only a count.
+  const names = [
+    ...(p.survivors?.length ? [`survived: ${p.survivors.join("; ")}`] : []),
+    ...(p.stale?.length ? [`stale: ${p.stale.join("; ")}`] : []),
+  ];
+  if (exitCode !== 0) return { status: "FAIL", observed: `harness exited ${exitCode} — ${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale${names.length ? ` — ${names.join(" — ")}` : ""}` };
   if (p.survived > 0 || p.notFound > 0) {
-    const names = [
-      ...(p.survivors?.length ? [`survived: ${p.survivors.join("; ")}`] : []),
-      ...(p.stale?.length ? [`stale: ${p.stale.join("; ")}`] : []),
-    ];
     return {
       status: "FAIL",
       observed: `${p.total} mutations: ${p.caught} caught, ${p.survived} survived, ${p.notFound} stale${names.length ? ` — ${names.join(" — ")}` : ""}`,
