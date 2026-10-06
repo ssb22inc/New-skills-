@@ -1197,6 +1197,16 @@ const MUTATIONS = [
   ["RV-03 the leak scan consults the reviewer route, nothing wider", "engine/scripts/scan-lib.mjs",
     "  if (PROVIDER_HOSTS.test(content) && !isReviewerRoute(path, content)) {",
     "  if (PROVIDER_HOSTS.test(content) && !/scripts\\//.test(path)) {"],
+  // ---- 2026-10-06: no same-family review opens the gate (L55) ----
+  ["AF-01 only a non-Claude reviewer's PASS opens the gate", "engine/scripts/gate-lib.mjs",
+    "  const pass = judged.find((j) => j.ok && isNonClaudeReviewer(j.content));",
+    "  const pass = judged.find((j) => j.ok);"],
+  ["AF-02 a Claude or empty family is not a non-Claude reviewer", "engine/scripts/gate-lib.mjs",
+    "    if (m) return m[1].length > 0 && !/claude|anthropic/i.test(m[1]);",
+    "    if (m) return true;"],
+  ["AF-03 the family line is read from the visible header only", "engine/scripts/gate-lib.mjs",
+    "  for (const line of visibleHeaderLines(reportContent)) {\n    const m = /^Reviewer-family:",
+    "  for (const line of String(reportContent).split(\"\\n\")) {\n    const m = /^Reviewer-family:"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

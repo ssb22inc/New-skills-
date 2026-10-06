@@ -365,6 +365,17 @@ const UNBOUND_HISTORICAL_REPORTS = new Map([
   ["ADVERSARY_REPORT_phase0.r9.md", "149d4541"],
 ]);
 
+/** The reviewer's family, from a `Reviewer-family:` line in the visible
+ * header. Absent, empty, or naming Claude/Anthropic is not a non-Claude
+ * reviewer. */
+export function isNonClaudeReviewer(reportContent) {
+  for (const line of visibleHeaderLines(reportContent)) {
+    const m = /^Reviewer-family:\s*(.*?)\s*$/.exec(line);
+    if (m) return m[1].length > 0 && !/claude|anthropic/i.test(m[1]);
+  }
+  return false;
+}
+
 /** Judge one report against the current tree. */
 function judgeReport(reportContent, currentTreeHash) {
   // Freshness is established FIRST (adversary finding R3-CP-06). Judging the
@@ -534,7 +545,7 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
       const pinned = UNBOUND_HISTORICAL_REPORTS.get(d.name);
       return pinned === undefined || shortSha256(d.content) !== pinned;
     })
-    .map((d) => ({ name: d.name, ...judgeReport(d.content, currentTreeHash) }));
+    .map((d) => ({ name: d.name, content: d.content, ...judgeReport(d.content, currentTreeHash) }));
 
   if (judged.length === 0) {
     return { ok: false, reason: `no reports/ADVERSARY_REPORT_phase${phase}*.md found that makes a claim about any tree` };
@@ -551,8 +562,21 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
     };
   }
 
-  const pass = judged.find((j) => j.ok);
+  // ONLY A NON-CLAUDE REVIEWER'S PASS OPENS THE GATE (human instruction
+  // 2026-10-06, L55: no review may be done by the same family as the builder;
+  // every review is GPT Astra's). A same-family PASS bound to this tree is not
+  // evidence; a same-family FAIL still blocks above, because a FAIL is never
+  // the dangerous direction. The family line is the runner's line 5, read
+  // through the same visible-header rules as the verdict and the binding.
+  const pass = judged.find((j) => j.ok && isNonClaudeReviewer(j.content));
   if (pass) return { ok: true, reason: `${pass.name}: ${pass.reason}` };
+  const sameFamilyPass = judged.find((j) => j.ok);
+  if (sameFamilyPass) {
+    return {
+      ok: false,
+      reason: `${sameFamilyPass.name}: a PASS from a same-family or undeclared reviewer — only a non-Claude reviewer (GPT Astra) can open this gate`,
+    };
+  }
 
   const first = judged[0];
   return { ok: false, reason: `${first.name}: ${first.reason}` };

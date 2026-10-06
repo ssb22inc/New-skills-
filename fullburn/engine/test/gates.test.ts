@@ -6,7 +6,10 @@ import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkClass2Approvals, checkR
 // Tree bindings must look like git object hashes — the gate rejects anything else.
 const TREE = "abc1234def5678";
 const OTHER_TREE = "0123456789abcdef";
-const report = (verdict: string, tree = TREE) => ["# ADVERSARY_REPORT_phase0", `Verdict: ${verdict}`, `verified-tree: ${tree}`].join("\n");
+// Every fixture report declares a non-Claude reviewer: since 2026-10-06 (L55)
+// only such a reviewer's PASS opens the gate.
+const FAMILY = "Reviewer-family: OpenAI (gpt-6-astra)";
+const report = (verdict: string, tree = TREE) => ["# ADVERSARY_REPORT_phase0", `Verdict: ${verdict}`, `verified-tree: ${tree}`, FAMILY].join("\n");
 const goodReport = report("PASS (CONDITIONAL — live ledger open)");
 
 describe("adversary-report gate (AC 4, Law 9, §10.3, R5)", () => {
@@ -53,6 +56,28 @@ describe("adversary-report gate (AC 4, Law 9, §10.3, R5)", () => {
     const res = checkAdversaryReport({ phase: "0", reports, currentTreeHash: TREE });
     expect(res.ok).toBe(false);
     expect(res.reason).toMatch(/not PASS/);
+  });
+
+  /** Human instruction 2026-10-06 (L55): no review may be done by the same
+   * family as the builder. MUTATION: open the gate on any PASS, or read the
+   * family line from below the visible header. */
+  it("only a non-Claude reviewer's PASS opens the gate", () => {
+    const mk = (family: string | null) => ({
+      name: "ADVERSARY_REPORT_phase0.f.md",
+      content: ["# r", "Verdict: PASS", `verified-tree: ${TREE}`, ...(family === null ? [] : [family])].join("\n"),
+    });
+    const gate = (r: { name: string; content: string }) => checkAdversaryReport({ phase: "0", reports: [r], currentTreeHash: TREE });
+    expect(gate(mk("Reviewer-family: OpenAI (gpt-6-astra)")).ok).toBe(true);
+    expect(gate(mk("Reviewer-family: Claude (same-family engine-adversary)")).ok, "a Claude PASS opened the gate").toBe(false);
+    expect(gate(mk("Reviewer-family: anthropic/claude-opus")).ok, "an Anthropic PASS opened the gate").toBe(false);
+    expect(gate(mk(null)).ok, "an undeclared reviewer's PASS opened the gate").toBe(false);
+    expect(gate(mk("Reviewer-family:")).ok, "an empty family opened the gate").toBe(false);
+    expect(gate(mk(null)).reason).toMatch(/non-Claude reviewer/);
+    const buried = { name: "ADVERSARY_REPORT_phase0.b.md", content: ["# r", "Verdict: PASS", `verified-tree: ${TREE}`, ...Array.from({ length: 12 }, (_, i) => `l${i}`), "Reviewer-family: OpenAI"].join("\n") };
+    expect(gate(buried).ok, "a family line below the visible header was read").toBe(false);
+    // A same-family FAIL bound to this tree still blocks an Astra PASS.
+    const claudeFail = { name: "ADVERSARY_REPORT_phase0.c.md", content: ["# r", "Verdict: FAIL", `verified-tree: ${TREE}`, "Reviewer-family: Claude"].join("\n") };
+    expect(checkAdversaryReport({ phase: "0", reports: [claudeFail, mk("Reviewer-family: OpenAI")], currentTreeHash: TREE }).ok).toBe(false);
   });
 
   it("ATTACK: a fresh FAIL blocks even when a fresh PASS exists (R2-10)", () => {
@@ -213,7 +238,7 @@ describe("adversary-report gate — a report the gate cannot read blocks it (R5-
     // decorated FAIL blocks either way. A decorated PASS must OPEN the gate, or
     // the strip is untested and an honest reviewer's backticks fail closed.
     for (const decorated of [`verified-tree: \`${TREE}\``, `**verified-tree:** ${TREE}`, `- verified-tree: ${TREE}`]) {
-      const only = { name: "ADVERSARY_REPORT_phase0.d.md", content: ["# r", "Verdict: PASS", decorated].join("\n") };
+      const only = { name: "ADVERSARY_REPORT_phase0.d.md", content: ["# r", "Verdict: PASS", decorated, FAMILY].join("\n") };
       expect(
         checkAdversaryReport({ phase: "0", reports: [only], currentTreeHash: TREE }).ok,
         `a PASS bound as ${decorated} was refused`,

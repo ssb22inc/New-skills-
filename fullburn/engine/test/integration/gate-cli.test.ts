@@ -225,7 +225,7 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -252,7 +252,7 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     git("commit", "-q", "-m", "sign the caps");
     const base = git("rev-parse", "HEAD").trim();
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
     // Rewrite the signed approval to say something the human never signed.
     write("fullburn/APPROVALS/2026-08-16-caps.md", "Approved-by: someone else\napproves: everything, forever\n");
     git("add", "-A");
@@ -282,7 +282,7 @@ describe("adversary-gate CLI — a PASS is a statement about the workflow too (R
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase and the CI");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -302,7 +302,7 @@ describe("adversary-gate CLI — a PASS is a statement about the workflow too (R
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase and the CI");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -328,7 +328,7 @@ describe("adversary-gate CLI — a PASS for another phase is not a PASS for this
     const tree = currentTreeHash();
     // Bound to the CURRENT tree and reading PASS: only the phase binding can
     // stop it, so a pass here would be for the wrong reason.
-    write("fullburn/reports/ADVERSARY_REPORT_phase1.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase1.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a phase-1 PASS");
     const base = git("rev-parse", "HEAD").trim();
@@ -394,7 +394,7 @@ describe("adversary-gate CLI", () => {
     const base = git("rev-parse", "HEAD").trim();
     // Bound to the CURRENT tree, so only the append-only rule can stop it —
     // otherwise this would pass for the wrong reason (staleness).
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "edit the FAIL into a PASS");
     const res = gate("adversary-gate.mjs", repo, base);
