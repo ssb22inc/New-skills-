@@ -193,16 +193,25 @@ export class EvalAttestation {
 const ATTESTATION_BRAND = Symbol("fullburn.eval-attestation");
 const GENUINE = new WeakSet<EvalAttestation>();
 
+/** A role's golden set, or a refusal. EXPORTED SO THE GUARD CAN BE DRIVEN
+ * (cross-family finding X5-13, 2026-10-06): every role in the registry
+ * declares a set, so through `attestEvalRun` this branch has no violating
+ * input, and its mutation was "caught" only because the sweep's source scan
+ * lost a throw. Driving it directly makes the catch behavioural. */
+export function requireGoldenSet(role: string, declared: readonly string[] | undefined): readonly string[] {
+  if (declared === undefined || declared.length === 0) {
+    throw new BindingError(`role "${role}" declares no golden set — an eval over nothing proves nothing`);
+  }
+  return declared;
+}
+
 /** The one factory. Verifies the run covers exactly the role's declared golden
  * set — no substituted set, no partial run, no duplicated case padding a score. */
 export function attestEvalRun(role: string, modelId: string, outcomes: readonly EvalCaseOutcome[]): EvalAttestation {
   const card = ownEntry(ROLE_CARDS, role);
   if (card === undefined) throw new BindingError(`attestEvalRun: unknown role "${role}"`);
   if (ownEntry(MODELS, modelId) === undefined) throw new BindingError(`attestEvalRun: unknown model "${modelId}"`);
-  const declared = ownEntry(GOLDEN_SET_CASE_IDS, role);
-  if (declared === undefined || declared.length === 0) {
-    throw new BindingError(`role "${role}" declares no golden set — an eval over nothing proves nothing`);
-  }
+  const declared = requireGoldenSet(role, ownEntry(GOLDEN_SET_CASE_IDS, role));
   if (!Array.isArray(outcomes)) throw new BindingError("eval outcomes must be an array");
   const seen = outcomes.map((o) => o?.caseId);
   if (new Set(seen).size !== seen.length) throw new BindingError("eval run repeats a case id");
@@ -232,7 +241,9 @@ function assertAttestation(att: unknown, role: string, modelId: string): asserts
   if (att.modelId !== modelId) throw new BindingError(`eval result is for model "${att.modelId}", not "${modelId}"`);
 }
 
-function familyOf(bindings: RoleBindings, role: string): ModelFamily {
+/** Exported so its no-binding guard can be driven (X5-13): every caller
+ * passes a role taken from the bindings' own keys. */
+export function familyOf(bindings: RoleBindings, role: string): ModelFamily {
   const modelId = ownEntry(bindings, role);
   if (modelId === undefined) throw new BindingError(`role "${role}" has no binding`);
   const spec = ownEntry(MODELS, modelId);

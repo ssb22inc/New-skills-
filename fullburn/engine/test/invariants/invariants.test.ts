@@ -659,9 +659,9 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       toMicros,
       isFrozenCapsMeter,
     } = await import("../../src/spend-meter.ts");
-    const { SpendLedgerError, InMemorySpendLedger } = await import("../../src/spend-ledger.ts");
+    const { SpendLedgerError, InMemorySpendLedger, usable } = await import("../../src/spend-ledger.ts");
     const { requireReservingMeter, GatewayError, SchemaError } = await import("../../src/gateway.ts");
-    const { BindingError } = await import("@fullburn/config/models");
+    const { BindingError, familyOf, requireGoldenSet } = await import("@fullburn/config/models");
     const { TraceEmitError, TraceContext, MemoryTraceSink, emitOrFail } = await import("../../src/tracing.ts");
     const { VaultError, MemoryVaultBackend, vaultForClient } = await import("../../src/vault.ts");
     const { assertMonotonic, trustedClock, zoneDayKey } = await import("../../src/trusted-clock.ts");
@@ -1095,6 +1095,15 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       { name: "a fixture signature does not sign a real client", file: "config/src/caps.ts", type: CapError,
         expect: /does not sign a real client/,
         fire: () => assertCapsUsable(getCaps("fixture-testco"), "a-real-client") },
+      // ---- X5-13 (2026-10-06): three guards that were DISCLOSED as having no
+      // reachable input, driven directly so their mutations are caught by
+      // behaviour, not by the source scan losing a throw. ----
+      { name: "a role with no golden set cannot be attested", file: "config/src/models.ts", type: BindingError,
+        expect: /declares no golden set/, fire: () => requireGoldenSet("r", []) },
+      { name: "a role with no binding has no family", file: "config/src/models.ts", type: BindingError,
+        expect: /has no binding/, fire: () => familyOf({} as never, "r") },
+      { name: "a corrupt stored total refuses spend", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
+        expect: /ledger is corrupt/, fire: () => usable(-1, "committed spend") },
     ];
 
     /** Did THIS guard refuse, or did something else throw on the way? */
@@ -1148,7 +1157,17 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       `the money path contains constructs the guard population cannot follow, so its completeness is not ` +
         `provable. Extend the derivation or restructure the code — do not leave it unseen:\n  ${refusals.join("\n  ")}`,
     ).toEqual([]);
-    const enumerated = moneyPathGuards(new URL("../../../", import.meta.url));
+    /** THE POPULATION IS READ FROM THE UNMUTATED SOURCE (cross-family finding
+     * X5-13, 2026-10-06). Read straight from disk, a mutation that turned a
+     * `throw` into `void` removed that guard from the population, and the
+     * "stale entry" or "stale disclosure" failure that followed is what caught
+     * it — a source-shape catch, not a behavioural one. Through the harness
+     * marker the population is the committed source, so a disabled guard can
+     * only be caught by its entry failing to fire it. */
+    const sweepRoot = new URL("../../../", import.meta.url);
+    const sweepMarker = existsSync(HARNESS_MARKER as string) ? (JSON.parse(readFileSync(HARNESS_MARKER as string, "utf8")) as { path: string; original: string }) : null;
+    const sweepRead = readThroughInFlight((f: string) => readFileSync(new URL(f, sweepRoot), "utf8"), sweepMarker, (p: string) => (p.startsWith("/") ? p : new URL(p, sweepRoot).pathname)) as (f: string) => string;
+    const enumerated = moneyPathModules(sweepRoot, (f: string) => existsSync(new URL(f, sweepRoot)), sweepRead).flatMap((f) => enumerateThrowGuards(f, sweepRead(f)));
     expect(enumerated.length, "no guards enumerated — this check would pass vacuously").toBeGreaterThan(60);
 
     /** Guards with no reachable input, each pointing at the row that says so.
@@ -1172,26 +1191,6 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           "here can reach it. It is driven for real in engine/test/ledger-slot.test.ts, which imports the " +
           "module only after planting an occupant — a separate FILE because vitest isolates by file and a " +
           "fresh process is the input this guard needs",
-      },
-      {
-        signature: /declares no golden set/,
-        row: "L19",
-        why:
-          "every role in ROLE_CARDS declares a golden set, so the call site has no violating input — the same " +
-          "class as L19's assertCapsCoherent call site. Planting a role with no golden set to make it fire " +
-          "would mean shipping a broken registry as test scaffolding",
-      },
-      {
-        signature: /has no binding/,
-        row: "L19",
-        why:
-          "`familyOf` is only ever called with roles taken from the bindings object's OWN keys, so its " +
-          "no-binding branch has no reachable input. Same class as the row above",
-      },
-      {
-        signature: /ledger is corrupt/,
-        row: "L23",
-        why: "committed totals only ever grow by settle, and reserved headroom is derived from open handles rather than stored — there is no input that makes a stored total corrupt now that the setters are gone (R12-01)",
       },
     ];
 
@@ -2511,12 +2510,56 @@ describe("runner-decision sweep — no verdict is reached where the default suit
     const guards = moneyPathModules(root, exists, read).flatMap((f) => enumerateThrowGuards(f, read(f)));
     expect(guards.length, "no guards enumerated — vacuous").toBeGreaterThan(60);
     const uncovered: string[] = [];
+    /** THE GUARD'S OWN LINES, AND A REAL CHANGE TO ONE (cross-family finding
+     * X5-13, 2026-10-06). The window was the throw line plus three lines above,
+     * and an entry counted if its `from` merely CONTAINED one of them — so an
+     * entry on an adjacent guard, whose lines shared that window, credited this
+     * one without disabling it. Now the window stops at the previous guard (a
+     * line that throws, or a lone block close), and the entry must CHANGE a line
+     * of it: present in `from`, absent from `to`. */
+    const ownLines = (lines: string[], line: number) => {
+      const own = [lines[line - 1]!];
+      for (let i = line - 2; i >= Math.max(0, line - 4); i--) {
+        const l = lines[i]!.trim();
+        if (/\bthrow\b/.test(l) || /^[})\];,]+$/.test(l)) break;
+        own.push(lines[i]!);
+      }
+      return own.map((l) => l.trim()).filter((l) => l.length > 8);
+    };
+    /** Does the entry's edit (the span of `from` that differs from `to`, or
+     * its insertion point) land on a `from` line that is one of the guard's
+     * own lines? */
+    const editsOwnLine = (from: string, to: string, own: string[]) => {
+      let p = 0;
+      while (p < from.length && p < to.length && from[p] === to[p]) p++;
+      let q = 0;
+      while (q < from.length - p && q < to.length - p && from[from.length - 1 - q] === to[to.length - 1 - q]) q++;
+      const [a, b] = [p, from.length - q];
+      let at = 0;
+      for (const raw of from.split("\n")) {
+        const fl = raw.trim();
+        const start = at + raw.indexOf(fl);
+        if (fl.length > 8 && own.some((l) => l.includes(fl)) && a <= start + fl.length && b >= start) return true;
+        at += raw.length + 1;
+      }
+      return false;
+    };
     for (const g of guards) {
-      const lines = read(g.file).split("\n");
-      const window = lines.slice(Math.max(0, g.line - 4), g.line).join("\n");
-      const hit = entries.some(([, f, from]) => f === g.file && from.split("\n").some((l) => l.trim().length > 8 && window.includes(l.trim())));
+      const own = ownLines(read(g.file).split("\n"), g.line);
+      const hit = entries.some(([, f, from, to]) => f === g.file && editsOwnLine(from, to, own));
       if (!hit) uncovered.push(`${g.file}:${g.line} ${g.signature.slice(0, 70)}`);
     }
+    // An entry whose edit falls OUTSIDE the guard's own lines does not cover
+    // it, even when its `from` quotes one of them.
+    const ownB = ["if (bFlagged) {", "throw new E(\"second guard message\");"];
+    expect(editsOwnLine("  const unrelated = compute(value);\n  if (bFlagged) {", "  const unrelated = 0;\n  if (bFlagged) {", ownB), "an edit outside the guard counted as disabling it").toBe(false);
+    expect(editsOwnLine("  if (bFlagged) {", "  if (false) {", ownB)).toBe(true);
+    // The matcher's red-proof: an entry that only shares context with a guard,
+    // changing a line OUTSIDE the guard's own lines, does not cover it.
+    const sample = ["  if (a) throw new E(\"first guard message\");", "  const unrelated = compute(value);", "  if (bFlagged) {", "    throw new E(\"second guard message\");", "  }"];
+    const sampleOwn = ownLines(sample, 4);
+    expect(sampleOwn.some((l) => l.includes("first guard")), "the window crossed into the previous guard").toBe(false);
+    expect(sampleOwn).toContain("if (bFlagged) {");
     expect(uncovered, "enumerated guards with no entry that disables them (DONE.md §2.1.6)").toEqual([]);
   });
 

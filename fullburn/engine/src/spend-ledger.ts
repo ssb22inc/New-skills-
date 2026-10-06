@@ -162,8 +162,10 @@ export interface SpendLedger {
 }
 
 /** A stored total that is not a safe non-negative integer is corrupt storage,
- * not a small number. Shared by every read so no path can skip it. */
-function usable(v: number, label: string): number {
+ * not a small number. Shared by every read so no path can skip it. Exported so
+ * the guard can be driven (X5-13): no input reaches it through the ledger now
+ * that the setters are gone (R12-01). */
+export function usable(v: number, label: string): number {
   if (!Number.isSafeInteger(v) || v < 0) {
     throw new MeterUnavailableError(`${label} ledger is corrupt — refusing spend (fail closed)`);
   }

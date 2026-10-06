@@ -1276,6 +1276,10 @@ const MUTATIONS = [
   ["X5-02e only a verified signature counts", "engine/scripts/gate-lib.mjs",
     "      a && a.signatureVerified === true &&",
     "      a &&"],
+  // ---- X5-13: a guard credited through another entry's context now has its own ----
+  ["G6-51 transport-brand.ts — no recorded output for the selected case", "engine/src/transport-brand.ts",
+    "    if (out === undefined) throw new TypeError(`no recorded output for case \"${this.#currentCase}\"`);",
+    "    if (out === undefined) void new TypeError(`no recorded output for case \"${this.#currentCase}\"`);"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
