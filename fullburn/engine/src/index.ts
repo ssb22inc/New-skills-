@@ -8,6 +8,10 @@ export { computeGrades, gradeAndEnforce } from "./grade-registry.ts";
 export { vaultForClient, ClientVault, MemoryVaultBackend } from "./vault.ts";
 export { MemorySpendMeter } from "./spend-meter.ts";
 export { TraceContext, MemoryTraceSink } from "./tracing.ts";
+// Production adapters (X5-12): the AI Gateway transport and the Langfuse sink.
+export { AiGatewayHttpTransport } from "./gateway-http.ts";
+export { LangfuseTraceSink } from "./langfuse-sink.ts";
+export { EncryptedVaultBackend } from "./vault-crypto.ts";
 
 export default {
   async fetch(): Promise<Response> {

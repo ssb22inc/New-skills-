@@ -1280,6 +1280,25 @@ const MUTATIONS = [
   ["G6-51 transport-brand.ts — no recorded output for the selected case", "engine/src/transport-brand.ts",
     "    if (out === undefined) throw new TypeError(`no recorded output for case \"${this.#currentCase}\"`);",
     "    if (out === undefined) void new TypeError(`no recorded output for case \"${this.#currentCase}\"`);"],
+  // ---- X5-12: production AI Gateway transport and Langfuse sink (2026-10-06) ----
+  ["X5-12a the gateway key travels as the gateway credential", "engine/src/gateway-http.ts",
+    "    const forward: Record<string, string> = { \"content-type\": \"application/json\", \"cf-aig-authorization\": auth };",
+    "    const forward: Record<string, string> = { \"content-type\": \"application/json\", authorization: auth };"],
+  ["X5-12b a non-2xx gateway reply is an error", "engine/src/gateway-http.ts",
+    "    if (status < 200 || status > 299) {\n      // The body may echo request material; only the status crosses.\n      throw",
+    "    if (false) {\n      // The body may echo request material; only the status crosses.\n      throw"],
+  ["X5-12c the transport posts only inside its gateway", "engine/src/gateway-http.ts",
+    "    if (target.origin !== this.#base.origin || !target.pathname.startsWith(this.#base.pathname)) {",
+    "    if (false) {"],
+  ["X5-12d a rejected Langfuse event fails the trace", "engine/src/langfuse-sink.ts",
+    "      if (!Array.isArray(errors) || errors.length > 0) throw",
+    "      if (false) throw"],
+  ["X5-12e a Langfuse non-2xx fails the trace", "engine/src/langfuse-sink.ts",
+    "    if (status < 200 || status > 299) throw new LangfuseSinkError",
+    "    if (false) throw new LangfuseSinkError"],
+  ["X5-12f a reply that is not a JSON object is refused", "engine/src/gateway-http.ts",
+    "    if (typeof output !== \"object\" || output === null || Array.isArray(output)) {",
+    "    if (false) {"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
