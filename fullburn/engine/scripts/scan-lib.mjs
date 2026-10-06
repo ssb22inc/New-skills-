@@ -102,6 +102,23 @@ export const SECRET_PATTERNS = [
 export const PROVIDER_HOSTS =
   /openai\.com|anthropic\.com|generativelanguage\.googleapis|mistral\.ai|api\.groq\.com|together\.xyz|fireworks\.ai|openrouter\.ai/;
 
+/** THE GPT ASTRA REVIEWER'S ROUTE (human instruction 2026-10-06: "all AI
+ * review and adversarial AI action should be done by GPT Astra"; ledger L54).
+ * Law 11 governs the ENGINE's model traffic — every call the running engine
+ * makes goes through AI Gateway so it is metered and capped. The reviewer is
+ * build tooling that grades the engine from outside it, in CI, on its own key;
+ * GPT Astra is reached through OpenRouter, and routing the reviewer through the
+ * engine's own gateway would put the code under review in the reviewer's call
+ * path. So exactly ONE file may name exactly ONE router host. Any other
+ * provider host in that file, or that host in any other file — engine source
+ * included — still fails. */
+export const REVIEWER_ROUTE = Object.freeze({ path: /^fullburn\/engine\/scripts\/cross-family-lib\.mjs$/, host: /openrouter\.ai/g });
+
+export function isReviewerRoute(path, content) {
+  if (!REVIEWER_ROUTE.path.test(path)) return false;
+  return !PROVIDER_HOSTS.test(String(content).replace(REVIEWER_ROUTE.host, ""));
+}
+
 /** Static, dynamic and CJS forms all bypass the gateway equally (F16). */
 export const PROVIDER_SDKS =
   /(?:from\s*|import\s*\(\s*|require\s*\(\s*)\s*["'`](?:@anthropic-ai\/|openai|@google\/generative|@mistralai\/|groq-sdk|together-ai)/;
@@ -286,7 +303,7 @@ export function scanContent(path, content) {
   if (!STRUCTURAL_SCOPE.test(path)) return findings;
   if (!CODE_FILE.test(path) || STRUCTURAL_EXEMPT.some((a) => a.test(path))) return findings;
 
-  if (PROVIDER_HOSTS.test(content)) {
+  if (PROVIDER_HOSTS.test(content) && !isReviewerRoute(path, content)) {
     findings.push(`${path}: LLM provider hostname — all LLM traffic goes through AI Gateway (Law 11)`);
   }
   if (PROVIDER_SDKS.test(content)) {

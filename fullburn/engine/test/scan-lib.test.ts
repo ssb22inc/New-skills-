@@ -59,6 +59,19 @@ describe("structural rules (Law 1, 6, 11, 18) — code only", () => {
     expect(scanContent(SRC, 'fetch("https://api.anthropic.com/v1/messages")')).toHaveLength(1);
   });
 
+  /** The GPT Astra reviewer's route (instruction 2026-10-06, L54) is exactly
+   * one file and one host. MUTATION: widen REVIEWER_ROUTE's path, or let any
+   * provider host through in that file. */
+  it("exempts only the Astra reviewer's file, and only its router host", () => {
+    const REVIEWER = "fullburn/engine/scripts/cross-family-lib.mjs";
+    const ROUTER = 'const E = "https://openrouter.ai/api/v1/chat/completions";';
+    expect(scanContent(REVIEWER, ROUTER), "the reviewer's own route was refused").toEqual([]);
+    expect(scanContent(REVIEWER, `${ROUTER}\nfetch("https://api.openai.com/v1/chat")`), "another provider rode the exemption").toHaveLength(1);
+    expect(scanContent(SRC, ROUTER), "engine source reached the router").toHaveLength(1);
+    expect(scanContent("fullburn/engine/scripts/other.mjs", ROUTER), "a second script inherited the exemption").toHaveLength(1);
+    expect(scanContent("fullburn/engine/scripts/sub/cross-family-lib.mjs", ROUTER), "a look-alike path inherited the exemption").toHaveLength(1);
+  });
+
   it("bans provider SDK imports in every module form (F16)", () => {
     expect(scanContent(SRC, 'import x from "openai";')).toHaveLength(1);
     expect(scanContent(SRC, 'const x = require("openai");')).toHaveLength(1);

@@ -1187,6 +1187,16 @@ const MUTATIONS = [
   ["AR-01 C2 needs GPT Astra's PASS", "engine/scripts/done-lib.mjs",
     "  if (!crossFamily || crossFamily.ok !== true) {",
     "  if (!crossFamily) {"],
+  // ---- 2026-10-06: the GPT Astra reviewer's route through the Law 11 scan (L54) ----
+  ["RV-01 the reviewer exemption is one file", "engine/scripts/scan-lib.mjs",
+    "export const REVIEWER_ROUTE = Object.freeze({ path: /^fullburn\\/engine\\/scripts\\/cross-family-lib\\.mjs$/,",
+    "export const REVIEWER_ROUTE = Object.freeze({ path: /cross-family-lib|scripts\\//,"],
+  ["RV-02 the reviewer exemption is one host", "engine/scripts/scan-lib.mjs",
+    "  return !PROVIDER_HOSTS.test(String(content).replace(REVIEWER_ROUTE.host, \"\"));",
+    "  return true;"],
+  ["RV-03 the leak scan consults the reviewer route, nothing wider", "engine/scripts/scan-lib.mjs",
+    "  if (PROVIDER_HOSTS.test(content) && !isReviewerRoute(path, content)) {",
+    "  if (PROVIDER_HOSTS.test(content) && !/scripts\\//.test(path)) {"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
