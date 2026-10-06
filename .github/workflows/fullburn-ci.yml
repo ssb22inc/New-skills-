@@ -56,8 +56,24 @@ jobs:
       # `== 'true'`. If this step is deleted or its id renamed, the output is
       # the empty string: `== 'true'` would skip every gated step and report a
       # GREEN job that executed nothing. `!= 'false'` runs the gate instead.
+      # THE SCOPE IS DECIDED BY THE BASE COMMIT'S SCRIPT (cross-family finding
+      # X5-01). Run from the checkout under review, a PR could rewrite ci-scope.mjs
+      # to print relevant=false and skip every gated step below — including the
+      # money-cap approval check — with this workflow unchanged. The base's script
+      # judges the PR's diff as data. No script at the base (the bootstrap merge,
+      # a new branch) means RUN THE GATE. A failing script fails the job.
       - id: scope
-        run: node engine/scripts/ci-scope.mjs .. "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+        working-directory: .
+        env:
+          SCOPE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SCOPE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$SCOPE_BASE:fullburn/engine/scripts/ci-scope.mjs" 2>/dev/null; then
+            git worktree add --detach "$RUNNER_TEMP/scope-base" "$SCOPE_BASE" > /dev/null
+            node "$RUNNER_TEMP/scope-base/fullburn/engine/scripts/ci-scope.mjs" . "$SCOPE_BASE" "$SCOPE_HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.scope.outputs.relevant != 'false'
         with:
@@ -187,8 +203,24 @@ jobs:
       #
       # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
       # true. See engine/scripts/ci-scope.mjs.
+      # THE SCOPE IS DECIDED BY THE BASE COMMIT'S SCRIPT (cross-family finding
+      # X5-01). Run from the checkout under review, a PR could rewrite ci-scope.mjs
+      # to print relevant=false and skip every gated step below — including the
+      # money-cap approval check — with this workflow unchanged. The base's script
+      # judges the PR's diff as data. No script at the base (the bootstrap merge,
+      # a new branch) means RUN THE GATE. A failing script fails the job.
       - id: scope
-        run: node engine/scripts/ci-scope.mjs .. "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+        working-directory: .
+        env:
+          SCOPE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SCOPE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$SCOPE_BASE:fullburn/engine/scripts/ci-scope.mjs" 2>/dev/null; then
+            git worktree add --detach "$RUNNER_TEMP/scope-base" "$SCOPE_BASE" > /dev/null
+            node "$RUNNER_TEMP/scope-base/fullburn/engine/scripts/ci-scope.mjs" . "$SCOPE_BASE" "$SCOPE_HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.scope.outputs.relevant != 'false'
         with:
@@ -219,8 +251,24 @@ jobs:
       #
       # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
       # true. See engine/scripts/ci-scope.mjs.
+      # THE SCOPE IS DECIDED BY THE BASE COMMIT'S SCRIPT (cross-family finding
+      # X5-01). Run from the checkout under review, a PR could rewrite ci-scope.mjs
+      # to print relevant=false and skip every gated step below — including the
+      # money-cap approval check — with this workflow unchanged. The base's script
+      # judges the PR's diff as data. No script at the base (the bootstrap merge,
+      # a new branch) means RUN THE GATE. A failing script fails the job.
       - id: scope
-        run: node fullburn/engine/scripts/ci-scope.mjs . "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+        working-directory: .
+        env:
+          SCOPE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SCOPE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$SCOPE_BASE:fullburn/engine/scripts/ci-scope.mjs" 2>/dev/null; then
+            git worktree add --detach "$RUNNER_TEMP/scope-base" "$SCOPE_BASE" > /dev/null
+            node "$RUNNER_TEMP/scope-base/fullburn/engine/scripts/ci-scope.mjs" . "$SCOPE_BASE" "$SCOPE_HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.scope.outputs.relevant != 'false'
         with:
@@ -246,8 +294,24 @@ jobs:
       #
       # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
       # true. See engine/scripts/ci-scope.mjs.
+      # THE SCOPE IS DECIDED BY THE BASE COMMIT'S SCRIPT (cross-family finding
+      # X5-01). Run from the checkout under review, a PR could rewrite ci-scope.mjs
+      # to print relevant=false and skip every gated step below — including the
+      # money-cap approval check — with this workflow unchanged. The base's script
+      # judges the PR's diff as data. No script at the base (the bootstrap merge,
+      # a new branch) means RUN THE GATE. A failing script fails the job.
       - id: scope
-        run: node fullburn/engine/scripts/ci-scope.mjs . "${{ github.event.pull_request.base.sha || github.event.before }}" "${{ github.event.pull_request.head.sha || github.sha }}" >> "$GITHUB_OUTPUT"
+        working-directory: .
+        env:
+          SCOPE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SCOPE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$SCOPE_BASE:fullburn/engine/scripts/ci-scope.mjs" 2>/dev/null; then
+            git worktree add --detach "$RUNNER_TEMP/scope-base" "$SCOPE_BASE" > /dev/null
+            node "$RUNNER_TEMP/scope-base/fullburn/engine/scripts/ci-scope.mjs" . "$SCOPE_BASE" "$SCOPE_HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.scope.outputs.relevant != 'false'
         with:

@@ -16,6 +16,7 @@ describe("human approval is owed for the money caps only (ruling 2026-10-06)", (
     "fullburn/engine/scripts/gate-lib.mjs",
     "fullburn/engine/scripts/class2-gate.mjs",
     "fullburn/engine/scripts/diff-lib.mjs",
+    "fullburn/engine/scripts/ci-scope.mjs",
     ".github/workflows/fullburn-ci.yml",
   ];
 

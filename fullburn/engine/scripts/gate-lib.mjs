@@ -144,6 +144,9 @@ export const HUMAN_APPROVAL_PATTERNS = [
   /^fullburn\/engine\/scripts\/gate-lib\.mjs$/,
   /^fullburn\/engine\/scripts\/class2-gate\.mjs$/,
   /^fullburn\/engine\/scripts\/diff-lib\.mjs$/,
+  // Decides whether the gates run at all; the base's copy judges each PR
+  // (X5-01), so a change to it governs every later PR — the cap rule included.
+  /^fullburn\/engine\/scripts\/ci-scope\.mjs$/,
   /^\.github\/workflows\/fullburn-ci\.yml$/,
 ];
 
