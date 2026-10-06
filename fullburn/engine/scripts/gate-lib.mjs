@@ -355,6 +355,14 @@ function shortSha256(text) {
 
 const UNBOUND_HISTORICAL_REPORTS = new Map([
   ["ADVERSARY_REPORT_phase0.r3.md", "38ba0f39"],
+  // r9 (2026-08-17) is a FAIL bound to tree c824ae67 — long superseded by
+  // r10–r14 and x1–x4 — but it quotes a literal NUL byte as evidence (line 618,
+  // the R2-30 key-collision proof). The R7-01 rule that refuses any report
+  // carrying an invisible character, anywhere, landed after it, so it became
+  // permanently unreadable, and unreadable blocks: the CI adversary gate could
+  // never pass again, whatever any later round said (measured 2026-10-06, L53).
+  // Append-only, so it cannot be fixed in place; pinned by content hash like r3.
+  ["ADVERSARY_REPORT_phase0.r9.md", "149d4541"],
 ]);
 
 /** Judge one report against the current tree. */

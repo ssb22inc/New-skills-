@@ -1177,6 +1177,16 @@ const MUTATIONS = [
   ["VC-10 the KEK is exactly 256 bits", "engine/src/vault-crypto.ts",
     "  if (raw.byteLength !== 32) throw",
     "  if (false) throw"],
+  // ---- 2026-10-06: Fullburn-only workflow scope, r9 pin, Astra-only adversary (L53) ----
+  ["WF-01 Fullburn's workflow checks cover Fullburn's workflows only", "engine/test/invariants/invariants.test.ts",
+    "export const FULLBURN_WORKFLOW = /^(?:fullburn-[\\w.-]+|cross-family-read)\\.ya?ml$/;",
+    "export const FULLBURN_WORKFLOW = /\\.ya?ml$/;"],
+  ["R9-01 the committed r9 report is pinned, not blocking", "engine/scripts/gate-lib.mjs",
+    "  [\"ADVERSARY_REPORT_phase0.r9.md\", \"149d4541\"],",
+    ""],
+  ["AR-01 C2 needs GPT Astra's PASS", "engine/scripts/done-lib.mjs",
+    "  if (!crossFamily || crossFamily.ok !== true) {",
+    "  if (!crossFamily) {"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

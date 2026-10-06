@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, astraRoundCondition, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -160,6 +160,16 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(isNonClaudeFamily("anthropic/claude-opus-5")).toBe(false);
     expect(isNonClaudeFamily("")).toBe(false);
     expect(isNonClaudeFamily(null)).toBe(false);
+  });
+
+  /** MUTATION: let C2 pass without the Astra read passing. Instruction of
+   * 2026-10-06 (L53): every adversary round is GPT Astra's. */
+  it("C2 passes only on the GPT Astra adversary's PASS at this tree", () => {
+    expect(astraRoundCondition({ ok: true, reason: "r" }).status).toBe("PASS");
+    expect(astraRoundCondition({ ok: false, reason: "stale" }).status, "a failing Astra read passed C2").toBe("FAIL");
+    expect(astraRoundCondition({ ok: false, reason: "stale" }).observed).toContain("stale");
+    expect(astraRoundCondition(undefined).status, "no Astra read passed C2").toBe("FAIL");
+    expect(astraRoundCondition({ reason: "unmeasured" }).status).toBe("FAIL");
   });
 
   /** MUTATION: grant the automated ack without a C3 PASS. Ruling 2026-10-06

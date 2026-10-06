@@ -2611,14 +2611,39 @@ describe("runner-decision sweep — no verdict is reached where the default suit
  * power to DISABLE A WORKFLOW, which means the power to turn off the gate. Four
  * of the five deleted workflows held it and one of them was `active`.
  *
- * Both are checked against every workflow file found on disk, so a new one is
- * covered the day it lands rather than the round after someone thinks to look. */
+ * Both are checked against every FULLBURN workflow file found on disk, so a new
+ * one is covered the day it lands rather than the round after someone thinks to
+ * look.
+ *
+ * FULLBURN'S WORKFLOWS ONLY (human instruction 2026-10-06: no cross-
+ * contamination with any other project). `.github/workflows/` is shared by the
+ * whole repository, and a pull request's merge ref carries every sibling
+ * project's workflows; scanning them made Fullburn's `verify` fail on another
+ * project's file (ledger L48) and made Fullburn a gate on code it does not own.
+ * A Fullburn workflow is named `fullburn-*.yml` or is the cross-family runner;
+ * a new Fullburn workflow must follow the naming to be covered. */
+export const FULLBURN_WORKFLOW = /^(?:fullburn-[\w.-]+|cross-family-read)\.ya?ml$/;
 describe("workflow hygiene — nothing executes with a credential on a promise (2026-08-22)", () => {
   const wfDir = new URL("../../../../.github/workflows/", import.meta.url);
   const workflows = (): { name: string; src: string }[] =>
     readdirSync(wfDir)
-      .filter((f) => /\.ya?ml$/.test(f))
+      .filter((f) => FULLBURN_WORKFLOW.test(f))
       .map((f) => ({ name: f, src: readFileSync(new URL(f, wfDir), "utf8") }));
+
+  /** MUTATION: widen FULLBURN_WORKFLOW to every YAML file, or narrow it so a
+   * Fullburn workflow drops out. */
+  it("covers exactly Fullburn's own workflows and no other project's", () => {
+    for (const f of ["fullburn-ci.yml", "cross-family-read.yml", "fullburn-deploy.yaml"]) {
+      expect(FULLBURN_WORKFLOW.test(f), `${f} is Fullburn's and must be checked`).toBe(true);
+    }
+    for (const f of ["pulsern-sms-reminders.yml", "haven-ci.yml", "0-start-exercise.yml", "ci.yml", "fullburn-ci.yml.bak"]) {
+      expect(FULLBURN_WORKFLOW.test(f), `${f} is not Fullburn's and must not be gated by it`).toBe(false);
+    }
+    const onDisk = readdirSync(wfDir).filter((f) => FULLBURN_WORKFLOW.test(f)).sort();
+    expect(onDisk, "a Fullburn workflow on disk fell outside the hygiene checks").toEqual(
+      expect.arrayContaining(["cross-family-read.yml", "fullburn-ci.yml"]),
+    );
+  });
 
   /** `uses:` values that are not third-party code and so take no SHA: a local
    * path (`./…`) and a Docker image reference, neither of which resolves

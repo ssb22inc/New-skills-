@@ -26,6 +26,7 @@ import {
   ENGINE_REQUIREMENTS,
   PHASE0_REQUIREMENTS,
   automatedGateAck,
+  astraRoundCondition,
   canaryIsStale,
   class2Condition,
   isNonClaudeFamily,
@@ -207,9 +208,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const reportsDir = `${ROOT}/reports`;
       const names = existsSync(reportsDir) ? selectPhaseReports(phase, readdirSync(reportsDir)) : [];
       const reports = names.map((n) => ({ name: n, content: readFileSync(`${reportsDir}/${n}`, "utf8") }));
-      const { same: sameFamily, cross } = splitReportsByFamily(reports);
-      const same = sameFamily.length === 0 ? { ok: false, reason: "no same-family report under reports/" } : checkAdversaryReport({ phase, reports: sameFamily, currentTreeHash: tree });
-      results.push({ id: "C2", title: "§2.1.2 same-family adversary round PASS against this tree", status: same.ok ? "PASS" : "FAIL", command: `checkAdversaryReport(phase ${phase}, ${reports.length} report(s), tree ${tree.slice(0, 12)})`, observed: same.reason });
+      const { cross } = splitReportsByFamily(reports);
+      // Same-family Claude rounds are retired (L53); their reports stay as history.
       let crossRes;
       let artifact = null;
       if (cross.length === 0) {
@@ -218,6 +218,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         crossRes = checkAdversaryReport({ phase, reports: cross, currentTreeHash: tree });
         if (crossRes.ok) artifact = `reports/${cross.find((r) => checkAdversaryReport({ phase, reports: [r], currentTreeHash: tree }).ok)?.name}`;
       }
+      const c2 = astraRoundCondition(crossRes);
+      results.push({ id: "C2", title: "§2.1.2 (amended 2026-10-06) adversary round by GPT Astra PASS against this tree", status: c2.status, command: "astraRoundCondition(C3)", observed: c2.observed });
       results.push({ id: "C3", title: "§2.1.3 cross-family read PASS against the SAME tree, artifact committed", status: crossRes.ok ? "PASS" : "FAIL", command: `checkAdversaryReport(non-Claude reports only, tree ${tree.slice(0, 12)})`, observed: crossRes.reason });
 
       // 4 — zero open findings
@@ -225,7 +227,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const deferrals = existsSync(approvalsDir)
         ? readdirSync(approvalsDir).flatMap((n) => [...readFileSync(`${approvalsDir}/${n}`, "utf8").matchAll(/^defer-finding:\s*(\S+)/gm)].map((m) => `${m[1]} (${n})`))
         : [];
-      const c4ok = same.ok && crossRes.ok;
+      const c4ok = c2.status === "PASS" && crossRes.ok;
       results.push({ id: "C4", title: "§2.1.4 zero open findings at any severity (deferrals only by a written ruling in APPROVALS/)", status: c4ok ? "PASS" : "FAIL", command: "derived from C2 ∧ C3; APPROVALS/*.md scanned for `defer-finding:` lines", observed: c4ok ? `no open findings; deferrals: ${deferrals.length ? deferrals.join(", ") : "none"}` : `a round against this tree is not PASS, so findings are open; deferrals on file: ${deferrals.length ? deferrals.join(", ") : "none"}` });
 
       // 5 — mutation harness, meta-checked in the same run

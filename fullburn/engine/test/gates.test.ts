@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkClass2Approvals, checkReportsAppendOnly, dirtyWorktreeLines, isClass2, parseVerdict, selectApprovalDocs, selectPhaseReports } from "../scripts/gate-lib.mjs";
@@ -234,6 +235,20 @@ describe("adversary-report gate — a report the gate cannot read blocks it (R5-
     const res = checkAdversaryReport({ phase: "0", reports: [impostor, PASS], currentTreeHash: TREE });
     expect(res.ok, "any file named r3.md inherited the exemption").toBe(false);
     expect(res.reason).toContain("r3.md");
+  });
+
+  /** The committed r9 report quotes a NUL byte as evidence, so the invisible-
+   * character rule makes it unreadable, and unreadable blocks. Unpinned, the CI
+   * adversary gate could never open again (L53, 2026-10-06). Its exemption is
+   * pinned to its exact bytes, so a new r9 cannot inherit it.
+   *
+   * MUTATION: drop the r9 entry from UNBOUND_HISTORICAL_REPORTS. */
+  it("the committed r9 report does not block a later PASS, and an impostor r9 still does", () => {
+    const r9 = { name: "ADVERSARY_REPORT_phase0.r9.md", content: readFileSync(new URL("../../reports/ADVERSARY_REPORT_phase0.r9.md", import.meta.url), "utf8") };
+    expect(r9.content, "r9 no longer carries the NUL this exemption exists for").toContain("\u0000");
+    expect(checkAdversaryReport({ phase: "0", reports: [r9, PASS], currentTreeHash: TREE }).ok, "the pinned r9 blocked a current PASS").toBe(true);
+    const impostor = { name: "ADVERSARY_REPORT_phase0.r9.md", content: `${r9.content}\nVerdict: PASS\n` };
+    expect(checkAdversaryReport({ phase: "0", reports: [impostor, PASS], currentTreeHash: TREE }).ok, "an edited r9 inherited the exemption").toBe(false);
   });
 
   /** An UNCLOSED `<!--` concealed everything after it and was stripped by

@@ -20,9 +20,9 @@ Read ENGINE_BUILD.md before any work. This file binds every session.
 16. **Flags, never forks.** One codebase. Markets and channels are registry flags (ENGINE_BUILD.md §2.5) that flip on only after their bundle passes adversary on live data. Launch: US + Meta on, Google staged (built in Phase 5, live on first baseline beat), all else locked.
 
 ## Build protocol (non-negotiable)
-- Nothing is "done" until the `engine-adversary` subagent returns a PASS report **and** its deterministic tests are green in CI. You never grade your own work.
+- Nothing is "done" until the adversary returns a PASS report **and** its deterministic tests are green in CI. You never grade your own work. **Since 2026-10-06 (L53) every adversary and review action is run by GPT Astra** through `engine/scripts/cross-family-read.mjs`, carrying the `engine-adversary` definition verbatim as its mandate; the Claude subagent is no longer invoked.
 - Before implementing a phase, ask the adversary to attack the plan first.
-- Phase gates are sequential. Never start phase N+1 before phase N's gate opens with human ack.
+- Phase gates are sequential. Never start phase N+1 before phase N's gate opens — since 2026-10-06 (L50) the ack is automated: GPT Astra's PASS at the exact tree.
 - Builder–adversary disagreements go to the human queue. Never auto-resolve.
 - On any ambiguity between code, this file, and ENGINE_BUILD.md: stop and ask the human. ENGINE_BUILD.md wins.
 

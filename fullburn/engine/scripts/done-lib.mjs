@@ -192,6 +192,18 @@ export function isNonClaudeFamily(family) {
   return !/claude|anthropic/i.test(family);
 }
 
+/** DONE.md §2.1.2 AS AMENDED BY THE HUMAN'S INSTRUCTION OF 2026-10-06 (ledger
+ * L53): "all AI review and adversarial AI action should be done by GPT Astra".
+ * The same-family Claude round is retired; the adversary round is the
+ * cross-family read, so C2 is C3's verdict — the same predicate, so the two
+ * rows cannot disagree, and anything short of a PASS is a FAIL. */
+export function astraRoundCondition(crossFamily) {
+  if (!crossFamily || crossFamily.ok !== true) {
+    return { status: "FAIL", observed: `no GPT Astra adversary PASS at this tree${crossFamily?.reason ? ` — ${crossFamily.reason}` : ""}` };
+  }
+  return { status: "PASS", observed: `GPT Astra adversary PASS at this tree — ${crossFamily.reason}` };
+}
+
 /** DONE.md §2.1.10 AS AMENDED BY THE HUMAN'S RULING OF 2026-10-06 (ledger
  * L50): the human gate ack is removed; the automated adversary's verdict is the
  * ack. The phase gate passes exactly when the cross-family read (C3) passed at

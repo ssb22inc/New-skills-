@@ -41,7 +41,7 @@ There are three. They are not interchangeable. Claude Code must always name whic
 All ten conditions hold simultaneously against **one single tree hash**:
 
 1. Every deliverable and acceptance criterion in that phase's ENGINE_BUILD.md section is implemented and **exercised by execution**, mapped `requirement → command run → observed output`.
-2. A same-family `engine-adversary` round returns PASS against tree `T`.
+2. *(Amended by Sheldon's instruction of 2026-10-06, ledger L53: all AI review and adversarial action is GPT Astra's.)* The adversary round — the `engine-adversary` mandate, run by GPT Astra through the cross-family runner — returns PASS against tree `T`. Same-family Claude rounds are retired; their reports remain as history.
 3. A **cross-family** read (non-Claude model family, §10.1) returns PASS against **the same tree `T`** — not an earlier one. Artifact committed.
 4. Zero open findings at any severity. Severity-3+ may be deferred only by a written human ruling in `APPROVALS/` naming the finding ID.
 5. `npm run mutate` reports 0 survived, 0 stale, **preceded in the same run by a passing meta-check** (negative canary SURVIVED, positive canary CAUGHT).
