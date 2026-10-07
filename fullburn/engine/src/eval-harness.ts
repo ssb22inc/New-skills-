@@ -91,11 +91,15 @@ export async function runEval(
   }
 
   const results: { caseId: string; output: unknown }[] = [];
+  const runId = crypto.randomUUID();
   const failures: string[] = [];
 
   for (const gcase of goldenSet) {
     recorded.setCase(gcase.id);
-    const trace = new TraceContext(`eval-${role}-${gcase.id}`, clientId);
+    // ONE TRACE PER DECISION (cross-family finding X6-13): `eval-<role>-<case>`
+    // was the same id for every model, client and run, so a remote sink that
+    // keys traces by id merged distinct decisions into one record.
+    const trace = new TraceContext(`eval-${role}-${modelId}-${clientId}-${runId}-${gcase.id}`, clientId);
     try {
       const bindings = evalCandidateBindings(role, modelId);
       const output = (await llm(

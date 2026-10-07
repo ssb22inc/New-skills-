@@ -128,3 +128,30 @@ describe("Langfuse trace sink (X5-12)", () => {
     expect(() => new LangfuseTraceSink({ host: "https://x.invalid", publicKey: "", secretKey: "b" })).toThrow(LangfuseSinkError);
   });
 });
+
+/** X6-14 (GPT-6 Astra, 2026-10-06): llm() read req.input again for the trace
+ * after awaiting the transport, so a caller could swap the input mid-flight
+ * and the trace described a prompt the provider never received.
+ * MUTATION: X6-14. */
+describe("the traced input is the dispatched input", () => {
+  it("an input changed while the request is in flight does not change the trace", async () => {
+    let release!: () => void;
+    const barrier = new Promise<void>((r) => (release = r));
+    let dispatched = "";
+    const gw: FetchLike = async (_url, init) => {
+      dispatched = JSON.parse(init.body).messages[1].content;
+      await barrier;
+      return { status: 200, text: async () => chat('{"greeting":"hi"}') };
+    };
+    const { deps, sink } = makeDeps({ transport: new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: gw }) });
+    const req = { role: "hello-world", clientId: TEST_CLIENT, input: { ask: "original", nested: { v: 1 } } as Record<string, unknown>, trace: trace("t-x6-14") };
+    const call = llm({ ...deps, bindings: ROLE_BINDINGS }, req);
+    await new Promise((r) => setTimeout(r, 0));
+    (req.input["nested"] as { v: number }).v = 2;
+    req.input = { ask: "replaced" };
+    release();
+    await call;
+    expect(dispatched).toBe(JSON.stringify({ ask: "original", nested: { v: 1 } }));
+    expect(sink.events.at(-1)!.input, "the trace recorded an input the provider never received").toEqual({ ask: "original", nested: { v: 1 } });
+  });
+});

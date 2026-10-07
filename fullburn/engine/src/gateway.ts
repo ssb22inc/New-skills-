@@ -1,5 +1,6 @@
 import { CapError } from "@fullburn/config/caps";
 import { MODELS, ROLE_CARDS, bindingsProvenance, ownEntry, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
+import { deepFreeze } from "@fullburn/config/freeze";
 import { isRecordedTransport } from "./transport-brand.ts";
 
 /** THE ONLY ORIGIN A CREDENTIAL IS EVER SENT TO. `gatewayBaseUrl` was
@@ -137,6 +138,19 @@ export function requireReservingMeter(meter: SpendMeter): Required<Pick<SpendMet
 export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
   const role = typeof req?.role === "string" ? req.role : "(unknown)";
   const clientId = typeof req?.clientId === "string" ? req.clientId : "(unknown)";
+  /** ONE INPUT, SNAPSHOTTED AT ENTRY (cross-family finding X6-14, 2026-10-06).
+   * `req.input` was read once for dispatch and again for the trace, after the
+   * transport had been awaited — so a caller could change it in between and
+   * the trace described a prompt the provider never received. The snapshot is
+   * cloned and frozen here, dispatched, and traced; an input that cannot be
+   * cloned is refused inside the guarded region below. */
+  let input: unknown = null;
+  let inputUnclonable = false;
+  try {
+    input = deepFreeze(JSON.parse(JSON.stringify(req?.input ?? null)) as unknown);
+  } catch {
+    inputUnclonable = true;
+  }
   // A clock that throws must not be the one exit that escapes tracing and
   // redaction (adversary findings B3, M-05): every collaborator call belongs
   // inside the guarded region.
@@ -192,7 +206,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
         role,
         model: modelId,
         startedAtMs,
-        input: redactValue(req?.input, secrets),
+        input: redactValue(input, secrets),
         output: redactValue(output, secrets),
         costUsd: committedUsd,
         outcome: "error",
@@ -247,6 +261,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       // client's traceId (R7-09).
       throw new TraceEmitError("trace context is scoped to a different client (Law 3)");
     }
+    if (inputUnclonable) throw new GatewayError("request input is not plain JSON data — refused before dispatch (Law 9)");
     // Vault least-scope (R11): the vault handle must belong to this client.
     if (deps.vault?.clientId !== req.clientId) {
       throw new GatewayError("vault scope mismatch — cross-client secret access refused (Law 3)");
@@ -359,7 +374,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     try {
       output = await deps.transport.post(
         url,
-        { role, input: req.input, contextBudgetTokens: card.contextBudgetTokens },
+        { role, input, contextBudgetTokens: card.contextBudgetTokens },
         { authorization: `Bearer ${key.value}`, "x-fullburn-client": clientId },
       );
     } catch (err) {
@@ -439,7 +454,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       role,
       model: bound,
       startedAtMs,
-      input: redactValue(req.input, secrets),
+      input: redactValue(input, secrets),
       output: redactValue(output, secrets),
       costUsd: reservation.amountUsd,
       outcome: "ok",

@@ -703,10 +703,12 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         trace: new TraceContext("sweep", SWEEP_CLIENT),
         ...("role" in over ? { role: over["role"] } : {}),
         ...("trace" in over ? { trace: over["trace"] } : {}),
+        ...("input" in over ? { input: over["input"] } : {}),
       };
       const d = { ...deps, bindings: ROLE_BINDINGS, ...over };
       delete (d as Record<string, unknown>)["role"];
       delete (d as Record<string, unknown>)["trace"];
+      delete (d as Record<string, unknown>)["input"];
       return llm(d as never, req as never);
     };
 
@@ -882,6 +884,9 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         expect: /is not the AI Gateway/, fire: () => viaLlm({ gatewayBaseUrl: "https://receiver.example.invalid/v1/x/y/" }) },
       // X-08: a provider that echoes the credential is refused, never returned.
       // X4-06: the output is cloned through JSON; what cannot be, is refused.
+      // X6-14: the input is cloned once at entry; one that cannot be is refused.
+      { name: "a request input that is not plain JSON is refused", file: "engine/src/gateway.ts", type: GatewayError,
+        expect: /request input is not plain JSON data/, fire: () => viaLlm({ input: { n: BigInt(1) } }) },
       { name: "a provider output that is not plain JSON is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /provider output is not plain JSON data/, fire: () => viaLlm({ transport: { async post() { return { greeting: "ok", n: BigInt(1) }; } } }) },
       // X5-05: a buffer, view, Map or Set has no faithful JSON form; the clone

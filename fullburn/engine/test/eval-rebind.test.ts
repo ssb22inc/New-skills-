@@ -189,3 +189,19 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     expect(c.expected["hook"]).toBe("pov");
   });
 });
+
+/** X6-13 (GPT-6 Astra, 2026-10-06): eval trace ids were `eval-<role>-<case>`,
+ * identical across models, clients and runs, so Langfuse — which keys a trace
+ * by its id — merged distinct decisions. MUTATION: X6-13. */
+describe("eval traces are distinct per model, client and run", () => {
+  it("no two eval decisions share a trace id", async () => {
+    const { deps, sink } = makeDeps();
+    await runEval(deps, "genome-tagger", "qwen-72b", GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
+    await runEval(deps, "genome-tagger", "qwen-72b", GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
+    await runEval(deps, "genome-tagger", "llama-70b", GOLDEN, new RecordedTransport(RECORDED_LLAMA_70B), TEST_CLIENT);
+    const ids = sink.events.map((e) => e.traceId);
+    expect(ids.length).toBeGreaterThanOrEqual(GOLDEN.length * 3);
+    expect(new Set(ids).size, "two eval decisions were traced under one id").toBe(ids.length);
+    expect(ids.every((id) => id.includes(TEST_CLIENT)), "an eval trace id does not name its client").toBe(true);
+  });
+});

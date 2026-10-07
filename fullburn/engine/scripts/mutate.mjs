@@ -1334,6 +1334,15 @@ const MUTATIONS = [
   ["X6-12 only a chain-verified attestation counts", "engine/scripts/gate-lib.mjs",
     "      a && a.signatureVerified === true && a.chainVerified === true &&",
     "      a && a.signatureVerified === true &&"],
+  ["X6-13 an eval trace id is unique per model, client and run", "engine/src/eval-harness.ts",
+    "    const trace = new TraceContext(`eval-${role}-${modelId}-${clientId}-${runId}-${gcase.id}`, clientId);",
+    "    const trace = new TraceContext(`eval-${role}-${gcase.id}`, clientId);"],
+  ["X6-14 the trace records the snapshot that was dispatched", "engine/src/gateway.ts",
+    "      input: redactValue(input, secrets),\n      output: redactValue(output, secrets),\n      costUsd: reservation.amountUsd,",
+    "      input: redactValue(req.input, secrets),\n      output: redactValue(output, secrets),\n      costUsd: reservation.amountUsd,"],
+  ["X6-14b an unclonable request input is refused", "engine/src/gateway.ts",
+    "    if (inputUnclonable) throw new GatewayError(\"request input is not plain JSON data",
+    "    if (false) throw new GatewayError(\"request input is not plain JSON data"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
