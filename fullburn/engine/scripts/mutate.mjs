@@ -1473,6 +1473,9 @@ const MUTATIONS = [
   ["VK-43 vault-crypto.ts — secret ${name} was replaced, but revoking the old ", "engine/src/vault-crypto.ts",
     "      throw new VaultError(`secret \"${name}\" was replaced, but revoking the old value at the provider failed — it may still be valid there`);",
     "      void new VaultError(`secret \"${name}\" was replaced, but revoking the old value at the provider failed — it may still be valid there`);"],
+  ["X6-15 the Worker declares nodejs_compat", "engine/wrangler.toml",
+    "compatibility_flags = [\"nodejs_compat\"]",
+    "compatibility_flags = []"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

@@ -5,6 +5,11 @@
 name = "fullburn-engine"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
+# nodejs_compat (human decision 2026-10-06, cross-family finding X6-15): the
+# spend meter's trusted clock needs process.hrtime.bigint(), which workerd
+# provides only with this flag. Measured under workerd itself by
+# engine/test/integration/workerd-runtime.test.ts, which reads this file.
+compatibility_flags = ["nodejs_compat"]
 
 # Per-client Durable Objects, R2 prefixes, Vectorize namespaces are provisioned
 # per client at onboarding (Law 3) — bindings land with Phase 2.
