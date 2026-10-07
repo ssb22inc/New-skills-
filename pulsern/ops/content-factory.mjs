@@ -28,7 +28,8 @@
      SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENROUTER_API_KEY
    ------------------------------------------------------------------ */
 
-import { createClient } from "@supabase/supabase-js";
+import { db, preflightDb, publishedCount } from "./supabase-guard.mjs";
+import { llm, FatalLlmError } from "./llm.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -50,28 +51,10 @@ const POPULATION = opt("--population", null); // 'peds' | 'geriatric' — popula
 const FORCE_CAT = opt("--cat", null);
 const DRY = flag("--dry-run");
 const NGN_ONLY = flag("--ngn");
+const LOOPS = Math.max(1, parseInt(opt("--loops", "1"), 10));      // repeat the pipeline in one process
+const MAX_MIN = parseInt(opt("--max-minutes", "300"), 10);          // stop before a CI job is killed
+const STOP_AT = parseInt(opt("--stop-at", "0"), 10);                // bank size to stop at (0 = no target)
 
-let _sb = null;
-const db = () => (_sb ??= createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY));
-
-/* ---------- LLM call through OpenRouter ---------- */
-async function llm(model, prompt, maxTokens = 6000) {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model, max_tokens: maxTokens, temperature: 0.7,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  const data = await r.json();
-  const text = data?.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error(`Empty response from ${model}`);
-  return text;
-}
 
 const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
@@ -203,8 +186,12 @@ async function run() {
 
   let existingStems = [];
   if (!DRY) {
-    const { data } = await db().from("questions").select("stem").in("cat", targets)
-      .order("created_at", { ascending: false }).limit(30);
+    /* This read is what stops the generator rewriting items the bank already
+       holds. Swallowing its error does not degrade gracefully — it silently
+       turns duplicate avoidance off, so surface it. */
+    const { data, error } = await db().from("questions").select("stem").in("cat", targets)
+      .order("created_at", { ascending: false }).limit(60);
+    if (error) throw new Error(`Could not read existing stems (duplicate avoidance would be off): ${error.message}`);
     existingStems = (data ?? []).map((r) => r.stem.slice(0, 60));
   }
 
@@ -223,7 +210,7 @@ async function run() {
     else schemaOk.push(it);
   }
   console.log(`Schema pass: ${schemaOk.length}/${items.length}`);
-  if (!schemaOk.length) return;
+  if (!schemaOk.length) return { inserted: 0, dupes: 0, reviewed: 0, survived: 0 };
 
   // ADVERSARIAL REVIEW by a different vendor
   const rawRev = await llm(REVIEW_MODEL, reviewPrompt(schemaOk), 6000);
@@ -243,7 +230,10 @@ async function run() {
   console.log(`Adversarial pass: ${survivors.length}/${schemaOk.length}`);
 
   // INSERT — approved stays FALSE. Humans open the gate, never this script.
-  if (DRY) { console.log("Dry run — nothing written. Survivors:", JSON.stringify(survivors, null, 2).slice(0, 800)); return; }
+  if (DRY) {
+    console.log("Dry run — nothing written. Survivors:", JSON.stringify(survivors, null, 2).slice(0, 800));
+    return { inserted: 0, dupes: 0, reviewed: schemaOk.length, survived: survivors.length };
+  }
 
   const rows = survivors.map(({ item, reviewNotes }) => ({
     cat: item.cat, diff: item.diff, type: item.type,
@@ -264,13 +254,97 @@ async function run() {
     gen_model: GEN_MODEL, review_model: REVIEW_MODEL,
     reviewer_notes: reviewNotes,
   }));
-  const { error } = await db().from("questions").insert(rows);
-  if (error) throw error;
-  console.log(`Inserted ${rows.length} items → ${PUBLISH ? "PUBLISHED live (adversarial gate)" : "review queue (approved=false)"}`);
+  /* Row by row, deliberately. A unique index on the stem guards the bank
+     (migration 011), and at several thousand items a collision is routine
+     rather than exceptional. A single batch insert throws the whole batch
+     away over one duplicate, which is how a long run dies half-finished.
+     Each row now stands or falls alone; duplicates are counted, not fatal. */
+  let inserted = 0, dupes = 0;
+  for (const row of rows) {
+    const { error } = await db().from("questions").insert(row);
+    if (!error) { inserted++; continue; }
+    if (/duplicate key|uniq_question_stem|23505/i.test(error.message)) { dupes++; continue; }
+    throw error;
+  }
+  console.log(`Inserted ${inserted}${dupes ? ` · skipped ${dupes} duplicate${dupes === 1 ? "" : "s"}` : ""} → ${PUBLISH ? "PUBLISHED live (adversarial gate)" : "review queue (approved=false)"}`);
+  return { inserted, dupes, reviewed: schemaOk.length, survived: survivors.length };
+}
+
+/* Repeat the pipeline in one process. Bounded by both a loop count and a wall
+   clock, so a CI job stops itself cleanly instead of being killed mid-insert. */
+async function runMany() {
+  const started = Date.now();
+  if (!DRY) await preflightDb(); // fail in seconds, before any model spend
+  const total = { inserted: 0, dupes: 0, reviewed: 0, survived: 0 };
+  let attempted = 0, failed = 0, hitTarget = false;
+  for (let i = 1; i <= LOOPS; i++) {
+    const mins = (Date.now() - started) / 60000;
+    if (mins > MAX_MIN) { console.log(`Time budget reached after ${i - 1} loops.`); break; }
+
+    /* Stop at the target rather than burning the loop budget past it. Each
+       parallel job checks independently, so the bank can overshoot by at most
+       one loop per job — far cheaper than the alternative, which is paying for
+       thousands of items nobody asked for. */
+    if (STOP_AT > 0 && !DRY) {
+      const size = await publishedCount("questions", { excludeExamForm: true });
+      if (size >= STOP_AT) {
+        console.log(`Target reached: bank holds ${size} approved practice items (target ${STOP_AT}).`);
+        hitTarget = true;
+        break;
+      }
+      if (i === 1) console.log(`Bank at ${size}; target ${STOP_AT}.`);
+    }
+    console.log(`\n──── loop ${i}/${LOOPS} ────`);
+    attempted++;
+    try {
+      const r = await run();
+      for (const k of Object.keys(total)) total[k] += r?.[k] ?? 0;
+    } catch (e) {
+      // One bad generation must not end a multi-hour run — but see below: a
+      // run where EVERY loop failed is a failure, not a quiet success.
+      failed++;
+      console.error(`  loop ${i} failed: ${e.message}`);
+      /* Some failures cannot improve on the next attempt. Spending the rest of
+         the budget rediscovering an empty balance wastes runner time and fills
+         the log with the same sentence sixty times. */
+      if (e instanceof FatalLlmError) { console.error("  Stopping: this cannot succeed on a retry."); break; }
+    }
+  }
+  const pct = total.reviewed ? Math.round((total.survived / total.reviewed) * 100) : 0;
+  console.log(`\n════ run complete ════`);
+  console.log(`loops ${attempted} attempted · ${failed} failed`);
+  console.log(`reviewed ${total.reviewed} · passed adversarial ${total.survived} (${pct}%) · inserted ${total.inserted} · duplicates skipped ${total.dupes}`);
+
+  /* Tolerating a bad loop keeps a long run alive, but it also hides the case
+     that matters: a run that quietly lost most of its loops to rate limiting
+     still ends green, and the only visible symptom is a target that never
+     arrives. Say so loudly enough to be noticed in a CI summary. */
+  if (attempted > 0 && failed / attempted > 0.25) {
+    const lostPct = Math.round((failed / attempted) * 100);
+    console.log(`::warning::${failed} of ${attempted} loops failed (${lostPct}%). Throughput was far below capacity — check the retry messages above for rate limiting or credit limits.`);
+  }
+
+  /* Tolerating a bad loop is useful; reporting a totally dead run as success is
+     not. If every loop failed, or a live run inserted nothing at all, exit
+     non-zero so CI goes red instead of showing a green tick over no work. */
+  if (attempted > 0 && failed === attempted) {
+    console.error(`All ${attempted} loops failed — nothing was generated.`);
+    process.exit(1);
+  }
+  if (!DRY && total.inserted === 0 && !hitTarget) {
+    console.error("Run finished without inserting a single item.");
+    process.exit(1);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  run().catch((e) => { console.error("FACTORY FAILED:", e.message); process.exit(1); });
+  /* --check verifies credentials and exits. CI runs it as its own step so a
+     bad secret shows up as a named failure in seconds rather than as a
+     mysterious error two minutes into generation. */
+  const job = flag("--check")
+    ? preflightDb().then(() => console.log("Preflight OK."))
+    : runMany();
+  job.catch((e) => { console.error("FACTORY FAILED:", e.message); process.exit(1); });
 }
 
 export { validItem }; // exported for tests

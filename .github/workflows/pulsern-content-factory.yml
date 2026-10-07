@@ -1,0 +1,153 @@
+name: content-factory
+
+# The twice-daily schedule was retired on 2026-09-07, at the owner's
+# instruction, once the libraries reached their targets: 10,034 practice
+# questions, 506 case studies, 1,145 flashcards. Topping up a bank of that
+# size by 12 items a day is not worth the standing model spend.
+#
+# The workflow itself is kept and still runs on demand, so a top-up is one
+# click away without having to rebuild any of this. Restoring the schedule
+# means putting the `schedule:` block back.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+
+      - run: npm ci
+
+      - name: Preflight — required secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          # Presence only — lengths and names, never values.
+          missing=""
+          [ -n "$SUPABASE_URL" ]             || missing="$missing SUPABASE_URL"
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || missing="$missing SUPABASE_SERVICE_ROLE_KEY"
+          [ -n "$OPENROUTER_API_KEY" ]        || missing="$missing OPENROUTER_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"
+            echo ""
+            echo "These must be REPOSITORY secrets on ssb22inc/New-skills-:"
+            echo "  Settings -> Secrets and variables -> Actions -> Repository secrets"
+            echo ""
+            echo "Common causes: added as Variables rather than Secrets, added as"
+            echo "Environment or Dependabot secrets (Actions cannot read those), or"
+            echo "added to a different repository."
+            exit 1
+          fi
+          echo "All three required secrets are present."
+          echo "  SUPABASE_URL length: ${#SUPABASE_URL}"
+          echo "  SUPABASE_SERVICE_ROLE_KEY length: ${#SUPABASE_SERVICE_ROLE_KEY}"
+          echo "  OPENROUTER_API_KEY length: ${#OPENROUTER_API_KEY}"
+
+      # Presence is not validity: a publishable key and a personal access token
+      # both pass every name check and then fail deep inside a run, after the
+      # model spend. Make the credential prove itself instead — one read and one
+      # service-role-only call, neither of which writes anything.
+      - name: Preflight — credentials actually work
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node ops/content-factory.mjs --check
+
+      - name: Run question factory
+        run: node ops/content-factory.mjs --batch 12
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Run flashcard factory
+        run: node ops/card-factory.mjs --batch 40
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Run case factory
+        run: node ops/case-factory.mjs --count 2
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      # Keep one durable incident instead of opening a dated duplicate after
+      # every failed attempt. A later successful recovery closes any open
+      # factory incidents so the tracker describes the current state.
+      - name: Reconcile factory incident
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          RUN_RESULT: ${{ job.status }}
+        with:
+          script: |
+            const marker = "<!-- pulsern-content-factory-incident -->";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100,
+            });
+            const incidents = openIssues.filter((issue) =>
+              !issue.pull_request &&
+              (/^content factory failed(?:\s|$)/i.test(issue.title) || issue.body?.includes(marker))
+            );
+
+            if (process.env.RUN_RESULT === "success") {
+              for (const issue of incidents) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `Recovered successfully in ${runUrl}. Closing this incident.`,
+                });
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: "closed",
+                  state_reason: "completed",
+                });
+              }
+              core.info(`Factory succeeded; closed ${incidents.length} open incident(s).`);
+              return;
+            }
+
+            const body = `${marker}\nThe on-demand content-factory run failed.\n\nRun: ${runUrl}\n\nInspect the failing step, correct the provider or database cause, and re-run the workflow. A successful recovery will close this incident automatically.`;
+            if (incidents.length) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: incidents[0].number,
+                body: `Another factory attempt failed: ${runUrl}`,
+              });
+              core.info(`Updated existing incident #${incidents[0].number}.`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: "content factory failed",
+                body,
+              });
+              core.info(`Opened incident #${created.data.number}.`);
+            }

@@ -1,0 +1,144 @@
+name: PulseRN adversarial search gate
+
+on:
+  pull_request:
+    paths:
+      - "pulsern/**"
+      - ".github/workflows/pulsern-seo-guardian.yml"
+  push:
+    branches: [main]
+    paths:
+      - "pulsern/**"
+      - ".github/workflows/pulsern-seo-guardian.yml"
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adversarial-search-audit:
+    runs-on: ubuntu-latest
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      SEO_ADVERSARY_MODEL: openai/gpt-4.1
+      VITE_SUPABASE_URL: http://127.0.0.1:54321
+      VITE_SUPABASE_ANON_KEY: public-ci-placeholder
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+      - run: npm ci
+      - name: Unit and negative-fixture tests
+        id: tests
+        continue-on-error: true
+        run: npm test
+      - name: Install accessibility browser
+        id: browser
+        continue-on-error: true
+        run: npx playwright install --with-deps chromium
+      - name: Capture authentic product screenshot evidence
+        id: product_capture
+        continue-on-error: true
+        run: npm run product:screenshots:capture
+      - name: Build exact candidate artifact
+        id: build
+        continue-on-error: true
+        run: npm run build
+      - name: Deterministic search, provenance, and intent gate
+        id: deterministic
+        if: always()
+        continue-on-error: true
+        run: npm run seo:audit
+      - name: Authentic product image provenance
+        id: product_images
+        if: always()
+        continue-on-error: true
+        run: npm run seo:product-images
+      - name: Public landing and private app boundary
+        id: app_boundary
+        if: always()
+        continue-on-error: true
+        run: npm run seo:app-boundary
+      - name: Local anonymous agent crawl
+        id: crawl
+        if: always()
+        continue-on-error: true
+        run: npm run seo:crawl
+      - name: Production anonymous agent crawl
+        id: crawl_live
+        if: always()
+        continue-on-error: true
+        run: npm run seo:crawl:live
+      - name: Exact production commit and route verification
+        id: live_release
+        if: always()
+        continue-on-error: true
+        run: npm run seo:live-release
+      - name: IndexNow candidate validation and production submission
+        id: indexnow
+        if: always()
+        continue-on-error: true
+        run: npm run seo:indexnow
+      - name: Authoritative source reachability
+        id: sources
+        if: always()
+        continue-on-error: true
+        run: npm run seo:sources
+      - name: Commercial comparison source and drift audit
+        id: commercial
+        if: always()
+        continue-on-error: true
+        run: npm run seo:commercial
+      - name: Official NCLEX rule and fee drift audit
+        id: exam_rules
+        if: always()
+        continue-on-error: true
+        run: npm run seo:exam-rules
+      - name: WCAG accessibility audit
+        id: accessibility
+        if: always()
+        continue-on-error: true
+        run: npm run seo:accessibility
+      - name: Required adversarial model review
+        id: adversary
+        if: always()
+        continue-on-error: true
+        run: npm run seo:adversary
+      - name: Bind evidence to commit
+        if: always()
+        run: npm run seo:evidence
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsern-search-audit
+          path: pulsern/reports/seo
+      - name: Enforce every required gate
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.tests.outcome }}" = "success"
+          test "${{ steps.browser.outcome }}" = "success"
+          test "${{ steps.product_capture.outcome }}" = "success"
+          test "${{ steps.build.outcome }}" = "success"
+          test "${{ steps.deterministic.outcome }}" = "success"
+          test "${{ steps.product_images.outcome }}" = "success"
+          test "${{ steps.app_boundary.outcome }}" = "success"
+          test "${{ steps.crawl.outcome }}" = "success"
+          test "${{ steps.crawl_live.outcome }}" = "success"
+          test "${{ steps.live_release.outcome }}" = "success"
+          test "${{ steps.indexnow.outcome }}" = "success"
+          test "${{ steps.sources.outcome }}" = "success"
+          test "${{ steps.commercial.outcome }}" = "success"
+          test "${{ steps.exam_rules.outcome }}" = "success"
+          test "${{ steps.accessibility.outcome }}" = "success"
+          test "${{ steps.adversary.outcome }}" = "success"
+          npm run seo:enforce

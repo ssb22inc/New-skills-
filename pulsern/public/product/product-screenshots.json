@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-06T11:43:59.417Z",
+  "sourceCommitSha": "0542c74dd80b5335dc91b45d893ef7acf1821173",
+  "renderer": "PulseRN App.jsx deterministic built-in-content harness",
+  "browser": "151.0.7922.34",
+  "containsLearnerData": false,
+  "sourceSetSha256": "50adaf1890383c7e73a5e7611b654e33d17b3a17ef3fc54ea57deb2161f97b75",
+  "sourceFiles": {
+    "src/App.jsx": "9ec0577c845e4f849fec764c355a04d085ead49c6b2faaf048ae72bef599824d",
+    "src/ability-engine.js": "a4a3c018359cf2128407cf31c3059f4bd2fcde84138aacb68c7614d963e3f462",
+    "src/app-main.jsx": "6fb222a28909201dff7b23674d7bc3edad533a0ef27ae66094dd09f7e447167f",
+    "src/app-routing.js": "12857f7ebab011e33bb1d74e1953d8ba21ef0bacf6db8e49f3a7bf31f98f5e9a",
+    "src/auth.jsx": "86a425e2a1622180a23b96bf073d72b7b35a1beb0ffd5665fa34c26041d0ce6b",
+    "src/billing.jsx": "fe543576e0fb37b382f737f3cdbe59da73b102d9a87f936c727e0b7ec00b8b61",
+    "src/calculator.jsx": "9809bf3116b94ecec2ba3e7efa2cb541714ed8c754718b6f2c8351d2862ae57f",
+    "src/case-studies.js": "72d1788b11cb489673682bf60ab7357a8b380ffb6275b96e94ced4225bbd9a0c",
+    "src/dates.js": "a47a5e7b677c9bdf7a051c5ee9d5faa3caff00d95030c771849b303c9af8b5ad",
+    "src/exam.jsx": "d1f392a08a819011a67394d6f3f7fc751fb8335a200931273cee061f06a74d01",
+    "src/exhibits.jsx": "777ca626c162271e5b40074e4054e233a384f7c9e21d06d3fac6fd17d3846f61",
+    "src/install.jsx": "aff9dfbde81e7a2b84f910de02cbbd54a7c5e41aff326856cd7c935f168c3c63",
+    "src/labs.js": "8d7cab0c115b5b002e9833343c4cfb18454cca4e47ea242564219bb41a137604",
+    "src/landing.jsx": "01f4132e85fba51d167628d29b73a148c3e4ae95d59fc7314892a14dafb63a3f",
+    "src/main.jsx": "f5f831ed673478786f9471ca7e355c295143db026f41ffc251b0da9d0b076f55",
+    "src/ngn-samples.js": "3c2ef292fc49892dd677168452fb6299ba33f9d47ec93a03f2a61a83bb85ba5d",
+    "src/ngn.js": "246975658d68f079092e02e4ee10f06ac7a57268146eb7711768e369ad50ea3f",
+    "src/phone.js": "06aa341c3dc80534da7b8ded727d5ce698235fb919119cb574176b2ca137e263",
+    "src/pricing.js": "e11bcde403f319434abc73a7148a0a87cef8984d96ae74b1ab20f8399f68745c",
+    "src/profile.jsx": "d6d33f5e0a33369637878098614e53ff0cbe7d1e8c20b9331137626cbd4bd59b",
+    "src/selftest.js": "461ffde7017551ffade6a55e9648b313ac433eef7a2c80268146421ce54d4d47",
+    "src/srs.js": "b9d8c5c6252bf1caf46727c9f8752f17db9e2fada42df6076d6999ce740141c0",
+    "src/state.js": "f6fc9c563824e08138a7079dc55754a9f522f5e5a8e9997ca5b23bfba890545e",
+    "src/supabase.js": "f50a21d412c6b4e667b488a4e7c2eb5c4afcb0ed66e60fd658f2a7b207fe8db7"
+  },
+  "images": [
+    {
+      "file": "pulsern-adaptive-practice.png",
+      "sha256": "302b97b55583fffb28681fd75632d342aca7e8c1e78a934d938ac1b51a1f4ba5",
+      "bytes": 40559,
+      "width": 720,
+      "height": 620,
+      "alt": "PulseRN adaptive NCLEX practice screen with a pharmacology question and four answer choices",
+      "caption": "Authentic adaptive NCLEX practice with answer-first review."
+    },
+    {
+      "file": "pulsern-today-dashboard.png",
+      "sha256": "5d51f6352fdbdc3b1d7ab4421a6dd17566a98b4ee03f3473bf4c0cd7a9756c81",
+      "bytes": 66854,
+      "width": 720,
+      "height": 1000,
+      "alt": "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards",
+      "caption": "A daily plan without guesswork"
+    },
+    {
+      "file": "pulsern-lab-reference.png",
+      "sha256": "d915727e561ee81a349620bd465c5cf5ec90fa0e9826e5f7927fc036afab6832",
+      "bytes": 82080,
+      "width": 430,
+      "height": 932,
+      "alt": "PulseRN mobile lab-reference drawer open over an adaptive practice question",
+      "caption": "Lab reference at your fingertips"
+    }
+  ]
+}

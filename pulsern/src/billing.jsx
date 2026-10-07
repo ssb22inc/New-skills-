@@ -29,15 +29,26 @@ export async function fetchEntitlement() {
 }
 
 /* The free pass is the one row a client may insert itself; the partial
-   unique index in migration 007 caps it at one per account for life. */
+   unique index in migration 007 caps it at one per account for life.
+
+   The insert result used to be discarded. One student answered a question
+   with no subscription row at all, which means the grant failed and nothing
+   anywhere recorded that it had: not the student, not the owner, not the
+   funnel. A duplicate is the expected, harmless case — the index doing its
+   job for someone who already had their day — so that one stays quiet.
+   Anything else is a real failure and is raised, because access silently not
+   being granted is exactly the kind of fault that hides for months. */
 export async function grantFreePass() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) throw new Error("Sign in first");
-  await supabase.from("subscriptions").insert({
+  const { error } = await supabase.from("subscriptions").insert({
     user_id: session.user.id, plan: "pass1",
     expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
     exams_granted: 0, price_cents: 0,
   });
+  if (error && !/duplicate|unique|23505/i.test(error.message)) {
+    throw new Error(`Free pass could not be started: ${error.message}`);
+  }
   return fetchEntitlement();
 }
 

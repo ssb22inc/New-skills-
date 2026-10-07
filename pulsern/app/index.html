@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>PulseRN Study App — Sign in</title>
+    <meta name="description" content="Sign in to the private PulseRN NCLEX-RN study application." />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <meta name="googlebot" content="noindex, nofollow, noarchive" />
+    <meta name="theme-color" content="#0E7C6B" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <link rel="manifest" href="/app.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="PulseRN" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="PulseRN" />
+    <style>
+      body { margin: 0; background: #f6f7f9; color: #102f2a; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+      .app-entry { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 24px; text-align: center; }
+      .app-entry h1 { margin: 0; color: #0e6e5c; }
+      .app-entry p { margin: 0; color: #5b6472; }
+      .app-entry button { margin-top: 10px; border: 0; border-radius: 10px; padding: 10px 14px; background: #0e7c6b; color: white; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <div id="root"><main class="app-entry"><h1>PulseRN</h1><p>Loading the private study application…</p></main></div>
+    <noscript><main class="app-entry"><h1>PulseRN study app</h1><p>JavaScript is required to sign in and use the private study tools. Public guides remain available from <a href="/learn/">the Learn hub</a>.</p></main></noscript>
+    <script type="module" src="/src/app-main.jsx"></script>
+  </body>
+</html>

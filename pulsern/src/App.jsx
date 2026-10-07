@@ -352,7 +352,12 @@ function Why({ label = "why this works", children }) {
   );
 }
 
-const freshCards = () => CARDS.map(() => ({ interval: 0, due: todayStr() }));
+/* The legacy fixed-position schedule. It is persisted for the blob contract
+   and read by nothing — srsMap replaced it. It starts EMPTY on purpose: it used
+   to start as one {interval: 0, due: today} placeholder per built-in card, and
+   those placeholders were later migrated into srsMap as genuine due-today
+   reviews, pinning the built-in cards to the front of the queue forever. */
+const freshCards = () => [];
 
 /* ================= APP ================= */
 
@@ -415,11 +420,9 @@ export default function App() {
           setStreak(s.streak);
           const d = s.daily ?? { day: todayStr(), answered: 0 };
           setDaily(d.day === todayStr() ? d : { day: todayStr(), answered: 0 });
-          if (s.srs.length) {
-            // Merge saved schedule with current card list: keep existing
-            // intervals, seed fresh entries for any cards added in an update.
-            setSrs(CARDS.map((_, i) => s.srs[i] ?? { interval: 0, due: todayStr() }));
-          }
+          // Kept verbatim. Re-stamping gaps with today's date on every load is
+          // what made ungraded cards look permanently due.
+          setSrs(s.srs);
           setSrsMap(migrateLegacySrs(s.srs, s.srsMap));
           setExamResults(s.examResults);
           setCustomQs(s.customQs);
@@ -463,13 +466,26 @@ export default function App() {
   const refreshEnt = async () => {
     try {
       let e = await fetchEntitlement();
-      if (e.status === "none") { try { e = await grantFreePass(); } catch { /* index says they had one */ } }
+      if (e.status === "none") {
+        /* The grant is best-effort for the student — a failure here must not
+           block the app — but it must not vanish either. It used to be
+           swallowed by a bare catch, and one student ended up answering
+           questions with no access row and no trace of why. Re-read the
+           entitlement so a race (two tabs, a retry) still lands on the truth,
+           and leave the reason in the console for the owner diagnostics. */
+        try {
+          e = await grantFreePass();
+        } catch (err) {
+          console.warn("free pass not granted:", err?.message ?? err);
+          try { e = await fetchEntitlement(); } catch { /* keep the first read */ }
+        }
+      }
       setEnt(e);
     } catch {
       setEnt({ status: "offline", expiresAt: null, hadPaid: false, examsLeft: 0, attempted: [] });
     }
   };
-  /* Stripe sends a completed checkout back to /?checkout=success. The webhook
+  /* Stripe sends a completed checkout back to /app/?checkout=success. The webhook
      that writes the subscription row can land a beat after the redirect, so
      poll briefly rather than showing "no plan yet" to someone who just paid.
      The param is stripped immediately so a refresh or a copied link cannot
@@ -788,6 +804,11 @@ export default function App() {
                 <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
                 <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
               </>}
+              {/* Owner only — students never see this entry, and the page and
+                  its API refuse anyone who is not in the reviewers table. */}
+              {isOwner && (
+                <button className="menu-item" onClick={() => { window.location.assign("/owner/"); }}>🛠 Owner tools — system &amp; accounts</button>
+              )}
               <button className="menu-item" onClick={() => supabase.auth.signOut()}>↪ Sign out</button>
             </nav>
           </>
@@ -825,10 +846,10 @@ export default function App() {
             ability={ability} calibration={calibration} plan={plan}
             profile={profile} setProfile={setProfile} profileCardDismissed={profileCardDismissed} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
-            cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} addXp={(n) => setXp((x) => x + n)} />}
+            cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)} />}
           {tab === "qbank" && <QBank record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} isOwner={isOwner} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
-          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} />}
+          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
           {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
@@ -1060,7 +1081,7 @@ function Today(props) {
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} fcFlips={props.fcFlips} onFlip={props.onFlip} embedded onDone={() => setStage("quiz")} />
+      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} embedded onDone={() => setStage("quiz")} />
     </div>
   );
 
@@ -1759,7 +1780,7 @@ const parseAntidote = (c) => {
 
 const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i.test(c.topic);
 
-function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = false, onDone, fcFlips = 99, onFlip }) {
+function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
   const [show, setShow] = useState(false);
@@ -1773,12 +1794,19 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, embedded = fals
     [cards, catFilter]
   );
 
-  // (Re)build the queue when the deck or focus changes — not on every grade.
+  /* (Re)build the queue when the deck or focus changes — not on every grade,
+     which would reshuffle the session underneath the student.
+
+     `ready` is in the deps because the saved schedule arrives asynchronously.
+     Building the queue before it lands makes every card look unseen, so the
+     first cards of the bank get served again to someone who has already
+     scheduled them days out. Rebuilding once the blob is in fixes that; it
+     does not fire again on grading, because `ready` only flips once. */
   useEffect(() => {
     setSessionQueue(dueQueue(filtered, srsMap));
     setShow(false); setTyped("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered.length, catFilter.join("|")]);
+  }, [ready, filtered.length, catFilter.join("|")]);
 
   const curId = sessionQueue?.[0];
   const cur = curId != null ? cards.find((c) => c.id === curId) : null;
@@ -2135,7 +2163,6 @@ Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a t
 function Style() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap');
       .app{
         /* LIGHT (default study theme) */
         --paper:#F3F6F4; --ink:#0F2E29; --card:#FFFFFF; --muted:#3B554F;

@@ -4,9 +4,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase.js";
 import App from "./App.jsx";
+import InstallCard from "./install.jsx";
+import { APP_ROOT, authModeFromUrl, authRedirectUrl } from "./app-routing.js";
+import { suggestEmail } from "./email-typo.js";
+import { explainAuthError } from "./auth-messages.js";
+import { captureAttribution, flushAttribution } from "./attribution.js";
 
-export function AuthScreen() {
-  const [mode, setMode] = useState("signin"); // signin | signup | forgot
+export function AuthScreen({ initialMode = "signin", onBack }) {
+  const [mode, setMode] = useState(initialMode); // signin | signup | forgot
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -14,6 +19,9 @@ export function AuthScreen() {
   const [linkBusy, setLinkBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  /* Recomputed per keystroke: the check is a couple of short string compares,
+     far cheaper than the state a debounce would need. */
+  const typoSuggestion = suggestEmail(email);
 
   /* Messages render above the form, but the buttons that produce them sit at
      the bottom of the card. On a phone — especially with the keyboard up — the
@@ -31,12 +39,12 @@ export function AuthScreen() {
     setBusy(true); setError(""); setNotice("");
     try {
       if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: authRedirectUrl() } });
         if (error) throw error;
         if (data.user && !data.session) setNotice("Check your email to confirm your account, then sign in.");
       } else if (mode === "forgot") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin,
+          redirectTo: authRedirectUrl("recovery"),
         });
         if (error) throw error;
         setNotice("If that email has an account, a reset link is on its way. Open it on this device.");
@@ -45,7 +53,12 @@ export function AuthScreen() {
         if (error) throw error;
       }
     } catch (err) {
-      setError(err.message || "Something went wrong. Try again.");
+      /* A throttle after a successful signup is not a failure, and colouring it
+         red is what cost us a live prospect. Let the translator decide whether
+         this is something the student must fix or simply something that has
+         already worked. */
+      const m = explainAuthError(err.message, mode);
+      if (m.tone === "notice") setNotice(m.text); else setError(m.text);
     } finally {
       setBusy(false);
     }
@@ -77,20 +90,13 @@ export function AuthScreen() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: window.location.origin },
+        options: { emailRedirectTo: authRedirectUrl() },
       });
       if (error) throw error;
       setNotice("Check your email — tap the link and you're in. No password needed.");
     } catch (err) {
-      /* GoTrue throttles one email per address per minute. Its raw wording
-         ("For security purposes...") reads like a rejection, so say plainly
-         that the first link is already on its way. */
-      const wait = /only request this after (\d+)/.exec(err.message || "");
-      setError(
-        wait
-          ? `A link was just sent to that address — check your inbox and spam. You can request another in ${wait[1]} seconds.`
-          : err.message || "Could not send the link. Try again."
-      );
+      const m = explainAuthError(err.message, "signin");
+      if (m.tone === "notice") setNotice(m.text); else setError(m.text);
     } finally {
       setLinkBusy(false);
     }
@@ -100,19 +106,19 @@ export function AuthScreen() {
     setError(""); setNotice("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: authRedirectUrl() },
     });
     if (error) setError(error.message || "Google sign-in is unavailable right now.");
   };
 
   return (
-    <div className="auth-wrap">
+    <main className="auth-wrap">
       <style>{`
         .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center;
           background: #f6f7f9; font-family: system-ui, -apple-system, sans-serif; padding: 16px; }
         .auth-card { background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 32px;
           width: 100%; max-width: 400px; box-shadow: 0 4px 24px rgba(20,30,50,.06); }
-        .auth-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #b42318; margin: 0 0 2px; }
+        .auth-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #0e6e5c; margin: 0 0 2px; }
         .auth-motto { font-size: 13px; font-style: italic; color: #0e6e5c; font-weight: 600; margin: 0 0 10px; }
         .auth-sub { color: #5b6472; font-size: 14px; margin: 0 0 20px; }
         .auth-field { display: block; width: 100%; box-sizing: border-box; padding: 11px 12px; margin-bottom: 10px;
@@ -122,19 +128,26 @@ export function AuthScreen() {
         .auth-eye { position: absolute; right: 6px; top: 5px; height: 32px; padding: 0 10px; border: 0;
           background: none; color: #5b6472; font-size: 13px; font-weight: 600; cursor: pointer; }
         .auth-btn { display: block; width: 100%; padding: 11px 12px; border-radius: 10px; border: 0;
-          background: #b42318; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+          background: #0e7c6b; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
         .auth-btn:disabled { opacity: .6; cursor: default; }
         .auth-btn.alt { background: #fff; color: #1c2430; border: 1px solid #d5dae1; margin-top: 10px; }
         .auth-btn.google { display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: #8a93a2; font-size: 13px; }
+        .auth-or { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: #5b6472; font-size: 13px; }
         .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: #e3e6ea; }
-        .auth-switch { background: none; border: 0; color: #b42318; cursor: pointer; font-size: 14px; padding: 0; }
+        .auth-switch { background: none; border: 0; color: #0e6e5c; cursor: pointer; font-size: 14px; padding: 0; }
         .auth-err { color: #b42318; font-size: 13px; margin: 0 0 10px; }
         .auth-note { color: #067647; font-size: 13px; margin: 0 0 10px; }
-        .auth-foot { color: #8a93a2; font-size: 12px; margin-top: 18px; line-height: 1.5; }
+        /* Amber, per the design system's caution role: this is a suggestion to
+           check something, not an error and not a success. */
+        .auth-typo { color: #8a5a00; font-size: 13px; margin: -6px 0 10px; }
+        .auth-typo-fix { background: none; border: 0; padding: 0; font: inherit;
+          color: #0e7c6b; font-weight: 600; text-decoration: underline; cursor: pointer; }
+        .auth-typo-fix:focus-visible { outline: 2px solid #0e7c6b; outline-offset: 2px; border-radius: 3px; }
+        .auth-foot { color: #5b6472; font-size: 12px; margin-top: 18px; line-height: 1.5; }
       `}</style>
       <div className="auth-card">
-        <p className="auth-logo">PulseRN</p>
+        {onBack && <button className="auth-switch" type="button" onClick={onBack} style={{ marginBottom: 16 }}>&larr; Back to PulseRN</button>}
+        <h1 className="auth-logo">PulseRN</h1>
         <p className="auth-motto">Created by a licensed RN — for future RNs.</p>
         <p className="auth-sub">{
           mode === "signup" ? "Create your account — progress syncs to every device."
@@ -147,6 +160,18 @@ export function AuthScreen() {
         <form onSubmit={submit}>
           <input className="auth-field" type="email" required placeholder="Email" autoComplete="email"
             value={email} onChange={(e) => setEmail(e.target.value)} />
+          {/* A near-miss domain is offered, never imposed: the address is
+              valid, it just probably is not theirs. One signup was already
+              lost to yaoo.com, and nothing in the product could tell them. */}
+          {typoSuggestion && (
+            <p className="auth-typo">
+              Did you mean{" "}
+              <button type="button" className="auth-typo-fix" onClick={() => setEmail(typoSuggestion)}>
+                {typoSuggestion}
+              </button>
+              ?
+            </p>
+          )}
           {mode !== "forgot" && (
             <div className="auth-pw-wrap">
               <input className="auth-field" type={showPw ? "text" : "password"} required minLength={6} placeholder="Password (6+ characters)"
@@ -195,8 +220,9 @@ export function AuthScreen() {
           </button>
         </p>
         <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/learn/" style={{ color: "#5b6472" }}>Guides</a> · <a href="/about/" style={{ color: "#5b6472" }}>About</a> · <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
+        <InstallCard scope="auth" headline="Install the PulseRN study app" message="Keep your study tools one tap away. Installation is handled by your browser; no app-store download is required." />
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -217,9 +243,9 @@ function NewPasswordScreen({ onDone }) {
   };
 
   return (
-    <div className="auth-wrap">
+    <main className="auth-wrap">
       <div className="auth-card">
-        <p className="auth-logo">PulseRN</p>
+        <h1 className="auth-logo">PulseRN</h1>
         <p className="auth-sub">Choose a new password to finish resetting your account.</p>
         {error && <p className="auth-err">{error}</p>}
         <form onSubmit={submit}>
@@ -235,7 +261,7 @@ function NewPasswordScreen({ onDone }) {
           <button className="auth-btn" type="submit" disabled={busy}>{busy ? "Saving…" : "Save new password"}</button>
         </form>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -248,22 +274,26 @@ export class ErrorBoundary extends React.Component {
   render() {
     if (!this.state.crashed) return this.props.children;
     return (
-      <div className="auth-wrap">
+      <main className="auth-wrap">
         <div className="auth-card">
-          <p className="auth-logo">PulseRN</p>
+          <h1 className="auth-logo">PulseRN</h1>
           <p className="auth-sub">Something went wrong on this screen. Your progress is saved to your account — reloading will pick up right where you left off.</p>
           <button className="auth-btn" onClick={() => window.location.reload()}>Reload PulseRN</button>
         </div>
-      </div>
+      </main>
     );
   }
 }
 
 export default function AuthGate() {
   const [session, setSession] = useState(undefined); // undefined = still checking
-  const [recovering, setRecovering] = useState(false);
+  const [recovering, setRecovering] = useState(() => authModeFromUrl() === "reset");
+  const [authMode] = useState(() => authModeFromUrl());
 
   useEffect(() => {
+    /* An ad can point straight at /app/, so the tags must be captured here too
+       and not only on the marketing site. */
+    captureAttribution();
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
@@ -272,8 +302,22 @@ export default function AuthGate() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  /* Write the first touch once there is a user to attach it to. The sign-up
+     that an ad paid for often happens on a later visit than the click, so the
+     tags are carried in localStorage until an account exists to own them. The
+     table's primary key makes a repeat call a no-op, so this can run on every
+     sign-in without tracking whether it has already happened. */
+  useEffect(() => {
+    if (session?.user?.id) flushAttribution(supabase, session.user.id);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session || recovering || window.location.pathname === APP_ROOT) return;
+    window.history.replaceState({}, "", `${APP_ROOT}${window.location.search}${window.location.hash}`);
+  }, [session, recovering]);
+
   if (session === undefined) return null;
-  if (recovering && session) return <NewPasswordScreen onDone={() => setRecovering(false)} />;
-  if (!session) return <AuthScreen />;
+  if (recovering && session) return <NewPasswordScreen onDone={() => { setRecovering(false); window.history.replaceState({}, "", APP_ROOT); }} />;
+  if (!session) return <AuthScreen initialMode={authMode} onBack={() => window.location.assign("/")} />;
   return <App key={session.user.id} />;
 }

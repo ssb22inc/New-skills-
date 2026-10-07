@@ -1,0 +1,161 @@
+#!/usr/bin/env node
+/* PulseRN keepalive — stop the Supabase project going to sleep, and say so
+   loudly the moment it has.
+   ------------------------------------------------------------------
+   On 2026-09-28 students hit "Failed to fetch" on the sign-in screen. Nothing
+   was broken: Supabase pauses a free-tier project after roughly a week with no
+   database activity, the project had been idle since 2026-09-08, and the whole
+   backend — database and auth — was simply switched off. The only reason
+   anyone found out was the owner trying to sign in.
+
+   Two jobs, in this order:
+
+     1. KEEP IT AWAKE. The pause timer is driven by database activity, so a
+        real query on a real table resets it. One cheap read a day is enough.
+
+     2. SAY SO IF IT IS ALREADY DOWN. A keepalive that fails quietly is worse
+        than none, because it looks like cover. Any failure exits non-zero so
+        the workflow goes red and opens an incident.
+
+   Both surfaces a student touches are checked, because they fail separately:
+   PostgREST serves study content, GoTrue serves sign-in. A paused project
+   takes down both, but a broken key or a bad RLS change can take down one
+   alone, and the message should say which.
+
+   Usage:
+     node ops/keepalive.mjs
+
+   Env (server-side only): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+   ------------------------------------------------------------------ */
+
+import { db } from "./supabase-guard.mjs";
+
+const URL_ = process.env.SUPABASE_URL ?? "";
+const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+
+/* A paused project does not answer politely — it refuses the connection, or
+   the gateway returns 5xx. Telling that apart from an ordinary error is the
+   difference between "go un-pause it" and "go fix your query". */
+const looksPaused = (detail) =>
+  /fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|5[0-9]{2}/i.test(detail);
+
+/* The project ref is the first label of the Supabase hostname. If the URL is
+   malformed the link must degrade to the dashboard root rather than printing a
+   broken one — an outage message is the worst place to send someone nowhere. */
+function dashboardUrl() {
+  const ref = /^https:\/\/([a-z0-9-]+)\.supabase\.(co|in)$/i.exec(URL_.trim().replace(/\/+$/, ""))?.[1];
+  return ref ? `https://supabase.com/dashboard/project/${ref}` : "https://supabase.com/dashboard";
+}
+
+function report(what, detail) {
+  const paused = looksPaused(detail);
+  console.error(`\n✗ ${what} unreachable: ${detail}`);
+  if (paused) {
+    console.error(`
+The project looks PAUSED or unreachable, not misconfigured.
+
+Supabase pauses a free-tier project after about a week without database
+activity. While it is paused every student sees "Failed to fetch" on the
+sign-in screen, because the browser's request never reaches a server.
+
+  Fix: open the project in the Supabase dashboard and restore it.
+       ${dashboardUrl()}
+       It takes a few minutes to come back up.
+
+This workflow exists to keep that from happening. If it has been failing for
+days, check that the schedule is still running at all — GitHub disables
+scheduled workflows in a repository with no activity for 60 days, which would
+silently disarm this guard.`);
+  }
+  process.exit(1);
+}
+
+async function main() {
+  if (!URL_) report("SUPABASE_URL", "not set");
+  if (!KEY) report("SUPABASE_SERVICE_ROLE_KEY", "not set");
+
+  /* 1. Study content. This read is also the activity that resets the timer. */
+  try {
+    const { error } = await db().from("questions").select("id").limit(1);
+    if (error) report("Database (PostgREST)", error.message);
+  } catch (e) {
+    report("Database (PostgREST)", e.message);
+  }
+  console.log("✓ Database reachable — pause timer reset.");
+
+  /* 2. Sign-in. GoTrue runs separately from PostgREST, so check it separately:
+        this is the exact surface that produced "Failed to fetch". */
+  try {
+    const r = await fetch(`${URL_}/auth/v1/health`, { headers: { apikey: KEY } });
+    if (!r.ok) report("Auth (GoTrue)", `HTTP ${r.status}`);
+  } catch (e) {
+    report("Auth (GoTrue)", e.message);
+  }
+  console.log("✓ Auth reachable — students can sign in.");
+
+  /* 3. Funnel milestones. Signup, trial and purchase are recorded live, but
+        first_answer and activated are derived from each student's answer log,
+        which only the product writes — so something has to notice when a
+        student crosses the line. This is that something.
+
+        It rides on the keepalive rather than getting its own schedule because
+        it needs exactly the same credentials and the same daily cadence, and a
+        second cron is a second thing that can silently stop.
+
+        A failure here does NOT fail the job: the funnel going stale is a
+        reporting problem, while a red keepalive means "students cannot reach
+        PulseRN" and must keep meaning only that. */
+  try {
+    const { error } = await db().rpc("refresh_funnel_events");
+    if (error) console.warn(`  ! funnel refresh skipped: ${error.message}`);
+    else console.log("✓ Funnel milestones refreshed.");
+  } catch (e) {
+    console.warn(`  ! funnel refresh skipped: ${e.message}`);
+  }
+
+  /* 4. Signup friction. A student who creates an account and never signs in is
+        the most expensive failure the product has: they wanted it enough to
+        type their email, and something in the way stopped them. It is also
+        completely silent -- nobody complains, they just leave. On 2026-09-29 a
+        live prospect was lost this way, and it was found only because they
+        happened to send a screenshot.
+
+        This is deliberately a deterministic check rather than a job for the
+        adversarial reviewer. "Did anyone sign up and never get in" is a
+        counting question with a right answer; a model asked to judge it would
+        produce a confident opinion instead. The adversarial reviewer earns its
+        place on the WORDS those students read -- see the friction pass in
+        ops/copy-audit.mjs -- which is a language judgement it is genuinely
+        better at than a regex. */
+  const DAYS = 3;
+  const since = new Date(Date.now() - DAYS * 86400_000).toISOString();
+  const { data: stuck, error: stuckErr } = await db()
+    .from("funnel_events").select("user_id").eq("event", "signup").gte("occurred_at", since);
+  if (stuckErr) {
+    console.warn(`  ! signup check skipped: ${stuckErr.message}`);
+  } else if (stuck?.length) {
+    const ids = stuck.map((r) => r.user_id);
+    const { data: started } = await db()
+      .from("funnel_events").select("user_id").eq("event", "trial_start").in("user_id", ids);
+    const gotIn = new Set((started ?? []).map((r) => r.user_id));
+    const blocked = ids.filter((id) => !gotIn.has(id));
+    if (blocked.length) {
+      /* A GitHub warning rather than a failure: people do sign up and drift
+         away for their own reasons, and a red keepalive must keep meaning
+         "PulseRN is unreachable". But it must not be invisible either. */
+      console.log(`::warning::${blocked.length} of ${ids.length} signup(s) in the last ${DAYS} days never reached the app. Check /owner/ -> Funnel, and whether email confirmation is still switched on.`);
+    }
+    console.log(`Signups in the last ${DAYS} days: ${ids.length} · reached the app: ${ids.length - blocked.length}`);
+  } else {
+    console.log(`No signups in the last ${DAYS} days.`);
+  }
+
+  /* Size is not the point of this job, but it is free once connected and it
+     makes the daily log a record of the library rather than a bare tick. */
+  const { count } = await db().from("questions")
+    .select("id", { count: "exact", head: true })
+    .eq("approved", true).is("exam_form", null);
+  console.log(`\nPulseRN is up. Practice bank: ${count ?? "unknown"} approved questions.`);
+}
+
+main().catch((e) => report("Keepalive", e.message));

@@ -16,6 +16,17 @@ export function dueQueue(cards, srsMap) {
     if (!e) fresh.push(c.id);
     else if (e.due <= today) reviews.push(c.id);
   }
+  /* Oldest due first, then least-recently-seen. The second key matters: a card
+     graded "again" stays due today, and with reviews emitted in bank order an
+     early card would sit at position 0 on every reload — the same card greeting
+     the student every time they refreshed. Sorting by last seen sends a card
+     you just graded to the back of today's reviews instead. */
+  reviews.sort((a, b) => {
+    const ea = srsMap[a], eb = srsMap[b];
+    if (ea.due !== eb.due) return ea.due < eb.due ? -1 : 1;
+    const sa = ea.seen ?? "", sb = eb.seen ?? "";
+    return sa < sb ? -1 : sa > sb ? 1 : 0;
+  });
   return [...reviews, ...fresh.slice(0, NEW_PER_DAY)];
 }
 
@@ -28,17 +39,36 @@ export function nextSchedule(entry, grade) {
   else if (grade === "hard") next = 1;
   else if (grade === "good") next = interval < 1 ? 3 : Math.min(interval * 2 + 1, 60);
   else next = interval < 1 ? 7 : Math.min(interval * 3 + 1, 90);
-  return { interval: next, due: addDays(Math.max(0, next)) };
+  // `seen` orders same-day reviews so a card just graded does not jump the queue.
+  return { interval: next, due: addDays(Math.max(0, next)), seen: todayStr() };
 }
 
-/* One-time migration: the legacy blob stored srs as an array aligned to the
-   built-in card list. Fold it into srsMap under the built-ins' stable ids. */
+/* Runs once on load. Two jobs: fold the legacy fixed-position array into
+   srsMap under the built-ins' stable ids, and clean out placeholder entries a
+   previous build had already written there. */
 export function migrateLegacySrs(srsArray, srsMap) {
-  const map = { ...srsMap };
+  const map = {};
+  /* Sanitise what is already saved. An entry with interval 0 and no `seen`
+     stamp came from the old placeholder seeding, not from a student grading a
+     card, and it reads as a review that is due today — every day. Dropping it
+     returns the card to the new-card pool, which is where an unstudied card
+     belongs. Anything genuinely graded from now on carries `seen`, so real
+     "again" grades survive this. */
+  for (const [id, e] of Object.entries(srsMap ?? {})) {
+    if (!e || typeof e.due !== "string") continue;
+    if ((e.interval ?? 0) === 0 && !e.seen) continue;
+    map[id] = e;
+  }
   if (Array.isArray(srsArray)) {
     srsArray.forEach((e, i) => {
-      if (e && typeof e.due === "string" && map[`b${i}`] === undefined) {
-        map[`b${i}`] = { interval: e.interval ?? 0, due: e.due };
+      /* Only entries carrying real progress are migrated. Early builds seeded
+         the whole legacy array with {interval: 0, due: today} placeholders for
+         every built-in card, and folding those in turned each one into a
+         due-today *review* — permanently parked ahead of genuine reviews and
+         exempt from the new-card cap. An interval of 0 encodes no schedule
+         worth keeping, so those cards are left as new instead. */
+      if (e && typeof e.due === "string" && (e.interval ?? 0) >= 1 && map[`b${i}`] === undefined) {
+        map[`b${i}`] = { interval: e.interval, due: e.due };
       }
     });
   }

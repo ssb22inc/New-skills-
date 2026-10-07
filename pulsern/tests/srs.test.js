@@ -33,8 +33,8 @@ describe("nextSchedule ladder", () => {
   afterEach(() => vi.useRealTimers());
 
   it("again → later today, hard → tomorrow", () => {
-    expect(nextSchedule({ interval: 15, due: "2026-07-13" }, "again")).toEqual({ interval: 0, due: "2026-07-13" });
-    expect(nextSchedule(undefined, "hard")).toEqual({ interval: 1, due: "2026-07-14" });
+    expect(nextSchedule({ interval: 15, due: "2026-07-13" }, "again")).toMatchObject({ interval: 0, due: "2026-07-13" });
+    expect(nextSchedule(undefined, "hard")).toMatchObject({ interval: 1, due: "2026-07-14" });
   });
   it("good grows 3 → 7 → 15 and caps at 60", () => {
     expect(nextSchedule(undefined, "good").interval).toBe(3);
@@ -50,14 +50,63 @@ describe("nextSchedule ladder", () => {
 });
 
 describe("migrateLegacySrs", () => {
-  it("folds the fixed-position array into srsMap under built-in ids", () => {
+  it("folds real intervals from the fixed-position array into srsMap", () => {
     const legacy = [{ interval: 3, due: "2026-07-20" }, { interval: 0, due: "2026-07-13" }];
     const map = migrateLegacySrs(legacy, {});
     expect(map.b0).toEqual({ interval: 3, due: "2026-07-20" });
-    expect(map.b1).toEqual({ interval: 0, due: "2026-07-13" });
+    // interval 0 was a placeholder the old app seeded for every built-in card,
+    // not a real grading. Migrating it made the card a due-today review that
+    // sat at the front of the queue forever, so it is deliberately skipped.
+    expect(map.b1).toBeUndefined();
   });
   it("never overwrites existing srsMap entries", () => {
     const map = migrateLegacySrs([{ interval: 3, due: "2026-07-20" }], { b0: { interval: 15, due: "2026-08-01" } });
     expect(map.b0).toEqual({ interval: 15, due: "2026-08-01" });
+  });
+});
+
+/* ---- regression: cards must not reappear unless they were failed ---- */
+describe("cards do not repeat once graded", () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 6, 13, 12, 0, 0)); });
+  afterEach(() => vi.useRealTimers());
+
+  const deck = Array.from({ length: 5 }, (_, i) => card(`c${i}`));
+
+  it("leaves the queue after good, hard or easy", () => {
+    for (const g of ["good", "hard", "easy"]) {
+      const map = { c0: nextSchedule(undefined, g) };
+      expect(dueQueue(deck, map).includes("c0")).toBe(false);
+    }
+  });
+
+  it("stays due after again, but does not park itself at the front", () => {
+    // three cards already due today, none seen today; c0 is then failed
+    const map = {
+      c0: { interval: 2, due: "2026-07-13", seen: "2026-07-10" },
+      c1: { interval: 2, due: "2026-07-13", seen: "2026-07-10" },
+      c2: { interval: 2, due: "2026-07-13", seen: "2026-07-10" },
+    };
+    map.c0 = nextSchedule(map.c0, "again");
+    const q = dueQueue(deck, map);
+    expect(q.includes("c0")).toBe(true);        // still due — it was failed
+    expect(q[0]).not.toBe("c0");                // but behind the cards not yet seen today
+    expect(q.indexOf("c0")).toBeGreaterThan(q.indexOf("c1"));
+  });
+
+  it("drops placeholder entries that were never really studied", () => {
+    // what an older build left behind: every built-in marked due today
+    const poisoned = {};
+    for (let i = 0; i < 5; i++) poisoned[`c${i}`] = { interval: 0, due: "2026-07-13" };
+    poisoned.c9 = { interval: 15, due: "2026-07-13", seen: "2026-06-28" }; // genuine review
+    const cleaned = migrateLegacySrs([], poisoned);
+    expect(Object.keys(cleaned)).toEqual(["c9"]);
+    // the placeholders come back as NEW cards, subject to the daily cap
+    expect(dueQueue(deck, cleaned).length).toBe(5);
+  });
+
+  it("keeps a genuine again grade through the cleanup", () => {
+    const map = migrateLegacySrs([], { c0: nextSchedule(undefined, "again") });
+    expect(map.c0).toBeDefined();
+    expect(dueQueue(deck, map).includes("c0")).toBe(true);
   });
 });

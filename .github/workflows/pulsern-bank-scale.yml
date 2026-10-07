@@ -1,0 +1,147 @@
+name: bank-scale
+
+# Bulk expansion of the practice bank, run on demand.
+#
+# The scheduled content-factory workflow adds ~24 items a day, which is right
+# for topping up but would take months to move the bank by thousands. This one
+# fans out across the eight client-need categories so eight jobs generate in
+# parallel, each looping the full pipeline: generate, adversarial review by a
+# different vendor, schema gate, insert.
+#
+# --publish is passed deliberately, per the standing owner order of
+# 2026-07-16: the adversarial gate at >=0.85 confidence is the publication gate
+# for practice questions, with the review console keeping rejection authority.
+
+on:
+  workflow_dispatch:
+    inputs:
+      loops:
+        description: "Pipeline loops per category (each loop = one generate + one review call)"
+        required: true
+        default: "12"
+      batch:
+        description: "Items requested per loop"
+        required: true
+        default: "15"
+      max_minutes:
+        description: "Wall-clock budget per job, kept under the 6h runner cap"
+        required: true
+        default: "300"
+      stop_at:
+        description: "Stop once the live bank reaches this many approved practice items (0 = no target)"
+        required: true
+        default: "7000"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    # Categories run independently, so one failing job never blocks the rest.
+    strategy:
+      fail-fast: false
+      # OpenRouter reserves each in-flight request's maximum possible cost
+      # against the account balance, so eight jobs asking for large
+      # completions get refused with 402 while the credit is still unspent.
+      # Three keeps the reservation inside a modest balance; raise it only
+      # alongside the balance itself.
+      max-parallel: 3
+      matrix:
+        cat:
+          - "Management of Care"
+          - "Safety & Infection Control"
+          - "Health Promotion & Maintenance"
+          - "Psychosocial Integrity"
+          - "Basic Care & Comfort"
+          - "Pharmacology"
+          - "Reduction of Risk"
+          - "Physiological Adaptation"
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+
+      - run: npm ci
+
+      - name: Preflight — required secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          # Presence only — lengths and names, never values.
+          missing=""
+          [ -n "$SUPABASE_URL" ]             || missing="$missing SUPABASE_URL"
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || missing="$missing SUPABASE_SERVICE_ROLE_KEY"
+          [ -n "$OPENROUTER_API_KEY" ]        || missing="$missing OPENROUTER_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"
+            echo ""
+            echo "These must be REPOSITORY secrets on ssb22inc/New-skills-:"
+            echo "  Settings -> Secrets and variables -> Actions -> Repository secrets"
+            echo ""
+            echo "Common causes: added as Variables rather than Secrets, added as"
+            echo "Environment or Dependabot secrets (Actions cannot read those), or"
+            echo "added to a different repository."
+            exit 1
+          fi
+          echo "All three required secrets are present."
+          echo "  SUPABASE_URL length: ${#SUPABASE_URL}"
+          echo "  SUPABASE_SERVICE_ROLE_KEY length: ${#SUPABASE_SERVICE_ROLE_KEY}"
+          echo "  OPENROUTER_API_KEY length: ${#OPENROUTER_API_KEY}"
+
+      # Presence is not validity. Guessing at a key by its length or prefix let
+      # both a publishable key and a personal access token through, each of
+      # which then failed two minutes into generation with real model spend
+      # already burned. This step makes the credential prove itself: one read
+      # and one service-role-only call, neither of which writes anything.
+      - name: Preflight — credentials actually work
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node ops/content-factory.mjs --check
+
+      - name: Expand ${{ matrix.cat }}
+        run: |
+          node ops/content-factory.mjs \
+            --cat "${{ matrix.cat }}" \
+            --batch "${{ inputs.batch }}" \
+            --loops "${{ inputs.loops }}" \
+            --max-minutes "${{ inputs.max_minutes }}" \
+            --stop-at "${{ inputs.stop_at }}" \
+            --publish
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+  report:
+    needs: generate
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the resulting bank size
+        run: |
+          COUNT=$(curl -s -o /dev/null -D - \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/questions?select=id&approved=eq.true&exam_form=is.null&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Prefer: count=exact" -H "Range: 0-0" \
+            | grep -i '^content-range' | sed 's|.*/||' | tr -d '\r')
+          if [ -z "$COUNT" ]; then
+            echo "::error::Could not read the bank size — Supabase returned no count."
+            echo "The credential in SUPABASE_SERVICE_ROLE_KEY cannot read this project."
+            echo "### Practice bank: could not be read" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "Approved practice questions now live: $COUNT"
+          echo "### Practice bank: $COUNT approved questions" >> $GITHUB_STEP_SUMMARY
