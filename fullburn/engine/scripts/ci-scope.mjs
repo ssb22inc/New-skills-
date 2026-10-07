@@ -30,10 +30,14 @@ import { parseNameStatusZ } from "./diff-lib.mjs";
  * outside them (adversary finding R8-04b). */
 export const CI_SCOPE_GLOBS = Object.freeze([
   "fullburn/**",
-  ".github/**",
+  // Fullburn's own workflows and CODEOWNERS only — `.github/` is shared, and
+  // another project's workflow change is not Fullburn's to gate (2026-10-07).
+  ".github/CODEOWNERS",
+  ".github/workflows/fullburn-*",
+  ".github/workflows/cross-family-read.yml",
   // The repo-root agent-discovery tree (2026-09-20): a change to the
   // adversary's definition must run the gate that definition guards.
-  ".claude/**",
+  ".claude/agents/**",
   "DONE.md",
   // The primary secret scanner's configuration (X2-04): a change to what
   // gitleaks reports must run the gate that gitleaks is part of.

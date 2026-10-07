@@ -1497,7 +1497,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const approvalOk =
             gateLib.selectApprovalDocs([{ status: "modified", path: "fullburn/APPROVALS/x.md" }]).length === 0 &&
             gateLib.selectApprovalDocs([{ status: "added", path: "fullburn/APPROVALS/x.md" }]).length === 1;
-          const scopeOk = gateLib.VERIFIED_TREE_SCOPE.includes(".github/");
+          const scopeOk = gateLib.VERIFIED_TREE_SCOPE.includes(":(glob).github/workflows/fullburn-*") && gateLib.VERIFIED_TREE_SCOPE.includes(".github/CODEOWNERS");
           const dirtyOk =
             gateLib.dirtyWorktreeLines(" M fullburn/config/src/caps.ts").length === 1 &&
             gateLib.dirtyWorktreeLines("M  fullburn/config/src/caps.ts").length === 0;
@@ -1556,7 +1556,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
             mirror === src &&
             gateLib.isClass2(p) === true &&
             scanLib !== undefined &&
-            gateLib.VERIFIED_TREE_SCOPE.includes(".claude/")
+            gateLib.VERIFIED_TREE_SCOPE.includes(".claude/agents/")
           );
         },
       },

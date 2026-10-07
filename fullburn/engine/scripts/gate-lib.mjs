@@ -38,7 +38,13 @@ export const CLASS2_PATTERNS = [
   // and no gate. So the root tree is covered here first, and the mirror only
   // exists because it is. Anything under a root `.claude/` configures how
   // agents behave in this repository; all of it is a human decision.
-  /^\.claude\//,
+  // FULLBURN'S OWN FILES ONLY (human instruction 2026-10-06: no cross-
+  // contamination). `.claude/` and `.github/` are shared by every project in
+  // the repository; main carries another build's workflows, GitHub's exercise
+  // workflows and an unrelated skill there. Matching the whole folder made a
+  // PulseRN workflow edit a Fullburn Class-2 change — running Fullburn's gates
+  // on PulseRN pull requests and blocking them on an Astra review of Fullburn.
+  /^\.claude\/agents\//,
   // THE COMPLETION CONTRACT. DONE.md defines when to stop (its own §0: "done"
   // is an exit code, never a sentence the builder writes). A contract editable
   // with no approval, outside the verified tree, is not a contract.
@@ -50,7 +56,7 @@ export const CLASS2_PATTERNS = [
   /^fullburn\/config\/src\//,
   /^fullburn\/engine\/src\//,
   // The gates themselves and everything that decides whether they run
-  /^\.github\//,
+  /^\.github\/(?:CODEOWNERS|workflows\/(?:fullburn-[^/]+|cross-family-read)\.ya?ml)$/,
   /^fullburn\/engine\/scripts\//,
   // THE PRIMARY SECRET SCANNER'S CONFIGURATION (cross-family finding X2-04,
   // 2026-09-24): a root .gitleaks.toml or .gitleaksignore decides what the
@@ -506,10 +512,15 @@ export function selectApprovalDocs(changedFiles) {
  * workflow change and watches a standing PASS go stale. */
 export const VERIFIED_TREE_SCOPE = Object.freeze([
   "fullburn/",
-  ".github/",
+  // Fullburn's own workflows and the ownership file — not the whole shared
+  // `.github/` (2026-10-07: main carries other projects' workflows there, and
+  // a PulseRN workflow edit must not stale a Fullburn review).
+  ".github/CODEOWNERS",
+  ":(glob).github/workflows/fullburn-*",
+  ".github/workflows/cross-family-read.yml",
   // The agent-discovery tree (2026-09-20). A PASS that does not cover the
   // adversary's own definition asserts nothing about who produced it.
-  ".claude/",
+  ".claude/agents/",
   "DONE.md",
   // The primary scanner's configuration (X3-06): Class-2 and in CI scope since
   // X2-04, but outside the hash a review binds to, so changing what gitleaks

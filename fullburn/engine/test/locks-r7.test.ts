@@ -1031,7 +1031,7 @@ describe("control plane — an approval cannot be minted by the agent it restrai
     // UNKNOWN IS IN SCOPE — fail-safe, never fail-quiet.
     expect(inScope(null as unknown as string[]), "an undeterminable diff skipped the gate").toBe(true);
     expect(inScope([]), "an empty diff skipped the gate").toBe(true);
-    expect(CI_SCOPE_GLOBS, "the .github tree left the gate's scope (R8-04b)").toContain(".github/**");
+    expect(CI_SCOPE_GLOBS, "Fullburn's workflows left the gate's scope (R8-04b)").toContain(".github/workflows/fullburn-*");
   });
 
   /** THE PARSER ITSELF, DRIVEN. The previous version of the check above matched

@@ -634,9 +634,13 @@ describe("gate-CLI decisions, extracted so the default suite can drive them (run
    * gate-cli.test.ts, which commits a workflow change and watches the binding
    * go stale; this states the requirement where the constant lives. */
   it("the verified tree covers the CI that enforces the gate, and excludes the record", () => {
-    expect(VERIFIED_TREE_SCOPE, "the workflow definition left the adversary's scope (R2-18)").toContain(".github/");
+    // Fullburn's own workflows and CODEOWNERS (R2-18), not the shared folder (2026-10-07).
+    for (const e of [".github/CODEOWNERS", ":(glob).github/workflows/fullburn-*", ".github/workflows/cross-family-read.yml"]) {
+      expect(VERIFIED_TREE_SCOPE, `the workflow definition left the adversary's scope (R2-18): ${e}`).toContain(e);
+    }
+    expect(VERIFIED_TREE_SCOPE, "the whole shared .github/ is back in Fullburn's verified tree").not.toContain(".github/");
     expect(VERIFIED_TREE_SCOPE).toContain("fullburn/");
-    expect(VERIFIED_TREE_SCOPE, "the agent-discovery tree left the adversary's scope").toContain(".claude/");
+    expect(VERIFIED_TREE_SCOPE, "the agent-discovery tree left the adversary's scope").toContain(".claude/agents/");
     // Excluded so a report cannot invalidate itself by being committed.
     expect(VERIFIED_TREE_SCOPE).toContain(":!fullburn/reports/");
     expect(VERIFIED_TREE_SCOPE).toContain(":!fullburn/APPROVALS/");
