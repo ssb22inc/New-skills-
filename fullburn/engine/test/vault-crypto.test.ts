@@ -380,10 +380,19 @@ describe("x6 vault findings (GPT-6 Astra, 2026-10-06)", () => {
     const p = store.pauseNextGet(slotKey("a", "s"));
     const unlocking = backend.unlock("a").then(() => null, (e: unknown) => e as Error);
     await p.reached; // the unlock has read the old record
-    const quarantine = backend.revokeAndRotate("a", "s", async () => { throw new Error("x"); }, async () => {}).catch(() => undefined);
+    // The quarantine COMPLETES while the unlock is still paused on its read —
+    // Astra's interleaving. (Releasing first let the unlock finish before the
+    // write began, a different, safe order: the quarantine then drops the
+    // cached plaintext itself, asserted below.)
+    await backend.revokeAndRotate("a", "s", async () => { throw new Error("x"); }, async () => {}).catch(() => undefined);
     p.release();
-    await quarantine;
     expect((await unlocking)?.message, "an unlock across a quarantine completed").toMatch(/while this unlock was in flight/);
     expect(() => backend.read("a", "s"), "quarantined plaintext was installed by a slower unlock").toThrow(/locked/);
+    // The other order: unlocked first, quarantined after — the cache is dropped.
+    await backend.put("a", "s2", "also-compromised");
+    await backend.unlock("a");
+    expect(backend.read("a", "s2")?.value).toBe("also-compromised");
+    await backend.revokeAndRotate("a", "s2", async () => { throw new Error("x"); }, async () => {}).catch(() => undefined);
+    expect(backend.read("a", "s2"), "a quarantined secret stayed readable in the unlocked session").toBeNull();
   });
 });
