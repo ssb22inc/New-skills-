@@ -9,6 +9,14 @@ narrative handoff (rulings history, per-round dispositions, numbers by commit)
 lives at `fullburn/reports/HANDOFF.md`; this file is the §5 contract and wins
 on any disagreement about *state*.
 
+## How the human wants to be told things (standing instructions)
+
+- **Always give the exact link for a merge, unasked.** Whenever anything is ready for the human to merge, the message includes the direct pull-request URL (today: https://github.com/ssb22inc/New-skills-/pull/130). (Human instruction, 2026-10-07.)
+- **Save every paid review, whatever its verdict.** The review workflow commits and attests the report on FAIL as well as PASS; a read whose report is lost is money wasted. (Human instruction, 2026-10-07.)
+- **Leave every API key un-rotated until the human says otherwise.** (Human instruction, 2026-10-06.)
+- **No cross-contamination with any other project** in this repository. (Human instruction, 2026-10-06.)
+- **All AI review and adversarial action is GPT Astra's; no same-family review.** (Human instructions, 2026-10-06.)
+
 ## Tree and branch
 
 - verified tree: `18a3bbeb4f0f1a6b7b351c5efc1b974d2a0c658d` (hash of `git ls-files -s` over `VERIFIED_TREE_SCOPE`; `reports/`, `APPROVALS/` and this file are outside it, so the record commit does not move it)
