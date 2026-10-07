@@ -1,0 +1,108 @@
+# The cross-family read (DONE.md §2.1.3; ENGINE_BUILD §2.4 family-diversity rule).
+# CLASS 2.
+#
+# THE REVIEWER RUNS FROM MAIN (cross-family finding X6-01, GPT-6 Astra; human
+# decision 2026-10-06). It is DISPATCHED ON MAIN with the commit to review: the
+# workflow, the runner, its prompt and the adversary definition are main's; the
+# commit under review is checked out beside them as DATA (`--target`) and
+# nothing in it is executed. The report is attested by GitHub's artifact
+# attestation, whose signer identity names this workflow AT refs/heads/main —
+# the only signer the adversary gate accepts — then committed to the branch
+# named in the dispatch, WHATEVER its verdict (a FAIL report is evidence too:
+# the x6 read, run 37544742946, lost one), and uploaded as an artifact.
+#
+# One read costs real money; it runs only when dispatched. It fails closed
+# without the OPENROUTER_API_KEY secret, and a report from any endpoint but the
+# production router can never carry Verdict: PASS (cross-family-lib).
+name: cross-family-read
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Full commit SHA to review (the tip of `branch`)"
+        required: true
+      branch:
+        description: "Branch the attested report is committed to"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  cross-family-read:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse to run from anywhere but main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "the reviewer runs only from main (X6-01); dispatched from ${GITHUB_REF}"
+          exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          path: trusted
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: The commit under review, as data
+        env:
+          REF: ${{ inputs.ref }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          [[ "$REF" =~ ^[0-9a-f]{40}$ ]] || { echo "ref must be a full commit SHA"; exit 1; }
+          [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "branch name refused"; exit 1; }
+          git -C trusted fetch --no-tags origin "+refs/heads/${BRANCH}:refs/remotes/target/branch"
+          git -C trusted worktree add --detach "$RUNNER_TEMP/target" "$REF" > /dev/null
+      # A FAIL verdict exits 1; the exit code is recorded and re-raised at the
+      # end, AFTER the report is attested and committed.
+      - name: Cross-family read (main's runner; the target is data)
+        id: read
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: node trusted/fullburn/engine/scripts/cross-family-read.mjs --target "$RUNNER_TEMP/target" || echo "rc=$?" >> "$GITHUB_OUTPUT"
+      - name: Report to the job summary
+        if: always()
+        run: |
+          for f in "$RUNNER_TEMP"/target/fullburn/reports/ADVERSARY_REPORT_phase*.x*.md; do
+            [ -f "$f" ] || continue
+            { echo "## ${f##*/}"; echo; echo '```'; sha256sum "$f"; echo '```'; echo; cat "$f"; } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Name the new report
+        id: new
+        run: |
+          NEW=$(git -C "$RUNNER_TEMP/target" ls-files --others --exclude-standard fullburn/reports/ | grep -E '^fullburn/reports/ADVERSARY_REPORT_phase[^/]*\.x[0-9]+\.md$' | head -1)
+          if [ -n "$NEW" ]; then echo "report=$RUNNER_TEMP/target/$NEW" >> "$GITHUB_OUTPUT"; echo "rel=$NEW" >> "$GITHUB_OUTPUT"; else echo "no new report was written"; fi
+      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        if: steps.new.outputs.report != ''
+        with:
+          subject-path: ${{ steps.new.outputs.report }}
+      - name: Commit the attested report to the named branch
+        if: steps.new.outputs.report != ''
+        env:
+          REL: ${{ steps.new.outputs.rel }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          cd "$RUNNER_TEMP/target"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$REL" "${REL%.md}.raw.json"
+          git commit -m "Record attested cross-family read: ${REL##*/}"
+          git push origin "HEAD:refs/heads/${BRANCH}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: cross-family-read
+          path: |
+            ${{ runner.temp }}/target/fullburn/reports/ADVERSARY_REPORT_phase*.x*.md
+            ${{ runner.temp }}/target/fullburn/reports/ADVERSARY_REPORT_phase*.x*.raw.json
+            ${{ runner.temp }}/target/fullburn/reports/cross-family-*-rejected-*.raw.json
+          if-no-files-found: ignore
+      - name: The read's own verdict decides the job
+        if: always()
+        env:
+          RC: ${{ steps.read.outputs.rc }}
+        run: |
+          if [ -n "$RC" ]; then echo "cross-family read exited $RC (a FAIL verdict, or no report)"; exit "$RC"; fi

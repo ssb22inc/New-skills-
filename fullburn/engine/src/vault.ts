@@ -1,0 +1,73 @@
+/** OAuth/API secret access (ENGINE_BUILD.md §15). Structural least-scope
+ * (adversary finding R11): callers hold a ClientVault bound to ONE client at
+ * construction — a cross-client read is a different object, not a different
+ * argument. Secrets are versioned so rotation cannot break holders. Errors
+ * never carry secret values. Real encrypted backing is H7; the interface is
+ * the contract every backend must meet. */
+
+export interface SecretRecord {
+  readonly value: string;
+  readonly version: number;
+}
+
+export interface VaultBackend {
+  /** Returns null when absent. Implementations must never log values. */
+  read(clientId: string, name: string): SecretRecord | null;
+}
+
+export class VaultError extends Error {}
+
+export class ClientVault {
+  readonly #backend: VaultBackend;
+  readonly #clientId: string;
+
+  constructor(backend: VaultBackend, clientId: string) {
+    if (!clientId) throw new VaultError("vault scope requires a clientId");
+    this.#backend = backend;
+    this.#clientId = clientId;
+  }
+
+  get clientId(): string {
+    return this.#clientId;
+  }
+
+  get(name: string): SecretRecord {
+    const rec = this.#backend.read(this.#clientId, name);
+    if (rec === null) {
+      // Name only — never echo anything that could be a value.
+      throw new VaultError(`secret "${name}" not found for scoped client`);
+    }
+    return rec;
+  }
+}
+
+export function vaultForClient(backend: VaultBackend, clientId: string): ClientVault {
+  return new ClientVault(backend, clientId);
+}
+
+/** Test/dev backend. Rotation bumps the version; old value is gone. */
+export class MemoryVaultBackend implements VaultBackend {
+  #store = new Map<string, SecretRecord>();
+
+  /** Length-prefixed composition (adversary finding R2-30). ANY single
+   * delimiter can appear inside a clientId and let one tenant's key collide
+   * with another's — a NUL moved the collision rather than removing it.
+   * Prefixing each part with its length makes the encoding unambiguous, so no
+   * two distinct (clientId, name) pairs can ever produce the same key (Law 3). */
+  #key(clientId: string, name: string): string {
+    return `${clientId.length}:${clientId}:${name.length}:${name}`;
+  }
+
+  set(clientId: string, name: string, value: string): void {
+    const prior = this.#store.get(this.#key(clientId, name));
+    this.#store.set(this.#key(clientId, name), { value, version: (prior?.version ?? 0) + 1 });
+  }
+
+  rotate(clientId: string, name: string, newValue: string): void {
+    this.set(clientId, name, newValue);
+  }
+
+  read(clientId: string, name: string): SecretRecord | null {
+    return this.#store.get(this.#key(clientId, name)) ?? null;
+  }
+}

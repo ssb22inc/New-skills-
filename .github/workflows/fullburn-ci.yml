@@ -1,0 +1,239 @@
+# Fullburn CI gate (ENGINE_BUILD.md §10.3). CLASS 2 — changing this workflow
+# requires an APPROVALS entry (class2-gate).
+name: fullburn-ci
+
+# NO `paths:` FILTER. THAT IS DELIBERATE AND IT IS LOAD-BEARING.
+#
+# A workflow skipped by path filtering never creates its check runs, so the
+# moment `fullburn-ci` becomes a REQUIRED status check a path-filtered skip
+# leaves the pull request at "Expected — waiting for status" forever. Fail-open
+# would become permanently stuck (human ruling 2026-08-23, §7.0 item 2).
+#
+# The scope decision moved INSIDE the jobs: `engine/scripts/ci-scope.mjs` says
+# whether the diff touches anything a fullburn verdict is about, every job runs
+# to completion either way, and a job with nothing to check reports SUCCESS
+# under the same check name. `locks-r7` holds those globs to CLASS2_PATTERNS —
+# the scope is unchanged from the filter this replaced (R8-04b), only its
+# location — and the invariant suite fails if a `paths:` filter reappears here.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# DEFAULT DENY. This workflow declared NO permissions block, so its token took
+# the repository default — a setting nobody in this project had ever read, and
+# which cannot be read from the build sandbox at all (2026-08-22 audit). Every
+# job here only reads the checkout and runs tests; none writes to the API.
+#
+# `actions: write` is deliberately absent and must stay absent: it is the power
+# to DISABLE THIS WORKFLOW, i.e. to turn off the gate this file exists to be.
+# It is a Class-2 surface wherever it appears (standing rule, 2026-08-22), and
+# the invariant suite fails on any workflow that grants it.
+permissions:
+  contents: read
+  # X5-02: the adversary gate reads the review report's attestation.
+  attestations: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fullburn
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      # ── IS THIS CHANGE IN SCOPE AT ALL? ──────────────────────────────────
+      #
+      # The trigger has no `paths:` filter, because a path-skipped workflow
+      # never creates its check runs and a REQUIRED check that never reports
+      # pins the pull request at "Expected — waiting for status" forever. So
+      # the scope decision lives here, the job always runs, and a job with
+      # nothing to check still reports SUCCESS under the same check name.
+      #
+      # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
+      # true. See engine/scripts/ci-scope.mjs.
+      # NOTE the gating expression on every step below is `!= 'false'`, not
+      # `== 'true'`. If this step is deleted or its id renamed, the output is
+      # the empty string: `== 'true'` would skip every gated step and report a
+      # GREEN job that executed nothing. `!= 'false'` runs the gate instead.
+      # THE SCOPE IS DECIDED BY THE BASE COMMIT'S SCRIPT (cross-family finding
+      # X5-01). Run from the checkout under review, a PR could rewrite ci-scope.mjs
+      # to print relevant=false and skip every gated step below — including the
+      # money-cap approval check — with this workflow unchanged. The base's script
+      # judges the PR's diff as data. No script at the base (the bootstrap merge,
+      # a new branch) means RUN THE GATE. A failing script fails the job.
+      - id: scope
+        working-directory: .
+        env:
+          SCOPE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SCOPE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$SCOPE_BASE:fullburn/engine/scripts/ci-scope.mjs" 2>/dev/null; then
+            git worktree add --detach "$RUNNER_TEMP/scope-base" "$SCOPE_BASE" > /dev/null
+            node "$RUNNER_TEMP/scope-base/fullburn/engine/scripts/ci-scope.mjs" . "$SCOPE_BASE" "$SCOPE_HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.scope.outputs.relevant != 'false'
+        with:
+          node-version: 22
+      - run: npm ci
+        if: steps.scope.outputs.relevant != 'false'
+      - name: Typecheck
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run typecheck
+      - name: Lint (eslint, type-aware — no-floating-promises, no-misused-promises; ruling 2026-09-22)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run lint
+      - name: Unit suite
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm test
+      # §10.3 names five stages. "integration" had no code and no deferral
+      # record until ledger L16; this is its first half — the gate CLIs executed
+      # against a real git repository, which is where two defects hid from every
+      # unit test (N-03 leg B, R3-CP-08). Playwright e2e stays deferred: Phase 0
+      # ships no endpoints and no UI for it to exercise.
+      - name: Integration suite (gate CLIs against a real repo)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run integration
+      - name: Invariant suite
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run invariants
+      # §10.3's fifth stage. H20 RECORDED VARIANCE (approved 2026-08-16, ledger
+      # L16): substantive e2e defers to Phase 1, but the stage is installed and
+      # running a minimal smoke NOW — a stage that does not exist cannot be
+      # checked. The variance expires at Phase 1's gate and the invariant suite
+      # enforces that expiry mechanically, so it cannot outlive its terms by
+      # being forgotten.
+      - name: Install the e2e browser
+        if: steps.scope.outputs.relevant != 'false'
+        run: npx playwright install --with-deps chromium
+      - name: Playwright e2e (smoke until Phase 1)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run e2e
+      # ── PRIMARY SECRET DETECTION — a ruleset we do not own ────────────────
+      #
+      # `scan-lib.mjs`'s SECRET_PATTERNS is OURS, and a ruleset that only ever
+      # meets credentials its own authors imagined is a ruleset that reports
+      # clean for everything it never thought of. That is exactly what happened
+      # on 2026-08-22: `.npmrc`, `.netrc` and `.pgpass` were read and their real
+      # credential formats were not matched, because the rules had been
+      # validated against a canary built FROM the rules.
+      #
+      # Same shape as the R14-01 ruling on spend: authority moves outside the
+      # thing being checked. gitleaks is PRIMARY; ours is an advisory fast
+      # signal that also carries this project's structural Laws, which no
+      # third-party scanner knows about. Ledger L36.
+      #
+      # `--redact` so a finding never puts the secret into a public CI log.
+      - name: Secret scan — PRIMARY (gitleaks, third-party ruleset)
+        if: steps.scope.outputs.relevant != 'false'
+        uses: gitleaks/gitleaks-action@cb7149a9b57195b609c63e8518d2c6056677d2d0 # v2.3.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+          GITLEAKS_ENABLE_SUMMARY: "true"
+
+      - name: Leak + structural scan
+        if: steps.scope.outputs.relevant != 'false'
+        run: node engine/scripts/leak-check.mjs ..
+      # THE INTERRUPT DRILL — its own step, never part of `npm test`.
+      #
+      # It spawns the real mutation harness and signals it, so inside the unit
+      # suite it mutated engine/src/spend-meter.ts on every run and orphaned a
+      # CPU-bound worker tree (adversary finding R10-05). Here it runs once,
+      # after the suite, where no harness is running — the mutation-harness job
+      # is a separate job with its own checkout.
+      - name: Harness interrupt drill (the fails-closed half, executed)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run drill
+
+      # ORDER-DEPENDENCE IS A MONEY BUG HERE, NOT A TEST-HYGIENE ONE. Four of
+      # six shuffle seeds went red because `vi.resetModules()` inside a
+      # money-path lock file split the one process ledger in two — the property
+      # R11-07's whole fix rests on, violated inside the project's own suite
+      # (adversary finding R12-06). Declaration order hid it; the seeds do not.
+      - name: Suite is order-independent (three shuffled seeds)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run test:shuffle
+
+      # R13-08 named TWO conditions — `--no-isolate` OR a single-fork pool — and
+      # only the first was ever run, so `test:noisolate`'s green did not prove
+      # what the config claimed. Forced, eight money-path locks were red, all of
+      # them module-identity artifacts of an object shared across registries
+      # (adversary finding R14-05). Both conditions are stages now.
+      - name: Suite survives a shared module registry (--no-isolate)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run test:noisolate
+
+      - name: Suite survives a single fork (R13-08's other condition)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run test:singlefork
+
+  # THE ACCEPTANCE BAR, AS A STAGE. `npm run mutate` is how this project
+  # enforces "a fix whose one-line revert leaves the suite green is not
+  # protected by anything" — the lesson of five consecutive rounds — and it
+  # appeared in package.json and in no CI job. It was enforced only when a human
+  # or an adversary ran it by hand, so between rounds a refactor could strand
+  # every entry naming a moved line (adversary finding R8-09).
+  #
+  # Its own limit, stated rather than hidden: it runs `vitest` only, so a fix
+  # protected by typecheck, leak-check, the gate CLIs or Playwright cannot be
+  # represented in it. Those stages above are that half.
+  #
+  # Separate job: it runs the full suite once per entry, so it is slow and
+  # should not delay the fast feedback the verify job gives.
+  mutation-harness:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fullburn
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      # ── IS THIS CHANGE IN SCOPE AT ALL? ──────────────────────────────────
+      #
+      # The trigger has no `paths:` filter, because a path-skipped workflow
+      # never creates its check runs and a REQUIRED check that never reports
+      # pins the pull request at "Expected — waiting for status" forever. So
+      # the scope decision lives here, the job always runs, and a job with
+      # nothing to check still reports SUCCESS under the same check name.
+      #
+      # Fail-safe direction is RUN THE GATE: an undeterminable diff returns
+      # true. See engine/scripts/ci-scope.mjs.
+      # THE SCOPE IS DECIDED BY THE BASE COMMIT'S SCRIPT (cross-family finding
+      # X5-01). Run from the checkout under review, a PR could rewrite ci-scope.mjs
+      # to print relevant=false and skip every gated step below — including the
+      # money-cap approval check — with this workflow unchanged. The base's script
+      # judges the PR's diff as data. No script at the base (the bootstrap merge,
+      # a new branch) means RUN THE GATE. A failing script fails the job.
+      - id: scope
+        working-directory: .
+        env:
+          SCOPE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SCOPE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$SCOPE_BASE:fullburn/engine/scripts/ci-scope.mjs" 2>/dev/null; then
+            git worktree add --detach "$RUNNER_TEMP/scope-base" "$SCOPE_BASE" > /dev/null
+            node "$RUNNER_TEMP/scope-base/fullburn/engine/scripts/ci-scope.mjs" . "$SCOPE_BASE" "$SCOPE_HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.scope.outputs.relevant != 'false'
+        with:
+          node-version: 22
+      - run: npm ci
+        if: steps.scope.outputs.relevant != 'false'
+      - name: Mutation harness (every lock must bite)
+        if: steps.scope.outputs.relevant != 'false'
+        run: npm run mutate
+
+  # adversary-gate and class2-gate MOVED to fullburn-gates.yml (cross-family
+  # findings X6-01/X6-02, 2026-10-06): run here, on `pull_request`, they were
+  # the branch's own copies of the gates. There they run on
+  # `pull_request_target`, from main, with the pull request as data.

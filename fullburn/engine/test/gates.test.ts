@@ -1,0 +1,648 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+// @ts-expect-error — plain .mjs module, typed loosely on purpose
+import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkClass2Approvals, checkReportsAppendOnly, dirtyWorktreeLines, isClass2, parseVerdict, selectApprovalDocs, selectPhaseReports } from "../scripts/gate-lib.mjs";
+
+// Tree bindings must look like git object hashes — the gate rejects anything else.
+const TREE = "abc1234def5678";
+const OTHER_TREE = "0123456789abcdef";
+// Every fixture report declares a non-Claude reviewer: since 2026-10-06 (L55)
+// only such a reviewer's PASS opens the gate.
+const FAMILY = "Reviewer-family: OpenAI (gpt-6-astra)";
+const report = (verdict: string, tree = TREE) => ["# ADVERSARY_REPORT_phase0", `Verdict: ${verdict}`, `verified-tree: ${tree}`, FAMILY].join("\n");
+const goodReport = report("PASS (CONDITIONAL — live ledger open)");
+
+describe("adversary-report gate (AC 4, Law 9, §10.3, R5)", () => {
+  it("blocks when the report is missing", () => {
+    expect(checkAdversaryReport({ phase: "0", reportContent: null, currentTreeHash: TREE }).ok).toBe(false);
+  });
+
+  it("ATTACK: a committed FAIL report does not open the gate", () => {
+    const res = checkAdversaryReport({ phase: "0", reportContent: report("FAIL"), currentTreeHash: TREE });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/not PASS/);
+  });
+
+  it("ATTACK: a stale report (code changed after the pass) is rejected", () => {
+    const res = checkAdversaryReport({ phase: "0", reportContent: goodReport, currentTreeHash: OTHER_TREE });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/re-run the adversary/);
+  });
+
+  it("a report with no verified-tree binding is rejected", () => {
+    const unbound = goodReport.replace(/verified-tree: .*/, "");
+    expect(checkAdversaryReport({ phase: "0", reportContent: unbound, currentTreeHash: TREE }).ok).toBe(false);
+  });
+
+  it("a fresh PASS report opens the gate (conditionality is preserved for human ack)", () => {
+    expect(checkAdversaryReport({ phase: "0", reportContent: goodReport, currentTreeHash: TREE }).ok).toBe(true);
+  });
+
+  it("re-runs: a superseded FAIL stays in history while a fresh PASS opens the gate", () => {
+    // Reports are append-only, so a FAIL is never edited into a PASS: the
+    // re-run adds a new file and the gate judges the one bound to this tree.
+    const reports = [
+      { name: "ADVERSARY_REPORT_phase0.md", content: report("FAIL", OTHER_TREE) },
+      { name: "ADVERSARY_REPORT_phase0.r2.md", content: goodReport },
+    ];
+    expect(checkAdversaryReport({ phase: "0", reports, currentTreeHash: TREE }).ok).toBe(true);
+  });
+
+  it("re-runs: a FAIL bound to the CURRENT tree still blocks, whatever else is in history", () => {
+    const reports = [
+      { name: "ADVERSARY_REPORT_phase0.md", content: report("PASS", OTHER_TREE) },
+      { name: "ADVERSARY_REPORT_phase0.r2.md", content: report("FAIL") },
+    ];
+    const res = checkAdversaryReport({ phase: "0", reports, currentTreeHash: TREE });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/not PASS/);
+  });
+
+  /** Human instruction 2026-10-06 (L55): no review may be done by the same
+   * family as the builder. MUTATION: open the gate on any PASS, or read the
+   * family line from below the visible header. */
+  it("only a non-Claude reviewer's PASS opens the gate", () => {
+    const mk = (family: string | null) => ({
+      name: "ADVERSARY_REPORT_phase0.f.md",
+      content: ["# r", "Verdict: PASS", `verified-tree: ${TREE}`, ...(family === null ? [] : [family])].join("\n"),
+    });
+    const gate = (r: { name: string; content: string }) => checkAdversaryReport({ phase: "0", reports: [r], currentTreeHash: TREE });
+    expect(gate(mk("Reviewer-family: OpenAI (gpt-6-astra)")).ok).toBe(true);
+    expect(gate(mk("Reviewer-family: Claude (same-family engine-adversary)")).ok, "a Claude PASS opened the gate").toBe(false);
+    expect(gate(mk("Reviewer-family: anthropic/claude-opus")).ok, "an Anthropic PASS opened the gate").toBe(false);
+    expect(gate(mk(null)).ok, "an undeclared reviewer's PASS opened the gate").toBe(false);
+    expect(gate(mk("Reviewer-family:")).ok, "an empty family opened the gate").toBe(false);
+    expect(gate(mk(null)).reason).toMatch(/non-Claude reviewer/);
+    const buried = { name: "ADVERSARY_REPORT_phase0.b.md", content: ["# r", "Verdict: PASS", `verified-tree: ${TREE}`, ...Array.from({ length: 12 }, (_, i) => `l${i}`), "Reviewer-family: OpenAI"].join("\n") };
+    expect(gate(buried).ok, "a family line below the visible header was read").toBe(false);
+    // A same-family FAIL bound to this tree still blocks an Astra PASS.
+    const claudeFail = { name: "ADVERSARY_REPORT_phase0.c.md", content: ["# r", "Verdict: FAIL", `verified-tree: ${TREE}`, "Reviewer-family: Claude"].join("\n") };
+    expect(checkAdversaryReport({ phase: "0", reports: [claudeFail, mk("Reviewer-family: OpenAI")], currentTreeHash: TREE }).ok).toBe(false);
+  });
+
+  it("ATTACK: a fresh FAIL blocks even when a fresh PASS exists (R2-10)", () => {
+    // A second adversary — the cross-family review H6b requires — must be able
+    // to stop a merge on a tree an earlier adversary already passed. Reports
+    // are append-only, so without this a PASS could never be revoked.
+    for (const order of [
+      [report("PASS"), report("FAIL")],
+      [report("FAIL"), report("PASS")],
+    ]) {
+      const reports = order.map((content, i) => ({ name: `ADVERSARY_REPORT_phase0.${i}.md`, content }));
+      const res = checkAdversaryReport({ phase: "0", reports, currentTreeHash: TREE });
+      expect(res.ok).toBe(false);
+      expect(res.reason).toMatch(/unresolved business/);
+    }
+  });
+
+  it("ATTACK: editing an old adversary report is refused (append-only)", () => {
+    const res = checkReportsAppendOnly([{ status: "modified", path: "fullburn/reports/ADVERSARY_REPORT_phase0.md" }]);
+    expect(res.ok).toBe(false);
+    const add = checkReportsAppendOnly([{ status: "added", path: "fullburn/reports/ADVERSARY_REPORT_phase1.md" }]);
+    expect(add.ok).toBe(true);
+  });
+});
+
+describe("verdict parsing (adversary finding F4)", () => {
+  it("reads the first verdict line that is not inside a code fence", () => {
+    const fenced = ["# r", "```", "Verdict: PASS", "```", "Verdict: FAIL", `verified-tree: ${TREE}`].join("\n");
+    expect(parseVerdict(fenced)?.token).toBe("FAIL");
+  });
+
+  it("ignores quoted prose", () => {
+    const quoted = ["# r", "> Verdict: PASS (quoting the last report)", "Verdict: FAIL"].join("\n");
+    expect(parseVerdict(quoted)?.token).toBe("FAIL");
+  });
+
+  it("requires an exact token: PASS-PENDING-FIXES is not a pass", () => {
+    expect(parseVerdict("Verdict: PASS-PENDING-FIXES")?.token).toBe("INVALID");
+    expect(parseVerdict("Verdict: PASSABLE")?.token).toBe("INVALID");
+  });
+
+  it("accepts a conditional PASS with a parenthetical", () => {
+    expect(parseVerdict("Verdict: PASS (CONDITIONAL — ledger open)")?.token).toBe("PASS");
+  });
+
+  it("ATTACK: a verdict hidden in an HTML comment is invisible to a human and must not count (R2-09)", () => {
+    const hidden = ["# r", "<!--", "Verdict: PASS", "-->", "Verdict: FAIL"].join("\n");
+    expect(parseVerdict(hidden)?.token).toBe("FAIL");
+  });
+
+  it("ATTACK: an indented code block is code, not a verdict (R2-09)", () => {
+    expect(parseVerdict(["# r", "    Verdict: PASS", "Verdict: FAIL"].join("\n"))?.token).toBe("FAIL");
+    expect(parseVerdict(["# r", "\tVerdict: PASS", "Verdict: FAIL"].join("\n"))?.token).toBe("FAIL");
+  });
+
+  it("ATTACK: a fence cannot be closed by a different marker (R2-09)", () => {
+    const mismatched = ["# r", "```", "Verdict: PASS", "~~~", "Verdict: PASS", "```", "Verdict: FAIL"].join("\n");
+    expect(parseVerdict(mismatched)?.token).toBe("FAIL");
+  });
+
+  it("a leading-whitespace verdict does not count — the real one starts at column 0", () => {
+    expect(parseVerdict("  Verdict: PASS\nVerdict: FAIL")?.token).toBe("FAIL");
+  });
+
+  it("CRLF reports parse", () => {
+    expect(parseVerdict("# r\r\nVerdict: FAIL\r\n")?.token).toBe("FAIL");
+  });
+});
+
+describe("adversary-report gate — a report the gate cannot read blocks it (R5-03, R5-04)", () => {
+  const PASS = { name: "ADVERSARY_REPORT_phase0.pass.md", content: report("PASS") };
+  const judge = (content: string) =>
+    checkAdversaryReport({
+      phase: "0",
+      reports: [{ name: "ADVERSARY_REPORT_phase0.fail.md", content }, PASS],
+      currentTreeHash: TREE,
+    });
+
+  /** Six ordinary Markdown choices silently discarded a correctly bound FAIL:
+   * the binding was read as a bare token, so a hash in backticks compared
+   * unequal to the tree, `judgeReport` called it stale, `checkAdversaryReport`
+   * skipped it, and the sibling PASS opened the gate — with the FAIL report
+   * never named. The gate printed two identical hashes and said "the code
+   * changed".
+   *
+   * MUTATION: read the binding as a bare `(\S+)` token again. */
+  it("a FAIL bound through ordinary Markdown decoration still blocks", () => {
+    for (const [label, line] of [
+      ["backticks", `verified-tree: \`${TREE}\``],
+      ["bold label", `**verified-tree:** ${TREE}`],
+      ["list item", `- verified-tree: ${TREE}`],
+      ["trailing parenthetical", `verified-tree: ${TREE} (tree of this commit)`],
+    ] as const) {
+      const res = judge(["# r", "Verdict: FAIL", line].join("\n"));
+      expect(res.ok, `a FAIL bound with ${label} was discarded`).toBe(false);
+      expect(res.reason, `the gate did not name the FAIL report (${label})`).toContain("fail.md");
+    }
+  });
+
+  /** "Unparseable" and "about a different tree" were the same state, and only
+   * the second is safe to skip. A report the gate cannot read cannot be shown
+   * to be stale, so it is unresolved business.
+   *
+   * MUTATION: filter on `j.fresh && !j.ok` again instead of `j.blocking`. */
+  it("a report the gate cannot read at all blocks, and is named", () => {
+    for (const [label, content] of [
+      ["binding below the header", ["# r", "Verdict: FAIL", "", "a", "b", "c", "d", "e", "f", "g", `verified-tree: ${TREE}`].join("\n")],
+      ["no binding at all", "# r\nVerdict: FAIL\n"],
+      ["binding with no hash-shaped token", "# r\nVerdict: FAIL\nverified-tree: (not computed)\n"],
+      ["unterminated html in the header", ["# r", "Verdict: FAIL", "<details>", `verified-tree: ${TREE}`].join("\n")],
+      ["no verdict line", `# r\nverified-tree: ${TREE}\n`],
+    ] as const) {
+      const res = judge(content);
+      expect(res.ok, `an unreadable report was skipped (${label})`).toBe(false);
+      expect(res.reason, `the unreadable report was not named (${label})`).toContain("fail.md");
+    }
+    // …and an honest PASS on its own still opens the gate.
+    expect(checkAdversaryReport({ phase: "0", reports: [PASS], currentTreeHash: TREE }).ok).toBe(true);
+  });
+
+  /** CONCEALING_BLOCKS was a five-tag list and every round found a new member:
+   * `<details>` in r4, `<div style="display:none">` in r5. The header is now
+   * pure prose — any raw tag ends it.
+   *
+   * MUTATION: return `text` unchanged from stripConcealed. */
+  it("no raw HTML element can hide a PASS in the header", () => {
+    for (const tag of ['<div style="display:none">', "<details>", "<span hidden>", "<template>", "<section>"]) {
+      const hidden = ["# r", "The engine is NOT safe. Do not merge.", tag, "", "Verdict: PASS", "", `verified-tree: ${TREE}`].join("\n");
+      expect(parseVerdict(hidden)?.token, `a PASS behind ${tag} was read`).not.toBe("PASS");
+      expect(
+        checkAdversaryReport({ phase: "0", reports: [{ name: "ADVERSARY_REPORT_phase0.z.md", content: hidden }], currentTreeHash: TREE }).ok,
+        `${tag} opened the gate`,
+      ).toBe(false);
+    }
+  });
+
+  /** The hash pattern was unanchored, so it took the FIRST hex-shaped run on
+   * the line: `verified-tree: <commit> (commit; tree <hash>)` bound to the
+   * commit. Not a parse failure — a WRONG binding, which landed in the one
+   * non-blocking branch, so the FAIL was skipped, a sibling PASS opened the
+   * gate, and the gate announced "code changed after the adversary judged it"
+   * about a report naming this exact tree (adversary finding R6-01).
+   *
+   * MUTATION: unanchor the hash pattern again. */
+  it("a binding line naming anything besides the hash is unreadable, and blocks", () => {
+    const COMMIT = "b9364e37a83cfb58a881dde52cb4e6e1e94471ae";
+    for (const [label, line] of [
+      ["commit before tree", `verified-tree: ${COMMIT} (commit; tree ${TREE})`],
+      ["prose before tree", `verified-tree: see commit b9364e3 — tree ${TREE}`],
+      ["hex-shaped decoy word", `verified-tree: deadbeef ${TREE}`],
+      ["tree then commit", `verified-tree: ${TREE} (commit ${COMMIT})`],
+    ] as const) {
+      const res = judge(["# r", "Verdict: FAIL", line].join("\n"));
+      expect(res.ok, `${label} let a sibling PASS open the gate`).toBe(false);
+      expect(res.reason, `${label}: the FAIL report was not named`).toContain("fail.md");
+    }
+    // Decoration is still read — and this is where it matters, because a
+    // decorated FAIL blocks either way. A decorated PASS must OPEN the gate, or
+    // the strip is untested and an honest reviewer's backticks fail closed.
+    for (const decorated of [`verified-tree: \`${TREE}\``, `**verified-tree:** ${TREE}`, `- verified-tree: ${TREE}`]) {
+      const only = { name: "ADVERSARY_REPORT_phase0.d.md", content: ["# r", "Verdict: PASS", decorated, FAMILY].join("\n") };
+      expect(
+        checkAdversaryReport({ phase: "0", reports: [only], currentTreeHash: TREE }).ok,
+        `a PASS bound as ${decorated} was refused`,
+      ).toBe(true);
+    }
+    expect(checkAdversaryReport({ phase: "0", reports: [PASS], currentTreeHash: TREE }).ok).toBe(true);
+  });
+
+  /** The pinned-hash exemption's whole justification is that it cannot be
+   * inherited by new content in the same filename. That property was asserted
+   * by nothing (adversary finding R6-05/P1).
+   *
+   * MUTATION: drop the content-hash comparison from the exemption filter. */
+  it("the historical-report exemption is bound to content, not to a filename", () => {
+    const impostor = {
+      name: "ADVERSARY_REPORT_phase0.r3.md",
+      content: "# r3\nVerdict: FAIL\nverified-tree: (not computed)\n",
+    };
+    const res = checkAdversaryReport({ phase: "0", reports: [impostor, PASS], currentTreeHash: TREE });
+    expect(res.ok, "any file named r3.md inherited the exemption").toBe(false);
+    expect(res.reason).toContain("r3.md");
+  });
+
+  /** The committed r9 report quotes a NUL byte as evidence, so the invisible-
+   * character rule makes it unreadable, and unreadable blocks. Unpinned, the CI
+   * adversary gate could never open again (L53, 2026-10-06). Its exemption is
+   * pinned to its exact bytes, so a new r9 cannot inherit it.
+   *
+   * MUTATION: drop the r9 entry from UNBOUND_HISTORICAL_REPORTS. */
+  it("the committed r9 report does not block a later PASS, and an impostor r9 still does", () => {
+    const r9 = { name: "ADVERSARY_REPORT_phase0.r9.md", content: readFileSync(new URL("../../reports/ADVERSARY_REPORT_phase0.r9.md", import.meta.url), "utf8") };
+    expect(r9.content, "r9 no longer carries the NUL this exemption exists for").toContain("\u0000");
+    expect(checkAdversaryReport({ phase: "0", reports: [r9, PASS], currentTreeHash: TREE }).ok, "the pinned r9 blocked a current PASS").toBe(true);
+    const impostor = { name: "ADVERSARY_REPORT_phase0.r9.md", content: `${r9.content}\nVerdict: PASS\n` };
+    expect(checkAdversaryReport({ phase: "0", reports: [impostor, PASS], currentTreeHash: TREE }).ok, "an edited r9 inherited the exemption").toBe(false);
+  });
+
+  /** An UNCLOSED `<!--` concealed everything after it and was stripped by
+   * neither pass: `stripHtmlComments` removed only closed pairs, and the
+   * "any raw tag ends the header" rule matched `</?[a-zA-Z]`, which a comment
+   * opener is not. A report rendering as nothing was accepted as PASS bound to
+   * the current tree — a manufactured PASS on the mechanism that gates every
+   * other mechanism (adversary finding R7-01, cross-family).
+   *
+   * MUTATION: restore the closed-pairs-only strip, or narrow the opener
+   * pattern back to tags. */
+  it("nothing a renderer hides can carry a verdict", () => {
+    for (const [label, lines] of [
+      ["an unclosed comment", ["# benign", "<!-- concealed", "Verdict: PASS", `verified-tree: ${TREE}`]],
+      ["an opener closed after the header", ["# benign", "<!-- a", "Verdict: PASS", `verified-tree: ${TREE}`, "-->"]],
+      ["a CDATA opener", ["# r", "<![CDATA[", "Verdict: PASS", `verified-tree: ${TREE}`]],
+      ["a processing instruction", ["# r", "<?php", "Verdict: PASS", `verified-tree: ${TREE}`]],
+      ["a closing tag", ["# r", "</summary>", "Verdict: PASS", `verified-tree: ${TREE}`]],
+    ] as const) {
+      const content = lines.join("\n");
+      expect(parseVerdict(content)?.token, `${label} produced a verdict`).not.toBe("PASS");
+      expect(
+        checkAdversaryReport({ phase: "0", reports: [{ name: "ADVERSARY_REPORT_phase0.x.md", content }], currentTreeHash: TREE }).ok,
+        `${label} opened the gate`,
+      ).toBe(false);
+    }
+  });
+
+  /** MUTATION: drop the invisible-character rejection from visibleHeaderLines.
+   * A zero-width space inside the token, or a bidi override, renders as
+   * something other than what the parser reads. */
+  it("a header containing invisible or direction-flipping characters is refused", () => {
+    for (const [label, ch] of [["zero-width space", "\u200b"], ["bidi override", "\u202e"], ["BOM", "\ufeff"]] as const) {
+      const content = ["# r", `Verdict:${ch} PASS`, `verified-tree: ${TREE}`].join("\n");
+      expect(
+        checkAdversaryReport({ phase: "0", reports: [{ name: "ADVERSARY_REPORT_phase0.x.md", content }], currentTreeHash: TREE }).ok,
+        `${label} opened the gate`,
+      ).toBe(false);
+    }
+    // A clean header is unaffected.
+    expect(checkAdversaryReport({ phase: "0", reports: [PASS], currentTreeHash: TREE }).ok).toBe(true);
+  });
+
+  /** MUTATION: drop the blockquote skip from visibleHeaderLines. */
+  it("a quoted verdict or binding is prose about a report, not the report", () => {
+    const quoted = ["# r", "> Verdict: PASS", `> verified-tree: ${TREE}`, "Verdict: FAIL", `verified-tree: ${TREE}`].join("\n");
+    expect(parseVerdict(quoted)?.token).toBe("FAIL");
+    const onlyQuoted = ["# r", "> Verdict: PASS", `> verified-tree: ${TREE}`].join("\n");
+    expect(
+      checkAdversaryReport({ phase: "0", reports: [{ name: "ADVERSARY_REPORT_phase0.q.md", content: onlyQuoted }], currentTreeHash: TREE }).ok,
+      "a quoted PASS opened the gate",
+    ).toBe(false);
+  });
+
+  /** A stale report is genuinely different from an unreadable one and must
+   * still be skippable, or history would deadlock the gate forever. */
+  it("a report bound to a DIFFERENT tree is still skipped, not blocking", () => {
+    const stale = { name: "ADVERSARY_REPORT_phase0.old.md", content: report("FAIL", OTHER_TREE) };
+    expect(checkAdversaryReport({ phase: "0", reports: [stale, PASS], currentTreeHash: TREE }).ok).toBe(true);
+  });
+});
+
+describe("class-2 change-control gate (Law 2/14/15, §13, R1)", () => {
+  const capsPath = "fullburn/config/src/caps.ts";
+  const hashOf = () => "deadbeef";
+  const baseHashOf = () => "cafe01";
+  // Every call supplies a base commit: since N-03 the check fails closed
+  // without one, so omitting it no longer silently skips the PR binding.
+  const BASE = "1111111111111111111111111111111111111111";
+
+  it("covers the values, the code that enforces them, and the gates (F5)", () => {
+    for (const p of [
+      capsPath,
+      "fullburn/config/src/grade-thresholds.ts",
+      "fullburn/engine/src/grade-registry.ts", // the grader itself
+      "fullburn/engine/src/gateway.ts", // where the cap check lives
+      "fullburn/engine/src/spend-meter.ts",
+      "fullburn/config/src/freeze.ts",
+      "fullburn/engine/scripts/leak-check.mjs",
+      "fullburn/engine/scripts/scan-lib.mjs",
+      "fullburn/vitest.config.ts",
+      "fullburn/engine/scripts/gate-lib.mjs",
+    ]) {
+      expect(isClass2(p), `${p} is not Class 2`).toBe(true);
+    }
+  });
+
+  it("ATTACK: changing caps without an approval entry is blocked", () => {
+    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [], hashOf, baseHashOf, baseCommit: BASE });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/without a matching human approval/);
+  });
+
+  it("ATTACK: an approval for different content (wrong hash) does not transfer", () => {
+    const doc = { path: "fullburn/APPROVALS/a.md", status: "added", content: `approves: ${capsPath}\ncontent-hash: 0000` };
+    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [doc], hashOf, baseHashOf, baseCommit: BASE });
+    expect(res.ok).toBe(false);
+  });
+
+  it("ATTACK: a pre-existing approval already in the tree is not harvested (F14)", () => {
+    const stale = {
+      path: "fullburn/APPROVALS/old.md",
+      status: "modified", // not added in this diff
+      content: `approves: ${capsPath}\ncontent-hash: deadbeef`,
+    };
+    const res = checkClass2Approvals({ changedFiles: [{ status: "modified", path: capsPath }], approvalDocs: [stale], hashOf, baseHashOf, baseCommit: BASE });
+    expect(res.ok).toBe(false);
+  });
+
+  it("an approval naming this exact transition (from-hash → to-hash) passes", () => {
+    const doc = {
+      path: "fullburn/APPROVALS/2026-08-15-caps.md",
+      status: "added",
+      content: `Approved-by: human\napproves: ${capsPath}\nbase-commit: ${BASE}\nfrom-content-hash: cafe01\ncontent-hash: deadbeef`,
+    };
+    const res = checkClass2Approvals({
+      changedFiles: [{ status: "modified", path: capsPath }],
+      approvalDocs: [doc],
+      hashOf,
+      baseHashOf,
+      baseCommit: BASE,
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("ATTACK: replaying a superseded approval does not re-authorize old content (R2-05)", () => {
+    // The human once approved reaching this content from an earlier state. The
+    // tree has since moved on. Re-adding that same doc verbatim must not
+    // authorize travelling back to it: the approval names a transition, and
+    // this diff's from-hash is not the one signed.
+    const januaryApproval = {
+      path: "fullburn/APPROVALS/2026-01-02-caps.md",
+      status: "added",
+      content: `approves: ${capsPath}\nfrom-content-hash: 000older\ncontent-hash: deadbeef`,
+    };
+    const res = checkClass2Approvals({
+      changedFiles: [{ status: "modified", path: capsPath }],
+      approvalDocs: [januaryApproval],
+      hashOf,
+      baseHashOf,
+      baseCommit: BASE,
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it("ATTACK: renaming a Class-2 file does not walk it out of the protected set (R2-06)", () => {
+    const res = checkClass2Approvals({
+      changedFiles: [{ status: "renamed", oldPath: capsPath, path: "fullburn/config/src/caps.v2.ts" }],
+      approvalDocs: [],
+      hashOf,
+      baseHashOf,
+      baseCommit: BASE,
+    });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toContain("caps.ts");
+  });
+
+  it("ATTACK: deleting a Class-2 file needs approval and does not crash the gate (R2-31)", () => {
+    const res = checkClass2Approvals({
+      changedFiles: [{ status: "deleted", path: capsPath }],
+      approvalDocs: [],
+      hashOf: () => {
+        throw new Error("ENOENT: no such file");
+      },
+      baseHashOf,
+      baseCommit: BASE,
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it("ATTACK: a multi-file approval cannot lend one path's hash to another (R2-32)", () => {
+    // Two clauses in one entry: caps approved cafe01→deadbeef, models approved
+    // beef02→feed99. A change to caps whose new content hashes to feed99 must
+    // not validate against the models clause.
+    const doc = {
+      path: "fullburn/APPROVALS/multi.md",
+      status: "added",
+      content: [
+        `approves: ${capsPath}`,
+        `base-commit: ${BASE}`,
+        "from-content-hash: cafe01",
+        "content-hash: deadbeef",
+        "approves: fullburn/config/src/models.ts",
+        `base-commit: ${BASE}`,
+        "from-content-hash: beef02",
+        "content-hash: feed99",
+      ].join("\n"),
+    };
+    const res = checkClass2Approvals({
+      changedFiles: [{ status: "modified", path: capsPath }],
+      approvalDocs: [doc],
+      hashOf: () => "feed99",
+      baseHashOf: () => "beef02",
+      baseCommit: BASE,
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it("the package manifests and the test tree are Class 2 (R2-04, R2-08, R2-11)", () => {
+    for (const p of [
+      "fullburn/package.json",
+      "fullburn/config/package.json",
+      "fullburn/tsconfig.json",
+      "fullburn/config/src/markets.ts",
+      "fullburn/config/src/channels.ts",
+      "fullburn/engine/test/invariants/invariants.test.ts",
+      "fullburn/PHASE",
+    ]) {
+      expect(isClass2(p)).toBe(true);
+    }
+  });
+
+  it("non-Class-2 changes need no approval", () => {
+    const res = checkClass2Approvals({
+      changedFiles: [{ status: "modified", path: "fullburn/HUMAN_TASKS.md" }],
+      approvalDocs: [],
+      hashOf,
+      baseHashOf,
+      baseCommit: BASE,
+    });
+    expect(res.ok).toBe(true);
+  });
+});
+
+/** THE FOUR DECISIONS THAT LIVED IN THE GATE CLIs.
+ *
+ * `adversary-gate.mjs` and `class2-gate.mjs` have no entry-point guard: they
+ * execute their whole gate at import, so a unit test cannot reach anything
+ * inside them. Everything they decided privately was therefore provable only
+ * through `gate-cli.test.ts`, and only for the cases that file happens to set
+ * up. A runner audit against the R14-06 rule mutated each of them and ran the
+ * full default suite: three survived at 354/354 green.
+ *
+ * They are gate-lib decisions now. These are their red-proofs. */
+describe("gate-CLI decisions, extracted so the default suite can drive them (runner audit)", () => {
+  /** MUTATION: widen the phase pattern in selectPhaseReports.
+   *
+   * SURVIVED as `/^ADVERSARY_REPORT_phase/`: a PASS written for phase 1 was
+   * handed to the phase-0 gate and opened it. */
+  describe("which reports answer for a phase", () => {
+    const names = [
+      "ADVERSARY_REPORT_phase0.md",
+      "ADVERSARY_REPORT_phase0.r14.md",
+      "ADVERSARY_REPORT_phase0-cross.md",
+      "ADVERSARY_REPORT_phase0_2026-08-21.md",
+      "ADVERSARY_REPORT_phase1.md",
+      "ADVERSARY_REPORT_phase10.md",
+      "README.md",
+      "LIVE_VERIFICATION_LEDGER.md",
+    ];
+
+    it("takes every suffix form of its own phase", () => {
+      expect(selectPhaseReports(0, names)).toEqual([
+        "ADVERSARY_REPORT_phase0-cross.md",
+        "ADVERSARY_REPORT_phase0.md",
+        "ADVERSARY_REPORT_phase0.r14.md",
+        "ADVERSARY_REPORT_phase0_2026-08-21.md",
+      ]);
+    });
+
+    it("ATTACK: another phase's PASS does not answer for this one", () => {
+      expect(selectPhaseReports(0, names), "a phase-1 report spoke for phase 0").not.toContain(
+        "ADVERSARY_REPORT_phase1.md",
+      );
+      // …and a digit may not extend the phase number into a different phase.
+      expect(selectPhaseReports(1, names), "phase 10's report spoke for phase 1").toEqual([
+        "ADVERSARY_REPORT_phase1.md",
+      ]);
+    });
+
+    it("takes nothing that is not a report", () => {
+      expect(selectPhaseReports(0, ["README.md", "notes.txt", "ADVERSARY_REPORT_phase0.md.bak"])).toEqual([]);
+    });
+
+    /** The whole point of the selection: an empty set must reach
+     * `checkAdversaryReport` as "no report", which is a FAIL. */
+    it("an empty selection blocks the gate rather than passing it", () => {
+      const picked = selectPhaseReports(0, ["ADVERSARY_REPORT_phase1.md"]);
+      expect(checkAdversaryReport({ phase: "0", reports: picked, currentTreeHash: TREE }).ok).toBe(false);
+    });
+  });
+
+  /** MUTATION: drop the `status === "added"` clause from selectApprovalDocs.
+   *
+   * SURVIVED: a PR could rewrite an approval file that already existed at the
+   * base and have the rewrite authorize a fresh Class-2 transition. */
+  describe("which files are credible approval documents", () => {
+    it("only a document this PR ADDED", () => {
+      const picked = selectApprovalDocs([
+        { status: "added", path: "fullburn/APPROVALS/2026-08-21-caps.md" },
+        { status: "modified", path: "fullburn/APPROVALS/2026-08-16-caps.md" },
+        { status: "renamed", path: "fullburn/APPROVALS/moved.md", oldPath: "fullburn/APPROVALS/old.md" },
+        { status: "deleted", path: "fullburn/APPROVALS/gone.md" },
+      ]);
+      expect(picked.map((f: { path: string }) => f.path)).toEqual(["fullburn/APPROVALS/2026-08-21-caps.md"]);
+    });
+
+    it("only under APPROVALS/, and never a README", () => {
+      const picked = selectApprovalDocs([
+        { status: "added", path: "fullburn/APPROVALS/README.md" },
+        { status: "added", path: "fullburn/APPROVALS/2026/nested.md" },
+        { status: "added", path: "fullburn/reports/looks-like-one.md" },
+        { status: "added", path: "fullburn/APPROVALS/notes.txt" },
+      ]);
+      expect(picked.map((f: { path: string }) => f.path)).toEqual(["fullburn/APPROVALS/2026/nested.md"]);
+    });
+
+    /** The consequence, driven end to end: a MODIFIED approval carrying a
+     * perfectly-formed transition must not open the gate. */
+    it("ATTACK: rewriting an existing approval does not authorize a new transition", () => {
+      const changed = [
+        { status: "modified", path: "fullburn/config/src/caps.ts" },
+        { status: "modified", path: "fullburn/APPROVALS/2026-08-16-caps.md" },
+      ];
+      const body =
+        "Approved-by: someone\n" +
+        "approves: fullburn/config/src/caps.ts\n" +
+        "base-commit: BASE\n" +
+        "from-content-hash: OLD\n" +
+        "content-hash: NEW\n";
+      const res = checkClass2Approvals({
+        changedFiles: changed,
+        // What the CLI would hand over AFTER selection — which is nothing.
+        approvalDocs: selectApprovalDocs(changed).map((f: { path: string; status: string }) => ({
+          ...f,
+          content: body,
+          authoredBy: "A Human <human@example.invalid>",
+        })),
+        hashOf: () => "NEW",
+        baseHashOf: () => "OLD",
+        baseCommit: "BASE",
+      });
+      expect(res.ok, "a rewritten approval authorized a Class-2 change").toBe(false);
+    });
+  });
+
+  /** MUTATION: drop the unstaged half of dirtyWorktreeLines.
+   *
+   * Already caught by gate-cli.test.ts; driven here too so the decision has a
+   * unit-level red-proof that does not depend on spawning git. */
+  describe("which git status lines mean the worktree moved ahead of the index", () => {
+    it("untracked files and unstaged edits are dirty; staged changes are not", () => {
+      expect(
+        dirtyWorktreeLines(["?? fullburn/engine/src/backdoor.ts", " M fullburn/config/src/caps.ts", "MM a.ts", "M  b.ts", "A  c.ts", ""].join("\n")),
+      ).toEqual(["?? fullburn/engine/src/backdoor.ts", " M fullburn/config/src/caps.ts", "MM a.ts"]);
+    });
+
+    it("a clean tree has no dirty lines", () => {
+      expect(dirtyWorktreeLines("")).toEqual([]);
+      expect(dirtyWorktreeLines("\n\n")).toEqual([]);
+    });
+  });
+
+  /** MUTATION: remove ".github/" from VERIFIED_TREE_SCOPE.
+   *
+   * SURVIVED: adversary finding R2-18 back in one line — a PASS that says
+   * nothing about the CI that enforces it. The behavioural proof is in
+   * gate-cli.test.ts, which commits a workflow change and watches the binding
+   * go stale; this states the requirement where the constant lives. */
+  it("the verified tree covers the CI that enforces the gate, and excludes the record", () => {
+    // Fullburn's own workflows and CODEOWNERS (R2-18), not the shared folder (2026-10-07).
+    for (const e of [".github/CODEOWNERS", ":(glob).github/workflows/fullburn-*", ".github/workflows/cross-family-read.yml"]) {
+      expect(VERIFIED_TREE_SCOPE, `the workflow definition left the adversary's scope (R2-18): ${e}`).toContain(e);
+    }
+    expect(VERIFIED_TREE_SCOPE, "the whole shared .github/ is back in Fullburn's verified tree").not.toContain(".github/");
+    expect(VERIFIED_TREE_SCOPE).toContain("fullburn/");
+    expect(VERIFIED_TREE_SCOPE, "the agent-discovery tree left the adversary's scope").toContain(".claude/agents/");
+    // Excluded so a report cannot invalidate itself by being committed.
+    expect(VERIFIED_TREE_SCOPE).toContain(":!fullburn/reports/");
+    expect(VERIFIED_TREE_SCOPE).toContain(":!fullburn/APPROVALS/");
+  });
+});

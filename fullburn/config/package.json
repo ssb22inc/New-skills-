@@ -1,0 +1,14 @@
+{
+  "name": "@fullburn/config",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    "./caps": "./src/caps.ts",
+    "./models": "./src/models.ts",
+    "./markets": "./src/markets.ts",
+    "./channels": "./src/channels.ts",
+    "./grade-thresholds": "./src/grade-thresholds.ts",
+    "./freeze": "./src/freeze.ts"
+  }
+}
