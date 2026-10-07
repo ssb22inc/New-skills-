@@ -28,7 +28,11 @@ import { existsSync, readFileSync } from "node:fs";
  * green (adversary finding R13-06). A typed boundary is a boundary that goes
  * stale on the next file. This one is derived from the import graph, so a
  * module added tomorrow is in the population the moment `llm()` can reach it. */
-export const MONEY_PATH_ROOTS = ["engine/src/gateway.ts"] as const;
+/** gateway.ts, plus the PRODUCTION COLLABORATORS it receives through
+ * interfaces (cross-family finding X6-16, 2026-10-06): the HTTP transport, the
+ * Langfuse sink and the encrypted vault execute on the production call path but
+ * no static import reaches them, so their guards were outside the population. */
+export const MONEY_PATH_ROOTS = ["engine/src/gateway.ts", "engine/src/gateway-http.ts", "engine/src/langfuse-sink.ts", "engine/src/vault-crypto.ts"] as const;
 
 /** Comments and string literals are not code. Without stripping them, a
  * specifier mentioned in a doc-comment became a PHANTOM MODULE in the

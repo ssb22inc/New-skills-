@@ -123,7 +123,7 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     try {
       output = JSON.parse(content);
     } catch {
-      throw new GatewayHttpError("model reply is not a JSON object");
+      throw new GatewayHttpError("model reply is not JSON");
     }
     if (typeof output !== "object" || output === null || Array.isArray(output)) {
       throw new GatewayHttpError("model reply is not a JSON object");

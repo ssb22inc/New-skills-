@@ -138,7 +138,7 @@ function parseSealed(raw: string, what: string): Sealed {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new VaultError(`${what} is not a sealed record`);
+    throw new VaultError(`${what} is not JSON — not a sealed record`);
   }
   const s = parsed as Partial<Sealed>;
   if (
@@ -147,7 +147,7 @@ function parseSealed(raw: string, what: string): Sealed {
     typeof s.at !== "number" || typeof s.q !== "boolean" || typeof s.kek !== "string" ||
     typeof s.iv !== "string" || typeof s.ct !== "string"
   ) {
-    throw new VaultError(`${what} is not a sealed record`);
+    throw new VaultError(`${what} is missing sealed-record fields`);
   }
   return s as Sealed;
 }
@@ -224,10 +224,10 @@ export class EncryptedVaultBackend implements VaultBackend {
     const sealed = parseSealed(raw, "the vault manifest");
     const text = await this.#open(key, "the vault manifest", sealed);
     const parsed = JSON.parse(text) as unknown;
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new VaultError("the vault manifest is malformed");
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new VaultError("the vault manifest is not an object");
     const versions: Record<string, number> = Object.create(null) as Record<string, number>;
     for (const [n, v] of Object.entries(parsed)) {
-      if (!Number.isInteger(v) || (v as number) < 1) throw new VaultError("the vault manifest is malformed");
+      if (!Number.isInteger(v) || (v as number) < 1) throw new VaultError("the vault manifest holds an invalid version");
       versions[n] = v as number;
     }
     return { raw, versions };
@@ -356,11 +356,19 @@ export class EncryptedVaultBackend implements VaultBackend {
         const current = await this.#open(slotKey(clientId, name), `secret "${name}"`, loaded.sealed);
         if (now - loaded.sealed.at < policy.maxAgeMs) continue;
         const next = await issue(clientId, name, current);
-        if (typeof next !== "string" || next.length === 0 || next === current) throw new Error("issuer returned no new value");
+        // Control flow, not throws (X6-16): an issuer that returns nothing new,
+        // or a slot changed underneath, is a FAILED rotation recorded by name.
+        if (typeof next !== "string" || next.length === 0 || next === current) {
+          failed.push(name);
+          continue;
+        }
         // OVER THE EXACT RECORD THE DECISION WAS MADE ON (X6-07): `put` re-read
         // the slot, so a rotation issued against version 1 could overwrite a
         // quarantine written as version 2 and make the slot readable again.
-        if (!(await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, next))) throw new Error("the slot changed during rotation");
+        if (!(await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, next))) {
+          failed.push(name);
+          continue;
+        }
         rotated.push(name);
       } catch {
         // The old secret stays: a failing provider must not become an outage.

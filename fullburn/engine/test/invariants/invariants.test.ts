@@ -16,6 +16,7 @@ import { CANARY_SECRET, TEST_CLIENT, makeDeps, memoryMeter } from "../helpers.ts
 import { e2eVarianceHolds, runnerTargets } from "../e2e-variance.ts";
 import { blockingCalls } from "../blocking-calls.ts";
 import { enumerateThrowGuards, moneyPathGuards, moneyPathModules, moneyPathRefusals } from "../money-path-guards.ts";
+import { productionGuardEntries } from "../production-guard-entries.ts";
 
 /** The complete §10.2 standing-invariant checklist, enumerated (R10). Every
  * bullet appears here by name every CI run, and every LIVE entry carries a real
@@ -1103,6 +1104,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         expect: /has no binding/, fire: () => familyOf({} as never, "r") },
       { name: "a corrupt stored total refuses spend", file: "engine/src/spend-ledger.ts", type: MeterUnavailableError,
         expect: /ledger is corrupt/, fire: () => usable(-1, "committed spend") },
+      // X6-16: the production collaborators' guards, each driven.
+      ...productionGuardEntries(),
     ];
 
     /** Did THIS guard refuse, or did something else throw on the way? */
