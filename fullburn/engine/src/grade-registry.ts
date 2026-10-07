@@ -1,0 +1,215 @@
+import { GRADE_AREAS, type MetricThreshold } from "@fullburn/config/grade-thresholds";
+import { TraceContext, TraceEmitError, emitOrFail, type TraceSink } from "./tracing.ts";
+
+/** Grade Registry scaffold (ENGINE_BUILD.md §12, Law 14). Grades are code:
+ * computed from metrics against Class-2 thresholds. Below-A triggers typed
+ * enforcement actions — the trust ladder steps down, auto-improvements halt
+ * for the area, the human is alerted. The registry never mutates thresholds. */
+
+export type Grade = "A" | "BELOW_A";
+
+export interface AreaGrade {
+  readonly area: string;
+  readonly grade: Grade;
+  readonly failing: readonly string[];
+  /** Metrics required by thresholds but absent from the snapshot. Missing data
+   * is BELOW_A, never assumed-fine (fail closed). */
+  readonly missing: readonly string[];
+}
+
+export type EnforcementAction =
+  | { readonly type: "STEP_DOWN_TRUST_LADDER"; readonly area: string }
+  | { readonly type: "HALT_AUTO_IMPROVEMENTS"; readonly area: string }
+  | { readonly type: "ALERT_HUMAN"; readonly area: string };
+
+export type MetricSnapshot = Readonly<Record<string, Readonly<Record<string, number | boolean>>>>;
+
+/** Ordered comparisons are only meaningful against a real, finite reading.
+ * `-Infinity` drift satisfied every `<` threshold and `+Infinity` satisfied
+ * every `>=` one, so an impossible number graded A — the grade failed OPEN,
+ * the opposite of this file's stated contract (adversary finding R2-20).
+ * Out-of-domain readings now fail closed into the enforcement path, exactly as
+ * caps, the meter and the model layer already do. */
+function isUsableReading(actual: unknown): actual is number {
+  return typeof actual === "number" && Number.isFinite(actual);
+}
+
+/** A reading outside the metric's declared domain is corrupt, not good news. */
+function inDomain(t: MetricThreshold, actual: number): boolean {
+  if (t.domainMin !== undefined && actual < t.domainMin) return false;
+  if (t.domainMax !== undefined && actual > t.domainMax) return false;
+  return true;
+}
+
+function metricPasses(t: MetricThreshold, actual: number | boolean): boolean {
+  switch (t.op) {
+    case "<": return isUsableReading(actual) && inDomain(t, actual) && actual < (t.value as number);
+    case "<=": return isUsableReading(actual) && inDomain(t, actual) && actual <= (t.value as number);
+    case ">=": return isUsableReading(actual) && inDomain(t, actual) && actual >= (t.value as number);
+    // Strict equality is immune to the domain problem by construction.
+    case "==": return typeof actual === "number" ? isUsableReading(actual) && inDomain(t, actual) && actual === t.value : actual === t.value;
+    case "==0": return actual === 0;
+    case "==true": return actual === true;
+  }
+}
+
+export class GradeRegistryError extends Error {}
+
+export function computeGrades(snapshot: MetricSnapshot): AreaGrade[] {
+  const grades = GRADE_AREAS.map((areaDef) => {
+    // Own-property lookups only (adversary finding F6): a polluted prototype
+    // must never supply metrics for an area the snapshot does not contain, or
+    // an empty snapshot could grade itself A.
+    const metrics =
+      snapshot !== null && typeof snapshot === "object" && Object.hasOwn(snapshot, areaDef.area)
+        ? snapshot[areaDef.area]
+        : undefined;
+    const failing: string[] = [];
+    const missing: string[] = [];
+    for (const t of areaDef.metrics) {
+      const actual =
+        metrics !== undefined && metrics !== null && Object.hasOwn(metrics, t.key) ? metrics[t.key] : undefined;
+      if (actual === undefined) missing.push(t.key);
+      else if (!metricPasses(t, actual)) failing.push(t.key);
+    }
+    const grade: Grade = failing.length === 0 && missing.length === 0 ? "A" : "BELOW_A";
+    // FROZEN, deeply. Identity proved the caller did not build the array; it
+    // said nothing about whether the caller had since rewritten what was in it.
+    // Overwriting each element in place turned 24 enforcement actions into 0
+    // and published an all-A report, with the identity intact and the length
+    // unchanged (adversary finding R8-05). Length is not what a caller mutates.
+    return Object.freeze({ area: areaDef.area, grade, failing: Object.freeze(failing), missing: Object.freeze(missing) });
+  });
+  Object.freeze(grades);
+  COMPUTED.add(grades);
+  return grades;
+}
+
+// THE AREA-COVERAGE CHECK IS GONE, AND ITS ABSENCE IS THE FIX.
+//
+// R7-10 added `grades.length !== GRADE_AREAS.length` "in case a caller mutated
+// the array it was handed". It could not be reached by any input: the identity
+// check refused every short or foreign list before it, so deleting the line
+// left the whole suite green — a guard reading as coverage while covering
+// nothing (adversary finding R8-05). And it did not even hold on its own terms:
+// `real[1] = real[0]` duplicates an area and drops another at unchanged length.
+//
+// Replacing it with a deeper check would have been the same mistake one level
+// down. The array and its elements are frozen at construction instead, so
+// coverage is a property of the value rather than something re-validated at
+// every use: `computeGrades` builds from `GRADE_AREAS` in order, and nothing
+// downstream can rewrite what it built. Structure, not a check.
+
+/** Grades this module computed. `enforcement()` accepts nothing else.
+ *
+ * `enforcement([])` returned no actions, and a caller could pass an A for a
+ * failing area, omit configured areas, or hand-build an `AreaGrade` — the
+ * registry did not guarantee that below-A freezes autonomy, it only translated
+ * an untrusted list (adversary finding R7-10). Freezing autonomy is the whole
+ * point of §12, so the input has to be evidence rather than assertion. */
+const COMPUTED = new WeakSet<readonly AreaGrade[]>();
+
+/** The graded metrics only, primitive readings only. Never throws. */
+function snapshotForTrace(snapshot: unknown): unknown {
+  try {
+    const out: Record<string, Record<string, number | boolean | null>> = {};
+    for (const areaDef of GRADE_AREAS) {
+      const area = Object.getOwnPropertyDescriptor(snapshot as object, areaDef.area)?.value as unknown;
+      const row: Record<string, number | boolean | null> = {};
+      for (const t of areaDef.metrics) {
+        const v = area !== null && typeof area === "object" ? (Object.getOwnPropertyDescriptor(area, t.key)?.value as unknown) : undefined;
+        row[t.key] = typeof v === "number" || typeof v === "boolean" ? v : null;
+      }
+      out[areaDef.area] = row;
+    }
+    return out;
+  } catch {
+    return "[unreadable snapshot]";
+  }
+}
+
+export interface GradeTraceDeps {
+  readonly sink: TraceSink;
+  readonly trace: TraceContext;
+  readonly now: () => number;
+}
+
+/** THE ONE AUTHORITY, AND IT IS TRACED: compute, enforce and publish on the
+ * same snapshot, and emit one trace carrying the snapshot, the grades and the
+ * enforcement actions before any of them is returned.
+ *
+ * Cross-family finding X2-14 (2026-09-24): a below-A snapshot produced
+ * trust-step-down, improvement-halt and human-alert decisions with no trace at
+ * all — Law 11 says every DECISION is traced, not only every LLM call. FAIL
+ * CLOSED like `llm()`: if the trace cannot be written, the caller gets a
+ * TraceEmitError and no decision; a failure inside the computation is traced
+ * as an error and re-thrown. The pure helpers stay exported for their own
+ * red-proofs; the Worker entry exports only this boundary. */
+export async function gradeAndEnforce(
+  snapshot: MetricSnapshot,
+  deps: GradeTraceDeps,
+): Promise<{ grades: AreaGrade[]; actions: EnforcementAction[]; report: string }> {
+  if (!(deps?.trace instanceof TraceContext)) {
+    throw new TraceEmitError("gradeAndEnforce requires a TraceContext — an untraced grade decision is a bug (Law 11)");
+  }
+  const startedAtMs = deps.now();
+  // X3-07 (2026-10-04): the trace carried the caller's snapshot verbatim, and
+  // computeGrades ignores fields it does not grade, so an extra credential-
+  // bearing field reached the sink. Only the metrics the thresholds name, and
+  // only primitive readings, are traced; an unreadable snapshot is named, not copied.
+  const traced = snapshotForTrace(snapshot);
+  const base = { traceId: deps.trace.traceId, clientId: deps.trace.clientId, role: "grade-registry", model: "deterministic", startedAtMs, costUsd: 0 };
+  let grades: AreaGrade[];
+  let actions: EnforcementAction[];
+  let report: string;
+  try {
+    // GRADE WHAT WAS TRACED (cross-family finding X4-11, 2026-10-04): grading
+    // the caller's object ran its accessors a second time, so a getter could
+    // grade A while the trace recorded null. The traced copy is plain data; an
+    // accessor-backed reading is null in both, and null grades BELOW_A.
+    if (traced === null || typeof traced !== "object") throw new GradeRegistryError("snapshot unreadable");
+    grades = computeGrades(traced as MetricSnapshot);
+    actions = enforcement(grades);
+    report = publishGradeReport(grades, startedAtMs);
+  } catch {
+    // Nothing of the thrown value crosses (X3-07): a hostile getter chooses its
+    // error's message, name, cause and class. A fixed message is traced and a
+    // fresh GradeRegistryError carrying it is thrown.
+    const safe = "grade computation failed — the snapshot could not be graded (fail closed)";
+    await emitOrFail(deps.sink, { ...base, input: traced, output: null, outcome: "error", errorMessage: safe });
+    throw new GradeRegistryError(safe);
+  }
+  await emitOrFail(deps.sink, { ...base, input: traced, output: { grades, actions }, outcome: "ok" });
+  return { grades, actions, report };
+}
+
+export function enforcement(grades: readonly AreaGrade[]): EnforcementAction[] {
+  // Identity, not shape: only an array computeGrades produced is evidence about
+  // this engine's state.
+  if (!COMPUTED.has(grades)) {
+    throw new GradeRegistryError(
+      "enforcement requires grades from computeGrades — a caller-supplied list is not evidence (§12, Law 14)",
+    );
+  }
+  const actions: EnforcementAction[] = [];
+  for (const g of grades) {
+    if (g.grade === "BELOW_A") {
+      actions.push(
+        { type: "STEP_DOWN_TRUST_LADDER", area: g.area },
+        { type: "HALT_AUTO_IMPROVEMENTS", area: g.area },
+        { type: "ALERT_HUMAN", area: g.area },
+      );
+    }
+  }
+  return actions;
+}
+
+/** Published grade report (monthly + continuous, §12). */
+export function publishGradeReport(grades: readonly AreaGrade[], generatedAtMs: number): string {
+  // A published report is a client-visible number (Law 10). It carries the same
+  // provenance requirement as enforcement (R7-10).
+  if (!COMPUTED.has(grades)) {
+    throw new GradeRegistryError("publishGradeReport requires grades from computeGrades (§12, Law 10)");
+  }
+  return JSON.stringify({ generatedAtMs, grades }, null, 2);
+}

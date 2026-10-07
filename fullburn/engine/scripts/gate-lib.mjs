@@ -1,0 +1,1020 @@
+import { createHash } from "node:crypto";
+/** Pure logic for the CI gates — unit-testable without git (R1, R5; hardened
+ * for F4, F5, F14 and then for R2-04/05/06/08/09/10/11/12/31/32). The CLI
+ * wrappers do the git plumbing. */
+
+/** Class-2 protection is expressed as PATTERNS, not a literal path list
+ * (adversary findings R2-04, R2-06, R2-08, R2-11, R2-12).
+ *
+ * A literal list protects a file only while it keeps its name and only while
+ * the file it names is the one that runs. Three demonstrated bypasses forced
+ * this change: `git mv` walked a Class-2 file out of the set; `config/package.json`
+ * redirected the `@fullburn/config/caps` specifier to an attacker module without
+ * touching caps.ts; and `fullburn/package.json` redefined `npm test` so the
+ * whole invariant suite became a no-op. Patterns cover the directory, so a
+ * rename lands inside the protected set rather than outside it. */
+/** ANY-DEPTH PATTERNS ARE FULLBURN-DEPTH (2026-10-04). The basename rules below
+ * (runner configs, lockfiles, package.json, .npmrc, .gitignore, tsconfig, e2e/)
+ * matched at ANY depth in the repository, so the sibling builds haven/ and
+ * pulsern/ were "Fullburn Class-2": a change to haven/package.json demanded a
+ * Fullburn approval and — after X3-02 — ran Fullburn's gates. That couples
+ * builds this project was told never to cross-contaminate. Each rule now
+ * matches at the repository root or anywhere under fullburn/, and nowhere else;
+ * nothing Fullburn owns left the protected set. */
+export const CLASS2_PATTERNS = [
+  // The constitution
+  /^fullburn\/CLAUDE\.md$/,
+  /^fullburn\/ENGINE_BUILD\.md$/,
+  /^fullburn\/\.claude\//,
+  // THE REPO-ROOT `.claude/` TREE — where the harness actually DISCOVERS agents.
+  //
+  // The adversary's definition lives at `fullburn/.claude/agents/` and was
+  // Class-2 from r2. But the harness reads agent definitions from
+  // `<repo-root>/.claude/agents/`, so from a session rooted at the repository
+  // the adversary was NOT REGISTERED AT ALL (measured 2026-09-20: "Agent type
+  // 'engine-adversary' not found", twice, from both working directories). The
+  // obvious fix — a copy at the root — measured `class2=false, inCIScope=false`:
+  // the adversary's own definition would have been editable with no approval
+  // and no gate. So the root tree is covered here first, and the mirror only
+  // exists because it is. Anything under a root `.claude/` configures how
+  // agents behave in this repository; all of it is a human decision.
+  // FULLBURN'S OWN FILES ONLY (human instruction 2026-10-06: no cross-
+  // contamination). `.claude/` and `.github/` are shared by every project in
+  // the repository; main carries another build's workflows, GitHub's exercise
+  // workflows and an unrelated skill there. Matching the whole folder made a
+  // PulseRN workflow edit a Fullburn Class-2 change — running Fullburn's gates
+  // on PulseRN pull requests and blocking them on an Astra review of Fullburn.
+  /^\.claude\/agents\//,
+  // THE COMPLETION CONTRACT. DONE.md defines when to stop (its own §0: "done"
+  // is an exit code, never a sentence the builder writes). A contract editable
+  // with no approval, outside the verified tree, is not a contract.
+  /^DONE\.md$/,
+  // Money, the grader, and the immutability primitive: values AND enforcing code.
+  // The WHOLE engine source tree, not an enumeration (adversary finding R2-CP-04):
+  // a list of seven files left index.ts — the deployed Worker entrypoint — free to
+  // re-export an unmetered llm() from a new module, with every gate green.
+  /^fullburn\/config\/src\//,
+  /^fullburn\/engine\/src\//,
+  // The gates themselves and everything that decides whether they run
+  /^\.github\/(?:CODEOWNERS|workflows\/(?:fullburn-[^/]+|cross-family-read)\.ya?ml)$/,
+  /^fullburn\/engine\/scripts\//,
+  // THE PRIMARY SECRET SCANNER'S CONFIGURATION (cross-family finding X2-04,
+  // 2026-09-24): a root .gitleaks.toml or .gitleaksignore decides what the
+  // PRIMARY detector reports and could land as an out-of-scope Class-1 change.
+  /^\.gitleaks(?:\.toml|ignore)$/,
+  /^fullburn\/\.gitleaks(?:\.toml|ignore)$/,
+  // THE LINT GATE'S CONTROLLING CONFIGURATION. Its `ignores` can exclude
+  // engine/src/** while the rules and the file globs read unchanged and the
+  // plants under engine/test/ still fire (cross-family finding X-02,
+  // 2026-09-24). Any lint config at the workspace root, by shape.
+  /^fullburn\/(?:eslint|biome)\.config\.[cm]?[jt]s$/,
+  // REVIEW ARTIFACTS. A handwritten file with `Verdict: PASS`, the current
+  // tree hash and a non-Claude `Reviewer-family:` line satisfied both C2 and
+  // C3 with no review having occurred (cross-family finding X-03). Provenance
+  // is not provable from bytes; what CAN be done is to put every review
+  // artifact behind the human's identity: Class-2, CODEOWNER-reviewed, owed an
+  // approval like any other gate input. Reports stay outside the verified
+  // tree so a record commit does not move the hash a report binds to.
+  /^fullburn\/reports\/(?:ADVERSARY_REPORT_|DONE_)/,
+  // Any test-runner or deploy config, by shape rather than by name: vitest
+  // honours vitest.workspace.ts OVER vitest.config.ts, so protecting only the
+  // latter left a sibling filename that silenced 145 of 148 tests (R3-CP-03).
+  //
+  // Enumerating the extensions was still too narrow. vitest resolves a workspace
+  // from WORKSPACES_NAMES × WORKSPACES_EXTENSIONS = {vitest.workspace,
+  // vitest.projects} × {.ts,.mts,.cts,.js,.mjs,.cjs,.json}; the four-extension
+  // list left .mts, .cts and .cjs Class-1, and `vitest.workspace.mts` silenced
+  // 165 of 168 tests with every gate green (adversary finding N-02). The rule is
+  // now ANY config-shaped file at ANY depth whose basename starts with vitest.
+  // or vite. — extension-agnostic, because the next runner version decides the
+  // extension list, not us.
+  /^(?:fullburn\/(?:[^/]+\/)*)?vite(?:st)?[._\-][^/]*$/,
+  // The Playwright runner and everything it points at. Adding the §10.3 e2e
+  // stage without this left BOTH halves Class-1: `playwright.config.ts` chooses
+  // `testDir`, so a two-file Class-1 diff repointed it at a new `fullburn/e2e/`
+  // holding a stub that launches no browser — five stages green, three gates
+  // green, and the invariant suite still asserting the H20 variance held,
+  // because it read the directory and never the runner that executes it
+  // (adversary finding R5-02). Same defect class as R3-CP-03 and N-02, fourth
+  // round, through a filename the H20 commit itself introduced.
+  /^(?:fullburn\/(?:[^/]+\/)*)?playwright[._\-][^/]*$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?e2e\//,
+  // `npm ci` reads these; the lockfile was made Class-2 on exactly this
+  // reasoning (N-11).
+  /^(?:fullburn\/(?:[^/]+\/)*)?\.npmrc$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?\.nvmrc$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?wrangler\.[^/]*$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?\.gitignore$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?package\.json$/,
+  // npm ci resolves STRICTLY from the lockfile — `resolved` and `integrity` both
+  // live there — so the lockfile decides what `vitest` actually is. It was the
+  // only executable thing left in the Class-1 surface (adversary finding N-11).
+  /^(?:fullburn\/(?:[^/]+\/)*)?package-lock\.json$/,
+  /^(?:fullburn\/(?:[^/]+\/)*)?tsconfig[^/]*\.json$/,
+  /^fullburn\/PHASE$/,
+  // The evidence: tests are the only thing standing between a defect and a
+  // green gate, so silencing one is a human decision.
+  /^fullburn\/(?:config|engine)\/test\//,
+  /^fullburn\/engine\/evals\//,
+];
+
+export function isClass2(path) {
+  return CLASS2_PATTERNS.some((re) => re.test(path));
+}
+
+/** HUMAN APPROVAL IS OWED FOR THE MONEY CAPS ONLY (human ruling 2026-10-06,
+ * ledger L50). The human removed every other human gate: a Class-2 change to
+ * code, tests, gates or the contract is now decided by the automated gates —
+ * the four required CI checks, the mutation harness and a cross-family PASS at
+ * the exact tree. `CLASS2_PATTERNS` still defines the protected SCOPE (what
+ * runs CI, what the verified tree covers, what CODEOWNERS must enumerate); this
+ * narrower list is what still needs a human-signed transition approval.
+ *
+ * It is the cap VALUES plus everything that decides whether this requirement
+ * is enforced at all. Without the second half the requirement would be one
+ * unapproved edit to this list away from gone, and the agent that may not
+ * raise its own budget could first delete the rule that says so. What this
+ * does NOT cover, stated as a limitation: the engine code that ENFORCES the
+ * caps (`engine/src/**`) and the tests that pin it. Those are guarded by the
+ * suite, the mutation harness and the cross-family read — not by a human. */
+export const HUMAN_APPROVAL_PATTERNS = [
+  // The values, the module that freezes them, and the export map that decides
+  // which module `@fullburn/config/caps` is (R2-08: a redirect there replaced
+  // caps.ts without touching it).
+  // Any caps-named module under config/src, not only caps.ts: a new file there
+  // holding cap values must not be the way around the list (R2-04 by name).
+  /^fullburn\/config\/src\/[^/]*caps[^/]*$/,
+  /^fullburn\/config\/src\/freeze\.ts$/,
+  /^fullburn\/config\/package\.json$/,
+  // The machinery that enforces this list.
+  /^fullburn\/engine\/scripts\/gate-lib\.mjs$/,
+  /^fullburn\/engine\/scripts\/class2-gate\.mjs$/,
+  /^fullburn\/engine\/scripts\/diff-lib\.mjs$/,
+  // Decides whether the gates run at all; the base's copy judges each PR
+  // (X5-01), so a change to it governs every later PR — the cap rule included.
+  /^fullburn\/engine\/scripts\/ci-scope\.mjs$/,
+  // Reads who added each approval from GitHub (X5-03).
+  /^fullburn\/engine\/scripts\/github-auth\.mjs$/,
+  /^\.github\/workflows\/fullburn-ci\.yml$/,
+  // The money-cap gate runs here since X6-02 (pull_request_target, from main).
+  /^\.github\/workflows\/fullburn-gates\.yml$/,
+];
+
+export function needsHumanApproval(path) {
+  return HUMAN_APPROVAL_PATTERNS.some((re) => re.test(path));
+}
+
+/** A concrete path per pattern, so `isClass2` — the authority — is what the
+ * lock tests drive. This replaces the old exported `CLASS2_FILES` array
+ * (adversary finding H-03): once `isClass2` became the authority, that list was
+ * read by nothing, yet two test files still asserted membership in it. Eight of
+ * the thirteen patterns were therefore neuterable with the whole suite green,
+ * including the money-path sources, the gate scripts, `.github/`, the Laws, and
+ * the adversary's own mandate. A dead list that tests point at is worse than no
+ * list at all, because it reads as coverage.
+ *
+ * Every entry here must be matched by some pattern AND every pattern must claim
+ * some entry — `locks-r5.test.ts` asserts both directions, so neutering a
+ * pattern or adding one without a witness turns the suite red. */
+export const CLASS2_WITNESS_PATHS = [
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  "fullburn/.gitleaks.toml",
+  "fullburn/eslint.config.mjs",
+  "fullburn/reports/ADVERSARY_REPORT_phase0.x1.md",
+  "fullburn/reports/DONE_phase0_abda5d88c24f.md",
+  "fullburn/CLAUDE.md",
+  "fullburn/ENGINE_BUILD.md",
+  "fullburn/.claude/agents/engine-adversary.md",
+  // Its discovery mirror at the repo root — Class-2 for the same reason.
+  ".claude/agents/engine-adversary.md",
+  "DONE.md",
+  "fullburn/config/src/caps.ts",
+  "fullburn/engine/src/gateway.ts",
+  ".github/workflows/fullburn-ci.yml",
+  "fullburn/engine/scripts/gate-lib.mjs",
+  "fullburn/vitest.workspace.mts",
+  "fullburn/vitest_workspace.ts",
+  "fullburn/playwright.config.ts",
+  "fullburn/e2e/anything.spec.ts",
+  "fullburn/.npmrc",
+  "fullburn/.nvmrc",
+  "fullburn/engine/deploy/wrangler.toml",
+  "fullburn/package-lock.json",
+  "fullburn/engine/.gitignore",
+  "fullburn/wrangler.toml",
+  "fullburn/.gitignore",
+  "fullburn/package.json",
+  "fullburn/tsconfig.base.json",
+  "fullburn/PHASE",
+  "fullburn/engine/test/invariants/invariants.test.ts",
+  "fullburn/engine/evals/hello-world/golden.ts",
+];
+/** Strip HTML comments before any line scanning: a verdict hidden in
+ * `<!-- ... -->` renders invisibly to a human but was read by the parser
+ * (adversary finding R2-09). */
+/** How far into a report the gate will look for its two machine-read fields.
+ *
+ * Both fields used to be findable anywhere in the file, and every fix since has
+ * been another entry on a list of hiding places: fenced blocks, mismatched
+ * fence markers, fence LENGTH, indented blocks, blockquotes, HTML comments,
+ * `<details>`. The list kept growing because the parser was deciding visibility
+ * from Markdown source while the artifact a human reads is rendered HTML — and
+ * those two disagree in ways nobody enumerates completely (adversary findings
+ * R2-09, R3-CP-02, N-04, N-05).
+ *
+ * A positive schema ends that: the verdict and the tree binding must appear in
+ * the report's HEADER — the first few lines, at column 0. There is no hiding
+ * place in a ten-line header, because a human opening the file sees all of it
+ * before scrolling. Every report ever written already complies. */
+const HEADER_LINES = 10;
+
+/** Closed comments are removed; an UNCLOSED opener conceals everything after
+ * it and therefore ENDS the header.
+ *
+ * This replaced only `<!-- … -->` pairs, and `stripConcealed` matched
+ * `</?[a-zA-Z]`, which a comment opener is not. So `<!--` with no closing
+ * delimiter survived both passes untouched and the concealed lines were read
+ * normally: a report whose rendered form shows nothing was accepted as
+ * `Verdict: PASS` bound to the current tree (adversary finding R7-01, the
+ * cross-family review). That is a manufactured PASS on the mechanism that
+ * gates every other mechanism.
+ *
+ * The r6 rule said "any raw tag ends the header" and was written one round
+ * before this. It was a rule about tags when the problem was about anything a
+ * renderer hides. */
+function stripHtmlComments(text) {
+  // Only closed pairs are removed here. An UNCLOSED opener is left in place on
+  // purpose, so `stripConcealed` truncates the header at it — one guard, not
+  // two. Truncating here as well was redundant, and a redundant guard reads as
+  // coverage without being it.
+  return text.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+/** THE HEADER IS PURE PROSE. Any raw HTML tag ends it.
+ *
+ * The previous rule was a five-tag list — details, script, style, template,
+ * iframe — and every round found a new member of it: `<details>` in r4,
+ * `<div style="display:none">` in r5. An enumeration of hiding places is not a
+ * rule, it is a scoreboard. A renderer can conceal with any element and any
+ * attribute, so the header simply may not contain markup: the first tag
+ * truncates it, and a binding below that point does not exist as far as the
+ * gate is concerned (which fails closed, per checkAdversaryReport). */
+function stripConcealed(text) {
+  // Any markup-ish opener ends the header, closed or not: a tag, a comment, a
+  // CDATA or doctype opener, or a processing instruction. Enumerating which
+  // ones conceal was the mistake three rounds running (R5-04, R6-05, R7-01).
+  const tag = /<[!/?a-zA-Z]/.exec(text);
+  return tag === null ? text : text.slice(0, tag.index);
+}
+
+/** The report's header lines, with everything a renderer would hide removed.
+ * ONE definition, shared by both readers: `readTreeBinding` was a near-copy of
+ * `parseVerdict` that compared fence CHARACTERS without length, so a correctly
+ * bound `Verdict: FAIL` was read as unbound, filed as history, and silently
+ * overridden by a sibling PASS — the gate's output never naming the FAIL report
+ * at all (N-04). Two parsers for one grammar is how that happens. */
+function visibleHeaderLines(reportContent) {
+  if (typeof reportContent !== "string") return [];
+  // Invisible and direction-flipping characters render as nothing or as
+  // something else entirely, so a header containing them is not a header a
+  // human read. Zero-width, BOM, and the bidi overrides (R7-01's remedy list).
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/.test(reportContent)) {
+    return [];
+  }
+  const lines = stripConcealed(stripHtmlComments(reportContent)).split("\n");
+  const out = [];
+  let fence = null; // {ch,len} of the fence currently open, or null
+  for (const raw of lines.slice(0, HEADER_LINES)) {
+    const line = raw.replace(/\r$/, "");
+    const fenceMatch = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+    if (fenceMatch) {
+      // CommonMark: a closing fence must use the same character AND be at least
+      // as long as the opening one. Comparing only the character let a
+      // 3-backtick line close a 4-backtick block (R3-CP-02).
+      const marker = { ch: fenceMatch[1][0], len: fenceMatch[1].length };
+      if (fence === null) fence = marker;
+      else if (fence.ch === marker.ch && marker.len >= fence.len) fence = null;
+      continue;
+    }
+    if (fence !== null) continue;
+    if (/^(?: {4,}|\t)/.test(line)) continue; // indented code block
+    // No blockquote skip: both readers anchor at column 0, so a "> " prefix
+    // already fails to match. A skip here would be dead code that reads as a
+    // guard (adversary finding R6-05/P3). The behaviour is asserted directly in
+    // gates.test.ts so removing the anchors is still caught.
+    out.push(line);
+  }
+  return out;
+}
+
+/** The verdict is the first verdict line in the visible header. The token must
+ * be exactly PASS or FAIL — anything else is INVALID, never a pass. */
+export function parseVerdict(reportContent) {
+  for (const line of visibleHeaderLines(reportContent)) {
+    const m = /^verdict\s*:\s*(\S+)/i.exec(line);
+    if (!m) continue;
+    const token = m[1].toUpperCase();
+    if (token === "PASS" || token === "FAIL") return { token, line: line.trim() };
+    return { token: "INVALID", line: line.trim() };
+  }
+  return null;
+}
+
+/** The binding, read through ordinary Markdown decoration.
+ *
+ * The old rule demanded the hash be the only thing on the line, bare. Writing
+ * it in backticks — ordinary Markdown practice — produced "`5f956c…`", which
+ * compared unequal to the tree, so a correctly bound FAIL was judged STALE,
+ * dropped, and silently overridden by a sibling PASS. The gate's own message
+ * printed two identical hashes and said "the code changed" (adversary finding
+ * R5-03). Six variants did it: backticks, bold, a list marker, a trailing
+ * parenthetical.
+ *
+ * Decoration is stripped and the first hash-shaped token is taken. Anything
+ * that yields no such token returns null — and null now BLOCKS rather than
+ * being skipped, which is the other half of the fix. */
+function readTreeBinding(reportContent) {
+  for (const line of visibleHeaderLines(reportContent)) {
+    const m = /^\s*(?:[-*+]\s+)?(?:\*\*|__)?verified-tree(?:\*\*|__)?\s*:\s*(.+)$/i.exec(line);
+    if (m === null) continue;
+    // ANCHORED. The hash pattern was unanchored and took the FIRST hex-shaped
+    // run on the line, so `verified-tree: <commit-sha> (commit; tree <hash>)`
+    // bound to the commit — a WRONG binding, not a parse failure, which landed
+    // in the one non-blocking branch. The FAIL was skipped, a sibling PASS
+    // opened the gate, and the gate's own message printed both hashes and said
+    // "code changed after the adversary judged it", which was false (adversary
+    // finding R6-01). Anything other than exactly one hash, after decoration is
+    // stripped, is now unreadable — and unreadable blocks.
+    const bare = m[1].replace(/[`*_]/g, "").trim();
+    return /^[0-9a-f]{7,64}$/i.test(bare) ? bare : null;
+  }
+  return null;
+}
+
+/** Reports that legitimately carry no tree binding, pinned by content hash.
+ *
+ * An unparseable report now BLOCKS (see below), and exactly one report in
+ * history cannot satisfy that: the r3 review's synthesizer died on a spend
+ * limit, so its findings were preserved mechanically and it was labelled, in
+ * its own text, as not adversary-authored and carrying no binding. Reports are
+ * append-only, so it cannot be edited into shape.
+ *
+ * The hash pins it: this exemption cannot be inherited by new content in the
+ * same filename, which is the only way an exemption like this goes wrong. */
+function shortSha256(text) {
+  return createHash("sha256").update(text, "utf8").digest("hex").slice(0, 8);
+}
+
+const UNBOUND_HISTORICAL_REPORTS = new Map([
+  ["ADVERSARY_REPORT_phase0.r3.md", "38ba0f39"],
+  // r9 (2026-08-17) is a FAIL bound to tree c824ae67 — long superseded by
+  // r10–r14 and x1–x4 — but it quotes a literal NUL byte as evidence (line 618,
+  // the R2-30 key-collision proof). The R7-01 rule that refuses any report
+  // carrying an invisible character, anywhere, landed after it, so it became
+  // permanently unreadable, and unreadable blocks: the CI adversary gate could
+  // never pass again, whatever any later round said (measured 2026-10-06, L53).
+  // Append-only, so it cannot be fixed in place; pinned by content hash like r3.
+  ["ADVERSARY_REPORT_phase0.r9.md", "149d4541"],
+]);
+
+/** The reviewer's family, from a `Reviewer-family:` line in the visible
+ * header. Absent, empty, or naming Claude/Anthropic is not a non-Claude
+ * reviewer. */
+export function isNonClaudeReviewer(reportContent) {
+  for (const line of visibleHeaderLines(reportContent)) {
+    const m = /^Reviewer-family:\s*(.*?)\s*$/.exec(line);
+    if (m) return m[1].length > 0 && !/claude|anthropic/i.test(m[1]);
+  }
+  return false;
+}
+
+/** Judge one report against the current tree. */
+function judgeReport(reportContent, currentTreeHash) {
+  // Freshness is established FIRST (adversary finding R3-CP-06). Judging the
+  // verdict first meant an unparseable one — a blockquoted FAIL, a homoglyph —
+  // returned fresh:false, so a report bound to THIS tree was filed as history
+  // and a sibling PASS opened the gate. Anything bound to the current tree that
+  // is not a clean PASS is unresolved business.
+  const tree = readTreeBinding(reportContent);
+  if (!tree) {
+    // UNPARSEABLE IS NOT STALE. These were the same state, and that was the
+    // defect: a report the gate could not read was filed as "about some other
+    // tree" and skipped, so six ordinary Markdown choices — a hash in
+    // backticks, a trailing parenthetical, a list marker — silently discarded a
+    // correctly bound FAIL while a sibling PASS opened the gate (adversary
+    // finding R5-03). The gate cannot show such a report is stale, so it must
+    // treat it as unresolved. `blocking` says so; `fresh` stays false because
+    // the report is not evidence ABOUT this tree, only an obstacle to it.
+    return {
+      ok: false,
+      fresh: false,
+      blocking: true,
+      reason:
+        "report has no readable 'verified-tree:' binding in its first 10 lines at column 0 — it cannot be shown to be about a different tree, so it blocks (fail closed)",
+    };
+  }
+  const fresh = tree === currentTreeHash;
+  const verdict = parseVerdict(reportContent);
+  if (!verdict) {
+    return {
+      ok: false,
+      fresh,
+      blocking: true,
+      reason: "report has no parseable 'Verdict:' line at column 0 in the first 10 lines",
+    };
+  }
+  if (!fresh) {
+    return {
+      ok: false,
+      fresh: false,
+      blocking: false,
+      reason: `report verified tree ${tree} but current fullburn tree is ${currentTreeHash} — code changed after the adversary judged it; re-run the adversary`,
+    };
+  }
+  if (verdict.token !== "PASS") {
+    return { ok: false, fresh: true, blocking: true, reason: `verdict is not PASS: "${verdict.line}"` };
+  }
+  return { ok: true, fresh: true, blocking: false, reason: "adversary report PASS and bound to the current tree" };
+}
+
+/** adversary-gate (R5): a report for this phase must exist, be bound to the
+ * current tree, and read PASS.
+ *
+ * ANY fresh FAIL blocks, even when a fresh PASS also exists (adversary finding
+ * R2-10). Reports are append-only and the tree hash confers freshness, so
+ * without this a PASS could never be revoked for a tree it already passed —
+ * and the second, cross-family adversary that H6b requires would be unable to
+ * stop a merge no matter what it found. §12 requires 0 unreviewed FAILs;
+ * "someone else passed it" is not a review. */
+/** WHICH REPORT FILES SPEAK FOR THIS PHASE — and, crucially, which do not.
+ *
+ * This regex lived inline in `adversary-gate.mjs`, between the CLI's `readdir`
+ * and `checkAdversaryReport`, so no unit test could reach it and the integration
+ * tests only ever exercised the phase they wrote. Widened to
+ * `/^ADVERSARY_REPORT_phase/`, a PASS written for phase 1 opened the phase 0
+ * gate — measured, with the default suite green at 354/354 (runner audit,
+ * R14-06 rule).
+ *
+ * CAPABILITY REMOVED: the gate can no longer choose which reports answer for
+ * the current phase from inside a process the default suite never starts. The
+ * phase binding is here, and it is driven directly.
+ *
+ * The suffix rule is deliberate: `_phase0.md`, `_phase0.r14.md` and
+ * `_phase0-cross.md` all speak for phase 0, and `_phase10.md` does NOT speak
+ * for phase 1 — a suffix must begin with `.`, `_` or `-`, so a digit cannot
+ * extend the phase number into a different one. */
+export function selectPhaseReports(phase, names) {
+  const re = new RegExp(`^ADVERSARY_REPORT_phase${String(phase).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:[._-].*)?\\.md$`);
+  return [...names].filter((n) => re.test(n)).sort();
+}
+
+/** WHICH FILES IN A DIFF ARE CREDIBLE APPROVAL DOCUMENTS.
+ *
+ * Inline in `class2-gate.mjs`, and unreachable from any unit test for the same
+ * reason. Dropping the `status === "added"` clause let a PR REWRITE an approval
+ * file that already existed at the base and have the rewrite authorize a fresh
+ * Class-2 transition — measured surviving with the default suite green. The
+ * append-only check in `adversary-gate.mjs` refuses that too, which is why the
+ * tree was never actually open; but the gate that AUTHORIZES Class-2 changes
+ * must not be relying on a different gate to notice.
+ *
+ * CAPABILITY REMOVED: approval-document selection is no longer a decision the
+ * class2 CLI makes privately. An approval is credible only if this PR ADDED it.
+ *
+ * Rules, each with its reason:
+ *  - `added` only — an approval must arrive WITH the change it approves.
+ *  - under `fullburn/APPROVALS/` — nowhere else is an approval directory.
+ *  - `.md` only, and never a README: the directory's own instructions are not
+ *    an approval, and a modified README is not a signature. */
+export function selectApprovalDocs(changedFiles) {
+  return changedFiles.filter(
+    (f) =>
+      f.status === "added" &&
+      /^fullburn\/APPROVALS\/.*\.md$/.test(f.path) &&
+      !/(?:^|\/)README\.md$/.test(f.path),
+  );
+}
+
+/** EVERYTHING THE ADVERSARY'S VERDICT IS A STATEMENT ABOUT.
+ *
+ * `.github/` is in scope per adversary finding R2-18: a PASS that does not cover
+ * the workflow definition asserts nothing about the CI that enforces it — the
+ * jobs could be deleted after the report was written and the binding would still
+ * match. `reports/` and `APPROVALS/` are excluded so a report cannot invalidate
+ * itself by being committed.
+ *
+ * It lived in `adversary-gate.mjs` as a const literal. Removing `.github/`
+ * restored R2-18 in one line with the default suite green, because the only
+ * tests that drove the scope wrote nothing under `.github/`. It is exported
+ * from here so the CLI, the tree hash and the integration test all read ONE
+ * definition, and `gate-cli.test.ts` drives it through git: it commits a
+ * workflow change and watches a standing PASS go stale. */
+export const VERIFIED_TREE_SCOPE = Object.freeze([
+  "fullburn/",
+  // Fullburn's own workflows and the ownership file — not the whole shared
+  // `.github/` (2026-10-07: main carries other projects' workflows there, and
+  // a PulseRN workflow edit must not stale a Fullburn review).
+  ".github/CODEOWNERS",
+  ":(glob).github/workflows/fullburn-*",
+  ".github/workflows/cross-family-read.yml",
+  // The agent-discovery tree (2026-09-20). A PASS that does not cover the
+  // adversary's own definition asserts nothing about who produced it.
+  ".claude/agents/",
+  "DONE.md",
+  // The primary scanner's configuration (X3-06): Class-2 and in CI scope since
+  // X2-04, but outside the hash a review binds to, so changing what gitleaks
+  // reports left a PASS fresh.
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  // Root Class-2 files (X4-02): every tracked Class-2 path outside reports/ and
+  // APPROVALS/ must be inside this hash, and the invariant suite derives that
+  // from `git ls-files` so a new root config fails the build until added here.
+  ".gitignore",
+  ":!fullburn/reports/",
+  ":!fullburn/APPROVALS/",
+]);
+
+/** `git status --porcelain` lines that mean the worktree has moved ahead of the
+ * index. "XY path": X is the index state, Y the worktree state — staged changes
+ * are already in the verified-tree hash, unstaged edits and untracked files are
+ * not (adversary findings R2-19, R5-07). */
+export function dirtyWorktreeLines(porcelain) {
+  return porcelain
+    .split("\n")
+    .filter((l) => l.length > 1)
+    .filter((l) => l.startsWith("??") || l[1] !== " ");
+}
+
+export function checkAdversaryReport({ phase, reportContent, reports, currentTreeHash }) {
+  const docs =
+    Array.isArray(reports) && reports.length > 0
+      ? reports
+      : reportContent === null || reportContent === undefined
+        ? []
+        : [{ name: `ADVERSARY_REPORT_phase${phase}.md`, content: reportContent }];
+
+  if (docs.length === 0) {
+    return { ok: false, reason: `no reports/ADVERSARY_REPORT_phase${phase}*.md found` };
+  }
+
+  const judged = docs
+    .filter((d) => {
+      const pinned = UNBOUND_HISTORICAL_REPORTS.get(d.name);
+      return pinned === undefined || shortSha256(d.content) !== pinned;
+    })
+    .map((d) => ({ name: d.name, content: d.content, ...judgeReport(d.content, currentTreeHash) }));
+
+  if (judged.length === 0) {
+    return { ok: false, reason: `no reports/ADVERSARY_REPORT_phase${phase}*.md found that makes a claim about any tree` };
+  }
+
+  // Unresolved business blocks, whatever else exists. That is a FAIL bound to
+  // this tree, AND a report the gate cannot read at all — the two were
+  // different states and only the first one blocked (R5-03).
+  const unresolved = judged.find((j) => j.blocking);
+  if (unresolved) {
+    return {
+      ok: false,
+      reason: `${unresolved.name}: ${unresolved.reason} (unresolved business on this tree blocks regardless of any PASS)`,
+    };
+  }
+
+  // ONLY A NON-CLAUDE REVIEWER'S PASS OPENS THE GATE (human instruction
+  // 2026-10-06, L55: no review may be done by the same family as the builder;
+  // every review is GPT Astra's). A same-family PASS bound to this tree is not
+  // evidence; a same-family FAIL still blocks above, because a FAIL is never
+  // the dangerous direction. The family line is the runner's line 5, read
+  // through the same visible-header rules as the verdict and the binding.
+  const pass = judged.find((j) => j.ok && isNonClaudeReviewer(j.content));
+  if (pass) return { ok: true, report: pass.name, reason: `${pass.name}: ${pass.reason}` };
+  const sameFamilyPass = judged.find((j) => j.ok);
+  if (sameFamilyPass) {
+    return {
+      ok: false,
+      reason: `${sameFamilyPass.name}: a PASS from a same-family or undeclared reviewer — only a non-Claude reviewer (GPT Astra) can open this gate`,
+    };
+  }
+
+  const first = judged[0];
+  return { ok: false, reason: `${first.name}: ${first.reason}` };
+}
+
+/** A PASS REPORT MUST BE THE RUNNER'S OWN OUTPUT, PROVEN BY SIGNATURE
+ * (cross-family finding X5-02, GPT-6 Astra, 2026-10-06). Without the human
+ * gate on reports, a handwritten file with `Verdict: PASS`, the current tree
+ * and a non-Claude family line opened the gate. Now the passing report's exact
+ * bytes must carry a GitHub artifact attestation whose signer is THIS
+ * repository's `cross-family-read.yml` workflow — the only place the pinned
+ * reviewer runs. The runner that fetched the attestation verified its
+ * signature (in CI, `gh attestation verify`: the full Sigstore chain); this
+ * decides whether what was verified is the right file from the right
+ * workflow. */
+export const REVIEW_SIGNER_WORKFLOW = ".github/workflows/cross-family-read.yml";
+
+/** THE PRODUCER MUST BE THE TRUSTED REVISION (cross-family finding X6-01,
+ * 2026-10-06). The signer URI names the workflow file AND the ref it ran from;
+ * matching only up to the "@" accepted the review workflow as rewritten on any
+ * branch — a branch could replace the reviewer with a PASS generator and keep
+ * the attestation step. Only the workflow as it stands on the trusted branch
+ * (`main`) counts, so the reviewer that produced the PASS is the one already
+ * merged, not the one under review. */
+export const TRUSTED_REVIEW_REF = "refs/heads/main";
+
+export function checkReportProvenance({ fileSha256, attestations, repo, trustedRef = TRUSTED_REVIEW_REF }) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(String(repo))) return { ok: false, reason: "no repository to bind the signer to — refusing (fail closed)" };
+  if (!/^[0-9a-f]{64}$/.test(String(fileSha256))) return { ok: false, reason: "the report's digest could not be computed — refusing" };
+  if (!/^refs\/heads\/[\w./-]+$/.test(String(trustedRef))) return { ok: false, reason: "no trusted branch to bind the reviewer to — refusing (fail closed)" };
+  const signer = `https://github.com/${repo}/${REVIEW_SIGNER_WORKFLOW}@${trustedRef}`;
+  const list = Array.isArray(attestations) ? attestations : [];
+  const good = list.find(
+    (a) =>
+      // CHAIN VERIFIED, NOT ONLY THE SIGNATURE (cross-family finding X6-12):
+      // a DSSE signature checked against the certificate shipped in the same
+      // bundle proves nothing about who issued that certificate — a
+      // self-signed one with the right SAN passed.
+      a && a.signatureVerified === true && a.chainVerified === true &&
+      typeof a.signerUri === "string" && a.signerUri === signer &&
+      Array.isArray(a.subjectDigests) && a.subjectDigests.includes(fileSha256),
+  );
+  if (good) return { ok: true, reason: `attested by ${good.signerUri}` };
+  return {
+    ok: false,
+    reason: list.length === 0
+      ? "the PASS report carries no attestation — only the cross-family-read workflow can produce a PASS"
+      : `no verified attestation of these exact bytes by ${REVIEW_SIGNER_WORKFLOW} at ${trustedRef} (${list.length} attestation(s) examined)`,
+  };
+}
+
+/** Append-only reports: a PR may add ADVERSARY_REPORT files, never modify,
+ * delete OR RENAME one (adversary finding R2-06 — a rename erased a standing
+ * FAIL while the gate certified append-only intact). */
+export function checkReportsAppendOnly(changedFiles) {
+  // APPROVALS/ is append-only for the same reason and was not covered, though
+  // its own README said it was. A signed approval could be rewritten — the
+  // `Approved-by` line altered, the standing caveat retitled "(RESOLVED)" — with
+  // all three gates green and the verified-tree hash UNCHANGED, because
+  // APPROVALS/ is excluded from the tree scope so a report's PASS cannot see it
+  // (adversary finding R5-05). L11/L13 disclose that an approval cannot prove
+  // WHO signed; nothing disclosed that it did not reliably prove WHAT, after
+  // the fact. The only artifact recording a human decision could be made to
+  // assert the opposite of that decision.
+  const isAppendOnly = (p) =>
+    /fullburn\/reports\/ADVERSARY_REPORT_.*\.md$/.test(p ?? "") ||
+    (/fullburn\/APPROVALS\/.*\.md$/.test(p ?? "") && !/\/README\.md$/.test(p ?? ""));
+  const touched = changedFiles.filter(
+    (f) => (isAppendOnly(f.path) && f.status !== "added") || (isAppendOnly(f.oldPath) && f.status === "renamed"),
+  );
+  if (touched.length > 0) {
+    const names = touched.map((f) => f.oldPath ?? f.path);
+    return {
+      ok: false,
+      reason: `adversary reports and approvals are append-only; modified/deleted/renamed: ${names.join(", ")}`,
+    };
+  }
+  return { ok: true, reason: "reports and approvals append-only holds" };
+}
+
+/** class2-gate (R1): every changed Class-2 path needs an approval entry ADDED
+ * in the same diff that authorizes THIS TRANSITION.
+ *
+ * An approval names the transition, not the state (adversary finding R2-05):
+ *   approves: <path>
+ *   from-content-hash: <sha256 of the file at the PR base, or "absent">
+ *   content-hash: <sha256 of the new content, or "deleted">
+ * Pinning only the destination let a superseded approval be re-added verbatim
+ * to reinstate content a human had already revoked — no forgery required. A
+ * transition can only be replayed if the tree is in exactly the state the human
+ * signed off FROM, which is the state they approved leaving.
+ *
+ * Both halves of a rename count as changes (R2-06), a deletion is a change that
+ * needs approval (R2-31), and each approval clause is parsed as a BLOCK so a
+ * path cannot borrow another path's hash (R2-32). */
+function parseApprovalBlocks(content) {
+  const blocks = [];
+  let current = null;
+  for (const raw of content.split("\n")) {
+    const line = raw.trim();
+    const approves = /^approves\s*:\s*(\S+)$/i.exec(line);
+    if (approves) {
+      if (current) blocks.push(current);
+      current = { path: approves[1], from: null, to: null, base: null };
+      continue;
+    }
+    if (!current) continue;
+    const from = /^from-content-hash\s*:\s*(\S+)$/i.exec(line);
+    if (from) {
+      current.from = from[1];
+      continue;
+    }
+    const base = /^base-commit\s*:\s*(\S+)$/i.exec(line);
+    if (base) {
+      current.base = base[1];
+      continue;
+    }
+    const to = /^content-hash\s*:\s*(\S+)$/i.exec(line);
+    if (to) current.to = to[1];
+  }
+  if (current) blocks.push(current);
+  return blocks;
+}
+
+/** Every money-cap path (`needsHumanApproval`, ruling 2026-10-06) a diff touches, including the source side of a rename,
+ * tagged with the transition it represents. This is the ONE definition of "what
+ * this PR owes an approval for": `checkClass2Approvals` enforces against it and
+ * `owed-approvals.mjs` prints from it, so the list a human is told to sign can
+ * never be a different list from the one the gate demands (adversary finding
+ * H-17, where a hand-maintained list drifted in both directions at once). */
+export function class2TouchedPaths(changedFiles) {
+  const touched = [];
+  for (const f of changedFiles) {
+    if (needsHumanApproval(f.path)) touched.push({ path: f.path, status: f.status === "renamed" ? "renamed-to" : f.status });
+    if (f.oldPath && needsHumanApproval(f.oldPath)) touched.push({ path: f.oldPath, status: "renamed-away" });
+  }
+  return touched;
+}
+
+/** The transition an approval for `entry` must authorize: which content it
+ * starts from and which it ends at. Shared for the same reason as above — a
+ * printed `from-content-hash` that the gate would not accept is worse than no
+ * printout, because the human believes they have signed. */
+export function approvalTransition(entry, { hashOf, baseHashOf }) {
+  const to = entry.status === "deleted" || entry.status === "renamed-away" ? "deleted" : safeHash(hashOf, entry.path);
+  // A rename destination did not exist at the base, so its transition starts
+  // from absence — the same shape as any newly added file.
+  const from =
+    entry.status === "added" || entry.status === "renamed-to" ? "absent" : safeHash(baseHashOf, entry.path, "unreadable");
+  return { from, to };
+}
+
+/** Principals whose commits cannot carry a Class-2 approval.
+ *
+ * An approval proved the bytes and never the author: a PR author or an
+ * autonomous agent could compute the base commit and both hashes, add a
+ * conforming approval file, and satisfy the gate — so the same agent changing
+ * caps could mint the evidence forbidding it (adversary finding R7-07).
+ *
+ * This is the in-repo half. It refuses an approval whose commit was authored by
+ * the automation principal, which raises the cost of the attack but does not
+ * prove a human either — a committer name is self-asserted. Only branch
+ * protection plus CODEOWNERS makes it real, and ledger L27 records that every
+ * approval predating that lock is unverified. */
+export const AUTOMATION_AUTHORS = [/\bclaude\b/i, /\bgithub-actions\b/i, /\[bot\]/i, /noreply@anthropic\.com/i];
+
+/** Does any CODEOWNERS rule claim this path?
+ *
+ * A deliberately small subset of the CODEOWNERS grammar — leading `/` anchors
+ * to the repository root, a trailing `/` matches a directory and everything
+ * under it, `*` matches within one segment, and a bare pattern matches by
+ * basename at any depth. That is every form this repo's file uses, and a rule
+ * shape it does NOT understand must be added here rather than assumed to work:
+ * a matcher that quietly returns false for a rule GitHub honours would report
+ * missing coverage, and one that quietly returns true would report coverage
+ * that does not exist. The second is the dangerous direction, so unknown
+ * constructs are not silently accepted.
+ *
+ * Exists because the file it checks covered 38 of 97 Class-2 paths while a lock
+ * test asserted six hard-coded strings and read as coverage of the set
+ * (adversary finding R8-04). */
+export function codeownersCovers(path, codeownersText) {
+  // LAST MATCH WINS, and a rule with NO OWNER un-covers what it matches — that
+  // is GitHub's semantics, and the previous version implemented neither. It
+  // read `line.split(/\s+/)[0]` as the pattern and never looked at the rest, so
+  // stripping every `@ssb22inc` from the file left it reporting 0 unowned of 98
+  // Class-2 paths while GitHub considered nobody the owner of anything
+  // (adversary finding R9-04). A lock that validates patterns and never owners
+  // is checking the shape of the control plane, not its effect.
+  const rules = codeownersText
+    .split("\n")
+    .map((l) => l.replace(/#.*$/, "").trim())
+    .filter((l) => l.length > 0)
+    .map((l) => {
+      const [pattern, ...rest] = l.split(/\s+/);
+      // An owner is a @user, a @org/team, or an email address. Anything else is
+      // not an owner, and a rule without one owns nothing.
+      const owners = rest.filter((t) => /^@[\w.-]+(?:\/[\w.-]+)?$/.test(t) || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t));
+      return { pattern, owned: owners.length > 0 };
+    });
+  const seg = (p) => p.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*");
+  const matches = (pattern) => {
+    if (pattern.startsWith("/")) {
+      const body = pattern.slice(1);
+      return body.endsWith("/")
+        ? new RegExp(`^${seg(body)}`).test(path)
+        : new RegExp(`^${seg(body)}$`).test(path);
+    }
+    if (pattern.endsWith("/")) return new RegExp(`(?:^|/)${seg(pattern.slice(0, -1))}/`).test(path);
+    // Bare pattern: matches the basename at any depth, which is how GitHub
+    // treats a rule with no slash in it.
+    return new RegExp(`(?:^|/)${seg(pattern)}$`).test(path);
+  };
+  let owned = false;
+  for (const rule of rules) if (matches(rule.pattern)) owned = rule.owned;
+  return owned;
+}
+
+/** Refuses approvals added by a commit the automation principal authored. */
+export function checkApprovalAuthorship(approvalDocs) {
+  const forged = approvalDocs.filter(
+    (d) =>
+      typeof d.authoredBy === "string" && AUTOMATION_AUTHORS.some((re) => re.test(d.authoredBy)),
+  );
+  if (forged.length > 0) {
+    return {
+      ok: false,
+      reason: `Class-2 approvals may not be authored by the automation principal (Law 15): ${forged
+        .map((d) => `${d.path} by ${d.authoredBy}`)
+        .join(", ")}`,
+    };
+  }
+  return { ok: true, reason: "approvals are not agent-authored" };
+}
+
+export function checkClass2Approvals({ changedFiles, approvalDocs, hashOf, baseHashOf, baseCommit }) {
+  const touched = class2TouchedPaths(changedFiles);
+  if (touched.length === 0) return { ok: true, reason: "no Class-2 changes" };
+
+  // FAIL CLOSED ON A MISSING BASE COMMIT. This was `baseCommit === undefined ||
+  // b.base === baseCommit` — an omitted argument disabled the whole
+  // pull-request binding and restored full approval replay. No test imported
+  // class2-gate.mjs, so renaming the property at the single call site left the
+  // suite green with the binding silently gone (adversary finding N-03, legs A
+  // and B). A control-plane check whose default is "skip me" is not a check.
+  if (typeof baseCommit !== "string" || baseCommit.length === 0) {
+    return {
+      ok: false,
+      reason:
+        "Class-2 approval check ran without a base commit, so approvals could not be bound to this pull request — refusing (fail closed)",
+    };
+  }
+
+  const authorship = checkApprovalAuthorship(approvalDocs);
+  if (!authorship.ok) return authorship;
+
+  const usable = approvalDocs
+    .map((d) => (typeof d === "string" ? { path: null, content: d, status: "added" } : d))
+    .filter((d) => d.status === undefined || d.status === "added")
+    .flatMap((d) => parseApprovalBlocks(d.content));
+
+  const failures = [];
+  for (const f of touched) {
+    const { from: wantFrom, to: wantTo } = approvalTransition(f, { hashOf, baseHashOf });
+    const approved = usable.some(
+      (b) =>
+        b.path === f.path && b.to === wantTo && b.from === wantFrom &&
+        // The approval must name THIS pull request's base (R3-CP-01). Content
+        // hashes alone authorize a content STATE: once a human's revert restored
+        // the previous bytes, every approval ever issued from those bytes was
+        // re-armed, and copying one back in re-authorized the revoked change with
+        // no forgery at all. A base commit occurs once.
+        b.base === baseCommit,
+    );
+    if (!approved) failures.push(`${f.path} (${f.status})`);
+  }
+  if (failures.length > 0) {
+    return {
+      ok: false,
+      reason: `Class-2 changes without a matching human approval for this transition (Law 2/14/15): ${failures.join(", ")}`,
+    };
+  }
+  return { ok: true, reason: "Class-2 changes carry transition approvals" };
+}
+
+/** WHO APPROVED A MONEY CAP, AS GITHUB RECORDS IT (cross-family finding X5-03,
+ * GPT-6 Astra, 2026-10-06). `checkApprovalAuthorship` reads a self-asserted git
+ * author and refuses only the automation's own names; any other name passed.
+ * Now every approval document added in the range must come from a commit that
+ * GitHub reports as signature-VERIFIED and authored by the repository's
+ * MAINTAINER account. `auth` is what the GitHub API returned for the commit
+ * that added the document — fetched by the runner, decided here.
+ *
+ * LIMITATION, stated (and the reason L49 says "authenticated authorship", not
+ * "independent review"): a commit GitHub signs on the maintainer's behalf —
+ * the web editor, or an API client holding the maintainer's own credentials —
+ * passes. This session's agent commits through git, unsigned, as "Claude", and
+ * fails. */
+export function checkApprovalAuthentication(approvalDocs, maintainer) {
+  if (typeof maintainer !== "string" || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(maintainer)) {
+    return { ok: false, reason: "no maintainer account is configured, so no approval can be authenticated — refusing (fail closed)" };
+  }
+  const want = maintainer.toLowerCase();
+  const bad = [];
+  for (const d of approvalDocs ?? []) {
+    /** EVERY COMMIT THAT TOUCHED THE DOCUMENT, NOT ONLY ITS ADDITION
+     * (cross-family finding X6-03, 2026-10-06). The bytes the gate parses are
+     * the document's CURRENT bytes; authenticating only the commit that added
+     * it let a later unsigned commit rewrite an approved document into a
+     * different cap transition. `auth` is the list of GitHub records for every
+     * commit in the range that touched the path; one bad or missing record
+     * refuses the document. */
+    const list = Array.isArray(d?.auth) ? d.auth : [d?.auth];
+    const a = list.length === 0 ? null : list.find((x) => !x || x.verified !== true || typeof x.authorLogin !== "string" || x.authorLogin.toLowerCase() !== want) ?? null;
+    if (list.length === 0 || a !== null || list.some((x) => !x)) {
+      bad.push(`${d?.path ?? "(unnamed)"} (${list.length === 0 || !a ? "no GitHub record" : a.verified !== true ? "commit not signature-verified" : `authored by ${a.authorLogin ?? "no account"}`})`);
+    }
+  }
+  if (bad.length > 0) {
+    return { ok: false, reason: `money-cap approvals must be added by a verified commit authored by @${maintainer}: ${bad.join(", ")}` };
+  }
+  return { ok: true, reason: `approvals added by verified commits authored by @${maintainer}` };
+}
+
+/** The money-cap gate as CI and `done` run it: the transition approvals AND,
+ * when any money-cap path is touched, their authentication. */
+export function checkMoneyCapGate({ maintainer, ...args }) {
+  const res = checkClass2Approvals(args);
+  if (!res.ok || class2TouchedPaths(args.changedFiles).length === 0) return res;
+  const added = (args.approvalDocs ?? []).filter((d) => d && typeof d === "object" && (d.status === undefined || d.status === "added"));
+  const auth = checkApprovalAuthentication(added, maintainer);
+  return auth.ok ? { ok: true, reason: `${res.reason}; ${auth.reason}` } : auth;
+}
+
+/** A hash that cannot be computed (deleted file, unreadable base) must not
+ * crash the gate — it fails closed to a sentinel no approval will match
+ * (adversary finding R2-31). */
+function safeHash(fn, path, absentSentinel) {
+  if (typeof fn !== "function") return "unavailable";
+  try {
+    const h = fn(path);
+    return typeof h === "string" && h.length > 0 ? h : "unavailable";
+  } catch {
+    // "deleted" means "this transition ends in absence" — a DELIBERATE state a
+    // human can approve. An unreadable base is something else entirely, and
+    // reusing the sentinel for it made a rename destination approvable with
+    // `from-content-hash: deleted` on a file being created (R3-CP-09).
+    return absentSentinel ?? "unreadable";
+  }
+}
+
+/** Every `paths:` filter in a workflow, as a list of globs — or `null` for a
+ * filter this parser cannot read.
+ *
+ * The lock that held the CI trigger to CLASS2_PATTERNS matched only the FLOW
+ * spelling, `paths: ["a", "b"]`, and captured an empty string for anything
+ * else. An empty capture became `globs = []`, and `[]` was then treated as "no
+ * filter, everything runs" — so rewriting the identical filter in YAML's
+ * ordinary block-sequence form defeated the lock while narrowing the trigger
+ * exactly as before (adversary finding R9-06):
+ *
+ *   paths:
+ *     - "fullburn/**"
+ *
+ * `null` means UNREADABLE and the caller must fail closed on it. Silently
+ * reading an unreadable filter as permissive is how this defect worked. */
+export function workflowPathFilters(workflowYaml) {
+  const lines = workflowYaml.split("\n");
+  const filters = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(\s*)paths(-ignore)?:\s*(.*)$/.exec(lines[i]);
+    if (m === null) continue;
+    // `paths-ignore` is the INVERSE of `paths` and was parsed as if it were the
+    // same key — so one ordinary line, `paths-ignore: ["**"]`, satisfied the
+    // lock that holds the trigger to CLASS2_PATTERNS while the workflow ran on
+    // no pull request at all, and adversary-gate and class2-gate never executed
+    // (adversary finding R10-04). The two are reported distinctly and the
+    // caller decides; a parser that flattens a negation into its positive is
+    // worse than one that cannot read the file.
+    const negated = m[2] !== undefined;
+    const indent = m[1].length;
+    const inline = m[3].trim();
+    if (inline.startsWith("[")) {
+      try {
+        filters.push({ negated, globs: JSON.parse(inline.replace(/'/g, '"')) });
+      } catch {
+        filters.push({ negated, globs: null }); // a flow sequence we cannot parse
+      }
+      continue;
+    }
+    if (inline.length > 0) {
+      // `paths: something` — an anchor, a variable, anything we do not model.
+      filters.push({ negated, globs: null });
+      continue;
+    }
+    // Block sequence: the following more-indented `- item` lines.
+    const globs = [];
+    let readable = true;
+    for (let j = i + 1; j < lines.length; j++) {
+      const line = lines[j];
+      if (line.trim().length === 0 || /^\s*#/.test(line)) continue;
+      const ind = line.search(/\S/);
+      if (ind <= indent) break;
+      const item = /^\s*-\s*(.*)$/.exec(line);
+      if (item === null) {
+        readable = false;
+        break;
+      }
+      globs.push(item[1].trim().replace(/^["']|["']$/g, "").replace(/\s+#.*$/, ""));
+    }
+    filters.push({ negated, globs: readable ? globs : null });
+  }
+  return filters;
+}
+
+/** Does a glob list admit this path? An EMPTY list means the workflow declared
+ * a filter that matches nothing, not "no filter" — the previous version
+ * conflated the two and that conflation was the bug. */
+export function globsAdmit(globs, path) {
+  return globs.some((g) =>
+    new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\u0000").replace(/\*/g, "[^/]*").replace(/\u0000/g, ".*")}$`).test(path),
+  );
+}

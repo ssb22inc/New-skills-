@@ -1,0 +1,89 @@
+# THE GATES RUN FROM MAIN (cross-family findings X6-01/X6-02, GPT-6 Astra;
+# human decision 2026-10-06). CLASS 2, and a money-cap path: changing this file
+# owes a human approval (HUMAN_APPROVAL_PATTERNS).
+#
+# On `pull_request`, GitHub runs the workflow — and the gate scripts — from the
+# branch under review, so a pull request could replace the adversary gate or
+# the money-cap gate with a no-op and keep the required check names. This
+# workflow runs on `pull_request_target`: the workflow file AND every script it
+# executes come from the BASE commit (main). The pull request is fetched only
+# as DATA — a worktree the trusted scripts read with git and readFileSync —
+# and nothing from it is executed: no `npm`, no `node` on a path inside it.
+# The job token is read-only.
+#
+# BOOTSTRAP, stated: on the pull request that first brings this file to main,
+# main has no copy of it, so these checks cannot report; that one merge needs
+# the human's one-time bypass. Every pull request after it is gated by main.
+name: fullburn-gates
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  attestations: read
+
+jobs:
+  adversary-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          path: trusted
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: The pull request, as data
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git -C trusted fetch --no-tags origin "+refs/pull/${PR}/head:refs/remotes/pr/head"
+          git -C trusted worktree add --detach "$RUNNER_TEMP/pr" "$HEAD_SHA" > /dev/null
+      - id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node trusted/fullburn/engine/scripts/ci-scope.mjs "$RUNNER_TEMP/pr" "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+      - name: Adversary report present, PASS, fresh, append-only (Law 9) — main's gate
+        if: steps.scope.outputs.relevant != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node trusted/fullburn/engine/scripts/adversary-gate.mjs "$RUNNER_TEMP/pr" "$BASE_SHA"
+
+  class2-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          path: trusted
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: The pull request, as data
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git -C trusted fetch --no-tags origin "+refs/pull/${PR}/head:refs/remotes/pr/head"
+          git -C trusted worktree add --detach "$RUNNER_TEMP/pr" "$HEAD_SHA" > /dev/null
+      - id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node trusted/fullburn/engine/scripts/ci-scope.mjs "$RUNNER_TEMP/pr" "$BASE_SHA" "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+      - name: Money-cap changes carry authenticated human approvals — main's gate
+        if: steps.scope.outputs.relevant != 'false'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FULLBURN_MAINTAINER: ${{ github.repository_owner }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node trusted/fullburn/engine/scripts/class2-gate.mjs "$RUNNER_TEMP/pr" "$BASE_SHA"

@@ -1,0 +1,393 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { containsSecret, redactValue } from "../src/redact.ts";
+import { CapError } from "@fullburn/config/caps";
+import { llm } from "../src/gateway.ts";
+import { FrozenCapsSpendMeter, MemorySpendMeter } from "../src/spend-meter.ts";
+import { TraceContext } from "../src/tracing.ts";
+import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
+import { ROLE_BINDINGS } from "@fullburn/config/models";
+// @ts-expect-error — plain .mjs module, typed loosely on purpose
+import { parseNameStatus } from "../scripts/diff-lib.mjs";
+import { CANARY_SECRET, LOW_CAP_NARROWING, TEST_CLIENT, capsOf, makeDeps, memoryMeter, testClock } from "./helpers.ts";
+import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
+
+/** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
+ * one test's spend is the next test's opening balance unless the slate is
+ * wiped. The reset cannot run outside a test runner — see spend-ledger.ts. */
+beforeEach(resetProcessLedgerForTests);
+
+
+/** Regression cover for hardening that previously shipped with none
+ * (adversary findings R2-07, R2-19, R2-27, R2-28, R2-30, R2-33). Each test
+ * fails if the protection it names is removed. */
+
+const trace = (id = "h-1") => new TraceContext(id, TEST_CLIENT);
+
+describe("money path — the transport-throw branch (R2-07)", () => {
+  it("a call billed upstream then failing is METERED, so the cap still bounds it", async () => {
+    // F3 named two paths; only the schema-invalid one had a lock test, so
+    // changing this branch's settle() to release() restored unbounded spend
+    // with the whole suite green.
+    const { deps, meter } = makeDeps({ capsTable: LOW_CAP_NARROWING });
+    let upstreamCalls = 0;
+    const failing = {
+      async post() {
+        upstreamCalls += 1;
+        throw new Error("upstream 504 after the provider processed the request");
+      },
+    };
+    for (let i = 0; i < 50; i++) {
+      await llm({ ...deps, transport: failing, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: trace(`h-throw-${i}`),
+      }).catch(() => undefined);
+    }
+    expect(upstreamCalls).toBeGreaterThan(0);
+    expect(upstreamCalls).toBeLessThanOrEqual(5); // $0.05 cap ÷ $0.01 per call
+    expect(meter.todayUsd(TEST_CLIENT)).toBeCloseTo(upstreamCalls * 0.01, 10);
+  });
+
+  it("a failure BEFORE the request leaves returns the headroom (R2-02)", async () => {
+    // A vault miss threw between reserve() and post(); nothing was ever sent,
+    // yet the reservation was never released, so the client's day drained to
+    // zero after cap/roleBudget failures.
+    const backend = new MemoryVaultBackend(); // deliberately empty: no key
+    // The production meter: llm() refuses any other kind (R8-01). testco's
+    // frozen day is $5.00 and this loop spends at most $0.20, so the ceiling is
+    // not what this test is about — the released headroom is.
+    const meter = new FrozenCapsSpendMeter();
+    const { deps } = makeDeps({ capsTable: LOW_CAP_NARROWING });
+    for (let i = 0; i < 20; i++) {
+      await llm({ ...deps, vault: vaultForClient(backend, TEST_CLIENT), meter, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: trace(`h-vault-${i}`),
+      }).catch(() => undefined);
+    }
+    expect(meter.reservedUsd(TEST_CLIENT)).toBe(0);
+    expect(meter.todayUsd(TEST_CLIENT)).toBe(0);
+    // With the vault repaired the client can still spend its full day.
+    backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+    await expect(
+      llm({ ...deps, vault: vaultForClient(backend, TEST_CLIENT), meter, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: trace("h-vault-ok"),
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("overlapping reserve/settle cycles never corrupt the ledger (R2-01)", async () => {
+    // Float accumulation left `reserved` at -3.47e-18 after three overlapping
+    // $0.01 reservations, and the meter's own guard then refused everything.
+    const m = memoryMeter(testClock, capsOf(25, 25));
+    for (let round = 0; round < 40; round++) {
+      const held = [m.reserve("c", 0.01), m.reserve("c", 0.01), m.reserve("c", 0.01)];
+      for (const r of held) m.settle(r);
+      expect(m.reservedUsd("c")).toBe(0);
+    }
+    expect(m.todayUsd("c")).toBeCloseTo(1.2, 10);
+    expect(() => m.reserve("c", 0.01)).not.toThrow();
+  });
+});
+
+describe("observability — refusals are decisions too (R2-28)", () => {
+  const refusals: [string, (d: ReturnType<typeof makeDeps>) => Parameters<typeof llm>][] = [];
+
+  it("a cap-breach refusal emits a trace", async () => {
+    const { deps, sink } = makeDeps({ capsTable: LOW_CAP_NARROWING });
+    const call = () =>
+      llm({ ...deps, bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: trace("h-cap"),
+      });
+    for (let i = 0; i < 5; i++) await call();
+    sink.events.length = 0;
+    await expect(call()).rejects.toThrow(/cap breach refused/);
+    expect(sink.events).toHaveLength(1);
+    expect(sink.events[0]!.outcome).toBe("error");
+    expect(sink.events[0]!.errorMessage).toMatch(/cap breach refused/);
+  });
+
+  it("a cross-tenant refusal emits a trace", async () => {
+    const { deps, backend, sink } = makeDeps();
+    await expect(
+      llm({ ...deps, vault: vaultForClient(backend, "other-client"), bindings: ROLE_BINDINGS }, {
+        role: "hello-world",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: trace("h-cross"),
+      }),
+    ).rejects.toThrow(/cross-client/);
+    expect(sink.events).toHaveLength(1);
+    expect(sink.events[0]!.outcome).toBe("error");
+  });
+
+  it("an unknown-role refusal emits a trace", async () => {
+    const { deps, sink } = makeDeps();
+    await expect(
+      llm({ ...deps, bindings: ROLE_BINDINGS }, {
+        role: "no-such-role",
+        clientId: TEST_CLIENT,
+        input: {},
+        trace: trace("h-role"),
+      }),
+    ).rejects.toThrow(/unknown role/);
+    expect(sink.events).toHaveLength(1);
+  });
+
+  void refusals;
+});
+
+describe("secret containment (R2-14, R2-27)", () => {
+  it("a hostile thrown value cannot smuggle the secret out through a getter", async () => {
+    const { deps } = makeDeps();
+    const hostile = {
+      get message() {
+        throw new Error("boom");
+      },
+      toString() {
+        throw new Error("boom");
+      },
+    };
+    const evilTransport = {
+      async post(_u: string, _b: unknown, headers: Readonly<Record<string, string>>) {
+        (hostile as Record<string, unknown>).leaked = JSON.stringify(headers);
+        throw hostile;
+      },
+    };
+    const msg = await llm({ ...deps, transport: evilTransport, bindings: ROLE_BINDINGS }, {
+      role: "hello-world",
+      clientId: TEST_CLIENT,
+      input: {},
+      trace: trace("h-hostile"),
+    }).then(
+      () => "",
+      (e: Error) => `${e.name} ${e.message} ${e.stack ?? ""}`,
+    );
+    expect(msg).not.toContain(CANARY_SECRET);
+  });
+
+  it("trace payloads are redacted, not just error messages — and an echoed credential is refused, not returned", async () => {
+    const { deps, transport, sink } = makeDeps();
+    // A provider that echoes the auth header back inside the response body.
+    // Until 2026-09-24 this call RESOLVED with the secret in its return value
+    // while only the trace copy was cleaned (cross-family finding X-08). The
+    // output is refused now; the trace is still redacted; nothing carries it.
+    transport.response = { greeting: `ok ${CANARY_SECRET}` };
+    const outcome = await llm({ ...deps, bindings: ROLE_BINDINGS }, {
+      role: "hello-world",
+      clientId: TEST_CLIENT,
+      input: { note: `carrying ${CANARY_SECRET}` },
+      trace: trace("h-trace"),
+    }).then(
+      (v) => ({ ok: true as const, v }),
+      (e: Error) => ({ ok: false as const, e }),
+    );
+    expect(outcome.ok, "a provider output carrying the credential was returned to the caller").toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.e.message).toMatch(/provider output carried a credential/);
+      expect(`${outcome.e.name} ${outcome.e.message} ${outcome.e.stack ?? ""}`).not.toContain(CANARY_SECRET);
+    }
+    expect(JSON.stringify(sink.events)).not.toContain(CANARY_SECRET);
+    expect(JSON.stringify(sink.events)).toContain("[redacted]");
+  });
+});
+
+describe("vault key composition (R2-30)", () => {
+  it("no clientId can collide into another tenant's secret, whatever it contains", () => {
+    const backend = new MemoryVaultBackend();
+    backend.set("acme corp", "meta-oauth", "acme-secret");
+    backend.set("acme\u0000corp", "meta-oauth", "nul-secret");
+    // Every hostile shape resolves to its own tenant, or to nothing at all.
+    expect(vaultForClient(backend, "acme corp").get("meta-oauth").value).toBe("acme-secret");
+    expect(vaultForClient(backend, "acme\u0000corp").get("meta-oauth").value).toBe("nul-secret");
+    expect(() => vaultForClient(backend, "acme").get("corp:meta-oauth")).toThrow();
+    expect(() => vaultForClient(backend, "acme").get("corp\u0000meta-oauth")).toThrow();
+  });
+});
+
+describe("diff parsing feeds every gate (R2-06)", () => {
+  it("a rename keeps BOTH paths, so neither side escapes a check", () => {
+    const parsed = parseNameStatus("R097\tfullburn/config/src/caps.ts\tfullburn/config/src/caps.v2.ts");
+    expect(parsed).toEqual([
+      { status: "renamed", oldPath: "fullburn/config/src/caps.ts", path: "fullburn/config/src/caps.v2.ts" },
+    ]);
+  });
+
+  it("adds, deletes and modifies still parse", () => {
+    const parsed = parseNameStatus(["A\ta.ts", "D\tb.ts", "M\tc.ts"].join("\n"));
+    expect(parsed.map((p: { status: string }) => p.status)).toEqual(["added", "deleted", "modified"]);
+  });
+});
+
+describe("an error's NAME is a leak surface too (cross-family finding X-08, 2026-09-24)", () => {
+  /** `redactValue` cleaned an Error's message and copied its name verbatim; a
+   * thrower chooses the name as freely as the message. The probe of 2026-09-24
+   * reported this lock SURVIVED its mutation because nothing drove it — this
+   * is that drive.
+   *
+   * MUTATION: X1-08b — copy the name unredacted. */
+  it("redactValue redacts a secret carried in an Error's name", () => {
+    const err = new Error("plain message");
+    err.name = `Leak-${CANARY_SECRET}-Error`;
+    const out = JSON.stringify(redactValue(err, [CANARY_SECRET]));
+    expect(out).not.toContain(CANARY_SECRET);
+    expect(out).toContain("[redacted]");
+    // Nested inside a payload, the same.
+    const nested = JSON.stringify(redactValue({ a: [{ e: err }] }, [CANARY_SECRET]));
+    expect(nested).not.toContain(CANARY_SECRET);
+  });
+
+describe("a credential anywhere in a provider output, at any depth (cross-family finding X2-06)", () => {
+  /** MUTATION: X2-06 — compare two depth-limited redactions again. */
+  it("a secret nested below the redactor's depth limit is still refused", async () => {
+    const { deps, transport } = makeDeps();
+    let deep: Record<string, unknown> = { leak: CANARY_SECRET };
+    for (let i = 0; i < 12; i++) deep = { d: deep };
+    transport.response = { greeting: "ok", extra: deep };
+    const outcome = await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-deep") }).then(
+      (v) => ({ ok: true as const, v }),
+      (e: Error) => ({ ok: false as const, e }),
+    );
+    expect(outcome.ok, "a deeply nested credential was returned").toBe(false);
+    if (!outcome.ok) expect(outcome.e.message).toMatch(/carried a credential/);
+  });
+
+  it("containsSecret sees strings, keys, binary, Error fields, Map/Set entries and cycles", () => {
+    const S = "s3cr3t-value";
+    expect(containsSecret({ a: [{ b: S }] }, [S])).toBe(true);
+    expect(containsSecret({ [S]: 1 }, [S])).toBe(true);
+    expect(containsSecret(new TextEncoder().encode(`x${S}y`), [S])).toBe(true);
+    const e = new Error("m"); (e as unknown as { cause: unknown }).cause = { x: S };
+    expect(containsSecret(e, [S])).toBe(true);
+    expect(containsSecret(new Map([["k", new Set([S])]]), [S])).toBe(true);
+    const cyc: Record<string, unknown> = { a: 1 }; cyc["self"] = cyc;
+    expect(containsSecret(cyc, [S])).toBe(false);
+    expect(containsSecret({ greeting: "ok" }, [S])).toBe(false);
+    expect(containsSecret({ greeting: S }, [])).toBe(false);
+    // A value too large to clear is refused rather than trusted.
+    expect(containsSecret(Array.from({ length: 10 }, () => "x"), [S], 5)).toBe(true);
+  });
+});
+
+describe("a money error is rebuilt, never handed back (cross-family finding X2-07)", () => {
+  /** MUTATION: X2-07 — return the original error object. */
+  it("a frozen CapError carrying the secret in message, name, cause and a custom field reaches the caller with none of them", async () => {
+    const { deps } = makeDeps();
+    const hostile = new CapError(`cap breached by ${CANARY_SECRET}`);
+    hostile.name = `Cap-${CANARY_SECRET}`;
+    (hostile as unknown as { cause: unknown }).cause = { token: CANARY_SECRET };
+    (hostile as unknown as { extra: string }).extra = CANARY_SECRET;
+    Object.freeze(hostile);
+    // The production meter is branded and frozen, so the throw is injected the
+    // way this repo's other tests do it: on the prototype the instance resolves
+    // through, restored in `finally`.
+    const proto = Object.getPrototypeOf(Object.getPrototypeOf(deps.meter)) as Record<string, unknown>;
+    const realReserve = proto["reserve"];
+    let outcome: { ok: true; v: unknown } | { ok: false; e: Error };
+    try {
+      proto["reserve"] = () => { throw hostile; };
+      outcome = await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-frozen") }).then(
+        (v) => ({ ok: true as const, v }),
+        (e: Error) => ({ ok: false as const, e }),
+      );
+    } finally {
+      proto["reserve"] = realReserve;
+    }
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      const e = outcome.e as Error & { cause?: unknown; extra?: unknown };
+      expect(e).not.toBe(hostile);
+      expect(e).toBeInstanceOf(CapError);
+      expect(`${e.name} ${e.message} ${e.stack ?? ""} ${JSON.stringify(e.cause ?? null)} ${String(e.extra ?? "")}`).not.toContain(CANARY_SECRET);
+      expect(e.message).toContain("[redacted]");
+    }
+  });
+});
+
+describe("x3 leak boundaries (cross-family, 2026-10-04)", () => {
+  /** X3-08: `err.constructor` is the thrower's to choose. MUTATION: X3-08. */
+  it("a money error is rebuilt from a class we choose, not from err.constructor", async () => {
+    const { redactMoneyError } = await import("../src/redact.ts");
+    const hostile = new CapError(`over by ${CANARY_SECRET}`);
+    (hostile as unknown as { extra: string }).extra = CANARY_SECRET;
+    Object.defineProperty(hostile, "constructor", { value: function () { return hostile; } });
+    const safe = redactMoneyError(hostile, [CANARY_SECRET]);
+    expect(safe, "the thrower's own object came back").not.toBe(hostile);
+    expect(safe).toBeInstanceOf(CapError);
+    expect(`${safe.message} ${String((safe as unknown as { extra?: string }).extra ?? "")}`).not.toContain(CANARY_SECRET);
+  });
+
+  /** X3-13: a credential-bearing output emitted "ok" then "error", each with
+   * the cost of one settled charge. Now: one event, the error, and its cost
+   * reconciles with the meter. */
+  it("a refused credential-bearing output is traced once, as an error, and costs reconcile", async () => {
+    const { deps, transport, sink, meter } = makeDeps();
+    transport.response = { greeting: CANARY_SECRET };
+    await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-x3-13") }).catch(() => undefined);
+    expect(sink.events.map((e) => e.outcome), "a refused call was traced as a success").toEqual(["error"]);
+    expect(sink.events.reduce((n, e) => n + e.costUsd, 0)).toBeCloseTo(meter.todayUsd(TEST_CLIENT), 10);
+  });
+});
+
+describe("x4 trace identity and output safety (cross-family, 2026-10-04)", () => {
+  /** X4-05/X4-14: the transport holds the request while `llm()` awaits it.
+   * MUTATION: X4-05, X4-05b. */
+  it("a transport that rewrites the request cannot change the traced identity", async () => {
+    const { deps, sink } = makeDeps();
+    const req = { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-x4-05") };
+    const transport = { async post() { (req as { clientId: string }).clientId = "other-client"; return { greeting: "ok" }; } };
+    await llm({ ...deps, transport, bindings: ROLE_BINDINGS }, req);
+    expect(sink.events.at(-1)!.clientId, "the trace took the rewritten client id").toBe(TEST_CLIENT);
+    expect(sink.events.at(-1)!.traceId).toBe("h-x4-05");
+    expect(() => { (req.trace as unknown as { traceId: string }).traceId = "rewritten"; }, "a TraceContext could be rewritten").toThrow();
+  });
+
+  /** X4-06: a toJSON closing over the bearer passed the check and leaked on
+   * the caller's serialisation. MUTATION: X4-06. */
+  it("the returned output is plain data: a toJSON or getter cannot leak later", async () => {
+    const { deps, transport } = makeDeps();
+    let reads = 0;
+    const tricky = { greeting: "ok", toJSON() { reads += 1; return { greeting: reads > 1 ? CANARY_SECRET : "ok" }; } };
+    transport.response = tricky;
+    const out = await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-x4-06") });
+    expect(out, "the provider's own object came back").not.toBe(tricky);
+    expect(JSON.stringify(out), "serialising the returned output leaked the secret").not.toContain(CANARY_SECRET);
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+  });
+
+  /** X5-05 (GPT-6 Astra, 2026-10-06): the JSON clone turned an echoed
+   * credential in a Uint8Array into a map of byte numbers, which the secret
+   * check could not see. MUTATION: X5-05. */
+  it("a credential echoed as bytes is refused, not returned or traced", async () => {
+    for (const wrap of [
+      (b: Uint8Array) => b,
+      (b: Uint8Array) => b.buffer,
+      (b: Uint8Array) => new DataView(b.buffer),
+      (b: Uint8Array) => new Map([["k", b]]),
+      (b: Uint8Array) => new Set([b]),
+      // X6-05: a Buffer's toJSON ran before the replacer looked.
+      (b: Uint8Array) => Buffer.from(b),
+      (b: Uint8Array) => ({ nested: [Buffer.from(b)] }),
+    ]) {
+      const { deps, transport, sink } = makeDeps();
+      transport.response = { greeting: "ok", extra: wrap(new TextEncoder().encode(CANARY_SECRET)) };
+      const outcome = await llm({ ...deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-x5-05") }).then(
+        (out) => ({ ok: true as const, out }),
+        (e: unknown) => ({ ok: false as const, e }),
+      );
+      expect(outcome.ok, "a binary echo of the credential was returned").toBe(false);
+      if (!outcome.ok) expect(String((outcome.e as Error).message)).toMatch(/binary or collection data/);
+      expect(JSON.stringify(sink.events)).not.toContain(JSON.stringify([...new TextEncoder().encode(CANARY_SECRET)]).slice(1, 20));
+      expect(sink.events.map((e) => e.outcome)).toEqual(["error"]);
+    }
+  });
+});
+});

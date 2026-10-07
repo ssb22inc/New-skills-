@@ -1,0 +1,75 @@
+# Human Tasks — What Only You Can Do
+
+Claude Code executes everything else. Spec references in parentheses. Nothing here may be worked around by the builder — a blocked task stays blocked until you clear it.
+
+## Phase 0 (blocking — the rails)
+
+- H1 · **fullburn.ai** — complete the domain registration and the formal trademark check (§11 Phase 0, §14). The name decision is made; only the paperwork remains.
+- H2 · **Cloudflare account** — Workers Paid plan; enable AI Gateway, R2, Vectorize, Durable Objects, Workflows, Browser Rendering (§2.2). Create the API token for CI/deploy.
+- H3 · **ClickHouse Cloud** — create the service (this is the warehouse, §2.1). Copy the HTTPS endpoint + credentials into the secrets vault, never into the repo.
+- H4 · **Airbyte** — Airbyte Cloud account or a small VPS for OSS (§2.2, explicitly not Cloudflare). Claude Code automates connector provisioning after this exists.
+- H5 · **Langfuse** — create the project (§2.3). Every LLM call and agent decision must trace here from the first hello-world (Law 11).
+- H6 · **Model provider keys** — at least one frontier (Claude/GPT/Gemini) and one open-source route (Workers AI / Together / Groq / Fireworks), all wired through AI Gateway (§2.4). The family-diversity rule needs two families from day one (Law 13).
+- H6b · **Cross-family adversary re-review** (adversary finding R9b, Phase 0) — the Phase 0 build adversary ran on the same model family as the builder because the build harness only offers Claude models. Once H6 provides a non-Claude route, re-run the Phase 0 adversary review on that model and record deltas as findings. Tracked as ledger item L8; Phase 0's verdict stays conditional on it.
+- H7 · **Secrets into CI + vault only** — GitHub Actions secrets and the encrypted vault are the only two homes for any key or token (§15). A token in code, logs, or traces is a critical defect the CI leak check must catch.
+- H8 · **`config/caps.ts` values — SIGNED 2026-08-16.** Client zero (pulsern): ad pacing **$66/day**, hard daily ad ceiling **$75**, total ad spend **$2,000**, AI **$200/month** with a **$10/day** sub-limit. Recorded in `APPROVALS/2026-08-16-h8-caps.md`. Two things this does NOT yet mean (ledger L20): the ad-spend trio has no enforcement path before Phase 6 — it is recorded configuration, not a guard — and the AI pair has only ever metered sandbox dollars. Every future change to any of these is a new human-approved commit (Law 2).
+- H9 · **Approve initial Grade Registry A-thresholds** (§12) — tuned in Phase 0, human-owned thereafter (Law 14, Class 2).
+- H19 · **Repository protection — without this every CI gate is advisory** (adversary finding F14, ledger L11). On GitHub, for the default branch and every phase branch: (1) **required status checks** — `verify`, `mutation-harness`, `adversary-gate`, `class2-gate` — so a red or gate-free PR cannot merge (the mutation harness was missing from this list until cross-family finding X3-01, 2026-10-04: a failing harness would have been advisory); (2) **no force-push / no branch deletion**; (3) **CODEOWNERS requiring your review on `fullburn/APPROVALS/**` and on every Class-2 path** listed in `engine/scripts/gate-lib.mjs`. Reason this is yours alone: the workflow file lives in the branch under test, so a PR that deletes it runs no gate, and the approval mechanism proves *what* was approved by content hash but never *who* wrote it — only CODEOWNERS makes "human-only" real. (~15 min) **AMENDED BY RULING 2026-10-06 (CODEOWNERS deadlock, ledger L49):** "Require review from Code Owners" is OFF on `main` — the sole maintainer authors every PR and GitHub forbids self-approval, so the requirement could never be met; a second identity under the same control is refused (it would reintroduce R7-07). KEPT: required status checks, branches up to date before merging, no bypass, no force-push, no deletion. `.github/CODEOWNERS` stays for coverage tracking — it is what makes the Class-2 file set enumerable (`locks-r7.test.ts`). Item (3) above therefore no longer proves *who* reviewed: in this single-maintainer repository a Class-2 approval proves authenticated authorship and that the gate blocked, NOT independent review, and that property is unavailable until a second human joins.
+
+- H20 · **§10.3 Playwright e2e stage — DECIDED 2026-08-16: recorded variance, APPROVED.** Substantive e2e defers to Phase 1; the Playwright stage stays installed and runs a minimal smoke in CI now. All five §10.3 stages therefore exist and execute. **The variance expires at Phase 1's gate — no real e2e on the intake confirm flow, no Phase 1 pass.** Enforced mechanically by the invariant suite, which fails the build the moment `PHASE` reads 1 while the e2e suite is still smoke-only. **This sentence has twice been written stronger than the code delivered** (adversary findings R5-06, R6-02, R6-06). What it enforces TODAY, verified by mutation: every `testDir` in `playwright.config.ts` must name the spec directory, and at Phase 1 a test whose TITLE names the intake confirm flow must have a BODY containing a `page.` call, an `await` and an `expect`, with `.skip`/`.todo` excluded. It does not and cannot verify that the test is a good one — only that a browser is driven and something is asserted. Tracked as ledger L16. **Nothing further is owed here in Phase 0.**
+
+## H21 · The one-time bootstrap merge into `main` (decided 2026-10-06, ledger L58–L60)
+
+The gates and the AI reviewer now run from `main`, so `main` must first receive Fullburn once. Until then no trusted review can exist and the two gate checks cannot report on that first pull request.
+
+- **Done (me, 2026-10-07):** `done` at tree `0076775a` — 457/457 deliberate breaks caught; Fullburn's gates narrowed to Fullburn's own files; a trial merge with today's `main` is conflict-free and passes all 552 tests.
+- **You — the merge IS your sign-off.** Your own merge of this pull request is the authenticated act that brings the 10 money-cap files (cap values, gate scripts, gate workflows) into `main`; no approval file is needed for it. After it, every later cap change needs a verified approval as before.
+  1. Open a pull request from `claude/fullburn-engine-spec-r7v5lg` into `main`.
+  2. Settings → Rules → Rulesets → `Proctect main` → **Bypass list** → add **Repository admin** → Save.
+  3. Merge the pull request (the `verify` and `mutation-harness` checks run; the two gate checks cannot report yet — that is what the bypass is for).
+  4. Back in the ruleset, **remove** the bypass entry → Save.
+- **Me, after the merge:** dispatch the GPT Astra review from `main` against the Fullburn branch (needs OpenRouter credit — about $11 a read), fix what it finds, repeat until it passes.
+
+What the merge changes outside `fullburn/`: adds `DONE.md`, `HANDOFF.md`, `.github/CODEOWNERS`, the three Fullburn workflows and `.claude/agents/engine-adversary.md`; adds two ignore lines to `.gitignore`; and deletes GitHub's five template "exercise" workflows and their step files (your ruling of 2026-08-22 — they held `actions: write`). No PulseRN file is touched.
+
+## Class-2 approvals owed for the Phase 0 fix commit
+
+**AMENDED BY RULING 2026-10-06 (ledger L50): only the money caps still need your approval.** Every other Class-2 change — code, tests, gates, the contract — is decided by the automated gates (four required CI checks, the mutation harness, a cross-family PASS at the exact tree). The command below now prints only money-cap paths: the cap values (`config/src/*caps*`), `config/src/freeze.ts`, `config/package.json`, and the gate machinery that enforces this rule (`gate-lib.mjs`, `class2-gate.mjs`, `diff-lib.mjs`, `.github/workflows/fullburn-ci.yml`). Measured 2026-10-06 against `origin/main`: **7 entries owed, down from 110.** Run it again on the final tree before signing — the hashes move with every commit. The text below is the original context and is kept as history.
+
+The Phase 0 adversary fixes touch files that are Class 2 by their own rule, so this PR needs approval entries from you before it can merge. Nothing here changes a *value* you own — caps and thresholds keep their pending-sign-off state — but the rule is the rule, and the builder must never write its own approval.
+
+**Get the list by running it, not by reading it:**
+
+```
+cd fullburn && npm run owed-approvals -- . <the-commit-this-PR-branches-from>
+```
+
+That prints one ready-made block per owed path — `approves:`, `base-commit:`, `from-content-hash:`, `content-hash:` — which you paste into a new file under `fullburn/APPROVALS/` in this same PR. It reads the same diff through the same `isClass2()` that `class2-gate.mjs` enforces with, so what it prints is what the gate demands, by construction.
+
+This section used to carry the list by hand and it drifted inside one commit (adversary finding H-17): it named two files the diff never touched and deferred eleven test-tree paths the gate demanded in that very diff. You would have hashed a set that was not the set you changed — signing off on files you had not edited while the gate stayed red on the ones you had. A hand-copied list is the one part of this mechanism that cannot be verified, so it is gone.
+
+**What the Phase 0 fixes changed, and why those paths are Class 2** (context for your review — the authoritative path list comes from the command above):
+
+- **Caps and the money path** (`config/src/caps.ts`, `engine/src/gateway.ts`, `engine/src/spend-meter.ts`) — removes the runtime cap-widening seam, adds reserve-then-settle so concurrent calls cannot breach a ceiling, and records that ad-spend caps have no enforcement path before Phase 6.
+- **The grader** (`engine/src/grade-registry.ts`, `config/src/grade-thresholds.ts`) — own-property lookups so a polluted prototype cannot forge an A; adds the §12 A-criteria that had no threshold, plus per-metric domain bounds so an impossible reading fails closed.
+- **The model layer** (`config/src/models.ts`, `engine/src/eval-harness.ts`) — a binding attestation must now come from an executed run over the role's declared golden set.
+- **The gates** (`engine/scripts/**`, `.github/**`) — a gate that can be edited without approval is not a gate.
+- **Secrets and traces** (`engine/src/vault.ts`, `tracing.ts`, `redact.ts`) — cross-tenant key collision, failure traces, and redaction of trace payloads.
+- **The whole engine and config source trees, the manifests, the runner configs and the test tree** — `config/package.json` could redirect the `@fullburn/config/caps` specifier to an attacker module without touching `caps.ts`; `fullburn/package.json` could redefine `npm test` into a no-op; a seven-file list left `index.ts`, the deployed Worker entrypoint, free to re-export an unmetered `llm()`; `vitest.workspace.ts` overrides `vitest.config.ts` and silenced 145 of 148 tests. Each of those was a real bypass, so the protection is now directory-shaped, not name-shaped.
+
+**Note on approval format:** entries name a TRANSITION **and the pull request it belongs to** — `base-commit:` (the sha this PR branches from), `from-content-hash:` (the content at that base) and `content-hash:` (the new content). Content hashes alone were not enough: once your own revert restored the previous bytes, every approval ever issued from those bytes was re-armed, and copying one back in re-authorized the revoked change with no forgery at all. A base commit occurs once. See `APPROVALS/README.md`.
+
+## Before client zero spends a dollar (Phase 6)
+
+- H10 · **Meta assets** — client-owned Business Manager with verified domain, plus the warmed backup ad account (§6.1). Developer app with Marketing API access, writes-only usage (Law 1).
+- H11 · **`VERDICT.md`** — sign off the pre-registered absolute thresholds for the PulseRN sprint (target CAC, payback period, D30 retention) before hash-lock (§14). After the first dollar it is unchangeable.
+- H12 · **Client-zero budget** — approve the $2,000 / 30-day concentrated sprint (~$66/day) (§14). The 90-day trickle was killed as a false-verdict risk.
+- H13 · **PulseRN claims ceiling** — confirm the NCSBN non-affiliation disclaimer wording for ads/landing pages; the claims adversary blocks anything past the site's own "honest readiness estimate" ceiling (§14).
+- H14 · **Legal texts** — DPA, no-cross-client-training clause, case-study rights in the client contract template (§7 step 9); attorney review before any cohort client signs.
+
+## Standing (forever)
+
+- H15 · **The gavel** — one daily 15-minute human-queue session; severity 1–2 same day, 3–5 within 72h (§5.1). Past SLA the engine waits — your latency is the throttle, by design.
+- H16 · **Phase gates** — each phase needs your ack on a green adversary report before the next begins (§10.1). Never pre-approve. **REMOVED BY RULING 2026-10-06 (L50):** the ack is automated — the cross-family adversary's PASS at the exact tree is the gate (DONE.md §2.1.10 as amended).
+- H17 · **Class 2 approvals** — Laws, caps, money paths, pricing, the Grade Registry, the improvement loop's own code: only you, forever (Law 15, §13). **NARROWED FOR THE BUILD BY RULING 2026-10-06 (L50):** in this repository's CI only money-cap changes owe your approval (`HUMAN_APPROVAL_PATTERNS`). The runtime improvement loop's Class-2 rules in ENGINE_BUILD.md §13 (what the running engine may change about itself) were not part of the ruling and are unchanged.
+- H18 · **Quarterly drills** — backup restore, Meta account recovery, red button <60s, model failover; results are graded (§15, §12).
