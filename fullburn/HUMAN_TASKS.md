@@ -18,16 +18,19 @@ Claude Code executes everything else. Spec references in parentheses. Nothing he
 
 - H20 · **§10.3 Playwright e2e stage — DECIDED 2026-08-16: recorded variance, APPROVED.** Substantive e2e defers to Phase 1; the Playwright stage stays installed and runs a minimal smoke in CI now. All five §10.3 stages therefore exist and execute. **The variance expires at Phase 1's gate — no real e2e on the intake confirm flow, no Phase 1 pass.** Enforced mechanically by the invariant suite, which fails the build the moment `PHASE` reads 1 while the e2e suite is still smoke-only. **This sentence has twice been written stronger than the code delivered** (adversary findings R5-06, R6-02, R6-06). What it enforces TODAY, verified by mutation: every `testDir` in `playwright.config.ts` must name the spec directory, and at Phase 1 a test whose TITLE names the intake confirm flow must have a BODY containing a `page.` call, an `await` and an `expect`, with `.skip`/`.todo` excluded. It does not and cannot verify that the test is a good one — only that a browser is driven and something is asserted. Tracked as ledger L16. **Nothing further is owed here in Phase 0.**
 
-## H21 · The one-time bootstrap merge into `main` (decided 2026-10-06, ledger L58)
+## H21 · The one-time bootstrap merge into `main` (decided 2026-10-06, ledger L58–L60)
 
-The gates and the AI reviewer now run from `main`, so `main` must first receive Fullburn once. Until then no trusted review can exist and the two gate checks cannot report on that first pull request. Steps, in order — I tell you when step 1 is ready:
+The gates and the AI reviewer now run from `main`, so `main` must first receive Fullburn once. Until then no trusted review can exist and the two gate checks cannot report on that first pull request.
 
-1. **Me:** a clean `done` run on the final tree (0 surviving deliberate breaks), and the list of money-cap approval blocks for that exact tree.
-2. **You:** add the approval file I give you through GitHub's web editor (that makes it a verified commit authored by you), on the Fullburn branch.
-3. **You:** open a pull request from `claude/fullburn-engine-spec-r7v5lg` into `main`. In Settings → Rules → Rulesets → `Proctect main`, add **Repository admin** to the **Bypass list** (or set the ruleset to Disabled), merge the pull request, then **remove the bypass** (or set it back to Active) straight away.
-4. **Me:** dispatch the review from `main` against the Fullburn branch (needs OpenRouter credit), fix what it finds, repeat until GPT Astra passes.
+- **Done (me, 2026-10-07):** `done` at tree `0076775a` — 457/457 deliberate breaks caught; Fullburn's gates narrowed to Fullburn's own files; a trial merge with today's `main` is conflict-free and passes all 552 tests.
+- **You — the merge IS your sign-off.** Your own merge of this pull request is the authenticated act that brings the 10 money-cap files (cap values, gate scripts, gate workflows) into `main`; no approval file is needed for it. After it, every later cap change needs a verified approval as before.
+  1. Open a pull request from `claude/fullburn-engine-spec-r7v5lg` into `main`.
+  2. Settings → Rules → Rulesets → `Proctect main` → **Bypass list** → add **Repository admin** → Save.
+  3. Merge the pull request (the `verify` and `mutation-harness` checks run; the two gate checks cannot report yet — that is what the bypass is for).
+  4. Back in the ruleset, **remove** the bypass entry → Save.
+- **Me, after the merge:** dispatch the GPT Astra review from `main` against the Fullburn branch (needs OpenRouter credit — about $11 a read), fix what it finds, repeat until it passes.
 
-After step 3, every pull request into `main` is checked by `main`'s copy of the gates — a branch can no longer weaken them.
+What the merge changes outside `fullburn/`: adds `DONE.md`, `HANDOFF.md`, `.github/CODEOWNERS`, the three Fullburn workflows and `.claude/agents/engine-adversary.md`; adds two ignore lines to `.gitignore`; and deletes GitHub's five template "exercise" workflows and their step files (your ruling of 2026-08-22 — they held `actions: write`). No PulseRN file is touched.
 
 ## Class-2 approvals owed for the Phase 0 fix commit
 
