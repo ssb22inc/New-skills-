@@ -394,13 +394,20 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     let opaque = false;
     try {
       plain = JSON.parse(
-        JSON.stringify(output, (_key, value: unknown) => {
-          if (
-            typeof value === "object" && value !== null &&
-            (ArrayBuffer.isView(value) || value instanceof ArrayBuffer || value instanceof Map || value instanceof Set)
-          ) {
-            opaque = true;
-            return null;
+        // `this[key]` is the value BEFORE its toJSON ran (cross-family finding
+        // X6-05): a Node Buffer's toJSON turns it into `{ type, data: [...] }`
+        // before the replacer sees it, so checking only `value` let a
+        // credential echoed as a Buffer through as an array of byte numbers.
+        JSON.stringify(output, function (this: unknown, key: string, value: unknown) {
+          const raw: unknown = this !== null && typeof this === "object" ? (this as Record<string, unknown>)[key] : value;
+          for (const v of [raw, value]) {
+            if (
+              typeof v === "object" && v !== null &&
+              (ArrayBuffer.isView(v) || v instanceof ArrayBuffer || v instanceof Map || v instanceof Set)
+            ) {
+              opaque = true;
+              return null;
+            }
           }
           return value;
         }),

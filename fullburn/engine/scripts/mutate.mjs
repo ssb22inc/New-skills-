@@ -1315,6 +1315,16 @@ const MUTATIONS = [
   ["X6-01 a report is attested whatever its verdict", ".github/workflows/cross-family-read.yml",
     "      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0\n        if: steps.new.outputs.report != ''",
     "      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0\n        if: success()"],
+  // ---- x6 (GPT-6 Astra, 2026-10-06) ----
+  ["X6-05 the binary refusal reads the value before its toJSON", "engine/src/gateway.ts",
+    "          for (const v of [raw, value]) {",
+    "          for (const v of [value]) {"],
+  ["X6-07 a scheduled rotation writes only over the record it decided on", "engine/src/vault-crypto.ts",
+    "        if (!(await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, next))) throw",
+    "        await this.put(clientId, name, next); if (false) throw"],
+  ["X6-08 every write invalidates an in-flight unlock", "engine/src/vault-crypto.ts",
+    "    this.#generation += 1;\n    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);",
+    "    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

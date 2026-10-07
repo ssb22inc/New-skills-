@@ -331,7 +331,59 @@ describe("vault concurrency (X5-08, X5-09)", () => {
     await p.reached;
     backend.lock();
     p.release();
-    await expect(unlocking).rejects.toThrow(/locked or re-unlocked while this unlock was in flight/);
+    await expect(unlocking).rejects.toThrow(/while this unlock was in flight/);
     expect(() => backend.read("a", "s"), "an explicit lock was undone by a slower unlock").toThrow(/locked/);
+  });
+});
+
+describe("x6 vault findings (GPT-6 Astra, 2026-10-06)", () => {
+  /** X6-06: a failed re-issue never reached the provider. MUTATION: X6-06. */
+  it("a breach rotation revokes at the provider even when re-issue fails", async () => {
+    const { backend } = await setup();
+    await backend.put("a", "k", "stolen");
+    const revoked: string[] = [];
+    await expect(backend.revokeAndRotate("a", "k", async () => { throw new Error("issuer down"); }, async (_c, _n, v) => { revoked.push(v); })).rejects.toThrow(/QUARANTINED.*revoked at the provider/);
+    expect(revoked, "a compromised credential was never sent for revocation").toEqual(["stolen"]);
+    await backend.put("a", "k2", "stolen-2");
+    await expect(backend.revokeAndRotate("a", "k2", async () => { throw new Error("x"); }, async () => { throw new Error("provider down"); })).rejects.toThrow(/ALSO failed/);
+  });
+
+  /** X6-07: a stale scheduled rotation un-quarantined a slot. MUTATION: X6-07. */
+  it("a scheduled rotation decided on an old record cannot overwrite a newer quarantine", async () => {
+    const store = new PausableStore();
+    const now = { t: 1_000_000 };
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k, { now: () => now.t });
+    await backend.put("a", "s", "v1");
+    now.t += 10 * DAY;
+    let release!: () => void;
+    let reached!: () => void;
+    const atIssuer = new Promise<void>((r) => (reached = r));
+    const gate = new Promise<void>((r) => (release = r));
+    const rotating = backend.rotateDue("a", { s: { maxAgeMs: DAY } }, async () => { reached(); await gate; return "rotated"; });
+    await atIssuer; // the rotation has read version 1
+    await expect(backend.revokeAndRotate("a", "s", async () => { throw new Error("x"); }, async () => {})).rejects.toThrow(/QUARANTINED/);
+    release();
+    const report = await rotating;
+    expect(report.failed, "the stale rotation was reported as a success").toEqual(["s"]);
+    const fresh = new EncryptedVaultBackend(store, k);
+    await fresh.unlock("a");
+    expect(fresh.read("a", "s"), "a stale rotation made a quarantined slot readable again").toBeNull();
+  });
+
+  /** X6-08: an unlock that read before a quarantine installed after it. MUTATION: X6-08. */
+  it("an unlock in flight across a quarantine installs nothing", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "compromised");
+    const p = store.pauseNextGet(slotKey("a", "s"));
+    const unlocking = backend.unlock("a").then(() => null, (e: unknown) => e as Error);
+    await p.reached; // the unlock has read the old record
+    const quarantine = backend.revokeAndRotate("a", "s", async () => { throw new Error("x"); }, async () => {}).catch(() => undefined);
+    p.release();
+    await quarantine;
+    expect((await unlocking)?.message, "an unlock across a quarantine completed").toMatch(/while this unlock was in flight/);
+    expect(() => backend.read("a", "s"), "quarantined plaintext was installed by a slower unlock").toThrow(/locked/);
   });
 });

@@ -252,6 +252,12 @@ export class EncryptedVaultBackend implements VaultBackend {
   async #write(clientId: string, name: string, value: string, quarantined: boolean): Promise<SecretRecord> {
     if (!clientId || !name) throw new VaultError("vault writes require a clientId and a name");
     const slot = slotKey(clientId, name);
+    // EVERY WRITE INVALIDATES AN IN-FLIGHT UNLOCK (cross-family finding X6-08):
+    // an unlock that read the old value before this write must not install it
+    // after. A quarantine also drops the cached plaintext FIRST, before any
+    // await, so a later failure cannot leave the compromised value readable.
+    this.#generation += 1;
+    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);
     for (let i = 0; i < CAS_RETRIES; i++) {
       const prior = await this.#loadRaw(clientId, name);
       const version = (prior?.sealed.v ?? 0) + 1;
@@ -266,6 +272,19 @@ export class EncryptedVaultBackend implements VaultBackend {
       }
     }
     throw new VaultError(`secret "${name}" could not be written — concurrent writers kept winning`);
+  }
+
+  /** One compare-and-swap over exactly `expectedRaw`; false if anything else
+   * wrote the slot since it was read. Never retries onto newer state. */
+  async #replaceExactly(clientId: string, name: string, expectedRaw: string, priorVersion: number, value: string): Promise<boolean> {
+    const slot = slotKey(clientId, name);
+    this.#generation += 1;
+    const version = priorVersion + 1;
+    const sealed = await this.#seal(slot, value, version, this.#now(), false);
+    if (!(await this.#store.compareAndSwap(slot, expectedRaw, JSON.stringify(sealed)))) return false;
+    await this.#advanceManifest(clientId, name, version);
+    if (this.#unlockedClient === clientId) this.#plain.set(name, Object.freeze({ value, version }));
+    return true;
   }
 
   async put(clientId: string, name: string, value: string): Promise<SecretRecord> {
@@ -293,7 +312,7 @@ export class EncryptedVaultBackend implements VaultBackend {
       plain.set(name, Object.freeze({ value, version: sealed.v }));
     }
     if (generation !== this.#generation) {
-      throw new VaultError("vault was locked or re-unlocked while this unlock was in flight — nothing installed");
+      throw new VaultError("vault was locked, re-unlocked or written while this unlock was in flight — nothing installed");
     }
     this.#plain = plain;
     this.#unlockedClient = clientId;
@@ -338,7 +357,10 @@ export class EncryptedVaultBackend implements VaultBackend {
         if (now - loaded.sealed.at < policy.maxAgeMs) continue;
         const next = await issue(clientId, name, current);
         if (typeof next !== "string" || next.length === 0 || next === current) throw new Error("issuer returned no new value");
-        await this.put(clientId, name, next);
+        // OVER THE EXACT RECORD THE DECISION WAS MADE ON (X6-07): `put` re-read
+        // the slot, so a rotation issued against version 1 could overwrite a
+        // quarantine written as version 2 and make the slot readable again.
+        if (!(await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, next))) throw new Error("the slot changed during rotation");
         rotated.push(name);
       } catch {
         // The old secret stays: a failing provider must not become an outage.
@@ -357,6 +379,16 @@ export class EncryptedVaultBackend implements VaultBackend {
     if (!loaded) throw new VaultError(`secret "${name}" not found for scoped client`);
     if (loaded.sealed.q) throw new VaultError(`secret "${name}" is already quarantined`);
     const current = await this.#open(slotKey(clientId, name), `secret "${name}"`, loaded.sealed);
+    // REVOKE FIRST, WHATEVER HAPPENS NEXT (cross-family finding X6-06). The
+    // runbook is revoke → rotate; issuing first meant a failed issue never
+    // reached the provider, and local quarantine cannot invalidate a stolen
+    // token. A revocation failure is remembered and reported, never swallowed.
+    let revoked = true;
+    try {
+      await revoke(clientId, name, current);
+    } catch {
+      revoked = false;
+    }
     let next: unknown;
     try {
       next = await issue(clientId, name, current);
@@ -365,12 +397,12 @@ export class EncryptedVaultBackend implements VaultBackend {
     }
     if (typeof next !== "string" || next.length === 0 || next === current) {
       await this.#write(clientId, name, "", true);
-      throw new VaultError(`secret "${name}" could not be re-issued — QUARANTINED: it can no longer be read; revoke it at the provider`);
+      throw new VaultError(
+        `secret "${name}" could not be re-issued — QUARANTINED: it can no longer be read; ${revoked ? "it was revoked at the provider" : "revoking it at the provider ALSO failed — revoke it by hand"}`,
+      );
     }
     const rec = await this.put(clientId, name, next);
-    try {
-      await revoke(clientId, name, current);
-    } catch {
+    if (!revoked) {
       throw new VaultError(`secret "${name}" was replaced, but revoking the old value at the provider failed — it may still be valid there`);
     }
     return rec;

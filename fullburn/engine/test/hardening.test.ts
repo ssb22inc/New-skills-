@@ -373,6 +373,9 @@ describe("x4 trace identity and output safety (cross-family, 2026-10-04)", () =>
       (b: Uint8Array) => new DataView(b.buffer),
       (b: Uint8Array) => new Map([["k", b]]),
       (b: Uint8Array) => new Set([b]),
+      // X6-05: a Buffer's toJSON ran before the replacer looked.
+      (b: Uint8Array) => Buffer.from(b),
+      (b: Uint8Array) => ({ nested: [Buffer.from(b)] }),
     ]) {
       const { deps, transport, sink } = makeDeps();
       transport.response = { greeting: "ok", extra: wrap(new TextEncoder().encode(CANARY_SECRET)) };
