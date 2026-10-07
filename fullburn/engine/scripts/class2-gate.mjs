@@ -53,14 +53,19 @@ const resolvedBase = execSync(`git -C ${JSON.stringify(repoRoot)} rev-parse ${JS
 // WHO added each approval, as GitHub records it (X5-03): the commit in this
 // range that added the document, its signature verification and its author's
 // account. Fetched here; decided by checkMoneyCapGate.
+// X6-03: every commit in the range that touched the document, not only the
+// one that added it — the bytes parsed are the current ones.
 for (const d of approvalDocs) {
-  const addedIn = git(`log --diff-filter=A --format=%H -1 ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).trim();
-  d.auth = await fetchCommitAuth({
-    repo: process.env.GITHUB_REPOSITORY ?? "",
-    sha: addedIn,
-    token: process.env.GITHUB_TOKEN ?? "",
-    apiUrl: process.env.GITHUB_API_URL || "https://api.github.com",
-  });
+  const touchedIn = git(`log --format=%H ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).split("\n").map((l) => l.trim()).filter(Boolean);
+  d.auth = [];
+  for (const sha of touchedIn) {
+    d.auth.push(await fetchCommitAuth({
+      repo: process.env.GITHUB_REPOSITORY ?? "",
+      sha,
+      token: process.env.GITHUB_TOKEN ?? "",
+      apiUrl: process.env.GITHUB_API_URL || "https://api.github.com",
+    }));
+  }
 }
 
 const res = checkMoneyCapGate({

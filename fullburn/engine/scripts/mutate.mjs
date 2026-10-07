@@ -1256,11 +1256,11 @@ const MUTATIONS = [
     "    if (false) {\n      throw new GatewayError(\"provider output carries binary"],
   // ---- X5-03: cap approvals authenticated by GitHub's commit record (2026-10-06) ----
   ["X5-03a an approval needs a verified commit by the maintainer", "engine/scripts/gate-lib.mjs",
-    "    if (!a || a.verified !== true || typeof a.authorLogin !== \"string\" || a.authorLogin.toLowerCase() !== want) {",
-    "    if (!a) {"],
+    "    const a = list.length === 0 ? null : list.find((x) => !x || x.verified !== true || typeof x.authorLogin !== \"string\" || x.authorLogin.toLowerCase() !== want) ?? null;",
+    "    const a = list.length === 0 ? null : list.find((x) => !x) ?? null;"],
   ["X5-03b the class-2 CLI reads each approval's GitHub record", "engine/scripts/class2-gate.mjs",
-    "  d.auth = await fetchCommitAuth({",
-    "  d.auth = { verified: true, authorLogin: process.env.FULLBURN_MAINTAINER }; void ({"],
+    "    d.auth.push(await fetchCommitAuth({",
+    "    d.auth.push({ verified: true, authorLogin: process.env.FULLBURN_MAINTAINER }); void ({"],
   ["X5-03c no maintainer, no authenticated approval", "engine/scripts/gate-lib.mjs",
     "  if (typeof maintainer !== \"string\" || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(maintainer)) {",
     "  if (false) {"],
@@ -1325,6 +1325,12 @@ const MUTATIONS = [
   ["X6-08 every write invalidates an in-flight unlock", "engine/src/vault-crypto.ts",
     "    this.#generation += 1;\n    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);",
     "    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);"],
+  ["X6-03 every commit touching an approval is authenticated (CLI)", "engine/scripts/class2-gate.mjs",
+    "  const touchedIn = git(`log --format=%H ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).split(\"\\n\").map((l) => l.trim()).filter(Boolean);",
+    "  const touchedIn = git(`log --diff-filter=A --format=%H -1 ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).split(\"\\n\").map((l) => l.trim()).filter(Boolean);"],
+  ["X6-03b every commit record must pass (decision)", "engine/scripts/gate-lib.mjs",
+    "    if (list.length === 0 || a !== null || list.some((x) => !x)) {",
+    "    if (list.length === 0) {"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

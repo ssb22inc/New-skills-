@@ -318,14 +318,18 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         // Actions token when there is one, else the `gh` client if present.
         const repoName = process.env.GITHUB_REPOSITORY || repoFromRemote((await git(["remote", "get-url", "origin"])).out) || "";
         for (const d of approvalDocs) {
-          const addedIn = (await git(["log", "--diff-filter=A", "--format=%H", "-1", `${base}..HEAD`, "--", d.path])).out.trim();
-          if (process.env.GITHUB_TOKEN) {
-            d.auth = await fetchCommitAuth({ repo: repoName, sha: addedIn, token: process.env.GITHUB_TOKEN, apiUrl: process.env.GITHUB_API_URL || "https://api.github.com" });
-          } else {
-            const r = /^[0-9a-f]{40}$/.test(addedIn) ? await run("gh", ["api", `repos/${repoName}/commits/${addedIn}`]) : { code: 1, out: "" };
-            let body = null;
-            try { body = r.code === 0 ? JSON.parse(r.out) : null; } catch { body = null; }
-            d.auth = commitAuthFromApi(body);
+          // X6-03: every commit that touched the document, not only its addition.
+          const touchedIn = (await git(["log", "--format=%H", `${base}..HEAD`, "--", d.path])).out.split("\n").map((l) => l.trim()).filter(Boolean);
+          d.auth = [];
+          for (const sha of touchedIn) {
+            if (process.env.GITHUB_TOKEN) {
+              d.auth.push(await fetchCommitAuth({ repo: repoName, sha, token: process.env.GITHUB_TOKEN, apiUrl: process.env.GITHUB_API_URL || "https://api.github.com" }));
+            } else {
+              const r = /^[0-9a-f]{40}$/.test(sha) ? await run("gh", ["api", `repos/${repoName}/commits/${sha}`]) : { code: 1, out: "" };
+              let body = null;
+              try { body = r.code === 0 ? JSON.parse(r.out) : null; } catch { body = null; }
+              d.auth.push(commitAuthFromApi(body));
+            }
           }
         }
         const c2 = checkMoneyCapGate({

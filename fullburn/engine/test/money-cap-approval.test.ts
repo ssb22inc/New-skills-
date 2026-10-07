@@ -78,6 +78,11 @@ describe("money-cap approvals are authenticated by GitHub's commit record (X5-03
     expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "other" } }], "maintainer").ok, "another account counted").toBe(false);
     expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: null } }], "maintainer").ok, "an unlinked author counted").toBe(false);
     expect(checkApprovalAuthentication([{ ...ok, auth: null }], "maintainer").ok, "no record counted").toBe(false);
+    // X6-03: every commit that touched the document must pass.
+    expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, ok.auth] }], "maintainer").ok).toBe(true);
+    expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, { verified: false, authorLogin: "maintainer" }] }], "maintainer").ok, "a later unsigned edit counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, null] }], "maintainer").ok, "a later edit with no record counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: [] }], "maintainer").ok, "no commits at all counted").toBe(false);
   });
 
   it("refuses everything when no maintainer is configured, even an empty login", () => {

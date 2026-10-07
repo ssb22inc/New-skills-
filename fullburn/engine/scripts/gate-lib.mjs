@@ -873,9 +873,17 @@ export function checkApprovalAuthentication(approvalDocs, maintainer) {
   const want = maintainer.toLowerCase();
   const bad = [];
   for (const d of approvalDocs ?? []) {
-    const a = d?.auth;
-    if (!a || a.verified !== true || typeof a.authorLogin !== "string" || a.authorLogin.toLowerCase() !== want) {
-      bad.push(`${d?.path ?? "(unnamed)"} (${!a ? "no GitHub record" : a.verified !== true ? "commit not signature-verified" : `authored by ${a.authorLogin ?? "no account"}`})`);
+    /** EVERY COMMIT THAT TOUCHED THE DOCUMENT, NOT ONLY ITS ADDITION
+     * (cross-family finding X6-03, 2026-10-06). The bytes the gate parses are
+     * the document's CURRENT bytes; authenticating only the commit that added
+     * it let a later unsigned commit rewrite an approved document into a
+     * different cap transition. `auth` is the list of GitHub records for every
+     * commit in the range that touched the path; one bad or missing record
+     * refuses the document. */
+    const list = Array.isArray(d?.auth) ? d.auth : [d?.auth];
+    const a = list.length === 0 ? null : list.find((x) => !x || x.verified !== true || typeof x.authorLogin !== "string" || x.authorLogin.toLowerCase() !== want) ?? null;
+    if (list.length === 0 || a !== null || list.some((x) => !x)) {
+      bad.push(`${d?.path ?? "(unnamed)"} (${list.length === 0 || !a ? "no GitHub record" : a.verified !== true ? "commit not signature-verified" : `authored by ${a.authorLogin ?? "no account"}`})`);
     }
   }
   if (bad.length > 0) {

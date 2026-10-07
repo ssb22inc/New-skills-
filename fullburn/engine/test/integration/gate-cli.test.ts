@@ -264,6 +264,19 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     const other = await gateAsync(env, "class2-gate.mjs", repo, base);
     expect(other.code, `another account's approval opened the gate:\n${other.out}`).toBe(1);
     expect(other.out).toMatch(/authored by someone-else/);
+    /** X6-03 (GPT-6 Astra, 2026-10-06): the maintainer's verified commit adds
+     * the approval; a LATER unsigned commit rewrites it. Only the addition was
+     * authenticated, while the gate parsed the rewritten bytes.
+     * MUTATION: X6-03. */
+    override.delete(approvalCommit);
+    write("fullburn/APPROVALS/2026-08-17-human-approved.md", approval + "\n");
+    git("-c", "user.name=Someone", "-c", "user.email=someone@example.invalid", "commit", "-q", "-am", "edit the approval");
+    const editCommit = git("rev-parse", "HEAD").trim();
+    override.set(editCommit, { verified: false, login: null });
+    const edited = await gateAsync(env, "class2-gate.mjs", repo, base);
+    expect(edited.code, `an approval rewritten by an unsigned commit opened the gate:\n${edited.out}`).toBe(1);
+    override.delete(editCommit);
+    expect((await gateAsync(env, "class2-gate.mjs", repo, base)).code, "a maintainer-signed edit was refused").toBe(0);
     const noRecord = await gateAsync({ ...env, GITHUB_TOKEN: "" }, "class2-gate.mjs", repo, base);
     expect(noRecord.code, "an approval with no GitHub record opened the gate").toBe(1);
     const noMaintainer = await gateAsync({ ...env, FULLBURN_MAINTAINER: "" }, "class2-gate.mjs", repo, base);
