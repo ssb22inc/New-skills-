@@ -44,9 +44,9 @@ import {
   splitReportsByFamily,
   verdict,
 } from "./done-lib.mjs";
-import { VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { REVIEW_SIGNER_WORKFLOW, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
 import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "./github-auth.mjs";
-import { attestationsFromApi } from "./attestation.mjs";
+import { attestationsFromApi, attestationsFromGhVerify } from "./attestation.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 import { createHash } from "node:crypto";
 import { MARKER, processAlive } from "./mutate-lib.mjs";
@@ -226,19 +226,21 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       if (crossRes.ok && crossRes.report) {
         const repoName = process.env.GITHUB_REPOSITORY || repoFromRemote((await git(["remote", "get-url", "origin"])).out) || "";
         const digest = createHash("sha256").update(readFileSync(`${reportsDir}/${crossRes.report}`)).digest("hex");
-        let body = null;
-        if (process.env.GITHUB_TOKEN) {
-          try {
-            const r = await fetch(`${process.env.GITHUB_API_URL || "https://api.github.com"}/repos/${repoName}/attestations/sha256:${digest}`, { headers: { authorization: `Bearer ${process.env.GITHUB_TOKEN}`, accept: "application/vnd.github+json" } });
-            body = r.status === 200 ? await r.json() : null;
-          } catch { body = null; }
-        } else {
+        // X6-12: only a FULL verification counts — the GitHub CLI's
+        // `attestation verify` (Sigstore chain + transparency log + signer
+        // workflow). Where that client is absent the REST listing is read, its
+        // DSSE signatures checked, and the row FAILS as not chain-verified.
+        const verify = await run("gh", ["attestation", "verify", `${reportsDir}/${crossRes.report}`, "--repo", repoName, "--signer-workflow", `${repoName}/${REVIEW_SIGNER_WORKFLOW}`, "--format", "json"]);
+        let attestations = verify.code === 0 ? attestationsFromGhVerify(verify.out) : [];
+        if (attestations.length === 0) {
           const r = await run("gh", ["api", `repos/${repoName}/attestations/sha256:${digest}`]);
+          let body = null;
           try { body = r.code === 0 ? JSON.parse(r.out) : null; } catch { body = null; }
+          attestations = attestationsFromApi(body);
         }
-        const prov = checkReportProvenance({ fileSha256: digest, attestations: attestationsFromApi(body), repo: repoName });
+        const prov = checkReportProvenance({ fileSha256: digest, attestations, repo: repoName });
         crossRes = prov.ok
-          ? { ...crossRes, reason: `${crossRes.reason}; ${prov.reason} (DSSE signature checked here; Sigstore chain verified by CI's gate)` }
+          ? { ...crossRes, reason: `${crossRes.reason}; ${prov.reason} (Sigstore chain verified)` }
           : { ok: false, reason: `${crossRes.report}: ${prov.reason}` };
         if (!prov.ok) artifact = null;
       }

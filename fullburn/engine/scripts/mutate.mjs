@@ -1284,8 +1284,8 @@ const MUTATIONS = [
     "        signatureVerified = verifier.verify(cert.publicKey, sig);",
     "        signatureVerified = true;"],
   ["X5-02e only a verified signature counts", "engine/scripts/gate-lib.mjs",
-    "      a && a.signatureVerified === true &&",
-    "      a &&"],
+    "      a && a.signatureVerified === true && a.chainVerified === true &&",
+    "      a && a.chainVerified === true &&"],
   // ---- X5-13: a guard credited through another entry's context now has its own ----
   ["G6-51 transport-brand.ts — no recorded output for the selected case", "engine/src/transport-brand.ts",
     "    if (out === undefined) throw new TypeError(`no recorded output for case \"${this.#currentCase}\"`);",
@@ -1331,6 +1331,9 @@ const MUTATIONS = [
   ["X6-03b every commit record must pass (decision)", "engine/scripts/gate-lib.mjs",
     "    if (list.length === 0 || a !== null || list.some((x) => !x)) {",
     "    if (list.length === 0) {"],
+  ["X6-12 only a chain-verified attestation counts", "engine/scripts/gate-lib.mjs",
+    "      a && a.signatureVerified === true && a.chainVerified === true &&",
+    "      a && a.signatureVerified === true &&"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

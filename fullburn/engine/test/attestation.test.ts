@@ -18,7 +18,7 @@ const SIGNER = `https://github.com/${REPO}/${REVIEW_SIGNER_WORKFLOW}@refs/heads/
 const DIGEST = createHash("sha256").update("the report bytes").digest("hex");
 
 describe("report provenance decision (X5-02)", () => {
-  const att = (over: Record<string, unknown> = {}) => ({ signatureVerified: true, signerUri: SIGNER, subjectDigests: [DIGEST], ...over });
+  const att = (over: Record<string, unknown> = {}) => ({ signatureVerified: true, chainVerified: true, signerUri: SIGNER, subjectDigests: [DIGEST], ...over });
 
   /** MUTATION: X5-02b, X5-02c. */
   it("accepts only a verified signature, from the review workflow, over these bytes", () => {
@@ -68,6 +68,10 @@ describe("attestation readers (X5-02)", () => {
       });
       const [good] = attestationsFromApi(bundle(statement, sig));
       expect(good).toEqual({ signatureVerified: true, chainVerified: false, signerUri: SIGNER, subjectDigests: [DIGEST] });
+      /** X6-12: this bundle is SELF-SIGNED with the right SAN. Its signature
+       * verifies; its chain does not — and the decision must refuse it.
+       * MUTATION: X6-12. */
+      expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [good], repo: REPO }).ok, "a self-signed certificate was accepted as the review workflow").toBe(false);
       const tampered = Buffer.from(JSON.stringify({ subject: [{ digest: { sha256: "0".repeat(64) } }] }));
       const [bad] = attestationsFromApi(bundle(tampered, sig));
       expect(bad.signatureVerified, "a payload the signature does not cover was accepted").toBe(false);

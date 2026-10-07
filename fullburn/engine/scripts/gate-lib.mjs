@@ -606,7 +606,11 @@ export function checkReportProvenance({ fileSha256, attestations, repo }) {
   const list = Array.isArray(attestations) ? attestations : [];
   const good = list.find(
     (a) =>
-      a && a.signatureVerified === true &&
+      // CHAIN VERIFIED, NOT ONLY THE SIGNATURE (cross-family finding X6-12):
+      // a DSSE signature checked against the certificate shipped in the same
+      // bundle proves nothing about who issued that certificate — a
+      // self-signed one with the right SAN passed.
+      a && a.signatureVerified === true && a.chainVerified === true &&
       typeof a.signerUri === "string" && a.signerUri.startsWith(signer) &&
       Array.isArray(a.subjectDigests) && a.subjectDigests.includes(fileSha256),
   );
