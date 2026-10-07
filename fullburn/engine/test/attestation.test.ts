@@ -27,6 +27,10 @@ describe("report provenance decision (X5-02)", () => {
     expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att({ signerUri: `https://github.com/${REPO}/.github/workflows/other.yml@refs/heads/main` })], repo: REPO }).ok, "another workflow's signature counted").toBe(false);
     expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att({ signerUri: `https://github.com/evil/r/${REVIEW_SIGNER_WORKFLOW}@refs/heads/main` })], repo: REPO }).ok, "another repository's workflow counted").toBe(false);
     expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att({ subjectDigests: ["0".repeat(64)] })], repo: REPO }).ok, "an attestation of other bytes counted").toBe(false);
+    // X6-01: the review workflow as rewritten on a branch is not the reviewer.
+    expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att({ signerUri: `https://github.com/${REPO}/${REVIEW_SIGNER_WORKFLOW}@refs/heads/review-request/x9` })], repo: REPO }).ok, "a branch-run review workflow counted").toBe(false);
+    expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att({ signerUri: `${SIGNER}-evil` })], repo: REPO }).ok, "a look-alike ref counted").toBe(false);
+    expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att()], repo: REPO, trustedRef: "" }).ok, "no trusted branch still counted").toBe(false);
     expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [], repo: REPO }).reason).toMatch(/no attestation/);
     expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att()], repo: "" }).ok, "no repository bound").toBe(false);
     expect(checkReportProvenance({ fileSha256: "nope", attestations: [att()], repo: REPO }).ok).toBe(false);
@@ -94,7 +98,22 @@ describe("the review workflow keeps every report it writes", () => {
     expect(wf, "a step is still gated on the read succeeding").not.toMatch(/if: success\(\)/);
     const attest = wf.slice(wf.indexOf("actions/attest-build-provenance@"));
     expect(attest.split("\n")[1], "the attestation is not gated on a report existing").toMatch(/if: steps\.new\.outputs\.report != ''/);
-    expect(wf).toMatch(/run: npm run cross-family-read \|\| echo "rc=\$\?" >> "\$GITHUB_OUTPUT"/);
+    expect(wf).toMatch(/run: node trusted\/fullburn\/engine\/scripts\/cross-family-read\.mjs --target "\$RUNNER_TEMP\/target" \|\| echo "rc=\$\?" >> "\$GITHUB_OUTPUT"/);
     expect(wf, "the read's verdict no longer decides the job").toMatch(/exit "\$RC"/);
+  });
+});
+
+/** X6-01 (GPT-6 Astra; human decision 2026-10-06): the reviewer is main's.
+ * The workflow is dispatched on main, refuses any other ref, and runs main's
+ * runner against the commit under review as data. MUTATION: X6-01b, X6-01c. */
+describe("the review workflow runs main's reviewer against the target as data", () => {
+  it("is dispatch-only, refuses any ref but main, and reviews --target", () => {
+    const wf = readFileSync(new URL("../../../.github/workflows/cross-family-read.yml", import.meta.url), "utf8");
+    const on = wf.slice(wf.indexOf("\non:\n"), wf.indexOf("\npermissions:"));
+    expect(on).toMatch(/^  workflow_dispatch:/m);
+    expect(on, "the reviewer can still be triggered from a branch").not.toMatch(/^  (?:push|pull_request|pull_request_target):/m);
+    expect(wf, "the reviewer does not refuse a non-main ref").toMatch(/if: github\.ref != 'refs\/heads\/main'\n\s+run: \|\n.*\n\s+exit 1/);
+    expect(wf).toMatch(/node trusted\/fullburn\/engine\/scripts\/cross-family-read\.mjs --target "\$RUNNER_TEMP\/target"/);
+    expect(wf, "the reviewer installs packages").not.toMatch(/\bnpm (?:ci|install|i)\b/);
   });
 });

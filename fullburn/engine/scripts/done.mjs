@@ -44,7 +44,7 @@ import {
   splitReportsByFamily,
   verdict,
 } from "./done-lib.mjs";
-import { REVIEW_SIGNER_WORKFLOW, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { REVIEW_SIGNER_WORKFLOW, TRUSTED_REVIEW_REF, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
 import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "./github-auth.mjs";
 import { attestationsFromApi, attestationsFromGhVerify } from "./attestation.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
@@ -230,7 +230,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         // `attestation verify` (Sigstore chain + transparency log + signer
         // workflow). Where that client is absent the REST listing is read, its
         // DSSE signatures checked, and the row FAILS as not chain-verified.
-        const verify = await run("gh", ["attestation", "verify", `${reportsDir}/${crossRes.report}`, "--repo", repoName, "--signer-workflow", `${repoName}/${REVIEW_SIGNER_WORKFLOW}`, "--format", "json"]);
+        const verify = await run("gh", ["attestation", "verify", `${reportsDir}/${crossRes.report}`, "--repo", repoName, "--signer-workflow", `${repoName}/${REVIEW_SIGNER_WORKFLOW}`, "--source-ref", TRUSTED_REVIEW_REF, "--format", "json"]);
         let attestations = verify.code === 0 ? attestationsFromGhVerify(verify.out) : [];
         if (attestations.length === 0) {
           const r = await run("gh", ["api", `repos/${repoName}/attestations/sha256:${digest}`]);

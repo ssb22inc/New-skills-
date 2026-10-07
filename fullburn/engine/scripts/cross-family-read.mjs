@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import {
   PRODUCTION_ENDPOINT,
+  parseTarget,
   READ_ADDENDUM,
   REVIEWER_MODEL,
   buildReviewRequest,
@@ -49,10 +50,10 @@ const KEY = process.env.OPENROUTER_API_KEY ?? "";
 const scrub = (text) => (KEY.length >= 8 ? String(text).split(KEY).join("[redacted]") : String(text));
 
 /** Anything a crashed run could have left: a `.partial` report. */
-function removeStaleCanary() {
-  if (!existsSync(REPORTS)) return;
-  for (const n of readdirSync(REPORTS)) {
-    if (/^ADVERSARY_REPORT_phase\d+\.x\d+\.md\.partial$/.test(n)) rmSync(`${REPORTS}/${n}`, { force: true });
+function removeStaleCanary(reports = REPORTS) {
+  if (!existsSync(reports)) return;
+  for (const n of readdirSync(reports)) {
+    if (/^ADVERSARY_REPORT_phase\d+\.x\d+\.md\.partial$/.test(n)) rmSync(`${reports}/${n}`, { force: true });
   }
 }
 
@@ -69,7 +70,21 @@ const git = (args, { cwd = REPO, input = null } = {}) =>
 
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");
-  const phase = readFileSync(`${ROOT}/PHASE`, "utf8").trim();
+  /** THE REVIEWER RUNS FROM TRUSTED CODE; THE TREE UNDER REVIEW IS DATA
+   * (cross-family finding X6-01, 2026-10-06). With `--target <checkout>`, this
+   * runner, its prompt and the adversary definition are the ones next to this
+   * file — `main`'s, when the workflow is dispatched there — and only the
+   * reviewed tree, its phase and its reports directory come from the target. */
+  const target = parseTarget(argv, REPO);
+  if (target.error) {
+    console.error(`CROSS-FAMILY READ: REFUSED — ${target.error}`);
+    return 2;
+  }
+  const TREPO = target.repo;
+  const TROOT = `${TREPO}/fullburn`;
+  const TREPORTS = `${TROOT}/reports`;
+  const tgit = (args, opts = {}) => git(args, { cwd: TREPO, ...opts });
+  const phase = readFileSync(`${TROOT}/PHASE`, "utf8").trim();
   const endpoint = process.env.FULLBURN_CROSS_FAMILY_ENDPOINT || PRODUCTION_ENDPOINT;
   const key = process.env.OPENROUTER_API_KEY;
 
@@ -77,7 +92,7 @@ async function main(argv) {
     console.error("CROSS-FAMILY READ: NOT CONFIGURED — OPENROUTER_API_KEY is not set. No read was made and no report was written (fails closed).");
     return 2;
   }
-  const porcelain = (await git(["status", "--porcelain"])).out;
+  const porcelain = (await tgit(["status", "--porcelain"])).out;
   const refusal = preflightRefusal({ dirty: porcelain.trim() !== "", endpoint, allowDirty: process.env.FULLBURN_CROSS_FAMILY_ALLOW_DIRTY === "1", dryRun });
   if (refusal) {
     console.error(`CROSS-FAMILY READ: REFUSED — ${refusal}:\n${porcelain}`);
@@ -85,16 +100,16 @@ async function main(argv) {
   }
   // The same hash the completion checker prints: `git ls-files -s` over the
   // verified scope, from the REPOSITORY root, piped through hash-object.
-  const listing = (await git(["ls-files", "-s", "--", ...VERIFIED_TREE_SCOPE])).out;
-  const treeHash = (await git(["hash-object", "--stdin"], { input: listing })).out.trim();
-  const commit = (await git(["rev-parse", "--short", "HEAD"])).out.trim();
-  const branch = (await git(["rev-parse", "--abbrev-ref", "HEAD"])).out.trim();
-  const paths = (await git(["ls-files", "--", ...VERIFIED_TREE_SCOPE])).out.split("\n").filter(Boolean);
-  const entries = paths.map((p) => ({ path: p, bytes: readFileSync(`${REPO}/${p}`) }));
+  const listing = (await tgit(["ls-files", "-s", "--", ...VERIFIED_TREE_SCOPE])).out;
+  const treeHash = (await tgit(["hash-object", "--stdin"], { input: listing })).out.trim();
+  const commit = (await tgit(["rev-parse", "--short", "HEAD"])).out.trim();
+  const branch = (await tgit(["rev-parse", "--abbrev-ref", "HEAD"])).out.trim();
+  const paths = (await tgit(["ls-files", "--", ...VERIFIED_TREE_SCOPE])).out.split("\n").filter(Boolean);
+  const entries = paths.map((p) => ({ path: p, bytes: readFileSync(`${TREPO}/${p}`) }));
   const bundle = bundleFiles(entries, looksBinary);
   const definition = readFileSync(DEFINITION, "utf8");
   const request = buildReviewRequest({ definition, bundle, tree: treeHash, phase });
-  const round = nextCrossRound(existsSync(REPORTS) ? readdirSync(REPORTS) : [], phase);
+  const round = nextCrossRound(existsSync(TREPORTS) ? readdirSync(TREPORTS) : [], phase);
   const startedAt = new Date().toISOString();
 
   console.log(`CROSS-FAMILY READ ${round} — tree ${treeHash} (${bundle.included.length} files, ${bundle.bytes} bytes; ${bundle.omitted.length} omitted) → ${REVIEWER_MODEL} at ${endpoint}`);
@@ -129,7 +144,7 @@ async function main(argv) {
   const parsed = parseReview(text);
   if (!parsed.ok) {
     console.error(scrub(`CROSS-FAMILY READ: REFUSED — the reviewer's answer is not the contract (${parsed.reason}); no report written. Raw answer saved for inspection.`));
-    writeFileSync(`${REPORTS}/cross-family-${round}-rejected-${Date.now()}.raw.json`, scrub(raw));
+    writeFileSync(`${TREPORTS}/cross-family-${round}-rejected-${Date.now()}.raw.json`, scrub(raw));
     return 1;
   }
   const verdict = crossVerdict(parsed.value, endpoint);
@@ -158,10 +173,10 @@ async function main(argv) {
   // served model are interpolated from the upstream's own fields.
   report = scrub(report);
   const name = `ADVERSARY_REPORT_phase${phase}.${round}.md`;
-  const partial = `${REPORTS}/${name}.partial`;
+  const partial = `${TREPORTS}/${name}.partial`;
   writeFileSync(partial, report);
-  writeFileSync(`${REPORTS}/${name.replace(/\.md$/, ".raw.json")}`, scrub(raw));
-  renameSync(partial, `${REPORTS}/${name}`);
+  writeFileSync(`${TREPORTS}/${name.replace(/\.md$/, ".raw.json")}`, scrub(raw));
+  renameSync(partial, `${TREPORTS}/${name}`);
   console.log(scrub(`report: reports/${name}  sha256 ${sha256(report)}\nVerdict: ${verdict.verdict} — ${verdict.why}\n${parsed.value.findings.length} finding(s); ${parsed.value.limitations.length} limitation(s).`));
   return verdict.verdict === "PASS" ? 0 : 1;
 }
@@ -171,8 +186,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error("CROSS-FAMILY READ: REFUSED — does not run inside a test worker");
     process.exit(2);
   }
-  removeStaleCanary();
-  process.on("exit", () => removeStaleCanary());
+  const t = parseTarget(process.argv.slice(2), REPO);
+  if (!t.error) {
+    removeStaleCanary(`${t.repo}/fullburn/reports`);
+    process.on("exit", () => removeStaleCanary(`${t.repo}/fullburn/reports`));
+  }
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (e) => {

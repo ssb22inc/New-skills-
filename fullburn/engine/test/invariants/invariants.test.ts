@@ -367,7 +367,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
        * source. */
       const mutatesSource = /for \(const \[name, file, from, to\] of MUTATIONS\)/.test(runner);
       if (!mutatesSource) {
-        expect(runner, `${f} writes files but never removes what a crashed run left behind`).toMatch(/removeStaleCanary\(\)/);
+        expect(runner, `${f} writes files but never removes what a crashed run left behind`).toMatch(/removeStaleCanary\(/);
         expect(runner, `${f} registers no exit cleanup`).toMatch(/process\.on\("exit"/);
         // A recorder must not have the source-mutation shape at all.
         expect(runner.search(/writeFileSync\(\s*path\s*,/), `${f} rewrites a tracked path — that is a source mutator and needs the marker discipline`).toBe(-1);
@@ -2301,7 +2301,10 @@ describe("runner-decision sweep — no verdict is reached where the default suit
    * own vitest config. Nothing is listed by hand — that is the property. */
   const enumerateRunners = (): string[] => {
     const pkg = JSON.parse(readWs("package.json")) as { scripts: Record<string, string> };
-    const ci = readFileSync(new URL("../../../../.github/workflows/fullburn-ci.yml", import.meta.url), "utf8");
+    // EVERY Fullburn workflow, not one file: since X6-01/X6-02 the gates run
+    // from fullburn-gates.yml and the reviewer from cross-family-read.yml.
+    const wfDirUrl = new URL("../../../../.github/workflows/", import.meta.url);
+    const ci = readdirSync(wfDirUrl).filter((f) => FULLBURN_WORKFLOW.test(f)).map((f) => readFileSync(new URL(f, wfDirUrl), "utf8")).join("\n");
     const invoked = `${Object.values(pkg.scripts).join("\n")}\n${ci}`;
     const scripts = readdirSync(new URL("engine/scripts/", wsRoot))
       .filter((f) => f.endsWith(".mjs"))

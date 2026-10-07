@@ -21,6 +21,7 @@ describe("human approval is owed for the money caps only (ruling 2026-10-06)", (
     "fullburn/engine/scripts/ci-scope.mjs",
     "fullburn/engine/scripts/github-auth.mjs",
     ".github/workflows/fullburn-ci.yml",
+    ".github/workflows/fullburn-gates.yml",
   ];
 
   it("every money-cap witness owes a human approval, and every pattern claims a witness", () => {

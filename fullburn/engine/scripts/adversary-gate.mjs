@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { attestationsFromGhVerify } from "./attestation.mjs";
 import {
   REVIEW_SIGNER_WORKFLOW,
+  TRUSTED_REVIEW_REF,
   VERIFIED_TREE_SCOPE,
   checkAdversaryReport,
   checkReportProvenance,
@@ -89,7 +90,7 @@ console.log(`adversary gate: ${res.reason}`);
   try {
     verified = execFileSync(
       "gh",
-      ["attestation", "verify", reportPath, "--repo", repo, "--signer-workflow", `${repo}/${REVIEW_SIGNER_WORKFLOW}`, "--format", "json"],
+      ["attestation", "verify", reportPath, "--repo", repo, "--signer-workflow", `${repo}/${REVIEW_SIGNER_WORKFLOW}`, "--source-ref", TRUSTED_REVIEW_REF, "--format", "json"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
   } catch {

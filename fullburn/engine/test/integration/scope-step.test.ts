@@ -80,7 +80,8 @@ afterEach(() => rmSync(temp, { recursive: true, force: true }));
 describe("the CI scope step is decided by the base commit's script (X5-01)", () => {
   it("every job's scope step runs the base's script, never the checkout's", () => {
     const steps = scopeSteps();
-    expect(steps.length, "a job lost its scope step, or the parser lost them").toBe(4);
+    // verify and mutation-harness; the two gate jobs moved to fullburn-gates.yml (X6-02).
+    expect(steps.length, "a job lost its scope step, or the parser lost them").toBe(2);
     for (const s of steps) {
       expect(s).toContain('"$RUNNER_TEMP/scope-base/fullburn/engine/scripts/ci-scope.mjs"');
       expect(s, "a scope step runs the checkout's own script").not.toMatch(/node (?:fullburn\/)?engine\/scripts\/ci-scope\.mjs/);
@@ -125,5 +126,27 @@ describe("the CI scope step is decided by the base commit's script (X5-01)", () 
     git("add", "-A");
     git("commit", "-q", "-m", "head");
     expect(runStep(scopeSteps()[0]!, base, git("rev-parse", "HEAD"))).toBe("relevant=true\n");
+  });
+});
+
+/** X6-01/X6-02 (GPT-6 Astra; human decision 2026-10-06): the gates run on
+ * `pull_request_target`, from main's code, with the pull request as data.
+ * MUTATION: X6-02a (trigger), X6-02b (PR code executed). */
+describe("the gates run from main, never from the pull request (X6-02)", () => {
+  const GATES = fileURLToPath(new URL("../../../../.github/workflows/fullburn-gates.yml", import.meta.url));
+  it("triggers on pull_request_target, checks out the base, and executes nothing from the PR", () => {
+    const wf = readFileSync(GATES, "utf8");
+    const on = /^on:\n((?:  .*\n)+)/m.exec(wf)?.[1] ?? "";
+    expect(on, "the gates are not on pull_request_target").toMatch(/^  pull_request_target:/m);
+    expect(on, "the gates also run from the branch").not.toMatch(/^  pull_request:|^  push:/m);
+    expect(wf.match(/ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/g)?.length, "a gate job does not check out the base").toBe(2);
+    const runs = [...wf.matchAll(/^\s+run: (.*)$/gm)].map((m) => m[1]!);
+    expect(runs.some((r) => /\bnpm\b/.test(r)), "a gate job installs or runs the PR's packages").toBe(false);
+    for (const r of runs.filter((x) => /\bnode\b/.test(x))) {
+      expect(r, "a gate job runs a script that is not main's").toMatch(/^node trusted\/fullburn\/engine\/scripts\/[\w-]+\.mjs /);
+    }
+    expect(wf, "the job token is not read-only").not.toMatch(/: write/);
+    const ci = readFileSync(WORKFLOW, "utf8");
+    expect(ci, "fullburn-ci.yml still runs the branch's own copy of a gate").not.toMatch(/^  (?:adversary-gate|class2-gate):/m);
   });
 });

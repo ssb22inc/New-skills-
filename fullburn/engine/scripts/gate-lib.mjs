@@ -150,6 +150,8 @@ export const HUMAN_APPROVAL_PATTERNS = [
   // Reads who added each approval from GitHub (X5-03).
   /^fullburn\/engine\/scripts\/github-auth\.mjs$/,
   /^\.github\/workflows\/fullburn-ci\.yml$/,
+  // The money-cap gate runs here since X6-02 (pull_request_target, from main).
+  /^\.github\/workflows\/fullburn-gates\.yml$/,
 ];
 
 export function needsHumanApproval(path) {
@@ -599,10 +601,20 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
  * workflow. */
 export const REVIEW_SIGNER_WORKFLOW = ".github/workflows/cross-family-read.yml";
 
-export function checkReportProvenance({ fileSha256, attestations, repo }) {
+/** THE PRODUCER MUST BE THE TRUSTED REVISION (cross-family finding X6-01,
+ * 2026-10-06). The signer URI names the workflow file AND the ref it ran from;
+ * matching only up to the "@" accepted the review workflow as rewritten on any
+ * branch — a branch could replace the reviewer with a PASS generator and keep
+ * the attestation step. Only the workflow as it stands on the trusted branch
+ * (`main`) counts, so the reviewer that produced the PASS is the one already
+ * merged, not the one under review. */
+export const TRUSTED_REVIEW_REF = "refs/heads/main";
+
+export function checkReportProvenance({ fileSha256, attestations, repo, trustedRef = TRUSTED_REVIEW_REF }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(String(repo))) return { ok: false, reason: "no repository to bind the signer to — refusing (fail closed)" };
   if (!/^[0-9a-f]{64}$/.test(String(fileSha256))) return { ok: false, reason: "the report's digest could not be computed — refusing" };
-  const signer = `https://github.com/${repo}/${REVIEW_SIGNER_WORKFLOW}@`;
+  if (!/^refs\/heads\/[\w./-]+$/.test(String(trustedRef))) return { ok: false, reason: "no trusted branch to bind the reviewer to — refusing (fail closed)" };
+  const signer = `https://github.com/${repo}/${REVIEW_SIGNER_WORKFLOW}@${trustedRef}`;
   const list = Array.isArray(attestations) ? attestations : [];
   const good = list.find(
     (a) =>
@@ -611,7 +623,7 @@ export function checkReportProvenance({ fileSha256, attestations, repo }) {
       // bundle proves nothing about who issued that certificate — a
       // self-signed one with the right SAN passed.
       a && a.signatureVerified === true && a.chainVerified === true &&
-      typeof a.signerUri === "string" && a.signerUri.startsWith(signer) &&
+      typeof a.signerUri === "string" && a.signerUri === signer &&
       Array.isArray(a.subjectDigests) && a.subjectDigests.includes(fileSha256),
   );
   if (good) return { ok: true, reason: `attested by ${good.signerUri}` };
@@ -619,7 +631,7 @@ export function checkReportProvenance({ fileSha256, attestations, repo }) {
     ok: false,
     reason: list.length === 0
       ? "the PASS report carries no attestation — only the cross-family-read workflow can produce a PASS"
-      : `no verified attestation of these exact bytes by ${REVIEW_SIGNER_WORKFLOW} (${list.length} attestation(s) examined)`,
+      : `no verified attestation of these exact bytes by ${REVIEW_SIGNER_WORKFLOW} at ${trustedRef} (${list.length} attestation(s) examined)`,
   };
 }
 

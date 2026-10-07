@@ -674,9 +674,10 @@ const MUTATIONS = [
   // SURVIVED on its first run: nothing asserted the absence of a job-level
   // `if:`, so reinstating one left the suite green. The workflow-hygiene
   // checker now reports it, with a fixture negative case.
-  ["CS-06 the gate jobs report rather than skip", ".github/workflows/fullburn-ci.yml",
-    "  adversary-gate:\n    # NO JOB-LEVEL `if:`.",
-    "  adversary-gate:\n    if: github.event_name == 'pull_request'\n    # NO JOB-LEVEL `if:`."],
+  // CS-06 re-targeted 2026-10-06: the gate jobs moved to fullburn-gates.yml.
+  ["CS-06 the gate jobs report rather than skip", ".github/workflows/fullburn-gates.yml",
+    "  adversary-gate:\n    runs-on: ubuntu-latest",
+    "  adversary-gate:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest"],
   ["CS-07 the isolation exclusions cannot grow quietly", "package.json",
     "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts'",
     "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts' --exclude '**/locks-r12.test.ts'"],
@@ -1275,7 +1276,7 @@ const MUTATIONS = [
     "  if (!prov.ok) {\n    console.error(`ADVERSARY GATE FAIL: ${res.report}: ${prov.reason}`);",
     "  if (false) {\n    console.error(`ADVERSARY GATE FAIL: ${res.report}: ${prov.reason}`);"],
   ["X5-02b the attestation must be signed by the review workflow", "engine/scripts/gate-lib.mjs",
-    "      typeof a.signerUri === \"string\" && a.signerUri.startsWith(signer) &&",
+    "      typeof a.signerUri === \"string\" && a.signerUri === signer &&",
     "      true &&"],
   ["X5-02c the attestation must cover these exact bytes", "engine/scripts/gate-lib.mjs",
     "      Array.isArray(a.subjectDigests) && a.subjectDigests.includes(fileSha256),",
@@ -1476,6 +1477,25 @@ const MUTATIONS = [
   ["X6-15 the Worker declares nodejs_compat", "engine/wrangler.toml",
     "compatibility_flags = [\"nodejs_compat\"]",
     "compatibility_flags = []"],
+  // ---- X6-01/X6-02: the gates and the reviewer run from main (2026-10-06) ----
+  ["X6-02a the gates run on pull_request_target", ".github/workflows/fullburn-gates.yml",
+    "on:\n  pull_request_target:\n",
+    "on:\n  pull_request:\n"],
+  ["X6-02b the adversary gate runs main's script, not the PR's", ".github/workflows/fullburn-gates.yml",
+    "        run: node trusted/fullburn/engine/scripts/adversary-gate.mjs \"$RUNNER_TEMP/pr\" \"$BASE_SHA\"",
+    "        run: node \"$RUNNER_TEMP/pr/fullburn/engine/scripts/adversary-gate.mjs\" \"$RUNNER_TEMP/pr\" \"$BASE_SHA\""],
+  ["X6-01b the reviewer refuses any ref but main", ".github/workflows/cross-family-read.yml",
+    "        if: github.ref != 'refs/heads/main'",
+    "        if: false"],
+  ["X6-01c the reviewer reviews the target as data", ".github/workflows/cross-family-read.yml",
+    "        run: node trusted/fullburn/engine/scripts/cross-family-read.mjs --target \"$RUNNER_TEMP/target\" || echo \"rc=$?\" >> \"$GITHUB_OUTPUT\"",
+    "        run: node trusted/fullburn/engine/scripts/cross-family-read.mjs || echo \"rc=$?\" >> \"$GITHUB_OUTPUT\""],
+  ["X6-01d --target must be a Fullburn checkout", "engine/scripts/cross-family-lib.mjs",
+    "  if (!exists(`${repo}/fullburn/PHASE`)) return { error:",
+    "  if (false) return { error:"],
+  ["MC-12 the gates workflow still owes a human approval", "engine/scripts/gate-lib.mjs",
+    "  /^\\.github\\/workflows\\/fullburn-gates\\.yml$/,",
+    "  /^NEVER-MATCHES$/,"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

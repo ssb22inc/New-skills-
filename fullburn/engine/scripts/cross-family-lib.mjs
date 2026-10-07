@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 /** The cross-family read's DECISIONS, pure (R14-06: no verdict is reached where
  * the default suite cannot see it). The runner, `cross-family-read.mjs`, only
  * moves bytes: it gathers the verified tree, posts it to a non-Claude model
@@ -218,4 +219,17 @@ export function renderCrossReport({ phase, round, tree, commit, branch, requeste
   if (review.limitations.length === 0) lines.push("- (none listed by the reviewer — treat with suspicion; a read always has some)");
   lines.push("");
   return lines.join("\n");
+}
+
+/** `--target <dir>`: the checkout whose tree is reviewed (X6-01). Absent, the
+ * runner's own repository. A target must be an absolute path to a checkout
+ * that carries `fullburn/PHASE`; anything else is refused, never guessed. */
+export function parseTarget(argv, defaultRepo, exists = (p) => existsSync(p)) {
+  const i = argv.indexOf("--target");
+  if (i === -1) return { repo: defaultRepo };
+  const dir = argv[i + 1];
+  if (typeof dir !== "string" || !dir.startsWith("/")) return { error: "--target needs an absolute path to a checkout" };
+  const repo = dir.replace(/\/+$/, "");
+  if (!exists(`${repo}/fullburn/PHASE`)) return { error: `--target ${repo} is not a Fullburn checkout (no fullburn/PHASE)` };
+  return { repo };
 }

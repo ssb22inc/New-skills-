@@ -194,3 +194,19 @@ describe("cross-family runner — fails closed at every step before a report exi
     expect(existsSync(`${REPORTS}/${md}.partial`)).toBe(false);
   });
 });
+
+/** X6-01: `--target` names the checkout under review; anything that is not an
+ * absolute path to a Fullburn checkout is refused, never guessed.
+ * MUTATION: X6-01d. */
+describe("the runner's --target", () => {
+  it("is parsed strictly", async () => {
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const { parseTarget } = await import("../../scripts/cross-family-lib.mjs");
+    const has = (p: string) => p === "/co/fullburn/PHASE";
+    expect(parseTarget([], "/self", has)).toEqual({ repo: "/self" });
+    expect(parseTarget(["--target", "/co/"], "/self", has)).toEqual({ repo: "/co" });
+    expect(parseTarget(["--target", "relative"], "/self", has).error).toMatch(/absolute/);
+    expect(parseTarget(["--target"], "/self", has).error).toMatch(/absolute/);
+    expect(parseTarget(["--target", "/elsewhere"], "/self", has).error, "a non-Fullburn directory was accepted").toMatch(/not a Fullburn checkout/);
+  });
+});
