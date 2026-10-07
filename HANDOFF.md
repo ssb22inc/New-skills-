@@ -34,6 +34,7 @@ on any disagreement about *state*.
 | ID | Severity | Status |
 |---|---|---|
 | L37 / H19 | **1** → protection measured | Ruleset live; re-measured 2026-10-06 (L48): throwaway PR #129 reads `mergeable_state: blocked`. Open human decisions: PulseRN's `pulsern-sms-reminders.yml` fails the Fullburn workflow-permissions invariant inside the PR merge ref; all PRs to `main` wait on checks that exist only on this branch; the author is also the sole code owner and cannot self-approve — RULED 2026-10-06 (L49): code-owner review off, no second identity, independent review unavailable until a second human joins. Pending human: set required approvals to 0 (else still deadlocked), tick "branches up to date" (stored as off), then re-read the ruleset. |
+| L57 | x6 | Astra x6 FAIL (16): 10 fixed; X6-04, X6-10 infrastructure; X6-01/02 (trust root = bootstrap merge to `main`), X6-15 (`nodejs_compat`), X6-11 await the human. OpenRouter credit $7.05 — a read needs ~$11. |
 | L56 | x5 | GPT Astra x5 FAIL (14): 11 fixed with tests and probed mutations; X5-04, X5-12 live half, X5-14 are infrastructure. Next read must run in Actions (push to `review-request/**`) with the `OPENROUTER_API_KEY` secret set. |
 | L50 | ruling | 2026-10-06: every human gate removed except money-cap approvals; the gate ack is the cross-family PASS (C10 = C3). 7 approvals owed (was 110). |
 | L4 / H2 | 1 | PRIMARY spend control (AI Gateway cap) designed, unprovisioned. Human/infrastructure. |
