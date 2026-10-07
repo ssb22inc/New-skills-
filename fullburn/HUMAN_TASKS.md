@@ -18,6 +18,17 @@ Claude Code executes everything else. Spec references in parentheses. Nothing he
 
 - H20 · **§10.3 Playwright e2e stage — DECIDED 2026-08-16: recorded variance, APPROVED.** Substantive e2e defers to Phase 1; the Playwright stage stays installed and runs a minimal smoke in CI now. All five §10.3 stages therefore exist and execute. **The variance expires at Phase 1's gate — no real e2e on the intake confirm flow, no Phase 1 pass.** Enforced mechanically by the invariant suite, which fails the build the moment `PHASE` reads 1 while the e2e suite is still smoke-only. **This sentence has twice been written stronger than the code delivered** (adversary findings R5-06, R6-02, R6-06). What it enforces TODAY, verified by mutation: every `testDir` in `playwright.config.ts` must name the spec directory, and at Phase 1 a test whose TITLE names the intake confirm flow must have a BODY containing a `page.` call, an `await` and an `expect`, with `.skip`/`.todo` excluded. It does not and cannot verify that the test is a good one — only that a browser is driven and something is asserted. Tracked as ledger L16. **Nothing further is owed here in Phase 0.**
 
+## H21 · The one-time bootstrap merge into `main` (decided 2026-10-06, ledger L58)
+
+The gates and the AI reviewer now run from `main`, so `main` must first receive Fullburn once. Until then no trusted review can exist and the two gate checks cannot report on that first pull request. Steps, in order — I tell you when step 1 is ready:
+
+1. **Me:** a clean `done` run on the final tree (0 surviving deliberate breaks), and the list of money-cap approval blocks for that exact tree.
+2. **You:** add the approval file I give you through GitHub's web editor (that makes it a verified commit authored by you), on the Fullburn branch.
+3. **You:** open a pull request from `claude/fullburn-engine-spec-r7v5lg` into `main`. In Settings → Rules → Rulesets → `Proctect main`, add **Repository admin** to the **Bypass list** (or set the ruleset to Disabled), merge the pull request, then **remove the bypass** (or set it back to Active) straight away.
+4. **Me:** dispatch the review from `main` against the Fullburn branch (needs OpenRouter credit), fix what it finds, repeat until GPT Astra passes.
+
+After step 3, every pull request into `main` is checked by `main`'s copy of the gates — a branch can no longer weaken them.
+
 ## Class-2 approvals owed for the Phase 0 fix commit
 
 **AMENDED BY RULING 2026-10-06 (ledger L50): only the money caps still need your approval.** Every other Class-2 change — code, tests, gates, the contract — is decided by the automated gates (four required CI checks, the mutation harness, a cross-family PASS at the exact tree). The command below now prints only money-cap paths: the cap values (`config/src/*caps*`), `config/src/freeze.ts`, `config/package.json`, and the gate machinery that enforces this rule (`gate-lib.mjs`, `class2-gate.mjs`, `diff-lib.mjs`, `.github/workflows/fullburn-ci.yml`). Measured 2026-10-06 against `origin/main`: **7 entries owed, down from 110.** Run it again on the final tree before signing — the hashes move with every commit. The text below is the original context and is kept as history.
