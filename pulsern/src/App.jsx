@@ -330,12 +330,25 @@ const AI_PROVIDERS = [
   { id: "kimi", name: "Kimi — Moonshot (China)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
 ];
 
+async function currentAccessToken() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || "";
+  } catch {
+    return "";
+  }
+}
+
 async function askModel(providerId, prompt, maxTokens = 1000) {
   const p = AI_PROVIDERS.find((x) => x.id === providerId) || AI_PROVIDERS[0];
+  const token = await currentAccessToken();
   const response = await fetch("/api/ai", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider: p.id, prompt, maxTokens }),
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ provider: p.id, prompt, maxTokens, token }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "UPSTREAM");
@@ -751,10 +764,14 @@ export default function App() {
         const perCat = Object.fromEntries(CATS.map((c) => [c, 0]));
         for (const q of allQuestions) if (!answeredIds.has(q.id) && perCat[q.cat] !== undefined) perCat[q.cat]++;
         const misses = Object.values(lastById).filter((ok) => !ok).length;
+        const token = await currentAccessToken();
         const r = await fetch("/api/plan", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ examDate, ability, dueCount, answeredTotal: log.length, today: todayStr(), inventory: { perCat, misses } }),
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ examDate, ability, dueCount, answeredTotal: log.length, today: todayStr(), inventory: { perCat, misses }, token }),
         });
         const data = await r.json().catch(() => ({}));
         if (r.ok && Array.isArray(data.days) && data.days.length) setPlan({ week: wk, days: data.days });
