@@ -19,8 +19,11 @@
    Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENROUTER_API_KEY
    ------------------------------------------------------------------ */
 import { createClient } from "@supabase/supabase-js";
+import { REVIEW_MODEL } from "./models.mjs";
+import { review, parseJson } from "./review.mjs";
 
-const REVIEW_MODEL = "openai/gpt-4.1";
+/* Writer and reviewer are decided in ops/models.mjs, and every review goes
+   through ops/review.mjs — see there for why. */
 const PASS_CONFIDENCE = 0.85;
 const BATCH = 6;
 
@@ -31,18 +34,6 @@ const DO_CASES = args.includes("--cases");
 
 const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-async function llm(prompt, maxTokens = 8000) {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
-    body: JSON.stringify({ model: REVIEW_MODEL, max_tokens: maxTokens, temperature: 0.2, messages: [{ role: "user", content: prompt }] }),
-  });
-  const data = await r.json();
-  const text = data?.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error(`Empty response from ${REVIEW_MODEL} ${data?.error?.message ?? ""}`);
-  return text;
-}
-const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
 const itemPrompt = (items) => `You are a hostile NCLEX exam auditor re-verifying items that are ALREADY LIVE on a high-stakes readiness exam. Be maximally skeptical. For each item: KEY CHECK (argue hard for a distractor — fail if any distractor is defensible), CURRENCY (current practice standards), SAFETY, QUALITY (unambiguous stem, plausible distractors), and for sata/highlight verify every keyed option is unambiguously correct and every non-keyed clearly not. For calc items recompute the math from the stem and fail on any numeric error.
 
@@ -72,7 +63,7 @@ async function sweepItems() {
     const batch = items.slice(i, i + BATCH);
     let reviews;
     try {
-      reviews = parseJson(await llm(itemPrompt(batch.map(({ id, exam_form, ...it }) => it))));
+      reviews = parseJson(await review(itemPrompt(batch.map(({ id, exam_form, ...it }) => it))));
     } catch (e) { errored += batch.length; console.log(`  ! batch ${i / BATCH + 1}: ${e.message.slice(0, 80)}`); continue; }
     for (let j = 0; j < batch.length; j++) {
       const r = reviews[j] ?? { verdict: "fail", notes: "no verdict returned" };
@@ -100,7 +91,7 @@ async function sweepCases() {
   let passed = 0, failed = 0;
   for (const c of cases) {
     let r;
-    try { r = parseJson(await llm(casePrompt({ ...c, id: undefined, exam_form: undefined }))); }
+    try { r = parseJson(await review(casePrompt({ ...c, id: undefined, exam_form: undefined }))); }
     catch (e) { console.log(`  ! case #${c.id}: ${e.message.slice(0, 80)}`); continue; }
     if (r.overall === "pass" && (r.confidence ?? 0) >= PASS_CONFIDENCE) { passed++; continue; }
     failed++;
