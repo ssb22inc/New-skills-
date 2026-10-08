@@ -1,0 +1,86 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "bootstrap",
+  "meta": {
+    "base": "5bf090a5f5b28386f7d3fa8506e273dfcba500e8",
+    "head": "1c58f65caccebbdd632d01bac49284948f402218",
+    "pr": "133"
+  },
+  "reviewedAt": "2026-10-08T20:32:02.040Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/llm-client.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "excluded": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": ".github/workflows/pulsern-astra-review.yml",
+      "line": 23,
+      "title": "The PR still controls the supposedly trusted workflow",
+      "problem": "A pull_request workflow uses the workflow definition from the PR merge ref. Checking out the reviewer from the base branch does not protect the steps that select and invoke it. A PR can modify this YAML to bypass the trusted reviewer, fabricate rc=0, or execute PR-controlled code with the supplied secret. The new base-branch test checks for strings, not this trust boundary.",
+      "failure_scenario": "A same-repository PR changes the review step to emit rc=0 without invoking Astra. That modified workflow runs for the PR and produces a successful review check, despite the base branch containing an uncompromised reviewer.",
+      "fix": "Run the orchestration through a base-defined trusted workflow or enforced required-workflow policy. If using pull_request_target, treat PR files strictly as data and remove the automatic execution of PR code during bootstrap; perform bootstrap through a separately approved process. Bind the result to the reviewed head SHA.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": ".github/workflows/pulsern-astra-review.yml",
+      "line": 42,
+      "title": "Fork PRs satisfy the check without any review",
+      "problem": "The job-level condition skips every fork PR. GitHub treats a conditionally skipped job as successful for required-check purposes, so making this review check required does not make fork contributions fail closed.",
+      "failure_scenario": "A non-draft fork PR changes grading or approval logic. The review job is skipped, no report or adversarial review exists, and this check does not prevent merging.",
+      "fix": "Review fork diffs through the trusted, data-only execution path without running fork code. If review cannot be performed, produce an explicit failing check rather than skipping the job.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 268,
+      "title": "Git-quoted filenames are silently dropped from the review",
+      "problem": "The name-status parser assumes Git prints literal, tab-separated paths. Git normally quotes paths containing non-ASCII characters, tabs, or newlines. A quoted path begins with a quotation mark, fails IN_SCOPE, and is silently treated as outside PulseRN. No test exercises collection from a real Git diff.",
+      "failure_scenario": "A PR changes only pulsern/public/révision.html. With Git's default core.quotePath behavior, name-status returns a quoted, escaped filename. collectChanges drops it, and main returns PASS with 'No PulseRN files changed' without making a review request.",
+      "fix": "Use git diff --name-status -z and parse its NUL-delimited status/path records without trimming or decoding quoted display output. Add temporary-repository integration tests covering Unicode, tab, and newline filenames and assert that their actual diffs reach the prompt.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 64,
+      "title": "Generated-page exclusions have no generation-integrity check",
+      "problem": "Files are excluded solely because their paths look generated. The reviewer neither verifies that they match generator output nor ensures their corresponding source was reviewed. A PR containing only excluded HTML receives PASS without an LLM call, even when it directly changes site copy or clinical content.",
+      "failure_scenario": "A PR directly edits public/learn/bow-tie-questions/index.html, or adds a hand-written HTML file beneath that directory. The gate excludes it and passes. If that public asset is shipped, its changes bypass this review entirely. I could not verify from the supplied files whether an independent deployment step always regenerates or removes such assets.",
+      "fix": "Exclude generated content only after verifying it is reproducible from reviewed inputs. Otherwise include its changes in the review or fail closed. Test direct edits and unexpected new files inside the excluded directories, not just whether directory names match the exclusion list.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": ".github/workflows/pulsern-astra-review.yml",
+      "line": 36,
+      "title": "Superseding a run can discard a paid review without a report",
+      "problem": "cancel-in-progress terminates the Node process, but the script writes its first report only after the model call completes or throws normally. Process cancellation is not caught by that try/catch. The preservation steps additionally require saved=true, which is emitted only after the script returns and an Markdown report exists. always() cannot recover a report that was never written.",
+      "failure_scenario": "A developer pushes another commit while OpenRouter is processing a paid review. GitHub cancels the previous run before save(), leaving no report artifact or reviews-branch record for that attempt. The renderer-only interrupted-run test does not exercise this path.",
+      "fix": "Disable superseding cancellation once model spending starts, or durably checkpoint the attempt before the request and finalize interrupted attempts through cancellation-safe cleanup. Make preservation discover existing reports independently of the review step's saved output, and test an actual interrupted process.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 34011,
+    "completionTokens": 10871,
+    "reasoningTokens": 9623,
+    "costUsd": 0.96868
+  },
+  "error": null,
+  "assessment": "Changes are needed before this can be treated as a trusted, fail-closed review gate. The severity-based verdict calculation is sound, but the workflow remains PR-controlled, some changes can pass without review, and cancellation defeats report retention. This assessment is based on the supplied files; I could not execute the tests or verify deployment regeneration.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 1,
+    "major": 4,
+    "minor": 0
+  }
+}
