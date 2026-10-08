@@ -13,6 +13,7 @@
    signed-in student; this one refuses anyone who is not the owner. */
 import { createClient } from "@supabase/supabase-js";
 import { runSelfTest } from "../src/selftest.js";
+import { readAll } from "../src/read-all.js";
 
 const admin = () =>
   createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -74,10 +75,16 @@ async function dataChecks(sb) {
      form is worse than a missing one: the student sits it, burns their single
      permanent attempt, and gets a score built on fewer questions. */
   try {
-    const { data, error } = await sb.from("questions").select("exam_form").eq("approved", true).not("exam_form", "is", null);
-    if (error) throw new Error(error.message);
+    /* Ten forms of ~85 items sit just under Supabase's silent 1,000-row cap.
+       One more batch of exam items and a plain select would start dropping
+       rows, and this check would report complete forms as short — or worse,
+       short forms as complete. */
+    const data = await readAll(
+      () => sb.from("questions").select("id, exam_form").eq("approved", true).not("exam_form", "is", null).order("id"),
+      { ordered: true },
+    );
     const per = {};
-    for (const r of data ?? []) per[r.exam_form] = (per[r.exam_form] ?? 0) + 1;
+    for (const r of data) per[r.exam_form] = (per[r.exam_form] ?? 0) + 1;
     const forms = Object.keys(per).map(Number).sort((a, b) => a - b);
     const short = forms.filter((f) => per[f] < 67);
     out.push({

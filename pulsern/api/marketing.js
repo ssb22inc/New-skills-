@@ -44,6 +44,7 @@
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { buildFunnelReport, windowFromDays, sinceFor } from "../src/funnel-report.js";
+import { readAll, tallyBy, reconcile } from "../src/read-all.js";
 import { PLANS, fmtUsd } from "../src/pricing.js";
 
 const admin = () =>
@@ -207,8 +208,14 @@ export default async function handler(req, res) {
   try {
     const sb = admin();
 
-    let q = sb.from("funnel_events").select("event, user_id, occurred_at, props");
-    if (since) q = q.gte("occurred_at", since);
+    /* Every row-returning read goes through readAll(). A plain select stops
+       at 1,000 rows without a word — which is how this breakdown came to sum
+       to exactly 1,000 against a bank of 10,034, and how the funnel would
+       have started undercounting the day events passed a thousand. */
+    const events = () => {
+      let q = sb.from("funnel_events").select("id, event, user_id, occurred_at, props").order("id");
+      return since ? q.gte("occurred_at", since) : q;
+    };
 
     /* head:true fetches counts without a single row of content — cheaper, and
        it means no question text or student data crosses this boundary even in
@@ -218,26 +225,29 @@ export default async function handler(req, res) {
       let c = sb.from(table).select("id", { count: "exact", head: true }).eq("approved", true);
       return (build ? build(c) : c);
     };
+    /* Only the category column, ordered for stable paging. */
+    const cats = (table, build) => () => {
+      let c = sb.from(table).select("id, cat").eq("approved", true).order("id");
+      return build ? build(c) : c;
+    };
+    const practice = (c) => c.is("exam_form", null);
 
-    const [events, attribution, questions, cases, cards, qCats, cCats, fCats] = await Promise.all([
-      q,
-      sb.from("user_attribution").select("user_id, utm_source, utm_medium, utm_campaign, referrer"),
-      live("questions", (c) => c.is("exam_form", null)),
-      live("case_studies", (c) => c.is("exam_form", null)),
+    const [eventRows, attrRows, questions, cases, cards, qCats, cCats, fCats] = await Promise.all([
+      readAll(events, { ordered: true }),
+      readAll(() => sb.from("user_attribution").select("user_id, utm_source, utm_medium, utm_campaign, referrer").order("user_id"), { ordered: true }),
+      live("questions", practice),
+      live("case_studies", practice),
       live("flashcards"),
-      sb.from("questions").select("cat").eq("approved", true).is("exam_form", null),
-      sb.from("case_studies").select("cat").eq("approved", true).is("exam_form", null),
-      sb.from("flashcards").select("cat").eq("approved", true),
+      readAll(cats("questions", practice), { ordered: true }),
+      readAll(cats("case_studies", practice), { ordered: true }),
+      readAll(cats("flashcards"), { ordered: true }),
     ]);
 
-    if (events.error)
-      return res.status(502).json({ error: `Could not read the funnel: ${events.error.message}` });
+    for (const r of [questions, cases, cards]) {
+      if (r.error) return res.status(502).json({ error: `Could not count the catalogue: ${r.error.message}` });
+    }
 
-    const funnel = buildFunnelReport({
-      rows: events.data ?? [],
-      attrRows: attribution.data ?? [],
-      windowDays,
-    });
+    const funnel = buildFunnelReport({ rows: eventRows, attrRows, windowDays });
 
     const counts = {
       questions: questions.count ?? null,
@@ -245,15 +255,17 @@ export default async function handler(req, res) {
       flashcards: cards.count ?? null,
     };
 
-    const tally = (rows) => {
-      const m = new Map();
-      for (const r of rows ?? []) m.set(r.cat, (m.get(r.cat) ?? 0) + 1);
-      return Object.fromEntries([...m.entries()].sort((a, b) => b[1] - a[1]));
-    };
     const byCategory = {
-      questions: tally(qCats.data),
-      caseStudies: tally(cCats.data),
-      flashcards: tally(fCats.data),
+      questions: tallyBy(qCats, "cat"),
+      caseStudies: tallyBy(cCats, "cat"),
+      flashcards: tallyBy(fCats, "cat"),
+    };
+    /* The breakdown must add up to its own headline. If rows landed between
+       the count and the read, say so instead of quietly disagreeing. */
+    byCategory.reconciled = {
+      questions: reconcile(byCategory.questions, counts.questions),
+      caseStudies: reconcile(byCategory.caseStudies, counts.cases),
+      flashcards: reconcile(byCategory.flashcards, counts.flashcards),
     };
 
     return res.status(200).json(buildMarketingPayload({ funnel, counts, byCategory, windowDays }));

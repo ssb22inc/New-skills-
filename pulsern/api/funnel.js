@@ -14,6 +14,7 @@
    student has any reason to see it. */
 import { createClient } from "@supabase/supabase-js";
 import { buildFunnelReport, windowFromDays, sinceFor } from "../src/funnel-report.js";
+import { readAll } from "../src/read-all.js";
 
 const admin = () =>
   createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -38,13 +39,21 @@ export default async function handler(req, res) {
   const windowDays = windowFromDays(days);
   const since = sinceFor(windowDays);
 
-  let q = sb.from("funnel_events").select("event, user_id, occurred_at, props");
-  if (since) q = q.gte("occurred_at", since);
-  const [{ data: rows, error }, { data: attrRows }] = await Promise.all([
-    q,
-    sb.from("user_attribution").select("user_id, utm_source, utm_medium, utm_campaign, referrer"),
-  ]);
-  if (error) return res.status(502).json({ error: `Could not read the funnel: ${error.message}` });
+  /* readAll(), not a plain select: Supabase stops at 1,000 rows without
+     saying so, and the funnel would start undercounting the day events passed
+     a thousand — the numbers ad spend is judged against. */
+  let rows, attrRows;
+  try {
+    [rows, attrRows] = await Promise.all([
+      readAll(() => {
+        let q = sb.from("funnel_events").select("id, event, user_id, occurred_at, props").order("id");
+        return since ? q.gte("occurred_at", since) : q;
+      }, { ordered: true }),
+      readAll(() => sb.from("user_attribution").select("user_id, utm_source, utm_medium, utm_campaign, referrer").order("user_id"), { ordered: true }),
+    ]);
+  } catch (e) {
+    return res.status(502).json({ error: `Could not read the funnel: ${e.message}` });
+  }
 
-  return res.status(200).json(buildFunnelReport({ rows: rows ?? [], attrRows: attrRows ?? [], windowDays }));
+  return res.status(200).json(buildFunnelReport({ rows, attrRows, windowDays }));
 }
