@@ -6,82 +6,201 @@
    Claude model, so it is judged by a model from a different lab — the point of
    a second reader is that it does not share the first one's blind spots.
 
-   Three rules shape this file, and each one exists because the alternative
-   produces a review that looks like assurance and is not:
+   Four rules shape this file. Each exists because the alternative produces a
+   review that looks like assurance and is not, and two of them were added
+   after Astra's own first review of this file found the gap:
 
    1. ASTRA FINDS, CODE DECIDES. The model returns findings with severities.
       The verdict is computed from those findings by verdictFor(), not taken
-      from the model's own summary. A reviewer that writes "PASS" above three
-      blocker findings would otherwise get the last word.
+      from the model's summary.
 
-   2. NOTHING IS SILENTLY CUT. If the change is too large to send whole, the
-      review FAILS with a blocker that says so, instead of quietly reviewing
-      the half that fit and reporting on it as though it were everything.
+   2. NOTHING IN PULSERN IS EXEMPT. An earlier version skipped generated public
+      pages by path, which meant a PR could add a hand-written page under one
+      of those directories and ship it unreviewed. Generated pages are now
+      reviewed in a compact form — their visible text, scripts and links — and
+      the lockfile as a list of dependency changes. Only files outside PulseRN
+      and earlier review reports are left out, and both are named.
 
-   3. EVERY PAID REVIEW IS KEPT. Owner's instruction: a review whose report is
-      lost is money wasted. The report — PASS, FAIL, or a run that broke
-      partway — is written before the exit code is decided.
+   3. NOTHING IS SILENTLY CUT. Whole-file context is shed before any diff is;
+      if the diffs alone do not fit, the review FAILS and says so.
 
-   Usage (from the repository root):
-     node pulsern/ops/astra-review.mjs --base <sha> --head <sha> [--pr <n>] [--out <dir>]
+   4. EVERY PAID REVIEW IS KEPT. A checkpoint report is written BEFORE the paid
+      call, so a run killed mid-request still leaves a record that it was
+      attempted and did not finish.
+
+   This script reads the change under review as DATA (git blobs and diffs). It
+   never executes anything from the change: in CI it runs from the base branch
+   while the pull request is only read, so a PR cannot alter its own review.
+
+   Usage (from the repository root of the checkout under review):
+     node <trusted>/pulsern/ops/astra-review.mjs --base <sha> --head <sha> [--pr <n>] [--out <dir>]
    Env: OPENROUTER_API_KEY
    Exit: 0 PASS · 1 FAIL · 2 the review itself could not be completed */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { llmCall } from "./llm.mjs";
 import { REVIEW_MODEL, assertCrossFamily } from "./models.mjs";
 
-/* The author of the code under review. Recorded so the cross-family check is
-   real rather than assumed. */
+/* The author of the code under review, so the cross-family check is real. */
 export const AUTHOR_MODEL_FAMILY_PROBE = "anthropic/claude";
 
 /* ---------------------------------------------------------------------------
-   What gets reviewed
+   What gets reviewed, and how
    --------------------------------------------------------------------------- */
 
 /* Only PulseRN. The repository holds other projects, and the owner's rule is
    no cross-contamination: this reviewer neither reads nor judges them. */
 const IN_SCOPE = [/^pulsern\//, /^\.github\/workflows\/pulsern-[^/]+\.ya?ml$/];
 
-/* Excluded and NAMED in the prompt, so the reviewer knows they exist and can
-   ask about them. Each is either machine output whose source is reviewed
-   instead, or a past review report — reviewing the reviews would only feed the
-   reviewer its own earlier words. */
-const EXCLUDED = [
-  { re: /^pulsern\/reports\/astra\//, why: "earlier review reports" },
-  { re: /(^|\/)package-lock\.json$/, why: "lockfile" },
-  { re: /^pulsern\/dist\//, why: "build output" },
-  /* Only the pages a generator writes. The hand-written ones — the owner
-     dashboard, the review console (where the approval gate lives), about and
-     legal — are reviewed like any other code. A blanket "public HTML" rule
-     would have exempted exactly the two files where a mistake does the most
-     damage; the owner dashboard has already been taken down once by a single
-     duplicate declaration. Kept in step with ops/build-public-pages.mjs and
-     ops/build-learn.mjs by tests/astra-review.test.js. */
-  { re: /^pulsern\/public\/(compare|learn|pricing|methodology|how-it-works|editorial-policy|free-nclex-practice-test)\/.*\.html$/, why: "generated public page (its generator is reviewed instead)" },
-  { re: /^pulsern\/public\/sitemap\.xml$/, why: "generated sitemap" },
-  { re: /^pulsern\/public\/(comparison-evidence|commercial-search-intents|release|search-intents|content-provenance)\.json$/, why: "generated manifest" },
-];
+/* Pages a generator writes. Reviewed as a digest, not skipped: the digest is
+   what a student would read plus every script and link the page carries,
+   which is where a harmful change would be. Raw minified markup changes on
+   every regeneration and would fill the budget with noise. Kept in step with
+   the generators by tests/astra-review.test.js. */
+const GENERATED_PAGE = /^pulsern\/public\/(compare|learn|pricing|methodology|how-it-works|editorial-policy|free-nclex-practice-test)\/.*\.html$|^pulsern\/public\/sitemap\.xml$/;
+const LOCKFILE = /(^|\/)package-lock\.json$/;
+const OWN_REPORTS = /^pulsern\/reports\/astra\//;
 
 export function classifyPath(path) {
-  if (!IN_SCOPE.some((re) => re.test(path))) return { include: false, why: "outside PulseRN" };
-  const hit = EXCLUDED.find((e) => e.re.test(path));
-  return hit ? { include: false, why: hit.why } : { include: true, why: null };
+  if (!IN_SCOPE.some((re) => re.test(path))) return { mode: "skip", why: "outside PulseRN" };
+  if (OWN_REPORTS.test(path)) return { mode: "skip", why: "earlier review reports" };
+  if (LOCKFILE.test(path)) return { mode: "lockfile", why: "reviewed as a dependency-change summary" };
+  if (GENERATED_PAGE.test(path)) return { mode: "page", why: "generated page: reviewed as visible text, scripts and links" };
+  return { mode: "review", why: null };
 }
 
-/* Roughly 4 characters per token. The ceiling keeps one review to a known,
-   bounded cost; at Astra's input price it is about $2 of input. */
+/* Roughly 4 characters per token; about $2 of Astra input at the ceiling. */
 export const MAX_PROMPT_CHARS = 800_000;
-/* A whole file is sent alongside its diff so the reviewer can see callers and
-   surrounding invariants. Very large files are sent as diff only. */
 export const MAX_FULL_FILE_CHARS = 60_000;
 
-/* Fits the change into the budget without ever dropping part of the change.
-   Full-file context is the only thing that may be shed; the diffs themselves
-   never are. If the diffs alone do not fit, that is reported, not hidden. */
+/* ---------------------------------------------------------------------------
+   Compact forms for generated pages and the lockfile
+   --------------------------------------------------------------------------- */
+
+const decode = (s) => s
+  .replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+  .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+
+/* One line per meaningful thing, in document order, so a line diff of two
+   digests shows exactly what changed for a reader — and for a browser. */
+export function pageDigest(html) {
+  const src = String(html ?? "");
+  const out = [];
+  for (const m of src.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    const attrs = m[1];
+    const s = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(attrs)?.[1];
+    const type = /\btype\s*=\s*["']([^"']+)["']/i.exec(attrs)?.[1] ?? "";
+    if (s) out.push(`SCRIPT src=${s}`);
+    else if (/ld\+json/i.test(type)) out.push(`JSON-LD ${m[2].replace(/\s+/g, " ").trim()}`);
+    else if (m[2].trim()) out.push(`SCRIPT inline ${m[2].replace(/\s+/g, " ").trim()}`);
+  }
+  for (const m of src.matchAll(/\bon[a-z]+\s*=\s*["']([^"']*)["']/gi)) out.push(`HANDLER ${m[0].slice(0, 300)}`);
+  for (const m of src.matchAll(/<(iframe|object|embed|form)\b[^>]*>/gi)) out.push(`EMBED ${m[0]}`);
+  for (const m of src.matchAll(/<link\b[^>]*>/gi)) out.push(`LINK ${m[0]}`);
+  for (const m of src.matchAll(/<meta\b[^>]*>/gi)) out.push(`META ${m[0]}`);
+  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(src)?.[1];
+  if (title) out.push(`TITLE ${decode(title).trim()}`);
+  for (const m of src.matchAll(/\bhref\s*=\s*["']([^"']+)["']/gi)) out.push(`HREF ${m[1]}`);
+  const body = src
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<(p|h[1-6]|li|tr|td|th|div|section|article|br|dt|dd|caption|summary)\b[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, " ");
+  for (const line of decode(body).split("\n")) {
+    const t = line.replace(/\s+/g, " ").trim();
+    if (t) out.push(`TEXT ${t}`);
+  }
+  return out.join("\n") + "\n";
+}
+
+/* What a reviewer needs from a lockfile change: which packages appeared,
+   disappeared, or moved — and from where. A swapped `resolved` URL is the
+   classic supply-chain change, and it is invisible in a version-only view. */
+export function lockDigest(jsonText) {
+  let lock;
+  try { lock = JSON.parse(jsonText ?? "{}"); } catch { return "UNPARSEABLE package-lock.json\n"; }
+  const pkgs = lock.packages ?? {};
+  return Object.keys(pkgs).filter((k) => k).sort().map((k) => {
+    const p = pkgs[k] ?? {};
+    let host = "";
+    try { host = p.resolved ? new URL(p.resolved).host : ""; } catch { host = `unparseable(${p.resolved})`; }
+    return `${k.replace(/^node_modules\//, "")}@${p.version ?? "?"} ${host} ${String(p.integrity ?? "").slice(0, 24)}`;
+  }).join("\n") + "\n";
+}
+
+/* Line diff of two strings via git's own diff engine, on temporary files.
+   Runs git as a tool over data; nothing from the change is executed. */
+export function textDiff(before, after, label) {
+  const dir = mkdtempSync(join(tmpdir(), "astra-"));
+  try {
+    const a = join(dir, "before"), b = join(dir, "after");
+    writeFileSync(a, before ?? "");
+    writeFileSync(b, after ?? "");
+    try {
+      execFileSync("git", ["diff", "--no-index", "--no-ext-diff", "--no-textconv", "-U2", "--", a, b], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      return "";
+    } catch (e) {
+      if (e.status === 1) return String(e.stdout).replace(/^(---|\+\+\+) .*$/gm, (m) => `${m.slice(0, 3)} ${label}`);
+      throw e;
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Collecting the change from git
+   --------------------------------------------------------------------------- */
+
+const gitIn = (cwd) => (...args) => execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+
+/* -z output: NUL-separated status/path records, paths verbatim. The display
+   form quotes paths with non-ASCII characters, tabs or newlines, and an
+   earlier version parsed that form — so a file named with an accent arrived
+   as a quoted string, matched nothing, and was silently left unreviewed. */
+export function parseNameStatusZ(out) {
+  const parts = String(out ?? "").split("\0");
+  const entries = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const status = parts[i];
+    const path = parts[i + 1];
+    if (!status) break;
+    entries.push({ status: status[0], path });
+  }
+  return entries;
+}
+
+export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
+  const git = gitIn(cwd);
+  const entries = parseNameStatusZ(git("diff", "--name-status", "--no-renames", "-z", `${base}...${head}`));
+  const mergeBase = git("merge-base", base, head).trim();
+  const blob = (rev, path) => { try { return git("show", `${rev}:${path}`); } catch { return null; } };
+
+  const files = [];
+  const skipped = [];
+  for (const e of entries) {
+    const c = classifyPath(e.path);
+    if (c.mode === "skip") { if (c.why !== "outside PulseRN") skipped.push({ path: e.path, why: c.why }); continue; }
+    const before = e.status === "A" ? null : blob(mergeBase, e.path);
+    const after = e.status === "D" ? null : blob(head, e.path);
+
+    if (c.mode === "page") {
+      files.push({ status: e.status, path: e.path, form: "page digest", diff: textDiff(before == null ? "" : pageDigest(before), after == null ? "" : pageDigest(after), e.path), full: null });
+    } else if (c.mode === "lockfile") {
+      files.push({ status: e.status, path: e.path, form: "dependency summary", diff: textDiff(before == null ? "" : lockDigest(before), after == null ? "" : lockDigest(after), e.path), full: null });
+    } else {
+      const diff = git("diff", "--no-renames", "--no-ext-diff", "--no-textconv", "-U25", `${base}...${head}`, "--", e.path);
+      files.push({ status: e.status, path: e.path, form: "diff", diff, full: after });
+    }
+  }
+  return { files, skipped };
+}
+
+/* Fits the change into the budget without ever dropping part of the change. */
 export function planContext(files, budget = MAX_PROMPT_CHARS, fixedOverhead = 0) {
   const diffs = files.reduce((n, f) => n + f.diff.length, 0);
   if (diffs + fixedOverhead > budget) {
@@ -89,7 +208,6 @@ export function planContext(files, budget = MAX_PROMPT_CHARS, fixedOverhead = 0)
   }
   let room = budget - fixedOverhead - diffs;
   const planned = files.map((f) => ({ ...f, includeFull: false }));
-  /* Smallest files first: the most context for the least budget. */
   const order = planned
     .map((f, i) => ({ i, len: f.full?.length ?? Infinity }))
     .filter((x) => Number.isFinite(x.len) && x.len <= MAX_FULL_FILE_CHARS)
@@ -142,12 +260,12 @@ export const FINDINGS_SCHEMA = {
   },
 };
 
-export function buildPrompt({ rules, files, excluded, meta }) {
+export function buildPrompt({ rules, files, skipped, meta }) {
   const parts = [];
   parts.push(`You are the adversarial reviewer for PulseRN, an NCLEX-RN exam-preparation platform used by nursing students. The change below was written by a Claude model. You are from a different lab precisely so that you do not share its blind spots. Your job is to find what is actually wrong before it reaches students — not to be agreeable, and not to pad the list.
 
 WHAT COUNTS
-- blocker: wrong clinical or exam content could reach a student; scoring, grading, readiness or ability maths is wrong; data loss or corruption; a security hole (secret exposure, auth bypass, personal data leak); any violation of a NON-NEGOTIABLE rule in the project rules below; a user-facing claim the code does not make true; a test that passes for the wrong reason while covering critical logic.
+- blocker: wrong clinical or exam content could reach a student; scoring, grading, readiness or ability maths is wrong; data loss or corruption; a security hole (secret exposure, auth bypass, personal data leak, a way for a change to bypass this review); any violation of a NON-NEGOTIABLE rule in the project rules below; a user-facing claim the code does not make true; a test that passes for the wrong reason while covering critical logic.
 - major: a real defect on a plausible path; new critical logic with no test that would catch its failure; behaviour that contradicts its own comments or documentation.
 - minor: maintainability or clarity problems that make a future defect likely.
 
@@ -155,17 +273,22 @@ HOW TO REPORT
 - Every finding names a file and, where possible, a line in the post-change file. State the concrete failure: what input or state, and what goes wrong.
 - No style preferences, no restating what the code does, no generic advice. If the code is correct, say so and return no findings for it.
 - If you are unsure, say exactly what you could not verify and lower the confidence — do not inflate severity to be safe, and do not omit a real concern to be polite.
-- Check the tests as hard as the code: a test that cannot fail is worse than no test, because it reports safety that does not exist.`);
+- Check the tests as hard as the code: a test that cannot fail is worse than no test, because it reports safety that does not exist.
+
+FORMS YOU WILL SEE
+- "diff": a normal unified diff, sometimes followed by the whole file after the change.
+- "page digest": a generated public page reduced to one line per visible text block, script, link, meta tag and event handler, diffed before/after. Judge what a reader sees and what a browser would run.
+- "dependency summary": the lockfile reduced to package@version, source host and integrity prefix, diffed before/after.`);
 
   parts.push(`\n=== PROJECT RULES (the standard you review against) ===\n${rules}`);
 
   parts.push(`\n=== CHANGE ===\nbase ${meta.base}  head ${meta.head}${meta.pr ? `  PR #${meta.pr}` : ""}\n${files.length} file(s) under review.`);
-  if (excluded.length) {
-    parts.push(`Excluded from this review (named so you know they changed): ${excluded.map((e) => `${e.path} [${e.why}]`).join("; ")}`);
+  if (skipped.length) {
+    parts.push(`Not sent (named so you know they changed): ${skipped.map((e) => `${e.path} [${e.why}]`).join("; ")}`);
   }
 
   for (const f of files) {
-    parts.push(`\n----- ${f.status} ${f.path} -----\n--- diff ---\n${f.diff || "(no textual diff)"}`);
+    parts.push(`\n----- ${f.status} ${f.path} (${f.form ?? "diff"}) -----\n${f.diff || "(no textual change)"}`);
     if (f.includeFull && f.full != null) parts.push(`--- full file after the change ---\n${f.full}`);
     else if (f.full != null) parts.push(`(full file not attached: over the per-file context limit; review from the diff)`);
   }
@@ -176,8 +299,6 @@ HOW TO REPORT
    What the answer means
    --------------------------------------------------------------------------- */
 
-/* Rejects anything that does not match the schema, rather than coercing it.
-   A malformed finding silently dropped is a defect silently waved through. */
 export function validateResult(obj) {
   if (!obj || typeof obj !== "object") throw new Error("review result is not an object");
   if (typeof obj.assessment !== "string") throw new Error("review result has no assessment");
@@ -191,7 +312,6 @@ export function validateResult(obj) {
   return obj;
 }
 
-/* The verdict is arithmetic over severities. The model's prose does not vote. */
 export function verdictFor(findings) {
   const counts = Object.fromEntries(SEVERITIES.map((s) => [s, 0]));
   for (const f of findings) counts[f.severity] += 1;
@@ -207,10 +327,10 @@ export function renderMarkdown(r) {
   lines.push("");
   lines.push(`| | |`);
   lines.push(`|---|---|`);
-  lines.push(`| Reviewer | \`${r.model}\`${r.mode ? ` · ${r.mode === "bootstrap" ? "**bootstrap — this PR was reviewed by its own copy of the reviewer**" : r.mode === "trusted" ? "run from the base branch" : r.mode}` : ""} |`);
+  lines.push(`| Reviewer | \`${r.model}\`${r.mode ? ` · ${r.mode === "trusted" ? "run from the base branch; the change was read as data" : r.mode}` : ""} |`);
   lines.push(`| Change | \`${r.meta.base.slice(0, 12)}..${r.meta.head.slice(0, 12)}\`${r.meta.pr ? ` · PR #${r.meta.pr}` : ""} |`);
   lines.push(`| Reviewed at | ${r.reviewedAt} |`);
-  lines.push(`| Files | ${r.filesReviewed.length} reviewed${r.excluded.length ? `, ${r.excluded.length} excluded` : ""} |`);
+  lines.push(`| Files | ${r.filesReviewed.length} reviewed${r.skipped?.length ? `, ${r.skipped.length} not sent` : ""} |`);
   lines.push(`| Cost | ${r.usage?.costUsd != null ? `$${r.usage.costUsd.toFixed(4)}` : "unknown"}${r.usage?.promptTokens != null ? ` (${r.usage.promptTokens.toLocaleString()} in / ${(r.usage.completionTokens ?? 0).toLocaleString()} out)` : ""} |`);
   if (r.counts) lines.push(`| Findings | ${r.counts.blocker} blocker · ${r.counts.major} major · ${r.counts.minor} minor |`);
   lines.push("");
@@ -229,8 +349,7 @@ export function renderMarkdown(r) {
   if (r.findings.length) {
     lines.push(`## Findings`);
     lines.push("");
-    const sorted = [...r.findings].sort((a, b) => rank(a.severity) - rank(b.severity));
-    sorted.forEach((f, i) => {
+    [...r.findings].sort((a, b) => rank(a.severity) - rank(b.severity)).forEach((f, i) => {
       lines.push(`### ${i + 1}. [${f.severity}] ${f.title}`);
       lines.push("");
       lines.push(`- **Where:** \`${f.file}${f.line != null ? `:${f.line}` : ""}\` · confidence ${f.confidence}`);
@@ -246,11 +365,11 @@ export function renderMarkdown(r) {
   lines.push(`## Files reviewed`);
   lines.push("");
   for (const f of r.filesReviewed) lines.push(`- \`${f}\``);
-  if (r.excluded.length) {
+  if (r.skipped?.length) {
     lines.push("");
-    lines.push(`## Excluded`);
+    lines.push(`## Not sent`);
     lines.push("");
-    for (const e of r.excluded) lines.push(`- \`${e.path}\` — ${esc(e.why)}`);
+    for (const e of r.skipped) lines.push(`- \`${e.path}\` — ${esc(e.why)}`);
   }
   return lines.join("\n") + "\n";
 }
@@ -262,75 +381,40 @@ export const reportBaseName = ({ head, pr, reviewedAt }) =>
    Running it
    --------------------------------------------------------------------------- */
 
-const git = (...args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
-
-function collectChanges(base, head) {
-  const raw = git("diff", "--name-status", "--no-renames", `${base}...${head}`).trim();
-  const entries = raw ? raw.split("\n").map((l) => { const [status, ...p] = l.split("\t"); return { status, path: p.join("\t") }; }) : [];
-  const files = [];
-  const excluded = [];
-  for (const e of entries) {
-    const c = classifyPath(e.path);
-    if (!c.include) { if (c.why !== "outside PulseRN") excluded.push({ path: e.path, why: c.why }); continue; }
-    const diff = git("diff", "--no-renames", "-U25", `${base}...${head}`, "--", e.path);
-    let full = null;
-    if (e.status !== "D") { try { full = git("show", `${head}:${e.path}`); } catch { full = null; } }
-    files.push({ status: e.status, path: e.path, diff, full });
-  }
-  return { files, excluded };
-}
-
-function arg(name, fallback = null) {
-  const i = process.argv.indexOf(name);
-  return i >= 0 ? process.argv[i + 1] : fallback;
-}
-
-async function main() {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const base = arg("--base");
-  const head = arg("--head");
-  const pr = arg("--pr");
-  const outDir = arg("--out", join(here, "..", "reports", "astra"));
-  if (!base || !head) { console.error("usage: astra-review.mjs --base <sha> --head <sha> [--pr <n>] [--out <dir>]"); process.exit(2); }
-
-  const reviewedAt = new Date().toISOString();
+/* The whole review as one function with its paid call injectable, so the
+   checkpoint-before-spending guarantee can be tested with a call that never
+   returns — the case a cancelled or timed-out CI run produces. */
+export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd = process.cwd(), mode = "local", now = () => new Date() }, { callModel = llmCall } = {}) {
+  const git = gitIn(cwd);
+  const reviewedAt = now().toISOString();
   const meta = { base: git("rev-parse", base).trim(), head: git("rev-parse", head).trim(), pr };
-  /* Which copy of the reviewer ran. "trusted" means the base branch's
-     reviewer judged this change; "bootstrap" means the PR was judged by its own
-     copy because the base had none yet, and the report must say so. */
-  const mode = process.env.ASTRA_REVIEW_MODE || "local";
-  const report = { model: REVIEW_MODEL, mode, meta, reviewedAt, filesReviewed: [], excluded: [], findings: [], usage: null, error: null };
+  const report = { model: REVIEW_MODEL, mode, meta, reviewedAt, filesReviewed: [], skipped: [], findings: [], usage: null, error: null };
+  const name = reportBaseName({ head: meta.head, pr, reviewedAt });
 
   const save = () => {
     mkdirSync(outDir, { recursive: true });
-    const name = reportBaseName({ head: meta.head, pr, reviewedAt });
     writeFileSync(join(outDir, `${name}.md`), renderMarkdown(report));
     writeFileSync(join(outDir, `${name}.raw.json`), JSON.stringify(report, null, 2) + "\n");
-    console.log(`Report: ${join(outDir, `${name}.md`)}`);
-    return name;
+    return join(outDir, `${name}.md`);
   };
 
   try {
     assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, REVIEW_MODEL);
-
-    const rulesPath = join(here, "..", "CLAUDE.md");
     const rules = existsSync(rulesPath) ? readFileSync(rulesPath, "utf8") : "(project rules file not found)";
-    const { files, excluded } = collectChanges(meta.base, meta.head);
-    report.excluded = excluded;
+    const { files, skipped } = collectChanges(meta.base, meta.head, { cwd });
+    report.skipped = skipped;
+    report.filesReviewed = files.map((f) => f.path);
 
     if (!files.length) {
       report.assessment = "No PulseRN files changed in this range; nothing to review.";
-      Object.assign(report, verdictFor([]), { verdict: "PASS" });
+      Object.assign(report, verdictFor([]));
       save();
-      return 0;
+      return { code: 0, report };
     }
 
-    const overhead = buildPrompt({ rules, files: [], excluded, meta }).length;
+    const overhead = buildPrompt({ rules, files: [], skipped, meta }).length;
     const plan = planContext(files, MAX_PROMPT_CHARS, overhead);
-    report.filesReviewed = files.map((f) => f.path);
     if (!plan.ok) {
-      /* Recorded as a blocker finding so the verdict maths stays the single
-         source of truth: a review that could not see everything cannot pass. */
       report.findings = [{
         severity: "blocker", file: "(whole change)", line: null, title: "Change too large to review in full",
         problem: `Not reviewed: ${plan.reason}.`,
@@ -341,18 +425,18 @@ async function main() {
       report.assessment = "Refused to review a partial change as if it were the whole change.";
       Object.assign(report, verdictFor(report.findings));
       save();
-      return 1;
+      return { code: 1, report };
     }
 
-    const prompt = buildPrompt({ rules, files: plan.files, excluded, meta });
-    console.log(`Reviewing ${files.length} file(s), ${prompt.length.toLocaleString()} chars, with ${REVIEW_MODEL}…`);
-    const res = await llmCall({
-      model: REVIEW_MODEL,
-      prompt,
-      maxTokens: 64000,
-      reasoningEffort: "high",
-      responseFormat: FINDINGS_SCHEMA,
-    });
+    /* Checkpoint BEFORE spending. If this process is killed during the paid
+       call — a cancelled run, a timeout, a lost runner — this is the report
+       that survives, and it says plainly that the review did not finish. */
+    report.error = "The review was started but did not finish: the run was stopped while waiting for Astra. Recorded as a failure.";
+    report.verdict = "FAIL";
+    save();
+
+    const prompt = buildPrompt({ rules, files: plan.files, skipped, meta });
+    const res = await callModel({ model: REVIEW_MODEL, prompt, maxTokens: 64000, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
     report.usage = res.usage;
     report.model = res.model || REVIEW_MODEL;
 
@@ -363,22 +447,40 @@ async function main() {
       report.rawAnswer = res.text;
       report.verdict = "FAIL";
       save();
-      return 2;
+      return { code: 2, report };
     }
 
+    report.error = null;
     report.assessment = parsed.assessment;
     report.findings = parsed.findings;
     Object.assign(report, verdictFor(parsed.findings));
     save();
-    return report.verdict === "PASS" ? 0 : 1;
+    return { code: report.verdict === "PASS" ? 0 : 1, report };
   } catch (e) {
     report.error = `The review could not be completed: ${e.message}`;
     report.verdict = "FAIL";
     try { save(); } catch (se) { console.error(`Could not save the report either: ${se.message}`); }
-    return 2;
+    return { code: 2, report };
   }
 }
 
+function arg(name, fallback = null) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : fallback;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().then((code) => process.exit(code), (e) => { console.error(e); process.exit(2); });
+  const here = dirname(fileURLToPath(import.meta.url));
+  const base = arg("--base");
+  const head = arg("--head");
+  if (!base || !head) { console.error("usage: astra-review.mjs --base <sha> --head <sha> [--pr <n>] [--out <dir>]"); process.exit(2); }
+  runReview({
+    base, head, pr: arg("--pr"),
+    outDir: arg("--out", join(here, "..", "reports", "astra")),
+    rulesPath: join(here, "..", "CLAUDE.md"),
+    mode: process.env.ASTRA_REVIEW_MODE || "local",
+  }).then(({ code, report }) => {
+    console.log(`Astra review: ${report.verdict}${report.counts ? ` (${report.counts.blocker} blocker, ${report.counts.major} major, ${report.counts.minor} minor)` : ""}`);
+    process.exit(code);
+  }, (e) => { console.error(e); process.exit(2); });
 }
