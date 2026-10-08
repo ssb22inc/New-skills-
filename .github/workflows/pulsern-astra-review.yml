@@ -1,0 +1,159 @@
+name: pulsern-astra-review
+
+# GPT Astra reviews every PulseRN pull request.
+#
+# Owner's standing instructions this enforces:
+#   - all AI review and adversarial action is GPT Astra's, never same-family;
+#   - every paid review is kept, whatever its verdict;
+#   - no cross-contamination: this job reads and judges PulseRN files only.
+#
+# TRUST. The reviewer, and the project rules it judges against, run from the
+# BASE branch. Only the code under review comes from the pull request. If the
+# reviewer ran from the PR, a PR could weaken the reviewer and then be passed
+# by its own weakened copy. The single exception is the bootstrap PR that
+# introduces this file, when the base has no reviewer yet; that report is
+# marked as such.
+#
+# RECORD. Each report is committed to the `pulsern-astra-reviews` branch —
+# PASS, FAIL, or a run that broke — and also uploaded as an artifact. Keeping
+# reports off the PR branch means the author's branch is never rewritten under
+# them, and a review survives even if its PR is closed unmerged.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "pulsern/**"
+      - "!pulsern/reports/astra/**"
+      - ".github/workflows/pulsern-*.yml"
+
+permissions:
+  contents: write   # to commit the report to the reviews branch
+
+# One review per PR at a time; a newer push supersedes an older review.
+concurrency:
+  group: pulsern-astra-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Pull requests from forks get no secrets, so there is nothing to review
+    # with. Skipped rather than failed, and visible as skipped.
+    if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the code under review (full history for the diff)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: target
+          fetch-depth: 0
+
+      - name: Check out the trusted reviewer from the base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Choose the reviewer
+        id: pick
+        run: |
+          if [ -f trusted/pulsern/ops/astra-review.mjs ]; then
+            echo "script=$GITHUB_WORKSPACE/trusted/pulsern/ops/astra-review.mjs" >> "$GITHUB_OUTPUT"
+            echo "mode=trusted" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Bootstrap: the base branch has no reviewer yet, so this PR is reviewed by its own copy."
+            echo "script=$GITHUB_WORKSPACE/target/pulsern/ops/astra-review.mjs" >> "$GITHUB_OUTPUT"
+            echo "mode=bootstrap" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Astra review
+        id: review
+        working-directory: target
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ASTRA_REVIEW_MODE: ${{ steps.pick.outputs.mode }}
+        run: |
+          set +e
+          node "${{ steps.pick.outputs.script }}" \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            --out "$RUNNER_TEMP/astra"
+          rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          if ls "$RUNNER_TEMP"/astra/*.md >/dev/null 2>&1; then echo "saved=true" >> "$GITHUB_OUTPUT"; fi
+          exit 0
+
+      - name: Show the report in the run summary
+        if: always() && steps.review.outputs.saved == 'true'
+        run: cat "$RUNNER_TEMP"/astra/*.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the report as an artifact
+        if: always() && steps.review.outputs.saved == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: astra-review-pr${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/astra/
+          retention-days: 90
+
+      # Every paid review is kept, PASS or FAIL. Runs even when the review
+      # failed, and retries because several PRs may be saving at once.
+      - name: Commit the report to the reviews branch
+        if: always() && steps.review.outputs.saved == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)"
+          URL="https://github.com/$REPO.git"
+          BRANCH=pulsern-astra-reviews
+          mkdir reviews && cd reviews
+          git init -q
+          git config user.name "pulsern-astra-review"
+          git config user.email "pulsern-astra-review@users.noreply.github.com"
+          git remote add origin "$URL"
+          # Success is reported ONLY when a push has actually landed. An
+          # earlier draft exited 0 on "nothing new to commit" during a retry,
+          # which would have claimed a save that never reached GitHub.
+          for attempt in 1 2 3 4 5; do
+            if git -c http.extraheader="$AUTH" fetch -q --depth 1 origin "$BRANCH" 2>/dev/null; then
+              # Rebuild on the latest remote tip; our earlier local commit, if
+              # any, is replaced by a fresh one on top of it.
+              git checkout -q -B "$BRANCH" FETCH_HEAD
+            elif ! git rev-parse --verify -q "refs/heads/$BRANCH" >/dev/null; then
+              git checkout -q --orphan "$BRANCH"
+            fi
+            mkdir -p reports
+            cp "$RUNNER_TEMP"/astra/* reports/
+            git add reports
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Astra review: PR #${{ github.event.pull_request.number }} @ ${{ github.event.pull_request.head.sha }} (${{ steps.pick.outputs.mode }}, rc=${{ steps.review.outputs.rc }})"
+            fi
+            if git -c http.extraheader="$AUTH" push -q origin "HEAD:$BRANCH"; then
+              echo "Saved to $BRANCH"
+              exit 0
+            fi
+            echo "push did not land (likely raced with another review); retrying ($attempt/5)"
+            sleep $((attempt * 3))
+          done
+          echo "::error::Could not save the review report after 5 attempts. It is still in the run's artifacts."
+          exit 1
+
+      # Last, so a red check never stops the report from being saved.
+      - name: Verdict
+        if: always()
+        run: |
+          rc="${{ steps.review.outputs.rc }}"
+          case "$rc" in
+            0) echo "Astra: PASS" ;;
+            1) echo "::error::Astra: FAIL — see the report in the run summary"; exit 1 ;;
+            *) echo "::error::Astra review did not complete (rc=${rc:-none}) — recorded as a failure"; exit 1 ;;
+          esac

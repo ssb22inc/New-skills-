@@ -99,4 +99,55 @@ describe("workflow placement", () => {
     expect(workflow).toContain("A successful recovery will close this incident automatically.");
     expect(workflow).not.toContain("The scheduled content-factory run failed.");
   });
+
+  /* The Astra review is only worth something if a PR cannot weaken it. These
+     pin the properties that make it trustworthy, so a later edit that quietly
+     removes one fails here instead of in production. */
+  describe("Astra review workflow", () => {
+    const wf = () => readFileSync(join(LIVE_DIR, "pulsern-astra-review.yml"), "utf8");
+
+    it("is live at the repository root", () => {
+      expect(readdirSync(LIVE_DIR)).toContain("pulsern-astra-review.yml");
+    });
+
+    it("runs the reviewer from the BASE branch, not from the PR it judges", () => {
+      const w = wf();
+      expect(w).toContain("ref: ${{ github.event.pull_request.base.sha }}");
+      expect(w).toContain("trusted/pulsern/ops/astra-review.mjs");
+      expect(w).toMatch(/mode=bootstrap/);
+    });
+
+    it("keeps every report, including on FAIL", () => {
+      const w = wf();
+      const save = w.slice(w.indexOf("- name: Commit the report to the reviews branch"));
+      expect(save.split("\n").slice(0, 3).join("\n")).toContain("if: always()");
+      // the verdict step comes after the save, so a red check never skips it
+      expect(w.indexOf("- name: Verdict")).toBeGreaterThan(w.indexOf("- name: Commit the report"));
+    });
+
+    it("only claims a save when a push actually landed", () => {
+      const w = wf();
+      expect(w).not.toMatch(/nothing new to commit"; exit 0/);
+      expect(w).toMatch(/push -q origin "HEAD:\$BRANCH"; then\s+echo "Saved to/);
+    });
+
+    /* Reads the actual trigger paths. An earlier draft of this test used a
+       regex that could never match, so it passed whatever the file said. */
+    it("triggers only on PulseRN paths", () => {
+      const w = wf();
+      const block = w.slice(w.indexOf("    paths:"), w.indexOf("\npermissions:"));
+      const paths = [...block.matchAll(/^\s+- "([^"]+)"$/gm)].map((m) => m[1]);
+      expect(paths.length).toBeGreaterThan(0);
+      for (const p of paths) {
+        expect(p, `trigger path ${p} reaches outside PulseRN`).toMatch(/^!?pulsern\/|^\.github\/workflows\/pulsern-/);
+      }
+    });
+
+    it("fails the check when Astra fails or the review does not finish", () => {
+      const w = wf();
+      expect(w).toMatch(/1\) echo "::error::Astra: FAIL[^"]*"; exit 1/);
+      expect(w).toMatch(/\*\) echo "::error::Astra review did not complete[^"]*"; exit 1/);
+    });
+  });
 });
+
