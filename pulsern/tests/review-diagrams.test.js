@@ -463,3 +463,63 @@ describe("a review covers everything the drawing depends on", () => {
     rmSync(root, { recursive: true, force: true });
   });
 });
+
+/* Astra, PR #134 review, round 30: the renderer never runs the tree's Vite
+   config, so a config that makes production load other modules — an alias
+   to an alternate kit, say — would leave the reviewed graph and the
+   approval key unchanged. Such a config is refused. */
+describe("the build resolves modules the way the review does", () => {
+  const { mkdtempSync, writeFileSync, rmSync, cpSync } = require("node:fs");
+  const { join } = require("node:path");
+  const { tmpdir } = require("node:os");
+  const withConfig = (config, pkg = null) => {
+    const root = mkdtempSync(join(tmpdir(), "vite-cfg-"));
+    cpSync("src", join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "package.json"), JSON.stringify(pkg ?? JSON.parse(require("node:fs").readFileSync("package.json", "utf8"))));
+    if (config != null) writeFileSync(join(root, "vite.config.js"), config);
+    return root;
+  };
+  it("accepts this project's own config", async () => {
+    const { buildConfigProblems } = await import("../ops/diagram-attest.mjs");
+    expect(buildConfigProblems(".")).toEqual([]);
+  });
+  it.each([
+    ["an alias to an alternate kit", 'import { defineConfig } from "vite";\nexport default defineConfig({ resolve: { alias: { "./kit.jsx": "/src/clinical/alternate-kit.jsx" } } });', /"resolve"|"alias"/],
+    ["a plugin that resolves imports", 'import { defineConfig } from "vite";\nfunction swap() { return { name: "swap", resolveId(id) { return id.endsWith("kit.jsx") ? "/src/alt.jsx" : null; } }; }\nexport default defineConfig({ plugins: [swap()] });', /"resolveId"/],
+    ["a plugin that rewrites code", 'import { defineConfig } from "vite";\nfunction rw() { return { name: "rw", transform(code) { return code.replace("7.35", "7.2"); } }; }\nexport default defineConfig({ plugins: [rw()] });', /"transform"/],
+    ["a third-party plugin", 'import { defineConfig } from "vite";\nimport paths from "vite-tsconfig-paths";\nexport default defineConfig({ plugins: [paths()] });', /imports vite-tsconfig-paths|plugin other than/],
+    ["a build-time replacement of code", 'import { defineConfig } from "vite";\nexport default defineConfig({ define: { ABG_LOW: "7.2" } });', /defines ABG_LOW/],
+    ["a spread hiding settings", 'import { defineConfig } from "vite";\nconst more = { resolve: {} };\nexport default defineConfig({ ...more });', /spreads|"resolve"/],
+  ])("refuses %s", async (_, config, why) => {
+    const { buildConfigProblems, sourceKey, diagramSources } = await import("../ops/diagram-attest.mjs");
+    const root = withConfig(config);
+    try {
+      expect(buildConfigProblems(root).join("; ")).toMatch(why);
+      expect(() => sourceKey(root)).toThrow(/could make production load other modules/);
+      expect(() => diagramSources("abg", root)).toThrow(/could make production load other modules/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  it("refuses package-level remapping and other config files", async () => {
+    const { buildConfigProblems } = await import("../ops/diagram-attest.mjs");
+    const pkg = JSON.parse(require("node:fs").readFileSync("package.json", "utf8"));
+    const a = withConfig(null, { ...pkg, browser: { "./src/diagrams/kit.jsx": "./src/alt.jsx" } });
+    const b = withConfig(null);
+    writeFileSync(join(b, "vite.config.ts"), "export default {};\n");
+    try {
+      expect(buildConfigProblems(a).join()).toMatch(/"browser" field/);
+      expect(buildConfigProblems(b).join()).toMatch(/only vite\.config\.js/);
+    } finally { rmSync(a, { recursive: true, force: true }); rmSync(b, { recursive: true, force: true }); }
+  });
+  it("a config or dependency change invalidates every approval", async () => {
+    const { sourceKey } = await import("../ops/diagram-attest.mjs");
+    const root = withConfig(require("node:fs").readFileSync("vite.config.js", "utf8"));
+    try {
+      const k0 = sourceKey(root);
+      writeFileSync(join(root, "vite.config.js"), require("node:fs").readFileSync("vite.config.js", "utf8") + "\n// changed\n");
+      const k1 = sourceKey(root);
+      expect(k1).not.toBe(k0);
+      writeFileSync(join(root, "package-lock.json"), "{}\n");
+      expect(sourceKey(root)).not.toBe(k1);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+});

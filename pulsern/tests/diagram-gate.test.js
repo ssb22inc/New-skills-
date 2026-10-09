@@ -249,23 +249,70 @@ describe("the pairing CLI under plain Node", () => {
        a "held back" message that disappears once every diagram passes). */
     expect(out).toContain("Reading practice questions…");
   }, 120_000);
-  /* Round 29: a dry run signs nothing, so it must not need the private
-     key — and it changes no record. A real run without the private key is
-     refused before it reads anything. */
-  it("dry-runs with only the public key, or none, and changes no record", () => {
-    const files = ["src/diagrams/item-map.json", "reports/diagram-map/decisions.json"];
-    const before = files.map((f) => (existsSync(f) ? readFileSync(f, "utf8") : null));
-    for (const env of [{ PULSERN_ATTEST_PUBLIC_KEY: KEYS.env.PULSERN_ATTEST_PUBLIC_KEY }, {}]) {
-      const e = { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9", ...env };
-      if (!env.PULSERN_ATTEST_PUBLIC_KEY) delete e.PULSERN_ATTEST_PUBLIC_KEY;
-      delete e.PULSERN_ATTEST_PRIVATE_KEY;
-      const r = spawnSync(process.execPath, ["ops/map-diagrams.mjs", "--dry-run"], { encoding: "utf8", timeout: 90_000, env: e });
-      const out = `${r.stdout}\n${r.stderr}`;
-      expect(out).not.toMatch(/PRIVATE_KEY is not set/);
-      expect(out).toContain("Reading practice questions…");
-      if (!env.PULSERN_ATTEST_PUBLIC_KEY) expect(out).toMatch(/cannot be checked/);
+  /* Rounds 29–30: a dry run signs nothing, so it must not need the
+     private key — and it must change no record. Run end to end on a
+     populated checkout against a bank that answers, so the run really
+     reaches the point where it would save. */
+  it("dry-runs with only the public key, or none, to completion, and changes no record", async () => {
+    const { createServer } = await import("node:http");
+    const { execFileSync } = await import("node:child_process");
+    const { mkdirSync } = await import("node:fs");
+    const { DIAGRAMS } = await import("../src/diagrams/index.js");
+    const { fingerprint } = await import("../src/diagrams/fingerprint.js");
+    const bankQ = { id: 7, stem: "pH 7.30, PaCO2 55, HCO3 24. Interpret the ABG.", options: ["a", "b"], answer: "a", rationale: "r" };
+    const server = createServer((req, res) => {
+      const u = new URL(req.url, "http://x");
+      const offset = Number(u.searchParams.get("offset") ?? (req.headers.range ?? "0-").split("-")[0]);
+      const rows = offset === 0 ? [bankQ] : [];
+      res.writeHead(200, { "content-type": "application/json", "content-range": `${offset}-${offset + rows.length - 1}/1` });
+      res.end(JSON.stringify(rows));
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${server.address().port}`;
+    const root = mkdtempSync(join(tmpdir(), "map-dry-"));
+    const into = join(root, "branch");
+    try {
+      mkdirSync(into);
+      for (const f of ["src", "package.json", "package-lock.json", "vite.config.js"]) cpSync(f, join(into, f), { recursive: true });
+      const key = sourceKey(into), steps = stepInventory(into);
+      const raw = Object.values(DIAGRAMS).map((d) => JSON.parse(JSON.stringify({ id: d.id, title: d.title, facts: d.facts, steps: d.steps.map((s) => ({ key: s.key, dynamic: s.dynamic === true ? true : undefined, caption: s.caption, narration: s.narration })) })));
+      const abg = raw.find((d) => d.id === "abg");
+      const index = { abg: signed("abg", { key: "rk", sourceKey: key, frames: frameIds(expectedFrames(steps.abg)), verdict: "PASS", completed: true, reviewedAt: "t", model: "m", report: "r.md" }) };
+      const extracted = { ph: 7.3, paco2: 55, hco3: 24 };
+      const dec = { attach: true, values_confirmed: true, extracted, itemHash: itemHash(bankQ), diagramHash: diagramHash(abg), reviewedAt: "t", model: "m", fp: fingerprint(bankQ) };
+      const decisions = { "7:abg": signedDecision("7:abg", dec) };
+      const map = signMap(buildItemMap(decisions, { abg }, key, new Map([[7, bankQ]])), KEYS.signer);
+      expect(Object.keys(map.pairs)).toEqual(["7"]);
+      mkdirSync(join(into, "reports/diagram-review"), { recursive: true });
+      mkdirSync(join(into, "reports/diagram-map"), { recursive: true });
+      writeFileSync(join(into, "reports/diagram-review/index.json"), JSON.stringify(index));
+      writeFileSync(join(into, "reports/diagram-map/decisions.json"), JSON.stringify(decisions));
+      writeFileSync(join(into, "src/diagrams/item-map.json"), JSON.stringify(map) + "\n");
+      const git = (...x) => execFileSync("git", x, { cwd: into, encoding: "utf8" }).trim();
+      git("init", "-q"); git("add", "-A"); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base");
+      const plan = join(root, "plan.json");
+      writeFileSync(plan, JSON.stringify({ kind: "diagram-map", commit: git("rev-parse", "HEAD"), diagrams: raw, proposals: { "7": [{ d: "abg", p: extracted }] } }));
+      const records = ["src/diagrams/item-map.json", "reports/diagram-map/decisions.json"].map((f) => join(into, f));
+      const before = records.map((f) => readFileSync(f, "utf8"));
+      for (const keys of [{ PULSERN_ATTEST_PUBLIC_KEY: KEYS.env.PULSERN_ATTEST_PUBLIC_KEY }, {}]) {
+        const env = { ...process.env, PULSERN_SUPABASE_URL: url, ...keys };
+        if (!keys.PULSERN_ATTEST_PUBLIC_KEY) delete env.PULSERN_ATTEST_PUBLIC_KEY;
+        delete env.PULSERN_ATTEST_PRIVATE_KEY;
+        const r = await new Promise((done) => {
+          const c = require("node:child_process").spawn(process.execPath, [join(process.cwd(), "ops/map-diagrams.mjs"), "--prepared", plan, "--into", into, "--dry-run"], { env });
+          let out = ""; c.stdout.on("data", (b) => (out += b)); c.stderr.on("data", (b) => (out += b));
+          c.on("close", (code) => done({ code, out }));
+        });
+        expect(r.code, r.out).toBe(0);
+        expect(r.out).toContain("Read 1 practice questions.");
+        expect(r.out).toContain("Dry run: nothing sent.");
+        if (!keys.PULSERN_ATTEST_PUBLIC_KEY) expect(r.out).toMatch(/cannot be checked/);
+        expect(records.map((f) => readFileSync(f, "utf8")), "a dry run leaves the map and decisions byte-identical").toEqual(before);
+      }
+    } finally {
+      server.close();
+      rmSync(root, { recursive: true, force: true });
     }
-    expect(files.map((f) => (existsSync(f) ? readFileSync(f, "utf8") : null))).toEqual(before);
   }, 240_000);
   it("refuses a real run without the private key, before reading anything", () => {
     const env = { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9", PULSERN_ATTEST_PUBLIC_KEY: KEYS.env.PULSERN_ATTEST_PUBLIC_KEY };

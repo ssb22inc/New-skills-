@@ -164,6 +164,7 @@ export function moduleClosure(entries, root = ".") {
 }
 
 export function diagramSources(id, root = ".") {
+  requireSupportedBuild(root);
   /* The registry the app and the renderer actually load is followed too,
      with everything it imports: a wrapper or helper added there changes
      what students see without touching the diagram's own file (Astra,
@@ -171,6 +172,57 @@ export function diagramSources(id, root = ".") {
   const parts = [moduleClosure([`src/diagrams/${id}.jsx`, "src/diagrams/index.js", "src/explainer.jsx"], root)];
   parts.push(`// ===== src/App.jsx (theme tokens) =====\n${themeBlock(readFileSync(join(root, "src/App.jsx"), "utf8"))}`);
   return parts.join("\n\n");
+}
+
+/* Does the production build resolve modules the way this walk and the
+   trusted renderer do? The renderer never runs the tree's Vite config, so
+   anything in it that could make production load OTHER modules than the
+   ones reviewed — an alias, a plugin that resolves, loads or transforms
+   code, an identifier replaced at build time, a package "browser" or
+   "imports" mapping — is refused rather than trusted (Astra, PR #134
+   review, round 30). Read from the syntax tree; nothing is run. */
+const CONFIG_FILES = ["vite.config.js", "vite.config.mjs", "vite.config.cjs", "vite.config.ts", "vite.config.mts", "vite.config.cts"];
+const CONFIG_IMPORTS = new Set(["vite", "@vitejs/plugin-react", "node:url", "./ops/search-verification.mjs"]);
+const RESOLUTION_KEYS = new Set(["resolve", "alias", "resolveId", "load", "transform", "renderChunk", "generateBundle", "config", "configResolved", "esbuild", "oxc", "optimizeDeps", "ssr", "worker"]);
+export function buildConfigProblems(root = ".") {
+  const out = [];
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  for (const k of ["browser", "imports"]) if (k in pkg) out.push(`package.json has a "${k}" field, which remaps modules`);
+  const present = CONFIG_FILES.filter((f) => existsSync(join(root, f)));
+  if (present.some((f) => f !== "vite.config.js")) out.push(`only vite.config.js is supported, found ${present.join(", ")}`);
+  if (!present.includes("vite.config.js")) return out;
+  const text = readFileSync(join(root, "vite.config.js"), "utf8");
+  let ast;
+  try { ast = parseAst(text, { lang: "js" }); } catch (e) { return [...out, `vite.config.js could not be parsed (${String(e.message).split("\n")[0]})`]; }
+  const key = (p) => (p?.type === "Property" && !p.computed ? (p.key.type === "Identifier" ? p.key.name : p.key.type === "Literal" ? String(p.key.value) : null) : null);
+  const walk = (n) => {
+    if (!n || typeof n !== "object") return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (n.type === "ImportDeclaration" && !CONFIG_IMPORTS.has(n.source.value)) out.push(`vite.config.js imports ${n.source.value}`);
+    if (n.type === "ImportExpression" || (n.type === "CallExpression" && n.callee?.name === "require")) out.push("vite.config.js loads a module dynamically");
+    if (n.type === "Property" && n.computed) out.push("vite.config.js has a computed property name");
+    if (n.type === "SpreadElement") out.push("vite.config.js spreads an object or array");
+    const k = key(n);
+    if (k && RESOLUTION_KEYS.has(k)) out.push(`vite.config.js sets "${k}", which can change which modules are built`);
+    if (k === "define" && n.value?.type === "ObjectExpression") {
+      for (const d of n.value.properties) if (!/^import\.meta\.env\./.test(key(d) ?? "")) out.push(`vite.config.js defines ${key(d) ?? "a computed name"}, which replaces code at build time`);
+    }
+    if (k === "plugins" && n.value?.type === "ArrayExpression") {
+      for (const el of n.value.elements) {
+        const name = el?.type === "CallExpression" && el.callee.type === "Identifier" ? el.callee.name : null;
+        const local = name && ast.body.some((b) => b.type === "FunctionDeclaration" && b.id?.name === name);
+        const fromReact = name && ast.body.some((b) => b.type === "ImportDeclaration" && b.source.value === "@vitejs/plugin-react" && b.specifiers.some((sp) => sp.local.name === name));
+        if (!local && !fromReact) out.push("vite.config.js uses a plugin other than react() or one defined in the file");
+      }
+    }
+    for (const c of Object.keys(n)) if (c !== "parent") walk(n[c]);
+  };
+  walk(ast);
+  return [...new Set(out)];
+}
+function requireSupportedBuild(root) {
+  const p = buildConfigProblems(root);
+  if (p.length) throw new Error(`the build configuration could make production load other modules than the ones reviewed — refusing: ${p.join("; ")}`);
 }
 
 /* The diagrams: every .jsx under src/diagrams except the drawing kit. */
@@ -221,7 +273,13 @@ export function stepInventory(root = ".") {
 }
 
 export function sourceKey(root = ".") {
+  requireSupportedBuild(root);
   const h = createHash("sha256");
+  /* The build's own inputs: its config and the exact dependencies it
+     installs (round 30). */
+  for (const f of ["vite.config.js", "package.json", "package-lock.json"]) {
+    h.update(`\0build:${f}\0`).update(existsSync(join(root, f)) ? readFileSync(join(root, f)) : "(absent)");
+  }
   const dir = join(root, "src/diagrams");
   for (const f of readdirSync(dir).filter((f) => /\.(jsx?|json)$/.test(f) && !NOT_DRAWING.has(f)).sort()) {
     h.update(`\0${f}\0`).update(readFileSync(join(dir, f)));
