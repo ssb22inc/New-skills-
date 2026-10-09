@@ -6,7 +6,7 @@
    longer applies and the pairing is reviewed again. Nothing else
    invalidates it, so a re-run never pays twice for the same question. */
 import { createHash } from "node:crypto";
-import { diagramFp } from "../src/diagrams/fingerprint.js";
+import { diagramFp, fingerprint } from "../src/diagrams/fingerprint.js";
 
 const sha = (s) => createHash("sha256").update(s).digest("hex").slice(0, 16);
 
@@ -117,16 +117,22 @@ export function shownAs(decision, extracted) {
 
 /* The shipped map: only attached pairs, deterministic order so a re-run
    with the same decisions produces a byte-identical file and a clean diff. */
-export function buildItemMap(decisions, diagrams, sourceKey = null) {
+export function buildItemMap(decisions, diagrams, sourceKey = null, items = null) {
   const pairs = {};
   for (const [key, d] of Object.entries(decisions).sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))) {
     if (!d.attach) continue;
     const [qid, did] = key.split(":");
-    if (!d.fp) continue;   // no fingerprint, no way to show it safely
+    /* The question fingerprint is computed NOW from the current question,
+       never copied from the cache: a cached value from an older algorithm
+       would make the app hide the pairing silently (Astra, PR #134 review,
+       round 7). Safe without a new paid review, because itemHash already
+       binds the decision to exactly the question that was reviewed. */
+    const q = items?.get(Number(qid));
+    if (!q) continue;      // no current question, nothing to fingerprint
     const dg = diagrams?.[did];
     if (!dg) continue;     // no diagram, no content to bind the pairing to
-    const v = diagramFp(dg);
-    (pairs[qid] ??= []).push(d.shown == null ? { d: did, f: d.fp, v } : { d: did, p: d.shown, f: d.fp, v });
+    const f = fingerprint(q), v = diagramFp(dg);
+    (pairs[qid] ??= []).push(d.shown == null ? { d: did, f, v } : { d: did, p: d.shown, f, v });
   }
   /* sourceKey: the drawing code this map was built against. A map with
      pairings must be rebuilt after any drawing or matcher change

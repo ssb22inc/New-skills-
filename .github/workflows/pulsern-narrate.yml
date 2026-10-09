@@ -104,22 +104,28 @@ jobs:
         if: always()
         run: cat reports/narration/run-*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
+      # Kept whatever happens to the push below: a conflicting concurrent
+      # update to the branch must not cost a paid run its results.
+      - name: Keep the results as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsern-narration-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            pulsern/src/diagrams/narration.json
+            pulsern/reports/narration/
+          if-no-files-found: ignore
+          retention-days: 90
+
       - name: Commit the manifest to the branch (always)
         id: save
         if: always()
         run: |
           git config user.name "pulsern-narrate"
           git config user.email "pulsern-narrate@users.noreply.github.com"
-          # A run that failed early may not have written every path; add what exists.
-          for p in src/diagrams/narration.json reports/narration/; do [ -e "$p" ] && git add -- "$p"; done
-          if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
-          git commit -q -m "Narration: $VOICE (rc=${{ steps.narrate.outputs.rc }})"
-          for attempt in 1 2 3; do
-            git push -q origin "HEAD:$BRANCH" && { echo "Saved."; echo "pushed=true" >> "$GITHUB_OUTPUT"; echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"; exit 0; }
-            git pull -q --rebase origin "$BRANCH" || true
-            sleep $((attempt * 5))
-          done
-          echo "::error::Could not push the manifest."; exit 1
+          # Commit, push, and confirm the commit reached the branch; a conflict
+          # fails instead of reporting a save (Astra, PR #134 review, round 7).
+          ops/save-results.sh "$BRANCH" "Narration: $VOICE (rc=${{ steps.narrate.outputs.rc }})" src/diagrams/narration.json reports/narration/
 
       # Pushes made with the workflow token do not trigger other workflows, so
       # the review this commit needs is requested explicitly — through the

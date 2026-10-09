@@ -38,6 +38,7 @@
    Exit: 0 PASS · 1 FAIL · 2 the review itself could not be completed */
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
@@ -206,8 +207,16 @@ export function parseNameStatusZ(out) {
   return entries;
 }
 
+/* Control characters a model cannot see (NUL, ESC…) are shown as visible
+   markers, so nothing in a changed file is silently invisible. */
+export const visibleControls = (s) => String(s ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, (c) => `\\u{${c.charCodeAt(0).toString(16).padStart(2, "0")}}`);
+/* Real binary assets get a summary (hash and size) rather than a diff. */
+const BINARY_ASSET = /\.(png|jpe?g|gif|webp|ico|mp3|wav|ogg|m4a|pdf|woff2?|ttf|otf|eot|zip|gz)$/i;
+const assetLine = (buf) => (buf == null ? "(absent)" : `sha256 ${createHash("sha256").update(buf).digest("hex")} · ${buf.length} bytes`);
+
 export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
   const git = gitIn(cwd);
+  const blobBuf = (rev, path) => { try { return execFileSync("git", ["show", `${rev}:${path}`], { cwd, maxBuffer: 256 * 1024 * 1024 }); } catch { return null; } };
   const entries = parseNameStatusZ(git("diff", "--name-status", "--no-renames", "-z", `${base}...${head}`));
   const mergeBase = git("merge-base", base, head).trim();
   const blob = (rev, path) => { try { return git("show", `${rev}:${path}`); } catch { return null; } };
@@ -224,11 +233,21 @@ export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
       files.push({ status: e.status, path: e.path, form: "page digest", diff: textDiff(before == null ? "" : pageDigest(before), after == null ? "" : pageDigest(after), e.path), full: null });
     } else if (c.mode === "lockfile") {
       files.push({ status: e.status, path: e.path, form: "dependency summary", diff: textDiff(before == null ? "" : lockDigest(before), after == null ? "" : lockDigest(after), e.path), full: null });
+    } else if (BINARY_ASSET.test(e.path)) {
+      const was = e.status === "A" ? null : blobBuf(mergeBase, e.path), now = e.status === "D" ? null : blobBuf(head, e.path);
+      files.push({ status: e.status, path: e.path, form: "binary asset", diff: `binary asset ${e.path}\n- ${assetLine(was)}\n+ ${assetLine(now)}\n`, full: null });
     } else {
-      const diff = git("diff", "--no-renames", "--no-ext-diff", "--no-textconv", "-U25", `${base}...${head}`, "--", e.path);
-      files.push({ status: e.status, path: e.path, form: "diff", diff, full: after });
+      /* --text: never let git decide a source file is "binary" and replace
+         its changes with a one-line marker (Astra, PR #134 review, round 7:
+         a NUL in a comment hid every other change in the file). */
+      const diff = git("diff", "--text", "--no-renames", "--no-ext-diff", "--no-textconv", "-U25", `${base}...${head}`, "--", e.path);
+      files.push({ status: e.status, path: e.path, form: "diff", diff: visibleControls(diff), full: after == null ? null : visibleControls(after) });
     }
   }
+  /* Fail closed: a change git could only describe as "Binary files differ"
+     has not been represented, so the review must not pass on it. */
+  const unrepresented = files.filter((f) => /^Binary files .* differ$/m.test(f.diff));
+  if (unrepresented.length) throw new Error(`cannot represent changes to ${unrepresented.map((f) => f.path).join(", ")} for review`);
   return { files, skipped };
 }
 

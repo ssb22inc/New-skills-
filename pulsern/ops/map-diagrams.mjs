@@ -64,7 +64,7 @@ function save(diagrams, items) {
   mkdirSync("reports/diagram-map", { recursive: true });
   writeFileSync(CACHE, serializeDecisions(decisions));
   const fresh = publishable(decisions, items, diagrams, approvedNow, PROPOSALS);
-  writeFileSync(MAP, JSON.stringify(buildItemMap(fresh, diagrams, KEY)) + "\n");
+  writeFileSync(MAP, JSON.stringify(buildItemMap(fresh, diagrams, KEY, items)) + "\n");
   const spend = reviewSpend();
   run.spendUsd = spend.costUsd;
   run.calls = spend.calls;

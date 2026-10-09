@@ -109,7 +109,7 @@ describe("the shipped map file", () => {
     const m = buildItemMap({
       "1:abg": { attach: true, shown: { ph: 7.3, paco2: 55, hco3: 24 }, fp: fingerprint(bankQ) },
       "1:tonicity": { attach: false, shown: null, fp: fingerprint(bankQ) },
-    }, DIAGRAMS, "a".repeat(24));
+    }, DIAGRAMS, "a".repeat(24), new Map([[1, bankQ]]));
     expect(m.version).toBe(2);
     const shown = pairsFor(JSON.parse(JSON.stringify(m)), bankQ, DIAGRAMS);
     expect(shown.map((x) => [x.diagram.id, x.params])).toEqual([["abg", { ph: 7.3, paco2: 55, hco3: 24 }]]);

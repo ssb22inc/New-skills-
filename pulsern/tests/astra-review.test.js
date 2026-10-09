@@ -246,6 +246,42 @@ describe("digests", () => {
     expect(f.diff).toContain("disabled\\nalert(1)");
     rmSync(dir, { recursive: true, force: true });
   });
+  /* Round 7: git treated a source file with a NUL in a comment as binary,
+     and its diff became one "Binary files differ" line. */
+  it("shows every change in a source file git would call binary, even when too big to attach", () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-bin-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    mkdirSync(join(dir, "pulsern/src"), { recursive: true });
+    const file = "pulsern/src/app.js";
+    const pad = "// " + "x".repeat(70_000) + "\n";
+    writeFileSync(join(dir, file), `/* \u0000 */\n${pad}export const dose = () => 1;\n`);
+    run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, file), `/* \u0000 */\n${pad}export const dose = () => 1000;\n`);
+    run("add", "-A"); run("commit", "-qm", "h");
+    const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === file);
+    expect(f.form).toBe("diff");
+    expect(f.diff).not.toMatch(/Binary files/);
+    expect(f.diff).toContain("+export const dose = () => 1000;");
+    expect(f.diff).toContain("\\u{00}");
+    expect(f.full.length).toBeGreaterThan(MAX_FULL_FILE_CHARS);   // too big to attach: the diff alone must carry it
+    rmSync(dir, { recursive: true, force: true });
+  });
+  it("summarises a real binary asset by hash and size instead of hiding it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-png-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    mkdirSync(join(dir, "pulsern/public"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/public/x.png"), Buffer.from([0x89, 0x50, 0, 1, 2]));
+    run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, "pulsern/public/x.png"), Buffer.from([0x89, 0x50, 0, 9, 9, 9]));
+    run("add", "-A"); run("commit", "-qm", "h");
+    const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === "pulsern/public/x.png");
+    expect(f.form).toBe("binary asset");
+    expect(f.diff).toMatch(/- sha256 [0-9a-f]{64} · 5 bytes\n\+ sha256 [0-9a-f]{64} · 6 bytes/);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it("is lossless: any byte that changes shows", () => {
     for (const [a, b] of [["<p>Hi  there</p>", "<p>Hi there</p>"], ["<p>x</p>", "<p>x</p>\n"], ["<b>a</b>", "<b >a</b>"]]) {
       expect(pageDigest(a), `${a} vs ${b}`).not.toBe(pageDigest(b));

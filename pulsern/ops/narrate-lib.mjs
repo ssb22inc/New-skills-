@@ -80,8 +80,19 @@ export function wordsToNumbers(text) {
    7.35" all become "minus 7.35", so a sign can never vanish into a hyphen
    (Astra, PR #134 review, round 4: "-7.35" passed for "seven point three
    five"). A hyphen BETWEEN two numbers is a range: "3-5" reads "3 to 5". */
+/* Symbols that carry clinical meaning become words, so "45%" can never
+   match "45" (Astra, PR #134 review, round 7). Comparison and other
+   unit-bearing symbols become explicit tokens that must match exactly. */
+const SYMBOL_WORDS = [[/%/g, " percent "], [/°/g, " degrees "], [/±/g, " plus or minus "], [/&/g, " and "], [/\+/g, " plus "]];
+const SYMBOL_TOKENS = [[/≤/g, " symle "], [/≥/g, " symge "], [/</g, " symlt "], [/>/g, " symgt "], [/=/g, " symeq "], [/×/g, " symtimes "], [/÷/g, " symdiv "], [/~/g, " symapprox "], [/\//g, " symslash "]];
+export function symbolsToWords(text) {
+  let t = String(text);
+  for (const [re, w] of [...SYMBOL_WORDS, ...SYMBOL_TOKENS]) t = t.replace(re, w);
+  return t;
+}
+
 export function signsAndRanges(text) {
-  return String(text)
+  return symbolsToWords(String(text))
     /* ".45" is 0.45, never 45: a leading decimal point is a digit's
        business (Astra, PR #134 review, round 5). */
     .replace(/(^|[^0-9])\.(?=\d)/g, "$10.")
@@ -190,7 +201,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 4;
+export const QA_VERSION = 5;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);

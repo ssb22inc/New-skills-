@@ -262,9 +262,14 @@ describe("records the workflows commit are committable", () => {
   const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
   it.each(files)("%s commits only paths git will accept", (f) => {
     const w = readFileSync(join(LIVE_DIR, f), "utf8");
-    const line = /for p in ([^;]+); do \[ -e "\$p" \] && git add -- "\$p"; done/.exec(w);
-    expect(line, "save step adds what exists, never fails on a missing path").not.toBeNull();
-    for (const p of line[1].trim().split(/\s+/)) {
+    const line = /ops\/save-results\.sh "\$BRANCH" "[^"\n]*" ([^\n]+)\n/.exec(w);
+    expect(line, "save step goes through the shared, checked save script").not.toBeNull();
+    const paths = line[1].trim().split(/\s+/);
+    // the artifact kept before the push holds the same paths
+    const art = w.slice(w.indexOf("- name: Keep the results as an artifact"), w.indexOf("id: save"));
+    expect(art).toMatch(/if: always\(\)\s+uses: actions\/upload-artifact@v4/);
+    for (const p of paths) expect(art).toContain(`pulsern/${p}`);
+    for (const p of paths) {
       const probe = p.endsWith("/") ? `${p}probe.json` : p;
       let ignored = true;
       try { execFileSync("git", ["check-ignore", "-q", probe], { cwd: join(LIVE_DIR, "../../pulsern") }); } catch { ignored = false; }
@@ -281,7 +286,8 @@ describe("bot pushes are reviewed", () => {
   it.each(files)("%s requests the Astra review of what it pushed", (f) => {
     const w = readFileSync(join(LIVE_DIR, f), "utf8");
     expect(w).toMatch(/^  actions: write/m);
-    expect(w).toMatch(/echo "pushed=true" >> "\$GITHUB_OUTPUT"; echo "head=\$\(git rev-parse HEAD\)"/);
+    expect(w).toContain("ops/save-results.sh \"$BRANCH\"");
+    expect(w).not.toMatch(/pull -q --rebase[^\n]*\|\| true/);
     const step = w.slice(w.indexOf("- name: Request CI and the Astra review of what was just pushed"));
     expect(step).toMatch(/if: always\(\) && steps\.save\.outputs\.pushed == 'true'/);
     // CI on the pushed head (round 5): a workflow-token push starts no CI by itself

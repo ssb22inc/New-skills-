@@ -144,6 +144,18 @@ describe("the audio check on the real scripts", () => {
     const longest = script.split(/[^A-Za-z]+/).sort((a, b) => b.length - a.length)[0];
     caughtOnly(script, script, script.replace(longest, "something"));
   });
+  /* Round 7: "%" was dropped as punctuation, so "45%" matched "45". */
+  it("never lets a percent sign or another unit symbol appear or disappear", () => {
+    const lungs = LITERAL["abg/lungs"];
+    const script = scriptOf("abg/lungs");
+    caughtOnly(script, lungs, lungs.replace("above 45", "above 45%"));
+    caughtOnly(script, lungs, lungs.replace("above 45", "above 45°"));
+    caughtOnly(script, lungs, lungs.replace("above 45", "above >45"));
+    expect(audioCheck("a level of forty-five percent", "a level of 45%").pass).toBe(true);
+    expect(audioCheck("thirty degrees or lower", "30° or lower").pass).toBe(true);
+    expect(audioCheck("thirty degrees or lower", "30 or lower").pass).toBe(false);
+  });
+
   /* Round 5: ".45" lost its decimal point and matched "45". */
   it("never lets a leading decimal point vanish", () => {
     const lungs = DIAGRAMS.abg.steps.find((s) => s.key === "lungs").narration;
