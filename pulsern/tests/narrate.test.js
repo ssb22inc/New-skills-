@@ -202,10 +202,10 @@ describe("the audio check on the real scripts", () => {
   });
 
   it("tolerates only spelling differences and filler words", () => {
-    expect(speechTokens("A P-A-C-O-2 of forty-five, and it doesn't")).toEqual(speechTokens("the PaCO2 of 45 and it does not"));
+    expect(speechTokens("The P-A-C-O-2 of forty-five, and it doesn't")).toEqual(speechTokens("PaCO2 of 45 and it does not"));
     expect(speechTokens("N-ninety-five")).toEqual(speechTokens("N95"));
     expect(speechTokens("D-five-W and D-ten-W")).toEqual(speechTokens("D5W and D10W"));
-    expect(speechTokens("a fit-tested mask")).toEqual(["fit", "tested", "mask"]);
+    expect(speechTokens("the fit-tested mask")).toEqual(["fit", "tested", "mask"]);
   });
 
   it("reads contractions as negations", () => {
@@ -289,15 +289,26 @@ describe("letters that name things are not fillers", () => {
     });
   });
   it("keeps a sign-written blood group too", () => {
-    expect(speechTokens("A+ blood")).toContain("lettera");
-    expect(speechTokens("Give A\u2212 cells")).toContain("lettera");
+    expect(speechTokens("A+ blood")).toEqual(["a", "positive", "blood"]);
+    expect(speechTokens("Give A\u2212 cells")).toEqual(["give", "a", "minus", "cell"]);
   });
-  it("still treats an article as droppable", () => {
-    expect(speechTokens("A client needs a dose")).toEqual(speechTokens("client needs dose"));
+  it("treats 'an' and 'the' as droppable, but never 'a'", () => {
     expect(speechTokens("Give the client an apple")).toEqual(speechTokens("Give client apple"));
+    expect(speechTokens("A client needs a dose")).not.toEqual(speechTokens("client needs dose"));
+  });
+  /* Round 15: "A plasma" at the start of a sentence matched none of the
+     protected contexts and was dropped as an article. */
+  it.each([
+    ["A plasma contains anti-B antibodies.", "Plasma contains anti-B antibodies."],
+    ["A plasma contains anti-B antibodies.", "plasma contains anti-B antibodies."],
+    ["A cells carry the A antigen on their surface.", "Cells carry the A antigen on their surface."],
+  ])("fails when a leading A is dropped: %s", (script, heard) => {
+    expect(audioCheck(script, heard).pass).toBe(false);
+    expect(audioCheck(script, script).pass).toBe(true);
+    expect(audioCheck(script, script.toLowerCase()).pass).toBe(true);
   });
   it("re-checks clips approved under the weaker rule", () => {
-    expect(QA_VERSION).toBeGreaterThanOrEqual(10);
+    expect(QA_VERSION).toBeGreaterThanOrEqual(11);
   });
 });
 

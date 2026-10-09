@@ -178,6 +178,16 @@ export function lockDigest(jsonText) {
   if (!lock || typeof lock !== "object" || Array.isArray(lock)) fail();
   const { packages = {}, ...top } = lock;
   if (!packages || typeof packages !== "object" || Array.isArray(packages)) fail();
+  /* The digest is built from the PARSED file, so parsing must lose nothing:
+     the file has to be exactly npm's own serialisation of what it parses to
+     (2-space JSON, trailing newline). A duplicate key, an over-long number,
+     unusual escapes or extra whitespace all fail this, so no committed byte
+     can vanish between the file and the reviewer (Astra, PR #134 review,
+     round 15: a duplicate "name" holding a credential was dropped by
+     JSON.parse and the digest showed no change). */
+  if (jsonText !== JSON.stringify(lock, null, 2) + "\n") {
+    throw new Error("package-lock.json is not exactly npm's serialisation of its own contents (duplicate keys, number formats or layout would be lost from the summary), so the change cannot pass — regenerate it with npm install");
+  }
   const lines = [`(lockfile) ${sortedJson(top)}`];
   for (const k of Object.keys(packages).sort()) {
     lines.push(`${k === "" ? "(root)" : k.replace(/^node_modules\//, "")} ${sortedJson(packages[k])}`);

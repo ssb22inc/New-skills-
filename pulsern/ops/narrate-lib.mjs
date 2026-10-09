@@ -168,7 +168,13 @@ export function criticalTerms(text) {
    mismatch, and the clip does not ship. A keyword list was not enough: it
    passed a recording that swapped the diagnosis (Astra, PR #134 review,
    finding 4). */
-const FILLER = new Set(["a", "an", "the", "um", "uh", "er", "erm"]);
+/* "a" is NOT a filler: a lone A can be a blood group, a hepatitis type, a
+   vitamin, a list item — "A plasma contains anti-B" heard as "Plasma
+   contains anti-B" is a different fact — and no list of contexts can be
+   complete (Astra, PR #134 review, round 15). Every "a" must be heard, so
+   a transcript that drops or adds one fails and the clip is re-recorded.
+   "an" and "the" are never clinical labels and stay droppable. */
+const FILLER = new Set(["an", "the", "um", "uh", "er", "erm"]);
 /* One token per unit, however it is written or said (plurals are already
    dropped): micrograms are never grams or milligrams. */
 const UNIT_ALIASES = {
@@ -178,22 +184,9 @@ const UNIT_ALIASES = {
   microl: "mcl", microliter: "mcl", microlitre: "mcl",
   milliequivalent: "meq", millimole: "mmol",
 };
-/* Words after which a lone "A" names something — hepatitis A, vitamin A,
-   blood group A, type A — rather than being an article. */
-const NAMES_A = /\b(hepatitis|hep|vitamin|vitamins|type|group|blood|influenza|flu|factor|class|grade|stage|phase|category|zone|lead|plan|part|step|option|choice|answer|item|unit|room|bed|bay|ward|wing|team|section|protein|immunoglobulin|ig|apolipoprotein|apo|strep|streptococcus|hemophilia)\s+a\b/gi;
-/* Letters and abbreviations that the filler list would otherwise swallow
-   are kept as named tokens, on both sides, so dropping one is a mismatch
-   (Astra, PR #134 review, round 10: "hepatitis A" heard as "hepatitis"
-   passed, because every "a" was discarded as an article). A capital A
-   inside a sentence, and an "a" after a word that takes a letter, is a
-   letter; "ER" is the emergency room. An article stays droppable. */
-/* An "A" followed by what only a letter can be followed by — a blood-group
-   sign or word (A positive, A−, A+), a list comma, "or"/"and" — is a
-   letter wherever it stands, including at the start of a sentence (Astra,
-   PR #134 review, round 10: "A positive packed red cells…" heard without
-   the A passed). An article never precedes these, except "a positive"/"a
-   negative" as adjectives; keeping those too only makes the check stricter. */
-const LETTER_A_BEFORE = /\bA(?=\s*(?:\+|\u2212|-(?![A-Za-z0-9]))|\s+(?:positive|negative|pos|neg|rh|plus|minus|and|or|nor|vs\.?|versus)\b|\s*[,;:/)]|\s*$)/gi;
+/* Every "a" is a token (see FILLER), so a letter A needs no special
+   handling: dropping it fails whatever its role. "ER" is kept apart from
+   the filler "er": it is the emergency room. */
 /* A blood group or Rh written with a sign is read as the words, so the
    sign survives as a token and a transcript that drops it fails (Astra,
    PR #134 review, round 12: "A−" and "A" normalised the same). Only a sign
@@ -202,9 +195,6 @@ const GROUP_SIGN = /\b(AB|A|B|O|Rh)(\+|\u2212|-(?![A-Za-z0-9]))(?=[\s,.;:)!?]|$)
 function keepLetters(text) {
   return String(text)
     .replace(GROUP_SIGN, (m, g, s) => `${g} ${s === "+" ? "positive" : "negative"}`)
-    .replace(LETTER_A_BEFORE, "letterA")
-    .replace(NAMES_A, (m, w) => `${w} letterA`)
-    .replace(/(?<=[A-Za-z0-9,;:)]\s+)A\b(?![-'’])/g, "letterA")
     .replace(/\bE\.?R\.?(?![A-Za-z])/g, "letterER");
 }
 export function speechTokens(text) {
@@ -262,7 +252,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 10;
+export const QA_VERSION = 11;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);

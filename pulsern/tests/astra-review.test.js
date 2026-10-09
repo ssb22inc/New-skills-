@@ -17,6 +17,8 @@ import {
 } from "../ops/astra-review.mjs";
 import { encodeCanonicalPng, canonicalDeflate, canonicalPng } from "../ops/png-canonical.mjs";
 
+/* A lockfile as npm writes it: 2-space JSON and a trailing newline. */
+const npmJson = (v) => JSON.stringify(v, null, 2) + "\n";
 const finding = (severity, extra = {}) => ({
   severity, file: "pulsern/src/x.js", line: 3, title: "t", problem: "p",
   failure_scenario: "f", fix: "fx", confidence: "high", ...extra,
@@ -33,7 +35,7 @@ beforeAll(() => {
   g("config", "user.email", "t@t"); g("config", "user.name", "t");
   write("pulsern/src/a.js", "export const a = 1;\n");
   write("pulsern/public/learn/bow-tie/index.html", "<html><head><title>Bow tie</title></head><body><p>Old guide text.</p></body></html>");
-  write("pulsern/package-lock.json", JSON.stringify({ packages: { "": {}, "node_modules/left-pad": { version: "1.0.0", resolved: "https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz", integrity: "sha512-AAAA" } } }));
+  write("pulsern/package-lock.json", npmJson({ packages: { "": {}, "node_modules/left-pad": { version: "1.0.0", resolved: "https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz", integrity: "sha512-AAAA" } } }));
   write("fullburn/x.js", "1\n");
   g("add", "-A"); g("commit", "-q", "-m", "base");
   g("tag", "base");
@@ -43,7 +45,7 @@ beforeAll(() => {
   write("pulsern/src/new\nline.js", "export const n = 1;\n");
   write("pulsern/public/learn/bow-tie/index.html", "<html><head><title>Bow tie</title><script src=\"https://evil.example/x.js\"></script></head><body><p>New guide text.</p></body></html>");
   write("pulsern/public/learn/sneaky/index.html", "<p>A page no generator writes</p>");
-  write("pulsern/package-lock.json", JSON.stringify({ packages: { "": {}, "node_modules/left-pad": { version: "1.0.0", resolved: "https://evil.example/left-pad-1.0.0.tgz", integrity: "sha512-BBBB" } } }));
+  write("pulsern/package-lock.json", npmJson({ packages: { "": {}, "node_modules/left-pad": { version: "1.0.0", resolved: "https://evil.example/left-pad-1.0.0.tgz", integrity: "sha512-BBBB" } } }));
   write("fullburn/x.js", "2\n");
   write("pulsern/reports/astra/old.md", "old report");
   g("add", "-A"); g("commit", "-q", "-m", "head");
@@ -583,7 +585,7 @@ describe("digests", () => {
   /* PR #133 review, finding 3: a git dependency moved to another commit at
      the same version, with no integrity field, was invisible. */
   it("shows a git dependency moved to a different commit", () => {
-    const lock = (rev) => JSON.stringify({ packages: { "": { name: "x" }, "node_modules/pkg": { version: "1.0.0", resolved: `git+ssh://git@github.com/org/pkg.git#${rev}` } } });
+    const lock = (rev) => npmJson({ packages: { "": { name: "x" }, "node_modules/pkg": { version: "1.0.0", resolved: `git+ssh://git@github.com/org/pkg.git#${rev}` } } });
     expect(textDiff(lockDigest(lock("aaaa1111")), lockDigest(lock("bbbb2222")), "package-lock.json")).toContain("bbbb2222");
   });
 
@@ -591,21 +593,21 @@ describe("digests", () => {
      (and runs its install script) under --omit=dev. */
   it.each([["dev", { dev: true }, {}], ["optional", { optional: true }, {}], ["devOptional", { devOptional: true }, {}]])(
     "shows a change to the %s flag", (_, before, after) => {
-      const lock = (flags) => JSON.stringify({ lockfileVersion: 3, packages: { "node_modules/p": { version: "1.0.0", hasInstallScript: true, ...flags } } });
+      const lock = (flags) => npmJson({ lockfileVersion: 3, packages: { "node_modules/p": { version: "1.0.0", hasInstallScript: true, ...flags } } });
       expect(textDiff(lockDigest(lock(before)), lockDigest(lock(after)), "l")).not.toBe("");
     });
   it("shows a change to any top-level lockfile field", () => {
-    const a = JSON.stringify({ lockfileVersion: 3, requires: true, packages: {} });
+    const a = npmJson({ lockfileVersion: 3, requires: true, packages: {} });
     expect(textDiff(lockDigest(a), lockDigest(a.replace("true", "false")), "l")).not.toBe("");
   });
   it("is deterministic whatever order npm writes keys in", () => {
-    const a = JSON.stringify({ packages: { "node_modules/p": { version: "1", dev: true } } });
-    const b = JSON.stringify({ packages: { "node_modules/p": { dev: true, version: "1" } } });
+    const a = npmJson({ packages: { "node_modules/p": { version: "1", dev: true } } });
+    const b = npmJson({ packages: { "node_modules/p": { dev: true, version: "1" } } });
     expect(lockDigest(a)).toBe(lockDigest(b));
   });
 
   it("shows a changed integrity hash in full and a new install script", () => {
-    const lock = (integ, scripts) => JSON.stringify({ packages: { "node_modules/p": { version: "1.0.0", resolved: "https://registry.npmjs.org/p/-/p-1.0.0.tgz", integrity: integ, ...(scripts ? { hasInstallScript: true } : {}) } } });
+    const lock = (integ, scripts) => npmJson({ packages: { "node_modules/p": { version: "1.0.0", resolved: "https://registry.npmjs.org/p/-/p-1.0.0.tgz", integrity: integ, ...(scripts ? { hasInstallScript: true } : {}) } } });
     const a = "sha512-" + "A".repeat(80), b = "sha512-" + "A".repeat(60) + "B".repeat(20);
     expect(textDiff(lockDigest(lock(a)), lockDigest(lock(b)), "l")).not.toBe("");
     expect(textDiff(lockDigest(lock(a)), lockDigest(lock(a, true)), "l")).toContain("hasInstallScript");
@@ -617,6 +619,23 @@ describe("digests", () => {
     for (const bad of ["{not json", "42", "\"text\"", "[]", "null", '{"packages": "x"}', '{"packages": []}']) {
       expect(() => lockDigest(bad), bad).toThrow(/cannot pass/);
     }
+  });
+  /* Round 15: JSON.parse keeps the last of two duplicate keys, so a
+     credential in the first one vanished from the summary. */
+  it("refuses a lockfile parsing would lose anything from", () => {
+    const good = JSON.stringify({ name: "pulsern", lockfileVersion: 3, packages: { "": { name: "pulsern" } } }, null, 2) + "\n";
+    expect(() => lockDigest(good)).not.toThrow();
+    const dup = good.replace('{\n  "name": "pulsern"', '{\n  "name": "SUPABASE_SERVICE_ROLE_KEY=eyJ.x",\n  "name": "pulsern"');
+    expect(JSON.parse(dup)).toEqual(JSON.parse(good));   // what JSON.parse sees is identical…
+    expect(() => lockDigest(dup)).toThrow(/cannot pass/);  // …so the file is refused
+    const nested = good.replace('"": {\n      "name": "pulsern"', '"": {\n      "name": "secret",\n      "name": "pulsern"');
+    expect(() => lockDigest(nested)).toThrow(/cannot pass/);
+    expect(() => lockDigest(good.replace("3", "3.0"))).toThrow(/cannot pass/);
+    expect(() => lockDigest(good.replace(/\n$/, ""))).toThrow(/cannot pass/);
+    expect(() => lockDigest(good.replace(/\n/g, "\r\n"))).toThrow(/cannot pass/);
+  });
+  it("accepts the repository's real lockfile", () => {
+    expect(() => lockDigest(readFileSync("package-lock.json", "utf8"))).not.toThrow();
   });
   it("summarises only PulseRN's own npm lockfile; any other of that name is plain text", () => {
     expect(classifyPath("pulsern/package-lock.json").mode).toBe("lockfile");
