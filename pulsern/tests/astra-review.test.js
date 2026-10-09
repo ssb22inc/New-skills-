@@ -188,6 +188,30 @@ describe("digests", () => {
     expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
     expect(textDiff(pageDigest('<p title="a  b">x</p>'), pageDigest('<p title="a b">x</p>'), "p")).not.toBe("");
   });
+  /* PR #134 review (round 3): replacements over the whole tag rewrote
+     quoted code, so "= =" and "==" digested the same. */
+  it("keeps every character of a quoted handler, including around =", () => {
+    const a = '<a onclick="if (1 = = 1) alert(1)">x</a>', b = '<a onclick="if (1 == 1) alert(1)">x</a>';
+    expect(pageDigest(a)).not.toBe(pageDigest(b));
+    expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
+  });
+  it("shows that handler change end to end, through a real git change", () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-eq-"));
+    const run = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    const page = "pulsern/public/learn/x/index.html";
+    mkdirSync(join(dir, "pulsern/public/learn/x"), { recursive: true });
+    writeFileSync(join(dir, page), '<p><a onclick="if (1 = = 1) alert(1)">x</a></p>');
+    run("add", "-A"); run("commit", "-qm", "base"); run("tag", "b");
+    writeFileSync(join(dir, page), '<p><a onclick="if (1 == 1) alert(1)">x</a></p>');
+    run("add", "-A"); run("commit", "-qm", "head");
+    const { files } = collectChanges("b", "HEAD", { cwd: dir });
+    const f = files.find((x) => x.path === page);
+    expect(f.form).toBe("page digest");
+    expect(f.diff).toContain("1 == 1");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it("ignores whitespace-only regeneration noise", () => {
     expect(textDiff(pageDigest('<p class="a">Hi  there</p>'), pageDigest('<p\n  class="a">\n Hi there\n</p>'), "p")).toBe("");
   });

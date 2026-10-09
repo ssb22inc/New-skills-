@@ -2,11 +2,12 @@
    for — and nowhere else. */
 import { describe, it, expect } from "vitest";
 import { pairsFor, audioFor, MAX_PER_QUESTION } from "../src/concept-explainers.jsx";
-import { fingerprint, fnv1a } from "../src/diagrams/fingerprint.js";
+import { fingerprint, fnv1a, diagramFp } from "../src/diagrams/fingerprint.js";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 const bankQ = { id: 1, stem: "ABG: pH 7.30, PaCO2 55, HCO3 24. Interpret.", rationale: "Respiratory acidosis." };
-const map = { version: 1, pairs: { "1": [{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 }, f: fingerprint(bankQ) }] } };
+const v = (id) => diagramFp(DIAGRAMS[id]);
+const map = { version: 2, pairs: { "1": [{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 }, f: fingerprint(bankQ), v: v("abg") }] } };
 
 describe("pairsFor", () => {
   it("returns the confirmed diagram with its confirmed values", () => {
@@ -31,14 +32,26 @@ describe("pairsFor", () => {
   });
 
   it("passes concept-only pairings through as params null", () => {
-    const m = { pairs: { "1": [{ d: "tonicity", f: fingerprint(bankQ) }] } };
+    const m = { pairs: { "1": [{ d: "tonicity", f: fingerprint(bankQ), v: v("tonicity") }] } };
     expect(pairsFor(m, bankQ, DIAGRAMS)[0].params).toBeNull();
   });
 
   it(`never stacks more than ${MAX_PER_QUESTION} under one rationale`, () => {
     const f = fingerprint(bankQ);
-    const m = { pairs: { "1": [{ d: "abg", f }, { d: "potassium", f }, { d: "tonicity", f }] } };
+    const m = { pairs: { "1": [{ d: "abg", f, v: v("abg") }, { d: "potassium", f, v: v("potassium") }, { d: "tonicity", f, v: v("tonicity") }] } };
     expect(pairsFor(m, bankQ, DIAGRAMS)).toHaveLength(MAX_PER_QUESTION);
+  });
+
+  /* PR #134 review: a pairing approved for what a diagram USED to teach
+     must stop showing once the diagram's content changes. */
+  it("stops showing when the diagram's clinical content has changed since the pairing was approved", () => {
+    const old = { ...DIAGRAMS.insulin, facts: ["Long-acting insulin (glargine, detemir): about 24 hours."] };
+    const m = { pairs: { "1": [{ d: "insulin", f: fingerprint(bankQ), v: diagramFp(old) }] } };
+    expect(pairsFor(m, bankQ, DIAGRAMS)).toEqual([]);
+    expect(pairsFor({ pairs: { "1": [{ d: "insulin", f: fingerprint(bankQ), v: v("insulin") }] } }, bankQ, DIAGRAMS)).toHaveLength(1);
+  });
+  it("shows nothing for a pairing that carries no content fingerprint", () => {
+    expect(pairsFor({ pairs: { "1": [{ d: "abg", f: fingerprint(bankQ) }] } }, bankQ, DIAGRAMS)).toEqual([]);
   });
 
   it("is safe with no map, no question, or no id", () => {

@@ -8,8 +8,8 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { approval, sourceKey, readReviewIndex } from "../ops/diagram-attest.mjs";
-import { publishable, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey } from "../ops/map-diagrams-lib.mjs";
+import { approval, sourceKey, readReviewIndex, mapIsCurrent } from "../ops/diagram-attest.mjs";
+import { publishable, sameProposal, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey } from "../ops/map-diagrams-lib.mjs";
 
 const dg = { id: "abg", title: "ABG", facts: ["f"], steps: [{ key: "ph", caption: "c", narration: "n" }] };
 const q = { id: 7, stem: "pH 7.30, PaCO2 55, HCO3 24", options: ["a", "b"], rationale: "r", answer: "a" };
@@ -66,8 +66,33 @@ describe("approval of a diagram for publication", () => {
   /* The guard that holds at merge time: the shipped map may only name
      diagrams whose CURRENT code passed visual review. A drawing change after
      pairing fails this test until the review is run again. */
+  /* PR #134 review: a fresh visual PASS must not revive a pairing made for
+     different content or different extracted values. */
+  it("retires a pairing whose extracted values today's matcher no longer reads", () => {
+    const longDecision = { ...decision, extracted: { type: "long", givenAt: "21:00" } };
+    const decisions = { [decisionKey(7, "abg")]: longDecision };
+    const items = new Map([[7, q]]);
+    const nowProposes = new Map([[7, [{ d: "abg", p: null }]]]);   // e.g. detemir: no longer read as long-acting
+    expect(publishable(decisions, items, { abg: dg }, () => true, nowProposes)).toEqual({});
+    const stillProposes = new Map([[7, [{ d: "abg", p: { type: "long", givenAt: "21:00" } }]]]);
+    expect(Object.keys(publishable(decisions, items, { abg: dg }, () => true, stillProposes))).toEqual(["7:abg"]);
+    expect(sameProposal([], "abg", null)).toBe(false);   // not proposed at all any more
+  });
+  it("retires a pairing approved for different clinical content, even after a fresh visual pass", () => {
+    const decisions = { [decisionKey(7, "abg")]: decision };
+    const changed = { ...dg, facts: ["a corrected fact"] };
+    expect(publishable(decisions, new Map([[7, q]]), { abg: changed }, () => true)).toEqual({});
+  });
+  it("requires a map with pairings to be rebuilt after any drawing or matcher change", () => {
+    const withPairs = { pairs: { "7": [{ d: "abg", f: "x", v: "y" }] }, sourceKey: "old" };
+    expect(mapIsCurrent(withPairs, "new")).toBe(false);
+    expect(mapIsCurrent({ ...withPairs, sourceKey: "new" }, "new")).toBe(true);
+    expect(mapIsCurrent({ pairs: {} }, "new")).toBe(true);
+  });
+
   it("ships no pairing for a diagram without a current passing review", () => {
     const map = JSON.parse(readFileSync("src/diagrams/item-map.json", "utf8"));
+    expect(mapIsCurrent(map, sourceKey()), "item-map.json was built against older drawing code: rerun ops/map-diagrams.mjs").toBe(true);
     const used = new Set(Object.values(map.pairs).flat().map((p) => p.d));
     const index = readReviewIndex(), key = sourceKey();
     for (const id of used) expect(approval(index, id, key), id).toEqual({ ok: true, why: null });

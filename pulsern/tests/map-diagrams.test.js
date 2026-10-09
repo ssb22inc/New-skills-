@@ -4,6 +4,8 @@
    a decision that cannot be trusted is never turned into a diagram on a
    student's screen, and nothing is paid for twice. */
 import { describe, it, expect } from "vitest";
+import { diagramFp } from "../src/diagrams/fingerprint.js";
+import { DIAGRAMS } from "../src/diagrams/index.js";
 import {
   itemHash, diagramHash, isFresh, batches, readDecisions, shownAs, buildItemMap, pairingPrompt, PAIRING_SCHEMA, serializeDecisions,
 } from "../ops/map-diagrams-lib.mjs";
@@ -69,20 +71,24 @@ describe("the shipped map", () => {
     "100:potassium": { attach: true, shown: { k: 6.2 }, fp: "cccccccc" },
   };
   it("contains only attached pairs, each with its question fingerprint", () => {
-    const m = buildItemMap(decisions);
-    expect(m.pairs["3"]).toEqual([{ d: "tonicity", f: "bbbbbbbb" }]);
-    expect(m.pairs["12"]).toEqual([{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 }, f: "aaaaaaaa" }]);
+    const m = buildItemMap(decisions, DIAGRAMS);
+    expect(m.pairs["3"]).toEqual([{ d: "tonicity", f: "bbbbbbbb", v: diagramFp(DIAGRAMS.tonicity) }]);
+    expect(m.pairs["12"]).toEqual([{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 }, f: "aaaaaaaa", v: diagramFp(DIAGRAMS.abg) }]);
     expect(JSON.stringify(m)).not.toContain('"attach"');
   });
   it("never ships a pairing it could not verify on screen", () => {
-    expect(buildItemMap({ "9:abg": { attach: true, shown: null } }).pairs).toEqual({});
+    expect(buildItemMap({ "9:abg": { attach: true, shown: null } }, DIAGRAMS).pairs).toEqual({});
+    expect(buildItemMap({ "9:retired": { attach: true, shown: null, fp: "dddddddd" } }, DIAGRAMS).pairs).toEqual({});
   });
   it("is byte-identical for the same decisions in any order", () => {
     const shuffled = Object.fromEntries(Object.entries(decisions).reverse());
-    expect(JSON.stringify(buildItemMap(shuffled))).toBe(JSON.stringify(buildItemMap(decisions)));
+    expect(JSON.stringify(buildItemMap(shuffled, DIAGRAMS))).toBe(JSON.stringify(buildItemMap(decisions, DIAGRAMS)));
   });
   it("orders question ids numerically", () => {
-    expect(Object.keys(buildItemMap(decisions).pairs)).toEqual(["3", "12", "100"]);
+    expect(Object.keys(buildItemMap(decisions, DIAGRAMS).pairs)).toEqual(["3", "12", "100"]);
+  });
+  it("records the drawing code it was built against", () => {
+    expect(buildItemMap(decisions, DIAGRAMS, "k1").sourceKey).toBe("k1");
   });
 });
 

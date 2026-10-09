@@ -136,8 +136,16 @@ export function speechTokens(text) {
      are joined to the written abbreviation (PaCO2, N95, IV). Only a hyphen
      after a single letter joins, so "fit-tested" and an article before an
      abbreviation are left alone. */
+  /* A hyphen joins when EITHER side is a single letter: "D-five-W" is D5W,
+     "N-ninety-five" is N95 (the number keeps its own hyphen), "X-ray" is
+     xray; "fit-tested" and "half-normal" are left alone. (Astra, PR #134
+     review: "D-five-W" once split into "d5" + "w" and failed a correct
+     "D5W" transcript.) */
   let t = String(text);
-  while (/\b([A-Za-z])-(?=[A-Za-z0-9])/.test(t)) t = t.replace(/\b([A-Za-z])-(?=[A-Za-z0-9])/g, "$1§");
+  for (let prev = null; prev !== t;) {
+    prev = t;
+    t = t.replace(/\b([A-Za-z])-(?=[A-Za-z0-9])/g, "$1§").replace(/(?<=[A-Za-z0-9§])-([A-Za-z])\b/g, "§$1");
+  }
   const expanded = t.toLowerCase()
     .replace(/\bcan['’]t\b/g, "can not").replace(/\bwon['’]t\b/g, "will not").replace(/n['’]t\b/g, " not")
     .replace(/\bcannot\b/g, "can not").replace(/['’]s\b/g, "s").replace(/['’](re|ve|ll|d|m)\b/g, " $1");

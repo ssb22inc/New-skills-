@@ -50,3 +50,12 @@ export function approval(index, id, key) {
   if (e.sourceKey !== key) return { ok: false, why: "changed since its review" };
   return { ok: true, why: null };
 }
+
+/* A map with pairings is current only if it was built against today's
+   drawing code. Rebuilding (ops/map-diagrams.mjs, cached decisions cost
+   nothing) re-checks approval, content and extracted values for every
+   pairing. An empty map needs no rebuild. */
+export function mapIsCurrent(map, key) {
+  const n = Object.values(map?.pairs ?? {}).flat().length;
+  return n === 0 || map.sourceKey === key;
+}

@@ -6,6 +6,7 @@
    longer applies and the pairing is reviewed again. Nothing else
    invalidates it, so a re-run never pays twice for the same question. */
 import { createHash } from "node:crypto";
+import { diagramFp } from "../src/diagrams/fingerprint.js";
 
 const sha = (s) => createHash("sha256").update(s).digest("hex").slice(0, 16);
 
@@ -116,15 +117,21 @@ export function shownAs(decision, extracted) {
 
 /* The shipped map: only attached pairs, deterministic order so a re-run
    with the same decisions produces a byte-identical file and a clean diff. */
-export function buildItemMap(decisions) {
+export function buildItemMap(decisions, diagrams, sourceKey = null) {
   const pairs = {};
   for (const [key, d] of Object.entries(decisions).sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))) {
     if (!d.attach) continue;
     const [qid, did] = key.split(":");
     if (!d.fp) continue;   // no fingerprint, no way to show it safely
-    (pairs[qid] ??= []).push(d.shown == null ? { d: did, f: d.fp } : { d: did, p: d.shown, f: d.fp });
+    const dg = diagrams?.[did];
+    if (!dg) continue;     // no diagram, no content to bind the pairing to
+    const v = diagramFp(dg);
+    (pairs[qid] ??= []).push(d.shown == null ? { d: did, f: d.fp, v } : { d: did, p: d.shown, f: d.fp, v });
   }
-  return { version: 1, pairs };
+  /* sourceKey: the drawing code this map was built against. A map with
+     pairings must be rebuilt after any drawing or matcher change
+     (tests/diagram-gate.test.js), which re-checks every pairing. */
+  return sourceKey ? { version: 2, sourceKey, pairs } : { version: 2, pairs };
 }
 
 /* The cache file, sorted for stable diffs. NOT JSON.stringify(obj, keys):
@@ -138,15 +145,26 @@ export function serializeDecisions(decisions) {
 /* The decisions that may ship: still about the current question and the
    current diagram, AND for a diagram whose visual review passes as it is
    now (`approved(id)`). Anything else is held back — fail closed. */
-export function publishable(decisions, items, diagrams, approved) {
+export function publishable(decisions, items, diagrams, approved, proposals = null) {
   const out = {};
   for (const [key, d] of Object.entries(decisions)) {
     const [qid, did] = key.split(":");
     const q = items.get(Number(qid));
     const dg = diagrams[did];
-    if (q && dg && approved(did) && d.itemHash === itemHash(q) && d.diagramHash === diagramHash(dg)) out[key] = d;
+    if (!(q && dg && approved(did) && d.itemHash === itemHash(q) && d.diagramHash === diagramHash(dg))) continue;
+    if (proposals && !sameProposal(proposals.get(Number(qid)), did, d.extracted)) continue;
+    out[key] = d;
   }
   return out;
+}
+
+/* Does today's matcher still propose this diagram for the question, reading
+   the SAME values the pairing review confirmed? A narrowed matcher (the
+   long-acting row now excludes detemir) must retire the old pairing, not
+   keep drawing the old values (Astra, PR #134 review). */
+export function sameProposal(proposed, did, extracted) {
+  const p = (proposed ?? []).find((x) => x.d === did);
+  return !!p && JSON.stringify(p.p ?? null) === JSON.stringify(extracted ?? null);
 }
 
 /* The paid part of a pairing run: ask the reviewer about each batch, record

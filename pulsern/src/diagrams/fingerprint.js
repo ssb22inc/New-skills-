@@ -23,3 +23,12 @@ export function fnv1a(text) {
 }
 
 export const fingerprint = (q) => fnv1a(`${q?.stem ?? ""}\u0000${q?.rationale ?? ""}`);
+
+/* A fingerprint of a diagram's clinical content — its claims, captions and
+   narration. Every shipped pairing carries the fingerprint of the content
+   its pairing review approved, and the app shows a pairing only while the
+   diagram still has that content: change what a diagram teaches and its
+   old pairings stop showing until they are re-confirmed (Astra, PR #134
+   review). Same input as the pairing cache's diagramHash. */
+export const diagramFp = (d) =>
+  fnv1a(JSON.stringify([d?.id, d?.title, d?.facts, (d?.steps ?? []).map((s) => [s.key, s.caption, s.narration])]));

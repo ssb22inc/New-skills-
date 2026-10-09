@@ -5,7 +5,7 @@
    a rationale. If any of it fails to load, the rationale simply stands on
    its own: a diagram is an enhancement, never a dependency. */
 import React from "react";
-import { fingerprint, fnv1a } from "./diagrams/fingerprint.js";
+import { fingerprint, fnv1a, diagramFp } from "./diagrams/fingerprint.js";
 
 /* At most two diagrams under one rationale: more is a wall, not a help. */
 export const MAX_PER_QUESTION = 2;
@@ -17,7 +17,9 @@ export function pairsFor(map, q, registry) {
   if (!Array.isArray(entries)) return [];
   const fp = fingerprint(q);
   return entries
-    .filter((e) => e && e.f === fp && registry?.[e.d])
+    /* The question must be the one reviewed (f), and the diagram must still
+       teach what it taught when the pairing was approved (v). */
+    .filter((e) => e && e.f === fp && registry?.[e.d] && e.v === diagramFp(registry[e.d]))
     .slice(0, MAX_PER_QUESTION)
     .map((e) => ({ diagram: registry[e.d], params: e.p ?? null }));
 }

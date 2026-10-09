@@ -99,13 +99,18 @@ const decode = (s) => s
 const TAG = /<(?:"[^"]*"|'[^']*'|[^'">])*>/y;
 const squash = (s) => s.replace(/\s+/g, " ").trim();
 const exact = (s) => JSON.stringify(s);
-/* Collapse whitespace OUTSIDE quotes only; quoted values stay exact. */
+/* Whitespace is normalised ONLY in the parts of a tag outside quotes;
+   every quoted value is kept exactly. (An earlier version ran its last
+   replacements over the whole assembled tag, so "1 = = 1" and "1 == 1"
+   inside an onclick digested the same — Astra, PR #134 review.) */
 function normaliseTag(tag) {
   let out = "";
   for (const part of tag.match(/"[^"]*"|'[^']*'|[^"']+/g) ?? []) {
-    out += part[0] === '"' || part[0] === "'" ? exact(part.slice(1, -1)) : part.replace(/\s+/g, " ");
+    out += part[0] === '"' || part[0] === "'"
+      ? exact(part.slice(1, -1))
+      : part.replace(/\s+/g, " ").replace(/\s*=\s*/g, "=").replace(/^<\s+/, "<").replace(/\s+(\/?>)$/, "$1");
   }
-  return out.replace(/\s+>/g, ">").replace(/<\s+/g, "<").replace(/\s*=\s*/g, "=");
+  return out;
 }
 export function pageDigest(html) {
   const src = String(html ?? "");

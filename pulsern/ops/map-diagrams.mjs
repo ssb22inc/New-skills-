@@ -28,7 +28,7 @@ import { REVIEW_MODEL, GEN_MODEL } from "./models.mjs";
 import { FatalLlmError } from "./llm.mjs";
 import {
   itemHash, diagramHash, decisionKey, isFresh, pairingPrompt, PAIRING_SCHEMA,
-  buildItemMap, serializeDecisions, publishable, pairAll, exitCodeFor,
+  buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor,
 } from "./map-diagrams-lib.mjs";
 import { sourceKey, readReviewIndex, approval } from "./diagram-attest.mjs";
 
@@ -56,12 +56,15 @@ const run = { startedAt, model: REVIEW_MODEL, maxUsd: MAX_USD, limit: Number.isF
 const KEY = sourceKey();
 const REVIEWS = readReviewIndex();
 const approvedNow = (id) => approval(REVIEWS, id, KEY).ok;
+/* What today's matcher proposes for each question; filled once the bank
+   is read. A decision ships only if its values still match. */
+const PROPOSALS = new Map();
 
 function save(diagrams, items) {
   mkdirSync("reports/diagram-map", { recursive: true });
   writeFileSync(CACHE, serializeDecisions(decisions));
-  const fresh = publishable(decisions, items, diagrams, approvedNow);
-  writeFileSync(MAP, JSON.stringify(buildItemMap(fresh)) + "\n");
+  const fresh = publishable(decisions, items, diagrams, approvedNow, PROPOSALS);
+  writeFileSync(MAP, JSON.stringify(buildItemMap(fresh, diagrams, KEY)) + "\n");
   const spend = reviewSpend();
   run.spendUsd = spend.costUsd;
   run.calls = spend.calls;
@@ -104,12 +107,15 @@ try {
 
   const queue = {};
   for (const q of rows) {
-    for (const pair of proposePairs(q)) {
+    const proposed = proposePairs(q);
+    PROPOSALS.set(q.id, proposed);
+    for (const pair of proposed) {
       const dg = DIAGRAMS[pair.d];
       if (!dg || (ONLY && pair.d !== ONLY)) continue;
       if (!approvedNow(pair.d)) continue;   // never pay to pair a diagram that cannot ship
       run.candidates[pair.d] = (run.candidates[pair.d] ?? 0) + 1;
-      if (isFresh(decisions[decisionKey(q.id, pair.d)], itemHash(q), diagramHash(dg))) continue;
+      const prev = decisions[decisionKey(q.id, pair.d)];
+      if (isFresh(prev, itemHash(q), diagramHash(dg)) && sameProposal(proposed, pair.d, prev.extracted)) continue;
       (queue[pair.d] ??= []).push({ ...q, extracted: pair.p ?? null });
     }
   }
