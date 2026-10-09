@@ -3,7 +3,7 @@
    no-op push then reported "Saved." with the results nowhere on the branch. */
 import { describe, it, expect, beforeEach } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, chmodSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync, accessSync, constants } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -56,8 +56,13 @@ beforeEach(() => {
 });
 
 describe("save-results.sh", () => {
-  it("is executable", () => {
-    expect(() => chmodSync(SCRIPT, 0o755)).not.toThrow();
+  /* Checks the bit without setting it (Astra, PR #134 review, round 8: the
+     first version of this test set the mode itself, repairing the very
+     defect it was meant to catch). The workflows run the script directly. */
+  it("is committed executable and is executable on disk", () => {
+    expect(() => accessSync(SCRIPT, constants.X_OK)).not.toThrow();
+    const mode = execFileSync("git", ["ls-files", "-s", "--", "ops/save-results.sh"], { encoding: "utf8" }).slice(0, 6);
+    expect(mode).toBe("100755");
   });
 
   it("saves and reports the pushed head when nobody else touched the branch", () => {

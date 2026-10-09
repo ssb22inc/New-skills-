@@ -51,7 +51,8 @@ on:
 # (Astra, PR #134 review, finding 1: a check written inside a dispatchable
 # workflow is not a trust boundary; GitHub's environment rules are).
 permissions:
-  contents: write   # commit the report to the reviews branch
+  contents: write       # commit the report to the reviews branch
+  pull-requests: read   # read a PR's range for a dispatched review (private repos need it)
 
 # Queue, never cancel: a review already being paid for always finishes and is
 # saved. Only runs that have not started yet are superseded, which costs

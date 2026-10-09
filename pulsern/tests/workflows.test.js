@@ -247,6 +247,15 @@ describe("workflow placement", () => {
       });
     });
 
+    /* Round 8: an explicit permissions block disables everything it omits,
+       and the resolver reads /pulls/{n} with the workflow token. */
+    it("can read the PR it resolves, and gets no more than it needs", () => {
+      const w = wf();
+      const block = w.slice(w.indexOf("\npermissions:"), w.indexOf("\nconcurrency:"));
+      const perms = [...block.matchAll(/^  ([a-z-]+): (\w+)/gm)].map((m) => `${m[1]}=${m[2]}`).sort();
+      expect(perms).toEqual(["contents=write", "pull-requests=read"]);
+    });
+
     it("does not spend money on unrelated labels", () => {
       expect(wf()).toMatch(/github\.event\.action != 'labeled' \|\| github\.event\.label\.name == 'astra-review'/);
     });

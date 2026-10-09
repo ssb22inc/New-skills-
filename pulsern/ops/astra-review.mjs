@@ -207,48 +207,105 @@ export function parseNameStatusZ(out) {
   return entries;
 }
 
-/* Control characters a model cannot see (NUL, ESC…) are shown as visible
-   markers, so nothing in a changed file is silently invisible. */
-export const visibleControls = (s) => String(s ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, (c) => `\\u{${c.charCodeAt(0).toString(16).padStart(2, "0")}}`);
-/* Real binary assets get a summary (hash and size) rather than a diff. */
-const BINARY_ASSET = /\.(png|jpe?g|gif|webp|ico|mp3|wav|ogg|m4a|pdf|woff2?|ttf|otf|eot|zip|gz)$/i;
-const assetLine = (buf) => (buf == null ? "(absent)" : `sha256 ${createHash("sha256").update(buf).digest("hex")} · ${buf.length} bytes`);
+/* Characters a model cannot see are shown as visible markers, so nothing in
+   a changed file is silently invisible: C0 controls (NUL, ESC…), DEL, and the
+   invisible format characters — zero-width, byte-order mark, bidirectional
+   overrides — that can make text read differently from how it runs. */
+export const visibleControls = (s) => String(s ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u00AD\u200B-\u200F\u2028-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g, (c) => `\\u{${c.charCodeAt(0).toString(16).padStart(2, "0")}}`);
 
+/* Exact bytes to text, or null. Decoding is fatal — an invalid byte is never
+   replaced with U+FFFD — and a byte-order mark is kept, so two different
+   byte sequences can never become the same text (Astra, PR #134 review,
+   round 8: lossy decoding let a non-UTF-8 page change its script while its
+   digest stayed the same). Valid UTF-8 decodes one-to-one. */
+export function exactText(buf) {
+  if (buf == null) return null;
+  try { return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buf); } catch { return undefined; }
+}
+
+/* Raster images Astra can look at, recognised by their bytes, never by the
+   file name. */
+export function imageType(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (/^GIF8[79]a/.test(buf.subarray(0, 6).toString("latin1"))) return "image/gif";
+  if (buf.subarray(0, 4).toString("latin1") === "RIFF" && buf.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
+  return null;
+}
+export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_IMAGES = 24;
+export const MAX_IMAGE_TOTAL_BYTES = 16 * 1024 * 1024;
+const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
+
+/* What each changed file is, decided by its bytes. Text — whatever its
+   extension — is diffed. A raster image is shown to Astra itself, both
+   versions, each bound to its exact bytes by hash. Anything else (audio, PDF,
+   fonts, archives, text in another encoding) cannot be put in front of the
+   reviewer, so the review fails closed rather than certifying a hash
+   (Astra, PR #134 review, round 8: a hash names a change, it does not show
+   whether a clinical image or document is right). */
 export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
   const git = gitIn(cwd);
-  const blobBuf = (rev, path) => { try { return execFileSync("git", ["show", `${rev}:${path}`], { cwd, maxBuffer: 256 * 1024 * 1024 }); } catch { return null; } };
+  const blob = (rev, path) => { try { return execFileSync("git", ["show", `${rev}:${path}`], { cwd, maxBuffer: 256 * 1024 * 1024 }); } catch { return null; } };
   const entries = parseNameStatusZ(git("diff", "--name-status", "--no-renames", "-z", `${base}...${head}`));
   const mergeBase = git("merge-base", base, head).trim();
-  const blob = (rev, path) => { try { return git("show", `${rev}:${path}`); } catch { return null; } };
 
   const files = [];
   const skipped = [];
+  const unrepresentable = [];
+  const images = [];
   for (const e of entries) {
     const c = classifyPath(e.path);
     if (c.mode === "skip") { if (c.why !== "outside PulseRN") skipped.push({ path: e.path, why: c.why }); continue; }
-    const before = e.status === "A" ? null : blob(mergeBase, e.path);
-    const after = e.status === "D" ? null : blob(head, e.path);
+    const wasBuf = e.status === "A" ? null : blob(mergeBase, e.path);
+    const nowBuf = e.status === "D" ? null : blob(head, e.path);
+    const before = exactText(wasBuf), after = exactText(nowBuf);
+    const isText = before !== undefined && after !== undefined;
 
-    if (c.mode === "page") {
+    if (!isText) {
+      const sides = [["before", wasBuf], ["after", nowBuf]].filter(([, b]) => b != null);
+      const ok = sides.every(([, b]) => imageType(b) && b.length <= MAX_IMAGE_BYTES);
+      if (!ok) { unrepresentable.push(e.path); continue; }
+      const lines = [`image ${e.path} (shown to you as attached images)`];
+      lines.push(`- ${wasBuf == null ? "(absent)" : `sha256 ${sha256(wasBuf)} · ${wasBuf.length} bytes · ${imageType(wasBuf)}`}`);
+      lines.push(`+ ${nowBuf == null ? "(absent)" : `sha256 ${sha256(nowBuf)} · ${nowBuf.length} bytes · ${imageType(nowBuf)}`}`);
+      for (const [side, b] of sides) images.push({ path: e.path, side, mime: imageType(b), sha256: sha256(b), bytes: b });
+      files.push({ status: e.status, path: e.path, form: "image", diff: lines.join("\n") + "\n", full: null });
+    } else if (c.mode === "page") {
       files.push({ status: e.status, path: e.path, form: "page digest", diff: textDiff(before == null ? "" : pageDigest(before), after == null ? "" : pageDigest(after), e.path), full: null });
     } else if (c.mode === "lockfile") {
       files.push({ status: e.status, path: e.path, form: "dependency summary", diff: textDiff(before == null ? "" : lockDigest(before), after == null ? "" : lockDigest(after), e.path), full: null });
-    } else if (BINARY_ASSET.test(e.path)) {
-      const was = e.status === "A" ? null : blobBuf(mergeBase, e.path), now = e.status === "D" ? null : blobBuf(head, e.path);
-      files.push({ status: e.status, path: e.path, form: "binary asset", diff: `binary asset ${e.path}\n- ${assetLine(was)}\n+ ${assetLine(now)}\n`, full: null });
     } else {
       /* --text: never let git decide a source file is "binary" and replace
          its changes with a one-line marker (Astra, PR #134 review, round 7:
-         a NUL in a comment hid every other change in the file). */
-      const diff = git("diff", "--text", "--no-renames", "--no-ext-diff", "--no-textconv", "-U25", `${base}...${head}`, "--", e.path);
+         a NUL in a comment hid every other change in the file). Both sides
+         are valid UTF-8 (checked above), so the diff decodes exactly. */
+      const raw = execFileSync("git", ["diff", "--text", "--no-renames", "--no-ext-diff", "--no-textconv", "-U25", `${base}...${head}`, "--", e.path], { cwd, maxBuffer: 256 * 1024 * 1024 });
+      const diff = exactText(raw);
+      if (diff === undefined) { unrepresentable.push(e.path); continue; }
       files.push({ status: e.status, path: e.path, form: "diff", diff: visibleControls(diff), full: after == null ? null : visibleControls(after) });
     }
   }
   /* Fail closed: a change git could only describe as "Binary files differ"
-     has not been represented, so the review must not pass on it. */
-  const unrepresented = files.filter((f) => /^Binary files .* differ$/m.test(f.diff));
-  if (unrepresented.length) throw new Error(`cannot represent changes to ${unrepresented.map((f) => f.path).join(", ")} for review`);
-  return { files, skipped };
+     has not been represented either. */
+  for (const f of files) if (f.form !== "image" && /^Binary files .* differ$/m.test(f.diff)) unrepresentable.push(f.path);
+  if (unrepresentable.length) throw new Error(`cannot put these changes in front of the reviewer, so the change cannot pass: ${unrepresentable.join(", ")} (not valid UTF-8 text and not a reviewable PNG/JPEG/GIF/WebP image under ${MAX_IMAGE_BYTES / 1024 / 1024} MB)`);
+  const total = images.reduce((n, i) => n + i.bytes.length, 0);
+  if (images.length > MAX_IMAGES || total > MAX_IMAGE_TOTAL_BYTES) throw new Error(`${images.length} image versions (${total.toLocaleString()} bytes) changed; at most ${MAX_IMAGES} images and ${MAX_IMAGE_TOTAL_BYTES / 1024 / 1024} MB can be shown in one review — split the change`);
+  return { files, skipped, images };
+}
+
+/* The request: the text prompt, then each image labelled with its path,
+   side and hash, so Astra reviews exactly the bytes that will ship. */
+export function buildMessages(prompt, images = []) {
+  if (!images.length) return [{ role: "user", content: prompt }];
+  const content = [{ type: "text", text: prompt }];
+  images.forEach((img, i) => {
+    content.push({ type: "text", text: `Image ${i + 1} of ${images.length}: ${img.path} — ${img.side} the change · sha256 ${img.sha256}` });
+    content.push({ type: "image_url", image_url: { url: `data:${img.mime};base64,${Buffer.from(img.bytes).toString("base64")}` } });
+  });
+  return [{ role: "user", content }];
 }
 
 /* Fits the change into the budget without ever dropping part of the change. */
@@ -329,7 +386,8 @@ HOW TO REPORT
 FORMS YOU WILL SEE
 - "diff": a normal unified diff, sometimes followed by the whole file after the change.
 - "page digest": a generated public page reduced to one line per visible text block, script, link, meta tag and event handler, diffed before/after. Judge what a reader sees and what a browser would run.
-- "dependency summary": the lockfile reduced to package@version, source host and integrity prefix, diffed before/after.`);
+- "dependency summary": the lockfile reduced to package@version, source host and integrity prefix, diffed before/after.
+- "image": a changed raster image. Both versions are attached after this text, each labelled with its path and sha256. Review what they show as strictly as text: a wrong value, label or clinical detail in an image is wrong content.`);
 
   parts.push(`\n=== PROJECT RULES (the standard you review against) ===\n${rules}`);
 
@@ -452,7 +510,7 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
   try {
     assertCrossFamily(AUTHOR_MODEL_FAMILY_PROBE, REVIEW_MODEL);
     const rules = existsSync(rulesPath) ? readFileSync(rulesPath, "utf8") : "(project rules file not found)";
-    const { files, skipped } = collectChanges(meta.base, meta.head, { cwd });
+    const { files, skipped, images } = collectChanges(meta.base, meta.head, { cwd });
     report.skipped = skipped;
     report.filesReviewed = files.map((f) => f.path);
 
@@ -487,7 +545,7 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
     save();
 
     const prompt = buildPrompt({ rules, files: plan.files, skipped, meta });
-    const res = await callModel({ model: REVIEW_MODEL, prompt, maxTokens: 64000, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
+    const res = await callModel({ model: REVIEW_MODEL, prompt, messages: buildMessages(prompt, images), maxTokens: 64000, reasoningEffort: "high", responseFormat: FINDINGS_SCHEMA });
     report.usage = res.usage;
     report.model = res.model || REVIEW_MODEL;
 

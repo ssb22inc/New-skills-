@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import {
   classifyPath, planContext, buildPrompt, validateResult, verdictFor, renderMarkdown, reportBaseName,
   FINDINGS_SCHEMA, MAX_FULL_FILE_CHARS, pageDigest, lockDigest, textDiff, parseNameStatusZ,
-  collectChanges, runReview,
+  collectChanges, runReview, buildMessages, exactText, imageType, visibleControls,
 } from "../ops/astra-review.mjs";
 
 const finding = (severity, extra = {}) => ({
@@ -267,19 +267,88 @@ describe("digests", () => {
     expect(f.full.length).toBeGreaterThan(MAX_FULL_FILE_CHARS);   // too big to attach: the diff alone must carry it
     rmSync(dir, { recursive: true, force: true });
   });
-  it("summarises a real binary asset by hash and size instead of hiding it", () => {
-    const dir = mkdtempSync(join(tmpdir(), "astra-png-"));
-    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
-    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
-    mkdirSync(join(dir, "pulsern/public"), { recursive: true });
-    writeFileSync(join(dir, "pulsern/public/x.png"), Buffer.from([0x89, 0x50, 0, 1, 2]));
-    run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
-    writeFileSync(join(dir, "pulsern/public/x.png"), Buffer.from([0x89, 0x50, 0, 9, 9, 9]));
-    run("add", "-A"); run("commit", "-qm", "h");
-    const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === "pulsern/public/x.png");
-    expect(f.form).toBe("binary asset");
-    expect(f.diff).toMatch(/- sha256 [0-9a-f]{64} · 5 bytes\n\+ sha256 [0-9a-f]{64} · 6 bytes/);
-    rmSync(dir, { recursive: true, force: true });
+  /* Round 8: hash-and-size summaries let a changed image or document pass
+     unseen, chosen by file name; lossy UTF-8 decoding hid byte changes. */
+  describe("changes are judged by their bytes", () => {
+    const PNG = (n) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from([0, 0, 0, 13, n, n, n, n])]);
+    function twoCommits(path, a, b) {
+      const dir = mkdtempSync(join(tmpdir(), "astra-bytes-"));
+      const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+      run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+      mkdirSync(join(dir, path, ".."), { recursive: true });
+      writeFileSync(join(dir, "pulsern-keep"), "x");
+      if (a != null) writeFileSync(join(dir, path), a);
+      run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+      writeFileSync(join(dir, path), b);
+      run("add", "-A"); run("commit", "-qm", "h");
+      return dir;
+    }
+
+    it("shows a changed image to Astra itself, both versions, bound to their exact bytes", () => {
+      const path = "pulsern/public/diagram.png";
+      const dir = twoCommits(path, PNG(1), PNG(2));
+      const { files, images } = collectChanges("b", "HEAD", { cwd: dir });
+      const f = files.find((x) => x.path === path);
+      expect(f.form).toBe("image");
+      expect(images.map((i) => i.side)).toEqual(["before", "after"]);
+      expect(Buffer.compare(images[1].bytes, PNG(2))).toBe(0);
+      const content = buildMessages("prompt", images)[0].content;
+      const urls = content.filter((c) => c.type === "image_url").map((c) => c.image_url.url);
+      expect(urls).toEqual([`data:image/png;base64,${PNG(1).toString("base64")}`, `data:image/png;base64,${PNG(2).toString("base64")}`]);
+      expect(content.find((c) => c.type === "text" && c.text.includes("after the change")).text).toContain(images[1].sha256);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("diffs text stored under a binary-looking name", () => {
+      const path = "pulsern/public/notes.png";
+      const dir = twoCommits(path, "dose: 1 mg\n", "dose: 10 mg\n");
+      const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === path);
+      expect(f.form).toBe("diff");
+      expect(f.diff).toContain("+dose: 10 mg");
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("refuses audio, documents and other bytes it cannot show — no hash-only pass", async () => {
+      for (const [path, a, b] of [
+        ["pulsern/public/clip.mp3", Buffer.from([0xff, 0xfb, 0x90, 1, 2, 3]), Buffer.from([0xff, 0xfb, 0x90, 4, 5, 6])],
+        ["pulsern/public/guide.pdf", Buffer.from("%PDF-1.7\n\xe2\xe3\xcf\xd3 a", "latin1"), Buffer.from("%PDF-1.7\n\xe2\xe3\xcf\xd3 b", "latin1")],
+        ["pulsern/public/fake.png", Buffer.from([0x89, 0x50, 0, 1, 2]), Buffer.from([0x89, 0x50, 0, 9, 9, 9])],
+      ]) {
+        const dir = twoCommits(path, a, b);
+        expect(() => collectChanges("b", "HEAD", { cwd: dir }), path).toThrow(/cannot pass/);
+        const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
+        let called = false;
+        const { code, report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return { text: JSON.stringify({ assessment: "ok", findings: [] }), usage: {} }; } });
+        expect(called, path).toBe(false);
+        expect(report.verdict, path).toBe("FAIL");
+        expect(code, path).not.toBe(0);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    /* Astra's case: a windows-1252 page whose script compares 0xE9 with
+       0xEA, changed to compare 0xE9 with 0xE9. Lossy decoding turned both
+       into U+FFFD, so the digest did not change at all. */
+    it("refuses a page whose bytes are not valid UTF-8 instead of digesting replacement characters", () => {
+      const page = (x) => Buffer.concat([Buffer.from('<meta charset="windows-1252"><script>if ("'), Buffer.from([0xe9]), Buffer.from('" === "'), Buffer.from([x]), Buffer.from('") go()</script>')]);
+      const path = "pulsern/public/learn/z/index.html";
+      const dir = twoCommits(path, page(0xea), page(0xe9));
+      expect(() => collectChanges("b", "HEAD", { cwd: dir })).toThrow(/learn\/z\/index\.html/);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("decodes exactly: invalid bytes are rejected and a byte-order mark is kept and shown", () => {
+      expect(exactText(Buffer.from([0x61, 0xe9]))).toBeUndefined();
+      expect(exactText(Buffer.from([0xef, 0xbb, 0xbf, 0x61]))).toBe("\uFEFFa");
+      expect(visibleControls("\uFEFFa\u202Eb\u200Bc")).toBe("\\u{feff}a\\u{202e}b\\u{200b}c");
+      expect(exactText(null)).toBeNull();
+    });
+
+    it("recognises images by their bytes, not their names", () => {
+      expect(imageType(PNG(1))).toBe("image/png");
+      expect(imageType(Buffer.from([0x89, 0x50, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
+      expect(imageType(Buffer.from("GIF89a......"))).toBe("image/gif");
+    });
   });
 
   it("is lossless: any byte that changes shows", () => {
