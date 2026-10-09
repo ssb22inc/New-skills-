@@ -1,0 +1,107 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "510c0a27e182ef2d328be032f3478de3c466bde0",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T10:31:16.871Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/src/concept-explainers.jsx",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/fingerprint.js",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/concept-explainers.test.jsx",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/map-diagrams.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": ".github/workflows/pulsern-narrate.yml",
+      "line": 49,
+      "title": "Fully qualified refs bypass the prohibition on publishing directly to main",
+      "problem": "The guard rejects only the literal inputs main and master. actions/checkout accepts refs/heads/main, and the later push becomes HEAD:refs/heads/main. The same bypass exists in pulsern-diagram-map.yml and pulsern-diagram-review.yml.",
+      "failure_scenario": "Dispatch narration with branch=refs/heads/main. The guard passes, main is checked out, and the workflow attempts to commit the generated manifest directly to main without a reviewed PR. If repository rules permit this token to push, the required review is bypassed; GITHUB_TOKEN pushes also suppress ordinary push-triggered workflows. Branch protection might prevent the final push, but that configuration was not supplied.",
+      "fix": "Validate and normalize branch inputs before checkout. Reject the repository's actual default branch, including fully qualified aliases, and reject non-branch refs. Use the validated canonical branch consistently for checkout, push, concurrency, and PR lookup. Add tests covering refs/heads/main and a non-main default branch.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/diagrams/fingerprint.js",
+      "line": 25,
+      "title": "Question edits to options or the answer leave obsolete pairings visible",
+      "problem": "The runtime question fingerprint includes only stem and rationale, whereas the pairing decision depends on options and the keyed answer too. The mapper also extracts diagram parameters from options. The new diagram-content fingerprint does not close this question-side freshness gap.",
+      "failure_scenario": "A bank item is corrected from NPH to regular insulin in its options while retaining its stem, administration time, and general peak-risk rationale. Its old pairing can still carry type=nph. pairsFor accepts that pairing because both runtime fingerprints still match, so the student receives the old insulin's peak window until the mapping job runs again. An answer-only correction likewise does not invalidate the pairing.",
+      "fix": "Fingerprint all question content used by pairing review and parameter extraction, including options and the keyed answer, using a canonical representation shared by the mapper and client. Rebuild existing pairings and add options-only and answer-only mutation tests.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/diagrams/insulin.jsx",
+      "line": 274,
+      "title": "The spoken and overview glargine claims still omit the U-100 restriction",
+      "problem": "The data and long-step caption now correctly restrict the approximately 24-hour profile to glargine U-100, but the new narration still says simply that glargine provides a background level for about 24 hours. The visible overview table likewise says only Long · glargine. The U-300 distinction in the facts array is not displayed in that overview.",
+      "failure_scenario": "A student studying the static table or listening to the narration learns an unqualified glargine duration of approximately 24 hours and applies it to glargine U-300, despite this file explicitly recognizing its longer duration. Saying that other basal insulins differ does not identify another formulation of glargine as excluded.",
+      "fix": "Identify glargine U-100 explicitly in the visible table and spoken narration, not just in metadata, the SVG description, and one caption. Regenerate the affected recording and test the visible and spoken product qualification.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/review-diagrams.mjs",
+      "line": 56,
+      "title": "A transient review error becomes a permanently cached rejection",
+      "problem": "Operational errors are saved in the index as FAIL with the same content key used for completed reviews. On the next run, the unchanged-key branch skips the reviewer regardless of whether the previous review actually completed. The new publication gate then treats this cached operational failure as a rejected diagram.",
+      "failure_scenario": "A diagram's first review encounters a timeout, authentication error, or malformed model response. After the underlying problem is fixed, rerunning pulsern-diagram-review on the same code skips the call and returns FAIL again. The workflow does not expose --force, so its normal retry path cannot recover, and the mapper continues withholding the diagram.",
+      "fix": "Record whether a valid review completed separately from its clinical verdict. Reuse cached verdicts only for completed reviews; retry operational failures automatically. Add an end-to-end test in which the first call throws and the second call, with identical content, succeeds.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 186512,
+    "completionTokens": 17155,
+    "reasoningTokens": 16056,
+    "costUsd": 3.1891425
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to approve. The changes close several earlier gaps, but publication controls, pairing freshness, and review-error recovery still have concrete defects. This was a static review; I did not run the tests or verify repository-level branch protection and environment settings.",
+  "counts": {
+    "blocker": 3,
+    "major": 1,
+    "minor": 0
+  }
+}
