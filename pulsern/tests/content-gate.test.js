@@ -49,6 +49,19 @@ describe("review()", () => {
     expect(sent[0].reasoning).toEqual({ effort: REVIEW_EFFORT });
   });
 
+  /* Rendered visuals are judged as images, through the same gate. */
+  it("sends images as image parts alongside the text", async () => {
+    await review("look at this", 8000, { images: [Buffer.from([137, 80, 78, 71])] });
+    const content = sent[0].messages[0].content;
+    expect(content[0]).toEqual({ type: "text", text: "look at this" });
+    expect(content[1].type).toBe("image_url");
+    expect(content[1].image_url.url).toMatch(/^data:image\/png;base64,/);
+  });
+  it("can raise the effort for high-stakes reviews", async () => {
+    await review("x", 8000, { effort: "high" });
+    expect(sent[0].reasoning).toEqual({ effort: "high" });
+  });
+
   it("refuses to let a model review its own family's writing", async () => {
     await expect(review("x", 8000, { writer: "openai/gpt-4.1" })).rejects.toThrow(/Same-family/);
     expect(sent).toHaveLength(0); // refused before any money is spent
@@ -87,7 +100,7 @@ describe("parseJson()", () => {
 });
 
 describe("no content script escapes the gate", () => {
-  const SCRIPTS = ["content-factory", "card-factory", "case-factory", "exam-factory", "audit-sweep", "copy-audit", "seed-visuals", "map-diagrams"];
+  const SCRIPTS = ["content-factory", "card-factory", "case-factory", "exam-factory", "audit-sweep", "copy-audit", "seed-visuals", "map-diagrams", "review-diagrams"];
 
   /* Discovery by what a script DOES — call a model — not by what its prompt
      happens to say. Every model-calling script must be a content reviewer on

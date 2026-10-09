@@ -1,0 +1,91 @@
+name: pulsern-diagram-review
+
+# GPT Astra reviews every concept diagram as a student sees it: rendered in
+# both themes and at every explainer step, alongside every clinical claim,
+# caption and narration script (pulsern/ops/review-diagrams.mjs).
+#
+# Manual, on a feature branch: rendering runs the branch's code, so this
+# never runs automatically on someone else's pull request with secrets.
+# Unchanged diagrams keep their earlier verdict. Every paid review is
+# committed back to the branch, PASS or FAIL.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to review and commit the reports to (never main)"
+        required: true
+      only:
+        description: "Optional: review one diagram id only"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pulsern-diagram-review-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - name: Refuse to write to main
+        working-directory: .
+        run: |
+          case "${{ inputs.branch }}" in
+            main|master) echo "::error::Run on a feature branch; reports are committed to it."; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Render and review every diagram (Astra)
+        id: review
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set +e
+          node ops/review-diagrams.mjs ${{ inputs.only != '' && format('--only {0}', inputs.only) || '' }}
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Show the reports
+        if: always()
+        run: |
+          for f in $(git ls-files --others --modified reports/diagram-review | grep '\.md$'); do cat "$f" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; done
+
+      - name: Commit the reports (always — every paid review is kept)
+        if: always()
+        run: |
+          git config user.name "pulsern-diagram-review"
+          git config user.email "pulsern-diagram-review@users.noreply.github.com"
+          git add reports/diagram-review/
+          if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
+          git commit -q -m "Astra diagram review (rc=${{ steps.review.outputs.rc }})"
+          for attempt in 1 2 3; do
+            git push -q origin "HEAD:${{ inputs.branch }}" && { echo "Saved."; exit 0; }
+            git pull -q --rebase origin "${{ inputs.branch }}" || true
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the reports."; exit 1
+
+      - name: Verdict
+        if: always()
+        run: |
+          [ "${{ steps.review.outputs.rc }}" = "0" ] || { echo "::error::At least one diagram failed Astra's review — see the reports."; exit 1; }

@@ -57,13 +57,23 @@ export function resetReviewSpend() {
 /* writer: the model that produced what is being judged. Defaults to the
    factories' generator; the copy audit judges strings written in this
    codebase, which a Claude model also wrote. */
-export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, responseFormat = null } = {}) {
+/* images: PNG buffers shown to the reviewer alongside the prompt, for
+   judging rendered visuals as a student sees them. effort: "high" for
+   reviews where one miss reaches every student at once. */
+export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, responseFormat = null, images = null, effort = REVIEW_EFFORT } = {}) {
   assertCrossFamily(writer, REVIEW_MODEL);
+  const messages = images?.length
+    ? [{ role: "user", content: [
+        { type: "text", text: prompt },
+        ...images.map((img) => ({ type: "image_url", image_url: { url: `data:image/png;base64,${Buffer.from(img).toString("base64")}` } })),
+      ] }]
+    : undefined;
   const res = await llmCall({
     model: REVIEW_MODEL,
     prompt,
+    messages,
     maxTokens: Math.max(maxTokens, REVIEW_MIN_TOKENS),
-    reasoningEffort: REVIEW_EFFORT,
+    reasoningEffort: effort,
     responseFormat,
   });
 

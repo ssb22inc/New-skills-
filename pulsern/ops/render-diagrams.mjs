@@ -17,10 +17,6 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { launchBrowser } from "./browser.mjs";
 
-const arg = (n, d) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
-const OUT = resolve(arg("--out", "reports/diagrams"));
-const ONLY = arg("--only", null);
-const WIDTH = Number(arg("--width", "360"));
 
 /* The theme tokens are read from App.jsx itself, so the render can never
    drift from what students actually see. */
@@ -35,12 +31,14 @@ function themeTokens() {
   return { light: light + extra, dark };
 }
 
-const page = (body, tokens, css) => `<!doctype html><html><head><meta charset="utf-8">
+const page = (body, tokens, css, WIDTH) => `<!doctype html><html><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>:root{${tokens}} body{margin:0;background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sans-serif}
 .shot{width:${WIDTH}px;padding:12px;box-sizing:border-box;background:var(--paper)} ${css}</style></head>
 <body>${body}</body></html>`;
 
+export async function renderDiagrams({ outDir, only = null, width = 360 } = {}) {
+const OUT = outDir, ONLY = only, WIDTH = width;
 const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
 try {
   /* React and react-dom are CommonJS: loaded by Node itself, so the app's
@@ -71,7 +69,7 @@ try {
           ? React.createElement(Explainer, { diagram: d })
           : React.createElement(Explainer, { diagram: d, startInPlayer: true, initialStep: frames[i] });
         const body = `<div class="shot">${renderToStaticMarkup(el)}</div>`;
-        await pg.setContent(page(body, tokens[theme], DIAGRAM_CSS), { waitUntil: "networkidle" });
+        await pg.setContent(page(body, tokens[theme], DIAGRAM_CSS, WIDTH), { waitUntil: "networkidle" });
         await pg.evaluate(() => document.fonts.ready);
         /* Layout lint, measured in a real browser with the real fonts: no
            text past the canvas, out of the box it sits in, or on top of other
@@ -104,13 +102,25 @@ try {
         }
         const file = join(dir, `${theme}-step${i}.png`);
         await pg.locator(".shot").screenshot({ path: file });
-        gallery.push({ id: d.id, theme, step: i, file });
+        gallery.push({ id: d.id, theme, step: i, key: frames[i] == null ? "static" : d.steps[frames[i]].key, file });
       }
     }
     console.log(`rendered ${d.id}: ${frames.length} frames × 2 themes`);
   }
   writeFileSync(join(OUT, "index.json"), JSON.stringify(gallery, null, 2));
   await browser.close();
+  return { gallery, lintFailures };
+} finally {
+  await vite.close();
+}
+}
+
+/* CLI: render to a folder and fail on any layout problem. */
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const arg = (n, d) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
+  const { lintFailures } = await renderDiagrams({
+    outDir: resolve(arg("--out", "reports/diagrams")), only: arg("--only", null), width: Number(arg("--width", "360")),
+  });
   if (lintFailures.length) {
     console.error(`\nLayout lint: ${lintFailures.length} problem(s)`);
     for (const f of lintFailures) console.error(`  ✗ ${f}`);
@@ -118,6 +128,4 @@ try {
   } else {
     console.log("Layout lint: clean");
   }
-} finally {
-  await vite.close();
 }
