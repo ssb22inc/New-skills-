@@ -1,0 +1,93 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "eb99254446cadaff486e0606203010d81b34d4c2",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T12:42:20.375Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/check-png-canonical.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/png-canonical.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/ops/save-results.sh",
+    "pulsern/src/concept-explainers.jsx",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/fingerprint.js",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/concept-explainers.test.jsx",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/insulin.test.js",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/map-diagrams.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/png-canonical.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/save-results.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 178,
+      "title": "Duplicate lockfile keys hide committed content from review",
+      "problem": "lockDigest parses the file with JSON.parse before constructing its only review representation. JSON.parse silently discards earlier occurrences of duplicate keys. A changed lockfile can therefore contain newly committed sensitive content while producing an identical digest. Lockfiles receive neither a raw diff nor full-file context.",
+      "failure_scenario": "Prepend a duplicate top-level \"name\" property containing a credential before the existing \"name\":\"pulsern\" property. npm and lockDigest retain the latter value, so installation still works and the reviewer sees \"no textual change\", while the credential remains in the committed file. Duplicate keys inside package entries have the same problem.",
+      "fix": "Detect and reject duplicate object keys at every nesting level before summarization, or include a lossless raw diff whenever parsing would discard source content. Add an end-to-end test proving that a duplicate-key payload cannot reach the model as an unchanged lockfile.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 171,
+      "title": "Narration QA still discards a blood-group A at sentence start",
+      "problem": "The filler filter removes every unprotected \"a\", but keepLetters does not protect a sentence-initial blood-group label followed directly by a product name. Consequently, the exact-word check can approve audio that changes a specific transfusion fact into a false general statement.",
+      "failure_scenario": "audioCheck(\"A plasma contains anti-B antibodies.\", \"Plasma contains anti-B antibodies.\") passes: the initial \"A\" matches none of the protection patterns and is discarded as an article. Both sides then have identical tokens, similarity 1, and no mismatch. The accepted transcript incorrectly attributes anti-B antibodies to plasma generally, including AB plasma.",
+      "fix": "Do not discard an ambiguous standalone A in clinical narration. Prefer retaining the token and failing closed over expanding an inevitably incomplete context allowlist. Add a faithful-baseline and dropped-label regression test for \"A plasma\", including lowercase transcription.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 231184,
+    "completionTokens": 14044,
+    "reasoningTokens": 13466,
+    "costUsd": 3.5919925
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. Two remaining gaps let the review pipelines approve content they have not actually verified: duplicate JSON keys can hide committed secrets, and narration normalization can erase a clinically meaningful blood-group label. These findings are based on the supplied code; I did not execute the tests or workflows.",
+  "counts": {
+    "blocker": 2,
+    "major": 0,
+    "minor": 0
+  }
+}
