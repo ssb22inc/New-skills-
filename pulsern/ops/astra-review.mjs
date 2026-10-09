@@ -190,7 +190,10 @@ export function lockDigest(jsonText) {
   }
   const lines = [`(lockfile) ${sortedJson(top)}`];
   for (const k of Object.keys(packages).sort()) {
-    lines.push(`${k === "" ? "(root)" : k.replace(/^node_modules\//, "")} ${sortedJson(packages[k])}`);
+    /* The key exactly, JSON-encoded: "node_modules/p" and "p" are different
+       install locations and must never print the same (Astra, PR #134
+       review, round 16: the prefix was stripped). */
+    lines.push(`${JSON.stringify(k)} ${sortedJson(packages[k])}`);
   }
   return lines.join("\n") + "\n";
 }

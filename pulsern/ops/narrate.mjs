@@ -23,7 +23,7 @@ import { createServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip } from "./narrate-lib.mjs";
+import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll } from "./narrate-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -82,6 +82,7 @@ function save() {
     `- Model: \`${TTS.model}\` · audio check: \`${QA_MODEL}\`, pass at ≥ ${QA_THRESHOLD} similarity AND every number, negation and direction word exactly as scripted`,
     `- Recorded and shipped: ${report.recorded.length} · unchanged, skipped: ${report.skippedUnchanged}`,
     `- Characters synthesised: ${report.characters.toLocaleString()} (OpenAI does not return a cost; this is what it bills on)`,
+    report.stopped ? `- **Stopped:** ${report.stopped}` : "- Stopped early: no",
     report.failedQa.length ? `- **Failed the audio check — not shipped:**\n${report.failedQa.map((f) => `  - ${f.diagram}/${f.step}: ${f.mismatch ? `said “${f.mismatch.heard}” where the script says “${f.mismatch.expected}”; ` : ""}similarity ${f.similarity.toFixed(3)} — heard: “${f.heard}”`).join("\n")}` : "- Failed the audio check: none",
     report.errors.length ? `- Errors: ${report.errors.map((e) => `${e.diagram}/${e.step}: ${e.error}`).join("; ")}` : "- Errors: none",
     "",
@@ -118,27 +119,9 @@ try {
       const { error } = await sb.storage.createBucket(BUCKET, { public: true, allowedMimeTypes: ["audio/mpeg"], fileSizeLimit: "4MB" });
       if (error) throw new Error(`Could not create the ${BUCKET} bucket: ${error.message}`);
     }
-    for (const { d, s, id } of work) {
-      try {
-        /* Two takes at most: a synthetic voice occasionally slurs a word, and
-           a second take is cheaper than a human re-recording. A clip that
-           fails both is reported and not shipped. */
-        let mp3, heard, check;
-        for (let take = 1; take <= 2; take++) {
-          mp3 = await synthesise(s.narration);
-          report.characters += s.narration.length;
-          heard = await transcribe(mp3);
-          check = audioCheck(s.narration, heard);
-          if (check.pass) break;
-          console.log(`  … ${d.id}/${s.key} take ${take}: ${check.mismatch ? `said “${check.mismatch.heard}” where the script says “${check.mismatch.expected}”` : `similarity ${check.similarity.toFixed(3)}`}`);
-        }
-        const similarity = check.similarity;
-        if (!check.pass) {
-          report.failedQa.push({ diagram: d.id, step: s.key, similarity, mismatch: check.mismatch, heard });
-          console.log(`  ✗ ${d.id}/${s.key}: failed the audio check twice — not shipped`);
-          save();
-          continue;
-        }
+    code = await recordAll(work, {
+      synthesise, transcribe, save, report,
+      store: async ({ d, s, id }, mp3, check) => {
         const audioHash = createHash("sha256").update(mp3).digest("hex").slice(0, 32);
         const path = `${d.id}/${audioHash}.mp3`;
         const { error } = await sb.storage.from(BUCKET).upload(path, mp3, { contentType: "audio/mpeg", cacheControl: "31536000", upsert: false });
@@ -146,19 +129,13 @@ try {
            this clip — anything else is a real failure. */
         if (error && !/exist|duplicate|409/i.test(`${error.message} ${error.statusCode ?? ""}`)) throw new Error(`upload: ${error.message}`);
         manifest.clips[d.id][s.key] = {
-          id, qa: QA_VERSION, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(similarity * 1000) / 1000,
+          id, qa: QA_VERSION, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(check.similarity * 1000) / 1000,
           url: `${process.env.SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${path}`, bytes: mp3.length,
         };
-        report.recorded.push({ diagram: d.id, step: s.key, similarity, bytes: mp3.length });
-        console.log(`  ✓ ${d.id}/${s.key}: ${(mp3.length / 1024).toFixed(0)} KB, audio check ${similarity.toFixed(3)}`);
-        save();   // after every clip: a stopped run keeps what it paid for
-      } catch (e) {
-        report.errors.push({ diagram: d.id, step: s.key, error: e.message.slice(0, 200) });
-        console.log(`  ✗ ${d.id}/${s.key}: ${e.message.slice(0, 160)}`);
-        save();
-        if (/ 401| 403|insufficient_quota|billing/i.test(e.message)) { code = 1; break; }
-      }
-    }
+        report.recorded.push({ diagram: d.id, step: s.key, similarity: check.similarity, bytes: mp3.length });
+        console.log(`  ✓ ${d.id}/${s.key}: ${(mp3.length / 1024).toFixed(0)} KB, audio check ${check.similarity.toFixed(3)}`);
+      },
+    });
     save();
     if (report.failedQa.length || report.errors.length) code = 1;
     console.log(`Done. Report: ${REPORT}.md`);

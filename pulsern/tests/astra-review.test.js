@@ -170,7 +170,7 @@ describe("collecting from real git output (Astra finding #3)", () => {
     const { files } = collectChanges("base", "HEAD", { cwd: repo });
     const lock = files.find((f) => f.path === "pulsern/package-lock.json");
     expect(lock.form).toBe("dependency summary");
-    expect(lock.diff).toMatch(/^\+left-pad .*"resolved":"https:\/\/evil\.example\/left-pad-1\.0\.0\.tgz"/m);
+    expect(lock.diff).toMatch(/^\+"node_modules\/left-pad" .*"resolved":"https:\/\/evil\.example\/left-pad-1\.0\.0\.tgz"/m);
   });
 });
 
@@ -622,6 +622,15 @@ describe("digests", () => {
   });
   /* Round 15: JSON.parse keeps the last of two duplicate keys, so a
      credential in the first one vanished from the summary. */
+  /* Round 16: "node_modules/" was stripped from keys, so moving an entry
+     between "p" and "node_modules/p" printed identically. */
+  it("keeps every package key exactly", () => {
+    const at = (key) => npmJson({ lockfileVersion: 3, packages: { "": { name: "x" }, [key]: { version: "1.0.0" } } });
+    expect(textDiff(lockDigest(at("node_modules/p")), lockDigest(at("p")), "l")).not.toBe("");
+    // a real key named like the old "(root)" alias can no longer collide with the root entry
+    expect(lockDigest(at("(root)"))).toContain('"(root)" {"version":"1.0.0"}');
+    expect(lockDigest(at("(root)"))).toContain('"" {"name":"x"}');
+  });
   it("refuses a lockfile parsing would lose anything from", () => {
     const good = JSON.stringify({ name: "pulsern", lockfileVersion: 3, packages: { "": { name: "pulsern" } } }, null, 2) + "\n";
     expect(() => lockDigest(good)).not.toThrow();

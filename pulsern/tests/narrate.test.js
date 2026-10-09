@@ -1,6 +1,6 @@
 /* Narration: clip identity, and the check that audio says what the script says. */
 import { describe, it, expect } from "vitest";
-import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD } from "../ops/narrate-lib.mjs";
+import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD, recordAll } from "../ops/narrate-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("clip identity", () => {
@@ -308,7 +308,7 @@ describe("letters that name things are not fillers", () => {
     expect(audioCheck(script, script.toLowerCase()).pass).toBe(true);
   });
   it("re-checks clips approved under the weaker rule", () => {
-    expect(QA_VERSION).toBeGreaterThanOrEqual(11);
+    expect(QA_VERSION).toBeGreaterThanOrEqual(12);
   });
 });
 
@@ -366,5 +366,57 @@ describe("contractions", () => {
     if (!step) return;   // nothing contractible in the current script
     const contracted = step.narration.replace(/\bIt is\b/, "It's").replace(/\bit is\b/, "it's");
     expect(audioCheck(step.narration, contracted).pass).toBe(true);
+  });
+});
+
+/* Astra, PR #134 review, round 16: number words were summed, so "nine one
+   one" read 11 and matched "eleven". */
+describe("spoken numbers", () => {
+  it("reads a digit string as digits, never as a sum", () => {
+    expect(wordsToNumbers("nine one one")).toBe("911");
+    expect(audioCheck("The emergency number is nine one one.", "The emergency number is eleven.").pass).toBe(false);
+    expect(audioCheck("The emergency number is nine one one.", "The emergency number is 911.").pass).toBe(true);
+    expect(audioCheck("Call extension two four six now.", "Call extension twelve now.").pass).toBe(false);
+  });
+  it("still reads cardinals and decimals", () => {
+    expect(wordsToNumbers("twenty-one")).toBe("21");
+    expect(wordsToNumbers("one hundred five")).toBe("105");
+    expect(wordsToNumbers("nine hundred ninety nine")).toBe("999");
+    expect(wordsToNumbers("seven point three five")).toBe("7.35");
+    expect(wordsToNumbers("forty five")).toBe("45");
+  });
+  it("never adds words that cannot form one number", () => {
+    expect(wordsToNumbers("one twenty")).toBe("1 20");
+    expect(wordsToNumbers("twenty thirty")).toBe("20 30");
+    expect(wordsToNumbers("eleven five")).toBe("11 5");
+  });
+});
+
+/* Astra, PR #134 review, round 16: CLAUDE.md rule 8 — a verification that
+   fails twice stops the run. The loop used to go on to the next clip. */
+describe("recording stops at a clip that fails twice", () => {
+  const work = ["one", "two", "three"].map((k) => ({ d: { id: "abg" }, s: { key: k, narration: `Step ${k} says the pH is low.` }, id: k }));
+  const setup = (heardFor) => {
+    const calls = [], stored = [], report = { characters: 0, failedQa: [], errors: [], recorded: [] };
+    return { calls, stored, report, deps: {
+      synthesise: async (text) => { calls.push(text); return Buffer.from(text); },
+      transcribe: async (mp3) => heardFor(mp3.toString()),
+      store: async (item) => { stored.push(item.s.key); },
+      save: () => {}, report, log: () => {},
+    } };
+  };
+  it("makes no further paid call after the second failed check", async () => {
+    const { calls, stored, report, deps } = setup((t) => (t.includes("two") ? "Something else entirely." : t));
+    const code = await recordAll(work, deps);
+    expect(code).toBe(1);
+    expect(stored).toEqual(["one"]);                       // what passed before the stop is kept
+    expect(calls.filter((t) => t.includes("two"))).toHaveLength(2);
+    expect(calls.some((t) => t.includes("three"))).toBe(false);   // nothing after the failure
+    expect(report.stopped).toMatch(/abg\/two failed the audio check on both takes/);
+  });
+  it("records every clip when each passes", async () => {
+    const { stored, deps } = setup((t) => t);
+    expect(await recordAll(work, deps)).toBe(0);
+    expect(stored).toEqual(["one", "two", "three"]);
   });
 });

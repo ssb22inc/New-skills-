@@ -55,15 +55,31 @@ export function wordsToNumbers(text) {
   while (i < tokens.length) {
     const w = tokens[i];
     if (!isNumWord(w)) { out.push(w); i++; continue; }
-    let value = 0, cur = 0, j = i, last = i;
+    /* Two or more single digits in a row are a spoken digit string —
+       "nine one one" is 911, never 9+1+1 = 11 (Astra, PR #134 review,
+       round 16). Otherwise only a valid cardinal is read: [tens] [unit],
+       or a teen, optionally "hundred" first; a word that cannot continue
+       the number starts a new one instead of being added to it. */
+    const digit = (t) => t in ONES && ONES[t] < 10;
+    let j = i, last = i, value;
+    if (digit(tokens[i]) && digit(tokens[next(i)] ?? "")) {
+      let digits = "";
+      while (j < tokens.length && digit(tokens[j])) { digits += ONES[tokens[j]]; last = j; j = next(j); }
+      out.push(digits);
+      i = last + 1;
+      continue;
+    }
+    let cur = 0, kind = null;
     while (j < tokens.length && isNumWord(tokens[j])) {
       const t = tokens[j];
-      if (t in ONES) cur += ONES[t];
-      else if (t in TENS) cur += TENS[t];
-      else if (t === "hundred") cur = (cur || 1) * 100;
+      if (t in ONES && ONES[t] < 10) { if (kind && kind !== "tens" && kind !== "hundred") break; cur += ONES[t]; kind = "unit"; }
+      else if (t in ONES) { if (kind && kind !== "hundred") break; cur += ONES[t]; kind = "teen"; }
+      else if (t in TENS) { if (kind && kind !== "hundred") break; cur += TENS[t]; kind = "tens"; }
+      else { if ((kind && kind !== "unit") || cur >= 100) break; cur = (cur || 1) * 100; kind = "hundred"; }
       last = j; j = next(j);
     }
-    value += cur;
+    value = cur;
+    j = next(last);
     let s = String(value);
     if (tokens[j] === "point") {
       let k = next(j), digits = "";
@@ -252,7 +268,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 11;
+export const QA_VERSION = 12;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);
@@ -271,4 +287,43 @@ export const narratedSteps = (diagram) => diagram.steps.filter((s) => !s.dynamic
    PR #134 review, finding 7). */
 export function isCurrentClip(entry, id) {
   return !!entry && entry.id === id && entry.qa === QA_VERSION && /^[0-9a-f]{32}$/.test(entry.audio ?? "") && String(entry.url ?? "").endsWith(`/${entry.audio}.mp3`);
+}
+
+/* Records each clip: up to two takes, each checked against its script.
+   A clip that fails the check on both takes STOPS the run — no further
+   clip is synthesised or paid for — and the failure is reported exactly
+   (CLAUDE.md rule 8: if a verification fails twice, stop and report; Astra,
+   PR #134 review, round 16: the loop used to continue to the next clip).
+   Clips recorded before the stop are kept: `store` saves each as it passes.
+   Returns the exit code. */
+export async function recordAll(work, { synthesise, transcribe, store, save, report, log = console.log }) {
+  for (const item of work) {
+    const { d, s } = item;
+    try {
+      let mp3, heard, check;
+      for (let take = 1; take <= 2; take++) {
+        mp3 = await synthesise(s.narration);
+        report.characters += s.narration.length;
+        heard = await transcribe(mp3);
+        check = audioCheck(s.narration, heard);
+        if (check.pass) break;
+        log(`  … ${d.id}/${s.key} take ${take}: ${check.mismatch ? `said “${check.mismatch.heard}” where the script says “${check.mismatch.expected}”` : `similarity ${check.similarity.toFixed(3)}`}`);
+      }
+      if (!check.pass) {
+        report.failedQa.push({ diagram: d.id, step: s.key, similarity: check.similarity, mismatch: check.mismatch, heard });
+        report.stopped = `${d.id}/${s.key} failed the audio check on both takes; the run stopped there and nothing after it was recorded.`;
+        log(`  ✗ ${report.stopped}`);
+        save();
+        return 1;
+      }
+      await store(item, mp3, check);
+      save();   // after every clip: a stopped run keeps what it paid for
+    } catch (e) {
+      report.errors.push({ diagram: d.id, step: s.key, error: String(e.message).slice(0, 200) });
+      log(`  ✗ ${d.id}/${s.key}: ${String(e.message).slice(0, 160)}`);
+      save();
+      if (/ 401| 403|insufficient_quota|billing/i.test(e.message)) return 1;
+    }
+  }
+  return report.errors.length || report.failedQa.length ? 1 : 0;
 }
