@@ -132,10 +132,15 @@ describe("insulin concentration", () => {
     expect(extractInsulin("Insulin lispro U-200 was given at 0700.")).toBeNull();
     expect(extractInsulin("Insulin glargine 300 units/mL was given at 2100.")).toBeNull();
     expect(extractInsulin("Insulin glargine 300 units per mL was given at 2100.")).toBeNull();
+    // round 19: the standard label notation
+    for (const u of ["300 U/mL", "300 U / mL", "300 IU/mL", "300 units per milliliter", "300 U/ml"]) {
+      expect(extractInsulin(`Insulin glargine ${u} was given at 2100.`), u).toBeNull();
+    }
   });
   it("still reads U-100 glargine", async () => {
     const { extractInsulin } = await import("../src/diagrams/match.js");
     expect(extractInsulin("Insulin glargine U-100 was given at 2100.")).toEqual({ type: "long", givenAt: "21:00" });
+    expect(extractInsulin("Insulin glargine 100 U/mL was given at 2100.")).toEqual({ type: "long", givenAt: "21:00" });
     expect(extractInsulin(`Insulin glargine U${ch(0x2011)}100 was given at 2100.`)).toEqual({ type: "long", givenAt: "21:00" });
     expect(extractInsulin("Insulin glargine was given at 2100.")).toEqual({ type: "long", givenAt: "21:00" });
   });

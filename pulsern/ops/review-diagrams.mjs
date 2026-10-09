@@ -14,7 +14,7 @@ import { renderDiagrams } from "./render-diagrams.mjs";
 import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
 import { sourceKey } from "./diagram-attest.mjs";
-import { imagePlan, diagramReviewPrompt, reviewKey, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord } from "./review-diagrams-lib.mjs";
+import { imagePlan, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest } from "./review-diagrams-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const ONLY = arg("--only");
@@ -56,8 +56,9 @@ try {
     if (ONLY && d.id !== ONLY) continue;
     const plan = imagePlan(d, gallery);
     const pngs = plan.map((p) => readFileSync(p.file));
-    const prompt = diagramReviewPrompt(d, plan, rules);
-    const key = reviewKey(d, pngs, { prompt, source: readFileSync(`src/diagrams/${d.id}.jsx`, "utf8") });
+    /* The reviewer sees the source too, so a change to logic that the
+       example does not exercise is still in front of it. */
+    const { prompt, key } = diagramRequest(d, plan, rules, pngs, (id) => readFileSync(`src/diagrams/${id}.jsx`, "utf8"));
     const prev = index[d.id];
     if (canReuse(prev, key, FORCE)) {
       /* Every reviewed image is byte-identical, so the verdict still describes

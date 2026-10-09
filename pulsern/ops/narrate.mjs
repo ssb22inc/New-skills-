@@ -119,8 +119,18 @@ try {
       const { error } = await sb.storage.createBucket(BUCKET, { public: true, allowedMimeTypes: ["audio/mpeg"], fileSizeLimit: "4MB" });
       if (error) throw new Error(`Could not create the ${BUCKET} bucket: ${error.message}`);
     }
+    /* Every paid take, kept for audit under reports/narration-takes (not
+       committed: git ignores it), which the workflow uploads as an artifact. */
+    const TAKES = `reports/narration-takes/${startedAt.replace(/[:.]/g, "-")}`;
     code = await recordAll(work, {
       synthesise, transcribe, save, report,
+      keepTake: ({ d, s, take, mp3, heard, check }) => {
+        mkdirSync(TAKES, { recursive: true });
+        const base = `${TAKES}/${d.id}--${s.key}--take${take}`;
+        writeFileSync(`${base}.mp3`, mp3);
+        writeFileSync(`${base}.json`, JSON.stringify({ diagram: d.id, step: s.key, take, script: s.narration, heard, pass: check.pass, similarity: check.similarity, mismatch: check.mismatch }, null, 2) + "\n");
+        return `${base}.mp3`;
+      },
       store: async ({ d, s, id }, mp3, check) => {
         const audioHash = createHash("sha256").update(mp3).digest("hex").slice(0, 32);
         const path = `${d.id}/${audioHash}.mp3`;

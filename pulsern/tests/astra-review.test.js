@@ -258,7 +258,7 @@ describe("digests", () => {
     expect(f.form).toBe("page digest");
     expect(f.diff).toContain("1 == 1");
     rmSync(dir, { recursive: true, force: true });
-  });
+  }, 30000);   // creates real git repositories; slow under a full parallel run
 
   /* Round 4: one space inside an UNQUOTED attribute moves its boundary —
      "onerror=window.x =alert(1)" runs nothing, "...x=alert(1)" runs alert.

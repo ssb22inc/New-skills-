@@ -80,7 +80,8 @@ const SPACES = /[\s\u00A0\u2007\u202F\u2060\uFEFF]+/g;
 export const normaliseDosing = (text) => String(text ?? "").replace(DASHES, "-").replace(SPACES, " ");
 function unsupportedConcentration(t) {
   for (const m of t.matchAll(/\bU ?-? ?(\d{2,4})\b/gi)) if (Number(m[1]) !== 100) return true;
-  for (const m of t.matchAll(/\b(\d{2,4}) ?units? ?(?:\/|per) ?(?:mL|milliliter)\b/gi)) if (Number(m[1]) !== 100) return true;
+  /* "300 units/mL", "300 U/mL", "300 IU/mL", "300 units per milliliter" */
+  for (const m of t.matchAll(/\b(\d{2,4}) ?(?:units?|U|IU) ?(?:\/|per) ?(?:mL|ml|milliliters?|millilitres?|cc)\b/gi)) if (Number(m[1]) !== 100) return true;
   return /\bconcentrated insulin\b/i.test(t);
 }
 export function extractInsulin(text) {

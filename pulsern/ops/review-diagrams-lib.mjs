@@ -69,7 +69,7 @@ export function imagePlan(diagram, gallery) {
   return plan;
 }
 
-export function diagramReviewPrompt(diagram, plan, rulesExcerpt) {
+export function diagramReviewPrompt(diagram, plan, rulesExcerpt, source = null) {
   const steps = diagram.steps.map((s, i) => [
     `  ${i + 1}. key "${s.key}"${s.dynamic ? " (worked example — caption computed from the example values)" : ""}`,
     `     in focus: ${(s.focus ?? []).join(", ") || "(everything)"}`,
@@ -102,7 +102,12 @@ SEVERITY: blocker = wrong or unsafe clinical content, or a picture that teaches 
 "where" names the image number and/or step key and the element.
 
 PROJECT RULES:
-${rulesExcerpt}`;
+${rulesExcerpt}${source == null ? "" : `
+
+THE DIAGRAM'S SOURCE — the code that draws it and writes its worked-example caption and verdict for EVERY set of values a question can supply, not only the example pictured. Review this logic as strictly as the pictures: a wrong branch for other values is a clinical error even if the example is right (Astra, PR #134 review, round 19):
+\`\`\`jsx
+${source}
+\`\`\``}`;
 }
 
 export function validateReview(obj) {
@@ -216,4 +221,13 @@ export async function reviewAndRecord({ d, key, images, ask, model, dir, index, 
   } finally {
     clearTimeout(timer);
   }
+}
+
+/* What one diagram's review request is made of, and the key it is cached
+   under: the prompt carries the diagram's own source, so any logic the
+   key covers is also in front of the reviewer (round 19). */
+export function diagramRequest(d, plan, rules, pngs, readSource) {
+  const source = readSource(d.id);
+  const prompt = diagramReviewPrompt(d, plan, rules, source);
+  return { prompt, key: reviewKey(d, pngs, { prompt, source }) };
 }

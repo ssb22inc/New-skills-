@@ -278,6 +278,8 @@ describe("records the workflows commit are committable", () => {
     const art = w.slice(w.indexOf("- name: Keep the results as an artifact"), w.indexOf("id: save"));
     expect(art).toMatch(/if: always\(\)\s+uses: actions\/upload-artifact@v4/);
     for (const p of paths) expect(art).toContain(`pulsern/${p}`);
+    // round 19: every paid narration take is kept in the artifact (never committed)
+    if (f === "pulsern-narrate.yml") expect(art).toContain("pulsern/reports/narration-takes/");
     for (const p of paths) {
       const probe = p.endsWith("/") ? `${p}probe.json` : p;
       let ignored = true;

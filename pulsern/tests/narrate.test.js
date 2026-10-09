@@ -397,11 +397,12 @@ describe("spoken numbers", () => {
 describe("recording stops at a clip that fails twice", () => {
   const work = ["one", "two", "three"].map((k) => ({ d: { id: "abg" }, s: { key: k, narration: `Step ${k} says the pH is low.` }, id: k }));
   const setup = (heardFor) => {
-    const calls = [], stored = [], report = { characters: 0, failedQa: [], errors: [], recorded: [] };
-    return { calls, stored, report, deps: {
+    const calls = [], stored = [], kept = [], report = { characters: 0, failedQa: [], errors: [], recorded: [] };
+    return { calls, stored, kept, report, deps: {
       synthesise: async (text) => { calls.push(text); return Buffer.from(text); },
       transcribe: async (mp3) => heardFor(mp3.toString()),
       store: async (item) => { stored.push(item.s.key); },
+      keepTake: async ({ s, take, check }) => { kept.push(`${s.key}#${take}:${check.pass ? "pass" : "fail"}`); return `takes/${s.key}-${take}.mp3`; },
       save: () => {}, report, log: () => {},
     } };
   };
@@ -413,6 +414,20 @@ describe("recording stops at a clip that fails twice", () => {
     expect(calls.filter((t) => t.includes("two"))).toHaveLength(2);
     expect(calls.some((t) => t.includes("three"))).toBe(false);   // nothing after the failure
     expect(report.stopped).toMatch(/abg\/two failed the audio check on both takes/);
+  });
+  /* Round 19: failed paid takes were discarded. */
+  it("keeps every paid take, failed ones included, before stopping", async () => {
+    const { kept, report, deps } = setup((t) => (t.includes("two") ? "Something else entirely." : t));
+    await recordAll(work, deps);
+    expect(kept).toEqual(["one#1:pass", "two#1:fail", "two#2:fail"]);
+    expect(report.takes.map((t) => [t.step, t.take, t.pass, t.file])).toEqual([
+      ["one", 1, true, "takes/one-1.mp3"], ["two", 1, false, "takes/two-1.mp3"], ["two", 2, false, "takes/two-2.mp3"],
+    ]);
+    expect(report.takes[1].heard).toBe("Something else entirely.");
+  });
+  it("refuses to run without somewhere to keep the takes", async () => {
+    const { deps } = setup((t) => t);
+    await expect(recordAll(work, { ...deps, keepTake: undefined })).rejects.toThrow(/keepTake is required/);
   });
   it("records every clip when each passes", async () => {
     const { stored, deps } = setup((t) => t);
@@ -437,7 +452,7 @@ describe("an upload counts as done only when it really is", () => {
     const manifest = {};
     const work = [{ d: { id: "abg" }, s: { key: "ph", narration: "The pH is low." }, id: "ph" }];
     const code = await recordAll(work, {
-      synthesise: async (t) => Buffer.from(t), transcribe: async (m) => m.toString(), save: () => {}, report, log: () => {},
+      synthesise: async (t) => Buffer.from(t), transcribe: async (m) => m.toString(), save: () => {}, report, log: () => {}, keepTake: async () => null,
       store: async () => {
         const error = { statusCode: "404", message: "The specified bucket does not exist" };
         if (error && !isDuplicateUpload(error)) throw new Error(`upload: ${error.message}`);

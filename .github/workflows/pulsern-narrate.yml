@@ -114,6 +114,7 @@ jobs:
           path: |
             pulsern/src/diagrams/narration.json
             pulsern/reports/narration/
+            pulsern/reports/narration-takes/
           if-no-files-found: ignore
           retention-days: 90
 

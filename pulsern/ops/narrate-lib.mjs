@@ -299,8 +299,13 @@ export function isCurrentClip(entry, id) {
    (CLAUDE.md rule 8: if a verification fails twice, stop and report; Astra,
    PR #134 review, round 16: the loop used to continue to the next clip).
    Clips recorded before the stop are kept: `store` saves each as it passes.
-   Returns the exit code. */
-export async function recordAll(work, { synthesise, transcribe, store, save, report, log = console.log }) {
+   Every paid take — passing or not — is handed to `keepTake` with its
+   transcript and check before anything else happens, so an owner can audit
+   what was paid for (Astra, PR #134 review, round 19); only passing clips
+   reach the student-facing manifest. Returns the exit code. */
+export async function recordAll(work, { synthesise, transcribe, store, save, report, keepTake, log = console.log }) {
+  if (typeof keepTake !== "function") throw new Error("recordAll: keepTake is required — every paid take is kept");
+  report.takes ??= [];
   for (const item of work) {
     const { d, s } = item;
     try {
@@ -310,6 +315,9 @@ export async function recordAll(work, { synthesise, transcribe, store, save, rep
         report.characters += s.narration.length;
         heard = await transcribe(mp3);
         check = audioCheck(s.narration, heard);
+        const kept = await keepTake({ d, s, take, mp3, heard, check });
+        report.takes.push({ diagram: d.id, step: s.key, take, pass: check.pass, similarity: check.similarity, mismatch: check.mismatch, heard, file: kept ?? null });
+        save();
         if (check.pass) break;
         log(`  … ${d.id}/${s.key} take ${take}: ${check.mismatch ? `said “${check.mismatch.heard}” where the script says “${check.mismatch.expected}”` : `similarity ${check.similarity.toFixed(3)}`}`);
       }

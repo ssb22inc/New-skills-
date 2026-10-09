@@ -1,7 +1,7 @@
 /* Astra's visual and clinical review of concept diagrams — the parts that
    decide what is sent and what a verdict means. No model is called. */
 import { describe, it, expect } from "vitest";
-import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne, reviewAndRecord } from "../ops/review-diagrams-lib.mjs";
+import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne, reviewAndRecord, diagramRequest } from "../ops/review-diagrams-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 const K = { prompt: "the review prompt", source: "export const x = 1;" };
 
@@ -180,5 +180,26 @@ describe("the review key covers everything the verdict rests on", () => {
   });
   it("refuses to compute a key without the prompt and source", () => {
     expect(() => reviewKey(d, pngs)).toThrow(/required/);
+  });
+});
+
+/* Astra, PR #134 review, round 19: changed logic invalidated the cache but
+   was never shown to the reviewer. */
+describe("the reviewer sees the logic, not only the example", () => {
+  it("puts the diagram's source in the request", () => {
+    const d = DIAGRAMS.abg;
+    const source = "export function interpretAbg() { /* branch for pH 7.20 */ return 'changed'; }";
+    const p = diagramReviewPrompt(d, [{ label: "x" }], "rules", source);
+    expect(p).toContain("branch for pH 7.20");
+    expect(p).toMatch(/EVERY set of values/);
+  });
+  it("builds the request and its key from the same source, so a logic change is both re-reviewed and shown", () => {
+    const d = DIAGRAMS.abg;
+    const pngs = [Buffer.from([1])];
+    const before = diagramRequest(d, [{ label: "x" }], "rules", pngs, () => "if (ph < 7.35) return 'acidosis';");
+    const after = diagramRequest(d, [{ label: "x" }], "rules", pngs, () => "if (ph < 7.30) return 'acidosis';");
+    expect(after.key).not.toBe(before.key);
+    expect(after.prompt).toContain("ph < 7.30");
+    expect(before.prompt).not.toContain("ph < 7.30");
   });
 });
