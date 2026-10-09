@@ -8,6 +8,13 @@ name: pulsern-diagram-review
 # never runs automatically on someone else's pull request with secrets.
 # Unchanged diagrams keep their earlier verdict. Every paid review is
 # committed back to the branch, PASS or FAIL.
+#
+# Two jobs (Astra, PR #134 review, round 21): "prepare" checks out the chosen
+# branch and runs its code with NO secrets, only to turn it into data;
+# "paid" runs the DEFAULT branch's scripts with the secrets, reads that data,
+# and commits the results to the branch. Dispatch from the default branch.
+# The secrets belong in the "pulsern-paid" environment, restricted to the
+# default branch, so no other ref's copy of this file can read them.
 
 on:
   workflow_dispatch:
@@ -30,8 +37,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  review:
+  # 1. The branch's code runs HERE, with no secrets: it only turns the branch
+  #    into data (ops/prepared.mjs). Its token can read, not write.
+  prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       BRANCH: ${{ inputs.branch }}
       ONLY: ${{ inputs.only }}
@@ -65,9 +76,22 @@ jobs:
             "https://api.github.com/repos/$REPO/branches/$(jq -rn --arg b "$BRANCH" '$b|@uri')" || fail "'$BRANCH' is not an existing branch."
           echo "Writing to feature branch '$BRANCH'."
 
+      # The paid job's code must be the reviewed default branch's: a run
+      # dispatched from any other ref is refused before anything runs, and
+      # the pulsern-paid environment (default branch only) withholds the
+      # secrets from it as well (Astra, PR #134 review, round 21).
+      - name: Run only from the default branch
+        working-directory: .
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF: ${{ github.ref }}
+        run: |
+          [ "$REF" = "refs/heads/$DEFAULT_BRANCH" ] || { echo "::error::Dispatch this workflow from $DEFAULT_BRANCH; choose the branch to work on with the branch input."; exit 1; }
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -78,14 +102,69 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
 
-      - name: Render and review every diagram (Astra)
+      - name: Turn the branch into data (no secrets)
+        run: |
+          [[ -z "${ONLY:-}" || "$ONLY" =~ ^[a-z0-9-]+$ ]] || { echo "::error::only must be a diagram id"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/prepared"
+          node ops/review-diagrams.mjs --prepare "$RUNNER_TEMP/prepared/review" ${ONLY:+--only "$ONLY"}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prepared/
+          if-no-files-found: error
+          retention-days: 7
+
+  # 2. The paid work, with the secrets: only the DEFAULT branch's scripts run
+  #    here (checked out as "trusted"). The branch is checked out as data
+  #    ("branch") — nothing in it is installed or executed — and receives
+  #    the results.
+  paid:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: pulsern-paid
+    env:
+      BRANCH: ${{ inputs.branch }}
+      ONLY: ${{ inputs.only }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: branch/pulsern
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          path: branch
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: trusted/pulsern/package-lock.json
+
+      - run: npm ci
+        working-directory: trusted/pulsern
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prepared
+
+      - name: Review every diagram (Astra)
         id: review
+        working-directory: trusted/pulsern
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           set +e
           [[ -z "$ONLY" || "$ONLY" =~ ^[a-z0-9-]+$ ]] || { echo "::error::only must be a diagram id"; exit 1; }
-          node ops/review-diagrams.mjs ${ONLY:+--only "$ONLY"}
+          node ops/review-diagrams.mjs --prepared "$RUNNER_TEMP/prepared/review" --into "$GITHUB_WORKSPACE/branch/pulsern" ${ONLY:+--only "$ONLY"}
           echo "rc=$?" >> "$GITHUB_OUTPUT"
           exit 0
 
@@ -102,7 +181,7 @@ jobs:
         with:
           name: pulsern-diagram-review-results-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            pulsern/reports/diagram-review/
+            branch/pulsern/reports/diagram-review/
           if-no-files-found: ignore
           retention-days: 90
 
@@ -114,7 +193,7 @@ jobs:
           git config user.email "pulsern-diagram-review@users.noreply.github.com"
           # Commit, push, and confirm the commit reached the branch; a conflict
           # fails instead of reporting a save (Astra, PR #134 review, round 7).
-          ops/save-results.sh "$BRANCH" "Astra diagram review (rc=${{ steps.review.outputs.rc }})" reports/diagram-review/
+          "$GITHUB_WORKSPACE/trusted/pulsern/ops/save-results.sh" "$BRANCH" "Astra diagram review (rc=${{ steps.review.outputs.rc }})" reports/diagram-review/
 
       # Pushes made with the workflow token do not trigger other workflows, so
       # the review this commit needs is requested explicitly — through the

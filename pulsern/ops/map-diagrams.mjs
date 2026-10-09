@@ -15,9 +15,14 @@
    paid for (owner's instruction: every paid review is kept).
 
    Usage: node ops/map-diagrams.mjs [--dry-run] [--limit N] [--max-usd X] [--only diagramId]
+          node ops/map-diagrams.mjs --prepare map.json        (no secrets: diagrams + proposals)
+          node ops/map-diagrams.mjs --prepared map.json --into <branch>/pulsern [--max-usd X]
+   In CI the branch's code runs only in the secret-less --prepare job; the
+   paid half is the DEFAULT branch's copy of this script, reading the
+   diagrams and proposals as data (ops/prepared.mjs), reading the public
+   bank itself, and writing into the branch checkout.
    Env:   OPENROUTER_API_KEY (not needed for --dry-run)
           PULSERN_SUPABASE_URL / PULSERN_SUPABASE_ANON_KEY (default: the app's public values) */
-import { createServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -31,12 +36,19 @@ import {
   buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor,
 } from "./map-diagrams-lib.mjs";
 import { sourceKey, readReviewIndex, approval } from "./diagram-attest.mjs";
+import { readPrepared, mapPlan } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
 const LIMIT = arg("--limit") ? Number(arg("--limit")) : Infinity;
 const MAX_USD = Number(arg("--max-usd", "15"));
 const ONLY = arg("--only");
+const PREPARE = arg("--prepare");
+const PREPARED = arg("--prepared");
+const INTO = arg("--into");
+if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
+const PLAN = PREPARED ? mapPlan(readPrepared(PREPARED, "diagram-map")) : null;
+if (INTO) process.chdir(INTO);   // caches, map, reviews and reports: the branch checkout's
 
 /* Public by design (CLAUDE.md rule 2): the app ships these to every browser. */
 const URL_ = process.env.PULSERN_SUPABASE_URL || "https://xlfdywudgamrnzjwtrtd.supabase.co";
@@ -84,14 +96,22 @@ function save(diagrams, items) {
   ].join("\n"));
 }
 
-const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
+let vite = null;
 let code = 0;
 try {
-  const { DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js");
-  /* Through Vite, like the registry: the matchers import .jsx modules, which
-     plain Node cannot load (Astra, PR #133 review, finding 11 — the CLI
-     crashed before reading a single question). */
-  const { proposePairs } = await vite.ssrLoadModule("/src/diagrams/match.js");
+  let DIAGRAMS, proposePairs;
+  if (PLAN) {
+    DIAGRAMS = PLAN.diagrams;
+    proposePairs = (q) => PLAN.proposals.get(q.id) ?? [];
+  } else {
+    const { createServer } = await import("vite");
+    vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
+    ({ DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js"));
+    /* Through Vite, like the registry: the matchers import .jsx modules, which
+       plain Node cannot load (Astra, PR #133 review, finding 11 — the CLI
+       crashed before reading a single question). */
+    ({ proposePairs } = await vite.ssrLoadModule("/src/diagrams/match.js"));
+  }
   run.heldBack = {};
   for (const id of Object.keys(DIAGRAMS)) {
     const a = approval(REVIEWS, id, KEY);
@@ -104,6 +124,15 @@ try {
     .eq("approved", true).is("exam_form", null).order("id"), { ordered: true });
   const items = new Map(rows.map((r) => [r.id, r]));
   console.log(`Read ${rows.length} practice questions.`);
+  if (PREPARE) {
+    const proposals = {};
+    for (const q of rows) { const p = proposePairs(q); if (p.length) proposals[q.id] = p.map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p })); }
+    const diagrams = Object.values(DIAGRAMS).map((d) => ({ id: d.id, title: d.title, facts: d.facts,
+      steps: d.steps.map((s) => ({ key: s.key, ...(s.dynamic ? { dynamic: true } : {}), ...(s.caption !== undefined ? { caption: s.caption } : {}), ...(s.narration !== undefined ? { narration: s.narration } : {}) })) }));
+    writeFileSync(PREPARE, JSON.stringify({ kind: "diagram-map", diagrams, proposals }) + "\n");
+    console.log(`Prepared ${diagrams.length} diagram(s), proposals for ${Object.keys(proposals).length} question(s) → ${PREPARE}`);
+    process.exit(0);
+  }
 
   const queue = {};
   for (const q of rows) {
@@ -142,6 +171,6 @@ try {
   console.error(e.message);
   code = 1;
 } finally {
-  await vite.close();
+  await vite?.close();
 }
 process.exit(code);

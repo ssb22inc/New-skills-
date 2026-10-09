@@ -21,8 +21,20 @@ delay=${SAVE_RETRY_DELAY:-5}
 
 fail() { echo "::error::$1"; exit 1; }
 
-for p in "$@"; do [ -e "$p" ] && git add -- "$p"; done
-if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
+# A path the run never created is skipped; one that exists must be staged
+# in full, or the save fails — a partial save must never report success
+# (Astra, PR #134 review, round 21: a failed `git add` was ignored).
+for p in "$@"; do
+  [ -e "$p" ] || continue
+  git add -- "$p" || fail "Could not stage $p; nothing was saved."
+  [ -z "$(git ls-files --others --exclude-standard -- "$p")" ] || fail "Part of $p could not be staged; nothing was saved."
+  [ -z "$(git ls-files --others --ignored --exclude-standard -- "$p")" ] || fail "Part of $p is git-ignored and would be lost; nothing was saved."
+  git diff --quiet -- "$p" || fail "$p still has unstaged changes; nothing was saved."
+done
+if git diff --cached --quiet; then
+  echo "Nothing new to save."
+  exit 0
+fi
 git commit -q -m "$msg" || fail "Could not commit the results."
 # The change itself, independent of where it is applied: survives a rebase.
 want=$(git show HEAD | git patch-id --stable | cut -d' ' -f1)

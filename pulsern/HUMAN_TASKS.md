@@ -81,3 +81,26 @@ Claude Code executes everything else. These run in parallel with the build.
 ## Texting (added 2026-07-15, round 13)
 
 - H14 · Twilio activation — the SMS engine (profile opt-ins, daily study reminders, offer blasts) is built and dormant until you: (1) create an account at twilio.com and buy a local number (~$1.15/mo), (2) enable Advanced Opt-Out on the Messaging service (handles STOP/HELP automatically), (3) register for A2P 10DLC (required by US carriers for application texting — Twilio's console walks you through it, ~1-3 days approval), (4) add repo Actions secrets TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM (the number, +1XXXXXXXXXX) next to the existing Supabase ones. Reminders then go out daily at ~1pm ET to consented students inactive 2+ days. To send an offer blast by hand: `node ops/sms-blast.mjs --offer "your message" --dry-run` (drop --dry-run to send). Texts only ever go to numbers with the matching checkbox ticked; STOP is honored at the carrier level and mirrored back nightly. (~45 min + carrier approval wait)
+
+## Paid diagram and narration jobs (added 2026-10-09, PR #134)
+
+- H20 · Create the `pulsern-paid` environment — GitHub → Settings →
+  Environments → New environment `pulsern-paid` → Deployment branches and
+  tags: "Selected branches" → add only the default branch (`main`). Add
+  these environment secrets (same values as the repository secrets):
+  `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `OPENROUTER_API_KEY`. Do not rotate the keys for this.
+
+  Why: the narration, diagram-pairing and diagram-review workflows now run
+  in two jobs. The first checks out the chosen branch and runs its code
+  with no secrets, only to turn it into data. The second holds the keys,
+  runs only `main`'s scripts, and treats the branch as data. The
+  environment rule means a copy of these workflows on any other branch
+  cannot reach the keys either. Dispatch the three workflows from `main`
+  and pick the branch to work on with the `branch` input.
+
+  Limit: other PulseRN workflows still read repository-level copies of
+  `SUPABASE_SERVICE_ROLE_KEY` and `OPENROUTER_API_KEY`, and any account
+  with write access can push a workflow that reads repository-level
+  secrets. Keep write access to people you trust; moving the remaining
+  workflows into environments is a later change.

@@ -100,6 +100,36 @@ describe("save-results.sh", () => {
     expect(readFileSync(join(runner, "src/item-map.json"), "utf8")).toBe('{"pairs":{"a":1}}\n');
   });
 
+  /* Round 21: a failed `git add` was ignored, so the map could be saved
+     without its report and still report success. */
+  it("fails, claiming nothing, when an existing result cannot be staged", () => {
+    write(runner, "src/item-map.json", '{"pairs":{"a":1}}\n');
+    write(runner, "reports/run.md", "paid report\n");
+    write(runner, ".gitignore", "reports/\n");
+    const before = git(remote, "rev-parse", BRANCH);
+    const r = save("src/item-map.json", "reports/run.md");
+    expect(r.code).toBe(1);
+    expect(r.out).toBe("");
+    expect(git(remote, "rev-parse", BRANCH)).toBe(before);
+  });
+  it("fails when an ignored file inside a requested folder would be left behind", () => {
+    write(runner, "reports/a.md", "kept\n");
+    write(runner, "reports/b.log", "paid but ignored\n");
+    write(runner, ".gitignore", "*.log\n");
+    const before = git(remote, "rev-parse", BRANCH);
+    const r = save("reports/");
+    expect(r.code).toBe(1);
+    expect(r.log).toMatch(/git-ignored/);
+    expect(r.out).toBe("");
+    expect(git(remote, "rev-parse", BRANCH)).toBe(before);
+  });
+  it("fails, rather than saying nothing changed, when the only result cannot be staged", () => {
+    write(runner, "reports/run.md", "paid report\n");
+    write(runner, ".gitignore", "reports/\n");
+    const r = save("reports/run.md");
+    expect(r.code).toBe(1);
+    expect(r.log).not.toMatch(/Nothing new to save/);
+  });
   it("says so, and claims nothing, when there is nothing to save", () => {
     const r = save("src/item-map.json");
     expect(r.code).toBe(0);

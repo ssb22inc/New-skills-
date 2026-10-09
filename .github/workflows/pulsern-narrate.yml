@@ -3,7 +3,7 @@ name: pulsern-narrate
 # Records explainer narration with OpenAI TTS and checks every clip by
 # transcribing it back (pulsern/ops/narrate.mjs). Manual only: it spends money.
 #
-# Needs repository secrets: OPENAI_API_KEY (owner adds it; never rotated by
+# Needs these secrets in the pulsern-paid environment: OPENAI_API_KEY (owner adds it; never rotated by
 # this job), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (for the public
 # `explainers` audio bucket).
 #
@@ -11,6 +11,13 @@ name: pulsern-narrate
 # committed back to the branch, so new audio reaches students only through
 # a reviewed pull request. Saved even when some clips fail: every paid
 # recording is kept, and clips that fail the audio check are listed.
+#
+# Two jobs (Astra, PR #134 review, round 21): "prepare" checks out the chosen
+# branch and runs its code with NO secrets, only to turn it into data;
+# "paid" runs the DEFAULT branch's scripts with the secrets, reads that data,
+# and commits the results to the branch. Dispatch from the default branch.
+# The secrets belong in the "pulsern-paid" environment, restricted to the
+# default branch, so no other ref's copy of this file can read them.
 
 on:
   workflow_dispatch:
@@ -33,8 +40,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  narrate:
+  # 1. The branch's code runs HERE, with no secrets: it only turns the branch
+  #    into data (ops/prepared.mjs). Its token can read, not write.
+  prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       BRANCH: ${{ inputs.branch }}
       VOICE: ${{ inputs.voice }}
@@ -76,9 +87,22 @@ jobs:
             *) echo "::error::Unknown voice: $VOICE"; exit 1 ;;
           esac
 
+      # The paid job's code must be the reviewed default branch's: a run
+      # dispatched from any other ref is refused before anything runs, and
+      # the pulsern-paid environment (default branch only) withholds the
+      # secrets from it as well (Astra, PR #134 review, round 21).
+      - name: Run only from the default branch
+        working-directory: .
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF: ${{ github.ref }}
+        run: |
+          [ "$REF" = "refs/heads/$DEFAULT_BRANCH" ] || { echo "::error::Dispatch this workflow from $DEFAULT_BRANCH; choose the branch to work on with the branch input."; exit 1; }
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -88,15 +112,69 @@ jobs:
 
       - run: npm ci
 
+      - name: Turn the branch into data (no secrets)
+        run: |
+          mkdir -p "$RUNNER_TEMP/prepared"
+          node ops/narrate.mjs --prepare "$RUNNER_TEMP/prepared/narration.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prepared/
+          if-no-files-found: error
+          retention-days: 7
+
+  # 2. The paid work, with the secrets: only the DEFAULT branch's scripts run
+  #    here (checked out as "trusted"). The branch is checked out as data
+  #    ("branch") — nothing in it is installed or executed — and receives
+  #    the results.
+  paid:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: pulsern-paid
+    env:
+      BRANCH: ${{ inputs.branch }}
+      VOICE: ${{ inputs.voice }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: branch/pulsern
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          path: branch
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: trusted/pulsern/package-lock.json
+
+      - run: npm ci
+        working-directory: trusted/pulsern
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prepared
+
       - name: Record and check narration
         id: narrate
+        working-directory: trusted/pulsern
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set +e
-          node ops/narrate.mjs --voice "$VOICE"
+          node ops/narrate.mjs --prepared "$RUNNER_TEMP/prepared/narration.json" --into "$GITHUB_WORKSPACE/branch/pulsern" --voice "$VOICE"
           echo "rc=$?" >> "$GITHUB_OUTPUT"
           exit 0
 
@@ -112,9 +190,9 @@ jobs:
         with:
           name: pulsern-narration-results-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            pulsern/src/diagrams/narration.json
-            pulsern/reports/narration/
-            pulsern/reports/narration-takes/
+            branch/pulsern/src/diagrams/narration.json
+            branch/pulsern/reports/narration/
+            branch/pulsern/reports/narration-takes/
           if-no-files-found: ignore
           retention-days: 90
 
@@ -126,7 +204,7 @@ jobs:
           git config user.email "pulsern-narrate@users.noreply.github.com"
           # Commit, push, and confirm the commit reached the branch; a conflict
           # fails instead of reporting a save (Astra, PR #134 review, round 7).
-          ops/save-results.sh "$BRANCH" "Narration: $VOICE (rc=${{ steps.narrate.outputs.rc }})" src/diagrams/narration.json reports/narration/
+          "$GITHUB_WORKSPACE/trusted/pulsern/ops/save-results.sh" "$BRANCH" "Narration: $VOICE (rc=${{ steps.narrate.outputs.rc }})" src/diagrams/narration.json reports/narration/
 
       # Pushes made with the workflow token do not trigger other workflows, so
       # the review this commit needs is requested explicitly — through the

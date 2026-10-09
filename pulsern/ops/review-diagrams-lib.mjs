@@ -76,7 +76,7 @@ export function diagramReviewPrompt(diagram, plan, rulesExcerpt, source = null) 
   const steps = diagram.steps.map((s, i) => [
     `  ${i + 1}. key "${s.key}"${s.dynamic ? " (worked example — caption computed from the example values)" : ""}`,
     `     in focus: ${(s.focus ?? []).join(", ") || "(everything)"}`,
-    `     caption: ${s.dynamic ? diagram.dynamicCaption?.(diagram.example) : s.caption}`,
+    `     caption: ${s.dynamic ? diagram.workedCaption ?? diagram.dynamicCaption?.(diagram.example) : s.caption}`,
     s.dynamic ? "     narration: (none — never recorded)" : `     narration script: ${s.narration}`,
   ].join("\n")).join("\n");
   return `You are the adversarial reviewer for PulseRN, an NCLEX-RN study app used by nursing students. Below is a concept diagram that will appear under practice-question rationales and as a step-by-step narrated explainer. It was drawn and written by a Claude model; you are from a different lab so that you do not share its blind spots. Find what is wrong before a student sees it. Do not be agreeable and do not pad.
@@ -139,8 +139,9 @@ export function verdictFor(findings) {
    and pixels were in the key). */
 export function reviewKey(diagram, pngBuffers, { prompt, source } = {}) {
   if (typeof prompt !== "string" || typeof source !== "string") throw new Error("reviewKey: the review prompt and the diagram's source are required");
-  const h = createHash("sha256").update(diagramHash(diagram)).update("\0").update(String(diagram.dynamicCaption ?? ""))
-    .update("\0").update(prompt).update("\0").update(source);
+  /* The caption logic itself is in `source` (the diagram's file and its
+     imports), which the reviewer is also shown. */
+  const h = createHash("sha256").update(diagramHash(diagram)).update("\0").update(prompt).update("\0").update(source);
   for (const b of pngBuffers) h.update("\0").update(b);
   return h.digest("hex").slice(0, 16);
 }
@@ -248,17 +249,43 @@ export function diagramSources(id, root = ".") {
   const visit = (rel) => {
     if (seen.has(rel)) return;
     seen.add(rel);
-    const text = readFileSync(join(root, rel), "utf8");
+    const buf = readFileSync(join(root, rel));
+    let text;
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { throw new Error(`diagramSources: ${rel} is not text, so the reviewer cannot be shown it — refusing to review without it`); }
     parts.push(`// ===== ${rel} =====\n${text}`);
-    for (const m of text.matchAll(/^\s*import\s[^;]*?from\s+["'](\.{1,2}\/[^"']+)["']/gm)) {
-      const target = posix.normalize(posix.join(posix.dirname(rel), m[1]));
-      const found = [target, `${target}.jsx`, `${target}.js`].find((p) => existsSync(join(root, p)));
-      if (!found) throw new Error(`diagramSources: ${rel} imports ${m[1]}, which was not found — refusing to review without it`);
-      if (/\.(jsx?|mjs)$/.test(found)) visit(found);
+    if (!/\.(jsx?|mjs)$/.test(rel)) return;   // data (JSON, CSS…) is shown but has no imports
+    /* Every way a module can pull in another: import … from, export … from,
+       a bare side-effect import, and import("…"). A computed import path
+       cannot be followed, so it is refused rather than missed (round 21:
+       an imported JSON threshold was outside the review). */
+    if (/\bimport\s*\(\s*(?!["'][^"']+["']\s*\))/.test(text)) throw new Error(`diagramSources: ${rel} has an import() whose path is computed — refusing to review without knowing what it loads`);
+    const specs = [
+      ...text.matchAll(/^\s*(?:import|export)\s[^;]*?\bfrom\s+["']([^"']+)["']/gm),
+      ...text.matchAll(/^\s*import\s+["']([^"']+)["']/gm),
+      ...text.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g),
+    ].map((m) => m[1]);
+    for (const spec of specs) {
+      if (!spec.startsWith(".")) continue;   // packages (react) are not project code
+      const target = posix.normalize(posix.join(posix.dirname(rel), spec));
+      const found = [target, `${target}.jsx`, `${target}.js`, `${target}.mjs`, `${target}.json`].find((p) => existsSync(join(root, p)));
+      if (!found) throw new Error(`diagramSources: ${rel} imports ${spec}, which was not found — refusing to review without it`);
+      visit(found);
     }
   };
   visit(`src/diagrams/${id}.jsx`);
   visit("src/explainer.jsx");
   parts.push(`// ===== src/App.jsx (theme tokens) =====\n${themeBlock(readFileSync(join(root, "src/App.jsx"), "utf8"))}`);
   return parts.join("\n\n");
+}
+
+/* A diagram as plain data — what the review is about, with the worked
+   caption already computed. The secret-less prepare job writes this; the
+   trusted job reviews only this, never the module itself. */
+export function reviewData(d, images) {
+  return {
+    id: d.id, title: d.title, facts: d.facts,
+    workedCaption: d.dynamicCaption ? d.dynamicCaption(d.example) : null,
+    steps: d.steps.map((s) => ({ key: s.key, dynamic: !!s.dynamic, focus: s.focus ?? [], caption: s.dynamic ? null : s.caption, narration: s.dynamic ? null : s.narration })),
+    images: images.map((p) => ({ label: p.label })),
+  };
 }

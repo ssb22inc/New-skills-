@@ -170,9 +170,11 @@ describe("the review key covers everything the verdict rests on", () => {
   it("changes when only the dynamic caption changes", () => {
     const changed = { ...d, dynamicCaption: (p) => `${d.dynamicCaption(p)} — and this is now wrong.` };
     expect(reviewKey(changed, pngs, { ...base, prompt: diagramReviewPrompt(changed, [{ label: "x" }], "rules") })).not.toBe(reviewKey(d, pngs, base));
-    // even if the example's own caption happened to be unchanged, the function differs
-    const sameExample = { ...d, dynamicCaption: (p) => (p === d.example ? d.dynamicCaption(p) : "wrong for every other value") };
-    expect(reviewKey(sameExample, pngs, base)).not.toBe(reviewKey(d, pngs, base));
+    // even if the example's own caption is unchanged, the caption logic lives
+    // in the diagram's source, which is in the key (and shown to the reviewer)
+    const changedLogic = { ...base, source: base.source.replace("return 1;", "return p === example ? 1 : 'wrong for every other value';") };
+    expect(changedLogic.source).not.toBe(base.source);
+    expect(reviewKey(d, pngs, changedLogic)).not.toBe(reviewKey(d, pngs, base));
   });
   it("changes when the diagram's source or the prompt changes", () => {
     expect(reviewKey(d, pngs, { ...base, source: base.source + " " })).not.toBe(reviewKey(d, pngs, base));
@@ -236,6 +238,37 @@ describe("a review covers everything the drawing depends on", () => {
     expect(rb.prompt).toContain("off-scale marker moved");
     expect(canReuse({ key: ra.key, completed: true, verdict: "PASS" }, rb.key)).toBe(false);
     rmSync(a, { recursive: true, force: true }); rmSync(b, { recursive: true, force: true });
+  });
+  /* Round 21: an imported JSON value, and re-exported modules, were not
+     followed, so a threshold could change under a cached PASS. */
+  it("includes imported data and re-exports, and a change there invalidates the approval", () => {
+    const make = (limit) => {
+      const root = tree("return v;");
+      writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import limits from "./limits.json";\nexport { Gauge } from "./kit.jsx";\nimport "./side.js";\nconst lazy = () => import("./lazy.js");\nexport const A = limits.low;\n');
+      writeFileSync(join(root, "src/diagrams/limits.json"), JSON.stringify({ low: limit }));
+      writeFileSync(join(root, "src/diagrams/side.js"), "globalThis.side = 1;\n");
+      writeFileSync(join(root, "src/diagrams/lazy.js"), "export const L = 'lazy';\n");
+      return root;
+    };
+    const a = make(7.35), b = make(7.3);
+    const sa = diagramSources("abg", a), sb = diagramSources("abg", b);
+    for (const p of ["src/diagrams/limits.json", "src/diagrams/kit.jsx", "src/diagrams/side.js", "src/diagrams/lazy.js"]) expect(sa).toContain(p);
+    expect(sb).toContain('"low":7.3');
+    const pngs = [Buffer.from([1])];
+    const ra = diagramRequest(DIAGRAMS.abg, [{ label: "x" }], "rules", pngs, () => sa);
+    const rb = diagramRequest(DIAGRAMS.abg, [{ label: "x" }], "rules", pngs, () => sb);
+    expect(rb.key).not.toBe(ra.key);
+    expect(canReuse({ key: ra.key, completed: true, verdict: "PASS" }, rb.key)).toBe(false);
+    rmSync(a, { recursive: true, force: true }); rmSync(b, { recursive: true, force: true });
+  });
+  it("refuses an import it cannot follow or show", () => {
+    const root = tree("return v;");
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), "const n = 'x';\nconst m = () => import(`./${n}.js`);\n");
+    expect(() => diagramSources("abg", root)).toThrow(/computed/);
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import pic from "./pic.png";\n');
+    writeFileSync(join(root, "src/diagrams/pic.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]));
+    expect(() => diagramSources("abg", root)).toThrow(/not text/);
+    rmSync(root, { recursive: true, force: true });
   });
   it("refuses to build a request when an import cannot be found", () => {
     const root = tree("return v;");

@@ -18,17 +18,31 @@
    recording fails, so old audio is never played over new words.
 
    Usage: node ops/narrate.mjs [--voice marin] [--only diagramId] [--dry-run]
-   Env:   OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (not needed for --dry-run) */
-import { createServer } from "vite";
+          node ops/narrate.mjs --prepare plan.json          (no secrets: reads the steps)
+          node ops/narrate.mjs --prepared plan.json --into <branch>/pulsern [--voice …]
+   Env:   OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (not needed for --dry-run or --prepare)
+
+   In CI the two halves run in separate jobs: --prepare on the branch with
+   no secrets, and --prepared from the default branch's trusted copy of this
+   script, reading the plan as data and writing into the branch checkout
+   (ops/prepared.mjs). The credentialed job never runs branch code. */
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { readPrepared, narrationPlan } from "./prepared.mjs";
 import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll, isDuplicateUpload } from "./narrate-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
 const VOICE = arg("--voice", "marin");
 const ONLY = arg("--only");
+const PREPARE = arg("--prepare");
+const PREPARED = arg("--prepared");
+const INTO = arg("--into");
+if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
+/* Read the plan before moving: its path is relative to where we started. */
+const PLAN = PREPARED ? narrationPlan(readPrepared(PREPARED, "narration")) : null;
+if (INTO) process.chdir(INTO);   // every path below is the branch checkout's
 const MANIFEST = "src/diagrams/narration.json";
 const BUCKET = "explainers";
 const startedAt = new Date().toISOString();
@@ -89,15 +103,31 @@ function save() {
   ].join("\n"));
 }
 
-const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
+/* The diagrams' narration steps: from the prepared plan (data) when
+   given one, otherwise from the registry through Vite (local runs, and the
+   secret-less --prepare job). */
+let vite = null;
+async function loadSteps() {
+  if (PLAN) return PLAN;
+  const { createServer } = await import("vite");
+  vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
+  const { DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js");
+  return Object.values(DIAGRAMS).map((d) => ({ id: d.id, steps: narratedSteps(d).map((s) => ({ key: s.key, narration: s.narration })) }));
+}
+
 let code = 0;
 try {
-  const { DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js");
+  const diagrams = await loadSteps();
+  if (PREPARE) {
+    writeFileSync(PREPARE, JSON.stringify({ kind: "narration", diagrams }, null, 2) + "\n");
+    console.log(`Prepared ${diagrams.reduce((n, d) => n + d.steps.length, 0)} narration step(s) → ${PREPARE}`);
+    process.exit(0);
+  }
   const work = [];
-  for (const d of Object.values(DIAGRAMS)) {
+  for (const d of diagrams) {
     if (ONLY && d.id !== ONLY) continue;
     manifest.clips[d.id] ??= {};
-    for (const s of narratedSteps(d)) {
+    for (const s of d.steps) {
       const id = clipId({ text: s.narration, voice: VOICE });
       if (isCurrentClip(manifest.clips[d.id][s.key], id)) { report.skippedUnchanged++; continue; }
       /* The script changed (or was never recorded): drop any old clip NOW, so
@@ -106,7 +136,7 @@ try {
       work.push({ d, s, id });
     }
     // steps that no longer exist lose their clips
-    const live = new Set(narratedSteps(d).map((s) => s.key));
+    const live = new Set(d.steps.map((s) => s.key));
     for (const k of Object.keys(manifest.clips[d.id])) if (!live.has(k)) delete manifest.clips[d.id][k];
   }
   console.log(`${work.length} clip(s) to record, ${report.skippedUnchanged} unchanged.`);
@@ -154,6 +184,6 @@ try {
   console.error(e.message);
   code = 1;
 } finally {
-  await vite.close();
+  await vite?.close();
 }
 process.exit(code);
