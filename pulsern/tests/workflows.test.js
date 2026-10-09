@@ -187,9 +187,61 @@ describe("workflow placement", () => {
       }
     });
 
+    /* PR #133 review, finding 1 (blocker): a dispatch with base = head for
+       any commit posted a pass without a review, and a dispatch from a
+       feature branch ran that branch's reviewer as if trusted. */
+    describe("manual re-review", () => {
+      const resolve = () => {
+        const w = wf();
+        return w.slice(w.indexOf("- name: Resolve what to review"), w.indexOf("- name: Mark the commit under review as pending"));
+      };
+      it("only runs the reviewer from the default branch", () => {
+        expect(resolve()).toMatch(/"\$GITHUB_REF" != "refs\/heads\/\$DEFAULT_BRANCH"[\s\S]*exit 1/);
+      });
+      it("reads a PR's range from GitHub and refuses a head that is not the PR's", () => {
+        const r = resolve();
+        expect(r).toContain("api.github.com/repos/$REPO/pulls/$IN_PR");
+        expect(r).toMatch(/"\$IN_HEAD" != "\$pr_head"[\s\S]*exit 1/);
+        expect(r).toContain('echo "BASE_SHA=$pr_base"');
+        expect(r).not.toMatch(/BASE_SHA=\$IN_BASE"; echo "PR=\$IN_PR/);
+      });
+      it("never posts a status for a report-only range", () => {
+        const w = wf();
+        expect(resolve()).toMatch(/echo "PR="; echo "POST_STATUS=false"/);
+        for (const step of ["- name: Mark the commit under review as pending", "- name: Post the verdict on the reviewed commit"]) {
+          const head = w.slice(w.indexOf(step)).split("\n").slice(0, 3).join("\n");
+          expect(head, step).toMatch(/env\.POST_STATUS == 'true'/);
+        }
+        // and its verdict still fails the run
+        expect(w).toMatch(/- name: Report-only verdict\s+if: always\(\) && env\.POST_STATUS != 'true'/);
+      });
+      it("takes inputs through the environment, never pasted into the script", () => {
+        expect(resolve()).not.toMatch(/run:[\s\S]*\$\{\{ inputs\./);
+      });
+    });
+
     it("does not spend money on unrelated labels", () => {
       expect(wf()).toMatch(/github\.event\.action != 'labeled' \|\| github\.event\.label\.name == 'astra-review'/);
     });
   });
 });
 
+
+/* The review workflows commit their records back. If git ignores the path,
+   every one of those commits fails — and the paid results go with it. That
+   was true of all three until this test existed. */
+describe("records the workflows commit are committable", () => {
+  const { execFileSync } = require("node:child_process");
+  const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
+  it.each(files)("%s commits only paths git will accept", (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const line = /for p in ([^;]+); do \[ -e "\$p" \] && git add -- "\$p"; done/.exec(w);
+    expect(line, "save step adds what exists, never fails on a missing path").not.toBeNull();
+    for (const p of line[1].trim().split(/\s+/)) {
+      const probe = p.endsWith("/") ? `${p}probe.json` : p;
+      let ignored = true;
+      try { execFileSync("git", ["check-ignore", "-q", probe], { cwd: join(LIVE_DIR, "../../pulsern") }); } catch { ignored = false; }
+      expect(ignored, `${probe} is git-ignored`).toBe(false);
+    }
+  });
+});

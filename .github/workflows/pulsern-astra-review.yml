@@ -31,13 +31,17 @@ on:
     paths:
       - "pulsern/**"
       - ".github/workflows/pulsern-*.yml"
-  # Review any range on demand — used to re-review, with the trusted reviewer,
-  # the PR that introduced this workflow.
+  # Re-review on demand. With `pr`, the range comes from GitHub's own record
+  # of that PR (never from the inputs) and `head` must be its current head;
+  # only then is the commit status posted. Without `pr` it is a report-only
+  # review of an arbitrary range: saved like any other, but it never touches
+  # a commit status, so it cannot certify anything (Astra, PR #133 review,
+  # finding 1: a dispatch with base = head posted a pass without a review).
   workflow_dispatch:
     inputs:
-      base: { description: "Base commit SHA", required: true }
+      base: { description: "Base commit SHA (report-only runs; ignored when pr is given)", required: false }
       head: { description: "Head commit SHA to review", required: true }
-      pr:   { description: "PR number (for the report name)", required: false }
+      pr:   { description: "PR number — its range is read from GitHub and its status posted", required: false }
 
 permissions:
   contents: write   # commit the report to the reviews branch
@@ -57,15 +61,53 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head }}
-      BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base }}
-      PR: ${{ github.event.pull_request.number || inputs.pr }}
       REPO: ${{ github.repository }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       OUT: ${{ github.workspace }}/astra-out
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      # Decides WHAT is reviewed and whether the verdict may be posted. Sets
+      # HEAD_SHA, BASE_SHA, PR and POST_STATUS for every later step.
+      - name: Resolve what to review
+        env:
+          EVENT: ${{ github.event_name }}
+          EV_HEAD: ${{ github.event.pull_request.head.sha }}
+          EV_BASE: ${{ github.event.pull_request.base.sha }}
+          EV_PR: ${{ github.event.pull_request.number }}
+          IN_HEAD: ${{ inputs.head }}
+          IN_BASE: ${{ inputs.base }}
+          IN_PR: ${{ inputs.pr }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::'$1' is not a full commit SHA"; exit 1; }; }
+          if [ "$EVENT" = "pull_request_target" ]; then
+            { echo "HEAD_SHA=$EV_HEAD"; echo "BASE_SHA=$EV_BASE"; echo "PR=$EV_PR"; echo "POST_STATUS=true"; } >> "$GITHUB_ENV"
+            exit 0
+          fi
+          # A dispatch runs the reviewer from the ref it was started on, so
+          # only the default branch's reviewer is trusted.
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "::error::Start this review from $DEFAULT_BRANCH; the reviewer on $GITHUB_REF has not itself been reviewed."; exit 1
+          fi
+          sha "$IN_HEAD"
+          if [ -n "$IN_PR" ]; then
+            [[ "$IN_PR" =~ ^[0-9]+$ ]] || { echo "::error::pr must be a number"; exit 1; }
+            pr_json=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/pulls/$IN_PR")
+            pr_head=$(jq -r .head.sha <<<"$pr_json"); pr_base=$(jq -r .base.sha <<<"$pr_json")
+            sha "$pr_head"; sha "$pr_base"
+            if [ "$IN_HEAD" != "$pr_head" ]; then
+              echo "::error::head $IN_HEAD is not PR #$IN_PR's head ($pr_head). Only a PR's real head can receive its status."; exit 1
+            fi
+            { echo "HEAD_SHA=$pr_head"; echo "BASE_SHA=$pr_base"; echo "PR=$IN_PR"; echo "POST_STATUS=true"; } >> "$GITHUB_ENV"
+          else
+            sha "$IN_BASE"
+            { echo "HEAD_SHA=$IN_HEAD"; echo "BASE_SHA=$IN_BASE"; echo "PR="; echo "POST_STATUS=false"; } >> "$GITHUB_ENV"
+            echo "Report-only review of $IN_BASE...$IN_HEAD: no commit status will be posted."
+          fi
+
       - name: Mark the commit under review as pending
+        if: env.POST_STATUS == 'true'
         run: |
           jq -n --arg u "$RUN_URL" '{state:"pending",context:"pulsern/astra-review",description:"Astra is reviewing this commit",target_url:$u}' |
             curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
@@ -108,7 +150,7 @@ jobs:
           git remote add origin "https://github.com/$REPO.git"
           AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c http.extraheader="$AUTH" fetch -q origin "$BASE_SHA"
-          if [ -n "$PR" ] && [ "${{ github.event_name }}" = "pull_request_target" ]; then
+          if [ -n "$PR" ]; then
             git -c http.extraheader="$AUTH" fetch -q origin "+refs/pull/$PR/head:refs/remotes/pr/head"
             test "$(git rev-parse refs/remotes/pr/head)" = "$HEAD_SHA" || { echo "::error::PR head moved during the run"; exit 1; }
           else
@@ -184,9 +226,10 @@ jobs:
           echo "::error::Could not save the review report after 5 attempts. It is still in the run's artifacts."
           exit 1
 
-      # Bound to the reviewed head SHA. Runs whatever happened above.
+      # Bound to the reviewed head SHA. Runs whatever happened above — except
+      # for report-only reviews, which never post a status.
       - name: Post the verdict on the reviewed commit
-        if: always()
+        if: always() && env.POST_STATUS == 'true'
         env:
           RC: ${{ steps.review.outputs.rc }}
           ALLOWED: ${{ steps.gate.outputs.allowed }}
@@ -207,3 +250,12 @@ jobs:
             curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$REPO/statuses/$HEAD_SHA" -d @- >/dev/null
           [ "$STATE" = "success" ] || [ "$STATE" = "pending" ] || exit 1
+
+      # A report-only review posts no status, so its verdict is the run's own.
+      - name: Report-only verdict
+        if: always() && env.POST_STATUS != 'true'
+        env:
+          RC: ${{ steps.review.outputs.rc }}
+        run: |
+          [ "$RC" = "0" ] && { echo "Astra: PASS (report only)"; exit 0; }
+          echo "::error::Astra: FAIL or incomplete (rc=${RC:-none}) — see the report"; exit 1

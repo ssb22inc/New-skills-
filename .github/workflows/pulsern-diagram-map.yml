@@ -77,7 +77,8 @@ jobs:
         run: |
           git config user.name "pulsern-diagram-map"
           git config user.email "pulsern-diagram-map@users.noreply.github.com"
-          git add src/diagrams/item-map.json reports/diagram-map/
+          # A run that failed early may not have written every path; add what exists.
+          for p in src/diagrams/item-map.json reports/diagram-map/; do [ -e "$p" ] && git add -- "$p"; done
           if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
           git commit -q -m "Diagram pairings: Astra-confirmed run (rc=${{ steps.map.outputs.rc }})"
           for attempt in 1 2 3; do

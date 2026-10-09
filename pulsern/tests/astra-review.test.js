@@ -130,7 +130,7 @@ describe("collecting from real git output (Astra finding #3)", () => {
     const { files } = collectChanges("base", "HEAD", { cwd: repo });
     const page = files.find((f) => f.path === "pulsern/public/learn/bow-tie/index.html");
     expect(page.form).toBe("page digest");
-    expect(page.diff).toMatch(/^\+SCRIPT src=https:\/\/evil\.example\/x\.js$/m);
+    expect(page.diff).toMatch(/^\+TAG <script src="https:\/\/evil\.example\/x\.js">$/m);
     expect(page.diff).toMatch(/^-TEXT Old guide text\.$/m);
     expect(page.diff).toMatch(/^\+TEXT New guide text\.$/m);
   });
@@ -139,20 +139,57 @@ describe("collecting from real git output (Astra finding #3)", () => {
     const { files } = collectChanges("base", "HEAD", { cwd: repo });
     const lock = files.find((f) => f.path === "pulsern/package-lock.json");
     expect(lock.form).toBe("dependency summary");
-    expect(lock.diff).toMatch(/^\+left-pad@1\.0\.0 evil\.example /m);
+    expect(lock.diff).toMatch(/^\+left-pad .*"resolved":"https:\/\/evil\.example\/left-pad-1\.0\.0\.tgz"/m);
   });
 });
 
 describe("digests", () => {
   it("captures what a reader sees and what a browser runs", () => {
     const d = pageDigest(`<title>T</title><meta name="description" content="D"><script type="application/ld+json">{"a":1}</script><script>alert(1)</script><a href="/x" onclick="steal()">go</a><iframe src="https://x"></iframe><p>Body &amp; text</p>`);
-    expect(d).toContain("TITLE T");
-    expect(d).toContain('JSON-LD {"a":1}');
-    expect(d).toContain("SCRIPT inline alert(1)");
-    expect(d).toContain("HREF /x");
-    expect(d).toMatch(/HANDLER onclick="steal\(\)"/);
-    expect(d).toContain("EMBED <iframe");
+    expect(d).toContain("TEXT T");
+    expect(d).toContain('TAG <meta name="description" content="D">');
+    expect(d).toContain('SCRIPT-BODY {"a":1}');
+    expect(d).toContain("SCRIPT-BODY alert(1)");
+    expect(d).toContain('TAG <a href="/x" onclick="steal()">');
+    expect(d).toContain('TAG <iframe src="https://x">');
     expect(d).toContain("TEXT Body & text");
+  });
+
+  /* PR #133 review, finding 2: an unquoted script source with an empty
+     body produced no digest change at all. */
+  it("shows an added script however it is written", () => {
+    const before = "<html><body><p>Hello</p></body></html>";
+    for (const tag of ["<script src=https://evil.example/p.js></script>", "<SCRIPT SRC='//evil.example/p.js'></SCRIPT>", "<img src=x onerror=alert(1)>", "<link rel=preload href=//evil.example/x.js as=script>"]) {
+      const after = before.replace("</body>", `${tag}</body>`);
+      const diff = textDiff(pageDigest(before), pageDigest(after), "page.html");
+      expect(diff, tag).not.toBe("");
+      expect(diff, tag).toContain(tag.includes("evil") ? "evil.example" : "onerror=alert(1)");
+    }
+  });
+
+  it("shows a changed attribute, a changed style and a changed comment", () => {
+    const base = '<div class="a" data-x=1><style>.a{color:red}</style><!-- note --></div>';
+    expect(textDiff(pageDigest(base), pageDigest(base.replace("data-x=1", "data-x=2")), "p")).not.toBe("");
+    expect(textDiff(pageDigest(base), pageDigest(base.replace("color:red", "background:url(//x)")), "p")).not.toBe("");
+    expect(textDiff(pageDigest(base), pageDigest(base.replace("note", "[if IE]><script src=x></script><![endif]")), "p")).not.toBe("");
+  });
+
+  it("ignores whitespace-only regeneration noise", () => {
+    expect(textDiff(pageDigest('<p class="a">Hi  there</p>'), pageDigest('<p\n  class="a">\n Hi there\n</p>'), "p")).toBe("");
+  });
+
+  /* PR #133 review, finding 3: a git dependency moved to another commit at
+     the same version, with no integrity field, was invisible. */
+  it("shows a git dependency moved to a different commit", () => {
+    const lock = (rev) => JSON.stringify({ packages: { "": { name: "x" }, "node_modules/pkg": { version: "1.0.0", resolved: `git+ssh://git@github.com/org/pkg.git#${rev}` } } });
+    expect(textDiff(lockDigest(lock("aaaa1111")), lockDigest(lock("bbbb2222")), "package-lock.json")).toContain("bbbb2222");
+  });
+
+  it("shows a changed integrity hash in full and a new install script", () => {
+    const lock = (integ, scripts) => JSON.stringify({ packages: { "node_modules/p": { version: "1.0.0", resolved: "https://registry.npmjs.org/p/-/p-1.0.0.tgz", integrity: integ, ...(scripts ? { hasInstallScript: true } : {}) } } });
+    const a = "sha512-" + "A".repeat(80), b = "sha512-" + "A".repeat(60) + "B".repeat(20);
+    expect(textDiff(lockDigest(lock(a)), lockDigest(lock(b)), "l")).not.toBe("");
+    expect(textDiff(lockDigest(lock(a)), lockDigest(lock(a, true)), "l")).toContain("hasInstallScript");
   });
 
   it("reports a lockfile it cannot read instead of passing it as empty", () => {
@@ -258,7 +295,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     await runReview(opts(dir), { callModel: async (a) => { prompt = a.prompt; return { text: JSON.stringify({ assessment: "x", findings: [] }), usage: {}, model: "m" }; } });
     expect(prompt).toContain("pulsern/public/révision.html");
     expect(prompt).toContain("pulsern/public/learn/sneaky/index.html");
-    expect(prompt).toContain("+SCRIPT src=https://evil.example/x.js");
+    expect(prompt).toContain('+TAG <script src="https://evil.example/x.js">');
     expect(prompt).not.toContain("fullburn/x.js");
   });
 

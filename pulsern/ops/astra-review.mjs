@@ -85,50 +85,74 @@ const decode = (s) => s
   .replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
   .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 
-/* One line per meaningful thing, in document order, so a line diff of two
-   digests shows exactly what changed for a reader — and for a browser. */
+/* One line per thing a browser sees, in document order, so a line diff of
+   two digests shows exactly what changed for a reader — and for a browser.
+
+   Near-lossless by construction: every tag is kept WITH ALL ITS ATTRIBUTES
+   (quoted or not), every script and style body is kept in full, comments are
+   kept, and text is kept. The only thing dropped is whitespace between and
+   inside tags, which is what changes on every regeneration of minified
+   markup. An earlier digest kept only the parts it recognised, so an
+   unquoted <script src=…> — and anything else it did not know — vanished
+   from review (Astra, PR #133 review, finding 2). */
+const TAG = /<(?:"[^"]*"|'[^']*'|[^'">])*>/y;
+const squash = (s) => s.replace(/\s+/g, " ").trim();
 export function pageDigest(html) {
   const src = String(html ?? "");
   const out = [];
-  for (const m of src.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    const attrs = m[1];
-    const s = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(attrs)?.[1];
-    const type = /\btype\s*=\s*["']([^"']+)["']/i.exec(attrs)?.[1] ?? "";
-    if (s) out.push(`SCRIPT src=${s}`);
-    else if (/ld\+json/i.test(type)) out.push(`JSON-LD ${m[2].replace(/\s+/g, " ").trim()}`);
-    else if (m[2].trim()) out.push(`SCRIPT inline ${m[2].replace(/\s+/g, " ").trim()}`);
+  let i = 0, text = "";
+  const flushText = () => { const t = squash(decode(text)); if (t) out.push(`TEXT ${t}`); text = ""; };
+  while (i < src.length) {
+    if (src.startsWith("<!--", i)) {
+      const end = src.indexOf("-->", i + 4);
+      const stop = end < 0 ? src.length : end + 3;
+      flushText();
+      out.push(`COMMENT ${squash(src.slice(i, stop))}`);
+      i = stop;
+      continue;
+    }
+    if (src[i] === "<" && /[A-Za-z\/!?]/.test(src[i + 1] ?? "")) {
+      TAG.lastIndex = i;
+      const m = TAG.exec(src);
+      if (m) {
+        flushText();
+        const tag = m[0];
+        out.push(`TAG ${squash(tag)}`);
+        i += tag.length;
+        /* Raw-text elements: the body is code or CSS, kept whole. */
+        const raw = /^<(script|style)\b/i.exec(tag)?.[1]?.toLowerCase();
+        if (raw) {
+          const close = src.toLowerCase().indexOf(`</${raw}`, i);
+          const end = close < 0 ? src.length : close;
+          const body = src.slice(i, end);
+          if (body.trim()) out.push(`${raw.toUpperCase()}-BODY ${squash(body)}`);
+          i = end;
+        }
+        continue;
+      }
+    }
+    text += src[i];
+    i += 1;
   }
-  for (const m of src.matchAll(/\bon[a-z]+\s*=\s*["']([^"']*)["']/gi)) out.push(`HANDLER ${m[0].slice(0, 300)}`);
-  for (const m of src.matchAll(/<(iframe|object|embed|form)\b[^>]*>/gi)) out.push(`EMBED ${m[0]}`);
-  for (const m of src.matchAll(/<link\b[^>]*>/gi)) out.push(`LINK ${m[0]}`);
-  for (const m of src.matchAll(/<meta\b[^>]*>/gi)) out.push(`META ${m[0]}`);
-  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(src)?.[1];
-  if (title) out.push(`TITLE ${decode(title).trim()}`);
-  for (const m of src.matchAll(/\bhref\s*=\s*["']([^"']+)["']/gi)) out.push(`HREF ${m[1]}`);
-  const body = src
-    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
-    .replace(/<(p|h[1-6]|li|tr|td|th|div|section|article|br|dt|dd|caption|summary)\b[^>]*>/gi, "\n")
-    .replace(/<[^>]+>/g, " ");
-  for (const line of decode(body).split("\n")) {
-    const t = line.replace(/\s+/g, " ").trim();
-    if (t) out.push(`TEXT ${t}`);
-  }
+  flushText();
   return out.join("\n") + "\n";
 }
 
-/* What a reviewer needs from a lockfile change: which packages appeared,
-   disappeared, or moved — and from where. A swapped `resolved` URL is the
-   classic supply-chain change, and it is invisible in a version-only view. */
+/* What a reviewer needs from a lockfile change: every package's full
+   identity. The complete `resolved` value is kept — host, path AND any git
+   revision fragment — with the complete integrity, so a git dependency moved
+   from #commitA to #commitB at the same version shows up (Astra, PR #133
+   review, finding 3). Install-affecting flags are kept too. */
+const LOCK_FIELDS = ["version", "resolved", "integrity", "link", "hasInstallScript", "bin", "os", "cpu", "engines", "dependencies", "optionalDependencies", "peerDependencies"];
 export function lockDigest(jsonText) {
   let lock;
   try { lock = JSON.parse(jsonText ?? "{}"); } catch { return "UNPARSEABLE package-lock.json\n"; }
   const pkgs = lock.packages ?? {};
-  return Object.keys(pkgs).filter((k) => k).sort().map((k) => {
+  return Object.keys(pkgs).sort().map((k) => {
     const p = pkgs[k] ?? {};
-    let host = "";
-    try { host = p.resolved ? new URL(p.resolved).host : ""; } catch { host = `unparseable(${p.resolved})`; }
-    return `${k.replace(/^node_modules\//, "")}@${p.version ?? "?"} ${host} ${String(p.integrity ?? "").slice(0, 24)}`;
+    const kept = {};
+    for (const f of LOCK_FIELDS) if (p[f] !== undefined) kept[f] = p[f];
+    return `${k === "" ? "(root)" : k.replace(/^node_modules\//, "")} ${JSON.stringify(kept)}`;
   }).join("\n") + "\n";
 }
 

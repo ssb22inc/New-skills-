@@ -45,7 +45,9 @@ const TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy:
 /* "seven point three five" → "7.35", "forty-five" → "45", "five point oh" → "5.0".
    Covers the range narration uses (0–999 and simple decimals). */
 export function wordsToNumbers(text) {
-  const tokens = String(text).toLowerCase().replace(/-/g, " ").split(/(\s+|[^a-z0-9.]+)/);
+  /* A period is part of a token only between digits ("7.35"); a full stop
+     after a word is a separator, so "five point oh." still reads as 5.0. */
+  const tokens = String(text).toLowerCase().replace(/-/g, " ").split(/(\s+|[^a-z0-9.]+|\.(?!\d))/).filter((t) => t !== undefined && t !== "");
   const out = [];
   let i = 0;
   const isNumWord = (w) => w in ONES || w in TENS || w === "hundred";
@@ -100,7 +102,43 @@ export function speechSimilarity(script, transcript) {
   return 1 - levenshtein(a, b) / Math.max(a.length, b.length);
 }
 
-export const passesQa = (script, transcript) => speechSimilarity(script, transcript) >= QA_THRESHOLD;
+/* The words that carry clinical meaning: numbers, negations, and words of
+   direction or order. Overall similarity cannot protect these — dropping
+   "not" from a long clip barely moves it ("calcium does not lower the
+   potassium" vs "does lower": 0.976 similar). So they must agree EXACTLY,
+   in order (Astra, PR #133 review, finding 4). */
+const NEGATION = new Set(["not", "no", "never", "without", "cannot", "nor", "neither", "none"]);
+const DIRECTION = /^(?:above|below|over|under|high|higher|highest|low|lower|lowest|increase[sd]?|increasing|decrease[sd]?|decreasing|rise[sn]?|rising|rose|fall[s]?|falling|fell|drop[s]?|dropp(?:ed|ing)|raise[sd]?|raising|more|less|fewer|opposite|same|equal|before|after|first|second|third|into|out|up|down|swell[s]?|swelling|shrink[s]?|shrinking|toward|away|left|right|faster|slower|longer|shorter|wider|narrow(?:er)?|peak(?:ed|s)?|flat(?:ten(?:ed|s)?)?|never|always|only)$/;
+export function criticalTerms(text) {
+  const expanded = String(text).toLowerCase()
+    .replace(/\bcan['’]t\b/g, "can not").replace(/\bwon['’]t\b/g, "will not").replace(/n['’]t\b/g, " not")
+    .replace(/\bcannot\b/g, "can not");
+  const words = wordsToNumbers(expanded).split(/[^a-z0-9.]+/).map((w) => w.replace(/\.$/, "")).filter(Boolean);
+  const out = [];
+  for (const w of words) {
+    for (const n of w.match(/\d+(?:\.\d+)?/g) ?? []) out.push(n);
+    if (/^[a-z]+$/.test(w) && (NEGATION.has(w) || DIRECTION.test(w))) out.push(w);
+  }
+  return out;
+}
+
+/* Where the clinically meaningful terms of two texts first disagree, or null. */
+export function criticalMismatch(script, transcript) {
+  const a = criticalTerms(script), b = criticalTerms(transcript);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return { at: i, expected: a[i] ?? "(nothing)", heard: b[i] ?? "(nothing)" };
+  }
+  return null;
+}
+
+/* A clip ships only if it is close overall AND its numbers, negations and
+   directions match exactly. */
+export function audioCheck(script, transcript) {
+  const similarity = speechSimilarity(script, transcript);
+  const mismatch = criticalMismatch(script, transcript);
+  return { similarity, mismatch, pass: similarity >= QA_THRESHOLD && !mismatch };
+}
+export const passesQa = (script, transcript) => audioCheck(script, transcript).pass;
 
 /* Steps that get recorded audio: every step with narration and a key,
    never a worked-example step (its caption follows the question's values). */

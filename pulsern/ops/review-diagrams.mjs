@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { renderDiagrams } from "./render-diagrams.mjs";
 import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
+import { sourceKey } from "./diagram-attest.mjs";
 import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA } from "./review-diagrams-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
@@ -30,6 +31,9 @@ function rulesExcerpt() {
 }
 
 const index = existsSync(INDEX) ? JSON.parse(readFileSync(INDEX, "utf8")) : {};
+/* The code this review approves. The pairing step accepts an approval only
+   while the code still has this key (ops/diagram-attest.mjs). */
+const SOURCE_KEY = sourceKey();
 const outDir = resolve(tmpdir(), `pulsern-diagram-review-${Date.now()}`);
 const { gallery, lintFailures } = await renderDiagrams({ outDir, only: ONLY });
 if (lintFailures.length) {
@@ -50,6 +54,9 @@ try {
     const key = reviewKey(d, pngs);
     const prev = index[d.id];
     if (!FORCE && prev?.key === key) {
+      /* Every reviewed image is byte-identical, so the verdict still describes
+         what students see: carry it to the current code without re-paying. */
+      if (prev.sourceKey !== SOURCE_KEY) { prev.sourceKey = SOURCE_KEY; mkdirSync(DIR, { recursive: true }); writeFileSync(INDEX, JSON.stringify(index, null, 2) + "\n"); }
       console.log(`${d.id}: unchanged since ${prev.reviewedAt} — ${prev.verdict}`);
       if (prev.verdict !== "PASS") failed++;
       continue;
@@ -70,7 +77,7 @@ try {
     const base = join(DIR, d.id, `${r.reviewedAt.slice(0, 10)}-${key}`);
     writeFileSync(`${base}.md`, renderReviewMarkdown(r));
     writeFileSync(`${base}.json`, JSON.stringify(r, null, 2) + "\n");
-    index[d.id] = { key, verdict: r.verdict, reviewedAt: r.reviewedAt, report: `${base}.md`, counts: r.counts ?? null };
+    index[d.id] = { key, sourceKey: SOURCE_KEY, verdict: r.verdict, reviewedAt: r.reviewedAt, report: `${base}.md`, counts: r.counts ?? null };
     writeFileSync(INDEX, JSON.stringify(index, null, 2) + "\n");   // after every diagram
     console.log(`${d.id}: ${r.verdict}${r.counts ? ` (${r.counts.blocker}B ${r.counts.major}M ${r.counts.minor}m)` : ""}${r.error ? ` — ${r.error}` : ""}`);
     if (r.verdict !== "PASS") failed++;

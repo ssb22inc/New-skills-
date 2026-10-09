@@ -134,3 +134,57 @@ export function serializeDecisions(decisions) {
   const sorted = Object.fromEntries(Object.entries(decisions).sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true })));
   return JSON.stringify(sorted, null, 2) + "\n";
 }
+
+/* The decisions that may ship: still about the current question and the
+   current diagram, AND for a diagram whose visual review passes as it is
+   now (`approved(id)`). Anything else is held back — fail closed. */
+export function publishable(decisions, items, diagrams, approved) {
+  const out = {};
+  for (const [key, d] of Object.entries(decisions)) {
+    const [qid, did] = key.split(":");
+    const q = items.get(Number(qid));
+    const dg = diagrams[did];
+    if (q && dg && approved(did) && d.itemHash === itemHash(q) && d.diagramHash === diagramHash(dg)) out[key] = d;
+  }
+  return out;
+}
+
+/* The paid part of a pairing run: ask the reviewer about each batch, record
+   every decision, and keep going past a failed batch — but count it, so the
+   run cannot end looking successful (Astra, PR #133 review, finding 12).
+   Everything that costs money or touches the network is passed in, so this
+   is tested with a reviewer that throws. */
+export async function pairAll({ queue, diagrams, decisions, run, limit = Infinity, maxUsd, ask, spent, isFatal = () => false, onBatch = () => {}, fingerprintOf, model, now = () => new Date().toISOString() }) {
+  let budgetLeft = limit;
+  outer: for (const [did, list] of Object.entries(queue)) {
+    const dg = diagrams[did];
+    for (const batch of batches(list.slice(0, Math.max(0, budgetLeft)))) {
+      if (spent() >= maxUsd) { run.stoppedFor = `reached the $${maxUsd} cap`; break outer; }
+      try {
+        const got = readDecisions(await ask(dg, batch), batch);
+        const byId = new Map(batch.map((b) => [b.id, b]));
+        for (const dec of got) {
+          const it = byId.get(dec.id);
+          const shown = shownAs(dec, it.extracted);
+          decisions[decisionKey(dec.id, did)] = {
+            attach: dec.attach, values_confirmed: dec.values_confirmed, reason: dec.reason,
+            extracted: it.extracted, shown, itemHash: itemHash(it), diagramHash: diagramHash(dg), fp: fingerprintOf(it),
+            reviewedAt: now(), model,
+          };
+          run.asked += 1;
+          if (dec.attach) { run.attached += 1; if (shown) run.attachedWithValues += 1; } else run.rejected += 1;
+        }
+      } catch (e) {
+        if (isFatal(e)) { run.stoppedFor = e.message.split("\n")[0]; onBatch(); throw e; }
+        run.failedBatches.push({ diagram: did, ids: batch.map((b) => b.id), error: String(e.message).slice(0, 200) });
+      }
+      budgetLeft -= batch.length;
+      onBatch();   // after every batch: a stopped run keeps what it paid for
+    }
+    if (budgetLeft <= 0) { run.stoppedFor = run.stoppedFor ?? `reached --limit ${limit}`; break; }
+  }
+  return run;
+}
+
+/* 0 only when every batch that was asked got an answer. */
+export const exitCodeFor = (run) => (run.failedBatches.length ? 1 : 0);

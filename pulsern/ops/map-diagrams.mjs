@@ -22,15 +22,15 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { readAll } from "../src/read-all.js";
-import { proposePairs } from "../src/diagrams/match.js";
 import { fingerprint } from "../src/diagrams/fingerprint.js";
 import { review, parseJson, reviewSpend } from "./review.mjs";
 import { REVIEW_MODEL, GEN_MODEL } from "./models.mjs";
 import { FatalLlmError } from "./llm.mjs";
 import {
-  itemHash, diagramHash, decisionKey, isFresh, batches, pairingPrompt, PAIRING_SCHEMA,
-  readDecisions, shownAs, buildItemMap, serializeDecisions,
+  itemHash, diagramHash, decisionKey, isFresh, pairingPrompt, PAIRING_SCHEMA,
+  buildItemMap, serializeDecisions, publishable, pairAll, exitCodeFor,
 } from "./map-diagrams-lib.mjs";
+import { sourceKey, readReviewIndex, approval } from "./diagram-attest.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -51,17 +51,16 @@ const decisions = existsSync(CACHE) ? JSON.parse(readFileSync(CACHE, "utf8")) : 
 const run = { startedAt, model: REVIEW_MODEL, maxUsd: MAX_USD, limit: Number.isFinite(LIMIT) ? LIMIT : null, dryRun: DRY,
   candidates: {}, asked: 0, attached: 0, attachedWithValues: 0, rejected: 0, failedBatches: [], stoppedFor: null };
 
+/* Which diagrams may be attached at all: passed their visual review, as the
+   code is now. Computed once per run. */
+const KEY = sourceKey();
+const REVIEWS = readReviewIndex();
+const approvedNow = (id) => approval(REVIEWS, id, KEY).ok;
+
 function save(diagrams, items) {
   mkdirSync("reports/diagram-map", { recursive: true });
   writeFileSync(CACHE, serializeDecisions(decisions));
-  // ship only decisions that still match the current question and diagram
-  const fresh = {};
-  for (const [key, d] of Object.entries(decisions)) {
-    const [qid, did] = key.split(":");
-    const q = items.get(Number(qid));
-    const dg = diagrams[did];
-    if (q && dg && d.itemHash === itemHash(q) && d.diagramHash === diagramHash(dg)) fresh[key] = d;
-  }
+  const fresh = publishable(decisions, items, diagrams, approvedNow);
   writeFileSync(MAP, JSON.stringify(buildItemMap(fresh)) + "\n");
   const spend = reviewSpend();
   run.spendUsd = spend.costUsd;
@@ -70,12 +69,13 @@ function save(diagrams, items) {
   run.shipped = Object.values(fresh).filter((d) => d.attach).length;
   writeFileSync(`${RUN}.json`, JSON.stringify(run, null, 2) + "\n");
   writeFileSync(`${RUN}.md`, [
-    `# Diagram pairing run — ${run.stoppedFor ? `PARTIAL (${run.stoppedFor})` : "complete"}`,
+    `# Diagram pairing run — ${run.failedBatches.length ? `FAILED BATCHES (${run.failedBatches.length})` : run.stoppedFor ? `PARTIAL (${run.stoppedFor})` : "complete"}`,
     "", `- Reviewer: \`${REVIEW_MODEL}\``, `- Started: ${startedAt}`,
     `- Spend: $${(run.spendUsd ?? 0).toFixed(4)} across ${run.calls ?? 0} calls${run.uncostedCalls ? ` (+${run.uncostedCalls} with no cost reported)` : ""} · cap $${MAX_USD}`,
     `- Candidates: ${Object.entries(run.candidates).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}`,
     `- Asked this run: ${run.asked} · attached ${run.attached} (${run.attachedWithValues} with confirmed values) · rejected ${run.rejected}`,
     `- Pairings now shipped: ${run.shipped}`,
+    `- Diagrams held back (no current passing visual review): ${Object.entries(run.heldBack ?? {}).map(([k, v]) => `${k} — ${v}`).join("; ") || "none"}`,
     run.failedBatches.length ? `- Failed batches (will be retried next run): ${run.failedBatches.map((f) => `${f.diagram} [${f.ids.join(", ")}] — ${f.error}`).join("; ")}` : "- Failed batches: none",
     "",
   ].join("\n"));
@@ -85,6 +85,16 @@ const vite = await createServer({ server: { middlewareMode: true }, appType: "cu
 let code = 0;
 try {
   const { DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js");
+  /* Through Vite, like the registry: the matchers import .jsx modules, which
+     plain Node cannot load (Astra, PR #133 review, finding 11 — the CLI
+     crashed before reading a single question). */
+  const { proposePairs } = await vite.ssrLoadModule("/src/diagrams/match.js");
+  run.heldBack = {};
+  for (const id of Object.keys(DIAGRAMS)) {
+    const a = approval(REVIEWS, id, KEY);
+    if (!a.ok) run.heldBack[id] = a.why;
+  }
+  if (Object.keys(run.heldBack).length) console.log(`Held back, not reviewed for pairing: ${JSON.stringify(run.heldBack)}`);
   const sb = createClient(URL_, ANON, { auth: { persistSession: false } });
   const rows = await readAll(() => sb.from("questions").select("id, stem, options, answer, rationale")
     .eq("approved", true).is("exam_form", null).order("id"), { ordered: true });
@@ -96,6 +106,7 @@ try {
     for (const pair of proposePairs(q)) {
       const dg = DIAGRAMS[pair.d];
       if (!dg || (ONLY && pair.d !== ONLY)) continue;
+      if (!approvedNow(pair.d)) continue;   // never pay to pair a diagram that cannot ship
       run.candidates[pair.d] = (run.candidates[pair.d] ?? 0) + 1;
       if (isFresh(decisions[decisionKey(q.id, pair.d)], itemHash(q), diagramHash(dg))) continue;
       (queue[pair.d] ??= []).push({ ...q, extracted: pair.p ?? null });
@@ -106,39 +117,19 @@ try {
 
   if (DRY) { save(DIAGRAMS, items); console.log("Dry run: nothing sent."); }
   else {
-    let budgetLeft = LIMIT;
-    outer: for (const [did, list] of Object.entries(queue)) {
-      const dg = DIAGRAMS[did];
-      for (const batch of batches(list.slice(0, Math.max(0, budgetLeft)))) {
-        if (reviewSpend().costUsd >= MAX_USD) { run.stoppedFor = `reached the $${MAX_USD} cap`; break outer; }
-        try {
-          const raw = await review(pairingPrompt(dg, batch), 12000, { writer: GEN_MODEL, responseFormat: PAIRING_SCHEMA });
-          const got = readDecisions(parseJson(raw), batch);
-          const byId = new Map(batch.map((b) => [b.id, b]));
-          for (const dec of got) {
-            const it = byId.get(dec.id);
-            const shown = shownAs(dec, it.extracted);
-            decisions[decisionKey(dec.id, did)] = {
-              attach: dec.attach, values_confirmed: dec.values_confirmed, reason: dec.reason,
-              extracted: it.extracted, shown, itemHash: itemHash(it), diagramHash: diagramHash(dg), fp: fingerprint(it),
-              reviewedAt: new Date().toISOString(), model: REVIEW_MODEL,
-            };
-            run.asked += 1;
-            if (dec.attach) { run.attached += 1; if (shown) run.attachedWithValues += 1; } else run.rejected += 1;
-          }
-        } catch (e) {
-          if (e instanceof FatalLlmError) { run.stoppedFor = e.message.split("\n")[0]; save(DIAGRAMS, items); throw e; }
-          run.failedBatches.push({ diagram: did, ids: batch.map((b) => b.id), error: e.message.slice(0, 200) });
-          console.log(`  ✗ batch failed (${e.message.slice(0, 120)}); will retry next run`);
-        }
-        budgetLeft -= batch.length;
-        save(DIAGRAMS, items);   // after every batch: a stopped run keeps what it paid for
-        console.log(`  ${did}: ${run.asked} decided so far · $${reviewSpend().costUsd.toFixed(4)}`);
-      }
-      if (budgetLeft <= 0) { run.stoppedFor = run.stoppedFor ?? `reached --limit ${LIMIT}`; break; }
-    }
+    await pairAll({
+      queue, diagrams: DIAGRAMS, decisions, run, limit: LIMIT, maxUsd: MAX_USD, model: REVIEW_MODEL,
+      ask: async (dg, batch) => parseJson(await review(pairingPrompt(dg, batch), 12000, { writer: GEN_MODEL, responseFormat: PAIRING_SCHEMA })),
+      spent: () => reviewSpend().costUsd,
+      isFatal: (e) => e instanceof FatalLlmError,
+      fingerprintOf: fingerprint,
+      onBatch: () => { save(DIAGRAMS, items); console.log(`  ${run.asked} decided so far · $${reviewSpend().costUsd.toFixed(4)}${run.failedBatches.length ? ` · ${run.failedBatches.length} batch(es) failed` : ""}`); },
+    });
     save(DIAGRAMS, items);
-    console.log(`Done${run.stoppedFor ? ` (partial: ${run.stoppedFor})` : ""}. Report: ${RUN}.md`);
+    /* A batch that failed is a run that did not finish its job: it must not
+       report success (Astra, PR #133 review, finding 12). */
+    code = exitCodeFor(run);
+    console.log(`Done${run.stoppedFor ? ` (partial: ${run.stoppedFor})` : ""}${run.failedBatches.length ? ` — ${run.failedBatches.length} batch(es) FAILED` : ""}. Report: ${RUN}.md`);
   }
 } catch (e) {
   console.error(e.message);

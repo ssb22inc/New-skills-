@@ -86,7 +86,8 @@ jobs:
         run: |
           git config user.name "pulsern-narrate"
           git config user.email "pulsern-narrate@users.noreply.github.com"
-          git add src/diagrams/narration.json reports/narration/
+          # A run that failed early may not have written every path; add what exists.
+          for p in src/diagrams/narration.json reports/narration/; do [ -e "$p" ] && git add -- "$p"; done
           if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
           git commit -q -m "Narration: ${{ inputs.voice }} (rc=${{ steps.narrate.outputs.rc }})"
           for attempt in 1 2 3; do

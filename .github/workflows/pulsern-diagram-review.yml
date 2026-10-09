@@ -75,7 +75,8 @@ jobs:
         run: |
           git config user.name "pulsern-diagram-review"
           git config user.email "pulsern-diagram-review@users.noreply.github.com"
-          git add reports/diagram-review/
+          # A run that failed early may not have written every path; add what exists.
+          for p in reports/diagram-review/; do [ -e "$p" ] && git add -- "$p"; done
           if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
           git commit -q -m "Astra diagram review (rc=${{ steps.review.outputs.rc }})"
           for attempt in 1 2 3; do

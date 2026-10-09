@@ -5,8 +5,12 @@
      1. synthesise it with OpenAI TTS (owner's choice of provider);
      2. transcribe the result and compare it with the script — a clip that
         skipped a clause or said a wrong number is NOT shipped;
-     3. upload passing clips to the public `explainers` storage bucket under a
-        content-addressed name, so a URL never changes meaning;
+     3. upload passing clips to the public `explainers` storage bucket, named
+        by the hash of the AUDIO BYTES and never overwritten — so a published
+        URL can never change what it plays. TTS output is not byte-identical
+        across runs, so naming by the inputs let a stale branch silently
+        replace live audio (Astra, PR #133 review, finding 5). Only a
+        reviewed manifest change moves a step to a new recording;
      4. write src/diagrams/narration.json, which the app reads.
 
    Re-runs only record clips whose words, voice or delivery changed. A clip
@@ -18,7 +22,8 @@
 import { createServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { TTS, QA_MODEL, QA_THRESHOLD, clipId, textFp, speechSimilarity, narratedSteps } from "./narrate-lib.mjs";
+import { createHash } from "node:crypto";
+import { TTS, QA_MODEL, QA_THRESHOLD, clipId, textFp, audioCheck, narratedSteps } from "./narrate-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -74,10 +79,10 @@ function save() {
   writeFileSync(`${REPORT}.json`, JSON.stringify(report, null, 2) + "\n");
   writeFileSync(`${REPORT}.md`, [
     `# Narration run — voice \`${VOICE}\``, "",
-    `- Model: \`${TTS.model}\` · audio check: \`${QA_MODEL}\`, pass at ≥ ${QA_THRESHOLD} similarity`,
+    `- Model: \`${TTS.model}\` · audio check: \`${QA_MODEL}\`, pass at ≥ ${QA_THRESHOLD} similarity AND every number, negation and direction word exactly as scripted`,
     `- Recorded and shipped: ${report.recorded.length} · unchanged, skipped: ${report.skippedUnchanged}`,
     `- Characters synthesised: ${report.characters.toLocaleString()} (OpenAI does not return a cost; this is what it bills on)`,
-    report.failedQa.length ? `- **Failed the audio check — not shipped:**\n${report.failedQa.map((f) => `  - ${f.diagram}/${f.step}: similarity ${f.similarity.toFixed(3)} — heard: “${f.heard}”`).join("\n")}` : "- Failed the audio check: none",
+    report.failedQa.length ? `- **Failed the audio check — not shipped:**\n${report.failedQa.map((f) => `  - ${f.diagram}/${f.step}: ${f.mismatch ? `said “${f.mismatch.heard}” where the script says “${f.mismatch.expected}”; ` : ""}similarity ${f.similarity.toFixed(3)} — heard: “${f.heard}”`).join("\n")}` : "- Failed the audio check: none",
     report.errors.length ? `- Errors: ${report.errors.map((e) => `${e.diagram}/${e.step}: ${e.error}`).join("; ")}` : "- Errors: none",
     "",
   ].join("\n"));
@@ -115,21 +120,33 @@ try {
     }
     for (const { d, s, id } of work) {
       try {
-        const mp3 = await synthesise(s.narration);
-        report.characters += s.narration.length;
-        const heard = await transcribe(mp3);
-        const similarity = speechSimilarity(s.narration, heard);
-        if (similarity < QA_THRESHOLD) {
-          report.failedQa.push({ diagram: d.id, step: s.key, similarity, heard });
-          console.log(`  ✗ ${d.id}/${s.key}: audio check ${similarity.toFixed(3)} — not shipped`);
+        /* Two takes at most: a synthetic voice occasionally slurs a word, and
+           a second take is cheaper than a human re-recording. A clip that
+           fails both is reported and not shipped. */
+        let mp3, heard, check;
+        for (let take = 1; take <= 2; take++) {
+          mp3 = await synthesise(s.narration);
+          report.characters += s.narration.length;
+          heard = await transcribe(mp3);
+          check = audioCheck(s.narration, heard);
+          if (check.pass) break;
+          console.log(`  … ${d.id}/${s.key} take ${take}: ${check.mismatch ? `said “${check.mismatch.heard}” where the script says “${check.mismatch.expected}”` : `similarity ${check.similarity.toFixed(3)}`}`);
+        }
+        const similarity = check.similarity;
+        if (!check.pass) {
+          report.failedQa.push({ diagram: d.id, step: s.key, similarity, mismatch: check.mismatch, heard });
+          console.log(`  ✗ ${d.id}/${s.key}: failed the audio check twice — not shipped`);
           save();
           continue;
         }
-        const path = `${d.id}/${s.key}-${id}.mp3`;
-        const { error } = await sb.storage.from(BUCKET).upload(path, mp3, { contentType: "audio/mpeg", cacheControl: "31536000", upsert: true });
-        if (error) throw new Error(`upload: ${error.message}`);
+        const audioHash = createHash("sha256").update(mp3).digest("hex").slice(0, 32);
+        const path = `${d.id}/${audioHash}.mp3`;
+        const { error } = await sb.storage.from(BUCKET).upload(path, mp3, { contentType: "audio/mpeg", cacheControl: "31536000", upsert: false });
+        /* Same name means the same bytes, so an existing object is exactly
+           this clip — anything else is a real failure. */
+        if (error && !/exist|duplicate|409/i.test(`${error.message} ${error.statusCode ?? ""}`)) throw new Error(`upload: ${error.message}`);
         manifest.clips[d.id][s.key] = {
-          id, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(similarity * 1000) / 1000,
+          id, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(similarity * 1000) / 1000,
           url: `${process.env.SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${path}`, bytes: mp3.length,
         };
         report.recorded.push({ diagram: d.id, step: s.key, similarity, bytes: mp3.length });
