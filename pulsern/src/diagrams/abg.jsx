@@ -77,25 +77,32 @@ const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
 export const ABG_EXAMPLE = { ph: 7.3, paco2: 55, hco3: 24 };
 
+/* params === null draws the method alone — no patient markers and no
+   verdict. Used when a question is about ABGs but its values could not be
+   confirmed: showing the textbook example beside a question with different
+   numbers would mislead. */
 export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
-  const r = interpretAbg(params);
-  const bad = r.disorder !== "normal";
-  const label = r.disorder === "normal" ? "Normal ABG"
+  const concept = params === null;
+  const r = concept ? null : interpretAbg(params);
+  const bad = !concept && r.disorder !== "normal";
+  const label = concept ? "Read pH → PaCO₂ → HCO₃⁻ → match" : r.disorder === "normal" ? "Normal ABG"
     : r.disorder === "inconsistent" || r.disorder === "indeterminate" ? "Recheck"
     : `${cap(r.disorder)}${r.compensation === "none" ? " · uncompensated" : r.compensation === "partial" ? " · partly compensated" : r.compensation === "full" ? " · fully compensated" : ""}`;
   return (
     <Frame h={420} focus={focus} title="Reading an arterial blood gas"
-      desc={`pH ${params.ph} (normal 7.35 to 7.45), PaCO2 ${params.paco2} mmHg (35 to 45, high means acid), HCO3 ${params.hco3} mEq/L (22 to 26, low means acid). ${r.reading}`}>
+      desc={concept
+        ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, high means acid; HCO3 normal 22 to 26 mEq/L, low means acid. Match the value that moves with the pH: respiratory opposite, metabolic equal."
+        : `pH ${params.ph} (normal 7.35 to 7.45), PaCO2 ${params.paco2} mmHg (35 to 45, high means acid), HCO3 ${params.hco3} mEq/L (22 to 26, low means acid). ${r.reading}`}>
       <G id="ph">
-        <Gauge x={20} y={56} w={320} min={7.1} max={7.7} lo={7.35} hi={7.45} value={params.ph} decimals={2}
+        <Gauge x={20} y={56} w={320} min={7.1} max={7.7} lo={7.35} hi={7.45} value={concept ? null : params.ph} decimals={2}
           label="1  pH — what is the problem?" leftLabel="ACIDOSIS" rightLabel="ALKALOSIS" leftColor="coral" rightColor="coral" />
       </G>
       <G id="co2">
-        <Gauge x={20} y={138} w={320} min={20} max={70} lo={35} hi={45} value={params.paco2} unit="mmHg"
+        <Gauge x={20} y={138} w={320} min={20} max={70} lo={35} hi={45} value={concept ? null : params.paco2} unit="mmHg"
           label="2  PaCO₂ — lungs · CO₂ is an acid" leftLabel="BASE" rightLabel="ACID ▸" rightColor="coral" />
       </G>
       <G id="hco3">
-        <Gauge x={20} y={220} w={320} min={12} max={36} lo={22} hi={26} value={params.hco3} unit="mEq/L"
+        <Gauge x={20} y={220} w={320} min={12} max={36} lo={22} hi={26} value={concept ? null : params.hco3} unit="mEq/L"
           label="3  HCO₃⁻ — kidneys · a base" leftLabel="◂ ACID" rightLabel="BASE" leftColor="coral" />
       </G>
       <G id="rome">
@@ -152,17 +159,17 @@ export const abg = {
     "In full compensation, a pH below 7.40 points to an original acidosis and above 7.40 to an original alkalosis.",
   ],
   steps: [
-    { focus: ["ph"], caption: "Start with pH. Below 7.35 is acidosis, above 7.45 is alkalosis. pH tells you what the problem is — not yet where it came from.",
+    { key: "ph", focus: ["ph"], caption: "Start with pH. Below 7.35 is acidosis, above 7.45 is alkalosis. pH tells you what the problem is — not yet where it came from.",
       narration: "Start with the pH. Anything below seven point three five is acidosis. Anything above seven point four five is alkalosis. The pH tells you what the problem is — not yet where it came from." },
-    { focus: ["co2"], caption: "Now the lungs. CO₂ behaves like an acid, so a PaCO₂ above 45 pushes the blood acidic. Notice its acid end is on the right — the opposite of the pH line.",
+    { key: "lungs", focus: ["co2"], caption: "Now the lungs. CO₂ behaves like an acid, so a PaCO₂ above 45 pushes the blood acidic. Notice its acid end is on the right — the opposite of the pH line.",
       narration: "Now look at the lungs. Carbon dioxide behaves like an acid, so a P-A-C-O-2 above forty-five pushes the blood toward acid. Notice that its acid end is on the right — the opposite way round from the pH line." },
-    { focus: ["hco3"], caption: "Then the kidneys. Bicarbonate is a base: below 22 leaves the blood acidic, above 26 makes it alkaline.",
+    { key: "kidneys", focus: ["hco3"], caption: "Then the kidneys. Bicarbonate is a base: below 22 leaves the blood acidic, above 26 makes it alkaline.",
       narration: "Then the kidneys. Bicarbonate is a base. Below twenty-two leaves the blood acidic, and above twenty-six makes it alkaline." },
-    { focus: ["rome"], caption: "Find the value that matches the pH. ROME: Respiratory — pH and PaCO₂ move Opposite ways. Metabolic — pH and HCO₃⁻ move the Equal way.",
+    { key: "rome", focus: ["rome"], caption: "Find the value that matches the pH. ROME: Respiratory — pH and PaCO₂ move Opposite ways. Metabolic — pH and HCO₃⁻ move the Equal way.",
       narration: "Now find the value that matches the pH, using ROME. Respiratory: the pH and P-A-C-O-2 move in opposite directions. Metabolic: the pH and bicarbonate move in the same direction." },
-    { focus: ["ph", "co2", "hco3", "result"], dynamic: true, caption: null,
+    { key: "worked", focus: ["ph", "co2", "hco3", "result"], dynamic: true, caption: null,
       narration: null },
-    { focus: ["comp", "result"], caption: "Compensation is the other system pushing back. Still normal: uncompensated. Moved, but pH still out of range: partially compensated. pH back in range: fully compensated.",
+    { key: "compensation", focus: ["comp", "result"], caption: "Compensation is the other system pushing back. Still normal: uncompensated. Moved, but pH still out of range: partially compensated. pH back in range: fully compensated.",
       narration: "Compensation is the other system pushing back. If it is still normal, the disorder is uncompensated. If it has moved but the pH is still out of range, it is partially compensated. And if the pH is back in range, it is fully compensated." },
   ],
   /* The worked-example step reads the actual values, so it is written by

@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Explainer, captionMs, stepCaption, verificationLabel, MIN_STEP_MS, WORDS_PER_SECOND } from "../src/explainer.jsx";
+import { Explainer, captionMs, stepCaption, stepsFor, clipFor, verificationLabel, MIN_STEP_MS, WORDS_PER_SECOND } from "../src/explainer.jsx";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("caption timing", () => {
@@ -33,7 +33,7 @@ describe("labelling (CLAUDE.md: AI content stays labelled)", () => {
     expect(html).not.toContain("RN-verified");
   });
   it("discloses a synthetic voice whenever narration is attached", () => {
-    const audio = DIAGRAMS.abg.steps.map((_, i) => `/a/${i}.mp3`);
+    const audio = Object.fromEntries(DIAGRAMS.abg.steps.filter((s) => s.key).map((s) => [s.key, `/a/${s.key}.mp3`]));
     const html = renderToStaticMarkup(<Explainer diagram={DIAGRAMS.abg} startInPlayer audio={audio} />);
     expect(html).toContain("Narration is a synthetic voice.");
   });
@@ -60,6 +60,49 @@ describe("what a student sees first", () => {
   });
 });
 
+describe("concept-only mode (no confirmed patient values)", () => {
+  /* A question about ABGs whose values could not be confirmed must not be
+     shown the textbook example's numbers as though they were its own. */
+  it("shows no patient values and no verdict", () => {
+    const html = renderToStaticMarkup(<Explainer diagram={DIAGRAMS.abg} params={null} />);
+    expect(html).not.toContain("7.30");
+    // the legend legitimately teaches the word "uncompensated"; what must be
+    // absent is a verdict about a patient
+    expect(html).not.toMatch(/(Respiratory|Metabolic|Combined)[a-z ]* (acidosis|alkalosis)|Normal ABG/);
+    expect(html).toContain("Read pH → PaCO₂ → HCO₃⁻ → match");
+  });
+  it("drops the worked-example step, which would need values", () => {
+    expect(stepsFor(DIAGRAMS.abg, null).some((s) => s.dynamic)).toBe(false);
+    expect(stepsFor(DIAGRAMS.abg, undefined).some((s) => s.dynamic)).toBe(true);
+  });
+  it("draws potassium without a marker or a matched strip", () => {
+    const html = renderToStaticMarkup(<DIAGRAMS.potassium.Diagram params={null} />);
+    expect(html).not.toContain("6.2");
+    expect(html).not.toContain('stroke-dasharray="5 4"');
+  });
+});
+
+describe("narration follows stable keys, never positions", () => {
+  const steps = DIAGRAMS.abg.steps;
+  const audio = Object.fromEntries(steps.filter((s) => s.key && !s.dynamic).map((s) => [s.key, `/a/${s.key}.mp3`]));
+
+  /* Its caption is computed from the question's values; a recording made
+     from the textbook example would contradict the screen. */
+  it("never plays a recording over a worked-example step", () => {
+    const i = steps.findIndex((s) => s.dynamic);
+    expect(clipFor({ ...audio, [steps[i].key]: "/a/worked.mp3" }, steps, i)).toBeNull();
+  });
+  it("plays the right clip after a step has been left out", () => {
+    const filtered = stepsFor(DIAGRAMS.abg, null);
+    filtered.forEach((s, i) => expect(clipFor(audio, filtered, i)).toBe(`/a/${s.key}.mp3`));
+  });
+  it("plays nothing rather than a neighbour's clip when one is missing", () => {
+    const { rome, ...partial } = audio;
+    const i = steps.findIndex((s) => s.key === "rome");
+    expect(clipFor(partial, steps, i)).toBeNull();
+  });
+});
+
 /* Every diagram in the registry must meet the same bar, so a new one cannot
    be added half-finished. */
 describe("every registered diagram", () => {
@@ -74,6 +117,11 @@ describe("every registered diagram", () => {
       it("states its clinical claims for the reviewer", () => {
         expect(d.facts.length).toBeGreaterThan(2);
         for (const f of d.facts) expect(f.length).toBeGreaterThan(20);
+      });
+      it("gives every step a unique, stable key", () => {
+        const keys = d.steps.map((s) => s.key);
+        for (const k of keys) expect(k, "step without a key").toMatch(/^[a-z][a-z0-9-]*$/);
+        expect(new Set(keys).size).toBe(keys.length);
       });
       it("has a caption and a narration script for every step", () => {
         d.steps.forEach((s, i) => {

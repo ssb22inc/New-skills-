@@ -1,0 +1,93 @@
+name: pulsern-diagram-map
+
+# Pairs concept diagrams with practice questions, each pairing confirmed by
+# GPT Astra (pulsern/ops/map-diagrams.mjs). Manual only: it spends money.
+#
+# Writes the confirmed map (src/diagrams/item-map.json), the decision cache
+# and a run report back to the branch it ran on, so the result arrives as an
+# ordinary commit on a pull request and goes through the Astra code review
+# like anything else. Saved even when the run stops early: every paid
+# decision is kept.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to run on and commit the results to (never main)"
+        required: true
+      max_usd:
+        description: "Spend cap for this run, in USD"
+        required: true
+        default: "15"
+      limit:
+        description: "Optional: stop after this many decisions (a pilot run)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pulsern-diagram-map-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - name: Refuse to write to main
+        working-directory: .
+        run: |
+          case "${{ inputs.branch }}" in
+            main|master) echo "::error::Results are committed to the branch given; run on a feature branch."; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+
+      - run: npm ci
+
+      - name: Pair diagrams with questions (Astra-confirmed)
+        id: map
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set +e
+          node ops/map-diagrams.mjs --max-usd "${{ inputs.max_usd }}" ${{ inputs.limit != '' && format('--limit {0}', inputs.limit) || '' }}
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Show the run report
+        if: always()
+        run: cat reports/diagram-map/run-*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - name: Commit results to the branch (always — every paid decision is kept)
+        if: always()
+        run: |
+          git config user.name "pulsern-diagram-map"
+          git config user.email "pulsern-diagram-map@users.noreply.github.com"
+          git add src/diagrams/item-map.json reports/diagram-map/
+          if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
+          git commit -q -m "Diagram pairings: Astra-confirmed run (rc=${{ steps.map.outputs.rc }})"
+          for attempt in 1 2 3; do
+            git push -q origin "HEAD:${{ inputs.branch }}" && { echo "Saved."; exit 0; }
+            git pull -q --rebase origin "${{ inputs.branch }}" || true
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the results."; exit 1
+
+      - name: Verdict
+        if: always()
+        run: |
+          [ "${{ steps.map.outputs.rc }}" = "0" ] || { echo "::error::The pairing run did not complete cleanly — see the report."; exit 1; }

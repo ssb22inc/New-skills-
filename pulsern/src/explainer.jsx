@@ -31,10 +31,28 @@ export function captionMs(text) {
 /* The caption for a step, including worked-example steps whose text is
    computed from the question's own values. */
 export function stepCaption(diagram, i, params) {
-  const s = diagram.steps[i];
+  const s = stepsFor(diagram, params)[i];
   if (!s) return "";
   if (s.dynamic) return diagram.dynamicCaption?.(params ?? diagram.example) ?? "";
   return s.caption ?? "";
+}
+
+/* The worked-example step reads a patient's values. With none (params ===
+   null, concept-only) there is nothing to work through, so it is left out
+   rather than shown with the textbook example's numbers. */
+export function stepsFor(diagram, params) {
+  return params === null ? diagram.steps.filter((s) => !s.dynamic) : diagram.steps;
+}
+
+/* Recorded narration is never used for a worked-example step: its caption is
+   computed from the question's own values, and a recording made from the
+   textbook example would contradict the screen. Those steps read as timed
+   captions instead. */
+export function clipFor(audio, steps, i) {
+  if (!audio || !steps[i] || steps[i].dynamic) return null;
+  /* By stable key only. Position would shift when a step is left out, and
+     the wrong clip would play over a step. */
+  return audio[steps[i].key] ?? null;
 }
 
 export function verificationLabel(rnVerified) {
@@ -62,8 +80,9 @@ const prefersReducedMotion = () =>
 
 export function Explainer({ diagram, params, startInPlayer = false, initialStep = 0, rnVerified = false, audio = null }) {
   useDiagramCss();
-  const n = diagram.steps.length;
-  const [step, setStep] = React.useState(startInPlayer ? Math.max(0, Math.min(diagram.steps.length - 1, initialStep)) : -1);   // -1 = static overview
+  const steps = stepsFor(diagram, params);
+  const n = steps.length;
+  const [step, setStep] = React.useState(startInPlayer ? Math.max(0, Math.min(n - 1, initialStep)) : -1);   // -1 = static overview
   const [playing, setPlaying] = React.useState(false);
   const [elapsed, setElapsed] = React.useState(0);
   const audioRef = React.useRef(null);
@@ -71,7 +90,7 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
   const D = diagram.Diagram;
   const inSteps = step >= 0;
   const caption = inSteps ? stepCaption(diagram, step, params) : null;
-  const clipUrl = inSteps ? audio?.[step] ?? null : null;
+  const clipUrl = inSteps ? clipFor(audio, steps, step) : null;
   const duration = caption ? captionMs(caption) : 0;
 
   const go = React.useCallback((i) => { setElapsed(0); setStep(Math.max(0, Math.min(n - 1, i))); }, [n]);
@@ -112,7 +131,7 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
         <span className="dg-title">{diagram.title}</span>
         {inSteps ? <span className="dg-badge" aria-hidden="true">{step + 1} / {n}</span> : null}
       </div>
-      <D params={params ?? diagram.example} focus={inSteps ? diagram.steps[step].focus : null} />
+      <D params={params === undefined ? diagram.example : params} focus={inSteps ? steps[step].focus : null} />
       {inSteps ? (
         <>
           <p className="dg-caption" aria-live="polite">{caption}</p>
@@ -121,7 +140,7 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
             <button type="button" className="dg-btn ghost" onClick={() => go(step - 1)} disabled={step === 0} aria-label="Previous step">‹</button>
             <button type="button" className="dg-btn" onClick={() => setPlaying((p) => !p)} aria-label={playing ? "Pause" : "Play"}>{playing ? "Pause" : "Play"}</button>
             <div className="dg-dots" role="group" aria-label="Steps">
-              {diagram.steps.map((_, i) => (
+              {steps.map((_, i) => (
                 <button key={i} type="button" className={`dg-dot${i === step ? " on" : ""}`} aria-label={`Step ${i + 1}`} aria-current={i === step ? "step" : undefined} onClick={() => go(i)} />
               ))}
             </div>

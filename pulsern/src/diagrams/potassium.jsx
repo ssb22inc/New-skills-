@@ -50,13 +50,15 @@ const Lines = ({ x, y, lines, size = 11.5, gap = 17, color = C.ink, weight = 500
 
 export const K_EXAMPLE = { k: 6.2 };
 
+/* params === null: concept-only — no patient marker, no matched strip. */
 export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
-  const state = classifyPotassium(params.k);
+  const concept = params === null;
+  const state = concept ? "normal" : classifyPotassium(params.k);
   return (
     <Frame h={492} focus={focus} title="Potassium and the heart"
-      desc={`Serum potassium ${params.k} mEq/L (normal 3.5 to 5.0): ${state}. Low potassium: flattened T waves, ST depression, prominent U wave. High potassium: tall peaked T waves, widened QRS, flattened P waves. Hyperkalemia emergency order: calcium gluconate to protect the heart, insulin with dextrose to shift potassium into cells, then remove it.`}>
+      desc={`${concept ? "Serum potassium normal range 3.5 to 5.0 mEq/L." : `Serum potassium ${params.k} mEq/L (normal 3.5 to 5.0): ${state}.`} Low potassium: flattened T waves, ST depression, prominent U wave. High potassium: tall peaked T waves, widened QRS, flattened P waves. Hyperkalemia emergency order: calcium gluconate to protect the heart, insulin with dextrose to shift potassium into cells, then remove it.`}>
       <G id="level">
-        <Gauge x={20} y={52} w={320} min={2} max={7} lo={3.5} hi={5.0} value={params.k} decimals={1} unit="mEq/L"
+        <Gauge x={20} y={52} w={320} min={2} max={7} lo={3.5} hi={5.0} value={concept ? null : params.k} decimals={1} unit="mEq/L"
           label="Serum potassium (K⁺)" leftLabel="◂ HYPO" rightLabel="HYPER ▸" leftColor="coral" rightColor="coral" />
       </G>
 
@@ -122,17 +124,17 @@ export const potassium = {
     "Insulin given with dextrose shifts potassium into cells; binders, diuretics or dialysis remove it from the body.",
   ],
   steps: [
-    { focus: ["level"], caption: "Normal serum potassium is 3.5–5.0. It sets the heart's resting electrical state, so either extreme can trigger a dangerous rhythm.",
+    { key: "range", focus: ["level"], caption: "Normal serum potassium is 3.5–5.0. It sets the heart's resting electrical state, so either extreme can trigger a dangerous rhythm.",
       narration: "Normal serum potassium is three point five to five point oh. Potassium sets the heart's resting electrical state, so a level that is either too low or too high can trigger a dangerous rhythm." },
-    { focus: ["hypo"], caption: "Low potassium flattens the T wave, depresses the ST segment, and adds a prominent U wave after the T.",
+    { key: "hypo-ecg", focus: ["hypo"], caption: "Low potassium flattens the T wave, depresses the ST segment, and adds a prominent U wave after the T.",
       narration: "Low potassium flattens the T wave, pushes the S-T segment down, and adds a prominent U wave just after the T." },
-    { focus: ["hypo", "hypo-act"], caption: "Common causes: diuretics, vomiting or NG suction, diarrhea. Replace it safely — IV potassium is never pushed: it is diluted, run on a pump, with the heart monitored. Check urine output first.",
+    { key: "hypo-care", focus: ["hypo", "hypo-act"], caption: "Common causes: diuretics, vomiting or NG suction, diarrhea. Replace it safely — IV potassium is never pushed: it is diluted, run on a pump, with the heart monitored. Check urine output first.",
       narration: "The common causes are diuretics, vomiting or N-G suction, and diarrhea. Replace it safely. I-V potassium is never pushed. It is diluted and run on a pump while the heart is monitored. And check urine output first, because the kidneys have to be able to clear it." },
-    { focus: ["hyper"], caption: "High potassium makes tall, peaked T waves first; as it climbs the QRS widens and the P wave flattens.",
+    { key: "hyper-ecg", focus: ["hyper"], caption: "High potassium makes tall, peaked T waves first; as it climbs the QRS widens and the P wave flattens.",
       narration: "High potassium makes tall, narrow, peaked T waves first. As it climbs further, the Q-R-S widens and the P wave flattens out." },
-    { focus: ["hyper", "hyper-act"], caption: "Emergency order: calcium gluconate first to protect the heart — it does not lower potassium. Then insulin with dextrose to shift K⁺ into cells. Then remove it.",
+    { key: "hyper-care", focus: ["hyper", "hyper-act"], caption: "Emergency order: calcium gluconate first to protect the heart — it does not lower potassium. Then insulin with dextrose to shift K⁺ into cells. Then remove it.",
       narration: "In an emergency, the order matters. Give calcium gluconate first, to protect the heart — remember, it does not lower the potassium. Then insulin with dextrose to shift potassium into the cells. Then remove it from the body with binders, diuretics, or dialysis." },
-    { focus: ["level", "match"], dynamic: true, caption: null, narration: null },
+    { key: "worked", focus: ["level", "match"], dynamic: true, caption: null, narration: null },
   ],
   dynamicCaption: ({ k } = K_EXAMPLE) => {
     const s = classifyPotassium(k);

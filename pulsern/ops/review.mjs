@@ -36,6 +36,9 @@ export const REVIEW_EFFORT = "medium";
 
 const spend = { calls: 0, costUsd: 0, uncosted: 0, promptTokens: 0, completionTokens: 0 };
 let exitHookArmed = false;
+let lastCost = null;
+/* Cost of the most recent call, or null if it was not reported. */
+export const lastReviewCost = () => lastCost;
 
 export function reviewSpend() {
   return { ...spend, costUsd: Math.round(spend.costUsd * 1e6) / 1e6 };
@@ -54,15 +57,17 @@ export function resetReviewSpend() {
 /* writer: the model that produced what is being judged. Defaults to the
    factories' generator; the copy audit judges strings written in this
    codebase, which a Claude model also wrote. */
-export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL } = {}) {
+export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, responseFormat = null } = {}) {
   assertCrossFamily(writer, REVIEW_MODEL);
   const res = await llmCall({
     model: REVIEW_MODEL,
     prompt,
     maxTokens: Math.max(maxTokens, REVIEW_MIN_TOKENS),
     reasoningEffort: REVIEW_EFFORT,
+    responseFormat,
   });
 
+  lastCost = res.usage.costUsd;
   spend.calls += 1;
   spend.promptTokens += res.usage.promptTokens ?? 0;
   spend.completionTokens += res.usage.completionTokens ?? 0;
