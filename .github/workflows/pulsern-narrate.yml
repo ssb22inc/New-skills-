@@ -1,0 +1,102 @@
+name: pulsern-narrate
+
+# Records explainer narration with OpenAI TTS and checks every clip by
+# transcribing it back (pulsern/ops/narrate.mjs). Manual only: it spends money.
+#
+# Needs repository secrets: OPENAI_API_KEY (owner adds it; never rotated by
+# this job), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (for the public
+# `explainers` audio bucket).
+#
+# The manifest (src/diagrams/narration.json) and the run report are
+# committed back to the branch, so new audio reaches students only through
+# a reviewed pull request. Saved even when some clips fail: every paid
+# recording is kept, and clips that fail the audio check are listed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to run on and commit the manifest to (never main)"
+        required: true
+      voice:
+        description: "OpenAI voice (marin, cedar, alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse)"
+        required: true
+        default: "marin"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pulsern-narrate-${{ inputs.branch }}
+  cancel-in-progress: false
+
+jobs:
+  narrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: pulsern
+    steps:
+      - name: Refuse to write to main
+        working-directory: .
+        run: |
+          case "${{ inputs.branch }}" in
+            main|master) echo "::error::Run on a feature branch; the manifest is committed to it."; exit 1 ;;
+          esac
+
+      - name: Check the voice name
+        working-directory: .
+        run: |
+          case "${{ inputs.voice }}" in
+            marin|cedar|alloy|ash|ballad|coral|echo|fable|nova|onyx|sage|shimmer|verse) ;;
+            *) echo "::error::Unknown voice '${{ inputs.voice }}'."; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pulsern/package-lock.json
+
+      - run: npm ci
+
+      - name: Record and check narration
+        id: narrate
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          node ops/narrate.mjs --voice "${{ inputs.voice }}"
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Show the run report
+        if: always()
+        run: cat reports/narration/run-*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - name: Commit the manifest to the branch (always)
+        if: always()
+        run: |
+          git config user.name "pulsern-narrate"
+          git config user.email "pulsern-narrate@users.noreply.github.com"
+          git add src/diagrams/narration.json reports/narration/
+          if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
+          git commit -q -m "Narration: ${{ inputs.voice }} (rc=${{ steps.narrate.outputs.rc }})"
+          for attempt in 1 2 3; do
+            git push -q origin "HEAD:${{ inputs.branch }}" && { echo "Saved."; exit 0; }
+            git pull -q --rebase origin "${{ inputs.branch }}" || true
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the manifest."; exit 1
+
+      - name: Verdict
+        if: always()
+        run: |
+          [ "${{ steps.narrate.outputs.rc }}" = "0" ] || { echo "::error::Some clips failed the audio check or errored — see the report."; exit 1; }

@@ -99,4 +99,97 @@ describe("workflow placement", () => {
     expect(workflow).toContain("A successful recovery will close this incident automatically.");
     expect(workflow).not.toContain("The scheduled content-factory run failed.");
   });
+
+  /* The Astra review is only worth something if a PR cannot weaken it. These
+     pin the properties that make it trustworthy — each one a finding from
+     Astra's own review of the first version — so an edit that quietly removes
+     one fails here rather than in production. */
+  describe("Astra review workflow", () => {
+    const wf = () => readFileSync(join(LIVE_DIR, "pulsern-astra-review.yml"), "utf8");
+
+    it("is live at the repository root", () => {
+      expect(readdirSync(LIVE_DIR)).toContain("pulsern-astra-review.yml");
+    });
+
+    /* Finding #1 (blocker): on pull_request GitHub runs the PR's copy of the
+       workflow, so a PR could report a pass without calling Astra. */
+    it("runs on pull_request_target, so the base branch's workflow judges every PR", () => {
+      const w = wf();
+      expect(w).toMatch(/^  pull_request_target:/m);
+      expect(w).not.toMatch(/^  pull_request:/m);
+    });
+
+    it("never installs, builds or runs anything from the pull request", () => {
+      const w = wf();
+      expect(w).not.toMatch(/\bnpm\b|\byarn\b|\bpnpm\b|\bnpx\b/);
+      const nodeCalls = [...w.matchAll(/^\s*node\s+(\S+)/gm)].map((m) => m[1]);
+      expect(nodeCalls.length).toBeGreaterThan(0);
+      for (const c of nodeCalls) expect(c, `node runs ${c}`).toMatch(/^"\$GITHUB_WORKSPACE\/trusted\//);
+      // the PR is fetched with plain git as data, never checked out by an action
+      expect(w).not.toMatch(/ref: \$\{\{ github\.event\.pull_request\.head/);
+      expect(w).toContain("+refs/pull/$PR/head:refs/remotes/pr/head");
+    });
+
+    it("takes the reviewer from the base branch, without credentials left on disk", () => {
+      const w = wf();
+      const trusted = w.slice(w.indexOf("- name: Check out the trusted reviewer"));
+      expect(trusted.split("\n").slice(0, 8).join("\n")).toMatch(/ref: \$\{\{ github\.sha \}\}/);
+      expect(trusted.split("\n").slice(0, 8).join("\n")).toContain("persist-credentials: false");
+      // No path left where a PR is judged by its own copy of the reviewer.
+      expect(w).not.toMatch(/ASTRA_REVIEW_MODE: bootstrap|mode=bootstrap|target\/pulsern\/ops\/astra-review/);
+    });
+
+    /* Finding #2: a skipped job counts as green. Forks and drafts must end red
+       or pending on the commit, never silently passed. */
+    it("fails a fork PR closed until a maintainer labels it, and holds drafts at pending", () => {
+      const w = wf();
+      expect(w).toMatch(/IS_FORK[\s\S]*LABELED[\s\S]*state=failure/);
+      expect(w).toMatch(/IS_DRAFT[\s\S]*state=pending/);
+      expect(w).not.toMatch(/^\s+if: github\.event\.pull_request\.head\.repo\.full_name == github\.repository/m);
+    });
+
+    it("binds the verdict to the reviewed commit as a status, whatever happened", () => {
+      const w = wf();
+      const post = w.slice(w.indexOf("- name: Post the verdict on the reviewed commit"));
+      expect(post.split("\n").slice(0, 3).join("\n")).toContain("if: always()");
+      expect(post).toContain('context:"pulsern/astra-review"');
+      expect(post).toContain("statuses/$HEAD_SHA");
+      expect(w).toContain("statuses: write");
+    });
+
+    /* Finding #5: cancelling a run mid-call threw away a paid review. */
+    it("never cancels a review that is already being paid for", () => {
+      expect(wf()).toMatch(/cancel-in-progress: false/);
+    });
+
+    it("finds and keeps the report by looking for it, not by trusting step outputs", () => {
+      const w = wf();
+      const save = w.slice(w.indexOf("- name: Commit the report to the reviews branch"));
+      expect(save.split("\n").slice(0, 3).join("\n")).toContain("if: always() && hashFiles('astra-out/*.md') != ''");
+      expect(w.indexOf("- name: Post the verdict")).toBeGreaterThan(w.indexOf("- name: Commit the report"));
+    });
+
+    it("only claims a save when a push actually landed", () => {
+      const w = wf();
+      expect(w).not.toMatch(/nothing new to commit"; exit 0/);
+      expect(w).toMatch(/push -q origin "HEAD:\$BRANCH"; then\s+echo "Saved to/);
+    });
+
+    /* Reads the actual trigger paths. An earlier draft of this test used a
+       regex that could never match, so it passed whatever the file said. */
+    it("triggers only on PulseRN paths", () => {
+      const w = wf();
+      const block = w.slice(w.indexOf("    paths:"), w.indexOf("  workflow_dispatch:"));
+      const paths = [...block.matchAll(/^\s+- "([^"]+)"$/gm)].map((m) => m[1]);
+      expect(paths.length).toBeGreaterThan(0);
+      for (const p of paths) {
+        expect(p, `trigger path ${p} reaches outside PulseRN`).toMatch(/^!?pulsern\/|^\.github\/workflows\/pulsern-/);
+      }
+    });
+
+    it("does not spend money on unrelated labels", () => {
+      expect(wf()).toMatch(/github\.event\.action != 'labeled' \|\| github\.event\.label\.name == 'astra-review'/);
+    });
+  });
 });
+

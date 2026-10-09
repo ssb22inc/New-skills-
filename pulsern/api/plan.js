@@ -1,7 +1,9 @@
 // api/plan.js — weekly study planner (§5.7). One LLM call (deepseek tier),
 // strict JSON out, validated server-side. The client caches the plan in the
 // saved blob until the ISO week changes, so this runs at most once a week
-// per student.
+// per student. Same signed-in door as /api/ai: no user, no OpenRouter call.
+import { userFromRequest } from './require-user.js';
+
 const CATS = [
   'Management of Care', 'Safety & Infection Control', 'Health Promotion & Maintenance',
   'Psychosocial Integrity', 'Basic Care & Comfort', 'Pharmacology',
@@ -42,6 +44,10 @@ async function callModel(prompt) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+
+  // Before any provider call. A missing session, a bad token, or an inability
+  // to check one all stop here. Signed-in free-pass and trial users pass.
+  if (!(await userFromRequest(req))) return res.status(401).json({ error: 'Sign in first' });
 
   const { examDate, ability = {}, dueCount = 0, answeredTotal = 0, today, inventory = {} } = req.body || {};
   if (typeof examDate !== 'string' || !DATE_RE.test(examDate))

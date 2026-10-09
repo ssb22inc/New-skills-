@@ -1,0 +1,209 @@
+name: pulsern-astra-review
+
+# GPT Astra reviews every PulseRN pull request.
+#
+# Owner's standing instructions this enforces:
+#   - all AI review and adversarial action is GPT Astra's, never same-family;
+#   - every paid review is kept, whatever its verdict;
+#   - no cross-contamination: this job reads and judges PulseRN files only.
+#
+# TRUST. This runs on pull_request_target, so GitHub always uses THIS FILE AS
+# IT IS ON THE BASE BRANCH — a pull request cannot edit its own review. (The
+# first version used pull_request, which runs the PR's copy of the workflow;
+# Astra's review of it showed a PR could then report a pass without ever
+# calling Astra.) The pull request is fetched as DATA only: nothing from it is
+# installed, built or executed. The reviewer and the rules it judges against
+# come from the base branch.
+#
+# RESULT. The verdict is posted as the commit status `pulsern/astra-review` on
+# the exact head commit that was reviewed. Make THAT the required check: it is
+# bound to the reviewed SHA, and it is red — never skipped-green — when a
+# review could not run.
+#
+# RECORD. Each report is committed to the `pulsern-astra-reviews` branch and
+# uploaded as an artifact. A paid review is never cancelled by a newer push,
+# and a checkpoint report is written before the paid call, so even a killed
+# run leaves a record.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    paths:
+      - "pulsern/**"
+      - ".github/workflows/pulsern-*.yml"
+  # Review any range on demand — used to re-review, with the trusted reviewer,
+  # the PR that introduced this workflow.
+  workflow_dispatch:
+    inputs:
+      base: { description: "Base commit SHA", required: true }
+      head: { description: "Head commit SHA to review", required: true }
+      pr:   { description: "PR number (for the report name)", required: false }
+
+permissions:
+  contents: write   # commit the report to the reviews branch
+  statuses: write   # post the verdict on the reviewed commit
+
+# Queue, never cancel: a review already being paid for always finishes and is
+# saved. Only runs that have not started yet are superseded, which costs
+# nothing.
+concurrency:
+  group: pulsern-astra-review-${{ github.event.pull_request.number || inputs.pr || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    # Unrelated labels do not trigger a paid review.
+    if: github.event_name != 'pull_request_target' || github.event.action != 'labeled' || github.event.label.name == 'astra-review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base }}
+      PR: ${{ github.event.pull_request.number || inputs.pr }}
+      REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      OUT: ${{ github.workspace }}/astra-out
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Mark the commit under review as pending
+        run: |
+          jq -n --arg u "$RUN_URL" '{state:"pending",context:"pulsern/astra-review",description:"Astra is reviewing this commit",target_url:$u}' |
+            curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/statuses/$HEAD_SHA" -d @- >/dev/null
+
+      # Decides whether a paid review may run. Anything that cannot be reviewed
+      # ends red or pending on the commit — never a silent, green skip.
+      - name: Gate
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+          LABELED: ${{ contains(github.event.pull_request.labels.*.name, 'astra-review') }}
+        run: |
+          if [ "$EVENT" = "pull_request_target" ] && [ "$IS_DRAFT" = "true" ]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"; echo "state=pending" >> "$GITHUB_OUTPUT"
+            echo "why=Draft: the review runs when the PR is marked ready" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "pull_request_target" ] && [ "$IS_FORK" = "true" ] && [ "$LABELED" != "true" ]; then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"; echo "state=failure" >> "$GITHUB_OUTPUT"
+            echo "why=Fork PR: a maintainer must add the astra-review label before it is reviewed" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the trusted reviewer (base branch)
+        if: steps.gate.outputs.allowed == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+
+      # The change under review, as data. Fork heads are fetched from this
+      # repository's refs/pull/N/head, so they arrive without running anything.
+      - name: Fetch the change under review (data only, never executed)
+        if: steps.gate.outputs.allowed == 'true'
+        run: |
+          git init -q target && cd target
+          git remote add origin "https://github.com/$REPO.git"
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c http.extraheader="$AUTH" fetch -q origin "$BASE_SHA"
+          if [ -n "$PR" ] && [ "${{ github.event_name }}" = "pull_request_target" ]; then
+            git -c http.extraheader="$AUTH" fetch -q origin "+refs/pull/$PR/head:refs/remotes/pr/head"
+            test "$(git rev-parse refs/remotes/pr/head)" = "$HEAD_SHA" || { echo "::error::PR head moved during the run"; exit 1; }
+          else
+            git -c http.extraheader="$AUTH" fetch -q origin "$HEAD_SHA"
+          fi
+          git cat-file -e "$HEAD_SHA^{commit}" && git cat-file -e "$BASE_SHA^{commit}"
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.allowed == 'true'
+        with:
+          node-version: 22
+
+      - name: Astra review
+        id: review
+        if: steps.gate.outputs.allowed == 'true'
+        timeout-minutes: 45
+        working-directory: target
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ASTRA_REVIEW_MODE: trusted
+        run: |
+          set +e
+          node "$GITHUB_WORKSPACE/trusted/pulsern/ops/astra-review.mjs" \
+            --base "$BASE_SHA" --head "$HEAD_SHA" ${PR:+--pr "$PR"} --out "$OUT"
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # The steps below find the report by looking for it, not by trusting the
+      # review step's outputs, so a review killed mid-call is still kept.
+      - name: Show the report in the run summary
+        if: always() && hashFiles('astra-out/*.md') != ''
+        run: cat "$OUT"/*.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the report as an artifact
+        if: always() && hashFiles('astra-out/*.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: astra-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: astra-out/
+          retention-days: 90
+
+      - name: Commit the report to the reviews branch
+        if: always() && hashFiles('astra-out/*.md') != ''
+        run: |
+          set -euo pipefail
+          AUTH="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          BRANCH=pulsern-astra-reviews
+          mkdir reviews && cd reviews
+          git init -q
+          git config user.name "pulsern-astra-review"
+          git config user.email "pulsern-astra-review@users.noreply.github.com"
+          git remote add origin "https://github.com/$REPO.git"
+          # Success is reported ONLY when a push has actually landed.
+          for attempt in 1 2 3 4 5; do
+            if git -c http.extraheader="$AUTH" fetch -q --depth 1 origin "$BRANCH" 2>/dev/null; then
+              git checkout -q -B "$BRANCH" FETCH_HEAD
+            elif ! git rev-parse --verify -q "refs/heads/$BRANCH" >/dev/null; then
+              git checkout -q --orphan "$BRANCH"
+            fi
+            mkdir -p reports
+            cp "$OUT"/* reports/
+            git add reports
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Astra review: ${PR:+PR #$PR }@ $HEAD_SHA (rc=${{ steps.review.outputs.rc || 'none' }})"
+            fi
+            if git -c http.extraheader="$AUTH" push -q origin "HEAD:$BRANCH"; then
+              echo "Saved to $BRANCH"
+              exit 0
+            fi
+            echo "push did not land (likely raced with another review); retrying ($attempt/5)"
+            sleep $((attempt * 3))
+          done
+          echo "::error::Could not save the review report after 5 attempts. It is still in the run's artifacts."
+          exit 1
+
+      # Bound to the reviewed head SHA. Runs whatever happened above.
+      - name: Post the verdict on the reviewed commit
+        if: always()
+        env:
+          RC: ${{ steps.review.outputs.rc }}
+          ALLOWED: ${{ steps.gate.outputs.allowed }}
+          GATE_STATE: ${{ steps.gate.outputs.state }}
+          GATE_WHY: ${{ steps.gate.outputs.why }}
+        run: |
+          if [ "$ALLOWED" != "true" ]; then
+            STATE="${GATE_STATE:-failure}"; DESC="${GATE_WHY:-Review could not run}"
+          else
+            case "$RC" in
+              0) STATE=success; DESC="Astra: PASS" ;;
+              1) STATE=failure; DESC="Astra: FAIL — see the report" ;;
+              *) STATE=failure; DESC="Astra review did not complete — recorded as a failure" ;;
+            esac
+          fi
+          echo "$STATE: $DESC"
+          jq -n --arg s "$STATE" --arg d "${DESC:0:139}" --arg u "$RUN_URL" '{state:$s,context:"pulsern/astra-review",description:$d,target_url:$u}' |
+            curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/statuses/$HEAD_SHA" -d @- >/dev/null
+          [ "$STATE" = "success" ] || [ "$STATE" = "pending" ] || exit 1

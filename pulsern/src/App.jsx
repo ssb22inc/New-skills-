@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 
 /* ================= DATA ================= */
 
@@ -268,7 +268,16 @@ import ExamCenter from "./exam.jsx";
 import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
 import InstallCard from "./install.jsx";
 import { ExhibitVisual } from "./exhibits.jsx";
+import { ConceptExplainers } from "./concept-explainers.jsx";
 import { ProfileCard, useProfile } from "./profile.jsx";
+import {
+  isStudyLocked,
+  shouldAutoOpenTour,
+  needsFirstAnswer,
+  tourSkipStartsQuestion,
+  showProfilePrompt,
+  trialBannerMessage,
+} from "./first-answer.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -322,12 +331,25 @@ const AI_PROVIDERS = [
   { id: "kimi", name: "Kimi — Moonshot (China)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
 ];
 
+async function currentAccessToken() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || "";
+  } catch {
+    return "";
+  }
+}
+
 async function askModel(providerId, prompt, maxTokens = 1000) {
   const p = AI_PROVIDERS.find((x) => x.id === providerId) || AI_PROVIDERS[0];
+  const token = await currentAccessToken();
   const response = await fetch("/api/ai", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider: p.id, prompt, maxTokens }),
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ provider: p.id, prompt, maxTokens, token }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "UPSTREAM");
@@ -393,8 +415,9 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);  // header menu
   const [labOpen, setLabOpen] = useState(false);    // lab-values drawer
   const [helpOpen, setHelpOpen] = useState(false);  // help & contact center
-  const [tourStep, setTourStep] = useState(null);   // null = closed, 0..n = showing
+  const [tourStep, setTourStep] = useState(null);   // null = closed, 0 = the one screen
   const [tourSeen, setTourSeen] = useState(false);  // persisted in blob
+  const [quizKick, setQuizKick] = useState(0);      // bumps Today into the forced first question
   const [ent, setEnt] = useState(null);             // entitlement (server truth, not in blob)
   const [profile, setProfile] = useProfile();       // name/phone/SMS consent (server truth)
   const [examLock, setExamLock] = useState(false);  // exam running → whole app locks down
@@ -453,11 +476,20 @@ export default function App() {
     })();
   }, [loaded, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips]);
 
-  /* first visit → run the 30-second tour once */
+  /* One screen, and only once study is actually reachable. Waiting for
+     entitlement is what keeps the tour off the expired paywall. */
+  const locked = isStudyLocked({ isOwner, ent });
+  const activating = needsFirstAnswer({ locked, ent, logLength: log.length, isOwner });
   useEffect(() => {
-    if (loaded && !tourSeen) setTourStep(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
+    if (locked && tourStep != null) setTourStep(null);
+    else if (shouldAutoOpenTour({ loaded, tourSeen, ent, locked })) setTourStep(0);
+  }, [loaded, tourSeen, ent, locked, tourStep]);
+
+  const wasActivating = useRef(false);
+  useEffect(() => {
+    if (activating && !wasActivating.current) setTab("today");
+    wasActivating.current = activating;
+  }, [activating]);
 
   /* ---- entitlement: who gets in, and how many exams they have left ----
      Brand-new accounts self-grant the 1-day free pass (capped at one per
@@ -733,10 +765,14 @@ export default function App() {
         const perCat = Object.fromEntries(CATS.map((c) => [c, 0]));
         for (const q of allQuestions) if (!answeredIds.has(q.id) && perCat[q.cat] !== undefined) perCat[q.cat]++;
         const misses = Object.values(lastById).filter((ok) => !ok).length;
+        const token = await currentAccessToken();
         const r = await fetch("/api/plan", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ examDate, ability, dueCount, answeredTotal: log.length, today: todayStr(), inventory: { perCat, misses } }),
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ examDate, ability, dueCount, answeredTotal: log.length, today: todayStr(), inventory: { perCat, misses }, token }),
         });
         const data = await r.json().catch(() => ({}));
         if (r.ok && Array.isArray(data.days) && data.days.length) setPlan({ week: wk, days: data.days });
@@ -755,8 +791,30 @@ export default function App() {
   );
 
   /* expired / never-entitled accounts see only the paywall (plus sign-out);
-     the owner is never locked — full site access for development */
-  const locked = !isOwner && ent && (ent.status === "expired" || ent.status === "none");
+     the owner is never locked — full site access for development.
+     locked / activating are computed above so the tour effect can use them. */
+  const accessPending = ent === null && log.length === 0 && !isOwner;
+  const profilePrompt = showProfilePrompt({
+    logLength: log.length,
+    hasProfile: !!profile,
+    dismissed: profileCardDismissed,
+    profileLoading: profile === undefined,
+  });
+
+  const openFirstQuestion = () => {
+    setTourStep(null);
+    setTourSeen(true);
+    setTab("today");
+    setQuizKick((n) => n + 1);
+  };
+  const dismissTour = () => {
+    setTourStep(null);
+    setTourSeen(true);
+    if (tourSkipStartsQuestion(activating)) {
+      setTab("today");
+      setQuizKick((n) => n + 1);
+    }
+  };
 
   return (
     <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "")} data-theme={theme}>
@@ -837,16 +895,17 @@ export default function App() {
         {locked && !confirming && <Paywall ent={ent} onRefresh={refreshEnt} />}
         {!locked && !isOwner && ent?.status === "trial" && tab !== "plans" && (
           <section className="card trial-banner">
-            <p className="small"><strong>Free pass</strong> — full study access{ent.expiresAt ? ` until ${new Date(ent.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} tomorrow` : ""}. <button className="auth-switch" onClick={() => setTab("plans")}>See plans →</button></p>
+            <p className="small"><strong>Free pass</strong> — {trialBannerMessage({ expiresAt: ent.expiresAt, answered: log.length >= 1 })} <button className="auth-switch" onClick={() => setTab("plans")}>See plans →</button></p>
           </section>
         )}
         {!locked && <>
           {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
             record={record} questions={allQuestions} provider={provider}
             ability={ability} calibration={calibration} plan={plan}
-            profile={profile} setProfile={setProfile} profileCardDismissed={profileCardDismissed} dismissProfileCard={() => setProfileCardDismissed(true)}
+            profile={profile} setProfile={setProfile} showProfile={profilePrompt} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
-            cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)} />}
+            cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
+            needsFirstAnswer={activating} quizKick={quizKick} accessPending={accessPending} />}
           {tab === "qbank" && <QBank record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} isOwner={isOwner} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
           {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} />}
@@ -856,7 +915,7 @@ export default function App() {
         </>}
       </main>
 
-      {!locked && !examLock && (
+      {!locked && !examLock && !activating && !accessPending && (
         <nav className="tabs" aria-label="Sections">
           {[["today", "Today"], ["qbank", "Practice"], ["case", "Case Study"], ["cards", "Cards"], ["stats", "Stats"]].map(([k, label]) => (
             <button key={k} className={tab === k ? "tab on" : "tab"} onClick={() => setTab(k)}>{label}</button>
@@ -867,38 +926,30 @@ export default function App() {
       {!examLock && !locked && <Fab onLabs={() => setLabOpen(true)} onHelp={() => setHelpOpen(true)} />}
       {!examLock && <LabRef open={labOpen} setOpen={setLabOpen} />}
       <HelpCenter open={helpOpen} setOpen={setHelpOpen} provider={provider} />
-      {tourStep != null && (
-        <Tour step={tourStep} setStep={setTourStep} onClose={() => { setTourStep(null); setTourSeen(true); }} />
+      {tourStep != null && !locked && (
+        <Tour trial={ent?.status === "trial" && log.length < 1} onAnswer={openFirstQuestion} onSkip={dismissTour} />
       )}
     </div>
   );
 }
 
 /* ================= FIRST-RUN TOUR =================
-   A 30-second walkthrough of the five places that matter. Shows once for
-   new accounts; replayable from the menu. */
+   One screen. The primary button opens a practice question. While a free
+   pass still has zero answers, Skip opens that same question — it must not
+   leave the student on the paywall. Replayable from the menu. */
 
-const TOUR_STEPS = [
-  { icon: "▶", title: "Today — one tap, that's the job", body: "Every day, press the big Start button. PulseRN picks your due flashcards and 8 smart questions — about 10 minutes. The monitor above it shows your readiness estimate once you've answered 12+ questions." },
-  { icon: "🎯", title: "Practice — an exam that adapts", body: "The QBank serves every NCLEX item type — Next-Gen matrix, bow-tie, cloze, and dosage-calculation math. Want to drill one area? Use the Focus chips to pick categories or question types. Miss one? It returns in Review misses until you beat it." },
-  { icon: "🧪", title: "The floating button — ranges & help", body: "The round floating button near the bottom right opens lab values (every normal range, searchable, with AI lookup) and the help chat — from anywhere in the app." },
-  { icon: "🃏", title: "Cards — memory on a schedule", body: "Flashcards come due right before you'd forget them. Type your answer before flipping — the typing is what builds the memory — then grade yourself honestly." },
-  { icon: "🧠", title: "Tutors, plans & help", body: "After any question, ask the AI tutor to explain it differently. Set your exam date in Stats to get a weekly plan. Stuck or found a bad question? Menu → Help & Contact, or the ⚠ report button under any question." },
-];
-
-function Tour({ step, setStep, onClose }) {
-  const s = TOUR_STEPS[step];
-  const last = step === TOUR_STEPS.length - 1;
+function Tour({ trial, onAnswer, onSkip }) {
   return (
-    <div className="tour-overlay" role="dialog" aria-label="App tour">
+    <div className="tour-overlay" role="dialog" aria-label="Start your first question">
       <div className="tour-card">
-        <p className="tour-icon">{s.icon}</p>
-        <h2 className="h2">{s.title}</h2>
-        <p className="small">{s.body}</p>
-        <div className="tour-dots">{TOUR_STEPS.map((_, i) => <span key={i} className={i === step ? "dot on" : "dot"} />)}</div>
+        <p className="tour-icon" aria-hidden="true">▶</p>
+        <h2 className="h2">{trial ? "Your free pass is on — answer this question" : "One question starts Today"}</h2>
+        <p className="small">{trial
+          ? "Answer this one item to unlock Today. You don't have to find Start. Skip opens the same question — do it before the pass ends."
+          : "Today is one round when you're ready. This button opens a single practice question first. Skip returns to Today."}</p>
         <div className="row">
-          <button className="btn" onClick={() => (last ? onClose() : setStep(step + 1))}>{last ? "Start studying" : "Next"}</button>
-          {!last && <button className="btn ghost" onClick={onClose}>Skip</button>}
+          <button className="btn" onClick={onAnswer}>Answer this question</button>
+          <button className="btn ghost" onClick={onSkip}>Skip</button>
         </div>
       </div>
     </div>
@@ -1076,7 +1127,45 @@ Both cases: plain text only (no markdown), educational exam-prep register only �
 
 function Today(props) {
   const { dueCount, streak } = props;
-  const [stage, setStage] = useState("home"); // home | cards | quiz | done
+  const [stage, setStage] = useState(props.needsFirstAnswer ? "first" : "home"); // home | first | cards | quiz | done
+  const kickSeen = useRef(0);
+  const released = useRef(false);
+
+  useEffect(() => {
+    if (released.current) return;
+    if (props.needsFirstAnswer && stage === "home") setStage("first");
+  }, [props.needsFirstAnswer, stage]);
+
+  useEffect(() => {
+    if (!props.quizKick || props.quizKick === kickSeen.current) return;
+    kickSeen.current = props.quizKick;
+    released.current = false;
+    setStage("first");
+  }, [props.quizKick]);
+
+  const finishFirst = () => {
+    released.current = true;
+    setStage("home");
+  };
+  const showingFirst = stage === "first" || (!!props.needsFirstAnswer && !released.current && stage === "home");
+
+  if (props.accessPending) return (
+    <div className="stack">
+      <section className="card">
+        <p className="eyebrow">PulseRN</p>
+        <h2 className="h2">Checking your access…</h2>
+        <p className="small">One moment.</p>
+      </section>
+    </div>
+  );
+
+  if (showingFirst) return (
+    <div className="stack">
+      <p className="eyebrow stage-label">Answer this to unlock Today</p>
+      <p className="small">One question opens your daily plan. You don't have to find Start.</p>
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} auto autoLimit={1} preferMc onDone={finishFirst} />
+    </div>
+  );
 
   if (stage === "cards") return (
     <div className="stack">
@@ -1100,7 +1189,7 @@ function Today(props) {
         <p className="small">Day {streak.count} locked in. The science says stop here — spacing does its work between sessions, not during them. Tomorrow, tap the same button.</p>
         <button className="btn ghost" onClick={() => setStage("home")}>Back to Today</button>
       </section>
-      {props.profile === null && !props.profileCardDismissed && (
+      {props.showProfile && (
         <ProfileCard profile={null} setProfile={props.setProfile} prompt onDismiss={props.dismissProfileCard} />
       )}
     </div>
@@ -1114,6 +1203,9 @@ function Today(props) {
         <button className="bigbtn" onClick={() => setStage(dueCount ? "cards" : "quiz")}>▶ Start today's round</button>
         <p className="small">{dueCount ? `${dueCount} flashcard${dueCount === 1 ? "" : "s"} due` : "No cards due"} + 8 smart questions · about 10 minutes</p>
       </section>
+      {props.showProfile && (
+        <ProfileCard profile={null} setProfile={props.setProfile} prompt onDismiss={props.dismissProfileCard} />
+      )}
       <Monitor {...props} />
       {Array.isArray(props.plan?.days) && props.plan.days.length > 0 && (
         <section className="card">
@@ -1219,7 +1311,7 @@ function Ecg() {
 
 /* ================= QBANK ================= */
 
-function QBank({ record, log, auto = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, isOwner = false }) {
+function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, isOwner = false }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
@@ -1258,6 +1350,10 @@ function QBank({ record, log, auto = false, onDone, questions = QUESTIONS, provi
   const pickFrom = (basePool) => {
     if (!basePool.length) { setPhase("done"); return; }
     let pool = basePool;
+    if (preferMc) {
+      const mc = pool.filter((x) => x.type === "mc");
+      if (mc.length) pool = mc;
+    }
     // interleave: avoid repeating the last category so related concepts stay mixed
     const interleaved = pool.filter((x) => x.cat !== lastCat);
     if (interleaved.length) pool = interleaved;
@@ -1296,7 +1392,8 @@ function QBank({ record, log, auto = false, onDone, questions = QUESTIONS, provi
   };
 
   const advance = () => {
-    if (auto && sessionN >= 8) { onDone?.(); return; }
+    const roundLimit = auto ? (autoLimit ?? 8) : null;
+    if (roundLimit != null && sessionN >= roundLimit) { onDone?.(); return; }
     if (sessionN > 0 && sessionN % 8 === 0) setPhase("break");
     else nextQuestion();
   };
@@ -1316,6 +1413,10 @@ function QBank({ record, log, auto = false, onDone, questions = QUESTIONS, provi
   }, [auto, phase]);
 
   const TYPE_CHIPS = [["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
+
+  if (auto && phase === "pick") return (
+    <section className="card"><p className="eyebrow">Practice</p><p className="small">Loading a question…</p></section>
+  );
 
   if (phase === "pick") return (
     <div className="stack">
@@ -1599,9 +1700,11 @@ function QBank({ record, log, auto = false, onDone, questions = QUESTIONS, provi
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
             {q.ai && <p className="small">Reviewed for clinical accuracy — verify anything surprising against your course materials.</p>}
+            {/* Astra-confirmed concept diagrams for this exact question (if any) */}
+            <ConceptExplainers key={`dx${q.id}`} q={q} />
             <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
             <ReportIssue key={`r${q.id}`} itemId={calibration[q.id] !== undefined ? q.id : null} label="question" />
-            <button className="btn" onClick={advance}>Next question →</button>
+            <button className="btn" onClick={advance}>{autoLimit != null && sessionN >= autoLimit ? "Continue to Today →" : "Next question →"}</button>
           </div>
         )}
       </section>
@@ -1912,7 +2015,7 @@ function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvi
   return (
     <div className="stack">
       <PlanCard ent={ent} onManage={onManagePlan} isOwner={isOwner} />
-      {profile !== undefined && <ProfileCard key={profile?.updated_at ?? "new"} profile={profile} setProfile={setProfile} />}
+      {profile !== undefined && log.length >= 1 && <ProfileCard key={profile?.updated_at ?? "new"} profile={profile} setProfile={setProfile} />}
       <section className="card">
         <p className="eyebrow">Exam date</p>
         <p className="small">Set your NCLEX date and the Today tab will build you a weekly plan from your ability profile.</p>

@@ -7,6 +7,8 @@
    retains rejection authority). Idempotent: dedupes by stem.
    Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENROUTER_API_KEY */
 import { createClient } from "@supabase/supabase-js";
+import { REVIEW_MODEL } from "./models.mjs";
+import { review, parseJson } from "./review.mjs";
 
 const DESCRIBE = {
   "ecg-hyperk": "ECG strip: tall, narrow, peaked T waves with flattened P waves — classic hyperkalemia pattern",
@@ -69,28 +71,16 @@ const ITEMS = [
 ];
 
 const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-async function llm(prompt) {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
-    body: JSON.stringify({ model: "openai/gpt-4.1", max_tokens: 3000, temperature: 0.2, messages: [{ role: "user", content: prompt }] }),
-  });
-  const d = await r.json();
-  const t = d?.choices?.[0]?.message?.content ?? "";
-  if (!t) throw new Error(d?.error?.message ?? "empty");
-  return t.replace(/```json|```/gi, "").trim();
-}
-
 for (const it of ITEMS) {
   const { data: dup } = await db.from("questions").select("id").eq("stem", it.stem).limit(1);
   if (dup?.length) { console.log("skip (exists):", it.stem.slice(0, 50)); continue; }
   const visKey = typeof it.visual === "string" ? it.visual : "med-label-heparin";
-  const review = JSON.parse(await llm(`You are a hostile NCLEX reviewer auditing an item WITH a visual exhibit. The exhibit is described textually below. Verify: (1) the keyed answer is the only defensible one, (2) the visual matches the stem's clinical claims exactly, (3) the visual supports interpretation without directly printing the answer, (4) recompute any math. Respond ONLY with raw JSON: {"verdict":"pass"|"fail","confidence":0-1,"notes":"why"}
+  const rev = parseJson(await review(`You are a hostile NCLEX reviewer auditing an item WITH a visual exhibit. The exhibit is described textually below. Verify: (1) the keyed answer is the only defensible one, (2) the visual matches the stem's clinical claims exactly, (3) the visual supports interpretation without directly printing the answer, (4) recompute any math. Respond ONLY with raw JSON: {"verdict":"pass"|"fail","confidence":0-1,"notes":"why"}
 
 EXHIBIT: ${DESCRIBE[visKey]}
 ITEM: ${JSON.stringify(it)}`));
-  if (review.verdict !== "pass" || (review.confidence ?? 0) < 0.85) {
-    console.log(`✗ REJECTED: ${it.stem.slice(0, 50)} — ${review.notes?.slice(0, 120)}`);
+  if (rev.verdict !== "pass" || (rev.confidence ?? 0) < 0.85) {
+    console.log(`✗ REJECTED: ${it.stem.slice(0, 50)} — ${rev.notes?.slice(0, 120)}`);
     continue;
   }
   const { error } = await db.from("questions").insert({
@@ -99,7 +89,7 @@ ITEM: ${JSON.stringify(it)}`));
     extra: { visual: it.visual, unit: it.unit ?? null, tolerance: it.tolerance ?? null, work: it.work ?? null },
     answer: it.answer, rationale: it.rationale,
     ai: true, approved: true, reviewed_at: new Date().toISOString(),
-    gen_model: "seed-visuals", review_model: "openai/gpt-4.1", reviewer_notes: review.notes ?? null,
+    gen_model: "seed-visuals", review_model: REVIEW_MODEL, reviewer_notes: rev.notes ?? null,
   });
   console.log(error ? `insert error: ${error.message}` : `✓ published: ${it.stem.slice(0, 55)}`);
 }

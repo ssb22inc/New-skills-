@@ -30,6 +30,8 @@
 
 import { db, preflightDb, publishedCount } from "./supabase-guard.mjs";
 import { llm, FatalLlmError } from "./llm.mjs";
+import { GEN_MODEL, REVIEW_MODEL } from "./models.mjs";
+import { review, parseJson } from "./review.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -39,8 +41,8 @@ const CATS = [
 const TYPES_STD = ["mc", "sata", "order", "calc"];
 const TYPES_NGN = ["matrix", "bowtie", "cloze"];
 
-const GEN_MODEL = "anthropic/claude-sonnet-4.6";   // strong writer
-const REVIEW_MODEL = "openai/gpt-4.1";             // DIFFERENT vendor attacks it
+/* Writer and reviewer are decided in ops/models.mjs, and every review goes
+   through ops/review.mjs — see there for why. */
 
 const args = process.argv.slice(2);
 const flag = (f) => args.includes(f);
@@ -56,7 +58,6 @@ const MAX_MIN = parseInt(opt("--max-minutes", "300"), 10);          // stop befo
 const STOP_AT = parseInt(opt("--stop-at", "0"), 10);                // bank size to stop at (0 = no target)
 
 
-const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
 /* ---------- Schema gate (superset of the app's validQ) ---------- */
 function validItem(x) {
@@ -213,7 +214,7 @@ async function run() {
   if (!schemaOk.length) return { inserted: 0, dupes: 0, reviewed: 0, survived: 0 };
 
   // ADVERSARIAL REVIEW by a different vendor
-  const rawRev = await llm(REVIEW_MODEL, reviewPrompt(schemaOk), 6000);
+  const rawRev = await review(reviewPrompt(schemaOk), 6000);
   let reviews;
   try { reviews = parseJson(rawRev); } catch { throw new Error("Reviewer returned unparseable JSON"); }
 
