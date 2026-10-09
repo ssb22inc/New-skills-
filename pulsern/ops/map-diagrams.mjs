@@ -35,8 +35,8 @@ import {
   itemHash, diagramHash, decisionKey, isFresh, pairingPrompt, PAIRING_SCHEMA,
   buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor,
 } from "./map-diagrams-lib.mjs";
-import { sourceKey, readReviewIndex, approval } from "./diagram-attest.mjs";
-import { readPrepared, mapPlan, headCommit } from "./prepared.mjs";
+import { sourceKey, readReviewIndex, approval, stepInventory } from "./diagram-attest.mjs";
+import { readPrepared, mapPlan, headCommit, checkInventory } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -67,7 +67,10 @@ const run = { startedAt, model: REVIEW_MODEL, maxUsd: MAX_USD, limit: Number.isF
    code is now. Computed once per run. */
 const KEY = sourceKey();
 const REVIEWS = readReviewIndex();
-const approvedNow = (id) => approval(REVIEWS, id, KEY).ok;
+/* The real steps, read from the source by this script (round 24): an
+   approval counts only if its review covered every one of them. */
+const STEPS = stepInventory();
+const approvedNow = (id) => !!STEPS[id] && approval(REVIEWS, id, KEY, STEPS[id]).ok;
 /* What today's matcher proposes for each question; filled once the bank
    is read. A decision ships only if its values still match. */
 const PROPOSALS = new Map();
@@ -102,6 +105,7 @@ try {
   let DIAGRAMS, proposePairs;
   if (PLAN) {
     DIAGRAMS = PLAN.diagrams;
+    checkInventory(Object.values(DIAGRAMS), STEPS);   // the prepared diagrams are the source's, step for step
     proposePairs = (q) => PLAN.proposals.get(q.id) ?? [];
   } else {
     const { createServer } = await import("vite");
@@ -114,7 +118,7 @@ try {
   }
   run.heldBack = {};
   for (const id of Object.keys(DIAGRAMS)) {
-    const a = approval(REVIEWS, id, KEY);
+    const a = STEPS[id] ? approval(REVIEWS, id, KEY, STEPS[id]) : { ok: false, why: "not a diagram in the source" };
     if (!a.ok) run.heldBack[id] = a.why;
   }
   if (Object.keys(run.heldBack).length) console.log(`Held back, not reviewed for pairing: ${JSON.stringify(run.heldBack)}`);

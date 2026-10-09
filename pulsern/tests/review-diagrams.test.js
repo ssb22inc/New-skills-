@@ -89,13 +89,14 @@ describe("the saved report", () => {
    same key as a real verdict, and the normal re-run never retried it. */
 describe("an error is retried, a verdict is reused", () => {
   const ok = { assessment: "Fine.", findings: [] };
+  const F = ["light/static", "dark/static"];
   it("retries after an error and then reuses the completed review", async () => {
     const index = {};
     const run = async (ask) => {
       const prev = index.abg;
-      if (canReuse(prev, "k1")) return "reused";
+      if (canReuse(prev, "k1", false, F)) return "reused";
       const r = await reviewOne({ d, key: "k1", images: 2, model: "m", ask });
-      index.abg = { key: "k1", verdict: r.verdict, completed: r.completed };
+      index.abg = { key: "k1", frames: F, verdict: r.verdict, completed: r.completed };
       return r.verdict;
     };
     expect(await run(async () => { throw new Error("timeout"); })).toBe("ERROR");
@@ -111,15 +112,23 @@ describe("an error is retried, a verdict is reused", () => {
     expect(canReuse({ key: "k", verdict: "FAIL" }, "k"), "an old entry with no completion record").toBe(false);
   });
   it("still reuses a completed FAIL — a real verdict is not re-bought", () => {
-    expect(canReuse({ key: "k", verdict: "FAIL", completed: true }, "k")).toBe(true);
-    expect(canReuse({ key: "k", verdict: "FAIL", completed: true }, "k", true)).toBe(false);
+    expect(canReuse({ key: "k", verdict: "FAIL", completed: true, frames: F }, "k", false, F)).toBe(true);
+    expect(canReuse({ key: "k", verdict: "FAIL", completed: true, frames: F }, "k", true, F)).toBe(false);
+  });
+  /* Round 24: a verdict is carried only with the same frames on record —
+     never for an entry from before frames were recorded. */
+  it("reuses a verdict only for the same frame set", () => {
+    const prev = { key: "k", verdict: "PASS", completed: true, frames: F };
+    expect(canReuse(prev, "k", false, ["light/static"])).toBe(false);
+    expect(canReuse({ key: "k", verdict: "PASS", completed: true }, "k", false, F)).toBe(false);
+    expect(canReuse(prev, "k")).toBe(false);
   });
 });
 
 /* Astra, PR #134 review, round 13: the report was written only after the
    paid call returned, so a hung or killed call left no record of it. */
 describe("a paid diagram review is recorded before it is asked", () => {
-  const d = { id: "abg", title: "ABG" };
+  const d = { id: "abg", title: "ABG", images: [{ theme: "light", key: "static" }, { theme: "dark", key: "static" }] };
   const store = () => { const files = {}; return { files, write: (p, s) => { files[p] = s; } }; };
   const answer = { assessment: "fine", findings: [] };
   it("writes a 'did not finish' checkpoint and index entry before the reviewer answers", async () => {
@@ -137,7 +146,7 @@ describe("a paid diagram review is recorded before it is asked", () => {
     const r = await pending;
     // the same attempt's files are finalised, not a second record
     expect(JSON.parse(files[json])).toMatchObject({ verdict: "PASS", completed: true });
-    expect(JSON.parse(files["r/index.json"]).abg).toMatchObject({ verdict: "PASS", completed: true, report: r.report });
+    expect(JSON.parse(files["r/index.json"]).abg).toMatchObject({ verdict: "PASS", completed: true, report: r.report, frames: ["light/static", "dark/static"] });
   });
   it("gives up on a reviewer that never answers, and keeps the record", async () => {
     const { files, write } = store();
@@ -220,6 +229,7 @@ describe("a review covers everything the drawing depends on", () => {
     writeFileSync(join(root, "src/diagrams/tone.js"), "export const tone = 1;\n");
     writeFileSync(join(root, "src/explainer.jsx"), 'import { DIAGRAM_CSS } from "./diagrams/kit.jsx";\nexport const E = 1;\n');
     writeFileSync(join(root, "src/App.jsx"), '.app{--teal:#0a7}.app[data-theme="dim"]{--teal:#3c9}');
+    writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { react: "18" } }));
     return root;
   };
   it("follows imports transitively and includes the explainer and theme", () => {
@@ -312,6 +322,42 @@ describe("a review covers everything the drawing depends on", () => {
     writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import pic from "./pic.png";\n');
     writeFileSync(join(root, "src/diagrams/pic.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]));
     expect(() => diagramSources("abg", root)).toThrow(/not text/);
+    rmSync(root, { recursive: true, force: true });
+  });
+  /* Round 24: a root-relative import ("/src/…", which Vite loads from the
+     project root) was skipped as if it were a package, so the module never
+     reached the reviewer or the approval key. */
+  it("follows root-relative imports, and a logic change there invalidates the approval", async () => {
+    const { sourceKey } = await import("../ops/diagram-attest.mjs");
+    const root = tree("return v;");
+    mkdirSync(join(root, "src/clinical"), { recursive: true });
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import { lowFor } from "/src/clinical/limits.mjs";\nexport const A = () => lowFor(7.4);\n');
+    writeFileSync(join(root, "src/clinical/limits.mjs"), "export const lowFor = (ph) => (ph < 7.0 ? 'critical' : 7.35);\n");
+    const before = sourceKey(root);
+    expect(diagramSources("abg", root)).toContain("src/clinical/limits.mjs");
+    // a threshold the example (pH 7.4) never reaches
+    writeFileSync(join(root, "src/clinical/limits.mjs"), "export const lowFor = (ph) => (ph < 6.9 ? 'critical' : 7.35);\n");
+    expect(sourceKey(root)).not.toBe(before);
+    expect(diagramSources("abg", root)).toContain("ph < 6.9");
+    rmSync(root, { recursive: true, force: true });
+  });
+  it("resolves like Vite: an exact file wins, two candidates are refused, unknown names are refused", async () => {
+    const { resolveImport } = await import("../ops/diagram-attest.mjs");
+    const root = tree("return v;");
+    writeFileSync(join(root, "src/diagrams/limits.js"), "export const L = 'js';\n");
+    writeFileSync(join(root, "src/diagrams/limits.jsx"), "export const L = 'jsx';\n");
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import { L } from "./limits";\n');
+    expect(() => diagramSources("abg", root)).toThrow(/could mean src\/diagrams\/limits\.js or src\/diagrams\/limits\.jsx/);
+    expect(resolveImport(root, "src/diagrams/abg.jsx", "./limits.jsx")).toBe("src/diagrams/limits.jsx");
+    expect(resolveImport(root, "src/diagrams/abg.jsx", "./tone")).toBe("src/diagrams/tone.js");
+    expect(resolveImport(root, "src/diagrams/abg.jsx", "/src/diagrams/tone.js")).toBe("src/diagrams/tone.js");
+    expect(resolveImport(root, "src/diagrams/abg.jsx", "react")).toBe(null);
+    expect(resolveImport(root, "src/diagrams/abg.jsx", "react/jsx-runtime")).toBe(null);
+    expect(() => resolveImport(root, "src/diagrams/abg.jsx", "clinical/limits")).toThrow(/neither a project file nor a dependency/);
+    expect(() => resolveImport(root, "src/diagrams/abg.jsx", "./tone.js?raw")).toThrow(/not a plain path/);
+    expect(() => resolveImport(root, "src/diagrams/abg.jsx", "/../secret.txt")).toThrow(/leaves the project/);
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import x from "/package.json";\n');
+    expect(() => diagramSources("abg", root)).toThrow(/outside src/);
     rmSync(root, { recursive: true, force: true });
   });
   it("refuses to build a request when an import cannot be found", () => {

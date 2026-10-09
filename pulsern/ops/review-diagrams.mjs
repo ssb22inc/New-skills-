@@ -21,7 +21,8 @@ import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
 import { sourceKey } from "./diagram-attest.mjs";
 import { DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest, diagramSources } from "./review-diagrams-lib.mjs";
-import { readPrepared, reviewPlan, readFrame, headCommit, reviewEntries, localEntries } from "./prepared.mjs";
+import { readPrepared, reviewPlan, readFrame, headCommit, reviewEntries, localEntries, checkInventory } from "./prepared.mjs";
+import { stepInventory, frameIds } from "./diagram-attest.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const ONLY = arg("--only");
@@ -51,6 +52,9 @@ if (PREPARED) {
   const prepared = reviewPlan(readPrepared(join(PREPARED, "plan.json"), "diagram-review", { into: INTO }));
   entries = reviewEntries(prepared.map((data) => ({ data, pngs: data.images.map((im) => readFrame(PREPARED, data.id, im.n)) })));
   process.chdir(INTO);   // the branch checkout: its source, index and reports
+  /* What the source says the diagrams and their steps are, read by this
+     trusted script without running any of it (round 24). */
+  checkInventory(prepared, stepInventory("."), ONLY);
 } else {
   const { renderDiagrams } = await import("./render-diagrams.mjs");
   const { createServer } = await import("vite");
@@ -97,7 +101,7 @@ try {
        read from the branch's files, and the key from exactly what is sent. */
     const { prompt, key } = diagramRequest(d, d.images, RULES, pngs, (id) => diagramSources(id));
     const prev = index[d.id];
-    if (canReuse(prev, key, FORCE)) {
+    if (canReuse(prev, key, FORCE, frameIds(d.images))) {
       /* Everything the verdict rests on is byte-identical, so it still
          describes what students see: carry it to the current code. */
       if (prev.sourceKey !== SOURCE_KEY) { prev.sourceKey = SOURCE_KEY; mkdirSync(DIR, { recursive: true }); writeFileSync(INDEX, JSON.stringify(index, null, 2) + "\n"); }

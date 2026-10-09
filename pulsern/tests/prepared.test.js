@@ -8,7 +8,8 @@ import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync, existsSync
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync, execFileSync } from "node:child_process";
-import { narrationPlan, reviewPlan, mapPlan, readPrepared, readFrame, reviewEntries, localEntries } from "../ops/prepared.mjs";
+import { narrationPlan, reviewPlan, mapPlan, readPrepared, readFrame, reviewEntries, localEntries, checkInventory } from "../ops/prepared.mjs";
+import { stepInventory, expectedFrames } from "../ops/diagram-attest.mjs";
 import { diagramRequest, reviewData } from "../ops/review-diagrams-lib.mjs";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "prepared-"));
@@ -167,5 +168,33 @@ describe("local and prepared reviews build the same request", () => {
     const runner = readFileSync("ops/review-diagrams.mjs", "utf8");
     expect(runner).toMatch(/entries = localEntries\(/);
     expect(runner).not.toMatch(/reviewData\(/);   // no second, unlabelled path
+  });
+});
+
+/* Astra, PR #134 review, round 24: the frame set was checked against the
+   step list the branch's prepare script supplied, so dropping a real step
+   together with its frames passed. The paid job now checks the prepared
+   diagrams against the steps trusted code reads from the source. */
+describe("prepared diagrams are checked against the source's own steps", () => {
+  const inventory = stepInventory();
+  const prepared = (id, keys) => reviewPlan({ diagrams: [{ id, title: id, facts: [], steps: keys.map((key) => ({ key })), images: expectedFrames(keys) }] })[0];
+  const all = (edit = (id, keys) => keys) => Object.entries(inventory).map(([id, keys]) => prepared(id, edit(id, keys)));
+
+  it("accepts every diagram with exactly its real steps", () => {
+    expect(checkInventory(all(), inventory)).toHaveLength(Object.keys(inventory).length);
+    expect(checkInventory([prepared("abg", inventory.abg)], inventory, "abg")).toHaveLength(1);
+  });
+  it("refuses a real step dropped together with its frames", () => {
+    expect(inventory.abg).toContain("kidneys");
+    const dropped = all((id, keys) => (id === "abg" ? keys.filter((k) => k !== "kidneys") : keys));
+    expect(() => checkInventory(dropped, inventory)).toThrow(/abg steps/);
+    expect(() => checkInventory(all((id, keys) => (id === "abg" ? [] : keys)), inventory)).toThrow(/abg steps/);
+  });
+  it("refuses reordered or invented steps, and a missing or unknown diagram", () => {
+    expect(() => checkInventory(all((id, keys) => (id === "abg" ? [...keys].reverse() : keys)), inventory)).toThrow(/abg steps/);
+    expect(() => checkInventory(all((id, keys) => (id === "abg" ? [...keys, "extra"] : keys)), inventory)).toThrow(/abg steps/);
+    expect(() => checkInventory(all().filter((d) => d.id !== "tonicity"), inventory)).toThrow(/not the diagrams in the source/);
+    expect(() => checkInventory([...all(), prepared("made-up", ["a"])], inventory)).toThrow(/not the diagrams in the source/);
+    expect(() => checkInventory([prepared("tonicity", inventory.tonicity)], inventory, "abg")).toThrow(/not the diagrams in the source/);
   });
 });

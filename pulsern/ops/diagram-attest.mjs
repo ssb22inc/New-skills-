@@ -13,13 +13,21 @@
    Fail closed. */
 import { createHash } from "node:crypto";
 import { parseAst } from "rolldown/parseAst";
-import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, realpathSync, statSync } from "node:fs";
 import { join, posix, resolve, sep } from "node:path";
 
 export const REVIEW_INDEX = "reports/diagram-review/index.json";
 /* Generated data, not drawing code: excluded so writing the map or the
    narration manifest does not invalidate the approvals they depend on. */
 const NOT_DRAWING = new Set(["item-map.json", "narration.json"]);
+
+/* The frames a diagram's review must show, in order: the inline overview
+   and every explainer step, in both themes. */
+export const THEMES = ["light", "dark"];
+export const expectedFrames = (stepKeys) => THEMES.flatMap((theme) => ["static", ...stepKeys].map((key) => ({ theme, key })));
+export const frameLabel = (theme, key) => `${theme} theme — ${key === "static" ? "inline, as shown under a rationale" : `explainer step "${key}"`}`;
+export const frameIds = (frames) => frames.map((f) => `${f.theme}/${f.key}`);
+const sameList = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => x === b[i]);
 
 export function themeBlock(appSource) {
   const m = /\.app\{([\s\S]*?)\}\s*\.app\[data-theme="dim"\]\{([\s\S]*?)\}/.exec(appSource);
@@ -60,6 +68,38 @@ export function importsOf(rel, text) {
   return specs;
 }
 
+/* Where Vite would load an import from, or a refusal. Relative and
+   root-relative ("/src/…") paths are project code and are followed; a bare
+   name must be a package this project depends on. An extensionless path
+   that could mean two files is refused rather than guessed, and the
+   extension order is Vite's (Astra, PR #134 review, round 24: "/src/…"
+   imports were skipped as packages, and .jsx was preferred over .js). */
+const VITE_EXTENSIONS = [".mjs", ".js", ".mts", ".ts", ".jsx", ".tsx", ".json"];
+const isFile = (p) => { try { return statSync(p).isFile(); } catch { return false; } };
+const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
+function packageNames(root) {
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  return new Set([...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})]);
+}
+export function resolveImport(root, rel, spec, packages = packageNames(root)) {
+  if (/[?#]/.test(spec) || spec.includes("\\") || spec.includes("\0")) throw new Error(`diagramSources: ${rel} imports ${spec}, which is not a plain path — refusing to review without knowing what it loads`);
+  let target;
+  if (spec.startsWith("./") || spec.startsWith("../") || spec === "." || spec === "..") target = posix.normalize(posix.join(posix.dirname(rel), spec));
+  else if (spec.startsWith("/")) target = posix.normalize(spec.slice(1));
+  else {
+    const name = spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0];
+    if (packages.has(name)) return null;   // a dependency, not project code
+    throw new Error(`diagramSources: ${rel} imports ${spec}, which is neither a project file nor a dependency of this project — refusing to review without knowing what it loads`);
+  }
+  if (target === ".." || target.startsWith("../") || posix.isAbsolute(target)) throw new Error(`diagramSources: ${rel} imports ${spec}, which leaves the project — refusing to read it`);
+  if (isFile(join(root, target))) return target;   // an exact file wins, as in Vite
+  const candidates = VITE_EXTENSIONS.map((e) => target + e).filter((p) => isFile(join(root, p)));
+  if (isDir(join(root, target))) candidates.push(...VITE_EXTENSIONS.map((e) => `${target}/index${e}`).filter((p) => isFile(join(root, p))));
+  if (candidates.length > 1) throw new Error(`diagramSources: ${rel} imports ${spec}, which could mean ${candidates.join(" or ")} — refusing to guess`);
+  if (!candidates.length) throw new Error(`diagramSources: ${rel} imports ${spec}, which was not found — refusing to review without it`);
+  return candidates[0];
+}
+
 export function diagramSources(id, root = ".") {
   /* Only the project's own source tree may be read: a path that leaves
      src/ — by "../" or through a symlink — is refused before anything is
@@ -70,6 +110,7 @@ export function diagramSources(id, root = ".") {
     const real = realpathSync(resolve(root, rel));
     if (real !== allowed && !real.startsWith(allowed + sep)) throw new Error(`diagramSources: ${rel} resolves outside src/ — refusing to read it`);
   };
+  const packages = packageNames(root);
   const seen = new Set();
   const parts = [];
   const visit = (rel) => {
@@ -81,14 +122,9 @@ export function diagramSources(id, root = ".") {
     try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { throw new Error(`diagramSources: ${rel} is not text, so the reviewer cannot be shown it — refusing to review without it`); }
     parts.push(`// ===== ${rel} =====\n${text}`);
     if (!/\.(jsx?|mjs)$/.test(rel)) return;   // data (JSON, CSS…) is shown but has no imports
-    const specs = importsOf(rel, text);
-    for (const spec of specs) {
-      if (!spec.startsWith(".")) continue;   // packages (react) are not project code
-      const target = posix.normalize(posix.join(posix.dirname(rel), spec));
-      if (target.startsWith("../") || target === "..") throw new Error(`diagramSources: ${rel} imports ${spec}, which leaves the project — refusing to read it`);
-      const found = [target, `${target}.jsx`, `${target}.js`, `${target}.mjs`, `${target}.json`].find((p) => existsSync(join(root, p)));
-      if (!found) throw new Error(`diagramSources: ${rel} imports ${spec}, which was not found — refusing to review without it`);
-      visit(found);
+    for (const spec of importsOf(rel, text)) {
+      const found = resolveImport(root, rel, spec, packages);
+      if (found) visit(found);
     }
   };
   visit(`src/diagrams/${id}.jsx`);
@@ -99,6 +135,50 @@ export function diagramSources(id, root = ".") {
 
 /* The diagrams: every .jsx under src/diagrams except the drawing kit. */
 export const diagramIds = (root = ".") => readdirSync(join(root, "src/diagrams")).filter((f) => /\.jsx$/.test(f) && f !== "kit.jsx").map((f) => f.slice(0, -4)).sort();
+
+/* Each diagram's explainer steps, read from its source's syntax tree by
+   trusted code, without running it. A paid job checks the prepared data
+   against this, so a branch's prepare step cannot drop a step (and its
+   frames) and still have the review record a PASS for the diagram
+   (Astra, PR #134 review, round 24). Only a plain literal definition is
+   accepted — `export const x = { id: "<file name>", …, steps: [{ key:
+   "…" }, …] }` with no spreads or computed names; anything else is refused
+   rather than guessed. */
+export function diagramSteps(rel, text, id) {
+  let ast;
+  try { ast = parseAst(text, { lang: rel.endsWith(".jsx") ? "jsx" : "js" }); }
+  catch (e) { throw new Error(`stepInventory: ${rel} could not be parsed (${String(e.message).split("\n")[0]})`); }
+  const refuse = (why) => { throw new Error(`stepInventory: ${rel} — ${why}; the steps must be a plain literal list`); };
+  const propName = (p) => (p.type === "Property" && !p.computed ? (p.key.type === "Identifier" ? p.key.name : p.key.type === "Literal" ? String(p.key.value) : null) : null);
+  const found = [];
+  for (const node of ast.body) {
+    if (node.type !== "ExportNamedDeclaration" || node.declaration?.type !== "VariableDeclaration") continue;
+    for (const v of node.declaration.declarations) {
+      if (v.init?.type !== "ObjectExpression") continue;
+      const idProp = v.init.properties.find((p) => propName(p) === "id");
+      if (idProp?.value?.type === "Literal" && idProp.value.value === id) found.push(v.init);
+    }
+  }
+  if (found.length !== 1) refuse(`expected exactly one exported diagram with id "${id}", found ${found.length}`);
+  const obj = found[0];
+  if (obj.properties.some((p) => p.type !== "Property" || propName(p) == null)) refuse("the diagram object has a spread or computed property");
+  const stepsProps = obj.properties.filter((p) => propName(p) === "steps");
+  if (stepsProps.length !== 1 || stepsProps[0].value.type !== "ArrayExpression") refuse("expected one literal steps array");
+  const keys = stepsProps[0].value.elements.map((el, i) => {
+    if (el?.type !== "ObjectExpression" || el.properties.some((p) => p.type !== "Property" || propName(p) == null)) refuse(`step ${i + 1} is not a plain object`);
+    const k = el.properties.filter((p) => propName(p) === "key");
+    if (k.length !== 1 || k[0].value.type !== "Literal" || typeof k[0].value.value !== "string") refuse(`step ${i + 1} has no literal key`);
+    return k[0].value.value;
+  });
+  if (new Set(keys).size !== keys.length) refuse("two steps share a key");
+  return keys;
+}
+export function stepInventory(root = ".") {
+  return Object.fromEntries(diagramIds(root).map((id) => {
+    const rel = `src/diagrams/${id}.jsx`;
+    return [id, diagramSteps(rel, readFileSync(join(root, rel), "utf8"), id)];
+  }));
+}
 
 export function sourceKey(root = ".") {
   const h = createHash("sha256");
@@ -120,12 +200,16 @@ export function readReviewIndex(root = ".") {
   return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : {};
 }
 
-/* { ok, why } for one diagram id. */
-export function approval(index, id, key) {
+/* { ok, why } for one diagram id. `steps` is the diagram's real step list
+   (stepInventory, or the registry): a PASS counts only if its review was
+   shown every one of those frames (round 24). */
+export function approval(index, id, key, steps) {
+  if (!Array.isArray(steps)) throw new Error(`approval(${id}): the diagram's real steps are required`);
   const e = index[id];
   if (!e) return { ok: false, why: "never reviewed" };
   if (e.verdict !== "PASS") return { ok: false, why: `review verdict ${e.verdict}` };
   if (e.sourceKey !== key) return { ok: false, why: "changed since its review" };
+  if (!sameList(e.frames, frameIds(expectedFrames(steps)))) return { ok: false, why: "its review did not cover every step" };
   return { ok: true, why: null };
 }
 

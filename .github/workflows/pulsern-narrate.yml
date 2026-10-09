@@ -115,8 +115,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: pulsern/package-lock.json
 
       - run: npm ci
 
@@ -163,11 +161,12 @@ jobs:
           path: branch
           persist-credentials: false
 
+      # No Actions cache, here or in the prepare job: branch code there can
+      # write cache entries, and a restored archive lands after the trusted
+      # checkout (Astra, PR #134 review, round 24).
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: trusted/pulsern/package-lock.json
 
       - run: npm ci
         working-directory: trusted/pulsern

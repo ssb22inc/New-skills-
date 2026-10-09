@@ -376,6 +376,18 @@ describe("paid workflows never run branch code with secrets", () => {
     wd: /^\s+working-directory: (\S+)/m.exec(t)?.[1] ?? null,
     run: /run: \|\n([\s\S]*)$/.exec(t)?.[1] ?? (/^\s*run: (.+)$/m.exec(t)?.[1] ?? ""),
   }));
+  /* Astra, PR #134 review, round 24: the branch code in the prepare job
+     can write to the Actions cache, and the paid job restored the npm
+     cache after its trusted checkout — a poisoned archive could replace a
+     trusted script. Neither job restores or saves any cache. */
+  it.each(files)("%s: no job restores or saves an Actions cache", (f) => {
+    for (const [name, job] of Object.entries(jobs(f))) {
+      const code = job.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+      expect(code, `${f} ${name}`).not.toMatch(/^\s+cache(-dependency-path)?:/m);
+      expect(code, `${f} ${name}`).not.toMatch(/actions\/cache|cache-restore|cache-save|ACTIONS_CACHE/i);
+      for (const st of steps(job).filter((s) => /setup-(node|python|go|java)/.test(s.text))) expect(st.text, `${f} ${name}`).not.toMatch(/cache/);
+    }
+  });
   it.each(files)("%s: secrets appear only in the paid job, which is in the protected environment", (f) => {
     const j = jobs(f);
     expect(Object.keys(j).sort()).toEqual(["paid", "prepare"]);

@@ -51,9 +51,8 @@ export const DIAGRAM_REVIEW_SCHEMA = {
 /* The frames a diagram's review must show, in order: the inline overview
    and every explainer step, in both themes. Defined here, by trusted code,
    from the step keys — never taken from prepared data (round 22). */
-export const THEMES = ["light", "dark"];
-export const expectedFrames = (stepKeys) => THEMES.flatMap((theme) => ["static", ...stepKeys].map((key) => ({ theme, key })));
-export const frameLabel = (theme, key) => `${theme} theme — ${key === "static" ? "inline, as shown under a rationale" : `explainer step "${key}"`}`;
+import { THEMES, expectedFrames, frameLabel, frameIds } from "./diagram-attest.mjs";
+export { THEMES, expectedFrames, frameLabel, frameIds };
 
 /* The images, in the order they are attached, with what each one is. */
 export function imagePlan(diagram, gallery) {
@@ -179,7 +178,10 @@ export function renderReviewMarkdown(r) {
    timeout, bad key, malformed answer — is not a verdict and is retried on
    the next run (Astra, PR #134 review, round 6: errors were cached as FAIL,
    and the normal re-run could never recover). */
-export const canReuse = (prev, key, force = false) => !force && !!prev && prev.key === key && prev.completed === true;
+/* A cached verdict also needs the same frame set on record: an entry from
+   before frames were recorded is re-reviewed, never carried (round 24). */
+export const canReuse = (prev, key, force = false, frames = null) => !force && !!prev && prev.key === key && prev.completed === true &&
+  Array.isArray(frames) && Array.isArray(prev.frames) && prev.frames.length === frames.length && prev.frames.every((f, i) => f === frames[i]);
 
 /* One diagram's review. `ask` returns the reviewer's parsed answer. The
    result says whether a valid review completed, separately from what it
@@ -213,7 +215,7 @@ export async function reviewAndRecord({ d, key, images, ask, model, dir, index, 
   const record = (r) => {
     write(`${base}.md`, renderReviewMarkdown(r));
     write(`${base}.json`, JSON.stringify(r, null, 2) + "\n");
-    index[d.id] = { key, sourceKey, verdict: r.verdict, completed: r.completed, reviewedAt: r.reviewedAt, report: `${base}.md`, counts: r.counts ?? null };
+    index[d.id] = { key, sourceKey, frames: frameIds(d.images), verdict: r.verdict, completed: r.completed, reviewedAt: r.reviewedAt, report: `${base}.md`, counts: r.counts ?? null };
     write(`${dir}/index.json`, JSON.stringify(index, null, 2) + "\n");
   };
   record({ id: d.id, title: d.title, model, reviewedAt: startedAt, images, key, findings: [], usage: null, completed: false, verdict: "ERROR",

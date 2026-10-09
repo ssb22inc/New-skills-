@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { approval, sourceKey, readReviewIndex, mapIsCurrent } from "../ops/diagram-attest.mjs";
+import { approval, sourceKey, readReviewIndex, mapIsCurrent, stepInventory, diagramSteps, expectedFrames, frameIds } from "../ops/diagram-attest.mjs";
 import { publishable, sameProposal, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey } from "../ops/map-diagrams-lib.mjs";
 
 const dg = { id: "abg", title: "ABG", facts: ["f"], steps: [{ key: "ph", caption: "c", narration: "n" }] };
@@ -17,10 +17,46 @@ const decision = { attach: true, itemHash: itemHash(q), diagramHash: diagramHash
 
 describe("approval of a diagram for publication", () => {
   it("fails closed when missing, failed or stale", () => {
-    expect(approval({}, "abg", "k1")).toEqual({ ok: false, why: "never reviewed" });
-    expect(approval({ abg: { verdict: "FAIL", sourceKey: "k1" } }, "abg", "k1").ok).toBe(false);
-    expect(approval({ abg: { verdict: "PASS", sourceKey: "old" } }, "abg", "k1")).toEqual({ ok: false, why: "changed since its review" });
-    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1" } }, "abg", "k1")).toEqual({ ok: true, why: null });
+    const steps = ["ph", "lungs"], frames = frameIds(expectedFrames(steps));
+    expect(approval({}, "abg", "k1", steps)).toEqual({ ok: false, why: "never reviewed" });
+    expect(approval({ abg: { verdict: "FAIL", sourceKey: "k1", frames } }, "abg", "k1", steps).ok).toBe(false);
+    expect(approval({ abg: { verdict: "PASS", sourceKey: "old", frames } }, "abg", "k1", steps)).toEqual({ ok: false, why: "changed since its review" });
+    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1", frames } }, "abg", "k1", steps)).toEqual({ ok: true, why: null });
+    expect(() => approval({ abg: { verdict: "PASS", sourceKey: "k1", frames } }, "abg", "k1")).toThrow(/real steps are required/);
+  });
+
+  /* Astra, PR #134 review, round 24: a PASS recorded from prepared data
+     that left out a real step — and that step's frames — still approved
+     the diagram. A PASS now counts only for the frames it was shown. */
+  it("does not approve a PASS whose review left out a real step", () => {
+    const real = ["ph", "lungs", "kidneys"];
+    const without = frameIds(expectedFrames(["ph", "lungs"]));
+    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1", frames: without } }, "abg", "k1", real)).toEqual({ ok: false, why: "its review did not cover every step" });
+    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1", frames: frameIds(expectedFrames([])) } }, "abg", "k1", real).ok).toBe(false);
+    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1" } }, "abg", "k1", real).ok, "an entry with no frames on record").toBe(false);
+    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1", frames: frameIds(expectedFrames(real)) } }, "abg", "k1", real).ok).toBe(true);
+  });
+
+  it("reads each diagram's steps from its source exactly as the app defines them", async () => {
+    const { DIAGRAMS } = await import("../src/diagrams/index.js");
+    const inv = stepInventory();
+    expect(Object.keys(inv).sort()).toEqual(Object.keys(DIAGRAMS).sort());
+    for (const [id, d] of Object.entries(DIAGRAMS)) expect(inv[id], id).toEqual(d.steps.map((s) => s.key));
+  });
+
+  it("refuses a step list it cannot read without running the code", () => {
+    const ok = 'export const abg = { id: "abg", title: "t", steps: [{ key: "ph", caption: "c" }, { key: "lungs" }] };';
+    expect(diagramSteps("abg.jsx", ok, "abg")).toEqual(["ph", "lungs"]);
+    for (const [why, src] of [
+      ["steps from a variable", 'const S = [{ key: "ph" }];\nexport const abg = { id: "abg", steps: S };'],
+      ["a spread step", 'const extra = { key: "x" };\nexport const abg = { id: "abg", steps: [{ key: "ph" }, extra] };'],
+      ["a spread object", 'const more = { steps: [] };\nexport const abg = { id: "abg", steps: [{ key: "ph" }], ...more };'],
+      ["a computed key", 'const k = "ph";\nexport const abg = { id: "abg", steps: [{ key: k }] };'],
+      ["a computed property", 'const p = "steps";\nexport const abg = { id: "abg", steps: [{ key: "ph" }], [p]: [] };'],
+      ["duplicate keys", 'export const abg = { id: "abg", steps: [{ key: "ph" }, { key: "ph" }] };'],
+      ["two definitions", 'export const abg = { id: "abg", steps: [] };\nexport const abg2 = { id: "abg", steps: [] };'],
+      ["no definition", 'export const other = { id: "other", steps: [] };'],
+    ]) expect(() => diagramSteps("abg.jsx", src, "abg"), why).toThrow(/stepInventory/);
   });
 
   it("publishes a confirmed pairing only for an approved diagram", () => {
@@ -40,6 +76,7 @@ describe("approval of a diagram for publication", () => {
       cpSync("src/diagrams", join(root, "src/diagrams"), { recursive: true });
       cpSync("src/explainer.jsx", join(root, "src/explainer.jsx"));
       cpSync("src/App.jsx", join(root, "src/App.jsx"));
+      cpSync("package.json", join(root, "package.json"));
       const base = sourceKey(root);
       expect(base).toMatch(/^[0-9a-f]{24}$/);
       const touch = (rel, edit) => {
@@ -95,7 +132,8 @@ describe("approval of a diagram for publication", () => {
     expect(mapIsCurrent(map, sourceKey()), "item-map.json was built against older drawing code: rerun ops/map-diagrams.mjs").toBe(true);
     const used = new Set(Object.values(map.pairs).flat().map((p) => p.d));
     const index = readReviewIndex(), key = sourceKey();
-    for (const id of used) expect(approval(index, id, key), id).toEqual({ ok: true, why: null });
+    const steps = stepInventory();
+    for (const id of used) expect(approval(index, id, key, steps[id]), id).toEqual({ ok: true, why: null });
   });
 });
 

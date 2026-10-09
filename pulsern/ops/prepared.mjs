@@ -101,6 +101,25 @@ export function reviewPlan(data) {
     return { ...d, images: want.map((w, n) => ({ ...w, label: frameLabel(w.theme, w.key), n })) };
   });
 }
+/* The prepared diagrams against the inventory trusted code read from the
+   pinned source (stepInventory): every diagram, with exactly its real
+   steps in order — or, for a single-diagram run, that one diagram. The
+   frame set follows from the steps, so a prepare step that drops a step
+   together with its frames is refused here (Astra, PR #134 review, round
+   24). */
+export function checkInventory(plan, inventory, only = null) {
+  const want = only ? [only] : Object.keys(inventory).sort();
+  const got = plan.map((d) => d.id).sort();
+  if (want.length !== got.length || want.some((id, i) => id !== got[i])) fail(`prepared diagrams [${got.join(", ")}] are not the diagrams in the source [${want.join(", ")}]`);
+  for (const d of plan) {
+    const real = inventory[d.id];
+    if (!real) fail(`${d.id} is not a diagram in the source`);
+    const keys = d.steps.map((s) => s.key);
+    if (keys.length !== real.length || keys.some((k, i) => k !== real[i])) fail(`${d.id} steps [${keys.join(", ")}] are not its steps in the source [${real.join(", ")}]`);
+  }
+  return plan;
+}
+
 export function readFrame(dir, id, n, maxBytes = 8 * 1024 * 1024) {
   const buf = readFileSync(`${dir}/${slug(id, "diagram id")}/${Number(n)}.png`);
   if (buf.length > maxBytes || !buf.subarray(0, 8).equals(PNG_SIG)) fail(`${id} frame ${n} is not a PNG under ${maxBytes} bytes`);
