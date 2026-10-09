@@ -87,7 +87,7 @@ describe("parseJson()", () => {
 });
 
 describe("no content script escapes the gate", () => {
-  const SCRIPTS = ["content-factory", "card-factory", "case-factory", "exam-factory", "audit-sweep", "copy-audit", "seed-visuals"];
+  const SCRIPTS = ["content-factory", "card-factory", "case-factory", "exam-factory", "audit-sweep", "copy-audit", "seed-visuals", "map-diagrams"];
 
   /* Discovery by what a script DOES — call a model — not by what its prompt
      happens to say. Every model-calling script must be a content reviewer on
