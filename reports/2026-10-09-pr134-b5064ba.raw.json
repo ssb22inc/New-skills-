@@ -1,0 +1,93 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "b5064bae79681d07e7d10183c216df4a9c1c1b12",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T13:21:33.958Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/check-png-canonical.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/png-canonical.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/ops/save-results.sh",
+    "pulsern/src/concept-explainers.jsx",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/fingerprint.js",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/concept-explainers.test.jsx",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/insulin.test.js",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/map-diagrams.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/png-canonical.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/save-results.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 246,
+      "title": "Hyphenated E-R is discarded as a filler",
+      "problem": "keepLetters protects \"ER\" and \"E.R.\", but not the hyphenated \"E-R\" spelling encouraged by the narration instructions. speechTokens subsequently joins \"E-R\" into \"er\" and removes it through FILLER. This both rejects a faithful transcript using \"ER\" and accepts a transcript that omits the qualifier entirely.",
+      "failure_scenario": "audioCheck(\"E-R tablets release medication slowly.\", \"Tablets release medication slowly.\") returns pass: true. recordAll can therefore publish audio that incorrectly generalizes an extended-release property to all tablets.",
+      "fix": "Preserve clinically meaningful abbreviations before filler removal, including hyphenated letter spellings, or stop treating \"er\" as droppable. Add paired tests proving that \"E-R\" matches \"ER\" and that deleting it fails. Increment QA_VERSION so recordings accepted by this rule are rechecked.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/diagrams/match.js",
+      "line": 76,
+      "title": "Common U-300 spellings still select the U-100 insulin profile",
+      "problem": "The exclusion recognizes only an optional ASCII hyphen in \"U-300\". It misses \"U 300\" and \"U‑300\" with a nonbreaking hyphen. Both then match the generic glargine expression and produce type: \"long\", whose drawing and worked caption specifically represent glargine U-100.",
+      "failure_scenario": "extractInsulin(\"Insulin glargine U‑300 was given at 2100.\") returns {type:\"long\", givenAt:\"21:00\"}. If the pairing is approved with values, the student receives the approximately 24-hour U-100 profile for a formulation that lasts longer. The pairing prompt's extracted-number check is not a deterministic formulation check.",
+      "fix": "Normalize whitespace and Unicode hyphen variants before identifying formulations, and reject unsupported concentrations before selecting a profile. Add extraction and proposal tests for \"U 300\", \"U‑300\", and \"U–300\", alongside a passing U-100 case.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 231745,
+    "completionTokens": 16143,
+    "reasoningTokens": 15538,
+    "costUsd": 3.703955
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge yet. The narration accuracy gate can accept a dropped clinical qualifier, and the insulin matcher can still assign concentrated glargine to the U-100 profile. These findings are based on the supplied code; I did not execute the tests or verify GitHub environment and branch-protection settings.",
+  "counts": {
+    "blocker": 2,
+    "major": 0,
+    "minor": 0
+  }
+}
