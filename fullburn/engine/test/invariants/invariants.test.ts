@@ -1500,6 +1500,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const { walk: walkTree } = await import("../../scripts/leak-check.mjs");
     const { execFileSync } = await import("node:child_process");
     const { relative: relPath } = await import("node:path");
+    const liveEval = await import("../../src/live-eval.ts");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1924,6 +1925,19 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           utcMeter.settle(utcMeter.reserve("pulsern", 1));
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
+        },
+      },
+      {
+        row: "L62",
+        claim: "a symlink in the protected tree is refused over the verified scope plus reports/ and APPROVALS/; an approval signed by another account is refused; a bindRole map is not production-servable",
+        holds: () => {
+          const link = gateLib.checkRegularFilesOnly(`120000 ${"c".repeat(40)} 0\tfullburn/config/src/caps.ts\0`).ok === false;
+          const scope = ["fullburn/reports/", "fullburn/APPROVALS/"].every((p) => gateLib.REGULAR_FILES_SCOPE.includes(p));
+          const doc = (committerLogin: string) => [{ path: "fullburn/APPROVALS/a.md", auth: { verified: true, authorLogin: "maintainer", committerLogin } }];
+          const signer = gateLib.checkApprovalAuthentication(doc("other"), "maintainer").ok === false && gateLib.checkApprovalAuthentication(doc("maintainer"), "maintainer").ok === true;
+          const recorded = modelsMod.attestEvalRun("genome-tagger", "qwen-72b", modelsMod.GOLDEN_SETS["genome-tagger"]!.map((c) => ({ caseId: c.id, output: c.expected })));
+          const notProduction = !liveEval.productionServable(modelsMod.bindRole(modelsMod.ROLE_BINDINGS, "genome-tagger", "qwen-72b", recorded)) && liveEval.productionServable(modelsMod.ROLE_BINDINGS);
+          return link && scope && signer && notProduction;
         },
       },
     ];
