@@ -23,7 +23,7 @@ import { createServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { TTS, QA_MODEL, QA_THRESHOLD, clipId, textFp, audioCheck, narratedSteps } from "./narrate-lib.mjs";
+import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip } from "./narrate-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -98,7 +98,7 @@ try {
     manifest.clips[d.id] ??= {};
     for (const s of narratedSteps(d)) {
       const id = clipId({ text: s.narration, voice: VOICE });
-      if (manifest.clips[d.id][s.key]?.id === id) { report.skippedUnchanged++; continue; }
+      if (isCurrentClip(manifest.clips[d.id][s.key], id)) { report.skippedUnchanged++; continue; }
       /* The script changed (or was never recorded): drop any old clip NOW, so
          a failure below can never leave stale audio attached to new words. */
       delete manifest.clips[d.id][s.key];
@@ -146,7 +146,7 @@ try {
            this clip — anything else is a real failure. */
         if (error && !/exist|duplicate|409/i.test(`${error.message} ${error.statusCode ?? ""}`)) throw new Error(`upload: ${error.message}`);
         manifest.clips[d.id][s.key] = {
-          id, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(similarity * 1000) / 1000,
+          id, qa: QA_VERSION, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(similarity * 1000) / 1000,
           url: `${process.env.SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${path}`, bytes: mp3.length,
         };
         report.recorded.push({ diagram: d.id, step: s.key, similarity, bytes: mp3.length });

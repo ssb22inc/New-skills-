@@ -43,9 +43,15 @@ on:
       head: { description: "Head commit SHA to review", required: true }
       pr:   { description: "PR number — its range is read from GitHub and its status posted", required: false }
 
+# The workflow token can NOT post statuses. The required check is posted
+# only by the PulseRN Astra GitHub App, whose key lives in the `astra-review`
+# environment, restricted to the default branch. A run started from any
+# other branch — whose copy of this file could say anything — cannot read
+# that key, so it cannot produce the status branch protection requires
+# (Astra, PR #134 review, finding 1: a check written inside a dispatchable
+# workflow is not a trust boundary; GitHub's environment rules are).
 permissions:
   contents: write   # commit the report to the reviews branch
-  statuses: write   # post the verdict on the reviewed commit
 
 # Queue, never cancel: a review already being paid for always finishes and is
 # saved. Only runs that have not started yet are superseded, which costs
@@ -60,6 +66,7 @@ jobs:
     if: github.event_name != 'pull_request_target' || github.event.action != 'labeled' || github.event.label.name == 'astra-review'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    environment: astra-review
     env:
       REPO: ${{ github.repository }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -74,6 +81,8 @@ jobs:
           EV_HEAD: ${{ github.event.pull_request.head.sha }}
           EV_BASE: ${{ github.event.pull_request.base.sha }}
           EV_PR: ${{ github.event.pull_request.number }}
+          EV_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EV_BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
           IN_HEAD: ${{ inputs.head }}
           IN_BASE: ${{ inputs.base }}
           IN_PR: ${{ inputs.pr }}
@@ -81,8 +90,15 @@ jobs:
         run: |
           set -euo pipefail
           sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::'$1' is not a full commit SHA"; exit 1; }; }
+          # A status belongs to a commit, not to a PR or a range. Only a review
+          # of the FULL change into the protected branch may post it; a PR
+          # aimed at another branch would review only part of the same head
+          # (Astra, PR #134 review, finding 2).
+          into_default() { [ "$1" = "$DEFAULT_BRANCH" ] && [ "$2" = "$REPO" ]; }
           if [ "$EVENT" = "pull_request_target" ]; then
-            { echo "HEAD_SHA=$EV_HEAD"; echo "BASE_SHA=$EV_BASE"; echo "PR=$EV_PR"; echo "POST_STATUS=true"; } >> "$GITHUB_ENV"
+            post=false; into_default "$EV_BASE_REF" "$EV_BASE_REPO" && post=true
+            { echo "HEAD_SHA=$EV_HEAD"; echo "BASE_SHA=$EV_BASE"; echo "PR=$EV_PR"; echo "POST_STATUS=$post"; } >> "$GITHUB_ENV"
+            [ "$post" = true ] || echo "PR #$EV_PR targets $EV_BASE_REPO:$EV_BASE_REF, not $DEFAULT_BRANCH: report only, no status."
             exit 0
           fi
           # A dispatch runs the reviewer from the ref it was started on, so
@@ -95,22 +111,54 @@ jobs:
             [[ "$IN_PR" =~ ^[0-9]+$ ]] || { echo "::error::pr must be a number"; exit 1; }
             pr_json=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/pulls/$IN_PR")
             pr_head=$(jq -r .head.sha <<<"$pr_json"); pr_base=$(jq -r .base.sha <<<"$pr_json")
+            pr_base_ref=$(jq -r .base.ref <<<"$pr_json"); pr_base_repo=$(jq -r .base.repo.full_name <<<"$pr_json")
             sha "$pr_head"; sha "$pr_base"
             if [ "$IN_HEAD" != "$pr_head" ]; then
               echo "::error::head $IN_HEAD is not PR #$IN_PR's head ($pr_head). Only a PR's real head can receive its status."; exit 1
             fi
-            { echo "HEAD_SHA=$pr_head"; echo "BASE_SHA=$pr_base"; echo "PR=$IN_PR"; echo "POST_STATUS=true"; } >> "$GITHUB_ENV"
+            post=false; into_default "$pr_base_ref" "$pr_base_repo" && post=true
+            { echo "HEAD_SHA=$pr_head"; echo "BASE_SHA=$pr_base"; echo "PR=$IN_PR"; echo "POST_STATUS=$post"; } >> "$GITHUB_ENV"
+            [ "$post" = true ] || echo "PR #$IN_PR targets $pr_base_repo:$pr_base_ref, not $DEFAULT_BRANCH: report only, no status."
           else
             sha "$IN_BASE"
             { echo "HEAD_SHA=$IN_HEAD"; echo "BASE_SHA=$IN_BASE"; echo "PR="; echo "POST_STATUS=false"; } >> "$GITHUB_ENV"
             echo "Report-only review of $IN_BASE...$IN_HEAD: no commit status will be posted."
           fi
 
+      # The only credential that can post the required status: a short-lived
+      # token for the PulseRN Astra App, minted from a key that exists only
+      # in the main-only `astra-review` environment. Not configured yet →
+      # the review still runs and is saved, but posts no status.
+      - name: Status publisher token (PulseRN Astra App)
+        if: env.POST_STATUS == 'true'
+        env:
+          APP_ID: ${{ vars.ASTRA_APP_ID }}
+          APP_KEY: ${{ secrets.ASTRA_APP_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_ID:-}" ] || [ -z "${APP_KEY:-}" ]; then
+            echo "::warning::The PulseRN Astra App is not configured (vars.ASTRA_APP_ID / secret ASTRA_APP_KEY in the astra-review environment). Report only: no status posted."
+            echo "POST_STATUS=false" >> "$GITHUB_ENV"; exit 0
+          fi
+          b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+          now=$(date +%s)
+          header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+          payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((now - 60)) $((now + 540)) "$APP_ID" | b64url)
+          key=$(mktemp); trap 'rm -f "$key"' EXIT; printf '%s' "$APP_KEY" > "$key"
+          sig=$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign "$key" | b64url)
+          jwt="$header.$payload.$sig"
+          inst=$(curl -fsS -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/installation" | jq -r .id)
+          tok=$(jq -n --arg r "${REPO#*/}" '{repositories:[$r],permissions:{statuses:"write"}}' |
+            curl -fsS -X POST -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github+json" "https://api.github.com/app/installations/$inst/access_tokens" -d @- | jq -r .token)
+          [ -n "$tok" ] && [ "$tok" != null ] || { echo "::error::Could not mint the status token"; exit 1; }
+          echo "::add-mask::$tok"
+          echo "STATUS_TOKEN=$tok" >> "$GITHUB_ENV"
+
       - name: Mark the commit under review as pending
         if: env.POST_STATUS == 'true'
         run: |
           jq -n --arg u "$RUN_URL" '{state:"pending",context:"pulsern/astra-review",description:"Astra is reviewing this commit",target_url:$u}' |
-            curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            curl -fsS -X POST -H "Authorization: Bearer $STATUS_TOKEN" -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$REPO/statuses/$HEAD_SHA" -d @- >/dev/null
 
       # Decides whether a paid review may run. Anything that cannot be reviewed
@@ -247,7 +295,7 @@ jobs:
           fi
           echo "$STATE: $DESC"
           jq -n --arg s "$STATE" --arg d "${DESC:0:139}" --arg u "$RUN_URL" '{state:$s,context:"pulsern/astra-review",description:$d,target_url:$u}' |
-            curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            curl -fsS -X POST -H "Authorization: Bearer $STATUS_TOKEN" -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$REPO/statuses/$HEAD_SHA" -d @- >/dev/null
           [ "$STATE" = "success" ] || [ "$STATE" = "pending" ] || exit 1
 

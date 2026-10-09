@@ -122,7 +122,41 @@ export function criticalTerms(text) {
   return out;
 }
 
-/* Where the clinically meaningful terms of two texts first disagree, or null. */
+/* Every word, in order, must match — after only these normalisations of
+   how speech is SPELLED: number words ↔ digits, letters spelled out ↔ the
+   abbreviation ("P-A-C-O-2" ↔ "PaCO2"), contractions, a plural -s, and the
+   filler words below, which a transcriber may add or drop. Anything else —
+   "acidosis" heard as "alkalosis", a dropped "not", a changed number — is a
+   mismatch, and the clip does not ship. A keyword list was not enough: it
+   passed a recording that swapped the diagnosis (Astra, PR #134 review,
+   finding 4). */
+const FILLER = new Set(["a", "an", "the", "um", "uh", "er", "erm"]);
+export function speechTokens(text) {
+  /* Letters spelled out with hyphens ("P-A-C-O-2", "N-ninety-five", "I-V")
+     are joined to the written abbreviation (PaCO2, N95, IV). Only a hyphen
+     after a single letter joins, so "fit-tested" and an article before an
+     abbreviation are left alone. */
+  let t = String(text);
+  while (/\b([A-Za-z])-(?=[A-Za-z0-9])/.test(t)) t = t.replace(/\b([A-Za-z])-(?=[A-Za-z0-9])/g, "$1§");
+  const expanded = t.toLowerCase()
+    .replace(/\bcan['’]t\b/g, "can not").replace(/\bwon['’]t\b/g, "will not").replace(/n['’]t\b/g, " not")
+    .replace(/\bcannot\b/g, "can not").replace(/['’]s\b/g, "s").replace(/['’](re|ve|ll|d|m)\b/g, " $1");
+  return wordsToNumbers(expanded).replace(/§/g, "").replace(/(\d)\.(?!\d)/g, "$1 ").split(/[^a-z0-9.]+/)
+    .map((w) => w.replace(/^\.+|\.+$/g, "")).filter(Boolean)
+    /* plural -s dropped from longer words, but not -ss/-is/-us (acidosis) */
+    .map((w) => (w.length > 4 && /s$/.test(w) && !/(ss|is|us)$/.test(w) ? w.slice(0, -1) : w))
+    .filter((w) => !FILLER.has(w));
+}
+
+/* The first word where script and transcript disagree, or null. */
+export function wordMismatch(script, transcript) {
+  const a = speechTokens(script), b = speechTokens(transcript);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return { at: i, expected: a[i] ?? "(nothing)", heard: b[i] ?? "(nothing)", context: a.slice(Math.max(0, i - 3), i + 3).join(" ") };
+  }
+  return null;
+}
+/* Kept for the report: the clinically loaded subset, compared the same way. */
 export function criticalMismatch(script, transcript) {
   const a = criticalTerms(script), b = criticalTerms(transcript);
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
@@ -131,11 +165,13 @@ export function criticalMismatch(script, transcript) {
   return null;
 }
 
-/* A clip ships only if it is close overall AND its numbers, negations and
-   directions match exactly. */
+/* A clip ships only if every word matches (above) and the overall
+   similarity is high. Bump QA_VERSION whenever this rule gets stricter:
+   clips approved by an older rule are re-checked, never grandfathered. */
+export const QA_VERSION = 3;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
-  const mismatch = criticalMismatch(script, transcript);
+  const mismatch = wordMismatch(script, transcript);
   return { similarity, mismatch, pass: similarity >= QA_THRESHOLD && !mismatch };
 }
 export const passesQa = (script, transcript) => audioCheck(script, transcript).pass;
@@ -143,3 +179,12 @@ export const passesQa = (script, transcript) => audioCheck(script, transcript).p
 /* Steps that get recorded audio: every step with narration and a key,
    never a worked-example step (its caption follows the question's values). */
 export const narratedSteps = (diagram) => diagram.steps.filter((s) => !s.dynamic && s.key && s.narration);
+
+/* May a run skip this step's clip? Only when it is for the same words and
+   voice, was approved by the CURRENT audio check, and is stored under the
+   hash of its bytes. Anything recorded under an older, weaker rule — or
+   the old input-named storage — is recorded and checked again (Astra,
+   PR #134 review, finding 7). */
+export function isCurrentClip(entry, id) {
+  return !!entry && entry.id === id && entry.qa === QA_VERSION && /^[0-9a-f]{32}$/.test(entry.audio ?? "") && String(entry.url ?? "").endsWith(`/${entry.audio}.mp3`);
+}

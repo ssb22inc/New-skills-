@@ -96,6 +96,7 @@ try {
   }
   if (Object.keys(run.heldBack).length) console.log(`Held back, not reviewed for pairing: ${JSON.stringify(run.heldBack)}`);
   const sb = createClient(URL_, ANON, { auth: { persistSession: false } });
+  console.log("Reading practice questions…");
   const rows = await readAll(() => sb.from("questions").select("id, stem, options, answer, rationale")
     .eq("approved", true).is("exam_form", null).order("id"), { ordered: true });
   const items = new Map(rows.map((r) => [r.id, r]));

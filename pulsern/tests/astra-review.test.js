@@ -148,8 +148,8 @@ describe("digests", () => {
     const d = pageDigest(`<title>T</title><meta name="description" content="D"><script type="application/ld+json">{"a":1}</script><script>alert(1)</script><a href="/x" onclick="steal()">go</a><iframe src="https://x"></iframe><p>Body &amp; text</p>`);
     expect(d).toContain("TEXT T");
     expect(d).toContain('TAG <meta name="description" content="D">');
-    expect(d).toContain('SCRIPT-BODY {"a":1}');
-    expect(d).toContain("SCRIPT-BODY alert(1)");
+    expect(d).toContain('SCRIPT-BODY "{\\"a\\":1}"');
+    expect(d).toContain('SCRIPT-BODY "alert(1)"');
     expect(d).toContain('TAG <a href="/x" onclick="steal()">');
     expect(d).toContain('TAG <iframe src="https://x">');
     expect(d).toContain("TEXT Body & text");
@@ -174,6 +174,20 @@ describe("digests", () => {
     expect(textDiff(pageDigest(base), pageDigest(base.replace("note", "[if IE]><script src=x></script><![endif]")), "p")).not.toBe("");
   });
 
+  /* PR #134 review, finding 3: whitespace inside code is behaviour. */
+  it("shows a newline that activates commented-out code", () => {
+    const a = "<script>// disabled alert(1)</script>", b = "<script>// disabled\nalert(1)</script>";
+    expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
+  });
+  it("shows a whitespace change that alters automatic semicolon insertion", () => {
+    const a = "<script>return\n42</script>", b = "<script>return 42</script>";
+    expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
+  });
+  it("keeps quoted attribute values exactly", () => {
+    const a = '<a onclick="x()// y\nz()">go</a>', b = '<a onclick="x()// y z()">go</a>';
+    expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
+    expect(textDiff(pageDigest('<p title="a  b">x</p>'), pageDigest('<p title="a b">x</p>'), "p")).not.toBe("");
+  });
   it("ignores whitespace-only regeneration noise", () => {
     expect(textDiff(pageDigest('<p class="a">Hi  there</p>'), pageDigest('<p\n  class="a">\n Hi there\n</p>'), "p")).toBe("");
   });

@@ -154,7 +154,32 @@ describe("workflow placement", () => {
       expect(post.split("\n").slice(0, 3).join("\n")).toContain("if: always()");
       expect(post).toContain('context:"pulsern/astra-review"');
       expect(post).toContain("statuses/$HEAD_SHA");
-      expect(w).toContain("statuses: write");
+    });
+
+    /* PR #134 review, finding 1: a check inside a dispatchable workflow is
+       not a trust boundary. Only the App — whose key is confined to the
+       main-only environment — can post the required status. */
+    it("posts statuses only with the App token from the main-only environment", () => {
+      const w = wf();
+      const perms = w.slice(w.indexOf("\npermissions:"), w.indexOf("\nconcurrency:"));
+      expect(perms).not.toMatch(/statuses:\s*write/);
+      expect(w).toMatch(/^    environment: astra-review$/m);
+      const tokenStep = w.slice(w.indexOf("- name: Status publisher token"), w.indexOf("- name: Mark the commit under review as pending"));
+      expect(tokenStep).toContain("secrets.ASTRA_APP_KEY");
+      expect(tokenStep).toMatch(/permissions:\{statuses:"write"\}/);
+      const statusCalls = [...w.matchAll(/Bearer \$(\w+)" -H "Accept: application\/vnd\.github\+json" \\\n\s+"https:\/\/api\.github\.com\/repos\/\$REPO\/statuses/g)].map((m) => m[1]);
+      expect(statusCalls).toEqual(["STATUS_TOKEN", "STATUS_TOKEN"]);
+    });
+
+    /* PR #134 review, finding 2: a PR aimed at another branch reviews only
+       part of a head that a PR into main also carries. */
+    it("only lets a review of a PR INTO the default branch post a status", () => {
+      const w = wf();
+      const r = w.slice(w.indexOf("- name: Resolve what to review"), w.indexOf("- name: Status publisher token"));
+      expect(r).toContain('into_default() { [ "$1" = "$DEFAULT_BRANCH" ] && [ "$2" = "$REPO" ]; }');
+      expect(r).toMatch(/into_default "\$EV_BASE_REF" "\$EV_BASE_REPO" && post=true/);
+      expect(r).toMatch(/into_default "\$pr_base_ref" "\$pr_base_repo" && post=true/);
+      expect(r).not.toMatch(/echo "POST_STATUS=true"/);
     });
 
     /* Finding #5: cancelling a run mid-call threw away a paid review. */
@@ -193,7 +218,7 @@ describe("workflow placement", () => {
     describe("manual re-review", () => {
       const resolve = () => {
         const w = wf();
-        return w.slice(w.indexOf("- name: Resolve what to review"), w.indexOf("- name: Mark the commit under review as pending"));
+        return w.slice(w.indexOf("- name: Resolve what to review"), w.indexOf("- name: Status publisher token"));
       };
       it("only runs the reviewer from the default branch", () => {
         expect(resolve()).toMatch(/"\$GITHUB_REF" != "refs\/heads\/\$DEFAULT_BRANCH"[\s\S]*exit 1/);
@@ -208,6 +233,8 @@ describe("workflow placement", () => {
       it("never posts a status for a report-only range", () => {
         const w = wf();
         expect(resolve()).toMatch(/echo "PR="; echo "POST_STATUS=false"/);
+        // and an unconfigured App means report-only too, never the workflow token
+        expect(w).toMatch(/not configured[\s\S]*echo "POST_STATUS=false" >> "\$GITHUB_ENV"; exit 0/);
         for (const step of ["- name: Mark the commit under review as pending", "- name: Post the verdict on the reviewed commit"]) {
           const head = w.slice(w.indexOf(step)).split("\n").slice(0, 3).join("\n");
           expect(head, step).toMatch(/env\.POST_STATUS == 'true'/);

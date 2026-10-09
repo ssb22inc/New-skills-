@@ -88,15 +88,25 @@ const decode = (s) => s
 /* One line per thing a browser sees, in document order, so a line diff of
    two digests shows exactly what changed for a reader — and for a browser.
 
-   Near-lossless by construction: every tag is kept WITH ALL ITS ATTRIBUTES
-   (quoted or not), every script and style body is kept in full, comments are
-   kept, and text is kept. The only thing dropped is whitespace between and
-   inside tags, which is what changes on every regeneration of minified
-   markup. An earlier digest kept only the parts it recognised, so an
-   unquoted <script src=…> — and anything else it did not know — vanished
-   from review (Astra, PR #133 review, finding 2). */
+   Exact where it matters: script and style bodies, comments, and every
+   quoted attribute value are kept byte-for-byte (JSON-escaped onto one
+   line), because whitespace there can change behaviour — a newline ends a
+   // comment and activates the code after it (Astra, PR #134 review,
+   finding 3). Whitespace is collapsed only where HTML ignores it: between
+   attributes, inside the tag name, and in text. An earlier digest kept only
+   what it recognised, so an unquoted <script src=…> vanished from review
+   (PR #133 review, finding 2). */
 const TAG = /<(?:"[^"]*"|'[^']*'|[^'">])*>/y;
 const squash = (s) => s.replace(/\s+/g, " ").trim();
+const exact = (s) => JSON.stringify(s);
+/* Collapse whitespace OUTSIDE quotes only; quoted values stay exact. */
+function normaliseTag(tag) {
+  let out = "";
+  for (const part of tag.match(/"[^"]*"|'[^']*'|[^"']+/g) ?? []) {
+    out += part[0] === '"' || part[0] === "'" ? exact(part.slice(1, -1)) : part.replace(/\s+/g, " ");
+  }
+  return out.replace(/\s+>/g, ">").replace(/<\s+/g, "<").replace(/\s*=\s*/g, "=");
+}
 export function pageDigest(html) {
   const src = String(html ?? "");
   const out = [];
@@ -107,7 +117,7 @@ export function pageDigest(html) {
       const end = src.indexOf("-->", i + 4);
       const stop = end < 0 ? src.length : end + 3;
       flushText();
-      out.push(`COMMENT ${squash(src.slice(i, stop))}`);
+      out.push(`COMMENT ${exact(src.slice(i, stop))}`);
       i = stop;
       continue;
     }
@@ -117,15 +127,15 @@ export function pageDigest(html) {
       if (m) {
         flushText();
         const tag = m[0];
-        out.push(`TAG ${squash(tag)}`);
+        out.push(`TAG ${normaliseTag(tag)}`);
         i += tag.length;
-        /* Raw-text elements: the body is code or CSS, kept whole. */
+        /* Raw-text elements: the body is code or CSS, kept exactly. */
         const raw = /^<(script|style)\b/i.exec(tag)?.[1]?.toLowerCase();
         if (raw) {
           const close = src.toLowerCase().indexOf(`</${raw}`, i);
           const end = close < 0 ? src.length : close;
           const body = src.slice(i, end);
-          if (body.trim()) out.push(`${raw.toUpperCase()}-BODY ${squash(body)}`);
+          if (body.length) out.push(`${raw.toUpperCase()}-BODY ${exact(body)}`);
           i = end;
         }
         continue;

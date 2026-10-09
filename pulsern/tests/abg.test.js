@@ -107,9 +107,27 @@ describe("compensation that goes too far", () => {
     expect(read(7.36, 55, 32).mixedPossible).toBe(false);  // chronic limit 32
     expect(read(7.43, 30, 19).mixedPossible).toBe(false);  // down to 24 − 5 − 2 = 17
   });
-  it("never flags under-compensation: that is uncompensated or partial, as taught", () => {
-    expect(read(7.28, 40, 16)).toMatchObject({ compensation: "none", mixedPossible: false });
-    expect(read(7.30, 55, 24)).toMatchObject({ compensation: "none", mixedPossible: false });
+  /* PR #134 review, finding 5: too LITTLE compensation can also mean a
+     second disorder; the diagram has no timeline to assume "early". */
+  it("flags Astra's under-compensation case: pH 7.15, PaCO2 30, HCO3 10", () => {
+    const r = read(7.15, 30, 10);   // Winter: 1.5×10+8 = 23 ± 2
+    expect(r).toMatchObject({ disorder: "metabolic acidosis", compensation: "partial", mixedPossible: true });
+    expect(r.reading).toMatch(/short of the compensation expected \(about 21–25\)/);
+  });
+  it("flags a metabolic disorder whose lungs have not compensated at all", () => {
+    expect(read(7.28, 40, 16)).toMatchObject({ compensation: "none", mixedPossible: true });   // Winter 32 ± 2
+    expect(read(7.52, 42, 34)).toMatchObject({ compensation: "none", mixedPossible: true });   // 0.7×34+21 = 44.8 ± 2
+  });
+  it("does not flag a respiratory disorder still within the acute range", () => {
+    expect(read(7.30, 55, 24)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 ≥ 22 + 1.5 − 2
+    expect(read(7.50, 28, 24)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 ≤ 26 − 2.4 + 2
+  });
+  it("flags a respiratory acidosis whose bicarbonate has not risen even acutely", () => {
+    // PaCO2 80: even acutely HCO3 should be at least 22 + 4 − 2 = 24
+    expect(read(7.10, 80, 22)).toMatchObject({ disorder: "respiratory acidosis", mixedPossible: true });
+  });
+  it("still reports a combined disorder as combined, not as compensation", () => {
+    expect(read(7.22, 60, 21)).toMatchObject({ primary: "both", compensation: null });
   });
   it("shows the caution on the diagram's verdict chip", async () => {
     const React = (await import("react")).default;

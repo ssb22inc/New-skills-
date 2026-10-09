@@ -5,7 +5,9 @@
      12 a run whose every batch failed still reported success. */
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { approval, sourceKey, readReviewIndex } from "../ops/diagram-attest.mjs";
 import { publishable, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey } from "../ops/map-diagrams-lib.mjs";
 
@@ -29,10 +31,36 @@ describe("approval of a diagram for publication", () => {
     expect(publishable(decisions, items, { abg: dg }, () => false)).toEqual({});
   });
 
-  it("changes the source key when any drawing code changes, not when generated data does", () => {
-    const k = sourceKey();
-    expect(k).toMatch(/^[0-9a-f]{24}$/);
-    expect(sourceKey()).toBe(k);
+  /* PR #134 review, finding 6: this used to call sourceKey() twice on an
+     unchanged tree — a constant would have passed. Now each input is
+     changed in a scratch copy and the key must move (or must not). */
+  it("changes the key for any drawing change, and not for generated data", () => {
+    const root = mkdtempSync(join(tmpdir(), "attest-"));
+    try {
+      cpSync("src/diagrams", join(root, "src/diagrams"), { recursive: true });
+      cpSync("src/explainer.jsx", join(root, "src/explainer.jsx"));
+      cpSync("src/App.jsx", join(root, "src/App.jsx"));
+      const base = sourceKey(root);
+      expect(base).toMatch(/^[0-9a-f]{24}$/);
+      const touch = (rel, edit) => {
+        const p = join(root, rel), before = readFileSync(p, "utf8");
+        writeFileSync(p, edit(before));
+        const k = sourceKey(root);
+        writeFileSync(p, before);
+        return k;
+      };
+      for (const rel of ["src/diagrams/abg.jsx", "src/diagrams/kit.jsx", "src/diagrams/match.js", "src/explainer.jsx"]) {
+        expect(touch(rel, (t) => t + "\n// changed\n"), rel).not.toBe(base);
+      }
+      expect(touch("src/App.jsx", (t) => t.replace("--teal:#0E7C6B", "--teal:#0E7C6C")), "theme colour").not.toBe(base);
+      expect(touch("src/App.jsx", (t) => t + "\n// unrelated app code\n"), "app code outside the theme").toBe(base);
+      for (const rel of ["src/diagrams/item-map.json", "src/diagrams/narration.json"]) {
+        expect(touch(rel, (t) => t.replace(/\}\s*$/, ',"x":1}')), rel).toBe(base);
+      }
+      expect(sourceKey(root)).toBe(base);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   /* The guard that holds at merge time: the shipped map may only name
@@ -82,6 +110,9 @@ describe("the pairing CLI under plain Node", () => {
     });
     const out = `${r.stdout}\n${r.stderr}`;
     expect(out).not.toMatch(/Unknown file extension|ERR_UNKNOWN_FILE_EXTENSION/);
-    expect(out).toContain("Held back");   // got far enough to check approvals
+    /* Got past module loading to the database read — whatever the review
+       state of the diagrams (PR #134 review, finding 8: this once required
+       a "held back" message that disappears once every diagram passes). */
+    expect(out).toContain("Reading practice questions…");
   }, 120_000);
 });

@@ -1,6 +1,6 @@
 /* Narration: clip identity, and the check that audio says what the script says. */
 import { describe, it, expect } from "vitest";
-import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, narratedSteps, TTS, QA_THRESHOLD } from "../ops/narrate-lib.mjs";
+import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD } from "../ops/narrate-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("clip identity", () => {
@@ -84,7 +84,12 @@ describe("which steps are recorded", () => {
 describe("the audio check on the real scripts", () => {
   const scripts = Object.values(DIAGRAMS).flatMap((d) => narratedSteps(d).map((st) => [`${d.id}/${st.key}`, st.narration]));
   /* How a transcriber writes speech: digits, not number words. */
-  const asTranscribed = (t) => wordsToNumbers(t).replace(/\s+/g, " ");
+  const asTranscribed = (t) => {
+    // how a transcriber writes speech: digits, and abbreviations not spelled out
+    let x = t;
+    while (/\b([A-Za-z])-(?=[A-Za-z0-9])/.test(x)) x = x.replace(/\b([A-Za-z])-(?=[A-Za-z0-9])/g, "$1§");
+    return wordsToNumbers(x).replace(/§/g, "").replace(/\s+/g, " ");
+  };
 
   it.each(scripts)("%s passes its own faithful transcript", (_, script) => {
     expect(audioCheck(script, script).pass).toBe(true);
@@ -111,8 +116,56 @@ describe("the audio check on the real scripts", () => {
       expect(audioCheck(script, script.replace(new RegExp(`\\b${w}\\b`, "i"), r)).pass).toBe(false);
     });
 
+  /* PR #134 review, finding 4: a recording that swapped the diagnosis
+     passed, because only a keyword list was compared exactly. */
+  const SWAPS = [["acidosis", "alkalosis"], ["alkalosis", "acidosis"], ["hypotonic", "hypertonic"], ["hypertonic", "hypotonic"],
+    ["hypokalemia", "hyperkalemia"], ["airborne", "droplet"], ["droplet", "airborne"], ["contact", "droplet"], ["calcium", "potassium"], ["swell", "shrink"]];
+  it("fails Astra's case: the ABG pH step with acidosis heard as alkalosis", () => {
+    const ph = DIAGRAMS.abg.steps.find((s) => s.key === "ph").narration;
+    expect(audioCheck(ph, ph.replace("acidosis", "alkalosis")).pass).toBe(false);
+  });
+  it.each(scripts.filter(([, t]) => SWAPS.some(([w]) => new RegExp(`\\b${w}\\b`, "i").test(t))))(
+    "%s fails when a clinical term is swapped", (_, script) => {
+      const [w, r] = SWAPS.find(([x]) => new RegExp(`\\b${x}\\b`, "i").test(script));
+      expect(audioCheck(script, asTranscribed(script).replace(new RegExp(`\\b${w}\\b`, "i"), r)).pass).toBe(false);
+    });
+  /* Not just a list of known swaps: change ANY word that carries meaning. */
+  it.each(scripts)("%s fails when its longest word is replaced", (_, script) => {
+    const longest = script.split(/[^A-Za-z]+/).sort((a, b) => b.length - a.length)[0];
+    expect(audioCheck(script, script.replace(longest, "something")).pass).toBe(false);
+  });
+  it("tolerates only spelling differences and filler words", () => {
+    expect(speechTokens("A P-A-C-O-2 of forty-five, and it doesn't")).toEqual(speechTokens("the PaCO2 of 45 and it does not"));
+    expect(speechTokens("N-ninety-five")).toEqual(speechTokens("N95"));
+  });
+
   it("reads contractions as negations", () => {
     expect(criticalTerms("it doesn't lower it")).toEqual(criticalTerms("it does not lower it"));
     expect(criticalTerms("you can't push it")).toContain("not");
+  });
+});
+
+/* PR #134 review, finding 7: clips approved by the old similarity-only
+   check, or stored under input-derived names, were skipped and kept. */
+describe("which recorded clips a re-run may keep", () => {
+  const audio = "a".repeat(32);
+  const good = { id: "abc", qa: QA_VERSION, audio, url: `https://x/storage/v1/object/public/explainers/abg/${audio}.mp3` };
+  it("keeps a clip approved by the current check and stored by its bytes", () => {
+    expect(isCurrentClip(good, "abc")).toBe(true);
+  });
+  it("re-records a clip from an older check, old storage, or other words", () => {
+    expect(isCurrentClip({ ...good, qa: undefined }, "abc")).toBe(false);
+    expect(isCurrentClip({ ...good, qa: QA_VERSION - 1 }, "abc")).toBe(false);
+    expect(isCurrentClip({ ...good, audio: undefined, url: "https://x/abg/ph-abc.mp3" }, "abc")).toBe(false);
+    expect(isCurrentClip({ ...good, url: "https://x/abg/ph-abc.mp3" }, "abc")).toBe(false);
+    expect(isCurrentClip(good, "different-words")).toBe(false);
+    expect(isCurrentClip(undefined, "abc")).toBe(false);
+  });
+  it("has no legacy clips in the shipped manifest", async () => {
+    const { readFileSync } = await import("node:fs");
+    const m = JSON.parse(readFileSync("src/diagrams/narration.json", "utf8"));
+    for (const [d, steps] of Object.entries(m.clips)) for (const [k, e] of Object.entries(steps)) {
+      expect(e.qa, `${d}/${k}`).toBe(QA_VERSION);
+    }
   });
 });
