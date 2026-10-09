@@ -25,7 +25,7 @@
           PULSERN_SUPABASE_URL / PULSERN_SUPABASE_ANON_KEY (default: the app's public values) */
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { readAll } from "../src/read-all.js";
 import { fingerprint } from "../src/diagrams/fingerprint.js";
 import { review, parseJson, reviewSpend } from "./review.mjs";
@@ -37,7 +37,7 @@ import {
 } from "./map-diagrams-lib.mjs";
 import { sourceKey, readReviewIndex, approval, stepInventory } from "./diagram-attest.mjs";
 import { signerFrom } from "./attest.mjs";
-import { readPrepared, mapPlan, headCommit, checkInventory } from "./prepared.mjs";
+import { readPrepared, mapPlan, headCommit, checkInventory, requireClean } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -45,6 +45,7 @@ const LIMIT = arg("--limit") ? Number(arg("--limit")) : Infinity;
 const MAX_USD = Number(arg("--max-usd", "15"));
 const ONLY = arg("--only");
 const PREPARE = arg("--prepare");
+const SOURCE = arg("--source");   // with --prepare: the tree to read, by this script, in a browser sandbox
 const PREPARED = arg("--prepared");
 const INTO = arg("--into");
 if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
@@ -81,10 +82,14 @@ const PROPOSALS = new Map();
 
 function save(diagrams, items) {
   mkdirSync("reports/diagram-map", { recursive: true });
-  writeFileSync(CACHE, serializeDecisions(decisions));
   const fresh = publishable(decisions, items, diagrams, approvedNow, PROPOSALS, SIGNER);
-  const map = buildItemMap(fresh, diagrams, KEY, items);
-  writeFileSync(MAP, JSON.stringify(Object.keys(map.pairs).length ? signMap(map, SIGNER) : map) + "\n");
+  /* A dry run changes no record: only its own run report is written
+     (Astra, PR #134 review, round 28). */
+  if (!DRY) {
+    writeFileSync(CACHE, serializeDecisions(decisions));
+    const map = buildItemMap(fresh, diagrams, KEY, items);
+    writeFileSync(MAP, JSON.stringify(Object.keys(map.pairs).length ? signMap(map, SIGNER) : map) + "\n");
+  }
   const spend = reviewSpend();
   run.spendUsd = spend.costUsd;
   run.calls = spend.calls;
@@ -112,6 +117,8 @@ try {
     DIAGRAMS = PLAN.diagrams;
     checkInventory(Object.values(DIAGRAMS), STEPS);   // the prepared diagrams are the source's, step for step
     proposePairs = (q) => PLAN.proposals.get(q.id) ?? [];
+  } else if (PREPARE) {
+    DIAGRAMS = {};   // read from the source below, in the browser sandbox
   } else {
     const { createServer } = await import("vite");
     vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
@@ -134,11 +141,23 @@ try {
   const items = new Map(rows.map((r) => [r.id, r]));
   console.log(`Read ${rows.length} practice questions.`);
   if (PREPARE) {
-    const proposals = {};
-    for (const q of rows) { const p = proposePairs(q); if (p.length) proposals[q.id] = p.map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p })); }
-    const diagrams = Object.values(DIAGRAMS).map((d) => ({ id: d.id, title: d.title, facts: d.facts,
-      steps: d.steps.map((s) => ({ key: s.key, ...(s.dynamic ? { dynamic: true } : {}), ...(s.caption !== undefined ? { caption: s.caption } : {}), ...(s.narration !== undefined ? { narration: s.narration } : {}) })) }));
-    writeFileSync(PREPARE, JSON.stringify({ kind: "diagram-map", commit: headCommit(), diagrams, proposals }) + "\n");
+    /* This script reads the source's diagrams and runs its matcher inside
+       the browser, where the source's code cannot reach this process or
+       what it writes — the proposals are the pinned matcher's, not a
+       branch script's (Astra, PR #134 review, round 28). */
+    const root = resolve(SOURCE ?? ".");
+    requireClean(root);
+    const { withSandbox } = await import("./render-diagrams.mjs");
+    const { diagrams, proposed } = await withSandbox(root, async (call) => {
+      const ids = await call("ids");
+      const diagrams = [];
+      for (const id of ids) diagrams.push(await call("raw", id));
+      return { diagrams, proposed: await call("propose", rows) };
+    });
+    checkInventory(diagrams, stepInventory(root));
+    const proposals = Object.fromEntries(Object.entries(proposed).filter(([, p]) => p.length));
+    requireClean(root);
+    writeFileSync(PREPARE, JSON.stringify({ kind: "diagram-map", commit: headCommit(root), diagrams, proposals }) + "\n");
     console.log(`Prepared ${diagrams.length} diagram(s), proposals for ${Object.keys(proposals).length} question(s) → ${PREPARE}`);
     process.exit(0);
   }

@@ -1,6 +1,6 @@
 /* Narration: clip identity, and the check that audio says what the script says. */
 import { describe, it, expect } from "vitest";
-import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD, recordAll, isDuplicateUpload, signClip, verifyClip } from "../ops/narrate-lib.mjs";
+import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD, recordAll, isDuplicateUpload, signClip, verifyClip, scriptDigest, clipProblems } from "../ops/narrate-lib.mjs";
 import { verifierFrom, PUBLIC_ENV } from "../ops/attest.mjs";
 import { testKeys } from "./helpers/attest-keys.js";
 const KEYS = testKeys();
@@ -221,9 +221,9 @@ describe("the audio check on the real scripts", () => {
    check, or stored under input-derived names, were skipped and kept. */
 describe("which recorded clips a re-run may keep", () => {
   const audio = "a".repeat(32);
-  const where = { diagram: "abg", step: "ph", verifier: KEYS.verifier };
+  const where = { diagram: "abg", step: "ph", verifier: KEYS.verifier, text: "the words" };
   const record = (e) => ({ ...e, sig: signClip("abg", "ph", e, KEYS.signer) });
-  const plain = { id: "abc", qa: QA_VERSION, textFp: "t1", audio, url: `https://x/storage/v1/object/public/explainers/abg/${audio}.mp3` };
+  const plain = { id: "abc", script: scriptDigest("the words"), qa: QA_VERSION, textFp: "t1", audio, url: `https://x/storage/v1/object/public/explainers/abg/${audio}.mp3` };
   const good = record(plain);
   it("keeps a clip approved by the current check and stored by its bytes", () => {
     expect(isCurrentClip(good, "abc", where)).toBe(true);
@@ -235,7 +235,9 @@ describe("which recorded clips a re-run may keep", () => {
     expect(isCurrentClip(record({ ...plain, url: "https://x/abg/ph-abc.mp3" }), "abc", where)).toBe(false);
     expect(isCurrentClip(good, "different-words", where)).toBe(false);
     expect(isCurrentClip(undefined, "abc", where)).toBe(false);
-    expect(() => isCurrentClip(good, "abc", { diagram: "abg", step: "ph" })).toThrow(/no public key/);
+    expect(() => isCurrentClip(good, "abc", { diagram: "abg", step: "ph", text: "the words" })).toThrow(/no public key/);
+    expect(() => isCurrentClip(good, "abc", { diagram: "abg", step: "ph", verifier: KEYS.verifier })).toThrow(/words are required/);
+    expect(isCurrentClip(good, "abc", { ...where, text: "other words" }), "the step's words changed").toBe(false);
   });
   /* Astra, PR #134 review, round 26: a record's public fields proved
      nothing, so another step's recording with this step's script id was
@@ -253,17 +255,30 @@ describe("which recorded clips a re-run may keep", () => {
     expect(isCurrentClip({ ...plain, sig: signClip("abg", "ph", plain, KEYS.other) }, "abc", where)).toBe(false);
     expect(isCurrentClip({ ...good, audio: otherAudio, url: otherStep.url }, "abc", where)).toBe(false);
   });
-  it("ships only clip records the narration job signed", async () => {
+  it("ships only clip records the narration job signed, for the source's own words", async () => {
     const { readFileSync } = await import("node:fs");
+    const { DIAGRAMS } = await import("../src/diagrams/index.js");
     const m = JSON.parse(readFileSync("src/diagrams/narration.json", "utf8"));
-    const clips = Object.entries(m.clips).flatMap(([d, steps]) => Object.entries(steps).map(([k, e]) => [d, k, e]));
-    if (!clips.length) return;
+    if (!Object.values(m.clips).some((steps) => Object.keys(steps).length)) return;
     expect(process.env[PUBLIC_ENV], `${PUBLIC_ENV} must be set to check recorded clips (HUMAN_TASKS H20)`).toBeTruthy();
-    const verifier = verifierFrom();
-    for (const [d, k, e] of clips) {
-      expect(e.qa, `${d}/${k}`).toBe(QA_VERSION);
-      expect(verifyClip(d, k, e, verifier), `${d}/${k} is signed by the narration job`).toBe(true);
-    }
+    expect(clipProblems(m, DIAGRAMS, verifierFrom())).toEqual([]);
+  });
+  /* Round 28: the narration plan's words were never compared with the
+     source, so a signed recording of other words could ship. */
+  it("refuses a signed clip whose words are not the source step's", () => {
+    const d = { id: "abg", steps: [{ key: "ph", narration: "Start with the pH." }, { key: "worked", dynamic: true, narration: "x" }] };
+    const make = (words, over = {}) => {
+      const e = { id: clipId({ text: words, voice: "marin" }), script: scriptDigest(words), textFp: textFp(words), qa: QA_VERSION, voice: "marin", model: TTS.model, audio, url: `https://x/${audio}.mp3`, ...over };
+      return { ...e, sig: signClip("abg", "ph", e, KEYS.signer) };
+    };
+    const ok = { clips: { abg: { ph: make("Start with the pH.") } } };
+    expect(clipProblems(ok, { abg: d }, KEYS.verifier)).toEqual([]);
+    expect(clipProblems({ clips: { abg: { ph: make("Start with the PaCO2.") } } }, { abg: d }, KEYS.verifier)).toEqual(["abg/ph: recorded for other words than the source's"]);
+    // a constructed textFp collision does not help: the full digest and id must match too
+    expect(clipProblems({ clips: { abg: { ph: make("Start with the PaCO2.", { textFp: textFp("Start with the pH.") }) } } }, { abg: d }, KEYS.verifier)).toEqual(["abg/ph: recorded for other words than the source's"]);
+    expect(clipProblems({ clips: { abg: { worked: make("x") } } }, { abg: d }, KEYS.verifier)).toEqual(["abg/worked: not a narrated step in the source"]);
+    const unsigned = { ...ok.clips.abg.ph, sig: undefined };
+    expect(clipProblems({ clips: { abg: { ph: unsigned } } }, { abg: d }, KEYS.verifier)).toEqual(["abg/ph: not signed by the narration job"]);
   });
 });
 

@@ -77,6 +77,7 @@ import { renderToStaticMarkup } from "react-dom/server.browser";
 import { DIAGRAMS } from "/src/diagrams/index.js";
 import { DIAGRAM_CSS } from "/src/diagrams/kit.jsx";
 import { Explainer } from "/src/explainer.jsx";
+import { proposePairs } from "/src/diagrams/match.js";
 const plain = (v) => JSON.parse(JSON.stringify(v ?? null));
 window.__pulsern = {
   css: String(DIAGRAM_CSS),
@@ -84,6 +85,12 @@ window.__pulsern = {
   data: (id) => { const d = DIAGRAMS[id]; return plain({ id: d.id, title: d.title, facts: d.facts,
     workedCaption: typeof d.dynamicCaption === "function" ? d.dynamicCaption(d.example) : null,
     steps: d.steps.map((s) => ({ key: s.key, dynamic: !!s.dynamic, focus: s.focus ?? [], caption: s.dynamic ? null : s.caption ?? null, narration: s.dynamic ? null : s.narration ?? null })) }); },
+  /* The words exactly as defined (an absent field stays absent), for the
+     pairing and narration jobs. */
+  raw: (id) => { const d = DIAGRAMS[id]; return plain({ id: d.id, title: d.title, facts: d.facts,
+    steps: d.steps.map((s) => ({ key: s.key, dynamic: s.dynamic === true ? true : undefined, caption: s.caption, narration: s.narration })) }); },
+  /* What the source's own matcher proposes for each question. */
+  propose: (questions) => plain(Object.fromEntries(questions.map((q) => [q.id, proposePairs(q).map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p }))]))),
   markup: (id, step) => renderToStaticMarkup(step == null
     ? React.createElement(Explainer, { diagram: DIAGRAMS[id] })
     : React.createElement(Explainer, { diagram: DIAGRAMS[id], startInPlayer: true, initialStep: step })),
@@ -95,6 +102,23 @@ window.__pulsern = {
   const chunks = (Array.isArray(out) ? out : [out]).flatMap((o) => o.output).filter((c) => c.type === "chunk");
   if (chunks.length !== 1) throw new Error(`renderDiagrams: expected one bundle, got ${chunks.length}`);
   return chunks[0].code;
+}
+
+/* The source tree's diagram code, loaded into a browser page by this
+   script, and a way to call into it. Used by the pairing and narration
+   jobs to read the diagrams and run the matcher without running any of
+   the tree's code in this process (Astra, PR #134 review, round 28). */
+export async function withSandbox(root, fn) {
+  const code = await bundleDiagrams(root);
+  const browser = await launchBrowser();
+  try {
+    const page = await (await browser.newContext()).newPage();
+    await page.addScriptTag({ content: code });
+    const call = (name, ...args) => page.evaluate(([n, a]) => window.__pulsern[n](...a), [name, args]);
+    return await fn(call);
+  } finally {
+    await browser.close();
+  }
 }
 
 export async function renderDiagrams({ outDir, only = null, width = 360, root = "." } = {}) {

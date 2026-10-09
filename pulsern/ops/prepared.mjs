@@ -27,6 +27,16 @@ export const list = (v, what, max = 10_000) => (Array.isArray(v) && v.length <= 
    than the one it is about to write to — so frames rendered from one tree
    can never be approved under another's key (Astra, PR #134 review, round
    22: the two jobs each checked out the moving branch name). */
+/* Everything in a checkout that differs from its commit, ignored files
+   included: a prepare step works only on a tree that is exactly its commit. */
+export function worktreeChanges(root = ".") {
+  return execFileSync("git", ["status", "--porcelain", "--ignored", "--untracked-files=all", "--", "."], { cwd: root, encoding: "utf8" })
+    .split("\n").filter((l) => l && !/^!! (pulsern\/)?node_modules\//.test(l)).join("\n");
+}
+export function requireClean(root) {
+  if (worktreeChanges(root) !== "") throw new Error(`${root} has changes beyond its commit — refusing to prepare data that may not show it`);
+}
+
 export const headCommit = (dir = ".") => execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
 
 export function readPrepared(file, kind, { into = null } = {}) {

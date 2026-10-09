@@ -97,7 +97,7 @@ describe("narration, prepared and consumed", () => {
     const r = spawnSync(process.execPath, [resolve("ops/narrate.mjs"), "--prepared", plan, "--into", into, "--dry-run"], { encoding: "utf8" });
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toMatch(/1 clip\(s\) to record/);
-    expect(JSON.parse(readFileSync(join(into, "src/diagrams/narration.json"), "utf8")).clips).toEqual({ abg: {} });
+    expect(readFileSync(join(into, "src/diagrams/narration.json"), "utf8"), "a dry run leaves the manifest as it was").toBe(JSON.stringify({ version: 1, clips: {} }));
     expect(existsSync(join(into, "reports/narration"))).toBe(true);
     rmSync(d, { recursive: true, force: true });
   });
@@ -244,4 +244,85 @@ describe("frames are rendered from the source tree by the trusted renderer", () 
       expect(existsSync(join(out, "plan.json"))).toBe(false);
     } finally { rmSync(root, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); }
   }, 300_000);
+});
+
+/* Astra, PR #134 review, round 28: the pairing and narration prepare steps
+   ran the branch's own scripts, so the matcher's proposals and the words to
+   record were whatever that script said. The trusted scripts now read the
+   source's diagrams and run its matcher in the browser sandbox. */
+describe("the pairing and narration jobs read the source through the sandbox", () => {
+  const { cpSync } = require("node:fs");
+  const git = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8" });
+  const source = (edit) => {
+    const root = mkdtempSync(join(tmpdir(), "sandbox-src-"));
+    cpSync("src", join(root, "src"), { recursive: true });
+    cpSync("package.json", join(root, "package.json"));
+    edit(root);
+    git(root, "init", "-q"); git(root, "add", "-A");
+    git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "source");
+    return root;
+  };
+  const editFile = (root, rel, f) => writeFileSync(join(root, rel), f(readFileSync(join(root, rel), "utf8")));
+
+  it("runs the source's own matcher and reads its own words", async () => {
+    const { withSandbox } = await import("../ops/render-diagrams.mjs");
+    const { proposePairs } = await import("../src/diagrams/match.js");
+    const q = { id: 1, stem: "The client's potassium is 6.2 mEq/L. Which finding is expected?", options: ["a", "b"], answer: "a", rationale: "Peaked T waves." };
+    const here = await withSandbox(".", (call) => call("propose", [q]));
+    expect(here["1"]).toEqual(proposePairs(q).map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p })));
+    // a source whose matcher reads nothing, and whose ABG step says other words
+    const root = source((r) => {
+      editFile(r, "src/diagrams/match.js", (t) => t.replace("export function proposePairs(item) {", "export function proposePairs(item) {\n  return [];"));
+      editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below"));
+    });
+    try {
+      const got = await withSandbox(root, async (call) => ({ p: await call("propose", [q]), abg: await call("raw", "abg") }));
+      expect(got.p["1"]).toEqual([]);
+      expect(got.abg.steps[0].narration).toMatch(/^Begin with the pH/);
+      expect(got.abg.steps.find((s) => s.dynamic)).toBeTruthy();
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }, 300_000);
+
+  it("prepares the narration plan from the source tree, at its commit, and refuses a dirty tree", () => {
+    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below")));
+    const out = join(mkdtempSync(join(tmpdir(), "narr-out-")), "plan.json");
+    try {
+      const r = spawnSync(process.execPath, ["ops/narrate.mjs", "--prepare", out, "--source", root], { encoding: "utf8", timeout: 240_000 });
+      expect(r.status, r.stderr).toBe(0);
+      const plan = JSON.parse(readFileSync(out, "utf8"));
+      expect(plan.commit).toBe(git(root, "rev-parse", "HEAD").trim());
+      expect(plan.diagrams.find((d) => d.id === "abg").steps[0].narration).toMatch(/^Begin with the pH/);
+      writeFileSync(join(root, "src/stray.txt"), "x\n");
+      const dirty = spawnSync(process.execPath, ["ops/narrate.mjs", "--prepare", out + ".2", "--source", root], { encoding: "utf8", timeout: 240_000 });
+      expect(dirty.status).not.toBe(0);
+      expect(dirty.stderr + dirty.stdout).toMatch(/changes beyond its commit/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }, 300_000);
+});
+
+/* Round 28: a dry run without the public key treated every clip as
+   unverified, deleted them, and saved the emptied manifest. */
+describe("a narration dry run changes nothing", () => {
+  it("leaves a populated manifest byte-identical without the public key", async () => {
+    const { testKeys } = await import("./helpers/attest-keys.js");
+    const { signClip, scriptDigest, textFp, clipId, QA_VERSION, TTS } = await import("../ops/narrate-lib.mjs");
+    const keys = testKeys(), words = "Start with the pH.", audio = "c".repeat(32);
+    const e = { id: clipId({ text: words, voice: "marin" }), script: scriptDigest(words), qa: QA_VERSION, audio, voice: "marin", model: TTS.model, textFp: textFp(words), url: `https://x/${audio}.mp3` };
+    const populated = JSON.stringify({ version: 1, clips: { abg: { ph: { ...e, sig: signClip("abg", "ph", e, keys.signer) }, gone: { ...e } } } }, null, 2) + "\n";
+    const d = tmp();
+    const into = join(d, "branch");
+    mkdirSync(join(into, "src/diagrams"), { recursive: true });
+    writeFileSync(join(into, "src/diagrams/narration.json"), populated);
+    const run = (...x) => execFileSync("git", x, { cwd: into, encoding: "utf8" }).trim();
+    run("init", "-q"); run("add", "-A"); run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base");
+    const plan = join(d, "plan.json");
+    writeFileSync(plan, JSON.stringify({ kind: "narration", commit: run("rev-parse", "HEAD"), diagrams: [{ id: "abg", steps: [{ key: "ph", narration: words }] }] }));
+    const env = { ...process.env };
+    delete env.PULSERN_ATTEST_PUBLIC_KEY; delete env.PULSERN_ATTEST_PRIVATE_KEY;
+    const r = spawnSync(process.execPath, [resolve("ops/narrate.mjs"), "--prepared", plan, "--into", into, "--dry-run"], { encoding: "utf8", timeout: 120_000, env });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toMatch(/nothing is changed/);
+    expect(readFileSync(join(into, "src/diagrams/narration.json"), "utf8")).toBe(populated);
+    rmSync(d, { recursive: true, force: true });
+  }, 180_000);
 });

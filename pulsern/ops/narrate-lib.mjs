@@ -298,14 +298,35 @@ export const narratedSteps = (diagram) => diagram.steps.filter((s) => !s.dynamic
    hash and URL. Its public fields alone prove nothing: a record copied
    from another step, with this step's script id, used to be skipped as
    current (Astra, PR #134 review, round 26). */
-const clipFields = (diagram, step, e) => [diagram, step, e.id ?? null, e.textFp ?? null, e.qa ?? null, e.audio ?? null, e.url ?? null];
+const clipFields = (diagram, step, e) => [diagram, step, e.id ?? null, e.script ?? null, e.textFp ?? null, e.qa ?? null, e.voice ?? null, e.model ?? null, e.audio ?? null, e.url ?? null];
+/* The exact words a clip says, as a full SHA-256 — signed with the record
+   and compared with the source's own step before anything ships (round 28:
+   the plan's words were not checked against the source, and the app's
+   32-bit fingerprint is no defence against a constructed collision). */
+export const scriptDigest = (text) => createHash("sha256").update(String(text)).digest("hex");
 export const signClip = (diagram, step, e, signer) => signer.sign("narration-clip", clipFields(diagram, step, e));
 export function verifyClip(diagram, step, e, verifier) {
   if (typeof verifier?.verify !== "function") throw new Error("verifyClip: no public key to check the signature with");
   return !!e && verifier.verify("narration-clip", clipFields(diagram, step, e), e.sig);
 }
-export function isCurrentClip(entry, id, { diagram, step, verifier } = {}) {
-  return !!entry && entry.id === id && entry.qa === QA_VERSION && /^[0-9a-f]{32}$/.test(entry.audio ?? "") && String(entry.url ?? "").endsWith(`/${entry.audio}.mp3`) &&
+/* What would stop the shipped manifest: each record must be for a narrated
+   step that exists, say exactly that step's words in its recorded voice,
+   pass the current check, and carry the narration job's signature. */
+export function clipProblems(manifest, diagrams, verifier) {
+  const out = [];
+  for (const [d, steps] of Object.entries(manifest?.clips ?? {})) for (const [k, e] of Object.entries(steps ?? {})) {
+    const step = diagrams[d] ? narratedSteps(diagrams[d]).find((s) => s.key === k) : null;
+    if (!step) { out.push(`${d}/${k}: not a narrated step in the source`); continue; }
+    if (e.qa !== QA_VERSION) out.push(`${d}/${k}: checked under an older rule`);
+    if (e.script !== scriptDigest(step.narration) || e.textFp !== textFp(step.narration) || e.id !== clipId({ text: step.narration, voice: e.voice, model: e.model })) out.push(`${d}/${k}: recorded for other words than the source's`);
+    if (!verifyClip(d, k, e, verifier)) out.push(`${d}/${k}: not signed by the narration job`);
+  }
+  return out;
+}
+
+export function isCurrentClip(entry, id, { diagram, step, verifier, text } = {}) {
+  if (typeof text !== "string") throw new Error("isCurrentClip: the step's words are required");
+  return !!entry && entry.id === id && entry.script === scriptDigest(text) && entry.qa === QA_VERSION && /^[0-9a-f]{32}$/.test(entry.audio ?? "") && String(entry.url ?? "").endsWith(`/${entry.audio}.mp3`) &&
     verifyClip(diagram, step, entry, verifier);
 }
 

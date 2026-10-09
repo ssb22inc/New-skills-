@@ -56,7 +56,7 @@ jobs:
     timeout-minutes: 60
     defaults:
       run:
-        working-directory: pulsern
+        working-directory: trusted/pulsern
     steps:
       # Only a plain feature-branch name is accepted, and never the default
       # branch: "refs/heads/main", tags, SHAs and other aliases are refused
@@ -103,25 +103,44 @@ jobs:
         run: |
           [ "$REF" = "refs/heads/$DEFAULT_BRANCH" ] || { echo "::error::Dispatch this workflow from $DEFAULT_BRANCH; choose the branch to work on with the branch input."; exit 1; }
 
+      # The default branch's scripts (this run's own commit) do the work; the
+      # branch is checked out beside them as data. Nothing from the branch is
+      # installed, and its code runs only inside the browser (round 28).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
+          path: branch
           persist-credentials: false
 
       - name: Pin the commit
         id: pin
+        working-directory: branch
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Refuse links and special files in the branch checkout
+        working-directory: .
+        run: |
+          bad=$(find branch -path branch/.git -prune -o \( -type l -o \( ! -type f ! -type d \) \) -print)
+          if [ -n "$bad" ]; then echo "::error::Links or special files found; refusing to run:"; echo "$bad"; exit 1; fi
+
+      # No Actions cache (round 24).
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
 
-      - name: Turn the branch into data (no secrets)
+      - name: Read the branch's narration with the default branch's scripts (no secrets)
         run: |
           mkdir -p "$RUNNER_TEMP/prepared"
-          node ops/narrate.mjs --prepare "$RUNNER_TEMP/prepared/narration.json"
+          node ops/narrate.mjs --prepare "$RUNNER_TEMP/prepared/narration.json" --source "$GITHUB_WORKSPACE/branch/pulsern"
 
       - uses: actions/upload-artifact@v4
         with:

@@ -460,20 +460,24 @@ describe("paid workflows never run branch code with secrets", () => {
      nothing proved they showed the pinned source. The diagram review's
      prepare job now runs only the default branch's scripts, with the branch
      checked out beside them as data. */
-  it("pulsern-diagram-review.yml: the prepare job renders the branch with the default branch's scripts", () => {
-    const prep = jobs("pulsern-diagram-review.yml").prepare;
+  it.each([
+    ["pulsern-diagram-review.yml", /node ops\/review-diagrams\.mjs --prepare "\$RUNNER_TEMP\/prepared\/review" --source "\$GITHUB_WORKSPACE\/branch\/pulsern"/],
+    ["pulsern-diagram-map.yml", /node ops\/map-diagrams\.mjs --prepare "\$RUNNER_TEMP\/prepared\/map\.json" --source "\$GITHUB_WORKSPACE\/branch\/pulsern"/],
+    ["pulsern-narrate.yml", /node ops\/narrate\.mjs --prepare "\$RUNNER_TEMP\/prepared\/narration\.json" --source "\$GITHUB_WORKSPACE\/branch\/pulsern"/],
+  ])("%s: the prepare job reads the branch with the default branch's scripts (rounds 25, 28)", (f, command) => {
+    const prep = jobs(f).prepare;
     const st = steps(prep);
     expect(prep).toMatch(/defaults:\n\s+run:\n\s+working-directory: trusted\/pulsern/);
     const trusted = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@") && /ref: \$\{\{ github\.sha \}\}\n\s+path: trusted\n\s+persist-credentials: false/.test(s.text));
     const branch = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@") && /path: branch/.test(s.text));
     expect(trusted).toBeGreaterThanOrEqual(0);
     expect(branch).toBeGreaterThan(trusted);
-    // nothing runs in the branch checkout but reading its commit and refusing links
+    // nothing runs in the branch checkout but reading its commit
     for (const s of st.filter((s) => s.run)) {
       if (s.wd === "branch") expect(s.run.trim()).toBe('echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"');
       else expect(s.wd === null || s.wd === ".", s.name).toBe(true);
     }
-    expect(prep).toMatch(/node ops\/review-diagrams\.mjs --prepare "\$RUNNER_TEMP\/prepared\/review" --source "\$GITHUB_WORKSPACE\/branch\/pulsern"/);
+    expect(prep).toMatch(command);
     expect(prep).not.toMatch(/npm (ci|install)[^\n]*branch/);
   });
 });

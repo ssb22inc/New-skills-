@@ -18,7 +18,7 @@
    recording fails, so old audio is never played over new words.
 
    Usage: node ops/narrate.mjs [--voice marin] [--only diagramId] [--dry-run]
-          node ops/narrate.mjs --prepare plan.json          (no secrets: reads the steps)
+          node ops/narrate.mjs --prepare plan.json [--source <tree>/pulsern]   (no secrets: reads the steps)
           node ops/narrate.mjs --prepared plan.json --into <branch>/pulsern [--voice …]
    Env:   OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PULSERN_ATTEST_PRIVATE_KEY,
           PULSERN_ATTEST_PUBLIC_KEY (not needed for --dry-run or --prepare)
@@ -30,8 +30,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { readPrepared, narrationPlan, headCommit } from "./prepared.mjs";
-import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll, isDuplicateUpload, signClip } from "./narrate-lib.mjs";
+import { readPrepared, narrationPlan, headCommit, requireClean } from "./prepared.mjs";
+import { resolve } from "node:path";
+import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll, isDuplicateUpload, signClip, scriptDigest } from "./narrate-lib.mjs";
 import { signerFrom, verifierFrom, PUBLIC_ENV } from "./attest.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
@@ -39,6 +40,7 @@ const DRY = process.argv.includes("--dry-run");
 const VOICE = arg("--voice", "marin");
 const ONLY = arg("--only");
 const PREPARE = arg("--prepare");
+const SOURCE = arg("--source");   // with --prepare: the tree to read, by this script, in a browser sandbox
 const PREPARED = arg("--prepared");
 const INTO = arg("--into");
 if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
@@ -48,7 +50,8 @@ if (INTO) process.chdir(INTO);   // every path below is the branch checkout's
 /* Clip records are signed by this job and only a signed record counts as
    recorded (round 26). A dry run without the public key treats every clip
    as unrecorded. */
-const KEYS = PREPARE ? null : DRY ? (process.env[PUBLIC_ENV] ? verifierFrom() : { verify: () => false }) : signerFrom();
+const KEYS = PREPARE ? null : DRY ? (process.env[PUBLIC_ENV] ? verifierFrom() : { verify: () => false, unverifiable: true }) : signerFrom();
+if (KEYS?.unverifiable) console.log(`${PUBLIC_ENV} is not set: existing clips cannot be checked, so this dry run lists every clip (nothing is changed).`);
 const MANIFEST = "src/diagrams/narration.json";
 const BUCKET = "explainers";
 const startedAt = new Date().toISOString();
@@ -95,7 +98,9 @@ const report = { startedAt, voice: VOICE, model: TTS.model, qaModel: QA_MODEL, q
 function save() {
   mkdirSync("reports/narration", { recursive: true });
   const sorted = { version: 1, clips: Object.fromEntries(Object.entries(manifest.clips).sort(([a], [b]) => a.localeCompare(b))) };
-  writeFileSync(MANIFEST, JSON.stringify(sorted, null, 2) + "\n");
+  /* A dry run changes no record: only its own report is written (Astra,
+     PR #134 review, round 28: a keyless dry run emptied the manifest). */
+  if (!DRY) writeFileSync(MANIFEST, JSON.stringify(sorted, null, 2) + "\n");
   writeFileSync(`${REPORT}.json`, JSON.stringify(report, null, 2) + "\n");
   writeFileSync(`${REPORT}.md`, [
     `# Narration run — voice \`${VOICE}\``, "",
@@ -113,8 +118,26 @@ function save() {
    given one, otherwise from the registry through Vite (local runs, and the
    secret-less --prepare job). */
 let vite = null;
+let PREPARE_COMMIT = null;
 async function loadSteps() {
   if (PLAN) return PLAN;
+  if (PREPARE) {
+    /* The words are read from the source by this script, inside the
+       browser, where the source's code cannot reach this process — so the
+       plan is the pinned source's narration, not a branch script's
+       (Astra, PR #134 review, round 28). */
+    const root = resolve(SOURCE ?? ".");
+    requireClean(root);
+    const { withSandbox } = await import("./render-diagrams.mjs");
+    const raw = await withSandbox(root, async (call) => {
+      const out = [];
+      for (const id of await call("ids")) out.push(await call("raw", id));
+      return out;
+    });
+    requireClean(root);
+    PREPARE_COMMIT = headCommit(root);
+    return raw.map((d) => ({ id: d.id, steps: narratedSteps(d).map((s) => ({ key: s.key, narration: s.narration })) }));
+  }
   const { createServer } = await import("vite");
   vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
   const { DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js");
@@ -125,7 +148,7 @@ let code = 0;
 try {
   const diagrams = await loadSteps();
   if (PREPARE) {
-    writeFileSync(PREPARE, JSON.stringify({ kind: "narration", commit: headCommit(), diagrams }, null, 2) + "\n");
+    writeFileSync(PREPARE, JSON.stringify({ kind: "narration", commit: PREPARE_COMMIT, diagrams }, null, 2) + "\n");
     console.log(`Prepared ${diagrams.reduce((n, d) => n + d.steps.length, 0)} narration step(s) → ${PREPARE}`);
     process.exit(0);
   }
@@ -135,15 +158,15 @@ try {
     manifest.clips[d.id] ??= {};
     for (const s of d.steps) {
       const id = clipId({ text: s.narration, voice: VOICE });
-      if (isCurrentClip(manifest.clips[d.id][s.key], id, { diagram: d.id, step: s.key, verifier: KEYS })) { report.skippedUnchanged++; continue; }
+      if (isCurrentClip(manifest.clips[d.id][s.key], id, { diagram: d.id, step: s.key, verifier: KEYS, text: s.narration })) { report.skippedUnchanged++; continue; }
       /* The script changed (or was never recorded): drop any old clip NOW, so
          a failure below can never leave stale audio attached to new words. */
-      delete manifest.clips[d.id][s.key];
+      if (!DRY) delete manifest.clips[d.id][s.key];
       work.push({ d, s, id });
     }
     // steps that no longer exist lose their clips
     const live = new Set(d.steps.map((s) => s.key));
-    for (const k of Object.keys(manifest.clips[d.id])) if (!live.has(k)) delete manifest.clips[d.id][k];
+    if (!DRY) for (const k of Object.keys(manifest.clips[d.id])) if (!live.has(k)) delete manifest.clips[d.id][k];
   }
   console.log(`${work.length} clip(s) to record, ${report.skippedUnchanged} unchanged.`);
   if (DRY) { save(); console.log("Dry run: nothing recorded."); }
@@ -175,7 +198,7 @@ try {
            this clip — anything else is a real failure. */
         if (error && !isDuplicateUpload(error)) throw new Error(`upload: ${error.message}`);
         const record = {
-          id, qa: QA_VERSION, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(check.similarity * 1000) / 1000,
+          id, script: scriptDigest(s.narration), qa: QA_VERSION, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(check.similarity * 1000) / 1000,
           url: `${process.env.SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${path}`, bytes: mp3.length,
         };
         manifest.clips[d.id][s.key] = { ...record, sig: signClip(d.id, s.key, record, KEYS) };

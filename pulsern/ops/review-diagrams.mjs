@@ -21,17 +21,14 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { execFileSync } from "node:child_process";
 import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
 import { sourceKey, signApproval } from "./diagram-attest.mjs";
 import { signerFrom } from "./attest.mjs";
 import { DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest, diagramSources } from "./review-diagrams-lib.mjs";
-import { readPrepared, reviewPlan, readFrame, headCommit, reviewEntries, localEntries, checkInventory } from "./prepared.mjs";
+import { readPrepared, reviewPlan, readFrame, headCommit, reviewEntries, localEntries, checkInventory, requireClean } from "./prepared.mjs";
 import { stepInventory, frameIds } from "./diagram-attest.mjs";
 
-/* Everything that differs from the commit, ignored files included. */
-const worktree = (root) => execFileSync("git", ["status", "--porcelain", "--ignored", "--untracked-files=all", "--", "."], { cwd: root, encoding: "utf8" }).split("\n").filter((l) => l && !/^!! (pulsern\/)?node_modules\//.test(l)).join("\n");
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const ONLY = arg("--only");
 const FORCE = process.argv.includes("--force");
@@ -70,7 +67,7 @@ if (PREPARED) {
   const { renderDiagrams } = await import("./render-diagrams.mjs");
   const root = SOURCE ? resolve(SOURCE) : ".";
   /* The tree must be exactly the pinned commit, before and after rendering. */
-  if (PREPARE && worktree(root) !== "") throw new Error(`${root} has changes beyond its commit — refusing to prepare frames that may not show it`);
+  if (PREPARE) requireClean(root);
   const { gallery, lintFailures, data } = await renderDiagrams({ outDir: resolve(tmpdir(), `pulsern-diagram-review-${Date.now()}`), only: ONLY, root });
   if (lintFailures.length) {
     console.error("Layout lint failed — fix these before spending on a review:");
@@ -80,7 +77,7 @@ if (PREPARED) {
   entries = localEntries(Object.values(data), gallery, (p) => readFileSync(p), ONLY);
   checkInventory(entries.map((x) => x.data), stepInventory(root), ONLY);
   if (PREPARE) {
-    if (worktree(root) !== "") throw new Error(`${root} has changes beyond its commit — refusing to prepare frames that may not show it`);
+    requireClean(root);
     mkdirSync(PREPARE, { recursive: true });
     for (const { data, pngs } of entries) {
       mkdirSync(join(PREPARE, data.id), { recursive: true });
