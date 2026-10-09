@@ -248,47 +248,65 @@ export class EncryptedVaultBackend implements VaultBackend {
   }
 
   /** Writes the next version with compare-and-swap; the version is read from
-   * the store, never from the caller, so a caller cannot roll a slot back. */
-  async #write(clientId: string, name: string, value: string, quarantined: boolean): Promise<SecretRecord> {
+   * the store, never from the caller, so a caller cannot roll a slot back.
+   *
+   * EVERY WRITE INVALIDATES AN IN-FLIGHT UNLOCK WHEN IT ENDS (cross-family
+   * findings X6-08, X7-06). The X6-08 bump ran only at the start, so an unlock
+   * that BEGAN after it captured the newer generation, read the old record
+   * before the CAS, and installed it once the write finished. The capability
+   * removed: an unlock overlapping any part of a write installing what it
+   * read. One bump at the end covers both orders — an unlock that started
+   * before the write and ends after it, and one that started inside it — and
+   * runs however the write ends. (Quarantines no longer come through here:
+   * the breach runbook writes them with `#replaceExactly`, X7-07.) */
+  async #write(clientId: string, name: string, value: string): Promise<SecretRecord> {
     if (!clientId || !name) throw new VaultError("vault writes require a clientId and a name");
     const slot = slotKey(clientId, name);
-    // EVERY WRITE INVALIDATES AN IN-FLIGHT UNLOCK (cross-family finding X6-08):
-    // an unlock that read the old value before this write must not install it
-    // after. A quarantine also drops the cached plaintext FIRST, before any
-    // await, so a later failure cannot leave the compromised value readable.
-    this.#generation += 1;
-    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);
-    for (let i = 0; i < CAS_RETRIES; i++) {
-      const prior = await this.#loadRaw(clientId, name);
-      const version = (prior?.sealed.v ?? 0) + 1;
-      const sealed = await this.#seal(slot, value, version, this.#now(), quarantined);
-      if (await this.#store.compareAndSwap(slot, prior?.raw ?? null, JSON.stringify(sealed))) {
-        await this.#advanceManifest(clientId, name, version);
-        if (this.#unlockedClient === clientId) {
-          if (quarantined) this.#plain.delete(name);
-          else this.#plain.set(name, Object.freeze({ value, version }));
+    try {
+      for (let i = 0; i < CAS_RETRIES; i++) {
+        const prior = await this.#loadRaw(clientId, name);
+        const version = (prior?.sealed.v ?? 0) + 1;
+        const sealed = await this.#seal(slot, value, version, this.#now(), false);
+        if (await this.#store.compareAndSwap(slot, prior?.raw ?? null, JSON.stringify(sealed))) {
+          await this.#advanceManifest(clientId, name, version);
+          if (this.#unlockedClient === clientId) this.#plain.set(name, Object.freeze({ value, version }));
+          return Object.freeze({ value, version });
         }
-        return Object.freeze({ value: quarantined ? "" : value, version });
       }
+      throw new VaultError(`secret "${name}" could not be written — concurrent writers kept winning`);
+    } finally {
+      this.#generation += 1;
     }
-    throw new VaultError(`secret "${name}" could not be written — concurrent writers kept winning`);
   }
 
   /** One compare-and-swap over exactly `expectedRaw`; false if anything else
    * wrote the slot since it was read. Never retries onto newer state. */
-  async #replaceExactly(clientId: string, name: string, expectedRaw: string, priorVersion: number, value: string): Promise<boolean> {
+  async #replaceExactly(clientId: string, name: string, expectedRaw: string, priorVersion: number, value: string, quarantined = false): Promise<string | null> {
     const slot = slotKey(clientId, name);
+    // A QUARANTINE INVALIDATES AN IN-FLIGHT UNLOCK WHEN IT STARTS, TOO (X6-08):
+    // an unlock that read the compromised record and finished before this
+    // write ended would otherwise make it readable for the rest of the write.
+    // The cached plaintext is dropped first, before any await.
     this.#generation += 1;
-    const version = priorVersion + 1;
-    const sealed = await this.#seal(slot, value, version, this.#now(), false);
-    if (!(await this.#store.compareAndSwap(slot, expectedRaw, JSON.stringify(sealed)))) return false;
-    await this.#advanceManifest(clientId, name, version);
-    if (this.#unlockedClient === clientId) this.#plain.set(name, Object.freeze({ value, version }));
-    return true;
+    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);
+    try {
+      const version = priorVersion + 1;
+      const sealed = JSON.stringify(await this.#seal(slot, value, version, this.#now(), quarantined));
+      if (!(await this.#store.compareAndSwap(slot, expectedRaw, sealed))) return null;
+      await this.#advanceManifest(clientId, name, version);
+      if (this.#unlockedClient === clientId) {
+        if (quarantined) this.#plain.delete(name);
+        else this.#plain.set(name, Object.freeze({ value, version }));
+      }
+      return sealed;
+    } finally {
+      // X7-06: an unlock overlapping the end of this write refuses too.
+      this.#generation += 1;
+    }
   }
 
   async put(clientId: string, name: string, value: string): Promise<SecretRecord> {
-    return this.#write(clientId, name, value, false);
+    return this.#write(clientId, name, value);
   }
 
   /** Decrypts ONE client's secrets for synchronous reads. Unlocking another
@@ -365,7 +383,7 @@ export class EncryptedVaultBackend implements VaultBackend {
         // OVER THE EXACT RECORD THE DECISION WAS MADE ON (X6-07): `put` re-read
         // the slot, so a rotation issued against version 1 could overwrite a
         // quarantine written as version 2 and make the slot readable again.
-        if (!(await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, next))) {
+        if ((await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, next)) === null) {
           failed.push(name);
           continue;
         }
@@ -378,15 +396,35 @@ export class EncryptedVaultBackend implements VaultBackend {
     return Object.freeze({ rotated: Object.freeze(rotated), failed: Object.freeze(failed) });
   }
 
-  /** Breach runbook (§15): revoke → rotate. A known-compromised secret never
-   * stays readable: if a replacement cannot be issued it is QUARANTINED, and
-   * after a successful replacement the old value is revoked at the provider. */
+  /** Breach runbook (§15): quarantine → revoke → rotate. A known-compromised
+   * secret never stays readable: it is QUARANTINED before anything external is
+   * awaited, revoked at the provider, and replaced only over that quarantine.
+   *
+   * QUARANTINE FIRST, PERSISTED (cross-family finding X7-07, 2026-10-09). The
+   * revoker and issuer were awaited while the compromised value was still the
+   * cached and stored record, so a slow provider kept it readable for as long
+   * as it took, and a store failure afterwards left it installed. The cached
+   * plaintext is dropped synchronously and an in-flight unlock invalidated
+   * before the first await; the quarantine is written over the exact record
+   * read before the revoker runs. The capability removed: reading a value the
+   * breach runbook has been asked to retire.
+   *
+   * COMPLETED OVER ITS OWN QUARANTINE, NEVER OVER NEWER STATE (cross-family
+   * finding X7-08). The replacement used `put`, which re-reads and retries, so
+   * a stale breach rotation could overwrite a newer quarantine or a newer
+   * operator write. It now replaces exactly the quarantine record it wrote;
+   * anything written since wins, and the issued value is reported unused. */
   async revokeAndRotate(clientId: string, name: string, issue: SecretIssuer, revoke: SecretRevoker): Promise<SecretRecord> {
     if (typeof revoke !== "function") throw new VaultError("revokeAndRotate requires a provider revoker");
+    if (this.#unlockedClient === clientId) this.#plain.delete(name);
     const loaded = await this.#loadRaw(clientId, name);
     if (!loaded) throw new VaultError(`secret "${name}" not found for scoped client`);
     if (loaded.sealed.q) throw new VaultError(`secret "${name}" is already quarantined`);
     const current = await this.#open(slotKey(clientId, name), `secret "${name}"`, loaded.sealed);
+    const quarantine = await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, "", true);
+    if (quarantine === null) {
+      throw new VaultError(`secret "${name}" changed while its breach rotation began — nothing was revoked or issued; re-run the runbook against the current value`);
+    }
     // REVOKE FIRST, WHATEVER HAPPENS NEXT (cross-family finding X6-06). The
     // runbook is revoke → rotate; issuing first meant a failed issue never
     // reached the provider, and local quarantine cannot invalidate a stolen
@@ -404,16 +442,18 @@ export class EncryptedVaultBackend implements VaultBackend {
       next = null;
     }
     if (typeof next !== "string" || next.length === 0 || next === current) {
-      await this.#write(clientId, name, "", true);
       throw new VaultError(
         `secret "${name}" could not be re-issued — QUARANTINED: it can no longer be read; ${revoked ? "it was revoked at the provider" : "revoking it at the provider ALSO failed — revoke it by hand"}`,
       );
     }
-    const rec = await this.put(clientId, name, next);
+    const qVersion = parseSealed(quarantine, `secret "${name}"`).v;
+    if ((await this.#replaceExactly(clientId, name, quarantine, qVersion, next)) === null) {
+      throw new VaultError(`secret "${name}" was written by something else during its breach rotation — the newer record stands and the issued replacement was NOT installed; revoke the unused replacement at the provider`);
+    }
     if (!revoked) {
       throw new VaultError(`secret "${name}" was replaced, but revoking the old value at the provider failed — it may still be valid there`);
     }
-    return rec;
+    return Object.freeze({ value: next, version: qVersion + 1 });
   }
 
   /** Re-seals every record of `clientId` under the current KEK, so a retired
