@@ -54,8 +54,8 @@ describe("what a student sees first", () => {
     expect(html).toMatch(/aria-current="step"/);
   });
   it("shows the question's own values, not the textbook example", () => {
-    const html = renderToStaticMarkup(<Explainer diagram={DIAGRAMS.abg} params={{ ph: 7.52, paco2: 42, hco3: 34 }} />);
-    expect(html).toContain("7.52");
+    const html = renderToStaticMarkup(<Explainer diagram={DIAGRAMS.abg} params={{ ph: 7.49, paco2: 42, hco3: 30 }} />);
+    expect(html).toContain("7.49");
     expect(html).toContain("Metabolic alkalosis");
   });
 });

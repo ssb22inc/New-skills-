@@ -287,6 +287,15 @@ describe("digests", () => {
       const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 2;
       return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(Buffer.from([0, n, n, n]))), chunk("IEND", Buffer.alloc(0))]);
     };
+    /* The same pixels with a chunk added just before IEND. */
+    const withChunk = (png, type, data) => Buffer.concat([png.subarray(0, png.length - 12), chunk(type, data), png.subarray(png.length - 12)]);
+    const secret = Buffer.from("Comment\0SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiJ9.service");
+    /* Valid zlib data with bytes after the end of the stream. */
+    const trailingIdat = (n) => {
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 2;
+      const z = Buffer.concat([deflateSync(Buffer.from([0, n, n, n])), Buffer.from("patient: Jane Doe")]);
+      return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", z), chunk("IEND", Buffer.alloc(0))]);
+    };
     function repoWith(changes) {
       const dir = mkdtempSync(join(tmpdir(), "astra-bytes-"));
       const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
@@ -358,6 +367,13 @@ describe("digests", () => {
         ["pulsern/public/tail.png", PNG(1), html],
         // a real PNG under another image name
         ["pulsern/public/photo.jpg", PNG(1), PNG(2)],
+        // round 10: the pixels are identical, only metadata changed — a
+        // secret in a text chunk with a valid CRC, then the same in EXIF
+        ["pulsern/public/same.png", PNG(1), withChunk(PNG(1), "tEXt", secret)],
+        ["pulsern/public/exif.png", PNG(1), withChunk(PNG(1), "eXIf", secret)],
+        ["pulsern/public/private.png", PNG(1), withChunk(PNG(1), "prVt", secret)],
+        // bytes hidden after the end of the compressed image data
+        ["pulsern/public/idat.png", PNG(1), trailingIdat(1)],
       ]) {
         const dir = repoWith([[path, a, b]]);
         expect(() => collectChanges("b", "HEAD", { cwd: dir }), path).toThrow(/cannot pass/);
@@ -455,6 +471,13 @@ describe("digests", () => {
       };
       expect(isStrictWebp(webp())).toBe(true);
       expect(isStrictWebp(Buffer.concat([webp(), Buffer.from("<script>")]))).toBe(false);
+      // metadata chunks, even well-formed ones, are refused
+      const exif = Buffer.concat([Buffer.from("EXIF"), Buffer.from([8, 0, 0, 0]), Buffer.from("secret!!")]);
+      expect(isStrictWebp(webp(exif))).toBe(false);
+      // PNG: ancillary text and trailing image data are refused; pixel chunks are not
+      expect(isStrictPng(withChunk(PNG(1), "tEXt", secret))).toBe(false);
+      expect(isStrictPng(trailingIdat(1))).toBe(false);
+      expect(isStrictPng(withChunk(PNG(1), "pHYs", Buffer.from([0, 0, 11, 19, 0, 0, 11, 19, 1])))).toBe(true);
     });
   });
 

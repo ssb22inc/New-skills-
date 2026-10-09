@@ -12,8 +12,11 @@
    compensation is also checked, on BOTH sides (Astra, PR #133 review,
    finding 7; PR #134 review, finding 5): compensation never overshoots,
    and the diagram has no timeline from which to assume too little simply
-   means "early". Outside the expected range either way, the reading keeps
-   the ROME label and says a second, mixed disorder is possible.
+   means "early". Outside the expected range either way, no single
+   compensated disorder is asserted (Astra, PR #134 review, round 10): the
+   ROME result is given only as a preliminary pattern, compensation is null,
+   and the reading names the second disorder the out-of-range value points
+   to.
 
    Expected-compensation ranges (standard bedside rules):
      metabolic acidosis    PaCO₂ = 1.5 × HCO₃⁻ + 8 ± 2 (Winter's formula)
@@ -54,10 +57,22 @@ export function compensationLimit(primary, kind, { paco2, hco3 }) {
   }
   return null;
 }
-const mixedNote = (c) => c.beyond
-  ? ` But ${c.name} ${c.value} is beyond what compensation alone usually reaches (about ${c.expected[0]}–${c.expected[1]}), so a second, mixed disorder is possible.`
-  : ` But ${c.name} ${c.value} is short of the compensation expected (about ${c.expected[0]}–${c.expected[1]}), so a second, mixed disorder is possible.`;
 const offRange = (c) => !!(c && (c.beyond || c.short));
+/* The second disorder an out-of-range compensating value points to: a
+   PaCO₂ lower than expected is an added respiratory alkalosis, higher an
+   added respiratory acidosis; an HCO₃⁻ lower than expected an added
+   metabolic acidosis, higher an added metabolic alkalosis. */
+const secondDisorder = (c) => {
+  const low = c.value < c.expected[0];
+  return c.name === "PaCO₂" ? (low ? "respiratory alkalosis" : "respiratory acidosis") : (low ? "metabolic acidosis" : "metabolic alkalosis");
+};
+/* Off the expected range: the ROME result is only a preliminary pattern. */
+const mixedResult = (primary, kind, rome, c) => ({
+  disorder: `${primary} ${kind}`, primary, compensation: null, romePattern: rome, mixedPossible: true, mixed: secondDisorder(c),
+  reading: `ROME pattern only: ${primary} ${kind}${rome === "none" ? ", uncompensated" : rome === "partial" ? ", partially compensated" : ", fully compensated"}. `
+    + `But ${c.name} ${c.value} is ${c.beyond ? "beyond what compensation alone usually reaches" : "short of the compensation expected"} (about ${c.expected[0]}–${c.expected[1]}), `
+    + `which suggests a mixed disorder — ${primary} ${kind} with ${secondDisorder(c)} — rather than a single compensated one.`,
+});
 
 /* Returns the disorder, the compensation state, and a one-line reading.
    "acid"/"base" describe each value's chemical push; CO₂ is an acid, so a
@@ -85,8 +100,9 @@ export function interpretAbg({ ph, paco2, hco3 }) {
       const primary = co2 === want ? "respiratory" : "metabolic";
       const kind = want === "acid" ? "acidosis" : "alkalosis";
       const c = compensationLimit(primary, kind, { paco2, hco3 });
-      return { disorder: `${primary} ${kind}`, primary, compensation: "full", mixedPossible: offRange(c),
-        reading: `${cap(primary)} ${kind}, fully compensated — pH is back in range, leaning ${want === "acid" ? "acidic (below 7.40)" : "alkaline (above 7.40)"}.${offRange(c) ? mixedNote(c) : ""}` };
+      if (offRange(c)) return mixedResult(primary, kind, "full", c);
+      return { disorder: `${primary} ${kind}`, primary, compensation: "full", mixedPossible: false,
+        reading: `${cap(primary)} ${kind}, fully compensated — pH is back in range, leaning ${want === "acid" ? "acidic (below 7.40)" : "alkaline (above 7.40)"}.` };
     }
     return { disorder: "inconsistent", primary: null, compensation: null,
       reading: "This pattern does not fit a single disorder — recheck the values or consider a mixed disorder." };
@@ -111,11 +127,12 @@ export function interpretAbg({ ph, paco2, hco3 }) {
   const compensation = other === "normal" ? "none" : "partial";
   const otherName = respMatches ? "HCO₃⁻ (kidneys)" : "PaCO₂ (lungs)";
   const c = compensationLimit(primary, phState, { paco2, hco3 });
+  if (offRange(c)) return mixedResult(primary, phState, compensation, c);
   return {
-    disorder: `${primary} ${phState}`, primary, compensation, mixedPossible: offRange(c),
-    reading: (compensation === "none"
+    disorder: `${primary} ${phState}`, primary, compensation, mixedPossible: false,
+    reading: compensation === "none"
       ? `${cap(primary)} ${phState}, uncompensated — ${otherName} is still normal.`
-      : `${cap(primary)} ${phState}, partially compensated — ${otherName} has moved to offset it, but pH is still out of range.`) + (offRange(c) ? mixedNote(c) : ""),
+      : `${cap(primary)} ${phState}, partially compensated — ${otherName} has moved to offset it, but pH is still out of range.`,
   };
 }
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
@@ -250,7 +267,8 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
   const bad = !concept && r.disorder !== "normal";
   const label = concept ? "Read pH → PaCO₂ → HCO₃⁻ → match" : r.disorder === "normal" ? "Normal ABG"
     : r.disorder === "inconsistent" || r.disorder === "indeterminate" ? "Recheck"
-    : `${cap(r.disorder)}${r.compensation === "none" ? " · uncompensated" : r.compensation === "partial" ? " · partly compensated" : r.compensation === "full" ? " · fully compensated" : ""}${r.mixedPossible ? " · mixed?" : ""}`;
+    : r.mixed ? `Possible mixed: ${r.disorder} + ${r.mixed}`
+    : `${cap(r.disorder)}${r.compensation === "none" ? " · uncompensated" : r.compensation === "partial" ? " · partly compensated" : r.compensation === "full" ? " · fully compensated" : ""}`;
   return (
     <Frame h={482} focus={focus} title="Reading an arterial blood gas"
       desc={concept

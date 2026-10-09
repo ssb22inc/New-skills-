@@ -156,6 +156,21 @@ export function criticalTerms(text) {
    passed a recording that swapped the diagnosis (Astra, PR #134 review,
    finding 4). */
 const FILLER = new Set(["a", "an", "the", "um", "uh", "er", "erm"]);
+/* Words after which a lone "A" names something — hepatitis A, vitamin A,
+   blood group A, type A — rather than being an article. */
+const NAMES_A = /\b(hepatitis|hep|vitamin|vitamins|type|group|blood|influenza|flu|factor|class|grade|stage|phase|category|zone|lead|plan|part|step|option|choice|answer|item|unit|room|bed|bay|ward|wing|team|section|protein|immunoglobulin|ig|apolipoprotein|apo|strep|streptococcus|hemophilia)\s+a\b/gi;
+/* Letters and abbreviations that the filler list would otherwise swallow
+   are kept as named tokens, on both sides, so dropping one is a mismatch
+   (Astra, PR #134 review, round 10: "hepatitis A" heard as "hepatitis"
+   passed, because every "a" was discarded as an article). A capital A
+   inside a sentence, and an "a" after a word that takes a letter, is a
+   letter; "ER" is the emergency room. An article stays droppable. */
+function keepLetters(text) {
+  return String(text)
+    .replace(NAMES_A, (m, w) => `${w} letterA`)
+    .replace(/(?<=[A-Za-z0-9,;:)]\s+)A\b(?![-'’])/g, "letterA")
+    .replace(/\bE\.?R\.?(?![A-Za-z])/g, "letterER");
+}
 export function speechTokens(text) {
   /* Letters spelled out with hyphens ("P-A-C-O-2", "N-ninety-five", "I-V")
      are joined to the written abbreviation (PaCO2, N95, IV). Only a hyphen
@@ -166,7 +181,7 @@ export function speechTokens(text) {
      xray; "fit-tested" and "half-normal" are left alone. (Astra, PR #134
      review: "D-five-W" once split into "d5" + "w" and failed a correct
      "D5W" transcript.) */
-  let t = signsAndRanges(text);
+  let t = signsAndRanges(keepLetters(text));
   for (let prev = null; prev !== t;) {
     prev = t;
     t = t.replace(/\b([A-Za-z])-(?=[A-Za-z0-9])/g, "$1§").replace(/(?<=[A-Za-z0-9§])-([A-Za-z])\b/g, "§$1");
@@ -201,7 +216,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 5;
+export const QA_VERSION = 6;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);

@@ -39,6 +39,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { inflateSync } from "node:zlib";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
@@ -246,39 +247,81 @@ function crc32(buf) {
   return (c ^ 0xffffffff) >>> 0;
 }
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-/* Every chunk's length and CRC check out, IHDR comes first, and the file
-   ends exactly at IEND. */
+/* Chunks that only describe pixels. Text (tEXt, zTXt, iTXt), EXIF, ICC
+   profiles, timestamps and unknown or private chunks can carry bytes a
+   picture does not show — a key, a name — so an image holding any of them
+   is refused rather than certified by its pixels (Astra, PR #134 review,
+   round 10). */
+const PNG_CHUNKS = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "sBIT", "bKGD", "pHYs"]);
+const PNG_CHANNELS = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
+/* The size of the decompressed scanlines IHDR promises, so the image data
+   cannot carry anything beyond its pixels either. */
+function pngRawSize(width, height, depth, colour, interlace) {
+  const ch = PNG_CHANNELS[colour];
+  if (!ch || ![1, 2, 4, 8, 16].includes(depth) || !width || !height || width > 16384 || height > 16384) return -1;
+  const rowBytes = (w) => (w ? 1 + Math.ceil((w * ch * depth) / 8) : 0);
+  if (interlace === 0) return height * rowBytes(width);
+  if (interlace !== 1) return -1;
+  const passes = [[0, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4], [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2]];
+  let total = 0;
+  for (const [x0, y0, dx, dy] of passes) {
+    const w = Math.ceil((width - x0) / dx), h = Math.ceil((height - y0) / dy);
+    if (w > 0 && h > 0) total += h * rowBytes(w);
+  }
+  return total;
+}
+/* Every chunk's length and CRC check out, IHDR comes first, only pixel
+   chunks appear, the file ends exactly at IEND, and the image data
+   inflates — consuming every byte — to exactly the size IHDR promises. */
 export function isStrictPng(buf) {
   if (!buf || buf.length < 8 + 25 + 12 || !buf.subarray(0, 8).equals(PNG_SIG)) return false;
-  let at = 8, first = true;
+  let at = 8, first = true, ihdr = null;
+  const idat = [];
   while (at + 12 <= buf.length) {
     const len = buf.readUInt32BE(at);
     const type = buf.subarray(at + 4, at + 8).toString("latin1");
     const end = at + 12 + len;
-    if (!/^[A-Za-z]{4}$/.test(type) || end > buf.length) return false;
+    if (!PNG_CHUNKS.has(type) || end > buf.length) return false;
     if (crc32(buf.subarray(at + 4, at + 8 + len)) !== buf.readUInt32BE(at + 8 + len)) return false;
-    if (first && type !== "IHDR") return false;
+    const data = buf.subarray(at + 8, at + 8 + len);
+    if (first !== (type === "IHDR")) return false;
+    if (type === "IHDR") { if (len !== 13) return false; ihdr = data; }
+    if (type === "IDAT") idat.push(data);
     first = false;
-    if (type === "IEND") return len === 0 && end === buf.length;
+    if (type === "IEND") {
+      if (len !== 0 || end !== buf.length || !ihdr || !idat.length) return false;
+      const want = pngRawSize(ihdr.readUInt32BE(0), ihdr.readUInt32BE(4), ihdr[8], ihdr[9], ihdr[12]);
+      if (want < 0 || ihdr[10] !== 0 || ihdr[11] !== 0) return false;
+      const z = Buffer.concat(idat);
+      try {
+        const { buffer, engine } = inflateSync(z, { info: true, maxOutputLength: want + 1 });
+        return buffer.length === want && engine.bytesWritten === z.length;
+      } catch { return false; }
+    }
     at = end;
   }
   return false;
 }
-/* The RIFF size covers the file exactly and the chunks tile it. */
+/* The RIFF size covers the file exactly, the chunks tile it, and they are
+   only image data: no EXIF, XMP, ICC profile or unknown chunk, no animation,
+   and an extended header that declares none of them. */
+const WEBP_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X", "ALPH"]);
 export function isStrictWebp(buf) {
   if (!buf || buf.length < 20) return false;
   if (buf.subarray(0, 4).toString("latin1") !== "RIFF" || buf.subarray(8, 12).toString("latin1") !== "WEBP") return false;
   if (buf.readUInt32LE(4) + 8 !== buf.length) return false;
-  let at = 12;
+  let at = 12, images = 0;
   while (at < buf.length) {
     if (at + 8 > buf.length) return false;
     const type = buf.subarray(at, at + 4).toString("latin1");
-    if (!/^[A-Z0-9 ]{4}$/i.test(type)) return false;
+    if (!WEBP_CHUNKS.has(type)) return false;
     const len = buf.readUInt32LE(at + 4);
+    if (type === "VP8X" && (len !== 10 || (buf[at + 8] & 0b00101110) !== 0)) return false;   // ICC, EXIF, XMP or animation flagged
+    if (type === "VP8 " || type === "VP8L") images += 1;
     at += 8 + len + (len & 1);
     if (at > buf.length) return false;
   }
-  return at === buf.length;
+  return at === buf.length && images === 1;
 }
 const IMAGE_FORMATS = { png: { mime: "image/png", ok: isStrictPng }, webp: { mime: "image/webp", ok: isStrictWebp } };
 /* The image type of this file, or null: the extension names the format and

@@ -238,3 +238,35 @@ describe("which recorded clips a re-run may keep", () => {
     }
   });
 });
+
+/* Astra, PR #134 review, round 10: every "a" was discarded as an article,
+   so "hepatitis A" heard as "hepatitis" passed and generalised hepatitis A's
+   route to all hepatitis. A letter that names something must be heard. */
+describe("letters that name things are not fillers", () => {
+  const astra = "Hepatitis A spreads by the fecal oral route. Teach careful hand hygiene to reduce transmission.";
+  it("fails Astra's case: 'hepatitis A' heard as 'hepatitis'", () => {
+    expect(audioCheck(astra, astra.replace("Hepatitis A", "Hepatitis")).pass).toBe(false);
+  });
+  it.each([
+    ["Hepatitis A spreads by the fecal oral route.", "Hepatitis spreads by the fecal oral route."],
+    ["Night blindness is a sign of low vitamin A.", "Night blindness is a sign of low vitamin."],
+    ["A client with blood group A can receive group O cells.", "A client with blood group can receive group O cells."],
+    ["Group A strep can follow a sore throat.", "Group strep can follow a sore throat."],
+    ["Send the client to the ER now and report the potassium result to the provider right away.", "Send the client to the now and report the potassium result to the provider right away."],
+  ])("fails when the letter is dropped: %s", (script, heard) => {
+    expect(audioCheck(script, heard).pass).toBe(false);
+    expect(audioCheck(script, script).pass).toBe(true);
+  });
+  it("matches however the transcript spells the letter", () => {
+    expect(speechTokens("hepatitis a")).toEqual(speechTokens("Hepatitis A"));
+    expect(speechTokens("Vitamin A")).toEqual(speechTokens("vitamin a"));
+    expect(speechTokens("the E.R.")).toEqual(speechTokens("the ER"));
+  });
+  it("still treats an article as droppable", () => {
+    expect(speechTokens("A client needs a dose")).toEqual(speechTokens("client needs dose"));
+    expect(speechTokens("Give the client an apple")).toEqual(speechTokens("Give client apple"));
+  });
+  it("re-checks clips approved under the weaker rule", () => {
+    expect(QA_VERSION).toBeGreaterThanOrEqual(6);
+  });
+});
