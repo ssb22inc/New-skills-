@@ -21,6 +21,8 @@
 
 import { db, preflightDb, publishedCount } from "./supabase-guard.mjs";
 import { llm } from "./llm.mjs";
+import { GEN_MODEL, REVIEW_MODEL } from "./models.mjs";
+import { review, parseJson } from "./review.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -29,8 +31,8 @@ const CATS = [
 ];
 const PHASES = ["Recognize Cues", "Analyze Cues", "Prioritize Hypotheses", "Generate Solutions", "Take Action", "Evaluate Outcomes"];
 
-const GEN_MODEL = "anthropic/claude-sonnet-4.6";
-const REVIEW_MODEL = "openai/gpt-4.1";
+/* Writer and reviewer are decided in ops/models.mjs, and every review goes
+   through ops/review.mjs — see there for why. */
 const PASS_CONFIDENCE = 0.85;
 
 const args = process.argv.slice(2);
@@ -43,7 +45,6 @@ const POPULATION = opt("--population", null); // 'peds' | 'geriatric' | 'materna
 const DRY = flag("--dry-run");
 const STOP_AT = parseInt(opt("--stop-at", "0"), 10); // library size to stop at (0 = no target)
 
-const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
 /* ---------- schema gate (exported for tests) ---------- */
 export function validCase(c) {
@@ -175,7 +176,7 @@ async function run() {
       if (err) { console.log(`  ✗ schema reject: ${err}`); continue; }
       // per-step review → targeted repair loop (up to 3 rounds); each repair
       // fixes only the steps the reviewer failed, then the case is re-reviewed.
-      let rev = parseJson(await llm(REVIEW_MODEL, reviewPrompt(c), 3000));
+      let rev = parseJson(await review(reviewPrompt(c), 3000));
       let repairs = 0;
       while (!reviewOk(rev) && repairs < 3) {
         repairs++;
@@ -191,7 +192,7 @@ ${JSON.stringify(c)}`, 6000);
         err = validCase(fixed);
         if (err) { console.log(`  ✗ repair broke schema: ${err}`); break; }
         c = fixed;
-        rev = parseJson(await llm(REVIEW_MODEL, reviewPrompt(c), 3000));
+        rev = parseJson(await review(reviewPrompt(c), 3000));
       }
       if (err || !reviewOk(rev)) {
         console.log(`  ✗ REVIEW FAIL after ${repairs} repair(s) (${rev?.confidence ?? "?"}): ${failNotes(rev).slice(0, 110)}`);

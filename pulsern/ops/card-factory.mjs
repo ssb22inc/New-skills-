@@ -23,6 +23,8 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { llm } from "./llm.mjs";
+import { GEN_MODEL, REVIEW_MODEL } from "./models.mjs";
+import { review, parseJson } from "./review.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -30,8 +32,8 @@ const CATS = [
   "Reduction of Risk", "Physiological Adaptation",
 ];
 
-const GEN_MODEL = "anthropic/claude-sonnet-4.6";
-const REVIEW_MODEL = "openai/gpt-4.1";
+/* Writer and reviewer are decided in ops/models.mjs, and every review goes
+   through ops/review.mjs — see there for why. */
 const PASS_CONFIDENCE = 0.85;
 
 const args = process.argv.slice(2);
@@ -45,7 +47,6 @@ const DRY = flag("--dry-run");
 let _sb = null;
 const db = () => (_sb ??= createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY));
 
-const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
 /* ---------- schema gate (exported for tests) ---------- */
 export function validCard(x) {
@@ -129,7 +130,7 @@ async function run() {
   console.log(`Schema pass: ${schemaOk.length}/${cards.length}`);
   if (!schemaOk.length) return;
 
-  const rawRev = await llm(REVIEW_MODEL, reviewPrompt(schemaOk), 8000);
+  const rawRev = await review(reviewPrompt(schemaOk), 8000);
   let reviews;
   try { reviews = parseJson(rawRev); } catch { throw new Error("Reviewer returned unparseable JSON"); }
 

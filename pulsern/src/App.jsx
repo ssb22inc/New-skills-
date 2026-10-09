@@ -268,6 +268,7 @@ import ExamCenter from "./exam.jsx";
 import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
 import InstallCard from "./install.jsx";
 import { ExhibitVisual } from "./exhibits.jsx";
+import { ConceptExplainers } from "./concept-explainers.jsx";
 import { ProfileCard, useProfile } from "./profile.jsx";
 import {
   isStudyLocked,
@@ -1699,6 +1700,8 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
             {q.ai && <p className="small">Reviewed for clinical accuracy — verify anything surprising against your course materials.</p>}
+            {/* Astra-confirmed concept diagrams for this exact question (if any) */}
+            <ConceptExplainers key={`dx${q.id}`} q={q} />
             <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
             <ReportIssue key={`r${q.id}`} itemId={calibration[q.id] !== undefined ? q.id : null} label="question" />
             <button className="btn" onClick={advance}>{autoLimit != null && sessionN >= autoLimit ? "Continue to Today →" : "Next question →"}</button>

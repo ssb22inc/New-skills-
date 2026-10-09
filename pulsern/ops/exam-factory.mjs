@@ -21,6 +21,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { validItem } from "./content-factory.mjs";
 import { validCase } from "./case-factory.mjs";
+import { llm } from "./llm.mjs";
+import { GEN_MODEL, REVIEW_MODEL } from "./models.mjs";
+import { review, parseJson } from "./review.mjs";
 
 const CATS = [
   "Management of Care", "Safety & Infection Control", "Health Promotion & Maintenance",
@@ -42,8 +45,8 @@ export const BLUEPRINT = {
 export const CASES_PER_FORM = 5; // owner order: >=30 case-study questions per exam (5 cases x 6 = 30)
 export const STANDALONE_PER_FORM = Object.values(BLUEPRINT).reduce((a, b) => a + b, 0); // 67
 
-const GEN_MODEL = "anthropic/claude-sonnet-4.6";
-const REVIEW_MODEL = "openai/gpt-4.1";
+/* Writer and reviewer are decided in ops/models.mjs, and every review goes
+   through ops/review.mjs — see there for why. */
 const PASS_CONFIDENCE = 0.85;
 
 const args = process.argv.slice(2);
@@ -54,18 +57,6 @@ const STATUS_ONLY = args.includes("--status");
 let _sb = null;
 const db = () => (_sb ??= createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY));
 
-async function llm(model, prompt, maxTokens = 8000) {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
-    body: JSON.stringify({ model, max_tokens: maxTokens, temperature: 0.7, messages: [{ role: "user", content: prompt }] }),
-  });
-  const data = await r.json();
-  const text = data?.choices?.[0]?.message?.content ?? "";
-  if (!text) throw new Error(`Empty response from ${model} ${data?.error?.message ?? ""}`);
-  return text;
-}
-const parseJson = (raw) => JSON.parse(raw.replace(/```json|```/gi, "").trim());
 
 /* Realistic type mix inside a category chunk. */
 const typeMixNote = `Type mix for the batch: mostly "mc"; roughly 1 in 4 "sata"; sprinkle single items of "order", "matrix", "bowtie", "cloze", or "highlight" where the category suits them; Pharmacology batches must include 1-2 "calc" items.
@@ -124,7 +115,7 @@ async function fillCategory(cat, need, existingStems) {
   });
   if (!schemaOk.length) return 0;
   let reviews;
-  try { reviews = parseJson(await llm(REVIEW_MODEL, reviewPrompt(schemaOk), 8000)); } catch { console.log("  ✗ review unparseable"); return 0; }
+  try { reviews = parseJson(await review(reviewPrompt(schemaOk), 8000)); } catch { console.log("  ✗ review unparseable"); return 0; }
   let inserted = 0;
   for (let i = 0; i < schemaOk.length && inserted < need; i++) {
     const it = schemaOk[i];

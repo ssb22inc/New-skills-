@@ -9,8 +9,11 @@
    Env: OPENROUTER_API_KEY
    ------------------------------------------------------------------ */
 import { readFileSync } from "node:fs";
+import { REVIEW_MODEL } from "./models.mjs";
+import { review, parseJson } from "./review.mjs";
 
-const REVIEW_MODEL = "openai/gpt-4.1";
+/* Writer and reviewer are decided in ops/models.mjs, and every review goes
+   through ops/review.mjs — see there for why. */
 const FILES = [
   "src/App.jsx", "src/exam.jsx", "src/billing.jsx", "src/auth.jsx",
   "src/profile.jsx", "src/pricing.js", "public/legal/index.html",
@@ -36,25 +39,13 @@ function extractStrings(path) {
   return [...out].filter((s) => /[a-z] [a-z]/.test(s));
 }
 
-async function llm(prompt) {
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
-    body: JSON.stringify({ model: REVIEW_MODEL, max_tokens: 4000, temperature: 0.2, messages: [{ role: "user", content: prompt }] }),
-  });
-  const d = await r.json();
-  const t = d?.choices?.[0]?.message?.content ?? "";
-  if (!t) throw new Error(d?.error?.message ?? "empty");
-  return t.replace(/```json|```/gi, "").trim();
-}
-
 let flagged = 0, checked = 0;
 for (const f of FILES) {
   const strings = extractStrings(f);
   checked += strings.length;
   for (let i = 0; i < strings.length; i += 25) {
     const batch = strings.slice(i, i + 25);
-    const reviews = JSON.parse(await llm(`You are a hostile compliance reviewer for an NCLEX-prep app. For each user-facing string, flag ONLY real problems:
+    const reviews = parseJson(await review(`You are a hostile compliance reviewer for an NCLEX-prep app. For each user-facing string, flag ONLY real problems:
 - equating with the official exam ("same as", "identical", implying official NCSBN scoring) — comparison words like "like"/"style"/"modeled on" are FINE
 - promising outcomes ("you will pass", guarantees)
 - readiness/score claims missing an estimate hedge nearby is only a problem if the string itself asserts certainty
@@ -76,7 +67,7 @@ for (const f of FRICTION_FILES) {
   frictionChecked += strings.length;
   for (let i = 0; i < strings.length; i += 25) {
     const batch = strings.slice(i, i + 25);
-    const reviews = JSON.parse(await llm(`You are reviewing the sign-up and sign-in messages of a study app, on behalf of a nursing student who is deciding in about five seconds whether to keep going or close the tab. Flag ONLY strings that would make a real person give up or feel blocked:
+    const reviews = parseJson(await review(`You are reviewing the sign-up and sign-in messages of a study app, on behalf of a nursing student who is deciding in about five seconds whether to keep going or close the tab. Flag ONLY strings that would make a real person give up or feel blocked:
 - reports something that actually SUCCEEDED as if it had failed or been refused
 - states a problem without telling the student what to do next
 - uses system or security wording ("for security purposes", "invalid request", error codes) where plain language would do

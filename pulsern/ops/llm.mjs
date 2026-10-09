@@ -20,6 +20,8 @@
    wastes time and burns the same error five times.
    ------------------------------------------------------------------ */
 
+import { acceptsTemperature } from "./models.mjs";
+
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const RETRY_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 const MAX_ATTEMPTS = 5;
@@ -59,8 +61,33 @@ function errorText(data, status) {
   return parts.length ? parts.join(" — ") : `HTTP ${status} with no completion and no error message`;
 }
 
-export async function llm(model, prompt, maxTokens = 6000) {
+/* The full call. Returns the text AND what it cost.
+
+   Cost matters because the owner has asked that every paid review be kept,
+   and a review report that cannot say what it spent is half a record.
+   OpenRouter reports the real charge when usage accounting is requested, which
+   is better than multiplying token counts by a price table that goes stale.
+
+   Options a model does not accept are left out rather than sent: temperature
+   to a reasoning model is the case that matters, and the caller should not
+   have to know which models are which. */
+export async function llmCall({
+  model,
+  prompt,
+  messages,
+  maxTokens = 6000,
+  temperature = null,
+  reasoningEffort = null,
+  responseFormat = null,
+} = {}) {
   if (!process.env.OPENROUTER_API_KEY) throw new Error("OPENROUTER_API_KEY is not set");
+  if (!model) throw new Error("llmCall: model is required");
+  const msgs = messages ?? [{ role: "user", content: String(prompt ?? "") }];
+
+  const body = { model, max_tokens: maxTokens, messages: msgs, usage: { include: true } };
+  if (temperature != null && acceptsTemperature(model)) body.temperature = temperature;
+  if (reasoningEffort) body.reasoning = { effort: reasoningEffort };
+  if (responseFormat) body.response_format = responseFormat;
 
   let lastError = null;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -72,10 +99,7 @@ export async function llm(model, prompt, maxTokens = 6000) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
         },
-        body: JSON.stringify({
-          model, max_tokens: maxTokens, temperature: 0.7,
-          messages: [{ role: "user", content: prompt }],
-        }),
+        body: JSON.stringify(body),
       });
     } catch (e) {
       // Network-level failure: no response at all, always worth one more try.
@@ -111,15 +135,36 @@ export async function llm(model, prompt, maxTokens = 6000) {
     }
 
     const text = data?.choices?.[0]?.message?.content ?? "";
-    if (text) return text;
+    if (text) {
+      const u = data?.usage ?? {};
+      return {
+        text,
+        model: data?.model ?? model,
+        id: data?.id ?? null,
+        usage: {
+          promptTokens: u.prompt_tokens ?? null,
+          completionTokens: u.completion_tokens ?? null,
+          reasoningTokens: u.completion_tokens_details?.reasoning_tokens ?? null,
+          costUsd: Number.isFinite(Number(u.cost)) ? Number(u.cost) : null,
+        },
+      };
+    }
 
     /* A 200 with no content. The finish reason distinguishes "the model hit
        the token ceiling" from "the provider returned nothing", which are
-       different problems with different fixes. */
+       different problems with different fixes. A reasoning model can spend the
+       whole budget thinking and return nothing, which this also catches. */
     const finish = data?.choices?.[0]?.finish_reason ?? "unknown";
     lastError = new Error(`${model}: empty completion (finish_reason: ${finish}, max_tokens: ${maxTokens})`);
     if (attempt < MAX_ATTEMPTS) { await sleep(backoffMs(attempt)); continue; }
     throw lastError;
   }
   throw lastError ?? new Error(`${model}: exhausted ${MAX_ATTEMPTS} attempts`);
+}
+
+/* The original signature, kept so the factories that call it are unaffected.
+   Temperature 0.7 is still what generators get; a model that does not accept
+   temperature simply does not receive it. */
+export async function llm(model, prompt, maxTokens = 6000) {
+  return (await llmCall({ model, prompt, maxTokens, temperature: 0.7 })).text;
 }
