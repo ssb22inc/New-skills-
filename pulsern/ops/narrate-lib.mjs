@@ -76,9 +76,20 @@ export function wordsToNumbers(text) {
   return out.join("");
 }
 
+/* Signs and ranges, said and written: "-7.35", "−7.35" and "negative
+   7.35" all become "minus 7.35", so a sign can never vanish into a hyphen
+   (Astra, PR #134 review, round 4: "-7.35" passed for "seven point three
+   five"). A hyphen BETWEEN two numbers is a range: "3-5" reads "3 to 5". */
+export function signsAndRanges(text) {
+  return String(text)
+    .replace(/(\d)\s*[-–]\s*(?=\d)/g, "$1 to ")
+    .replace(/(^|[^A-Za-z0-9])[-−–](?=\s*\d)/g, "$1 minus ")
+    .replace(/\bnegative\b/gi, "minus");
+}
+
 /* Lowercase letters and digits only, numbers in digit form. */
 export function normaliseSpeech(text) {
-  return wordsToNumbers(text).toLowerCase().replace(/[^a-z0-9.]+/g, "").replace(/\.(?!\d)/g, "");
+  return wordsToNumbers(signsAndRanges(text)).toLowerCase().replace(/[^a-z0-9.]+/g, "").replace(/\.(?!\d)/g, "");
 }
 
 function levenshtein(a, b) {
@@ -141,7 +152,7 @@ export function speechTokens(text) {
      xray; "fit-tested" and "half-normal" are left alone. (Astra, PR #134
      review: "D-five-W" once split into "d5" + "w" and failed a correct
      "D5W" transcript.) */
-  let t = String(text);
+  let t = signsAndRanges(text);
   for (let prev = null; prev !== t;) {
     prev = t;
     t = t.replace(/\b([A-Za-z])-(?=[A-Za-z0-9])/g, "$1§").replace(/(?<=[A-Za-z0-9§])-([A-Za-z])\b/g, "§$1");

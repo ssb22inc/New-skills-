@@ -99,19 +99,11 @@ const decode = (s) => s
 const TAG = /<(?:"[^"]*"|'[^']*'|[^'">])*>/y;
 const squash = (s) => s.replace(/\s+/g, " ").trim();
 const exact = (s) => JSON.stringify(s);
-/* Whitespace is normalised ONLY in the parts of a tag outside quotes;
-   every quoted value is kept exactly. (An earlier version ran its last
-   replacements over the whole assembled tag, so "1 = = 1" and "1 == 1"
-   inside an onclick digested the same — Astra, PR #134 review.) */
-function normaliseTag(tag) {
-  let out = "";
-  for (const part of tag.match(/"[^"]*"|'[^']*'|[^"']+/g) ?? []) {
-    out += part[0] === '"' || part[0] === "'"
-      ? exact(part.slice(1, -1))
-      : part.replace(/\s+/g, " ").replace(/\s*=\s*/g, "=").replace(/^<\s+/, "<").replace(/\s+(\/?>)$/, "$1");
-  }
-  return out;
-}
+/* Tags are kept VERBATIM (JSON-escaped onto one line). Every attempt to
+   normalise whitespace inside a tag eventually hid a behaviour change —
+   last, "onerror=window.x =alert(1)" vs "onerror=window.x=alert(1)",
+   where one space moves an unquoted attribute boundary (Astra, PR #134
+   review, round 4). Only text between tags is whitespace-normalised. */
 export function pageDigest(html) {
   const src = String(html ?? "");
   const out = [];
@@ -132,7 +124,7 @@ export function pageDigest(html) {
       if (m) {
         flushText();
         const tag = m[0];
-        out.push(`TAG ${normaliseTag(tag)}`);
+        out.push(`TAG ${exact(tag)}`);
         i += tag.length;
         /* Raw-text elements: the body is code or CSS, kept exactly. */
         const raw = /^<(script|style)\b/i.exec(tag)?.[1]?.toLowerCase();
@@ -153,22 +145,23 @@ export function pageDigest(html) {
   return out.join("\n") + "\n";
 }
 
-/* What a reviewer needs from a lockfile change: every package's full
-   identity. The complete `resolved` value is kept — host, path AND any git
-   revision fragment — with the complete integrity, so a git dependency moved
-   from #commitA to #commitB at the same version shows up (Astra, PR #133
-   review, finding 3). Install-affecting flags are kept too. */
-const LOCK_FIELDS = ["version", "resolved", "integrity", "link", "hasInstallScript", "bin", "os", "cpu", "engines", "dependencies", "optionalDependencies", "peerDependencies"];
+/* What a reviewer needs from a lockfile change: EVERYTHING npm reads.
+   Each package entry is kept whole, with keys sorted so the digest is
+   deterministic — a field allowlist kept missing install-affecting flags
+   (git revisions, then dev/optional/devOptional: Astra, PR #133 review,
+   finding 3; PR #134 review, round 4). Top-level fields are kept too, and
+   an unreadable lockfile is reported, never passed as empty. */
+const sortedJson = (v) => JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x));
 export function lockDigest(jsonText) {
   let lock;
   try { lock = JSON.parse(jsonText ?? "{}"); } catch { return "UNPARSEABLE package-lock.json\n"; }
-  const pkgs = lock.packages ?? {};
-  return Object.keys(pkgs).sort().map((k) => {
-    const p = pkgs[k] ?? {};
-    const kept = {};
-    for (const f of LOCK_FIELDS) if (p[f] !== undefined) kept[f] = p[f];
-    return `${k === "" ? "(root)" : k.replace(/^node_modules\//, "")} ${JSON.stringify(kept)}`;
-  }).join("\n") + "\n";
+  if (!lock || typeof lock !== "object" || Array.isArray(lock)) return "UNPARSEABLE package-lock.json\n";
+  const { packages = {}, ...top } = lock;
+  const lines = [`(lockfile) ${sortedJson(top)}`];
+  for (const k of Object.keys(packages).sort()) {
+    lines.push(`${k === "" ? "(root)" : k.replace(/^node_modules\//, "")} ${sortedJson(packages[k])}`);
+  }
+  return lines.join("\n") + "\n";
 }
 
 /* Line diff of two strings via git's own diff engine, on temporary files.

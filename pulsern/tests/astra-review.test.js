@@ -130,7 +130,7 @@ describe("collecting from real git output (Astra finding #3)", () => {
     const { files } = collectChanges("base", "HEAD", { cwd: repo });
     const page = files.find((f) => f.path === "pulsern/public/learn/bow-tie/index.html");
     expect(page.form).toBe("page digest");
-    expect(page.diff).toMatch(/^\+TAG <script src="https:\/\/evil\.example\/x\.js">$/m);
+    expect(page.diff).toContain(`+TAG ${JSON.stringify('<script src="https://evil.example/x.js">')}`);
     expect(page.diff).toMatch(/^-TEXT Old guide text\.$/m);
     expect(page.diff).toMatch(/^\+TEXT New guide text\.$/m);
   });
@@ -147,11 +147,11 @@ describe("digests", () => {
   it("captures what a reader sees and what a browser runs", () => {
     const d = pageDigest(`<title>T</title><meta name="description" content="D"><script type="application/ld+json">{"a":1}</script><script>alert(1)</script><a href="/x" onclick="steal()">go</a><iframe src="https://x"></iframe><p>Body &amp; text</p>`);
     expect(d).toContain("TEXT T");
-    expect(d).toContain('TAG <meta name="description" content="D">');
+    expect(d).toContain(`TAG ${JSON.stringify('<meta name="description" content="D">')}`);
     expect(d).toContain('SCRIPT-BODY "{\\"a\\":1}"');
     expect(d).toContain('SCRIPT-BODY "alert(1)"');
-    expect(d).toContain('TAG <a href="/x" onclick="steal()">');
-    expect(d).toContain('TAG <iframe src="https://x">');
+    expect(d).toContain(`TAG ${JSON.stringify('<a href="/x" onclick="steal()">')}`);
+    expect(d).toContain(`TAG ${JSON.stringify('<iframe src="https://x">')}`);
     expect(d).toContain("TEXT Body & text");
   });
 
@@ -212,8 +212,25 @@ describe("digests", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("ignores whitespace-only regeneration noise", () => {
-    expect(textDiff(pageDigest('<p class="a">Hi  there</p>'), pageDigest('<p\n  class="a">\n Hi there\n</p>'), "p")).toBe("");
+  /* Round 4: one space inside an UNQUOTED attribute moves its boundary —
+     "onerror=window.x =alert(1)" runs nothing, "...x=alert(1)" runs alert.
+     Tags are therefore kept byte-for-byte; only text is normalised. */
+  it("shows a one-space change inside a tag that moves an unquoted attribute boundary", () => {
+    const a = "<img src=x onerror=window.x =alert(1)>", b = "<img src=x onerror=window.x=alert(1)>";
+    expect(pageDigest(a)).not.toBe(pageDigest(b));
+    const dir = mkdtempSync(join(tmpdir(), "astra-ws-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    const page = "pulsern/public/learn/y/index.html";
+    mkdirSync(join(dir, "pulsern/public/learn/y"), { recursive: true });
+    writeFileSync(join(dir, page), `<p>${a}</p>`); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, page), `<p>${b}</p>`); run("add", "-A"); run("commit", "-qm", "h");
+    const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === page);
+    expect(f.diff).toContain("window.x=alert(1)");
+    rmSync(dir, { recursive: true, force: true });
+  });
+  it("still ignores whitespace in the text a student reads", () => {
+    expect(textDiff(pageDigest('<p class="a">Hi  there</p>'), pageDigest('<p class="a">\n Hi there\n</p>'), "p")).toBe("");
   });
 
   /* PR #133 review, finding 3: a git dependency moved to another commit at
@@ -221,6 +238,23 @@ describe("digests", () => {
   it("shows a git dependency moved to a different commit", () => {
     const lock = (rev) => JSON.stringify({ packages: { "": { name: "x" }, "node_modules/pkg": { version: "1.0.0", resolved: `git+ssh://git@github.com/org/pkg.git#${rev}` } } });
     expect(textDiff(lockDigest(lock("aaaa1111")), lockDigest(lock("bbbb2222")), "package-lock.json")).toContain("bbbb2222");
+  });
+
+  /* Round 4: dev/optional flags decide whether npm installs a package
+     (and runs its install script) under --omit=dev. */
+  it.each([["dev", { dev: true }, {}], ["optional", { optional: true }, {}], ["devOptional", { devOptional: true }, {}]])(
+    "shows a change to the %s flag", (_, before, after) => {
+      const lock = (flags) => JSON.stringify({ lockfileVersion: 3, packages: { "node_modules/p": { version: "1.0.0", hasInstallScript: true, ...flags } } });
+      expect(textDiff(lockDigest(lock(before)), lockDigest(lock(after)), "l")).not.toBe("");
+    });
+  it("shows a change to any top-level lockfile field", () => {
+    const a = JSON.stringify({ lockfileVersion: 3, requires: true, packages: {} });
+    expect(textDiff(lockDigest(a), lockDigest(a.replace("true", "false")), "l")).not.toBe("");
+  });
+  it("is deterministic whatever order npm writes keys in", () => {
+    const a = JSON.stringify({ packages: { "node_modules/p": { version: "1", dev: true } } });
+    const b = JSON.stringify({ packages: { "node_modules/p": { dev: true, version: "1" } } });
+    expect(lockDigest(a)).toBe(lockDigest(b));
   });
 
   it("shows a changed integrity hash in full and a new install script", () => {
@@ -333,7 +367,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     await runReview(opts(dir), { callModel: async (a) => { prompt = a.prompt; return { text: JSON.stringify({ assessment: "x", findings: [] }), usage: {}, model: "m" }; } });
     expect(prompt).toContain("pulsern/public/révision.html");
     expect(prompt).toContain("pulsern/public/learn/sneaky/index.html");
-    expect(prompt).toContain('+TAG <script src="https://evil.example/x.js">');
+    expect(prompt).toContain(`+TAG ${JSON.stringify('<script src="https://evil.example/x.js">')}`);
     expect(prompt).not.toContain("fullburn/x.js");
   });
 

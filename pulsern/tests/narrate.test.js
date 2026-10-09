@@ -1,6 +1,6 @@
 /* Narration: clip identity, and the check that audio says what the script says. */
 import { describe, it, expect } from "vitest";
-import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD } from "../ops/narrate-lib.mjs";
+import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD } from "../ops/narrate-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("clip identity", () => {
@@ -153,6 +153,24 @@ describe("the audio check on the real scripts", () => {
     const script = scriptOf("tonicity/dextrose");
     expect(audioCheck(script, LITERAL["tonicity/dextrose"].replace("D10W", "D50W")).pass).toBe(false);
     expect(audioCheck(script, LITERAL["tonicity/dextrose"].replace("D5W and", "D5NS and")).pass).toBe(false);
+  });
+
+  /* Round 4: a minus sign vanished into the hyphen handling, so "-7.35"
+     passed for "seven point three five". Real ABG script, both directions. */
+  it("never lets a sign appear or disappear", () => {
+    const ph = scriptOf("abg/ph");
+    const faithful = "Start with the pH. Anything below 7.35 is acidosis. Anything above 7.45 is alkalosis. The pH tells you what the problem is, not yet where it came from.";
+    expect(audioCheck(ph, faithful).pass).toBe(true);
+    expect(audioCheck(ph, faithful.replace("below 7.35", "below -7.35")).pass).toBe(false);
+    expect(audioCheck(ph, faithful.replace("below 7.35", "below minus seven point three five")).pass).toBe(false);
+    expect(audioCheck(ph, faithful.replace("below 7.35", "below negative 7.35")).pass).toBe(false);
+    expect(audioCheck("a value of minus five", "a value of -5").pass).toBe(true);
+    expect(audioCheck("a value of minus five", "a value of 5").pass).toBe(false);
+  });
+  it("reads a numeric range written with a hyphen as 'to'", () => {
+    expect(signsAndRanges("3-5 h")).toBe("3 to 5 h");
+    expect(audioCheck("It lasts three to five hours.", "It lasts 3-5 hours.").pass).toBe(true);
+    expect(audioCheck("It lasts three to five hours.", "It lasts 3-6 hours.").pass).toBe(false);
   });
 
   it("tolerates only spelling differences and filler words", () => {

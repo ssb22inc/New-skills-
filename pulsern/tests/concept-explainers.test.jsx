@@ -70,16 +70,36 @@ describe("fingerprint", () => {
 });
 
 describe("the shipped map file", () => {
-  it("is valid and only references diagrams that exist", async () => {
+  /* Version 2: every pairing carries the content fingerprint (v) of the
+     diagram it was approved for, and a map with pairings records the
+     drawing code it was built against (sourceKey; checked against the live
+     code in tests/diagram-gate.test.js). */
+  it("is version 2, and every pairing is complete and current", async () => {
     const m = (await import("../src/diagrams/item-map.json")).default;
-    expect(m.version).toBe(1);
-    for (const [qid, entries] of Object.entries(m.pairs)) {
+    expect(m.version).toBe(2);
+    const entries = Object.entries(m.pairs);
+    if (entries.length) expect(m.sourceKey).toMatch(/^[0-9a-f]{24}$/);
+    for (const [qid, list] of entries) {
       expect(qid).toMatch(/^\d+$/);
-      for (const e of entries) {
+      for (const e of list) {
         expect(DIAGRAMS[e.d], `unknown diagram ${e.d}`).toBeDefined();
         expect(e.f).toMatch(/^[0-9a-f]{8}$/);
+        expect(e.v, `${qid}:${e.d} approved for older diagram content`).toBe(diagramFp(DIAGRAMS[e.d]));
       }
     }
+  });
+
+  /* Producer to consumer: what the mapper writes is what the app shows. */
+  it("shows exactly what the mapper produced, for the question it was made for", async () => {
+    const { buildItemMap } = await import("../ops/map-diagrams-lib.mjs");
+    const m = buildItemMap({
+      "1:abg": { attach: true, shown: { ph: 7.3, paco2: 55, hco3: 24 }, fp: fingerprint(bankQ) },
+      "1:tonicity": { attach: false, shown: null, fp: fingerprint(bankQ) },
+    }, DIAGRAMS, "a".repeat(24));
+    expect(m.version).toBe(2);
+    const shown = pairsFor(JSON.parse(JSON.stringify(m)), bankQ, DIAGRAMS);
+    expect(shown.map((x) => [x.diagram.id, x.params])).toEqual([["abg", { ph: 7.3, paco2: 55, hco3: 24 }]]);
+    expect(pairsFor(m, { ...bankQ, stem: "another question" }, DIAGRAMS)).toEqual([]);
   });
 });
 
