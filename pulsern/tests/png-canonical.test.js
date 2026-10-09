@@ -7,7 +7,7 @@ import { inflateSync } from "node:zlib";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { canonicalDeflate, decodePng, encodeCanonicalPng, canonicalPng, isCanonicalPng } from "../ops/png-canonical.mjs";
+import { canonicalDeflate, decodePng, encodeCanonicalPng, canonicalPng, isCanonicalPng, premultipliedRepresentative } from "../ops/png-canonical.mjs";
 
 describe("canonical deflate", () => {
   it.each([
@@ -36,18 +36,40 @@ describe("canonical PNG", () => {
       const back = decodePng(canon);
       const ch = { 0: 1, 2: 3, 4: 2, 6: 4 }[orig.colour];
       // identical, except that fully transparent pixels carry colour 0
+      /* Compared as drawn: colour premultiplied by alpha (exact where
+         opaque). Chromium's own decode is compared in ops/check-png-canonical.mjs. */
+      const alpha = orig.colour === 4 || orig.colour === 6;
       let differ = -1;
       for (let p = 0; p < orig.pixels.length && differ < 0; p += ch) {
-        if ((orig.colour === 4 || orig.colour === 6) && orig.pixels[p + ch - 1] === 0) continue;
-        for (let k = 0; k < ch; k++) if (back.pixels[p + k] !== orig.pixels[p + k]) { differ = p; break; }
+        const a = alpha ? orig.pixels[p + ch - 1] : 255;
+        if (alpha && back.pixels[p + ch - 1] !== a) { differ = p; break; }
+        for (let k = 0; k < (alpha ? ch - 1 : ch); k++) {
+          if (Math.round((back.pixels[p + k] * a) / 255) !== Math.round((orig.pixels[p + k] * a) / 255)) { differ = p; break; }
+        }
       }
       expect(differ, `${f}: first differing pixel byte`).toBe(-1);
       expect(isCanonicalPng(canon), f).toBe(true);
     }
   }, 120000);
-  it("gives fully transparent pixels colour 0, and nothing else", () => {
-    const png = encodeCanonicalPng({ width: 2, height: 1, colour: 6, pixels: Buffer.from([1, 2, 3, 0, 4, 5, 6, 7]) });
-    expect([...decodePng(png).pixels]).toEqual([0, 0, 0, 0, 4, 5, 6, 7]);
+  it("gives fully transparent pixels colour 0", () => {
+    const png = encodeCanonicalPng({ width: 2, height: 1, colour: 6, pixels: Buffer.from([1, 2, 3, 0, 4, 5, 6, 255]) });
+    expect([...decodePng(png).pixels]).toEqual([0, 0, 0, 0, 4, 5, 6, 255]);
+  });
+  /* Round 14: colour under alpha 1 could carry a credential that draws
+     the same as any other colour. */
+  it("normalises colour under partial alpha so render-identical pixels have identical bytes", () => {
+    const secret = Buffer.from("KEY=s3cr3t!", "latin1");
+    const px = (reds) => Buffer.from([...reds].flatMap((r) => [r, 0, 0, 1]));
+    const a = encodeCanonicalPng({ width: secret.length, height: 1, colour: 6, pixels: px(secret) });
+    const b = encodeCanonicalPng({ width: secret.length, height: 1, colour: 6, pixels: px(Buffer.alloc(secret.length)) });
+    expect(a.equals(b)).toBe(true);
+    expect(decodePng(a).pixels.includes(secret)).toBe(false);
+    // every (colour, alpha) pair maps to the representative of its premultiplied value, idempotently
+    for (let al = 0; al < 256; al++) for (let c = 0; c < 256; c++) {
+      const r = premultipliedRepresentative(c, al);
+      if (premultipliedRepresentative(r, al) !== r || Math.round((r * al) / 255) !== Math.round((c * al) / 255)) throw new Error(`c=${c} a=${al}`);
+    }
+    expect(premultipliedRepresentative(77, 255)).toBe(77);
   });
   /* Round 12: tRNS was ignored and a transparent background became
      opaque. Anything that changes how the image is drawn is refused

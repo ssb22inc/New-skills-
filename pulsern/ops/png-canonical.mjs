@@ -13,8 +13,8 @@
 
    and the IDAT is this module's own deflate: every row unfiltered, one
    fixed-Huffman block, greedy LZ77 — deterministic code in this file, not
-   a library whose output can change between versions. Transparent pixels
-   carry colour 0. Given the pixels there is exactly one accepted file, so
+   a library whose output can change between versions. Colour under any
+   transparency is normalised through premultiplied alpha (see below). Given the pixels there is exactly one accepted file, so
    there is nowhere left to hide anything.
 
    To make an image acceptable:   node ops/png-canonical.mjs file.png …
@@ -174,14 +174,29 @@ export function canonicalDeflate(data) {
   return Buffer.concat([Buffer.from([0x78, 0x01]), w.done(), sum]);
 }
 
-/* The one accepted file for these pixels. Transparent pixels get colour 0,
-   since their colour is never drawn. */
+/* The one accepted file for these pixels. Colour under partial alpha is
+   normalised through premultiplied alpha — the form browsers decode to and
+   draw from: each sample becomes the representative of its premultiplied
+   value, round(round(c·a/255)·255/a). Two colours that draw identically
+   therefore have identical bytes, so a near-transparent pixel cannot carry
+   data in colour nobody can see (Astra, PR #134 review, round 14: red
+   values under alpha 1 encoded a credential). Under alpha 0 every sample
+   is 0. The mapping is idempotent, so canonical files stay canonical, and
+   ops/check-png-canonical.mjs confirms in Chromium that pixels survive. */
+export function premultipliedRepresentative(c, a) {
+  if (a === 255) return c;
+  if (a === 0) return 0;
+  return Math.min(255, Math.round((Math.round((c * a) / 255) * 255) / a));
+}
 export function encodeCanonicalPng({ width, height, colour, pixels }) {
   const ch = CHANNELS[colour];
   if (!ch) throw new Error("unsupported colour type");
   const px = Buffer.from(pixels);
   if (colour === 4 || colour === 6) {
-    for (let p = 0; p < px.length; p += ch) if (px[p + ch - 1] === 0) px.fill(0, p, p + ch - 1);
+    for (let p = 0; p < px.length; p += ch) {
+      const a = px[p + ch - 1];
+      for (let k = 0; k < ch - 1; k++) px[p + k] = premultipliedRepresentative(px[p + k], a);
+    }
   }
   const stride = width * ch;
   const raw = Buffer.alloc((stride + 1) * height);

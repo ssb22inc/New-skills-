@@ -611,8 +611,37 @@ describe("digests", () => {
     expect(textDiff(lockDigest(lock(a)), lockDigest(lock(a, true)), "l")).toContain("hasInstallScript");
   });
 
-  it("reports a lockfile it cannot read instead of passing it as empty", () => {
-    expect(lockDigest("{not json")).toBe("UNPARSEABLE package-lock.json\n");
+  /* Round 14: every unreadable version used to become the same constant
+     line, so two different files showed "no change". */
+  it("refuses a lockfile it cannot read instead of summarising it as a constant", () => {
+    for (const bad of ["{not json", "42", "\"text\"", "[]", "null", '{"packages": "x"}', '{"packages": []}']) {
+      expect(() => lockDigest(bad), bad).toThrow(/cannot pass/);
+    }
+  });
+  it("summarises only PulseRN's own npm lockfile; any other of that name is plain text", () => {
+    expect(classifyPath("pulsern/package-lock.json").mode).toBe("lockfile");
+    expect(classifyPath("pulsern/public/package-lock.json").mode).toBe("review");
+  });
+  it("fails the review, end to end, on two different unparseable lockfiles", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-lock-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    mkdirSync(join(dir, "pulsern"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/package-lock.json"), "{broken one"); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, "pulsern/package-lock.json"), "{broken two SUPABASE_SERVICE_ROLE_KEY=x");
+    run("add", "-A"); run("commit", "-qm", "h");
+    let called = false;
+    const { report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return { text: JSON.stringify({ assessment: "ok", findings: [] }), usage: {} }; } });
+    expect(called).toBe(false);
+    expect(report.verdict).toBe("FAIL");
+    // and a file of that name elsewhere is shown in full
+    mkdirSync(join(dir, "pulsern/public"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/public/package-lock.json"), "{broken SECRET=1");
+    run("add", "-A"); run("commit", "-qm", "p");
+    const f = collectChanges("HEAD~1", "HEAD", { cwd: dir }).files.find((x) => x.path === "pulsern/public/package-lock.json");
+    expect(f.form).toBe("diff");
+    expect(f.diff).toContain("SECRET=1");
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("produces no diff when nothing meaningful changed", () => {

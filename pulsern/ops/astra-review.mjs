@@ -64,7 +64,7 @@ const IN_SCOPE = [/^pulsern\//, /^\.github\/workflows\/pulsern-[^/]+\.ya?ml$/];
    every regeneration and would fill the budget with noise. Kept in step with
    the generators by tests/astra-review.test.js. */
 const GENERATED_PAGE = /^pulsern\/public\/(compare|learn|pricing|methodology|how-it-works|editorial-policy|free-nclex-practice-test)\/.*\.html$|^pulsern\/public\/sitemap\.xml$/;
-const LOCKFILE = /(^|\/)package-lock\.json$/;
+const LOCKFILE = /^pulsern\/package-lock\.json$/;
 const OWN_REPORTS = /^pulsern\/reports\/astra\//;
 
 /* The repository's control plane: workflows, actions and settings outside
@@ -165,13 +165,19 @@ export function pageDigest(html) {
    deterministic — a field allowlist kept missing install-affecting flags
    (git revisions, then dev/optional/devOptional: Astra, PR #133 review,
    finding 3; PR #134 review, round 4). Top-level fields are kept too, and
-   an unreadable lockfile is reported, never passed as empty. */
+   a lockfile that is not a JSON object with an object of packages makes
+   the review fail: a constant "unparseable" line for every version let two
+   different files reach the reviewer as "no change" (Astra, PR #134 review,
+   round 14). Only PulseRN's own npm lockfile gets this form; any other file
+   of that name is diffed as text. */
 const sortedJson = (v) => JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x));
 export function lockDigest(jsonText) {
   let lock;
-  try { lock = JSON.parse(jsonText ?? "{}"); } catch { return "UNPARSEABLE package-lock.json\n"; }
-  if (!lock || typeof lock !== "object" || Array.isArray(lock)) return "UNPARSEABLE package-lock.json\n";
+  const fail = () => { throw new Error("package-lock.json is not a JSON object with an object of packages, so it cannot be summarised and the change cannot pass"); };
+  try { lock = JSON.parse(jsonText ?? "{}"); } catch { fail(); }
+  if (!lock || typeof lock !== "object" || Array.isArray(lock)) fail();
   const { packages = {}, ...top } = lock;
+  if (!packages || typeof packages !== "object" || Array.isArray(packages)) fail();
   const lines = [`(lockfile) ${sortedJson(top)}`];
   for (const k of Object.keys(packages).sort()) {
     lines.push(`${k === "" ? "(root)" : k.replace(/^node_modules\//, "")} ${sortedJson(packages[k])}`);

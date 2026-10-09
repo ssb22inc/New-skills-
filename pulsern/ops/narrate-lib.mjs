@@ -224,7 +224,16 @@ export function speechTokens(text) {
   }
   const expanded = t.toLowerCase()
     .replace(/\bcan['’]t\b/g, "can not").replace(/\bwon['’]t\b/g, "will not").replace(/n['’]t\b/g, " not")
-    .replace(/\bcannot\b/g, "can not").replace(/['’]s\b/g, "s").replace(/['’](re|ve|ll|d|m)\b/g, " $1");
+    .replace(/\bcannot\b/g, "can not")
+    /* Affirmative contractions read as their words (Astra, PR #134 review,
+       round 14: "It's given with a meal" failed "It is given with a
+       meal"). "'s" is "is" only after a pronoun-like word; elsewhere it is
+       a possessive. "'d" (had or would) is ambiguous and must match as
+       written. */
+    .replace(/\b(it|that|there|here|what|who|where|when|how|he|she|this|everyone|someone|nobody|everything|nothing)['’]s\b/g, "$1 is")
+    .replace(/\blet['’]s\b/g, "let us").replace(/\bi['’]m\b/g, "i am")
+    .replace(/['’]re\b/g, " are").replace(/['’]ve\b/g, " have").replace(/['’]ll\b/g, " will").replace(/['’]d\b/g, " d")
+    .replace(/['’]s\b/g, "s");
   return wordsToNumbers(expanded).replace(/§/g, "").replace(/(\d)\.(?!\d)/g, "$1 ").split(/[^a-z0-9.]+/)
     .map((w) => w.replace(/\.+$/g, "").replace(/^\.+(?!\d)/, "")).filter(Boolean)
     /* plural -s dropped from longer words, but not -ss/-is/-us (acidosis) */
@@ -253,7 +262,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 9;
+export const QA_VERSION = 10;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);

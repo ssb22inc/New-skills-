@@ -54,6 +54,16 @@ function fixtureColourKey() {
   return Buffer.concat([SIG, chunk("IHDR", ihdr), chunk("tRNS", Buffer.from([0, 255, 0, 0, 0, 0])), chunk("IDAT", deflateSync(Buffer.from([0, 255, 0, 0, 0, 0, 255]))), chunk("IEND", Buffer.alloc(0))]);
 }
 
+/* Astra's round-14 case: a credential in the red channel under alpha 1.
+   Raw RGBA (filter 0), written by zlib — not canonical. */
+function fixtureLowAlpha(text) {
+  const bytes = Buffer.from(text, "latin1");
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(bytes.length, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 6;
+  const row = [0];
+  for (const b of bytes) row.push(b, 0, 0, 1);
+  return Buffer.concat([SIG, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(Buffer.from(row))), chunk("IEND", Buffer.alloc(0))]);
+}
+
 const tracked = execFileSync("git", ["ls-files", "--", "*.png", "*.PNG"], { encoding: "utf8" }).split("\n").filter(Boolean);
 const cases = [
   ...tracked.map((f) => ({ name: f, bytes: readFileSync(f) })),
@@ -86,6 +96,14 @@ try {
     if (!same) failed += 1;
     console.log(`${same ? "same" : "DIFFERENT"}  ${name}  ${a.w}×${a.h}`);
   }
+  /* Two different hidden payloads under alpha 1 that the browser draws
+     identically must canonicalise to the same bytes: nothing survives
+     that the pixels do not show. */
+  const secret = fixtureLowAlpha("KEY=s3cr3t!"), blank = fixtureLowAlpha("\0".repeat(11));
+  const drawnSame = (await pixels(secret)).hash === (await pixels(blank)).hash;
+  const bytesSame = canonicalPng(secret).equals(canonicalPng(blank));
+  console.log(`${drawnSame ? "drawn alike" : "drawn differently"}, ${bytesSame ? "canonical bytes identical" : "CANONICAL BYTES DIFFER"}  fixture: credential under alpha 1`);
+  if (drawnSame && !bytesSame) failed += 1;
   let refused = false;
   try { canonicalPng(fixtureColourKey()); } catch { refused = true; }
   if (!refused) failed += 1;

@@ -297,7 +297,7 @@ describe("letters that name things are not fillers", () => {
     expect(speechTokens("Give the client an apple")).toEqual(speechTokens("Give client apple"));
   });
   it("re-checks clips approved under the weaker rule", () => {
-    expect(QA_VERSION).toBeGreaterThanOrEqual(9);
+    expect(QA_VERSION).toBeGreaterThanOrEqual(10);
   });
 });
 
@@ -323,5 +323,37 @@ describe("units keep their prefix", () => {
   });
   it("still treats ordinary punctuation as neutral", () => {
     expect(speechTokens("Check the pulse, then — calmly — reassess.")).toEqual(speechTokens("Check the pulse then calmly reassess"));
+  });
+});
+
+/* Astra, PR #134 review, round 14: affirmative contractions were promised
+   as spelling differences but did not match their words. */
+describe("contractions", () => {
+  it.each([
+    ["It is given with a meal.", "It's given with a meal."],
+    ["They are at risk of falls.", "They're at risk of falls."],
+    ["We have checked the site.", "We've checked the site."],
+    ["You will feel a pinch.", "You'll feel a pinch."],
+    ["I am going to check your pulse.", "I'm going to check your pulse."],
+    ["That is the priority.", "That's the priority."],
+    ["Let us review the steps.", "Let's review the steps."],
+  ])("'%s' matches '%s'", (script, heard) => {
+    expect(speechTokens(script)).toEqual(speechTokens(heard));
+    expect(audioCheck(script, heard).pass).toBe(true);
+  });
+  it("still catches a negation hidden in a contraction", () => {
+    expect(audioCheck("It is given with a meal, as the label directs for this rapid insulin.", "It isn't given with a meal, as the label directs for this rapid insulin.").pass).toBe(false);
+    expect(audioCheck("They are at risk of falls when they get up quickly at night.", "They aren't at risk of falls when they get up quickly at night.").pass).toBe(false);
+  });
+  it("keeps a possessive a possessive", () => {
+    expect(speechTokens("the client's pulse")).toEqual(speechTokens("the clients pulse"));
+    expect(speechTokens("It's dose")).not.toEqual(speechTokens("Its dose"));
+  });
+  it("the real rapid-insulin narration passes a contracted transcript", async () => {
+    const { DIAGRAMS } = await import("../src/diagrams/index.js");
+    const step = DIAGRAMS.insulin.steps.find((s) => /\bit is\b/i.test(s.narration ?? ""));
+    if (!step) return;   // nothing contractible in the current script
+    const contracted = step.narration.replace(/\bIt is\b/, "It's").replace(/\bit is\b/, "it's");
+    expect(audioCheck(step.narration, contracted).pass).toBe(true);
   });
 });
