@@ -1,7 +1,7 @@
 /* Astra's visual and clinical review of concept diagrams — the parts that
    decide what is sent and what a verdict means. No model is called. */
 import { describe, it, expect } from "vitest";
-import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA } from "../ops/review-diagrams-lib.mjs";
+import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne } from "../ops/review-diagrams-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 const d = DIAGRAMS.abg;
@@ -81,5 +81,36 @@ describe("the saved report", () => {
   it("says unknown, never $0, when the cost was not reported", () => {
     const md = renderReviewMarkdown({ title: "ABG", model: "m", reviewedAt: "t", images: 8, verdict: "PASS", counts: { blocker: 0, major: 0, minor: 0 }, findings: [], usage: { costUsd: null } });
     expect(md).toContain("| Cost | unknown |");
+  });
+});
+
+/* PR #134 review, round 6: an operational error was cached as FAIL under the
+   same key as a real verdict, and the normal re-run never retried it. */
+describe("an error is retried, a verdict is reused", () => {
+  const ok = { assessment: "Fine.", findings: [] };
+  it("retries after an error and then reuses the completed review", async () => {
+    const index = {};
+    const run = async (ask) => {
+      const prev = index.abg;
+      if (canReuse(prev, "k1")) return "reused";
+      const r = await reviewOne({ d, key: "k1", images: 2, model: "m", ask });
+      index.abg = { key: "k1", verdict: r.verdict, completed: r.completed };
+      return r.verdict;
+    };
+    expect(await run(async () => { throw new Error("timeout"); })).toBe("ERROR");
+    expect(index.abg).toMatchObject({ verdict: "ERROR", completed: false });
+    expect(await run(async () => ok)).toBe("PASS");        // same content: retried, not skipped
+    expect(index.abg).toMatchObject({ verdict: "PASS", completed: true });
+    expect(await run(async () => { throw new Error("should not be called"); })).toBe("reused");
+  });
+  it("never reuses a malformed answer as a verdict", async () => {
+    const r = await reviewOne({ d, key: "k", images: 1, model: "m", ask: async () => ({ nonsense: true }) });
+    expect(r).toMatchObject({ completed: false, verdict: "ERROR" });
+    expect(canReuse({ key: "k", verdict: "ERROR", completed: false }, "k")).toBe(false);
+    expect(canReuse({ key: "k", verdict: "FAIL" }, "k"), "an old entry with no completion record").toBe(false);
+  });
+  it("still reuses a completed FAIL — a real verdict is not re-bought", () => {
+    expect(canReuse({ key: "k", verdict: "FAIL", completed: true }, "k")).toBe(true);
+    expect(canReuse({ key: "k", verdict: "FAIL", completed: true }, "k", true)).toBe(false);
   });
 });

@@ -299,3 +299,38 @@ describe("bot pushes are reviewed", () => {
     for (const sc of scripts) expect(sc).not.toMatch(/\$\{\{\s*inputs\./);
   });
 });
+
+/* PR #134 review, round 6: "refs/heads/main" passed a guard that refused
+   only the literal words main/master. Each workflow's real guard script is
+   extracted and RUN here against hostile inputs, with the GitHub branch
+   lookup stubbed to know two real branches. */
+describe("jobs that push refuse the default branch in every spelling", () => {
+  const { execFileSync } = require("node:child_process");
+  const { mkdtempSync, writeFileSync } = require("node:fs");
+  const { tmpdir } = require("node:os");
+  const guardOf = (f) => {
+    const lines = readFileSync(join(LIVE_DIR, f), "utf8").split("\n");
+    const i = lines.findIndex((l) => l.trim() === "- name: Refuse to write to main");
+    const j = lines.findIndex((l, k) => k > i && l.trim() === "run: |");
+    const body = [];
+    for (const l of lines.slice(j + 1)) { if (l.trim() && !l.startsWith(" ".repeat(10))) break; body.push(l.slice(10)); }
+    const stub = 'curl() { url="${@: -1}"; case "$url" in */branches/feature%2Fx|*/branches/claude%2Fwork) return 0;; *) return 22;; esac; }';
+    return `${stub}\n${body.join("\n")}`;
+  };
+  const accepts = (script, branch) => {
+    const dir = mkdtempSync(join(tmpdir(), "guard-"));
+    writeFileSync(join(dir, "g.sh"), script);
+    try {
+      execFileSync("bash", [join(dir, "g.sh")], { env: { ...process.env, BRANCH: branch, DEFAULT_BRANCH: "trunk", REPO: "o/r", GH_TOKEN: "x" }, stdio: "pipe" });
+      return true;
+    } catch { return false; }
+  };
+  it.each(["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"])("%s", (f) => {
+    const g = guardOf(f);
+    for (const ok of ["feature/x", "claude/work"]) expect(accepts(g, ok), ok).toBe(true);
+    for (const bad of ["trunk", "main", "master", "refs/heads/main", "refs/heads/feature/x", "HEAD", "a..b", "x.lock", "has space",
+      "2994d8ae53705dc4206507b5daec4812f290372b", "abc1234", "v1.0", "not-a-branch"]) {
+      expect(accepts(g, bad), bad).toBe(false);
+    }
+  });
+});

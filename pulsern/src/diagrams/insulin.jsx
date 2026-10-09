@@ -144,7 +144,7 @@ export const INSULIN_EXAMPLE = { type: "nph", givenAt: "07:00" };
 const ROWS = [["rapid", "Rapid · lispro", "10–30 min", "1–2 h", "3–5 h"],
   ["short", "Short · regular", "30–60 min", "2–4 h", "5–8 h"],
   ["nph", "Intermed. · NPH", "1–2 h", "4–12 h", "12–18 h"],
-  ["long", "Long · glargine", "1–2 h", "none", "~24 h"]];
+  ["long", "Long · glargine U-100", "1–2 h", "none", "~24 h"]];
 
 export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   const concept = params === null;
@@ -203,15 +203,15 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
           </OnStep>
         ))}
         <T x={18} y={270} size={10.5} weight={700} color={C.muted}>Type</T>
-        <T x={124} y={270} size={10.5} weight={700} color={C.muted}>Onset</T>
-        <T x={204} y={270} size={10.5} weight={700} color={C.muted}>Peak</T>
-        <T x={268} y={270} size={10.5} weight={700} color={C.muted}>Lasts</T>
+        <T x={150} y={270} size={10.5} weight={700} color={C.muted}>Onset</T>
+        <T x={222} y={270} size={10.5} weight={700} color={C.muted}>Peak</T>
+        <T x={282} y={270} size={10.5} weight={700} color={C.muted}>Lasts</T>
         {ROWS.map(([k, a, b, c, d], i) => (
           <g key={k}>
             <T x={18} y={290 + i * 19} size={11}>{a}</T>
-            <T x={124} y={290 + i * 19} size={11} mono>{b}</T>
-            <T x={204} y={290 + i * 19} size={11} mono color={c === "none" ? C.muted : C.ink}>{c}</T>
-            <T x={268} y={290 + i * 19} size={11} mono>{d}</T>
+            <T x={150} y={290 + i * 19} size={11} mono>{b}</T>
+            <T x={222} y={290 + i * 19} size={11} mono color={c === "none" ? C.muted : C.ink}>{c}</T>
+            <T x={282} y={290 + i * 19} size={11} mono>{d}</T>
           </g>
         ))}
       </G>
@@ -274,8 +274,8 @@ export const insulin = {
       narration: "Short-acting regular insulin starts in thirty to sixty minutes and peaks at two to four hours." },
     { key: "nph", focus: ["axes", "nph", "table"], caption: "Intermediate NPH starts in 1 to 2 hours, with a long, broad peak from about 4 to 12 hours.",
       narration: "Intermediate-acting N-P-H starts in one to two hours, and has a long, broad peak from about four to twelve hours." },
-    { key: "long", focus: ["axes", "long", "table"], caption: "Long-acting glargine (U-100) has no pronounced peak — a steady background level for about 24 hours. Other basal insulins last shorter or longer, so check the product.",
-      narration: "Long-acting glargine has no pronounced peak. It provides a steady background level for about twenty-four hours. Other basal insulins last shorter or longer, so always check the product." },
+    { key: "long", focus: ["axes", "long", "table"], caption: "Long-acting glargine U-100 has no pronounced peak — a steady background level for about 24 hours. Others last differently, including glargine U-300, so check the product.",
+      narration: "Long-acting glargine U-one-hundred has no pronounced peak. It provides a steady background level for about twenty-four hours. Other basal insulins last differently, including glargine U-three-hundred, so always check the product." },
     { key: "risk", focus: ["axes", "rapid", "short", "nph", "peak-risk"], caption: "The peak is when hypoglycemia is most likely. Know when each client's insulin peaks, and make sure food and glucose checks line up with it.",
       narration: "The peak is when hypoglycemia is most likely. Know when each client's insulin peaks, and make sure food and glucose checks line up with it." },
     { key: "worked", focus: ["axes", "worked", "peak-risk"], dynamic: true, caption: null, narration: null },

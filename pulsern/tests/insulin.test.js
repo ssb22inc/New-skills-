@@ -60,3 +60,30 @@ describe("worked step draws the question's insulin", () => {
     expect(html).toContain(">08:00<");
   });
 });
+
+/* PR #134 review, round 6: the ~24 h profile is glargine U-100's, and the
+   table and narration said only "glargine" — U-300 lasts longer. */
+describe("the long-acting row names its product everywhere a student sees or hears it", () => {
+  it("in the static table, the long step's caption and its narration", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { insulin } = await import("../src/diagrams/insulin.jsx");
+    const html = renderToStaticMarkup(React.createElement(insulin.Diagram, { params: null }));
+    expect(html).toContain("glargine U-100");
+    expect(html).not.toMatch(/Long · glargine</);
+    const step = insulin.steps.find((s) => s.key === "long");
+    expect(step.caption).toMatch(/glargine U-100/);
+    expect(step.caption).toMatch(/U-300/);
+    expect(step.narration).toMatch(/glargine U-one-hundred/);
+    expect(step.narration).toMatch(/U-three-hundred/);
+  });
+  it("its narration passes a real transcript and fails one that drops the formulation", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    const { insulin } = await import("../src/diagrams/insulin.jsx");
+    const script = insulin.steps.find((s) => s.key === "long").narration;
+    const heard = "Long-acting glargine U-100 has no pronounced peak. It provides a steady background level for about 24 hours. Other basal insulins last differently, including glargine U-300, so always check the product.";
+    expect(audioCheck(script, heard).pass).toBe(true);
+    expect(audioCheck(script, heard.replace("glargine U-100 has", "glargine has")).pass).toBe(false);
+    expect(audioCheck(script, heard.replace("U-300", "U-100")).pass).toBe(false);
+  });
+});

@@ -43,12 +43,30 @@ jobs:
       run:
         working-directory: pulsern
     steps:
+      # Only a plain feature-branch name is accepted, and never the default
+      # branch: "refs/heads/main", tags, SHAs and other aliases are refused
+      # outright, so checkout, push, concurrency and PR lookup all see the
+      # same exact branch (Astra, PR #134 review, round 6).
       - name: Refuse to write to main
         working-directory: .
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          case "$BRANCH" in
-            main|master) echo "::error::Run on a feature branch; the manifest is committed to it."; exit 1 ;;
-          esac
+          set -euo pipefail
+          fail() { echo "::error::$1 Run on a feature branch; the manifest is committed to it."; exit 1; }
+          [[ "$BRANCH" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || fail "'$BRANCH' is not a plain branch name."
+          case "$BRANCH" in refs/*|*/|*..*|*.lock|HEAD) fail "'$BRANCH' is not a plain branch name." ;; esac
+          git check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || fail "'$BRANCH' is not a valid branch name."
+          for protected in "$DEFAULT_BRANCH" main master; do
+            [ "$BRANCH" = "$protected" ] && fail "'$BRANCH' is protected."
+          done
+          [[ "$BRANCH" =~ ^[0-9a-f]{7,40}$ ]] && fail "'$BRANCH' looks like a commit, not a branch."
+          # It must be an existing branch of this repository — not a tag or commit.
+          curl -fsS -o /dev/null -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/branches/$(jq -rn --arg b "$BRANCH" '$b|@uri')" || fail "'$BRANCH' is not an existing branch."
+          echo "Writing to feature branch '$BRANCH'."
 
       - name: Check the voice name
         working-directory: .

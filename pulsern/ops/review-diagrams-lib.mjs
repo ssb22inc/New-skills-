@@ -152,3 +152,29 @@ export function renderReviewMarkdown(r) {
   } else lines.push("_No findings._", "");
   return lines.join("\n");
 }
+
+/* May an earlier result be reused instead of paying for a new review?
+   Only a COMPLETED review of byte-identical images. An operational error —
+   timeout, bad key, malformed answer — is not a verdict and is retried on
+   the next run (Astra, PR #134 review, round 6: errors were cached as FAIL,
+   and the normal re-run could never recover). */
+export const canReuse = (prev, key, force = false) => !force && !!prev && prev.key === key && prev.completed === true;
+
+/* One diagram's review. `ask` returns the reviewer's parsed answer. The
+   result says whether a valid review completed, separately from what it
+   concluded. */
+export async function reviewOne({ d, key, images, ask, model, now = () => new Date().toISOString(), cost = () => null }) {
+  const r = { id: d.id, title: d.title, model, reviewedAt: now(), images, key, findings: [], usage: null, error: null, completed: false };
+  try {
+    const parsed = validateReview(await ask());
+    r.usage = { costUsd: cost() };
+    r.assessment = parsed.assessment;
+    r.findings = parsed.findings;
+    Object.assign(r, verdictFor(parsed.findings));
+    r.completed = true;
+  } catch (e) {
+    r.error = String(e?.message ?? e);
+    r.verdict = "ERROR";   // not a clinical verdict; never PASS, never cached
+  }
+  return r;
+}

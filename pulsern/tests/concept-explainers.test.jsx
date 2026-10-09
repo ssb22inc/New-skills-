@@ -25,6 +25,20 @@ describe("pairsFor", () => {
   it("stops showing when the question is edited after review", () => {
     expect(pairsFor(map, { ...bankQ, rationale: "Edited rationale." }, DIAGRAMS)).toEqual([]);
   });
+  /* Round 6: options and the answer feed the pairing and its values, so an
+     edit to either must retire the pairing too. */
+  it("stops showing when only an option or only the answer is edited", () => {
+    const q = { id: 9, stem: "NPH insulin was given at 0700.", rationale: "Peak risk.", options: ["NPH", "regular"], answer: 0 };
+    const m = { pairs: { "9": [{ d: "insulin", p: { type: "nph", givenAt: "07:00" }, f: fingerprint(q), v: v("insulin") }] } };
+    expect(pairsFor(m, q, DIAGRAMS)).toHaveLength(1);
+    expect(pairsFor(m, { ...q, options: ["regular", "regular"] }, DIAGRAMS)).toEqual([]);
+    expect(pairsFor(m, { ...q, answer: 1 }, DIAGRAMS)).toEqual([]);
+  });
+  it("fingerprints the same row identically whatever order its JSON keys arrive in", () => {
+    const a = { id: 1, stem: "s", rationale: "r", options: { a: 1, b: [2, { c: 3, d: 4 }] }, answer: { x: 1, y: 2 } };
+    const b = { id: 1, stem: "s", rationale: "r", options: { b: [2, { d: 4, c: 3 }], a: 1 }, answer: { y: 2, x: 1 } };
+    expect(fingerprint(a)).toBe(fingerprint(b));
+  });
 
   it("ignores a pairing for a diagram that no longer exists", () => {
     const m = { pairs: { "1": [{ d: "retired-diagram", f: fingerprint(bankQ) }] } };
