@@ -6,7 +6,7 @@
     "head": "7338484335445b2a349c343648d80c8e622161c5",
     "pr": "134"
   },
-  "reviewedAt": "2026-10-09T14:54:52.232Z",
+  "reviewedAt": "2026-10-09T15:58:37.641Z",
   "filesReviewed": [
     ".github/workflows/pulsern-astra-review.yml",
     ".github/workflows/pulsern-ci.yml",
@@ -59,6 +59,6 @@
   "skipped": [],
   "findings": [],
   "usage": null,
-  "error": "The review could not be completed: openai/gpt-6-astra: 402 out of credits — This request requires more credits, or fewer max_tokens. You requested up to 64000 tokens, but can only afford 61517. To increase, visit https://openrouter.ai/settings/credits and add more credits\n  Add credits at https://openrouter.ai/settings/credits, then re-run.",
+  "error": "The review could not be completed: openai/gpt-6-astra: 402 out of credits — This request requires more credits, or fewer max_tokens. You requested up to 64000 tokens, but can only afford 58411. To increase, visit https://openrouter.ai/settings/credits and add more credits\n  Add credits at https://openrouter.ai/settings/credits, then re-run.",
   "verdict": "FAIL"
 }
