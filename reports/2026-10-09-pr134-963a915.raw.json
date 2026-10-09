@@ -1,0 +1,108 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "963a915043628ef0a334204ef91a58f5485e69ef",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T10:45:03.562Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/src/concept-explainers.jsx",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/fingerprint.js",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/concept-explainers.test.jsx",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/insulin.test.js",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/map-diagrams.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 228,
+      "title": "Binary-classified source can bypass the review payload",
+      "problem": "Ordinary source files use git's default binary detection. If git classifies a file as binary, its diff contains only a 'Binary files differ' marker. When the post-change file exceeds MAX_FULL_FILE_CHARS, planContext also excludes its full contents. Nothing rejects this unreviewed payload before a successful model response becomes a passing status.",
+      "failure_scenario": "A PR inserts a NUL inside a JavaScript block comment near the beginning of an executable source file and pads it beyond 60,000 characters. JavaScript comments can contain that character, but git treats the file as binary. Functional changes elsewhere in the file are absent from the model's prompt; the trusted workflow can certify the commit without showing those changes.",
+      "fix": "Force textual diffs for supported source formats, safely represent control characters, and fail closed whenever changed content cannot be represented in the review payload. Binary assets need an appropriate review representation or an explicit failure, not just a git marker. Add a real-git regression using an executable source file above the full-file limit with a NUL in a comment.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 167,
+      "title": "Narration QA discards clinically meaningful percent symbols",
+      "problem": "Both speechTokens and normaliseSpeech discard '%' as punctuation. Consequently, the new exact-word check still treats a number and a percentage as equivalent, despite their different clinical meanings.",
+      "failure_scenario": "Take the passing hand-written abg/lungs transcript in tests/narrate.test.js and replace 'above 45' with 'above 45%'. audioCheck still passes: both normalized token streams are identical. A recording that incorrectly says 'forty-five percent', transcribed as '45%', can therefore be published as the PaCO2 teaching threshold.",
+      "fix": "Normalize clinically meaningful symbols into explicit tokens, such as '%' to 'percent', instead of deleting them. Preserve or reject other unit-bearing symbols deliberately. Add positive-baseline and corrupted-percentage tests against the actual scripts, bump QA_VERSION, and recheck recordings approved by the weaker rule.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": ".github/workflows/pulsern-diagram-map.yml",
+      "line": 113,
+      "title": "A rebase conflict can be reported as a successful save",
+      "problem": "The save loop ignores a failed rebase with '|| true' and then retries pushing HEAD. During a conflicting rebase, HEAD can already be the remote branch tip, without the results commit. Pushing that HEAD succeeds as an up-to-date no-op, so the job reports 'Saved' and sets pushed=true even though its paid results were never pushed. The diagram-review and narrate workflows contain the same pattern.",
+      "failure_scenario": "While the mapper runs, another commit updates the same map or decision-cache file. The initial push is rejected, and rebasing the mapper's results commit conflicts. The next push publishes nothing but succeeds because HEAD equals the remote tip. The runner then exits successfully and is discarded, taking the unpushed decision cache with it.",
+      "fix": "Do not continue the push loop after an unresolved rebase. Preserve results as an unconditional artifact before attempting synchronization, fail explicitly on conflicts, and only report a successful save after verifying that the results commit or its successfully rebased equivalent reached the branch. Apply the fix to all three workflows and test a conflicting concurrent update with real git repositories.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/map-diagrams-lib.mjs",
+      "line": 129,
+      "title": "Reused decisions retain the obsolete question fingerprint",
+      "problem": "The browser fingerprint now includes options and answer, but buildItemMap still copies the cached d.fp unchanged. Cache freshness checks itemHash, diagramHash and extracted values, none of which invalidates a decision solely because the fingerprint algorithm changed.",
+      "failure_scenario": "A decisions.json cache produced by the previous mapper contains a confirmed potassium or pressure-injury pairing whose question, diagram content and extraction remain unchanged. After obtaining current visual approvals, the mapper skips the paid pairing review and emits the old stem/rationale-only fingerprint into a version-2 map. pairsFor computes the new fingerprint and silently suppresses the pairing. The shipped-map tests accept the old value because it is still eight hexadecimal characters.",
+      "fix": "Recompute the browser fingerprint from the current question whenever publishing a fresh cached decision; this does not require another paid review because itemHash already binds the reviewed question fields. Alternatively, version and migrate the cached fingerprint. Add a producer-to-consumer regression starting with an actual old-format cached fingerprint.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 197980,
+    "completionTokens": 15081,
+    "reasoningTokens": 13905,
+    "costUsd": 3.2287925
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge yet. The review collector can omit executable changes, narration QA can approve a clinically altered transcript, and the workflow save retry can lose paid results while reporting success. Cached pairing fingerprints also need migration. This was a static review; I could not run the tests/build or verify GitHub's external environment and branch-protection settings.",
+  "counts": {
+    "blocker": 3,
+    "major": 1,
+    "minor": 0
+  }
+}
