@@ -178,3 +178,35 @@ export async function reviewOne({ d, key, images, ask, model, now = () => new Da
   }
   return r;
 }
+
+/* One diagram's paid review, recorded around the call. A checkpoint report
+   — "started, did not finish" — and its index entry are written BEFORE the
+   reviewer is asked, and the same files are overwritten with the result.
+   A run killed or hung mid-call therefore still leaves a record of the
+   paid attempt, and the paid call has its own timeout, shorter than the
+   job's, so the save steps still run (Astra, PR #134 review, round 13). */
+export const REVIEW_CALL_TIMEOUT_MS = 12 * 60 * 1000;
+export async function reviewAndRecord({ d, key, images, ask, model, dir, index, sourceKey, write, now = () => new Date().toISOString(), cost = () => null, timeoutMs = REVIEW_CALL_TIMEOUT_MS }) {
+  const startedAt = now();
+  const base = `${dir}/${d.id}/${startedAt.replace(/[:.]/g, "-")}-${key}`;
+  const record = (r) => {
+    write(`${base}.md`, renderReviewMarkdown(r));
+    write(`${base}.json`, JSON.stringify(r, null, 2) + "\n");
+    index[d.id] = { key, sourceKey, verdict: r.verdict, completed: r.completed, reviewedAt: r.reviewedAt, report: `${base}.md`, counts: r.counts ?? null };
+    write(`${dir}/index.json`, JSON.stringify(index, null, 2) + "\n");
+  };
+  record({ id: d.id, title: d.title, model, reviewedAt: startedAt, images, key, findings: [], usage: null, completed: false, verdict: "ERROR",
+    error: "The review was started but did not finish: the run stopped while waiting for Astra. The request may have been charged." });
+  let timer;
+  const timed = () => Promise.race([
+    ask(),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`no answer within ${timeoutMs / 1000} s; the request may have been charged`)), timeoutMs); }),
+  ]);
+  try {
+    const r = await reviewOne({ d, key, images, ask: timed, model, now: () => startedAt, cost });
+    record(r);
+    return { ...r, report: `${base}.md` };
+  } finally {
+    clearTimeout(timer);
+  }
+}

@@ -67,8 +67,21 @@ const GENERATED_PAGE = /^pulsern\/public\/(compare|learn|pricing|methodology|how
 const LOCKFILE = /(^|\/)package-lock\.json$/;
 const OWN_REPORTS = /^pulsern\/reports\/astra\//;
 
+/* The repository's control plane: workflows, actions and settings outside
+   PulseRN's own workflows. This reviewer does not judge them (other
+   projects' business), but it cannot certify a change that alters them
+   either: any workflow on the default branch can ask for the astra-review
+   environment and read the status-publisher key, so an unreviewed workflow
+   riding along with a PulseRN change would inherit the review's authority
+   (Astra, PR #134 review, round 13). Such a change fails closed; it needs
+   its own review outside this one. */
+const CONTROL_PLANE = /^\.github\//;
+
 export function classifyPath(path) {
-  if (!IN_SCOPE.some((re) => re.test(path))) return { mode: "skip", why: "outside PulseRN" };
+  if (!IN_SCOPE.some((re) => re.test(path))) {
+    if (CONTROL_PLANE.test(path)) return { mode: "refuse", why: "repository control plane outside PulseRN's own workflows: a PulseRN review cannot certify it" };
+    return { mode: "skip", why: "outside PulseRN" };
+  }
   if (OWN_REPORTS.test(path)) return { mode: "skip", why: "earlier review reports" };
   if (LOCKFILE.test(path)) return { mode: "lockfile", why: "reviewed as a dependency-change summary" };
   if (GENERATED_PAGE.test(path)) return { mode: "page", why: "generated page: reviewed as visible text, scripts and links" };
@@ -295,6 +308,7 @@ export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
   for (const e of entries) {
     const c = classifyPath(e.path);
     if (c.mode === "skip") { if (c.why !== "outside PulseRN") skipped.push({ path: e.path, why: c.why }); continue; }
+    if (c.mode === "refuse") { unrepresentable.push(`${e.path} (${c.why})`); continue; }
     /* A symlink or submodule is not its own content: what ships is
        whatever it points to, which may be outside the review entirely. A
        change that leaves one in place is refused; removing one is fine. */

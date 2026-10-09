@@ -58,10 +58,36 @@ describe("scope (no cross-contamination; nothing in PulseRN exempt)", () => {
     }
   });
 
-  it("never touches another project", () => {
-    for (const p of ["fullburn/engine/scripts/done.mjs", "haven/app/page.tsx", ".github/workflows/fullburn-gates.yml", ".github/workflows/cross-family-read.yml"]) {
+  it("never reads another project's code", () => {
+    for (const p of ["fullburn/engine/scripts/done.mjs", "haven/app/page.tsx", "package.json"]) {
       expect(classifyPath(p), p).toEqual({ mode: "skip", why: "outside PulseRN" });
     }
+  });
+  /* Round 13: any default-branch workflow can read the astra-review
+     environment's key, so a PulseRN review must not certify a change that
+     also alters the repository's control plane. */
+  it("refuses to certify a change to any other workflow or repository setting", () => {
+    for (const p of [".github/workflows/fullburn-gates.yml", ".github/workflows/bypass.yml", ".github/actions/x/action.yml", ".github/CODEOWNERS", ".github/dependabot.yml"]) {
+      expect(classifyPath(p).mode, p).toBe("refuse");
+    }
+  });
+  it("fails the review, end to end, when a differently named workflow rides along", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-cp-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    mkdirSync(join(dir, "pulsern/docs"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/docs/a.md"), "old\n"); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, "pulsern/docs/a.md"), "new\n");
+    mkdirSync(join(dir, ".github/workflows"), { recursive: true });
+    writeFileSync(join(dir, ".github/workflows/bypass.yml"), "on: push\njobs:\n  x:\n    environment: astra-review\n    runs-on: ubuntu-latest\n    steps: [{ run: echo $KEY }]\n");
+    run("add", "-A"); run("commit", "-qm", "h");
+    let called = false;
+    const { report, code } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return { text: JSON.stringify({ assessment: "ok", findings: [] }), usage: {} }; } });
+    expect(called).toBe(false);
+    expect(report.verdict).toBe("FAIL");
+    expect(report.error).toMatch(/bypass\.yml/);
+    expect(code).not.toBe(0);
+    rmSync(dir, { recursive: true, force: true });
   });
 
   /* Astra finding #4: generated pages were exempt by path. They are now

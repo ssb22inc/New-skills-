@@ -14,7 +14,7 @@ import { renderDiagrams } from "./render-diagrams.mjs";
 import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
 import { sourceKey } from "./diagram-attest.mjs";
-import { imagePlan, diagramReviewPrompt, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne } from "./review-diagrams-lib.mjs";
+import { imagePlan, diagramReviewPrompt, reviewKey, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord } from "./review-diagrams-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const ONLY = arg("--only");
@@ -42,6 +42,11 @@ if (lintFailures.length) {
   process.exit(1);
 }
 
+/* No new paid review starts after this, so a run inside the job's 60
+   minutes always reaches its save steps. */
+const RUN_DEADLINE = Date.now() + 40 * 60 * 1000;
+const write = (p, s) => { mkdirSync(join(p, ".."), { recursive: true }); writeFileSync(p, s); };
+
 const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
 let failed = 0;
 try {
@@ -62,16 +67,11 @@ try {
       continue;
     }
     if (prev && prev.key === key && !prev.completed) console.log(`${d.id}: the last attempt did not complete (${prev.verdict}) — retrying`);
-    const r = await reviewOne({
-      d, key, images: plan.length, model: REVIEW_MODEL, cost: lastReviewCost,
+    if (Date.now() > RUN_DEADLINE) { console.log(`${d.id}: not started — the run is near its time limit; re-run to review it`); failed++; continue; }
+    const r = await reviewAndRecord({
+      d, key, images: plan.length, model: REVIEW_MODEL, cost: lastReviewCost, dir: DIR, index, sourceKey: SOURCE_KEY, write,
       ask: async () => parseJson(await review(diagramReviewPrompt(d, plan, rules), 32000, { images: pngs, responseFormat: DIAGRAM_REVIEW_SCHEMA, effort: "high" })),
     });
-    mkdirSync(join(DIR, d.id), { recursive: true });
-    const base = join(DIR, d.id, `${r.reviewedAt.slice(0, 10)}-${key}`);
-    writeFileSync(`${base}.md`, renderReviewMarkdown(r));
-    writeFileSync(`${base}.json`, JSON.stringify(r, null, 2) + "\n");
-    index[d.id] = { key, sourceKey: SOURCE_KEY, verdict: r.verdict, completed: r.completed, reviewedAt: r.reviewedAt, report: `${base}.md`, counts: r.counts ?? null };
-    writeFileSync(INDEX, JSON.stringify(index, null, 2) + "\n");   // after every diagram
     console.log(`${d.id}: ${r.verdict}${r.counts ? ` (${r.counts.blocker}B ${r.counts.major}M ${r.counts.minor}m)` : ""}${r.error ? ` — ${r.error}` : ""}`);
     if (r.verdict !== "PASS") failed++;
   }

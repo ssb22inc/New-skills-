@@ -297,6 +297,31 @@ describe("letters that name things are not fillers", () => {
     expect(speechTokens("Give the client an apple")).toEqual(speechTokens("Give client apple"));
   });
   it("re-checks clips approved under the weaker rule", () => {
-    expect(QA_VERSION).toBeGreaterThanOrEqual(8);
+    expect(QA_VERSION).toBeGreaterThanOrEqual(9);
+  });
+});
+
+/* Astra, PR #134 review, round 13: the micro sign was deleted as
+   punctuation, so "5 μg" heard as "5 g" passed. */
+describe("units keep their prefix", () => {
+  const MU = String.fromCodePoint(0x3bc), MICRO = String.fromCodePoint(0xb5);
+  const script = (u) => `The label reads 5 ${u}. Verify units against your course materials.`;
+  it.each([MU + "g", MICRO + "g", "mcg"])("fails when %s is heard as grams or milligrams", (u) => {
+    expect(audioCheck(script(u), script("g")).pass).toBe(false);
+    expect(audioCheck(script(u), script("mg")).pass).toBe(false);
+    expect(audioCheck(script(u), "The label reads 5 grams. Verify units against your course materials.").pass).toBe(false);
+  });
+  it.each([MU + "g", MICRO + "g", "mcg"])("passes a faithful reading of %s", (u) => {
+    expect(audioCheck(script(u), "The label reads 5 micrograms. Verify units against your course materials.").pass).toBe(true);
+    expect(audioCheck(script(u), script("mcg")).pass).toBe(true);
+    expect(audioCheck(script(u), script(MU + "g")).pass).toBe(true);
+  });
+  it("keeps any other unhandled symbol as a token that must match", () => {
+    const arrow = String.fromCodePoint(0x2192), dagger = String.fromCodePoint(0x2020);
+    expect(speechTokens(`K ${arrow} cells`)).toContain("sym2192");
+    expect(audioCheck(`Give the dose ${dagger} only after the potassium result is reviewed by the provider.`, "Give the dose only after the potassium result is reviewed by the provider.").pass).toBe(false);
+  });
+  it("still treats ordinary punctuation as neutral", () => {
+    expect(speechTokens("Check the pulse, then — calmly — reassess.")).toEqual(speechTokens("Check the pulse then calmly reassess"));
   });
 });

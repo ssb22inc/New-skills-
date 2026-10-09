@@ -1,7 +1,7 @@
 /* Astra's visual and clinical review of concept diagrams — the parts that
    decide what is sent and what a verdict means. No model is called. */
 import { describe, it, expect } from "vitest";
-import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne } from "../ops/review-diagrams-lib.mjs";
+import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne, reviewAndRecord } from "../ops/review-diagrams-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 const d = DIAGRAMS.abg;
@@ -112,5 +112,49 @@ describe("an error is retried, a verdict is reused", () => {
   it("still reuses a completed FAIL — a real verdict is not re-bought", () => {
     expect(canReuse({ key: "k", verdict: "FAIL", completed: true }, "k")).toBe(true);
     expect(canReuse({ key: "k", verdict: "FAIL", completed: true }, "k", true)).toBe(false);
+  });
+});
+
+/* Astra, PR #134 review, round 13: the report was written only after the
+   paid call returned, so a hung or killed call left no record of it. */
+describe("a paid diagram review is recorded before it is asked", () => {
+  const d = { id: "abg", title: "ABG" };
+  const store = () => { const files = {}; return { files, write: (p, s) => { files[p] = s; } }; };
+  const answer = { assessment: "fine", findings: [] };
+  it("writes a 'did not finish' checkpoint and index entry before the reviewer answers", async () => {
+    const { files, write } = store();
+    const index = {};
+    let release;
+    const pending = reviewAndRecord({ d, key: "k1", images: 2, model: "m", dir: "r", index, sourceKey: "s", write,
+      now: () => "2026-10-09T12:00:00.000Z", ask: () => new Promise((res) => { release = res; }) });
+    await new Promise((r) => setTimeout(r, 10));
+    const json = Object.keys(files).find((p) => p.endsWith(".json") && p.startsWith("r/abg/"));
+    expect(json).toBeTruthy();
+    expect(JSON.parse(files[json])).toMatchObject({ verdict: "ERROR", completed: false });
+    expect(JSON.parse(files["r/index.json"]).abg).toMatchObject({ key: "k1", verdict: "ERROR", completed: false });
+    release(answer);
+    const r = await pending;
+    // the same attempt's files are finalised, not a second record
+    expect(JSON.parse(files[json])).toMatchObject({ verdict: "PASS", completed: true });
+    expect(JSON.parse(files["r/index.json"]).abg).toMatchObject({ verdict: "PASS", completed: true, report: r.report });
+  });
+  it("gives up on a reviewer that never answers, and keeps the record", async () => {
+    const { files, write } = store();
+    const index = {};
+    const r = await reviewAndRecord({ d, key: "k2", images: 1, model: "m", dir: "r", index, sourceKey: "s", write,
+      timeoutMs: 30, ask: () => new Promise(() => {}) });
+    expect(r).toMatchObject({ verdict: "ERROR", completed: false });
+    expect(r.error).toMatch(/no answer within/);
+    expect(JSON.parse(files["r/index.json"]).abg).toMatchObject({ key: "k2", completed: false });
+    expect(canReuse(index.abg, "k2")).toBe(false);   // retried next run, never cached
+  });
+  it("keeps every attempt under its own name", async () => {
+    const { files, write } = store();
+    const index = {};
+    let t = 0;
+    const now = () => `2026-10-09T12:00:0${t++}.000Z`;
+    await reviewAndRecord({ d, key: "k", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, now, ask: async () => { throw new Error("boom"); } });
+    await reviewAndRecord({ d, key: "k", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, now, ask: async () => answer });
+    expect(Object.keys(files).filter((p) => p.endsWith(".json") && p.startsWith("r/abg/"))).toHaveLength(2);
   });
 });

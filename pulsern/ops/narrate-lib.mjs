@@ -85,10 +85,20 @@ export function wordsToNumbers(text) {
    unit-bearing symbols become explicit tokens that must match exactly. */
 const SYMBOL_WORDS = [[/%/g, " percent "], [/°/g, " degrees "], [/±/g, " plus or minus "], [/&/g, " and "], [/\+/g, " plus "]];
 const SYMBOL_TOKENS = [[/≤/g, " symle "], [/≥/g, " symge "], [/</g, " symlt "], [/>/g, " symgt "], [/=/g, " symeq "], [/×/g, " symtimes "], [/÷/g, " symdiv "], [/~/g, " symapprox "], [/\//g, " symslash "]];
+/* Punctuation a transcript may add, drop or spell differently without
+   changing the meaning. Everything else that is not a letter or digit is
+   meaning-bearing until shown otherwise: it becomes a "sym<code>" token
+   that must match exactly, instead of being deleted (Astra, PR #134
+   review, round 13: the micro sign was deleted, so "5 μg" heard as "5 g"
+   passed). U+2212 is left for the sign handling below. */
+const NEUTRAL = /[A-Za-z0-9\s.,;:!?'"()[\]\-\u2010-\u2015\u2018\u2019\u201C\u201D\u2026\u2212]/;
 export function symbolsToWords(text) {
-  let t = String(text);
+  /* The micro prefix, as the micro sign (U+00B5) or Greek mu (U+03BC),
+     joins its unit: "5 μg" and "5 µg" read "5 microg", which the token
+     step equates with "mcg" and "micrograms". */
+  let t = String(text).replace(/[\u00B5\u03BC]\s*(?=[A-Za-z])/g, " micro");
   for (const [re, w] of [...SYMBOL_WORDS, ...SYMBOL_TOKENS]) t = t.replace(re, w);
-  return t;
+  return [...t].map((c) => (NEUTRAL.test(c) ? c : ` sym${c.codePointAt(0).toString(16)} `)).join("");
 }
 
 export function signsAndRanges(text) {
@@ -121,8 +131,11 @@ function levenshtein(a, b) {
   return prev[b.length];
 }
 
+/* Similarity is measured on the same normalised words the exact check
+   uses (units, letters, signs), so a correct spelling of a unit — "mcg"
+   for "micrograms" — does not cost similarity either. */
 export function speechSimilarity(script, transcript) {
-  const a = normaliseSpeech(script), b = normaliseSpeech(transcript);
+  const a = speechTokens(script).join(" "), b = speechTokens(transcript).join(" ");
   if (!a.length && !b.length) return 1;
   return 1 - levenshtein(a, b) / Math.max(a.length, b.length);
 }
@@ -156,6 +169,15 @@ export function criticalTerms(text) {
    passed a recording that swapped the diagnosis (Astra, PR #134 review,
    finding 4). */
 const FILLER = new Set(["a", "an", "the", "um", "uh", "er", "erm"]);
+/* One token per unit, however it is written or said (plurals are already
+   dropped): micrograms are never grams or milligrams. */
+const UNIT_ALIASES = {
+  microg: "mcg", microgram: "mcg", mcg: "mcg",
+  milligram: "mg", gram: "g", kilogram: "kg",
+  milliliter: "ml", millilitre: "ml",
+  microl: "mcl", microliter: "mcl", microlitre: "mcl",
+  milliequivalent: "meq", millimole: "mmol",
+};
 /* Words after which a lone "A" names something — hepatitis A, vitamin A,
    blood group A, type A — rather than being an article. */
 const NAMES_A = /\b(hepatitis|hep|vitamin|vitamins|type|group|blood|influenza|flu|factor|class|grade|stage|phase|category|zone|lead|plan|part|step|option|choice|answer|item|unit|room|bed|bay|ward|wing|team|section|protein|immunoglobulin|ig|apolipoprotein|apo|strep|streptococcus|hemophilia)\s+a\b/gi;
@@ -207,7 +229,8 @@ export function speechTokens(text) {
     .map((w) => w.replace(/\.+$/g, "").replace(/^\.+(?!\d)/, "")).filter(Boolean)
     /* plural -s dropped from longer words, but not -ss/-is/-us (acidosis) */
     .map((w) => (w.length > 4 && /s$/.test(w) && !/(ss|is|us)$/.test(w) ? w.slice(0, -1) : w))
-    .filter((w) => !FILLER.has(w));
+    .filter((w) => !FILLER.has(w))
+    .map((w) => UNIT_ALIASES[w] ?? w);
 }
 
 /* The first word where script and transcript disagree, or null. */
@@ -230,7 +253,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 8;
+export const QA_VERSION = 9;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);
