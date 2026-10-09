@@ -1,0 +1,110 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "940b351bb36509c3cd44dc48ef0264a6e594f4fb",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T11:09:44.053Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/ops/save-results.sh",
+    "pulsern/src/concept-explainers.jsx",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/fingerprint.js",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/concept-explainers.test.jsx",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/insulin.test.js",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/map-diagrams.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/save-results.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 265,
+      "title": "Image detection can hide executable HTML behind benign pixels",
+      "problem": "The non-UTF-8 branch overrides the path classification and sends only an image attachment whenever the bytes begin with a recognized image signature. Valid image files can contain trailing data that image decoders ignore but an HTML parser executes. Neither the hash nor the rendered pixels expose that data.",
+      "failure_scenario": "Add pulsern/public/learn/example/index.html containing a valid small PNG followed by an HTML script element. The public server serves the .html path as HTML, allowing the appended script to execute. collectChanges instead classifies it as an image and sends benign pixels plus a hash, withholding the script from Astra.",
+      "fix": "Do not allow image recognition to replace source review for HTML, JavaScript, or other executable/document paths. Fail closed on conflicting file types. For supported image paths, validate the image container and explicitly handle non-image payloads. Add a regression using a real decodable PNG with appended HTML under an .html path.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 250,
+      "title": "Lossy filename decoding still turns unreadable changes into empty reviews",
+      "problem": "Blob contents now use fatal UTF-8 decoding, but the NUL-delimited filename list still goes through gitIn's lossy UTF-8 string decoding. An invalid filename byte becomes U+FFFD. Subsequent blob reads address a different path, and blob() catches the errors and returns null, indistinguishable from an absent file. Collection can consequently produce an empty diff and no full content instead of failing.",
+      "failure_scenario": "Commit an in-scope file whose filename contains byte 0xFF. Git preserves that filename, but collection requests the replacement-character spelling. For an added generated page, both inputs to textDiff are then empty; for an ordinary source file, the replacement-character pathspec also matches nothing. The model receives the filename with '(no textual change)' and can return PASS without seeing its contents.",
+      "fix": "Read the filename list as bytes and reject unsupported filename encodings before decoding, or preserve exact path bytes throughout collection. Also make any unexpected blob-read failure fatal; only the known absent side of an addition or deletion should become null. Test this with a real Git filename containing invalid UTF-8.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 213,
+      "title": "Control-character escaping makes executable changes indistinguishable",
+      "problem": "visibleControls replaces actual control characters with textual backslash-u markers without escaping existing literal markers. This representation is not one-to-one: actual U+2028 and the source characters \\u{2028} produce identical review text, although JavaScript treats them differently.",
+      "failure_scenario": "The base contains a JavaScript line comment followed by the literal characters \\u{2028} and a function call, so the call remains commented out. Replace those literal characters with an actual U+2028 line separator. The call now executes, but visibleControls makes the removed and added source lines look identical; the attached post-change file also looks like the original comment.",
+      "fix": "Use an unambiguous source encoding that distinguishes literal backslashes from escaped controls, and explain that encoding in the review prompt. Add an end-to-end collection test for a literal marker changing into U+2028, proving both that the JavaScript behavior changes and that the representations remain distinguishable.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/tests/astra-review.test.js",
+      "line": null,
+      "title": "Image tests do not exercise delivery through the actual review call",
+      "problem": "The valid-image test calls collectChanges and buildMessages directly. The runReview tests never review a valid image or assert the image-bearing outbound request. Removing messages: buildMessages(prompt, images) from runReview would leave these tests green while restoring hash-only reviews. The supplied files also do not establish whether llmCall forwards the new messages argument.",
+      "failure_scenario": "A regression drops the messages argument, or the adapter ignores it and constructs a text-only request from prompt. Astra receives image hashes but no images, returns an empty findings list, and the workflow posts PASS. The new image tests still pass because they only test the unused message-building helper.",
+      "fix": "Exercise runReview with a real small image through the production LLM adapter and a mocked HTTP boundary. Assert that the outgoing request includes the exact before/after image attachments, and that losing this transport causes the test to fail rather than permitting a hash-only pass.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 217391,
+    "completionTokens": 15255,
+    "reasoningTokens": 14105,
+    "costUsd": 3.48013
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge yet. The collector still has three concrete ways to conceal changed executable content from the reviewer, despite its fail-closed guarantees. Image delivery also lacks an end-to-end regression test. I did not execute the tests or verify GitHub environment restrictions and required-status source binding.",
+  "counts": {
+    "blocker": 3,
+    "major": 1,
+    "minor": 0
+  }
+}
