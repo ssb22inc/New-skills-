@@ -207,49 +207,114 @@ export function parseNameStatusZ(out) {
   return entries;
 }
 
-/* Characters a model cannot see are shown as visible markers, so nothing in
-   a changed file is silently invisible: C0 controls (NUL, ESC…), DEL, and the
-   invisible format characters — zero-width, byte-order mark, bidirectional
-   overrides — that can make text read differently from how it runs. */
-export const visibleControls = (s) => String(s ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u00AD\u200B-\u200F\u2028-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g, (c) => `\\u{${c.charCodeAt(0).toString(16).padStart(2, "0")}}`);
+/* How text reaches the reviewer. Characters a model cannot see — controls,
+   line/paragraph separators, zero-width and bidirectional formatting, the
+   byte-order mark, variation selectors, tag characters — are written as
+   ⟦U+XXXX⟧. A literal ⟦ in the source is itself written ⟦U+27E6⟧, so every
+   ⟦ in the output starts a marker and the encoding is one-to-one: text that
+   already contains "⟦U+2028⟧" or "\u{2028}" can never look like a real
+   U+2028 (Astra, PR #134 review, round 9: the earlier \u{…} markers were
+   indistinguishable from the same characters typed literally). Tab and
+   newline stay as they are; everything else is shown as written. */
+const INVISIBLE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u2028-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB\u27E6]|\uDB40[\uDC00-\uDDEF]/g;
+export const reviewText = (s) => String(s ?? "").replace(INVISIBLE, (c) => `⟦U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}⟧`);
+/* The inverse, used by the tests to prove nothing is lost. */
+export const fromReviewText = (s) => String(s ?? "").replace(/⟦U\+([0-9A-F]{4,6})⟧/g, (_, h) => String.fromCodePoint(parseInt(h, 16)));
 
-/* Exact bytes to text, or null. Decoding is fatal — an invalid byte is never
-   replaced with U+FFFD — and a byte-order mark is kept, so two different
-   byte sequences can never become the same text (Astra, PR #134 review,
-   round 8: lossy decoding let a non-UTF-8 page change its script while its
-   digest stayed the same). Valid UTF-8 decodes one-to-one. */
+/* Exact bytes to text, or undefined. Decoding is fatal — an invalid byte is
+   never replaced with U+FFFD — and a byte-order mark is kept, so two
+   different byte sequences can never become the same text (Astra, PR #134
+   review, round 8). Valid UTF-8 decodes one-to-one. */
 export function exactText(buf) {
   if (buf == null) return null;
   try { return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(buf); } catch { return undefined; }
 }
 
-/* Raster images Astra can look at, recognised by their bytes, never by the
-   file name. */
-export function imageType(buf) {
-  if (!buf || buf.length < 12) return null;
-  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
-  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
-  if (/^GIF8[79]a/.test(buf.subarray(0, 6).toString("latin1"))) return "image/gif";
-  if (buf.subarray(0, 4).toString("latin1") === "RIFF" && buf.subarray(8, 12).toString("latin1") === "WEBP") return "image/webp";
-  return null;
+/* ---- Images -------------------------------------------------------------
+   Only PNG and WebP, only under their own extension, and only when the
+   container parses exactly to its last byte — so no bytes ride along that
+   the pixels do not show (Astra, PR #134 review, round 9: a PNG with an
+   HTML script appended, saved as .html, was sent as harmless pixels). */
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+/* Every chunk's length and CRC check out, IHDR comes first, and the file
+   ends exactly at IEND. */
+export function isStrictPng(buf) {
+  if (!buf || buf.length < 8 + 25 + 12 || !buf.subarray(0, 8).equals(PNG_SIG)) return false;
+  let at = 8, first = true;
+  while (at + 12 <= buf.length) {
+    const len = buf.readUInt32BE(at);
+    const type = buf.subarray(at + 4, at + 8).toString("latin1");
+    const end = at + 12 + len;
+    if (!/^[A-Za-z]{4}$/.test(type) || end > buf.length) return false;
+    if (crc32(buf.subarray(at + 4, at + 8 + len)) !== buf.readUInt32BE(at + 8 + len)) return false;
+    if (first && type !== "IHDR") return false;
+    first = false;
+    if (type === "IEND") return len === 0 && end === buf.length;
+    at = end;
+  }
+  return false;
+}
+/* The RIFF size covers the file exactly and the chunks tile it. */
+export function isStrictWebp(buf) {
+  if (!buf || buf.length < 20) return false;
+  if (buf.subarray(0, 4).toString("latin1") !== "RIFF" || buf.subarray(8, 12).toString("latin1") !== "WEBP") return false;
+  if (buf.readUInt32LE(4) + 8 !== buf.length) return false;
+  let at = 12;
+  while (at < buf.length) {
+    if (at + 8 > buf.length) return false;
+    const type = buf.subarray(at, at + 4).toString("latin1");
+    if (!/^[A-Z0-9 ]{4}$/i.test(type)) return false;
+    const len = buf.readUInt32LE(at + 4);
+    at += 8 + len + (len & 1);
+    if (at > buf.length) return false;
+  }
+  return at === buf.length;
+}
+const IMAGE_FORMATS = { png: { mime: "image/png", ok: isStrictPng }, webp: { mime: "image/webp", ok: isStrictWebp } };
+/* The image type of this file, or null: the extension names the format and
+   the bytes must be exactly that format. */
+export function reviewableImage(path, buf) {
+  const fmt = IMAGE_FORMATS[(/\.([a-z0-9]+)$/i.exec(path)?.[1] ?? "").toLowerCase()];
+  return fmt && buf && buf.length <= MAX_IMAGE_BYTES && fmt.ok(buf) ? fmt.mime : null;
 }
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 export const MAX_IMAGES = 24;
 export const MAX_IMAGE_TOTAL_BYTES = 16 * 1024 * 1024;
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
-/* What each changed file is, decided by its bytes. Text — whatever its
-   extension — is diffed. A raster image is shown to Astra itself, both
-   versions, each bound to its exact bytes by hash. Anything else (audio, PDF,
-   fonts, archives, text in another encoding) cannot be put in front of the
-   reviewer, so the review fails closed rather than certifying a hash
-   (Astra, PR #134 review, round 8: a hash names a change, it does not show
-   whether a clinical image or document is right). */
+/* What each changed file is, decided by its bytes and never by trust in a
+   name alone. UTF-8 text — whatever its extension — is diffed. A strict PNG
+   or WebP under its own extension is shown to Astra itself, both versions,
+   each bound to its exact bytes by hash. Anything else (audio, PDF, fonts,
+   archives, other encodings, images under another name or carrying extra
+   bytes) cannot be put in front of the reviewer, so the review fails closed
+   rather than certifying a hash (Astra, PR #134 review, round 8). */
 export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
   const git = gitIn(cwd);
-  const blob = (rev, path) => { try { return execFileSync("git", ["show", `${rev}:${path}`], { cwd, maxBuffer: 256 * 1024 * 1024 }); } catch { return null; } };
-  const entries = parseNameStatusZ(git("diff", "--name-status", "--no-renames", "-z", `${base}...${head}`));
+  const bytes = (...args) => execFileSync("git", ["--literal-pathspecs", ...args], { cwd, maxBuffer: 256 * 1024 * 1024 });
+  /* Paths are read as bytes and decoded exactly: a lossy decode once
+     turned an unreadable name into a different path whose read "failed"
+     quietly, and the file went to review as empty (round 9). */
+  const names = exactText(bytes("diff", "--name-status", "--no-renames", "-z", `${base}...${head}`));
+  if (names === undefined) throw new Error("a changed path is not valid UTF-8, so it cannot be named to the reviewer and the change cannot pass");
+  const entries = parseNameStatusZ(names);
   const mergeBase = git("merge-base", base, head).trim();
+  /* A side that should exist must be read; only the known-absent side of
+     an addition or deletion is null. */
+  const blob = (rev, path) => {
+    try { return bytes("cat-file", "blob", `${rev}:${path}`); }
+    catch (e) { throw new Error(`could not read ${path} at ${rev.slice(0, 12)} (${String(e.stderr ?? e.message).trim()}), so the change cannot pass`); }
+  };
 
   const files = [];
   const skipped = [];
@@ -265,32 +330,32 @@ export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
 
     if (!isText) {
       const sides = [["before", wasBuf], ["after", nowBuf]].filter(([, b]) => b != null);
-      const ok = sides.every(([, b]) => imageType(b) && b.length <= MAX_IMAGE_BYTES);
+      /* The extension must be the image's own, so a page (.html), a
+         lockfile or any source file can never be sent as pixels. */
+      const ok = sides.every(([, b]) => reviewableImage(e.path, b));
       if (!ok) { unrepresentable.push(e.path); continue; }
-      const lines = [`image ${e.path} (shown to you as attached images)`];
-      lines.push(`- ${wasBuf == null ? "(absent)" : `sha256 ${sha256(wasBuf)} · ${wasBuf.length} bytes · ${imageType(wasBuf)}`}`);
-      lines.push(`+ ${nowBuf == null ? "(absent)" : `sha256 ${sha256(nowBuf)} · ${nowBuf.length} bytes · ${imageType(nowBuf)}`}`);
-      for (const [side, b] of sides) images.push({ path: e.path, side, mime: imageType(b), sha256: sha256(b), bytes: b });
-      files.push({ status: e.status, path: e.path, form: "image", diff: lines.join("\n") + "\n", full: null });
+      const line = (b) => (b == null ? "(absent)" : `sha256 ${sha256(b)} · ${b.length} bytes · ${reviewableImage(e.path, b)}`);
+      for (const [side, b] of sides) images.push({ path: e.path, side, mime: reviewableImage(e.path, b), sha256: sha256(b), bytes: b });
+      files.push({ status: e.status, path: e.path, form: "image", diff: `image ${reviewText(e.path)} (shown to you as attached images)\n- ${line(wasBuf)}\n+ ${line(nowBuf)}\n`, full: null });
     } else if (c.mode === "page") {
-      files.push({ status: e.status, path: e.path, form: "page digest", diff: textDiff(before == null ? "" : pageDigest(before), after == null ? "" : pageDigest(after), e.path), full: null });
+      files.push({ status: e.status, path: e.path, form: "page digest", diff: reviewText(textDiff(before == null ? "" : pageDigest(before), after == null ? "" : pageDigest(after), e.path)), full: null });
     } else if (c.mode === "lockfile") {
-      files.push({ status: e.status, path: e.path, form: "dependency summary", diff: textDiff(before == null ? "" : lockDigest(before), after == null ? "" : lockDigest(after), e.path), full: null });
+      files.push({ status: e.status, path: e.path, form: "dependency summary", diff: reviewText(textDiff(before == null ? "" : lockDigest(before), after == null ? "" : lockDigest(after), e.path)), full: null });
     } else {
       /* --text: never let git decide a source file is "binary" and replace
-         its changes with a one-line marker (Astra, PR #134 review, round 7:
-         a NUL in a comment hid every other change in the file). Both sides
-         are valid UTF-8 (checked above), so the diff decodes exactly. */
-      const raw = execFileSync("git", ["diff", "--text", "--no-renames", "--no-ext-diff", "--no-textconv", "-U25", `${base}...${head}`, "--", e.path], { cwd, maxBuffer: 256 * 1024 * 1024 });
-      const diff = exactText(raw);
+         its changes with a one-line marker (Astra, PR #134 review, round 7).
+         Both sides are valid UTF-8 (checked above), so the diff decodes
+         exactly. */
+      const diff = exactText(bytes("diff", "--text", "--no-renames", "--no-ext-diff", "--no-textconv", "-U25", `${base}...${head}`, "--", e.path));
       if (diff === undefined) { unrepresentable.push(e.path); continue; }
-      files.push({ status: e.status, path: e.path, form: "diff", diff: visibleControls(diff), full: after == null ? null : visibleControls(after) });
+      if (!diff && before !== after) throw new Error(`git showed no diff for ${e.path} although it changed, so the change cannot pass`);
+      files.push({ status: e.status, path: e.path, form: "diff", diff: reviewText(diff), full: after == null ? null : reviewText(after) });
     }
   }
   /* Fail closed: a change git could only describe as "Binary files differ"
      has not been represented either. */
   for (const f of files) if (f.form !== "image" && /^Binary files .* differ$/m.test(f.diff)) unrepresentable.push(f.path);
-  if (unrepresentable.length) throw new Error(`cannot put these changes in front of the reviewer, so the change cannot pass: ${unrepresentable.join(", ")} (not valid UTF-8 text and not a reviewable PNG/JPEG/GIF/WebP image under ${MAX_IMAGE_BYTES / 1024 / 1024} MB)`);
+  if (unrepresentable.length) throw new Error(`cannot put these changes in front of the reviewer, so the change cannot pass: ${unrepresentable.join(", ")} (not valid UTF-8 text, and not a well-formed PNG/WebP under its own extension and under ${MAX_IMAGE_BYTES / 1024 / 1024} MB)`);
   const total = images.reduce((n, i) => n + i.bytes.length, 0);
   if (images.length > MAX_IMAGES || total > MAX_IMAGE_TOTAL_BYTES) throw new Error(`${images.length} image versions (${total.toLocaleString()} bytes) changed; at most ${MAX_IMAGES} images and ${MAX_IMAGE_TOTAL_BYTES / 1024 / 1024} MB can be shown in one review — split the change`);
   return { files, skipped, images };
@@ -387,17 +452,18 @@ FORMS YOU WILL SEE
 - "diff": a normal unified diff, sometimes followed by the whole file after the change.
 - "page digest": a generated public page reduced to one line per visible text block, script, link, meta tag and event handler, diffed before/after. Judge what a reader sees and what a browser would run.
 - "dependency summary": the lockfile reduced to package@version, source host and integrity prefix, diffed before/after.
+- Invisible characters (controls, separators, zero-width and bidirectional formatting, byte-order marks) are written as ⟦U+XXXX⟧, and a literal ⟦ in the file is written ⟦U+27E6⟧, so every ⟦U+…⟧ you see is that exact character in the file — never text that merely looks like it.
 - "image": a changed raster image. Both versions are attached after this text, each labelled with its path and sha256. Review what they show as strictly as text: a wrong value, label or clinical detail in an image is wrong content.`);
 
   parts.push(`\n=== PROJECT RULES (the standard you review against) ===\n${rules}`);
 
   parts.push(`\n=== CHANGE ===\nbase ${meta.base}  head ${meta.head}${meta.pr ? `  PR #${meta.pr}` : ""}\n${files.length} file(s) under review.`);
   if (skipped.length) {
-    parts.push(`Not sent (named so you know they changed): ${skipped.map((e) => `${e.path} [${e.why}]`).join("; ")}`);
+    parts.push(`Not sent (named so you know they changed): ${skipped.map((e) => `${reviewText(e.path)} [${e.why}]`).join("; ")}`);
   }
 
   for (const f of files) {
-    parts.push(`\n----- ${f.status} ${f.path} (${f.form ?? "diff"}) -----\n${f.diff || "(no textual change)"}`);
+    parts.push(`\n----- ${f.status} ${reviewText(f.path)} (${f.form ?? "diff"}) -----\n${f.diff || "(no textual change)"}`);
     if (f.includeFull && f.full != null) parts.push(`--- full file after the change ---\n${f.full}`);
     else if (f.full != null) parts.push(`(full file not attached: over the per-file context limit; review from the diff)`);
   }

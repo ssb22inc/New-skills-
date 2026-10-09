@@ -8,10 +8,12 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { deflateSync } from "node:zlib";
 import {
   classifyPath, planContext, buildPrompt, validateResult, verdictFor, renderMarkdown, reportBaseName,
   FINDINGS_SCHEMA, MAX_FULL_FILE_CHARS, pageDigest, lockDigest, textDiff, parseNameStatusZ,
-  collectChanges, runReview, buildMessages, exactText, imageType, visibleControls,
+  collectChanges, runReview, exactText, reviewableImage, isStrictPng, isStrictWebp, reviewText, fromReviewText,
 } from "../ops/astra-review.mjs";
 
 const finding = (severity, extra = {}) => ({
@@ -263,62 +265,105 @@ describe("digests", () => {
     expect(f.form).toBe("diff");
     expect(f.diff).not.toMatch(/Binary files/);
     expect(f.diff).toContain("+export const dose = () => 1000;");
-    expect(f.diff).toContain("\\u{00}");
+    expect(f.diff).toContain("⟦U+0000⟧");
     expect(f.full.length).toBeGreaterThan(MAX_FULL_FILE_CHARS);   // too big to attach: the diff alone must carry it
     rmSync(dir, { recursive: true, force: true });
   });
-  /* Round 8: hash-and-size summaries let a changed image or document pass
-     unseen, chosen by file name; lossy UTF-8 decoding hid byte changes. */
+  /* Rounds 8 and 9: what reaches the reviewer is decided by bytes, decoded
+     exactly, and shown one-to-one. (Characters are built with
+     String.fromCodePoint so this file itself holds no invisible ones.) */
   describe("changes are judged by their bytes", () => {
-    const PNG = (n) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from([0, 0, 0, 13, n, n, n, n])]);
-    function twoCommits(path, a, b) {
+    const ch = (cp) => String.fromCodePoint(cp);
+    const CRC = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+    const crc = (b) => { let c = 0xffffffff; for (const x of b) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const chunk = (type, data) => {
+      const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+      const body = Buffer.concat([Buffer.from(type, "latin1"), data]);
+      const sum = Buffer.alloc(4); sum.writeUInt32BE(crc(body));
+      return Buffer.concat([len, body, sum]);
+    };
+    /* A real, decodable 1x1 RGB PNG whose one pixel is (n, n, n). */
+    const PNG = (n) => {
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 2;
+      return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(Buffer.from([0, n, n, n]))), chunk("IEND", Buffer.alloc(0))]);
+    };
+    function repoWith(changes) {
       const dir = mkdtempSync(join(tmpdir(), "astra-bytes-"));
       const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
       run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
-      mkdirSync(join(dir, path, ".."), { recursive: true });
-      writeFileSync(join(dir, "pulsern-keep"), "x");
-      if (a != null) writeFileSync(join(dir, path), a);
+      const put = (path, body) => {
+        const full = Buffer.concat([Buffer.from(dir + "/"), Buffer.isBuffer(path) ? path : Buffer.from(path)]);
+        mkdirSync(join(dir, String(path).split("/").slice(0, -1).join("/")), { recursive: true });
+        writeFileSync(full, body);
+      };
+      writeFileSync(join(dir, "keep"), "x");
+      for (const [path, a] of changes) if (a != null) put(path, a);
       run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
-      writeFileSync(join(dir, path), b);
+      for (const [path, , b] of changes) put(path, b);
       run("add", "-A"); run("commit", "-qm", "h");
       return dir;
     }
+    const ok = (findings = []) => ({ text: JSON.stringify({ assessment: "ok", findings }), usage: {}, model: "m" });
 
-    it("shows a changed image to Astra itself, both versions, bound to their exact bytes", () => {
+    /* Through the production adapter, with only the HTTP boundary faked:
+       the request that leaves must carry both versions of the image. */
+    it("sends both versions of a changed image in the actual review request", async () => {
       const path = "pulsern/public/diagram.png";
-      const dir = twoCommits(path, PNG(1), PNG(2));
-      const { files, images } = collectChanges("b", "HEAD", { cwd: dir });
-      const f = files.find((x) => x.path === path);
-      expect(f.form).toBe("image");
-      expect(images.map((i) => i.side)).toEqual(["before", "after"]);
-      expect(Buffer.compare(images[1].bytes, PNG(2))).toBe(0);
-      const content = buildMessages("prompt", images)[0].content;
+      const dir = repoWith([[path, PNG(10), PNG(200)]]);
+      const sent = [];
+      const realFetch = globalThis.fetch, realKey = process.env.OPENROUTER_API_KEY;
+      process.env.OPENROUTER_API_KEY = "test-key";
+      globalThis.fetch = async (url, init) => {
+        sent.push(JSON.parse(init.body));
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ model: "openai/gpt-6-astra", choices: [{ message: { content: JSON.stringify({ assessment: "ok", findings: [] }) } }], usage: { cost: 0 } }) };
+      };
+      try {
+        const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
+        const { report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir });
+        expect(report.error, report.error).toBeNull();
+      } finally {
+        globalThis.fetch = realFetch;
+        if (realKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = realKey;
+        rmSync(dir, { recursive: true, force: true });
+      }
+      expect(sent).toHaveLength(1);
+      const content = sent[0].messages[0].content;
+      expect(Array.isArray(content)).toBe(true);
       const urls = content.filter((c) => c.type === "image_url").map((c) => c.image_url.url);
-      expect(urls).toEqual([`data:image/png;base64,${PNG(1).toString("base64")}`, `data:image/png;base64,${PNG(2).toString("base64")}`]);
-      expect(content.find((c) => c.type === "text" && c.text.includes("after the change")).text).toContain(images[1].sha256);
-      rmSync(dir, { recursive: true, force: true });
+      expect(urls).toEqual([`data:image/png;base64,${PNG(10).toString("base64")}`, `data:image/png;base64,${PNG(200).toString("base64")}`]);
+      const labels = content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+      expect(labels).toContain(createHash("sha256").update(PNG(200)).digest("hex"));
+      expect(content[0].text).toContain("(image)");
     });
 
-    it("diffs text stored under a binary-looking name", () => {
+    it("diffs text stored under an image name", () => {
       const path = "pulsern/public/notes.png";
-      const dir = twoCommits(path, "dose: 1 mg\n", "dose: 10 mg\n");
+      const dir = repoWith([[path, "dose: 1 mg\n", "dose: 10 mg\n"]]);
       const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === path);
       expect(f.form).toBe("diff");
       expect(f.diff).toContain("+dose: 10 mg");
       rmSync(dir, { recursive: true, force: true });
     });
 
-    it("refuses audio, documents and other bytes it cannot show — no hash-only pass", async () => {
+    it("refuses what it cannot show, and never asks the model", async () => {
+      const html = Buffer.concat([PNG(1), Buffer.from("<script>fetch('/steal')</script>")]);
       for (const [path, a, b] of [
         ["pulsern/public/clip.mp3", Buffer.from([0xff, 0xfb, 0x90, 1, 2, 3]), Buffer.from([0xff, 0xfb, 0x90, 4, 5, 6])],
         ["pulsern/public/guide.pdf", Buffer.from("%PDF-1.7\n\xe2\xe3\xcf\xd3 a", "latin1"), Buffer.from("%PDF-1.7\n\xe2\xe3\xcf\xd3 b", "latin1")],
         ["pulsern/public/fake.png", Buffer.from([0x89, 0x50, 0, 1, 2]), Buffer.from([0x89, 0x50, 0, 9, 9, 9])],
+        // Astra's case: valid pixels with a script appended, saved as a page
+        ["pulsern/public/learn/example/index.html", null, html],
+        ["pulsern/src/widget.js", null, html],
+        // the same bytes under an image name: the extra bytes are refused too
+        ["pulsern/public/tail.png", PNG(1), html],
+        // a real PNG under another image name
+        ["pulsern/public/photo.jpg", PNG(1), PNG(2)],
       ]) {
-        const dir = twoCommits(path, a, b);
+        const dir = repoWith([[path, a, b]]);
         expect(() => collectChanges("b", "HEAD", { cwd: dir }), path).toThrow(/cannot pass/);
         const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
         let called = false;
-        const { code, report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return { text: JSON.stringify({ assessment: "ok", findings: [] }), usage: {} }; } });
+        const { code, report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return ok(); } });
         expect(called, path).toBe(false);
         expect(report.verdict, path).toBe("FAIL");
         expect(code, path).not.toBe(0);
@@ -326,28 +371,90 @@ describe("digests", () => {
       }
     });
 
-    /* Astra's case: a windows-1252 page whose script compares 0xE9 with
-       0xEA, changed to compare 0xE9 with 0xE9. Lossy decoding turned both
-       into U+FFFD, so the digest did not change at all. */
+    /* Round 8, Astra's case: a windows-1252 page whose script compares 0xE9
+       with 0xEA, changed to compare 0xE9 with 0xE9. */
     it("refuses a page whose bytes are not valid UTF-8 instead of digesting replacement characters", () => {
       const page = (x) => Buffer.concat([Buffer.from('<meta charset="windows-1252"><script>if ("'), Buffer.from([0xe9]), Buffer.from('" === "'), Buffer.from([x]), Buffer.from('") go()</script>')]);
       const path = "pulsern/public/learn/z/index.html";
-      const dir = twoCommits(path, page(0xea), page(0xe9));
+      const dir = repoWith([[path, page(0xea), page(0xe9)]]);
       expect(() => collectChanges("b", "HEAD", { cwd: dir })).toThrow(/learn\/z\/index\.html/);
       rmSync(dir, { recursive: true, force: true });
     });
 
-    it("decodes exactly: invalid bytes are rejected and a byte-order mark is kept and shown", () => {
+    /* Round 9: a name with an invalid byte was decoded lossily, the read of
+       that "other" path failed quietly, and the file reached review empty. */
+    it("refuses a changed path whose name is not valid UTF-8", () => {
+      const name = Buffer.concat([Buffer.from("pulsern/src/a"), Buffer.from([0xff]), Buffer.from(".js")]);
+      const dir = repoWith([[name, null, "export const dose = 1000;\n"]]);
+      expect(() => collectChanges("b", "HEAD", { cwd: dir })).toThrow(/path is not valid UTF-8/);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("reads paths literally: a name with glob characters shows only its own change", () => {
+      const dir = repoWith([["pulsern/src/*.js", "a = 1;\n", "a = 2;\n"], ["pulsern/src/x.js", "x = 1;\n", "x = 2;\n"]]);
+      const files = collectChanges("b", "HEAD", { cwd: dir }).files;
+      const star = files.find((f) => f.path === "pulsern/src/*.js");
+      expect(star.diff).toContain("+a = 2;");
+      expect(star.diff).not.toContain("x = 2");
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    /* Round 9, Astra's case: a line comment ending in the six characters
+       \u{2028} keeps the call commented out; an actual U+2028 ends the
+       comment and the call runs. The two must not look the same. */
+    it("keeps a literal escape and the real character apart, end to end", () => {
+      const LS = ch(0x2028);
+      const before = "let r = 0; // note \\u{2028} r = 1;\nexport default r;\n";
+      const after = `let r = 0; // note ${LS} r = 1;\nexport default r;\n`;
+      const run = (src) => new Function(src.replace("export default r;", "return r;"))();
+      expect(run(before)).toBe(0);
+      expect(run(after)).toBe(1);
+      const path = "pulsern/src/flag.js";
+      const dir = repoWith([[path, before, after]]);
+      const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === path);
+      const minus = f.diff.split("\n").find((l) => l.startsWith("-let"));
+      const plus = f.diff.split("\n").find((l) => l.startsWith("+let"));
+      expect(minus.slice(1)).not.toBe(plus.slice(1));
+      expect(plus).toContain("⟦U+2028⟧");
+      expect(f.full).toContain("⟦U+2028⟧");
+      expect(f.full).not.toContain(LS);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("encodes one-to-one: nothing typed in a file can pass for an invisible character", () => {
+      const samples = [
+        `${ch(0x2028)}`, "\\u{2028}", "⟦U+2028⟧", "⟦U+27E6⟧",
+        `${ch(0xfeff)}a${ch(0x202e)}b${ch(0x200b)}c${ch(0xe0041)}${ch(0)}${ch(13)}`,
+      ];
+      const shown = samples.map(reviewText);
+      expect(new Set(shown).size).toBe(samples.length);
+      for (const [i, s] of samples.entries()) expect(fromReviewText(shown[i])).toBe(s);
+      expect(reviewText(`${ch(0xfeff)}a${ch(0x202e)}b`)).toBe("⟦U+FEFF⟧a⟦U+202E⟧b");
+      // nothing invisible survives
+      expect(shown.join("")).not.toMatch(new RegExp(`[${ch(0x2028)}${ch(0xfeff)}${ch(0x202e)}${ch(0x200b)}${ch(0)}${ch(13)}]`));
+    });
+
+    it("decodes exactly: invalid bytes are rejected and a byte-order mark is kept", () => {
       expect(exactText(Buffer.from([0x61, 0xe9]))).toBeUndefined();
-      expect(exactText(Buffer.from([0xef, 0xbb, 0xbf, 0x61]))).toBe("\uFEFFa");
-      expect(visibleControls("\uFEFFa\u202Eb\u200Bc")).toBe("\\u{feff}a\\u{202e}b\\u{200b}c");
+      expect(exactText(Buffer.from([0xef, 0xbb, 0xbf, 0x61]))).toBe(`${ch(0xfeff)}a`);
       expect(exactText(null)).toBeNull();
     });
 
-    it("recognises images by their bytes, not their names", () => {
-      expect(imageType(PNG(1))).toBe("image/png");
-      expect(imageType(Buffer.from([0x89, 0x50, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))).toBeNull();
-      expect(imageType(Buffer.from("GIF89a......"))).toBe("image/gif");
+    it("accepts only a well-formed image under its own extension", () => {
+      expect(reviewableImage("a/b.png", PNG(1))).toBe("image/png");
+      expect(reviewableImage("a/b.PNG", PNG(1))).toBe("image/png");
+      expect(reviewableImage("a/b.html", PNG(1))).toBeNull();
+      expect(reviewableImage("a/b.png", Buffer.concat([PNG(1), Buffer.from("x")]))).toBeNull();
+      const bad = PNG(1); bad[bad.length - 20] ^= 1;   // a flipped bit: the CRC no longer matches
+      expect(reviewableImage("a/b.png", bad)).toBeNull();
+      expect(isStrictPng(PNG(1))).toBe(true);
+      const webp = (extra = Buffer.alloc(0)) => {
+        const body = Buffer.concat([Buffer.from("WEBP"), Buffer.from("VP8L"), Buffer.from([2, 0, 0, 0, 0x2f, 0]), extra]);
+        const size = Buffer.alloc(4); size.writeUInt32LE(body.length);
+        return Buffer.concat([Buffer.from("RIFF"), size, body]);
+      };
+      expect(isStrictWebp(webp())).toBe(true);
+      expect(isStrictWebp(Buffer.concat([webp(), Buffer.from("<script>")]))).toBe(false);
     });
   });
 
