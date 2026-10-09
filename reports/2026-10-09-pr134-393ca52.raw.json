@@ -6,7 +6,7 @@
     "head": "393ca5261ee0f664f3deb08a843486165944dd9f",
     "pr": "134"
   },
-  "reviewedAt": "2026-10-09T18:35:28.924Z",
+  "reviewedAt": "2026-10-09T18:40:46.931Z",
   "filesReviewed": [
     ".github/workflows/pulsern-astra-review.yml",
     ".github/workflows/pulsern-ci.yml",
@@ -61,8 +61,50 @@
     "pulsern/tests/workflows.test.js"
   ],
   "skipped": [],
-  "findings": [],
-  "usage": null,
-  "error": "The review could not be completed: openai/gpt-6-astra: 402 out of credits — This request requires more credits, or fewer max_tokens. You requested up to 64000 tokens, but can only afford 58411. To increase, visit https://openrouter.ai/settings/credits and add more credits\n  Add credits at https://openrouter.ai/settings/credits, then re-run.",
-  "verdict": "FAIL"
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": ".github/workflows/pulsern-diagram-review.yml",
+      "line": 160,
+      "title": "The untrusted prepare job can poison caches restored by the paid job",
+      "problem": "Both jobs run under the default-branch workflow_dispatch ref. The prepare job executes arbitrary branch code, which can access Actions cache-writing capabilities, while the paid job restores an npm cache in that same trusted cache scope. contents: read and environment restrictions do not isolate Actions caches. The diagram-map and narration workflows have the same arrangement.",
+      "failure_scenario": "On a cache miss, malicious prepare code reserves the cache key/version that the paid job will restore and uploads a crafted cache archive containing a replacement trusted/pulsern/ops/narrate.mjs. Cache restoration happens after the trusted checkout. The later recording step therefore executes the replacement with SUPABASE_SERVICE_ROLE_KEY and OPENAI_API_KEY, despite never intentionally executing a script from the branch checkout.",
+      "fix": "Do not restore caches writable by these untrusted default-ref jobs into credentialed jobs. Remove cache restoration from the paid jobs, or establish genuinely separate cache trust scopes. Disabling only the prepare job's automatic cache save is insufficient because its executed code can use the cache API directly.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/diagram-attest.mjs",
+      "line": 87,
+      "title": "The dependency walk skips project modules that Vite actually loads",
+      "problem": "Every import not starting with '.' is treated as an external package and skipped. Vite supports root-relative project imports such as '/src/clinical/limits.mjs'. Those modules are consequently absent from both the source shown to the diagram reviewer and the approval freshness key. The manual extension order also prefers .jsx over .js, unlike Vite, so extensionless imports can fingerprint a different file from the one executed.",
+      "failure_scenario": "A diagram imports a threshold from '/src/clinical/limits.mjs'. Changing a threshold used only outside the screenshot's example leaves diagramSources(), sourceKey(), and the rendered example unchanged. review-diagrams.mjs then reuses the old PASS, and the mapper can publish the changed clinical behavior without its dependency reaching the visual/clinical reviewer.",
+      "fix": "Make dependency resolution match the application's actual module resolution. Follow root-relative project imports within the allowed source tree, and reject unsupported or ambiguous resolution rather than silently skipping it. Add regression tests for root-relative imports and colliding .js/.jsx extensionless imports, including an off-example logic change.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/prepared.mjs",
+      "line": 98,
+      "title": "Frame coverage is validated against an untrusted step list",
+      "problem": "expectedFrames() is derived from d.steps supplied by the branch's prepare script. Nothing checks that those are the actual steps of the pinned application's diagram. The commit field proves only that the supplied SHA matches HEAD; it does not authenticate the prepared metadata or screenshots. The current tests remove frames while retaining their steps, so they miss this bypass.",
+      "failure_scenario": "For the real ABG diagram, prepared data omits the kidneys step and both corresponding frames—or supplies steps: [] with only the two overview frames. reviewPlan() accepts it. The paid runner can then record a completed PASS with the current sourceKey even though the omitted step was never visually reviewed. approval() accepts that record and permits publication.",
+      "fix": "Determine the required diagram IDs and step keys independently from the pinned application using trusted preparation/orchestration code in the isolated, secretless environment, and verify the prepared inventory against that independently established inventory before recording approval. Add a test that removes a real step and its matching frames together and requires rejection.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 231058,
+    "completionTokens": 15385,
+    "reasoningTokens": 14465,
+    "costUsd": 3.6574675
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. The new workflow separation still permits credentialed code execution through cache poisoning, and the diagram approval gate can reuse incomplete reviews. These findings are based on static inspection; I could not execute the suite or inspect GitHub environment and branch-protection settings.",
+  "counts": {
+    "blocker": 3,
+    "major": 0,
+    "minor": 0
+  }
 }
