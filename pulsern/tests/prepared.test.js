@@ -8,7 +8,8 @@ import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync, existsSync
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync, execFileSync } from "node:child_process";
-import { narrationPlan, reviewPlan, mapPlan, readPrepared, readFrame } from "../ops/prepared.mjs";
+import { narrationPlan, reviewPlan, mapPlan, readPrepared, readFrame, reviewEntries, localEntries } from "../ops/prepared.mjs";
+import { diagramRequest, reviewData } from "../ops/review-diagrams-lib.mjs";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "prepared-"));
 /* A branch checkout to write into: a real git repository at one commit. */
@@ -134,5 +135,37 @@ describe("prepared data is bound to its commit", () => {
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/was made from bbbbbbbbbbbb/);
     rmSync(d, { recursive: true, force: true });
+  });
+});
+
+/* Round 23: the local path skipped the frame-plan builder, so its prompt
+   said "Image N: undefined" and its key never matched CI's. */
+describe("local and prepared reviews build the same request", () => {
+  it("gives identical labelled prompts and keys", () => {
+    const d = { id: "abg", title: "ABG", facts: ["pH 7.35–7.45"], example: {}, dynamicCaption: null,
+      steps: [{ key: "ph", caption: "c", narration: "n", focus: ["ph"] }] };
+    const plan = ["light", "dark"].flatMap((theme) => ["static", "ph"].map((key) => ({ theme, key, file: "x" })));
+    const pngs = plan.map((_, i) => Buffer.from([0x89, 0x50, 0x4e, 0x47, i]));
+    const local = reviewEntries([{ data: reviewData(d, plan), pngs }])[0];
+    const viaJson = reviewEntries([{ data: JSON.parse(JSON.stringify(reviewData(d, plan))), pngs }])[0];
+    const src = () => "export const x = 1;";
+    const a = diagramRequest(local.data, local.data.images, "rules", local.pngs, src);
+    const b = diagramRequest(viaJson.data, viaJson.data.images, "rules", viaJson.pngs, src);
+    expect(a.prompt).toBe(b.prompt);
+    expect(a.key).toBe(b.key);
+    expect(a.prompt).not.toMatch(/undefined/);
+    expect(a.prompt).toContain('Image 4: dark theme — explainer step "ph"');
+  });
+  it("the local runner builds its entries through that same builder", () => {
+    const d = { id: "abg", title: "ABG", facts: ["f"], example: {}, steps: [{ key: "ph", caption: "c", narration: "n" }] };
+    const gallery = ["light", "dark"].flatMap((theme) => ["static", "ph"].map((key) => ({ id: "abg", theme, key, file: `${theme}-${key}.png` })));
+    const [e] = localEntries([d], gallery, (file) => Buffer.from(file));
+    expect(e.data.images.map((i) => i.label)).toEqual([
+      "light theme — inline, as shown under a rationale", 'light theme — explainer step "ph"',
+      "dark theme — inline, as shown under a rationale", 'dark theme — explainer step "ph"',
+    ]);
+    const runner = readFileSync("ops/review-diagrams.mjs", "utf8");
+    expect(runner).toMatch(/entries = localEntries\(/);
+    expect(runner).not.toMatch(/reviewData\(/);   // no second, unlabelled path
   });
 });

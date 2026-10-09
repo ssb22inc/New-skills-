@@ -12,7 +12,7 @@
    plain slugs, strings are bounded, and anything unexpected is refused. */
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { expectedFrames, frameLabel } from "./review-diagrams-lib.mjs";
+import { expectedFrames, frameLabel, imagePlan, reviewData } from "./review-diagrams-lib.mjs";
 
 export const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const MAX_TEXT = 20_000;
@@ -147,4 +147,22 @@ export function mapPlan(data) {
     }));
   }
   return { diagrams: Object.fromEntries(diagrams.map((d) => [d.id, d])), proposals };
+}
+
+/* Local and prepared runs reach the reviewer through this one builder, so
+   the same diagram and frames give the same labelled prompt and the same
+   cache key either way (Astra, PR #134 review, round 23: local runs sent
+   "Image N: undefined" and could never share CI's cache). */
+export function reviewEntries(raw) {
+  const plan = reviewPlan({ diagrams: raw.map((r) => JSON.parse(JSON.stringify(r.data))) });
+  return plan.map((data, i) => ({ data, pngs: raw[i].pngs }));
+}
+
+/* A local run's entries: the registry's diagrams and their rendered frames,
+   through the same builder as a prepared run. */
+export function localEntries(diagrams, gallery, readFile, only = null) {
+  return reviewEntries(diagrams.filter((d) => !only || d.id === only).map((d) => {
+    const plan = imagePlan(d, gallery);
+    return { data: reviewData(d, plan), pngs: plan.map((p) => readFile(p.file)) };
+  }));
 }

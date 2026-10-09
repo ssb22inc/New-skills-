@@ -288,6 +288,23 @@ describe("a review covers everything the drawing depends on", () => {
     expect(sourceKey(root)).not.toBe(before);
     rmSync(root, { recursive: true, force: true });
   });
+  /* Round 23: a second import on the same line was missed, so a nested
+     clinical module could change without invalidating the approval. */
+  it("finds every import from the syntax tree, wherever it sits", async () => {
+    const { sourceKey, importsOf } = await import("../ops/diagram-attest.mjs");
+    expect(importsOf("x.jsx", 'import React from "react"; import { LOW } from "../clinical/limits.mjs";\nconst s = "import nope from \'./fake.js\'";\nexport * from "./a.js"; export { B } from "./b.js";\nconst r = require("./c.js");\nconst el = <div>{LOW}</div>;')).toEqual(["react", "../clinical/limits.mjs", "./a.js", "./b.js", "./c.js"]);
+    expect(() => importsOf("x.js", "const m = require(name);")).toThrow(/computed/);
+    expect(() => importsOf("x.js", "this is ( not javascript")).toThrow(/could not be parsed/);
+    const root = tree("return v;");
+    mkdirSync(join(root, "src/clinical"), { recursive: true });
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import React from "react"; import { LOW } from "../clinical/limits.mjs";\nexport const A = () => <div>{LOW}</div>;\n');
+    writeFileSync(join(root, "src/clinical/limits.mjs"), "export const LOW = 7.35;\n");
+    const before = sourceKey(root);
+    expect(diagramSources("abg", root)).toContain("src/clinical/limits.mjs");
+    writeFileSync(join(root, "src/clinical/limits.mjs"), "export const LOW = 7.30;\n");
+    expect(sourceKey(root)).not.toBe(before);
+    rmSync(root, { recursive: true, force: true });
+  });
   it("refuses an import it cannot follow or show", () => {
     const root = tree("return v;");
     writeFileSync(join(root, "src/diagrams/abg.jsx"), "const n = 'x';\nconst m = () => import(`./${n}.js`);\n");

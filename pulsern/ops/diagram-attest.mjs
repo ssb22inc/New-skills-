@@ -12,6 +12,7 @@
    rendering actually changed. Missing, failed or stale: not approved.
    Fail closed. */
 import { createHash } from "node:crypto";
+import { parseAst } from "rolldown/parseAst";
 import { readFileSync, readdirSync, existsSync, realpathSync } from "node:fs";
 import { join, posix, resolve, sep } from "node:path";
 
@@ -33,6 +34,32 @@ export function themeBlock(appSource) {
    cache key, so an approval is reused only while all of it is unchanged
    (Astra, PR #134 review, round 20: a change to kit.jsx kept a cached PASS
    that never saw it). */
+/* Every module a source file loads, read from its syntax tree — not by
+   pattern-matching lines, which missed a second import on the same line
+   (Astra, PR #134 review, round 23). Static imports, both kinds of
+   re-export, import("…") and require("…") with a literal path are
+   followed; a computed path, or a file that does not parse, is refused. */
+export function importsOf(rel, text) {
+  let ast;
+  try { ast = parseAst(text, { lang: rel.endsWith(".jsx") ? "jsx" : "js" }); }
+  catch (e) { throw new Error(`diagramSources: ${rel} could not be parsed (${String(e.message).split("\n")[0]}) — refusing to review it`); }
+  const specs = [];
+  const literal = (node, how) => {
+    if (node?.type === "Literal" && typeof node.value === "string") specs.push(node.value);
+    else throw new Error(`diagramSources: ${rel} has a ${how} whose path is computed — refusing to review without knowing what it loads`);
+  };
+  const walk = (n) => {
+    if (!n || typeof n !== "object") return;
+    if (Array.isArray(n)) { for (const x of n) walk(x); return; }
+    if ((n.type === "ImportDeclaration" || n.type === "ExportAllDeclaration" || n.type === "ExportNamedDeclaration") && n.source) literal(n.source, "re-export");
+    if (n.type === "ImportExpression") literal(n.source, "import()");
+    if (n.type === "CallExpression" && n.callee?.type === "Identifier" && n.callee.name === "require") literal(n.arguments?.[0], "require()");
+    for (const k of Object.keys(n)) if (k !== "parent") walk(n[k]);
+  };
+  walk(ast);
+  return specs;
+}
+
 export function diagramSources(id, root = ".") {
   /* Only the project's own source tree may be read: a path that leaves
      src/ — by "../" or through a symlink — is refused before anything is
@@ -54,16 +81,7 @@ export function diagramSources(id, root = ".") {
     try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { throw new Error(`diagramSources: ${rel} is not text, so the reviewer cannot be shown it — refusing to review without it`); }
     parts.push(`// ===== ${rel} =====\n${text}`);
     if (!/\.(jsx?|mjs)$/.test(rel)) return;   // data (JSON, CSS…) is shown but has no imports
-    /* Every way a module can pull in another: import … from, export … from,
-       a bare side-effect import, and import("…"). A computed import path
-       cannot be followed, so it is refused rather than missed (round 21:
-       an imported JSON threshold was outside the review). */
-    if (/\bimport\s*\(\s*(?!["'][^"']+["']\s*\))/.test(text)) throw new Error(`diagramSources: ${rel} has an import() whose path is computed — refusing to review without knowing what it loads`);
-    const specs = [
-      ...text.matchAll(/^\s*(?:import|export)\s[^;]*?\bfrom\s+["']([^"']+)["']/gm),
-      ...text.matchAll(/^\s*import\s+["']([^"']+)["']/gm),
-      ...text.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g),
-    ].map((m) => m[1]);
+    const specs = importsOf(rel, text);
     for (const spec of specs) {
       if (!spec.startsWith(".")) continue;   // packages (react) are not project code
       const target = posix.normalize(posix.join(posix.dirname(rel), spec));

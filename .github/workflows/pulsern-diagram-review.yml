@@ -154,15 +154,6 @@ jobs:
           path: branch
           persist-credentials: false
 
-      # The branch is data. A symlink or special file in it could make a
-      # trusted step or the artifact upload read something else — a token,
-      # /proc — so any is refused before anything runs (round 22).
-      - name: Refuse links and special files in the branch checkout
-        working-directory: .
-        run: |
-          bad=$(find branch -path branch/.git -prune -o \( -type l -o \( ! -type f ! -type d \) \) -print)
-          if [ -n "$bad" ]; then echo "::error::The branch contains links or special files; refusing to run:"; echo "$bad"; exit 1; fi
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -177,6 +168,18 @@ jobs:
           name: prepared-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/prepared
 
+      # The branch and the prepared data are data. A symlink or special file
+      # in either could make a later step or the artifact upload read
+      # something else — a token, /proc — so any is refused, and every later
+      # step that reads, uploads or saves them requires this check to have
+      # passed, "always()" steps included (rounds 22–23).
+      - name: Refuse links and special files in the branch checkout and prepared data
+        id: links
+        working-directory: .
+        run: |
+          bad=$(find branch -path branch/.git -prune -o \( -type l -o \( ! -type f ! -type d \) \) -print; find "$RUNNER_TEMP/prepared" \( -type l -o \( ! -type f ! -type d \) \) -print)
+          if [ -n "$bad" ]; then echo "::error::Links or special files found; refusing to run:"; echo "$bad"; exit 1; fi
+
       - name: Review every diagram (Astra)
         id: review
         working-directory: trusted/pulsern
@@ -190,14 +193,14 @@ jobs:
           exit 0
 
       - name: Show the reports
-        if: always()
+        if: always() && steps.links.outcome == 'success'
         run: |
           for f in $(git ls-files --others --modified reports/diagram-review | grep '\.md$'); do cat "$f" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; done
 
       # Kept whatever happens to the push below: a conflicting concurrent
       # update to the branch must not cost a paid run its results.
       - name: Keep the results as an artifact
-        if: always()
+        if: always() && steps.links.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: pulsern-diagram-review-results-${{ github.run_id }}-${{ github.run_attempt }}
@@ -208,7 +211,7 @@ jobs:
 
       - name: Commit the reports (always — every paid review is kept)
         id: save
-        if: always()
+        if: always() && steps.links.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXPECT_BASE: ${{ needs.prepare.outputs.sha }}
@@ -226,7 +229,7 @@ jobs:
       # the review this commit needs is requested explicitly — through the
       # trusted, range-verified dispatch (Astra, PR #133 review, finding 17).
       - name: Request CI and the Astra review of what was just pushed
-        if: always() && steps.save.outputs.pushed == 'true'
+        if: always() && steps.links.outcome == 'success' && steps.save.outputs.pushed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}

@@ -20,8 +20,8 @@ import { tmpdir } from "node:os";
 import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
 import { sourceKey } from "./diagram-attest.mjs";
-import { DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest, diagramSources, imagePlan, reviewData } from "./review-diagrams-lib.mjs";
-import { readPrepared, reviewPlan, readFrame, headCommit } from "./prepared.mjs";
+import { DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest, diagramSources } from "./review-diagrams-lib.mjs";
+import { readPrepared, reviewPlan, readFrame, headCommit, reviewEntries, localEntries } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const ONLY = arg("--only");
@@ -48,8 +48,8 @@ const RULES = rulesExcerpt();
    only its data and its frames. */
 let entries;
 if (PREPARED) {
-  entries = reviewPlan(readPrepared(join(PREPARED, "plan.json"), "diagram-review", { into: INTO }))
-    .map((data) => ({ data, pngs: data.images.map((im) => readFrame(PREPARED, data.id, im.n)) }));
+  const prepared = reviewPlan(readPrepared(join(PREPARED, "plan.json"), "diagram-review", { into: INTO }));
+  entries = reviewEntries(prepared.map((data) => ({ data, pngs: data.images.map((im) => readFrame(PREPARED, data.id, im.n)) })));
   process.chdir(INTO);   // the branch checkout: its source, index and reports
 } else {
   const { renderDiagrams } = await import("./render-diagrams.mjs");
@@ -63,10 +63,7 @@ if (PREPARED) {
   const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
   try {
     const { DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js");
-    entries = Object.values(DIAGRAMS).filter((d) => !ONLY || d.id === ONLY).map((d) => {
-      const plan = imagePlan(d, gallery);
-      return { data: reviewData(d, plan), pngs: plan.map((p) => readFileSync(p.file)) };
-    });
+    entries = localEntries(Object.values(DIAGRAMS), gallery, (p) => readFileSync(p), ONLY);
   } finally {
     await vite.close();
   }

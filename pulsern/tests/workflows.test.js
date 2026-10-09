@@ -276,7 +276,7 @@ describe("records the workflows commit are committable", () => {
     const paths = line[1].trim().split(/\s+/);
     // the artifact kept before the push holds the same paths
     const art = w.slice(w.indexOf("- name: Keep the results as an artifact"), w.indexOf("id: save"));
-    expect(art).toMatch(/if: always\(\)\s+uses: actions\/upload-artifact@v4/);
+    expect(art).toMatch(/if: always\(\) && steps\.links\.outcome == 'success'\s+uses: actions\/upload-artifact@v4/);
     for (const p of paths) expect(art).toContain(`branch/pulsern/${p}`);
     // round 19: every paid narration take is kept in the artifact (never committed)
     if (f === "pulsern-narrate.yml") expect(art).toContain("branch/pulsern/reports/narration-takes/");
@@ -300,7 +300,7 @@ describe("bot pushes are reviewed", () => {
     expect(w).toContain("trusted/pulsern/ops/save-results.sh\" \"$BRANCH\"");
     expect(w).not.toMatch(/pull -q --rebase[^\n]*\|\| true/);
     const step = w.slice(w.indexOf("- name: Request CI and the Astra review of what was just pushed"));
-    expect(step).toMatch(/if: always\(\) && steps\.save\.outputs\.pushed == 'true'/);
+    expect(step).toMatch(/if: always\(\) && steps\.links\.outcome == 'success' && steps\.save\.outputs\.pushed == 'true'/);
     // CI on the pushed head (round 5): a workflow-token push starts no CI by itself
     expect(step).toContain("actions/workflows/pulsern-ci.yml/dispatches");
     expect(step.indexOf("pulsern-ci.yml/dispatches")).toBeLessThan(step.indexOf("pulls?state=open"));
@@ -437,7 +437,7 @@ describe("the paid job refuses links in the branch it was given", () => {
   const { tmpdir } = require("node:os");
   const script = (f) => {
     const w = readFileSync(join(LIVE_DIR, f), "utf8");
-    const i = w.indexOf("- name: Refuse links and special files in the branch checkout");
+    const i = w.indexOf("- name: Refuse links and special files in the branch checkout and prepared data");
     const block = w.slice(i, w.indexOf("\n      - ", i + 10));
     return block.slice(block.indexOf("run: |\n") + 7).split("\n").map((l) => l.replace(/^ {10}/, "")).join("\n");
   };
@@ -447,15 +447,49 @@ describe("the paid job refuses links in the branch it was given", () => {
     writeFileSync(join(ws, "branch/.git/config"), "[http]\n\textraheader = AUTHORIZATION: basic c2VudGluZWw=\n");
     mkdirSync(join(ws, "branch/pulsern/reports/narration"), { recursive: true });
     writeFileSync(join(ws, "branch/pulsern/reports/narration/run.md"), "ok\n");
+    mkdirSync(join(ws, "tmp/prepared/review/abg"), { recursive: true });
+    writeFileSync(join(ws, "tmp/prepared/review/abg/0.png"), "png");
     return ws;
   };
+  const run = (f, ws) => spawnSync("bash", ["-e", "-o", "pipefail", "-c", script(f)], { cwd: ws, encoding: "utf8", env: { ...process.env, RUNNER_TEMP: join(ws, "tmp") } });
   it.each(["pulsern-narrate.yml", "pulsern-diagram-map.yml", "pulsern-diagram-review.yml"])("%s: a symlinked report stops the job; a clean tree passes", (f) => {
     const ws = tree();
-    expect(spawnSync("bash", ["-c", script(f)], { cwd: ws, encoding: "utf8" }).status).toBe(0);
-    symlinkSync("../../../.git/config", join(ws, "branch/pulsern/reports/narration/git-token.txt"));
-    const r = spawnSync("bash", ["-c", script(f)], { cwd: ws, encoding: "utf8" });
+    expect(run(f, ws).status).toBe(0);
+    symlinkSync("/proc/self/environ", join(ws, "branch/pulsern/reports/narration/run-env.md"));
+    const r = run(f, ws);
     expect(r.status).toBe(1);
-    expect(r.stdout).toMatch(/git-token\.txt/);
+    expect(r.stdout).toMatch(/run-env\.md/);
+    rmSync(join(ws, "branch/pulsern/reports/narration/run-env.md"));
+    symlinkSync("/proc/self/environ", join(ws, "tmp/prepared/review/abg/1.png"));
+    const p = run(f, ws);
+    expect(p.status).toBe(1);
+    expect(p.stdout).toMatch(/1\.png/);
     rmSync(ws, { recursive: true, force: true });
+  });
+});
+
+/* Round 23: the check failed the job, but report, upload and save steps
+   marked always() still read the rejected checkout. */
+describe("nothing reads the branch after the link check fails", () => {
+  const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
+  it.each(files)("%s: every later always() step requires the check to have passed", (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const paid = w.slice(w.indexOf("\n  paid:\n"));
+    const after = paid.slice(paid.indexOf("        id: links\n"));
+    const steps = after.split(/^      - /m).slice(1);
+    expect(steps.length).toBeGreaterThan(3);
+    for (const s of steps) {
+      const cond = /^\s+if: (.+)$/m.exec(s)?.[1];
+      if (!cond || !/always\(\)/.test(cond)) continue;   // default success(): skipped after a failure
+      if (s.startsWith("name: Verdict")) {
+        // the verdict reads only step outputs, never the branch
+        expect(s).not.toMatch(/branch\/|reports\/|cat /);
+        continue;
+      }
+      expect(cond, s.split("\n")[0]).toContain("steps.links.outcome == 'success'");
+    }
+    // and the check runs after the prepared data is downloaded, before any trusted script
+    expect(paid.indexOf("actions/download-artifact@")).toBeLessThan(paid.indexOf("id: links"));
+    expect(paid.indexOf("id: links")).toBeLessThan(paid.indexOf("--prepared "));
   });
 });
