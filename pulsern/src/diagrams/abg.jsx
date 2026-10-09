@@ -8,7 +8,7 @@
    Reference ranges used (standard adult arterial values taught for NCLEX):
      pH 7.35–7.45 · PaCO₂ 35–45 mmHg · HCO₃⁻ 22–26 mEq/L */
 import React from "react";
-import { Frame, G, T, Gauge, Chip, Arrow, Box, C } from "./kit.jsx";
+import { Frame, G, T, Gauge, Chip, Box, C, Anim, Loop, useMotion } from "./kit.jsx";
 
 export const ABG_RANGES = {
   ph: { lo: 7.35, hi: 7.45 },
@@ -77,6 +77,124 @@ const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
 export const ABG_EXAMPLE = { ph: 7.3, paco2: 55, hco3: 24 };
 
+/* Small symbols drawn around (0,0), placed with a translate so a step can
+   animate them (the lungs breathe on the lungs step). */
+const ICON = { fill: "none", stroke: C.teal, strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" };
+const BloodIcon = () => (
+  <g {...ICON}>
+    <path d="M0,-7 C3,-3 5,0 5,2.5 A5,5 0 1 1 -5,2.5 C-5,0 -3,-3 0,-7 Z" fill={C.coral} fillOpacity={0.25} stroke={C.coral} />
+  </g>
+);
+const LungsIcon = () => (
+  <g {...ICON}>
+    <path d="M0,-8 V-1 M0,-1 l-2.5,2.5 M0,-1 l2.5,2.5" />
+    <path d="M-2.5,-3 C-6,-4 -8.5,0 -8,5 C-7.6,8 -4,8 -2.6,6 Z" fill={C.teal} fillOpacity={0.2} />
+    <path d="M2.5,-3 C6,-4 8.5,0 8,5 C7.6,8 4,8 2.6,6 Z" fill={C.teal} fillOpacity={0.2} />
+  </g>
+);
+const KidneyIcon = () => (
+  <g {...ICON}>
+    <path d="M1,-7 C-5,-8 -8,-3 -7,2 C-6,7 -1,8 1,5 C2.5,3 0.5,1.5 1,0 C1.5,-1.5 3.5,-2.5 2.5,-5 Z" fill={C.teal} fillOpacity={0.2} />
+    <path d="M1.5,0 C4,0 5,2 5,7" strokeWidth={1.2} />
+  </g>
+);
+
+/* Renders `moving` while step `on` plays with motion live, otherwise the
+   still version — so static views never carry motion markup. */
+function WhileStep({ on, moving, still }) {
+  const { stepKey, live } = useMotion();
+  const keys = Array.isArray(on) ? on : [on];
+  return (
+    <>
+      <Loop on={on}>{moving}</Loop>
+      {live && keys.includes(stepKey) ? null : still}
+    </>
+  );
+}
+
+const placed = (Icon, breathe = null) => (cx, cy) => (
+  <g transform={`translate(${cx},${cy})`}>
+    {breathe
+      ? <WhileStep on={breathe}
+          moving={<g><animateTransform attributeName="transform" type="scale" values="1;1.18;1" dur="2.4s" repeatCount="indefinite" /><Icon /></g>}
+          still={<Icon />} />
+      : <Icon />}
+  </g>
+);
+
+/* A small labelled block that sits on the seesaw or the lift. */
+const Tag = ({ x, y, text }) => {
+  const w = text.length * 6.6 + 10;
+  return (
+    <g>
+      <rect x={x - w / 2} y={y - 12} width={w} height={14} rx={4} fill={C.card} stroke={C.teal} strokeWidth={1.1} />
+      <T x={x} y={y - 1.5} size={10} anchor="middle" weight={700} mono color={C.accent}>{text}</T>
+    </g>
+  );
+};
+
+/* Respiratory Opposite: a seesaw — when pH goes down, PaCO₂ goes up.
+   It rocks while the step plays, which shows the rule both ways round. */
+function Seesaw({ cx, cy }) {
+  const beam = (
+    <g>
+      <line x1={-50} x2={50} y1={0} y2={0} stroke={C.teal} strokeWidth={3} strokeLinecap="round" />
+      <Tag x={-34} y={-2} text="pH" />
+      <Tag x={30} y={-2} text="PaCO₂" />
+    </g>
+  );
+  return (
+    <g transform={`translate(${cx},${cy})`}>
+      <WhileStep on="rome"
+        moving={<g><animateTransform attributeName="transform" type="rotate" values="-11;11;-11" dur="3.2s" repeatCount="indefinite" />{beam}</g>}
+        still={<g transform="rotate(-11)">{beam}</g>} />
+      <path d="M0,1 L-8,13 H8 Z" fill={C.muted} fillOpacity={0.45} />
+    </g>
+  );
+}
+
+/* Metabolic Equal: a lift — pH and HCO₃⁻ ride the same platform. */
+function Lift({ cx, cy }) {
+  const car = (
+    <g>
+      <line x1={-46} x2={46} y1={0} y2={0} stroke={C.teal} strokeWidth={3} strokeLinecap="round" />
+      <Tag x={-26} y={-2} text="pH" />
+      <Tag x={22} y={-2} text="HCO₃⁻" />
+      <path d="M-30,5 l4,4 l4,-4 M18,5 l4,4 l4,-4" fill="none" stroke={C.coral} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </g>
+  );
+  return (
+    <g transform={`translate(${cx},${cy})`}>
+      <line x1={-52} x2={-52} y1={-16} y2={12} stroke={C.line} strokeWidth={2} />
+      <line x1={52} x2={52} y1={-16} y2={12} stroke={C.line} strokeWidth={2} />
+      <WhileStep on="rome"
+        moving={<g><animateTransform attributeName="transform" type="translate" values="0,-5;0,5;0,-5" dur="3.2s" repeatCount="indefinite" />{car}</g>}
+        still={car} />
+    </g>
+  );
+}
+
+/* Compensation as three small pH lines: the marker is pulled back toward
+   normal as the other system compensates. It slides on its step. */
+function CompTile({ x, y, title, lines, at, i }) {
+  const bx = x + 12, bw = 80, lo = bx + 30, hi = bx + 52;
+  const start = bx + 6;
+  const mx = bx + at;
+  const inRange = mx >= lo && mx <= hi;
+  return (
+    <g>
+      <Box x={x} y={y} w={104} h={72} r={9} fill={C.surface} lift />
+      <T x={x + 52} y={y + 16} size={10.5} weight={700} anchor="middle">{title}</T>
+      <rect x={bx} y={y + 25} width={bw} height={7} rx={3.5} fill={C.surface} stroke={C.line} />
+      <rect x={lo} y={y + 25} width={hi - lo} height={7} rx={3} fill={C.teal} fillOpacity={0.8} />
+      <Anim on="compensation" kind="slide" from={`${start - mx}px`} dur={1400} delay={i * 250}>
+        <circle cx={mx} cy={y + 28.5} r={4.6} fill={inRange ? C.teal : C.danger} stroke={C.card} strokeWidth={1.5} />
+      </Anim>
+      {lines.map((l, j) => <T key={j} x={x + 52} y={y + 50 + j * 12} size={9.5} anchor="middle" color={C.muted}>{l}</T>)}
+    </g>
+  );
+}
+
 /* params === null draws the method alone — no patient markers and no
    verdict. Used when a question is about ABGs but its values could not be
    confirmed: showing the textbook example beside a question with different
@@ -89,56 +207,46 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
     : r.disorder === "inconsistent" || r.disorder === "indeterminate" ? "Recheck"
     : `${cap(r.disorder)}${r.compensation === "none" ? " · uncompensated" : r.compensation === "partial" ? " · partly compensated" : r.compensation === "full" ? " · fully compensated" : ""}`;
   return (
-    <Frame h={420} focus={focus} title="Reading an arterial blood gas"
+    <Frame h={482} focus={focus} title="Reading an arterial blood gas"
       desc={concept
-        ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, high means acid; HCO3 normal 22 to 26 mEq/L, low means acid. Match the value that moves with the pH: respiratory opposite, metabolic equal."
+        ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, high means acid; HCO3 normal 22 to 26 mEq/L, low means acid. Match the value that moves with the pH: respiratory opposite, metabolic equal. Compensation: other value still normal means uncompensated; moved but pH still out of range means partially compensated; pH back in range means fully compensated."
         : `pH ${params.ph} (normal 7.35 to 7.45), PaCO2 ${params.paco2} mmHg (35 to 45, high means acid), HCO3 ${params.hco3} mEq/L (22 to 26, low means acid). ${r.reading}`}>
       <G id="ph">
         <Gauge x={20} y={56} w={320} min={7.1} max={7.7} lo={7.35} hi={7.45} value={concept ? null : params.ph} decimals={2}
-          label="1  pH — what is the problem?" leftLabel="ACIDOSIS" rightLabel="ALKALOSIS" leftColor="coral" rightColor="coral" />
+          label="1  pH — what is the problem?" leftLabel="ACIDOSIS" rightLabel="ALKALOSIS" leftColor="coral" rightColor="coral"
+          icon={placed(BloodIcon)} anim={["ph", "worked"]} />
       </G>
       <G id="co2">
         <Gauge x={20} y={138} w={320} min={20} max={70} lo={35} hi={45} value={concept ? null : params.paco2} unit="mmHg"
-          label="2  PaCO₂ — lungs · CO₂ is an acid" leftLabel="BASE" rightLabel="ACID ▸" rightColor="coral" />
+          label="2  PaCO₂ — lungs · CO₂ is an acid" leftLabel="BASE" rightLabel="ACID ▸" rightColor="coral"
+          icon={placed(LungsIcon, "lungs")} anim={["lungs", "worked"]} />
       </G>
       <G id="hco3">
         <Gauge x={20} y={220} w={320} min={12} max={36} lo={22} hi={26} value={concept ? null : params.hco3} unit="mEq/L"
-          label="3  HCO₃⁻ — kidneys · a base" leftLabel="◂ ACID" rightLabel="BASE" leftColor="coral" />
+          label="3  HCO₃⁻ — kidneys · a base" leftLabel="◂ ACID" rightLabel="BASE" leftColor="coral"
+          icon={placed(KidneyIcon)} anim={["kidneys", "worked"]} />
       </G>
       <G id="rome">
-        <Box x={20} y={258} w={320} h={72} r={10} fill={C.surface} />
+        <Box x={20} y={258} w={320} h={106} r={10} fill={C.surface} lift />
         <T x={32} y={279} size={12} weight={700}>4  Match the pH — ROME</T>
-        <T x={32} y={302} size={12}><tspan fontWeight={700} fill={C.accent}>R</tspan>espiratory <tspan fontWeight={700} fill={C.accent}>O</tspan>pposite</T>
-        <Updown x={214} y={302} label="pH" dir="down" />
-        <Updown x={262} y={302} label="PaCO₂" dir="up" />
-        <T x={32} y={322} size={12}><tspan fontWeight={700} fill={C.accent}>M</tspan>etabolic <tspan fontWeight={700} fill={C.accent}>E</tspan>qual</T>
-        <Updown x={214} y={322} label="pH" dir="down" />
-        <Updown x={262} y={322} label="HCO₃⁻" dir="down" />
+        <T x={32} y={310} size={12}><tspan fontWeight={700} fill={C.accent}>R</tspan>espiratory <tspan fontWeight={700} fill={C.accent}>O</tspan>pposite</T>
+        <T x={32} y={324} size={10} color={C.muted}>pH and PaCO₂ move apart</T>
+        <Seesaw cx={268} cy={304} />
+        <T x={32} y={346} size={12}><tspan fontWeight={700} fill={C.accent}>M</tspan>etabolic <tspan fontWeight={700} fill={C.accent}>E</tspan>qual</T>
+        <T x={32} y={359} size={10} color={C.muted}>pH and HCO₃⁻ move together</T>
+        <Lift cx={268} cy={346} />
       </G>
       <G id="result">
-        <Chip x={180} y={360} text={label} color={bad ? "coral" : "teal"} size={12} />
+        <Anim on="worked" kind="pop" delay={1100}>
+          <Chip x={180} y={390} text={label} color={bad ? "coral" : "teal"} size={12} />
+        </Anim>
       </G>
       <G id="comp">
-        <T x={180} y={386} size={10.5} anchor="middle" color={C.muted}>Other value still normal → uncompensated</T>
-        <T x={180} y={401} size={10.5} anchor="middle" color={C.muted}>Moved, pH still out of range → partial</T>
-        <T x={180} y={416} size={10.5} anchor="middle" color={C.muted}>pH back in range → fully compensated</T>
+        <CompTile x={20} y={404} i={0} title="Uncompensated" lines={["other value", "still normal"]} at={6} />
+        <CompTile x={128} y={404} i={1} title="Partial" lines={["other moved,", "pH still out"]} at={20} />
+        <CompTile x={236} y={404} i={2} title="Full" lines={["pH back", "in range"]} at={34} />
       </G>
     </Frame>
-  );
-}
-
-/* "pH ↓" as text plus a small drawn arrow — glyph arrows render at
-   different sizes in different fonts, a drawn one does not. */
-function Updown({ x, y, label, dir }) {
-  const ax = x + label.length * 6.9 + 6;
-  const top = y - 10, bot = y + 1;
-  return (
-    <g>
-      <T x={x} y={y} size={11} color={C.muted} mono>{label}</T>
-      <path d={dir === "up" ? `M${ax},${bot} V${top + 3} M${ax - 3.5},${top + 6.5} L${ax},${top} L${ax + 3.5},${top + 6.5}`
-                            : `M${ax},${top} V${bot - 3} M${ax - 3.5},${bot - 6.5} L${ax},${bot} L${ax + 3.5},${bot - 6.5}`}
-        fill="none" stroke={C.coral} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-    </g>
   );
 }
 

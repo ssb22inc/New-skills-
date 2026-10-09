@@ -39,3 +39,24 @@ describe("the reference table", () => {
     }
   });
 });
+
+/* The worked step used to spotlight the NPH curve whatever insulin the
+   question named. It must draw the client's own insulin. */
+describe("worked step draws the question's insulin", () => {
+  it("does not hard-code one insulin's curve into the worked step", async () => {
+    const { insulin } = await import("../src/diagrams/insulin.jsx");
+    const worked = insulin.steps.find((s) => s.key === "worked");
+    expect(worked.focus).not.toContain("nph");
+    expect(worked.focus).toContain("worked");
+  });
+  it("shows the given insulin's own peak window on that step", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { StepContext } = await import("../src/diagrams/kit.jsx");
+    const { InsulinDiagram } = await import("../src/diagrams/insulin.jsx");
+    const html = renderToStaticMarkup(React.createElement(StepContext.Provider, { value: { stepKey: "worked" } },
+      React.createElement(InsulinDiagram, { params: { type: "rapid", givenAt: "08:00" } })));
+    expect(html).toContain("09:00–10:00");
+    expect(html).toContain(">08:00<");
+  });
+});

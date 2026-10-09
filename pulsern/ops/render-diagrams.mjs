@@ -28,7 +28,15 @@ export function themeTokens() {
   if (!light || !dark) throw new Error("Could not find the light/dark token blocks in src/App.jsx");
   // ECG/monitor tokens live in a separate block in the light theme.
   const extra = blocks.filter((b) => /--mon:|--read-size:/.test(b) && b !== light && b !== dark).join("");
-  return { light: light + extra, dark };
+  /* In the app the dim theme is an override on the same .app element: it
+     inherits every light token it does not redefine (the monitor's --mon and
+     --ecg among them). Dark renders cascade the same way — without the light
+     base they drew black, trace-less ECG strips. */
+  const out = { light: light + extra, dark: light + extra + dark };
+  for (const [name, css] of Object.entries(out)) {
+    if (!/--mon:/.test(css) || !/--ecg:/.test(css)) throw new Error(`${name} theme is missing the monitor tokens`);
+  }
+  return out;
 }
 
 const page = (body, tokens, css, WIDTH) => `<!doctype html><html><head><meta charset="utf-8">
@@ -73,15 +81,29 @@ try {
         await pg.evaluate(() => document.fonts.ready);
         /* Layout lint, measured in a real browser with the real fonts: no
            text past the canvas, out of the box it sits in, or on top of other
-           text. Checked once per diagram, on the static frame in light theme
-           — focus and theme change opacity and colour, never geometry. */
-        if (i === 0 && theme === "light") {
+           text. Checked on every frame in light theme: theme changes only
+           colour, but a step can add its own annotations (onset/peak marks,
+           a highlighted row), so each step's geometry is its own. */
+        if (theme === "light") {
           const issues = await pg.evaluate(() => {
             const svg = document.querySelector(".shot svg");
             const vb = svg.viewBox.baseVal;
             const out = [];
-            const texts = [...svg.querySelectorAll("text")].map((t) => ({ t, b: t.getBBox(), s: t.textContent.trim() })).filter((x) => x.s);
-            const rects = [...svg.querySelectorAll("rect")].map((r) => r.getBBox()).filter((b) => b.width > 40 && b.height > 20);
+            /* Boxes in the canvas's own units, AFTER any transform: text
+               inside a translated or rotated group (a seesaw, a lift) is
+               measured where it is actually drawn, not where its local
+               coordinates say. */
+            const toSvg = svg.getScreenCTM().inverse();
+            const boxOf = (el) => {
+              const b = el.getBBox();
+              const m = toSvg.multiply(el.getScreenCTM());
+              const pts = [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]
+                .map(([x, y]) => new DOMPoint(x, y).matrixTransform(m));
+              const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+              return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+            };
+            const texts = [...svg.querySelectorAll("text")].map((t) => ({ t, b: boxOf(t), s: t.textContent.trim() })).filter((x) => x.s);
+            const rects = [...svg.querySelectorAll("rect")].map(boxOf).filter((b) => b.width > 40 && b.height > 20);
             const tol = 0.75;
             for (const { b, s } of texts) {
               if (b.x < vb.x - tol || b.x + b.width > vb.x + vb.width + tol) out.push(`"${s}" runs off the canvas`);
@@ -101,7 +123,8 @@ try {
             }
             return out;
           });
-          if (issues.length) { lintFailures.push(...issues.map((m) => `${d.id}: ${m}`)); }
+          const where = frames[i] == null ? "static" : d.steps[frames[i]].key;
+          if (issues.length) { lintFailures.push(...issues.map((m) => `${d.id} [${where}]: ${m}`)); }
         }
         const file = join(dir, `${theme}-step${i}.png`);
         await pg.locator(".shot").screenshot({ path: file });

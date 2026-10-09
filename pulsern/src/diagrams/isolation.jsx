@@ -6,7 +6,7 @@
    named condition to its precautions (pure, tested), so when a question
    names exactly one condition its row is outlined. */
 import React from "react";
-import { Frame, G, T, Box, C } from "./kit.jsx";
+import { Frame, G, T, Box, C, Anim, Loop, Flow, OnStep, useDefs, useMotion } from "./kit.jsx";
 
 /* Conditions → precautions. Some need two (varicella: airborne + contact). */
 export const CONDITIONS = [
@@ -74,12 +74,128 @@ function NegRoom({ x, y }) {
   );
 }
 
-function Row({ id, y, title, how, examples, wear, room, icons, highlight }) {
+/* ---- transmission scenes ----
+   Each row opens with a small scene of HOW the organism spreads, which is
+   what decides the precaution. Germs and particles are drawn in the lab
+   ink tone (a hazard, not an error, so not coral). Static views show the
+   scene still; on its step it moves. */
+const GERM = C.labInk;
+
+/* A client in profile, facing right. `masked` puts a surgical mask on
+   (the transport step). */
+function Profile({ x, y, masked = false }) {
+  return (
+    <g>
+      <path d={`M${x - 12},${y + 26} q0,-12 12,-13 q12,1 12,13`} fill={C.teal} fillOpacity={0.18} stroke={C.teal} strokeWidth={1.3} />
+      <circle cx={x} cy={y} r={8.5} fill={C.card} stroke={C.teal} strokeWidth={1.4} />
+      <path d={`M${x + 8},${y - 2} l3,3 l-2.6,1`} fill="none" stroke={C.teal} strokeWidth={1.3} strokeLinejoin="round" />
+      {masked ? (
+        <OnStep on="transport" kind="pop" delay={300}>
+          <rect x={x + 2} y={y - 1} width={10} height={8} rx={2.5} fill={C.card} stroke={C.accent} strokeWidth={1.4} />
+          <path d={`M${x + 2},${y + 1} l-7,-3 M${x + 2},${y + 5} l-7,2`} stroke={C.accent} strokeWidth={0.9} />
+        </OnStep>
+      ) : null}
+    </g>
+  );
+}
+
+function SceneCard({ x, y, children }) {
+  const u = useDefs();
+  return (
+    <g>
+      <rect x={x} y={y} width={80} height={62} rx={8} fill={u("teal-soft")} stroke={C.line} />
+      {children}
+    </g>
+  );
+}
+
+/* Contact: a gloved hand touches a contaminated rail and carries germs. */
+function ContactScene({ x, y }) {
+  const rail = y + 46;
+  const germs = [[x + 18, rail - 3], [x + 30, rail - 2.5], [x + 47, rail - 3], [x + 60, rail - 2.5]];
+  const hand = (
+    <g>
+      <path d={`M${x + 34},${y + 6} v14 l-4,-4 a2.2,2.2 0 0 0 -3,3 l7,9 h12 l2,-8 v-10 a2,2 0 0 0 -4,0 v6 v-8 a2,2 0 0 0 -4,0 v7 v-8 a2,2 0 0 0 -4,0 z`}
+        fill={C.card} stroke={C.teal} strokeWidth={1.3} strokeLinejoin="round" />
+    </g>
+  );
+  return (
+    <SceneCard x={x} y={y}>
+      <rect x={x + 8} y={rail} width={64} height={5} rx={2.5} fill={C.muted} fillOpacity={0.35} />
+      {germs.map(([gx, gy], i) => <circle key={i} cx={gx} cy={gy} r={2} fill={GERM} />)}
+      <WhileStep on="contact"
+        moving={<g><animateTransform attributeName="transform" type="translate" values="0,-6;0,8;0,8;0,-6" keyTimes="0;0.4;0.6;1" dur="2.4s" repeatCount="indefinite" />{hand}
+          <circle cx={x + 40} cy={y + 34} r={1.8} fill={GERM}><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.45;0.6;1" dur="2.4s" repeatCount="indefinite" /></circle></g>}
+        still={hand} />
+    </SceneCard>
+  );
+}
+
+/* Droplet: a cough sends large droplets that fall within about 3 feet. */
+function DropletScene({ x, y }) {
+  const mx = x + 27, my = y + 21, floor = y + 52;
+  const arcs = [13, 20, 27].map((reach) => `M${mx},${my} q${reach * 0.5},-8 ${reach},${floor - my - 4}`);
+  return (
+    <SceneCard x={x} y={y}>
+      <Profile x={x + 17} y={y + 22} masked />
+      {[[mx + 12, floor - 6], [mx + 19, floor - 3], [mx + 26, floor - 5]].map(([dx, dy], i) => <circle key={i} cx={dx} cy={dy} r={2.6} fill={GERM} fillOpacity={0.8} />)}
+      <Loop on="droplet">
+        {arcs.map((d, i) => <Flow key={i} d={d} n={2} dur={1.6 + i * 0.2} r={2.6} color={GERM} shape="dot" />)}
+      </Loop>
+      {/* the ~3 ft reach */}
+      <path d={`M${mx},${floor + 4} h30 M${mx},${floor + 1} v6 M${mx + 30},${floor + 1} v6`} stroke={C.muted} strokeWidth={1} />
+      <T x={mx + 32} y={floor + 8} size={8.5} weight={700} color={C.muted} mono>3ft</T>
+    </SceneCard>
+  );
+}
+
+/* Airborne: tiny particles drift and hang across the whole room. */
+const AIR_DOTS = [[34, 14], [44, 30], [52, 12], [58, 40], [66, 22], [70, 50], [40, 46], [62, 8], [74, 34], [48, 54]];
+function AirborneScene({ x, y }) {
+  const mx = x + 27, my = y + 21;
+  const paths = [
+    `M${mx},${my} C${x + 40},${y + 4} ${x + 55},${y + 30} ${x + 78},${y + 12}`,
+    `M${mx},${my} C${x + 38},${y + 40} ${x + 58},${y + 6} ${x + 78},${y + 40}`,
+    `M${mx},${my} C${x + 42},${y + 24} ${x + 60},${y + 56} ${x + 78},${y + 26}`,
+  ];
+  return (
+    <SceneCard x={x} y={y}>
+      <Profile x={x + 17} y={y + 22} masked />
+      {AIR_DOTS.map(([dx, dy], i) => <circle key={i} cx={x + dx} cy={y + dy} r={1.1} fill={GERM} fillOpacity={0.75} />)}
+      <Loop on="airborne">
+        {paths.map((d, i) => <Flow key={i} d={d} n={3} dur={4 + i * 0.6} r={1.2} color={GERM} shape="dot" />)}
+      </Loop>
+    </SceneCard>
+  );
+}
+
+/* Moving vs still, without motion markup in static renders. */
+function WhileStep({ on, moving, still }) {
+  const { stepKey, live } = useMotion();
+  const keys = Array.isArray(on) ? on : [on];
+  return (
+    <>
+      <Loop on={on}>{moving}</Loop>
+      {live && keys.includes(stepKey) ? null : still}
+    </>
+  );
+}
+
+/* A PPE glyph shrunk into a round "wear" badge. */
+const Badge = ({ cx, cy, children }) => (
+  <g>
+    <circle cx={cx} cy={cy} r={13} fill={C.card} stroke={C.teal} strokeWidth={1.2} />
+    <g transform={`translate(${cx - 10.5},${cy - 10.5}) scale(0.55)`}>{children}</g>
+  </g>
+);
+
+function Row({ id, y, title, how, examples, wear, room, scene, badges, highlight }) {
   return (
     <G id={id}>
-      <Box x={8} y={y} w={344} h={104} r={10} fill={C.surface} />
+      <Box x={8} y={y} w={344} h={104} r={10} fill={C.surface} lift />
       {highlight ? <rect x={5} y={y - 3} width={350} height={110} rx={12} fill="none" stroke={C.coral} strokeWidth={2} strokeDasharray="5 4" /> : null}
-      <g>{icons}</g>
+      {scene(14, y + 7)}
+      <Anim on={id} kind="pop" delay={500}>{badges(y + 86)}</Anim>
       <T x={100} y={y + 20} size={12.5} weight={700}>{title}</T>
       <T x={100} y={y + 36} size={10.5} color={C.muted}>{how}</T>
       <T x={100} y={y + 54} size={11}>{examples}</T>
@@ -89,34 +205,61 @@ function Row({ id, y, title, how, examples, wear, room, icons, highlight }) {
   );
 }
 
+/* Hand hygiene for the standard row; soap vs alcohol rub for C. diff. */
+const HandWash = ({ x, y }) => (
+  <g fill="none" stroke={C.teal} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
+    <path d={`M${x - 4},${y + 9} v-8 l-3,-3 a1.6,1.6 0 0 1 2.4,-2 l2.6,2.6 v-8 a1.5,1.5 0 0 1 3,0 v6 v-7.5 a1.5,1.5 0 0 1 3,0 v7.5 v-6 a1.5,1.5 0 0 1 3,0 v6 v-4 a1.5,1.5 0 0 1 3,0 v8 c0,4 -2,7 -5,7 z`} fill={C.card} />
+    <path d={`M${x + 12},${y - 10} C${x + 13.5},${y - 8} ${x + 14.5},${y - 6.5} ${x + 14.5},${y - 5.5} A2.5,2.5 0 1 1 ${x + 9.5},${y - 5.5} C${x + 9.5},${y - 6.5} ${x + 10.5},${y - 8} ${x + 12},${y - 10} Z`} fill={C.teal} fillOpacity={0.35} />
+  </g>
+);
+const Soap = ({ x, y }) => (
+  <g>
+    <rect x={x - 9} y={y - 5} width={18} height={11} rx={4} fill={C.card} stroke={C.teal} strokeWidth={1.4} />
+    {[[x - 7, y - 8], [x - 1, y - 10], [x + 5, y - 8.5]].map(([bx, by], i) => <circle key={i} cx={bx} cy={by} r={2} fill="none" stroke={C.teal} strokeWidth={1} />)}
+    <path d={`M${x + 12},${y + 2} l3,3 l6,-7`} fill="none" stroke={C.teal} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+  </g>
+);
+const Rub = ({ x, y }) => (
+  <g>
+    <path d={`M${x - 5},${y - 4} h10 v12 a2,2 0 0 1 -2,2 h-6 a2,2 0 0 1 -2,-2 z M${x - 2},${y - 4} v-3 h5 l2,2`} fill={C.card} stroke={C.muted} strokeWidth={1.3} strokeLinejoin="round" />
+    <path d={`M${x + 10},${y - 3} l8,8 M${x + 18},${y - 3} l-8,8`} stroke={C.coral} strokeWidth={1.8} strokeLinecap="round" />
+  </g>
+);
+
 export function IsolationDiagram({ params = null, focus = null }) {
   const lit = new Set(params?.types ?? []);
   return (
     <Frame h={442} focus={focus} title="Transmission-based precautions"
-      desc="Standard precautions for every client. Contact precautions (spread by touch; MRSA, VRE, C. difficile, scabies, RSV): gown and gloves, private room or cohort, dedicated equipment; soap and water for C. difficile. Droplet precautions (large droplets within about 3 feet; influenza, pertussis, mumps, rubella, meningococcal meningitis): surgical mask on entering the room, private room. Airborne precautions (tiny particles that stay in the air; tuberculosis, measles, chickenpox): N95 respirator, negative-pressure room with the door closed. Clients wear a surgical mask when transported on droplet or airborne precautions.">
+      desc="Standard precautions, including hand hygiene, for every client. Contact precautions (spread by touch; MRSA, VRE, C. difficile, scabies, RSV): gown and gloves, private room or cohort, dedicated equipment; soap and water for C. difficile because alcohol rub does not kill its spores. Droplet precautions (large droplets that fall within about 3 feet; influenza, pertussis, mumps, rubella, meningococcal meningitis): surgical mask on entering the room, private room. Airborne precautions (tiny particles that stay in the air; tuberculosis, measles, chickenpox): N95 respirator, negative-pressure room with the door closed. Clients wear a surgical mask when transported on droplet or airborne precautions.">
       <G id="standard">
-        <Box x={8} y={6} w={344} h={34} r={10} fill={C.card} />
-        <T x={18} y={28} size={11.5}><tspan fontWeight={700} fill={C.accent}>Standard precautions</tspan> for every client — then add:</T>
+        <Box x={8} y={6} w={344} h={34} r={10} fill={C.card} lift />
+        <HandWash x={24} y={23} />
+        <T x={44} y={28} size={11.5}><tspan fontWeight={700} fill={C.accent}>Standard precautions</tspan> for every client — then add:</T>
       </G>
       <Row id="contact" y={50} highlight={lit.has("contact")}
         title="Contact — spread by touch" how="skin, wounds, stool, surfaces, equipment"
         examples="MRSA · VRE · C. diff · scabies · lice · RSV"
         wear="gown + gloves" room="private or cohort; dedicated equipment"
-        icons={<><Gown x={20} y={64} /><Glove x={56} y={64} /></>} />
+        scene={(x, y) => <ContactScene x={x} y={y} />}
+        badges={(cy) => <><Badge cx={36} cy={cy}><Gown x={0} y={0} /></Badge><Badge cx={68} cy={cy}><Glove x={2} y={0} /></Badge></>} />
       <Row id="droplet" y={164} highlight={lit.has("droplet")}
         title="Droplet — large droplets, ~3 ft" how="coughing, sneezing, talking"
         examples="flu · pertussis · mumps · rubella · meningococcal"
         wear="surgical mask on entering the room" room="private; client masks for transport"
-        icons={<Mask x={36} y={182} />} />
+        scene={(x, y) => <DropletScene x={x} y={y} />}
+        badges={(cy) => <Badge cx={52} cy={cy}><Mask x={0} y={2} /></Badge>} />
       <Row id="airborne" y={278} highlight={lit.has("airborne")}
         title="Airborne — tiny particles hang in air" how="travel on air currents, farther than droplets"
         examples="TB · measles · chickenpox"
         wear="fit-tested N95 respirator" room="negative pressure, door closed"
-        icons={<><N95 x={12} y={294} /><NegRoom x={60} y={292} /></>} />
+        scene={(x, y) => <AirborneScene x={x} y={y} />}
+        badges={(cy) => <><Badge cx={36} cy={cy}><N95 x={0} y={4} /></Badge><Badge cx={68} cy={cy}><NegRoom x={2} y={0} /></Badge></>} />
       <G id="cdiff">
-        <Box x={8} y={392} w={344} h={46} r={10} fill={C.noBg} stroke={C.coral} />
+        <Box x={8} y={392} w={344} h={46} r={10} fill={C.noBg} stroke={C.coral} lift />
         <T x={18} y={411} size={11.5} weight={700} color={C.danger}>C. diff: wash with soap and water</T>
         <T x={18} y={428} size={10.5}>Alcohol rub does not kill its spores.</T>
+        <Anim on="cdiff" kind="pop" delay={300}><Soap x={278} y={416} /></Anim>
+        <Anim on="cdiff" kind="pop" delay={600}><Rub x={318} y={414} /></Anim>
       </G>
     </Frame>
   );

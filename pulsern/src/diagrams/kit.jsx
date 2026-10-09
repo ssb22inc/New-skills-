@@ -183,9 +183,18 @@ export function Anim({ on, kind = "fade", delay = 0, dur, origin = "50% 50%", fr
   const keys = stepKeys(on, collect);
   if (!live || !keys.includes(stepKey)) return <g>{children}</g>;
   const style = { animationDelay: `${delay}ms`, transformOrigin: origin, transformBox: "fill-box" };
-  if (dur) style.animationDuration = `${dur}ms`;
+  if (dur) { style.animationDuration = `${dur}ms`; style["--dur"] = `${dur}ms`; }
   if (from != null) style["--from"] = from;
   return <g key={stepKey} className={`dg-a dg-${kind}`} style={style}>{children}</g>;
+}
+
+/* Shown only while its step is on screen (played or as a still) — for
+   annotations that belong to one step and would crowd the overview. */
+export function OnStep({ on, kind = "fade", delay = 0, dur, children }) {
+  const { stepKey, collect } = useMotion();
+  const keys = stepKeys(on, collect);
+  if (!keys.includes(stepKey)) return null;
+  return <Anim on={on} kind={kind} delay={delay} dur={dur}>{children}</Anim>;
 }
 
 export function Loop({ on, children }) {
@@ -247,31 +256,51 @@ export function Chip({ x, y, text, color = "teal", fill, anchor = "middle", size
 
 /* A horizontal number line with the normal range shaded and an optional
    marker. The tool for every lab-value diagram: where the value sits
-   relative to normal is the whole point. */
+   relative to normal is the whole point.
+
+   The out-of-range ends are lightly shaded, the normal band is a teal bar
+   with a sheen, and the value sits in a pin (coral when abnormal). On its
+   step (`anim`) the pin slides in from the middle of the normal range, so
+   the eye travels the distance from normal. `icon` draws a small symbol
+   before the title (a lung for PaCO₂, a kidney for HCO₃⁻). */
 export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, unit = "",
-  leftLabel, rightLabel, leftColor = "muted", rightColor = "muted", markerColor = "coral", label }) {
-  /* Vertical rhythm, top to bottom: title (y-34), value (y-15), marker
-     (y-6), bar (y), range numbers and end labels (y+19). The title and the
-     value used to share a line and collided whenever the value sat under it. */
+  leftLabel, rightLabel, leftColor = "muted", rightColor = "muted", markerColor = "coral", label, icon = null, anim = null }) {
+  /* Vertical rhythm, top to bottom: title (y-34), value pin (y-27 to y-11),
+     marker stem (y-10), bar (y), range numbers and end labels (y+19). */
+  const u = useDefs();
   const px = (v) => x + ((Math.min(max, Math.max(min, v)) - min) / (max - min)) * w;
   const fmt = (v) => Number(v).toFixed(decimals);
   const valueBad = value != null && (value < lo || value > hi);
-  const vx = value != null ? Math.min(x + w - 14, Math.max(x + 14, px(value))) : 0;
+  const mx = value != null ? px(value) : 0;
+  const text = value != null ? fmt(value) : "";
+  const pillW = text.length * 7.4 + 14;
+  const pillX = Math.min(x + w - pillW, Math.max(x, mx - pillW / 2));
+  const pinFill = valueBad ? (markerColor === "coral" ? C.danger : C[markerColor]) : C.teal;
+  const ticks = Array.from({ length: 11 }, (_, i) => x + (i / 10) * w);
   return (
     <g>
-      {label ? <T x={x} y={y - 34} size={12} weight={700}>{label}</T> : null}
+      {icon ? <g>{icon(x + 8, y - 38)}</g> : null}
+      {label ? <T x={icon ? x + 22 : x} y={y - 34} size={12} weight={700}>{label}</T> : null}
       {unit ? <T x={x + w} y={y - 34} size={10} anchor="end" color={C.muted} mono>{unit}</T> : null}
-      <rect x={x} y={y - 4} width={w} height={8} rx={4} fill={C.surface} stroke={C.line} />
-      <rect x={px(lo)} y={y - 4} width={px(hi) - px(lo)} height={8} rx={3} fill={C.teal} opacity={0.85} />
+      <rect x={x} y={y - 5} width={w} height={10} rx={5} fill={C.surface} stroke={C.line} />
+      <rect x={x + 1} y={y - 4} width={px(lo) - x - 1} height={8} rx={4} fill={C.muted} fillOpacity={0.1} />
+      <rect x={px(hi)} y={y - 4} width={x + w - px(hi) - 1} height={8} rx={4} fill={C.muted} fillOpacity={0.1} />
+      {ticks.map((tx, i) => <line key={i} x1={tx} x2={tx} y1={y + 6} y2={y + 9} stroke={C.muted} strokeOpacity={0.45} strokeWidth={0.8} />)}
+      <rect x={px(lo)} y={y - 5} width={px(hi) - px(lo)} height={10} rx={4} fill={u("teal")} />
+      <rect x={px(lo)} y={y - 5} width={px(hi) - px(lo)} height={5} rx={3} fill={u("sheen")} />
       <T x={px(lo)} y={y + 19} size={10.5} anchor="middle" color={C.accent} mono>{fmt(lo)}</T>
       <T x={px(hi)} y={y + 19} size={10.5} anchor="middle" color={C.accent} mono>{fmt(hi)}</T>
       {leftLabel ? <T x={x} y={y + 19} size={10.5} color={C[leftColor]} weight={600}>{leftLabel}</T> : null}
       {rightLabel ? <T x={x + w} y={y + 19} size={10.5} anchor="end" color={C[rightColor]} weight={600}>{rightLabel}</T> : null}
       {value != null ? (
-        <g>
-          <path d={`M${px(value)},${y - 5} l-5.5,-8 h11 z`} fill={valueBad ? C[markerColor] : C.teal} />
-          <T x={vx} y={y - 16} size={12} anchor="middle" weight={700} mono color={valueBad ? C[markerColor] : C.teal}>{fmt(value)}</T>
-        </g>
+        <Anim on={anim ?? []} kind="slide" from={`${((lo + hi) / 2 - Math.min(max, Math.max(min, value))) / (max - min) * w}px`} dur={1300}>
+          <g filter={u("shadow")}>
+            <line x1={mx} x2={mx} y1={y - 11} y2={y + 6} stroke={pinFill} strokeWidth={2} strokeLinecap="round" />
+            <circle cx={mx} cy={y} r={3.4} fill={C.card} stroke={pinFill} strokeWidth={2} />
+            <rect x={pillX} y={y - 27} width={pillW} height={16} rx={8} fill={pinFill} />
+            <T x={pillX + pillW / 2} y={y - 15} size={11} anchor="middle" weight={700} mono color={C.card}>{text}</T>
+          </g>
+        </Anim>
       ) : null}
     </g>
   );
@@ -303,13 +332,16 @@ export const DIAGRAM_CSS = `
 .dg-pop{animation-name:dg-pop;animation-duration:.55s;animation-timing-function:cubic-bezier(.3,1.45,.5,1)}
 .dg-grow{animation-name:dg-grow;animation-duration:1.2s}
 .dg-scale{animation-name:dg-scale;animation-duration:1.6s;animation-timing-function:cubic-bezier(.45,0,.25,1)}
-.dg-wipe{animation-name:dg-wipe;animation-duration:1.4s;animation-timing-function:linear}
+/* draw: strokes trace themselves along their length (paths need pathLength="1") */
+.dg-draw path{stroke-dasharray:1 1;animation:dg-draw var(--dur,1.4s) linear both}
 .dg-press{animation:dg-press 1.6s ease-in-out infinite}
+.dg-slide{animation-name:dg-slide;animation-duration:1.3s}
 @keyframes dg-fade{from{opacity:0;transform:translateY(6px)}}
 @keyframes dg-pop{from{opacity:0;transform:scale(.55)}}
 @keyframes dg-grow{from{transform:scaleY(.04)}}
 @keyframes dg-scale{from{transform:scale(var(--from,1))}}
-@keyframes dg-wipe{from{clip-path:inset(0 100% 0 0)}}
+@keyframes dg-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes dg-slide{from{transform:translateX(var(--from,0))}}
 @keyframes dg-press{0%,100%{transform:translateY(-6px)}40%,60%{transform:translateY(0)}}
-@media (prefers-reduced-motion: reduce){.dg-g,.dg-progress>i{transition:none}.dg-a,.dg-press{animation:none!important}}
+@media (prefers-reduced-motion: reduce){.dg-g,.dg-progress>i{transition:none}.dg-a,.dg-press,.dg-draw path{animation:none!important}}
 `;
