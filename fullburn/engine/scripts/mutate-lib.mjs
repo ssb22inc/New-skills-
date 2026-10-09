@@ -478,3 +478,15 @@ export function mergeShardResults(shardRuns, total, canaryNames = META_CANARIES.
   if (reported !== total) return { ok: false, reason: `shards reported ${reported} of ${total} entries — HARNESS RESULT IS VOID.` };
   return { ok: true, lines, survived, notFound, caught: total - survived - notFound, total };
 }
+
+/** The names of the failing tests in a vitest run's output, for a canary that
+ * came out wrong: a void meta-check must say WHICH tests went red, or the next
+ * step is guesswork (the first 3-shard run, 2026-10-09). Display only. */
+export function failedTestNames(text, limit = 5) {
+  const names = [];
+  for (const m of String(text ?? "").matchAll(/^\s*FAIL\s+(.+?)\s*$/gm)) {
+    if (!names.includes(m[1])) names.push(m[1]);
+    if (names.length >= limit) break;
+  }
+  return names;
+}

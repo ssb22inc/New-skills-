@@ -28,6 +28,7 @@ import {
   parseShardFlags,
   recoverInFlight,
   shardEntries,
+  failedTestNames,
   summaryLine,
   tableEndOf, acquireRunLock, releaseRunLock } from "./mutate-lib.mjs";
 
@@ -1695,12 +1696,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       child.stderr.on("data", (d) => (err += d));
       child.on("close", (code) => {
         if (code === 0) return resolveRun(null);
+        lastFailed = failedTestNames(`${out}\n${err}`);
         resolveRun(summaryLine(out, err));
       });
       child.on("error", () => resolveRun("failed to start"));
       current = child;
     });
   let current = null;
+  let lastFailed = [];
 
   // A marker here means the PREVIOUS run died mid-mutation. Repair before
   // measuring anything, and say so — a silent repair would hide the fact that a
@@ -1808,6 +1811,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const got = classifyRun(failure);
     metaResults.push({ name: c.name, expect: c.expect, got });
     console.log(`  ${got === c.expect ? "ok  " : "FAIL"} ${c.name}  |  got ${got}${failure ? `  (${failure})` : ""}`);
+    if (got !== c.expect && lastFailed.length > 0) console.log(`       failing: ${lastFailed.join(" ; ")}`);
   }
   const meta = metaCheckVerdict(metaResults);
   if (!meta.ok) {
@@ -1969,7 +1973,15 @@ async function runSharded(n) {
   await removeTrees();
   const merged = mergeShardResults(runs, MUTATIONS.length);
   if (!merged.ok) {
-    console.error(`META-CHECK FAILED: ${merged.reason}`);
+    // Each shard's whole output is kept, outside the removed worktrees, so a
+    // void run can be diagnosed rather than re-run blind.
+    const logs = runs.map((r, i) => {
+      const f = join(tmpdir(), `fullburn-mutate-${process.pid}-shard-${i}.log`);
+      writeFileSync(f, r.out);
+      return f;
+    });
+    const failing = runs.flatMap((r, i) => [...String(r.out).matchAll(/^\s+failing: (.*)$/gm)].map((m) => `shard ${i}: ${m[1]}`));
+    console.error(`META-CHECK FAILED: ${merged.reason}${failing.length ? ` Failing tests — ${failing.join(" | ")}.` : ""} Shard logs: ${logs.join(", ")}`);
     process.exit(1);
   }
   console.log(`META-CHECK — every one of ${n} shards passed its own meta-check\n`);

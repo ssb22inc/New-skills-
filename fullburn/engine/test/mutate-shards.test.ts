@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { META_CANARIES, mergeShardResults, parseShardFlags, shardEntries } from "../scripts/mutate-lib.mjs";
+import { META_CANARIES, failedTestNames, mergeShardResults, parseShardFlags, shardEntries } from "../scripts/mutate-lib.mjs";
 
 /** SHARDED HARNESS RUNS (human decision 2026-10-09): the decisions that make
  * N partial runs one valid run, driven here. MUTATION: MS-01..MS-06. */
@@ -52,5 +52,14 @@ describe("sharded mutation runs", () => {
     expect(void_([good, good], 3), "two shards covering two of three entries made a total").toBe(false);
     expect(void_([]), "no shards made a total").toBe(false);
     expect(void_([good, good])).toBe(true);
+  });
+});
+
+describe("a void meta-check names the tests that went red", () => {
+  it("extracts vitest's FAIL lines, once each, up to a limit", () => {
+    const out = " FAIL  engine/test/a.test.ts > x > y\n FAIL  engine/test/a.test.ts > x > y\n FAIL  engine/test/b.test.ts > z\nother";
+    expect(failedTestNames(out)).toEqual(["engine/test/a.test.ts > x > y", "engine/test/b.test.ts > z"]);
+    expect(failedTestNames(out, 1)).toHaveLength(1);
+    expect(failedTestNames("")).toEqual([]);
   });
 });
