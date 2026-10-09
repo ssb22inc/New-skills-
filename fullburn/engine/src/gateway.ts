@@ -135,6 +135,10 @@ export function requireReservingMeter(meter: SpendMeter): Required<Pick<SpendMet
   return { reserve: meter.reserve.bind(meter), settle: meter.settle.bind(meter), release: meter.release.bind(meter) };
 }
 
+/** What a failure trace carries in place of input/output before the redaction
+ * set is loaded (X7-05). */
+export const WITHHELD_BEFORE_REDACTION = "[withheld: refused before the redaction set was loaded]";
+
 export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
   const role = typeof req?.role === "string" ? req.role : "(unknown)";
   const clientId = typeof req?.clientId === "string" ? req.clientId : "(unknown)";
@@ -172,6 +176,14 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     req?.trace instanceof TraceContext && !scopeMismatch ? req.trace.traceId : `unscoped-${role}-${randomEventId()}`;
   let modelId = "(unbound)";
   let secrets: string[] = [];
+  /** NO INPUT INTO TELEMETRY BEFORE THE REDACTION SET EXISTS (cross-family
+   * finding X7-05, 2026-10-09). `secrets` is filled by the first vault read,
+   * after the role, binding, trace, scope and origin checks; a refusal from any
+   * of those serialized the caller's input against an EMPTY set, so a vault
+   * credential in the input went to the sink verbatim. The capability removed:
+   * copying uncleared caller data into a trace. Until a read has loaded the
+   * set, a failure trace carries a withheld marker instead of input and output. */
+  let redactionLoaded = false;
   let reservation: SpendReservation | null = null;
   let meter: ReturnType<typeof requireReservingMeter> | null = null;
   /** Set the instant before the request is handed to the transport. From that
@@ -206,8 +218,8 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
         role,
         model: modelId,
         startedAtMs,
-        input: redactValue(input, secrets),
-        output: redactValue(output, secrets),
+        input: redactionLoaded ? redactValue(input, secrets) : WITHHELD_BEFORE_REDACTION,
+        output: redactionLoaded ? redactValue(output, secrets) : WITHHELD_BEFORE_REDACTION,
         costUsd: committedUsd,
         outcome: "error",
         errorMessage: message,
@@ -283,6 +295,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     // the authoritative read stays below, in its proper order.
     try {
       secrets = [deps.vault.get("ai-gateway-key").value];
+      redactionLoaded = true;
     } catch {
       // Surfaced in order by the authoritative read below.
     }
@@ -334,6 +347,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
 
     const key = deps.vault.get("ai-gateway-key");
     secrets = [key.value];
+    redactionLoaded = true;
     const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
 
     let output: unknown;

@@ -1265,6 +1265,13 @@ const MUTATIONS = [
   ["X5-03b the class-2 CLI reads each approval's GitHub record", "engine/scripts/class2-gate.mjs",
     "    d.auth.push(await fetchCommitAuth({",
     "    d.auth.push({ verified: true, authorLogin: process.env.FULLBURN_MAINTAINER, committerLogin: process.env.FULLBURN_MAINTAINER }); void ({"],
+  // ---- X7-05: no uncleared input in an early refusal's trace (2026-10-09) ----
+  ["X7-05a an early refusal's trace withholds the input", "engine/src/gateway.ts",
+    "        input: redactionLoaded ? redactValue(input, secrets) : WITHHELD_BEFORE_REDACTION,",
+    "        input: redactValue(input, secrets),"],
+  ["X7-05b the redaction set starts unloaded", "engine/src/gateway.ts",
+    "  let redactionLoaded = false;",
+    "  let redactionLoaded = true;"],
   // ---- X7-02: the signer is the committer (2026-10-09) ----
   ["X7-02a an approval must be signed by the maintainer, not only name it", "engine/scripts/gate-lib.mjs",
     "    const s = a !== null ? null : list.find((x) => !x || typeof x.committerLogin !== \"string\" || (x.committerLogin.toLowerCase() !== want && x.committerLogin !== \"web-flow\")) ?? null;",
