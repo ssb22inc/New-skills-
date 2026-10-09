@@ -9,7 +9,10 @@ import * as transportBrand from "../src/transport-brand.ts";
 const { isRecordedTransport } = transportBrand;
 import { llm } from "../src/gateway.ts";
 import { TraceContext } from "../src/tracing.ts";
-import { TEST_CLIENT, makeDeps } from "./helpers.ts";
+import { TEST_CLIENT, makeDeps, queuedGateway } from "./helpers.ts";
+import { bindRoleLive, runLiveEval } from "../src/live-eval.ts";
+import { AiGatewayHttpTransport } from "../src/gateway-http.ts";
+import { GOLDEN_SETS, attestEvalRun } from "@fullburn/config/models";
 
 describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
   it("scores are COMPUTED from recorded outputs — a divergent output costs the score", async () => {
@@ -26,30 +29,36 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     // qwen-72b → qwen-72b, which demonstrated nothing. Start from a frontier
     // binding and move the role to an open-source model on the evidence of an
     // actual harness run.
-    const { deps, transport } = makeDeps();
-    // The frontier binding is EARNED too (X2-09): a hand-built map is not servable.
-    const frontierEval = await runEval(deps, "genome-tagger", "gpt-5", GOLDEN, new RecordedTransport(RECORDED_GPT_5), TEST_CLIENT);
-    const frontier = bindRole(ROLE_BINDINGS, "genome-tagger", "gpt-5", frontierEval.attestation);
-    transport.response = { hook: "pov", angle: "x", emotion: "y", format: "z", offer: "none" };
-    await llm({ ...deps, bindings: frontier }, {
+    // X7-09: production serving is earned by a LIVE eval — the golden set
+    // served through the production AI Gateway adapter (here over a stubbed
+    // fetch answering with the recorded outputs) — and bound by bindRoleLive.
+    const { deps } = makeDeps();
+    const gw = queuedGateway();
+    gw.queue.push(...GOLDEN.map((c) => RECORDED_GPT_5[c.id]));
+    const frontierEval = await runLiveEval(deps, "genome-tagger", "gpt-5", GOLDEN, gw.transport, TEST_CLIENT);
+    const frontier = bindRoleLive(ROLE_BINDINGS, "genome-tagger", "gpt-5", frontierEval.attestation);
+    gw.queue.push({ hook: "pov", angle: "x", emotion: "y", format: "z", offer: "none" });
+    await llm({ ...deps, transport: gw.transport, bindings: frontier }, {
       role: "genome-tagger",
       clientId: TEST_CLIENT,
       input: { ad: "some ad" },
       trace: new TraceContext("t-frontier", TEST_CLIENT),
     });
-    expect(transport.requests.at(-1)!.url).toContain("openai/gpt-5");
+    expect(gw.calls.at(-1)).toContain("openai/gpt-5");
 
-    const res = await runEval(deps, "genome-tagger", "qwen-72b", GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
-    const rebound = bindRole(frontier, "genome-tagger", "qwen-72b", res.attestation);
+    gw.queue.push(...GOLDEN.map((c) => RECORDED_QWEN_72B[c.id]));
+    const res = await runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN, gw.transport, TEST_CLIENT);
+    const rebound = bindRoleLive(frontier, "genome-tagger", "qwen-72b", res.attestation);
 
     // Same call site, same everything — only the bindings object changed.
-    await llm({ ...deps, bindings: rebound }, {
+    gw.queue.push({ hook: "pov", angle: "x", emotion: "y", format: "z", offer: "none" });
+    await llm({ ...deps, transport: gw.transport, bindings: rebound }, {
       role: "genome-tagger",
       clientId: TEST_CLIENT,
       input: { ad: "some ad" },
       trace: new TraceContext("t-oss", TEST_CLIENT),
     });
-    expect(transport.requests.at(-1)!.url).toContain("workers-ai/qwen-72b");
+    expect(gw.calls.at(-1)).toContain("workers-ai/qwen-72b");
   });
 
   it("a bad candidate fails the harness and bindRole refuses it", async () => {
@@ -203,5 +212,57 @@ describe("eval traces are distinct per model, client and run", () => {
     expect(ids.length).toBeGreaterThanOrEqual(GOLDEN.length * 3);
     expect(new Set(ids).size, "two eval decisions were traced under one id").toBe(ids.length);
     expect(ids.every((id) => id.includes(TEST_CLIENT)), "an eval trace id does not name its client").toBe(true);
+  });
+});
+
+/** X7-09 (GPT-6 Astra, 2026-10-09): the golden set's own answers, handed to
+ * the grader with no model called, authorized production serving; and no
+ * live eval path existed. MUTATION: X7-09a..e. */
+describe("x7 recorded evidence never reaches production serving", () => {
+  const req = (id: string) => ({ role: "genome-tagger", clientId: TEST_CLIENT, input: { ad: "x" }, trace: new TraceContext(id, TEST_CLIENT) });
+  it("fabricated answers bind, but the map serves recorded outputs only — never the production adapter", async () => {
+    const { deps } = makeDeps();
+    const fabricated = attestEvalRun("genome-tagger", "llama-70b", GOLDEN_SETS["genome-tagger"]!.map((c) => ({ caseId: c.id, output: c.expected })));
+    const bound = bindRole(ROLE_BINDINGS, "genome-tagger", "llama-70b", fabricated);
+    const gw = queuedGateway();
+    gw.queue.push({ hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" });
+    await expect(llm({ ...deps, transport: gw.transport, bindings: bound }, req("x7-09-live")), "fabricated answers served production traffic").rejects.toThrow(/earned on recorded eval evidence/);
+    expect(gw.calls, "a request left for the provider under a fabricated binding").toEqual([]);
+    const recorded = new RecordedTransport({ g1: { hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" } });
+    recorded.setCase("g1");
+    await expect(llm({ ...deps, transport: recorded, bindings: bound }, req("x7-09-rec"))).resolves.toBeDefined();
+    // The launch table is production-servable as it stands.
+    gw.queue.push({ hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" });
+    await expect(llm({ ...deps, transport: gw.transport, bindings: ROLE_BINDINGS }, req("x7-09-launch"))).resolves.toBeDefined();
+  });
+
+  it("bindRoleLive takes live evidence over a production base only", async () => {
+    const { deps } = makeDeps();
+    const recordedRun = await runEval(deps, "genome-tagger", "qwen-72b", GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
+    expect(() => bindRoleLive(ROLE_BINDINGS, "genome-tagger", "qwen-72b", recordedRun.attestation), "recorded evidence bound for production").toThrow(/needs a live eval run/);
+    const gw = queuedGateway();
+    gw.queue.push(...GOLDEN.map((c) => RECORDED_QWEN_72B[c.id]));
+    const live = await runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN, gw.transport, TEST_CLIENT);
+    const recordedBase = bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", recordedRun.attestation);
+    expect(() => bindRoleLive(recordedBase, "genome-tagger", "qwen-72b", live.attestation), "a recorded-evidence base was promoted").toThrow(/base map is not production-servable/);
+    expect(bindRoleLive(ROLE_BINDINGS, "genome-tagger", "qwen-72b", live.attestation)["genome-tagger"]).toBe("qwen-72b");
+    expect(live.score).toBe(0.8);
+  });
+
+  it("a live eval runs through the production adapter itself, not a look-alike", async () => {
+    const { deps, transport } = makeDeps();
+    await expect(runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN, transport as never, TEST_CLIENT)).rejects.toThrow(/production AiGatewayHttpTransport itself/);
+    class Sub extends AiGatewayHttpTransport {}
+    const sub = new Sub({ gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/test-account/fullburn/", fetchImpl: async () => ({ status: 500, text: async () => "" }) });
+    await expect(runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN, sub, TEST_CLIENT), "a subclass ran a live eval").rejects.toThrow(/not a subclass/);
+  });
+
+  it("a live eval's candidate map is served live during the run only, and a failing candidate does not bind", async () => {
+    const { deps } = makeDeps();
+    const gw = queuedGateway();
+    gw.queue.push(...GOLDEN.map((c) => RECORDED_LLAMA_70B[c.id]));
+    const live = await runLiveEval(deps, "genome-tagger", "llama-70b", GOLDEN, gw.transport, TEST_CLIENT);
+    expect(gw.calls.length, "the live eval did not reach the gateway per case").toBe(GOLDEN.length);
+    expect(() => bindRoleLive(ROLE_BINDINGS, "genome-tagger", "llama-70b", live.attestation)).toThrow(/no pass, no bind/);
   });
 });

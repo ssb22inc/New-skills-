@@ -1,5 +1,5 @@
-import { GOLDEN_SET_CASE_IDS, ROLE_CARDS, attestEvalRun, evalCandidateBindings, ownEntry, structurallyEqual, type EvalAttestation, type GoldenCase } from "@fullburn/config/models";
-import { RecordedTransport } from "./transport-brand.ts";
+import { GOLDEN_SET_CASE_IDS, ROLE_CARDS, attestEvalRun, evalCandidateBindings, ownEntry, requireGoldenSet, structurallyEqual, type EvalAttestation, type GoldenCase } from "@fullburn/config/models";
+import { RecordedTransport, isRecordedTransport } from "./transport-brand.ts";
 import { CANONICAL_GOLDEN_SETS } from "../evals/index.ts";
 
 
@@ -35,6 +35,11 @@ export interface EvalResult {
   readonly attestation: EvalAttestation;
 }
 
+/** An eval over RECORDED outputs. Its attestation binds through `bindRole`,
+ * and the map that comes back is servable through recorded outputs only —
+ * never through a live transport (cross-family finding X7-09): an answer a
+ * caller can hand over is not evidence a model gave it. Production serving
+ * needs `runLiveEval` + `bindRoleLive` (live-eval.ts). */
 export async function runEval(
   baseDeps: Omit<LlmDeps, "transport" | "bindings">,
   role: string,
@@ -43,14 +48,30 @@ export async function runEval(
   recorded: RecordedTransport,
   clientId: string,
 ): Promise<EvalResult> {
+  if (!isRecordedTransport(recorded)) throw new Error("runEval serves recorded outputs only — a live eval is runLiveEval");
+  return runEvalWith(baseDeps, role, modelId, goldenSet, recorded, clientId);
+}
+
+/** @internal — the shared run, over whichever transport the caller vouched
+ * for: runEval (recorded) or runLiveEval (the production adapter). */
+export async function runEvalWith(
+  baseDeps: Omit<LlmDeps, "transport" | "bindings">,
+  role: string,
+  modelId: string,
+  goldenSet: readonly GoldenCase[],
+  transport: GatewayTransport,
+  clientId: string,
+): Promise<EvalResult> {
   const card = ownEntry(ROLE_CARDS, role);
   if (card === undefined) throw new Error(`unknown role "${role}"`);
   if (goldenSet.length === 0) throw new Error("empty golden set — an eval over nothing proves nothing");
 
   // The set must be the one the role card declares (R2-23). A caller-supplied
   // set that does not match the declared case ids is refused before any call.
-  const declared = ownEntry(GOLDEN_SET_CASE_IDS, role);
-  if (declared === undefined) throw new Error(`role "${role}" declares no golden set`);
+  // Every role card has a golden set (the ids are derived from the sets), so a
+  // local "declares no golden set" guard here could not fire once the unknown
+  // role was refused above; config's driven guard stands in for it (X7-09 sweep).
+  const declared = requireGoldenSet(role, ownEntry(GOLDEN_SET_CASE_IDS, role));
   const supplied = goldenSet.map((c) => c.id).sort();
   const expected = [...declared].sort();
   if (supplied.length !== expected.length || expected.some((id, i) => id !== supplied[i])) {
@@ -95,7 +116,7 @@ export async function runEval(
   const failures: string[] = [];
 
   for (const gcase of goldenSet) {
-    recorded.setCase(gcase.id);
+    if (transport instanceof RecordedTransport) transport.setCase(gcase.id);
     // ONE TRACE PER DECISION (cross-family finding X6-13): `eval-<role>-<case>`
     // was the same id for every model, client and run, so a remote sink that
     // keys traces by id merged distinct decisions into one record.
@@ -103,7 +124,7 @@ export async function runEval(
     try {
       const bindings = evalCandidateBindings(role, modelId);
       const output = (await llm(
-        { ...baseDeps, transport: recorded, bindings },
+        { ...baseDeps, transport, bindings },
         { role, clientId, input: gcase.input, trace },
       )) as Record<string, unknown>;
       const ok = Object.entries(gcase.expected).every(([k, v]) => structurallyEqual(output[k], v));

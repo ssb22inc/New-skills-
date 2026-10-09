@@ -2,6 +2,7 @@
  * has no client surface until Phase 7 and no write paths until Phase 6. */
 export { llm, validateOutput } from "./gateway.ts";
 export { runEval, RecordedTransport } from "./eval-harness.ts";
+export { runLiveEval, bindRoleLive } from "./live-eval.ts";
 // The traced boundary only (X2-14): an untraced `enforcement` or
 // `publishGradeReport` on the Worker surface is a decision path with no trace.
 export { computeGrades, gradeAndEnforce } from "./grade-registry.ts";

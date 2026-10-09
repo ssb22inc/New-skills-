@@ -237,3 +237,17 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(reportPath("engine", "0", "abcdef1234567890")).toBe("reports/DONE_engine_abcdef123456.md");
   });
 });
+
+/** X7-12 (GPT-6 Astra, 2026-10-09): the vault deliverable described a KV
+ * store while vault-crypto.ts requires compare-and-swap, which KV lacks. The
+ * requirement text and the code's own statement must agree. */
+describe("the vault deliverable names the store the code requires (X7-12)", () => {
+  it("D-vault-live asks for a Durable Object, not KV", async () => {
+    const req = PHASE0_REQUIREMENTS.flatMap((r: { id: string; sub?: { id: string; what: string }[] }) => [r, ...(r.sub ?? [])]).find((r: { id: string }) => r.id === "D-vault-live") as { what: string; why: string } | undefined;
+    expect(req, "D-vault-live is gone").toBeDefined();
+    expect(req!.what).toMatch(/Durable Object/);
+    expect(`${req!.what} ${req!.why}`).not.toMatch(/\bin KV\b|KV namespace/);
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync(new URL("../src/vault-crypto.ts", import.meta.url), "utf8")).toMatch(/production CipherStore must be a Durable Object/);
+  });
+});

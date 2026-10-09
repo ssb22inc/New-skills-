@@ -2,6 +2,7 @@ import { CapError } from "@fullburn/config/caps";
 import { MODELS, ROLE_CARDS, bindingsProvenance, ownEntry, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
 import { deepFreeze } from "@fullburn/config/freeze";
 import { isRecordedTransport } from "./transport-brand.ts";
+import { isLiveEvalTransport, productionServable } from "./live-eval.ts";
 
 /** THE ONLY ORIGIN A CREDENTIAL IS EVER SENT TO. `gatewayBaseUrl` was
  * caller-controlled and unchecked: any origin received the vault key and the
@@ -254,8 +255,16 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     if (provenance === null) {
       throw new BindingError("binding map was not produced by bindRole or the launch table — an unevaluated map is not servable (§2.4, no pass no bind)");
     }
-    if (provenance === "candidate" && !isRecordedTransport(deps.transport)) {
+    if (provenance === "candidate" && !isRecordedTransport(deps.transport) && !isLiveEvalTransport(deps.transport)) {
       throw new BindingError("an eval-candidate binding is servable only through recorded outputs — it has not passed its eval (§2.4)");
+    }
+    /** RECORDED EVIDENCE SERVES RECORDED OUTPUTS ONLY (cross-family finding
+     * X7-09, 2026-10-09). `bindRole` accepts any graded run, including the
+     * golden set's own answers handed back without a model call; the map it
+     * returns is servable, but through a live transport only if a live eval
+     * earned it (`bindRoleLive`) — or it is the launch table. */
+    if (provenance === "servable" && !isRecordedTransport(deps.transport) && !productionServable(deps.bindings)) {
+      throw new BindingError("binding map was earned on recorded eval evidence — servable through recorded outputs only; production serving needs a live eval (bindRoleLive, X7-09)");
     }
     // The unbound-role and unknown-model refusals that stood here are GONE, not
     // shadowed: `validateBindings` refuses both first (a complete map, every

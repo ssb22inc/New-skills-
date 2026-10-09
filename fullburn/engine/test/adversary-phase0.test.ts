@@ -15,7 +15,8 @@ import { computeGrades, type MetricSnapshot } from "../src/grade-registry.ts";
 import { FrozenCapsSpendMeter, type SpendMeter } from "../src/spend-meter.ts";
 import { MemoryTraceSink, TraceContext } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, queuedGateway, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { bindRoleLive, runLiveEval } from "../src/live-eval.ts";
 import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 
 /** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
@@ -252,28 +253,34 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
     // refuses case 3 and a refusal is a failed case, which is correct and not
     // what this test measures — and the ledger is reset before serving.
     const evalDeps = makeDeps().deps;
-    const gpt5 = await runEval(evalDeps, "genome-tagger", "gpt-5", TAGGER_GOLDEN, new RecordedTransport(RECORDED_GPT_5), TEST_CLIENT);
-    const qwen = await runEval(evalDeps, "genome-tagger", "qwen-72b", TAGGER_GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
+    // X7-09: production bindings are earned by LIVE evals through the
+    // production adapter (stubbed fetch, recorded answers) and bindRoleLive.
+    const gw = queuedGateway();
+    gw.queue.push(...TAGGER_GOLDEN.map((c) => RECORDED_GPT_5[c.id]));
+    const gpt5 = await runLiveEval(evalDeps, "genome-tagger", "gpt-5", TAGGER_GOLDEN, gw.transport, TEST_CLIENT);
+    gw.queue.push(...TAGGER_GOLDEN.map((c) => RECORDED_QWEN_72B[c.id]));
+    const qwen = await runLiveEval(evalDeps, "genome-tagger", "qwen-72b", TAGGER_GOLDEN, gw.transport, TEST_CLIENT);
     resetProcessLedgerForTests();
-    const { deps, transport } = makeDeps({ capsTable: LOW_AI_CAP });
-    const frontier = bindRole(ROLE_BINDINGS, "genome-tagger", "gpt-5", gpt5.attestation);
-    transport.response = { hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" };
-    await llm({ ...deps, bindings: frontier }, {
+    const { deps } = makeDeps({ capsTable: LOW_AI_CAP });
+    const frontier = bindRoleLive(ROLE_BINDINGS, "genome-tagger", "gpt-5", gpt5.attestation);
+    gw.queue.push({ hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" });
+    await llm({ ...deps, transport: gw.transport, bindings: frontier }, {
       role: "genome-tagger",
       clientId: TEST_CLIENT,
       input: { ad: "x" },
       trace: new TraceContext("ac2-frontier", TEST_CLIENT),
     });
-    expect(transport.requests.at(-1)!.url).toContain("openai/gpt-5");
+    expect(gw.calls.at(-1)).toContain("openai/gpt-5");
 
-    const openSource = bindRole(frontier, "genome-tagger", "qwen-72b", qwen.attestation);
-    await llm({ ...deps, bindings: openSource }, {
+    const openSource = bindRoleLive(frontier, "genome-tagger", "qwen-72b", qwen.attestation);
+    gw.queue.push({ hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" });
+    await llm({ ...deps, transport: gw.transport, bindings: openSource }, {
       role: "genome-tagger",
       clientId: TEST_CLIENT,
       input: { ad: "x" },
       trace: new TraceContext("ac2-oss", TEST_CLIENT),
     });
-    expect(transport.requests.at(-1)!.url).toContain("workers-ai/qwen-72b");
+    expect(gw.calls.at(-1)).toContain("workers-ai/qwen-72b");
   });
 });
 
