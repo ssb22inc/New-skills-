@@ -1,0 +1,142 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "82ee217da5305a6ae3f59c0912c009cca73cef5f",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T09:41:10.034Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": ".github/workflows/pulsern-astra-review.yml",
+      "line": 90,
+      "title": "The trusted-ref check is controlled by the untrusted dispatch ref",
+      "problem": "workflow_dispatch loads the workflow from the selected ref. A check inside that workflow cannot establish its own trustworthiness: the branch can remove this check, change the reviewer, and retain statuses: write.",
+      "failure_scenario": "A contributor with repository write access pushes a branch that removes the default-branch check and makes its reviewer return 0. Dispatching that branch runs its altered YAML and reviewer, which can publish pulsern/astra-review=success on the target PR head without the trusted review.",
+      "fix": "Enforce status-publisher provenance outside branch-editable YAML. Use a trusted GitHub App or enforced required-workflow mechanism whose identity and credentials an unreviewed branch cannot use to satisfy the required check. A removable shell condition is not a trust boundary.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": ".github/workflows/pulsern-astra-review.yml",
+      "line": 97,
+      "title": "A second PR with a narrower base can certify the same unsafe head",
+      "problem": "The resolver verifies the head against a PR but never requires that PR to target the trusted integration branch. Commit statuses belong to a SHA, not to the PR or base/head range that was reviewed.",
+      "failure_scenario": "Head H contains an unsafe change plus a harmless final commit. One PR targets main; another targets a branch already containing the unsafe change. Reviewing the second PR examines only the harmless delta and posts success on H, satisfying the first PR's required status even if its full change failed review.",
+      "fix": "Before allowing status publication, require the PR's base repository and base ref to match the protected integration target. Apply this to both dispatch and pull_request_target paths. Reviews against other bases must be report-only or use a separately enforced, range-bound check.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 128,
+      "title": "Whitespace normalization still hides executable JavaScript changes",
+      "problem": "squash(body) removes semantically significant whitespace from script bodies. The same normalization is also applied inside attribute values. Consequently, different browser behavior can produce identical page digests and no review diff.",
+      "failure_scenario": "Changing a script body from \"// disabled alert(1)\" to \"// disabled\\nalert(1)\" activates the JavaScript, but both digest to \"// disabled alert(1)\". Arbitrary previously commented code can therefore be activated without appearing in the review.",
+      "fix": "Preserve script/style bodies and attribute values exactly, using escaped strings if one-line records are necessary. Normalize only whitespace proven insignificant by a parser. Add regression tests for line comments, automatic semicolon insertion, and whitespace inside quoted attributes.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 140,
+      "title": "Audio QA accepts opposite clinical diagnoses",
+      "problem": "The exact-match safeguard protects a limited list of numbers, negations, and direction words, but not clinical terms such as acidosis and alkalosis. Overall character similarity remains sufficient to approve a clinically reversed statement.",
+      "failure_scenario": "Use the actual ABG ph-step narration as the script and replace its first \"acidosis\" with \"alkalosis\" in the transcript. The critical-term arrays remain identical and similarity remains above 0.92, so audioCheck passes a recording teaching that pH below 7.35 is alkalosis.",
+      "fix": "Fail closed on clinically meaningful lexical substitutions. Prefer exact token agreement after explicitly allowed speech/spelling normalization, with a separate review path for other differences, rather than a short keyword whitelist. Add this real-script diagnosis-swap regression.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/diagrams/abg.jsx",
+      "line": 38,
+      "title": "Insufficient compensation is incorrectly excluded from mixed-disorder detection",
+      "problem": "The new compensation checks examine only excessive compensation. Inadequate compensation is always treated as uncomplicated none/partial compensation, although it can indicate a second disorder. The interpreter has no onset or time-course information that would justify assuming the compensatory response simply has not developed.",
+      "failure_scenario": "For pH 7.15, PaCO2 30, and HCO3 10, Winter's expected PaCO2 is 21–25. The observed 30 can indicate superimposed respiratory acidosis, but the function returns partially compensated metabolic acidosis with mixedPossible=false. The new test explicitly enshrines never flagging under-compensation.",
+      "fix": "Evaluate both sides of the expected-compensation interval and report inadequate-compensation/mixed-disorder uncertainty where appropriate. Do not assume a time course absent from the inputs. Replace the blanket under-compensation test with cases covering both appropriate compensation and possible additional disorders.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/tests/diagram-gate.test.js",
+      "line": 32,
+      "title": "The source-key invalidation test never changes any source",
+      "problem": "The test claims to verify invalidation after drawing changes and stability after generated-data changes, but only calls sourceKey twice on the unchanged repository. It tests repeatability, not the publication gate's critical invalidation behavior.",
+      "failure_scenario": "Replacing sourceKey with a function returning a constant 24-character hexadecimal string passes this test. Once approvals carry that constant, subsequent drawing changes no longer invalidate them, while this test continues reporting success.",
+      "fix": "Create a temporary source tree using sourceKey(root). Independently mutate a diagram, the kit, the player, and theme tokens and assert that each changes the key. Mutate item-map.json and narration.json and assert that those do not change it.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/narrate.mjs",
+      "line": 101,
+      "title": "Existing clips bypass the strengthened QA and immutable-storage migration",
+      "problem": "The unchanged-clip shortcut checks only clipId, which contains neither the QA-policy version nor the storage format. Entries produced by the old similarity-only gate are therefore accepted without the new checks, and old input-addressed URLs are retained.",
+      "failure_scenario": "A legacy manifest entry has the current script/voice ID but its audio omitted a negation and passed the former similarity threshold. Re-running this updated pipeline skips that entry, leaving the unsafe recording attached. I could not verify whether the current narration manifest contains such legacy entries because it was not supplied.",
+      "fix": "Version the QA attestation and require both a current attestation and byte-addressed audio metadata before skipping a clip. Re-transcribe and validate legacy recordings, or regenerate them, and remove entries that fail migration.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/tests/diagram-gate.test.js",
+      "line": 84,
+      "title": "The CLI smoke test fails once all diagrams are approved",
+      "problem": "The smoke test requires the text \"Held back\", but map-diagrams.mjs prints that only when at least one diagram lacks a current passing review. The test therefore depends on an unfinished approval state rather than successful CLI startup.",
+      "failure_scenario": "Run the visual-review workflow successfully for every diagram and commit the resulting current index. On the next test run, the mapper correctly has no held-back diagrams and emits no such message, causing this test and CI to fail.",
+      "fix": "Make the CLI test independent of repository approval state. Use controlled fixture approvals and a local database-response stub, then assert the intended startup/result behavior and exit status instead of requiring a warning that should disappear after successful review.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 155120,
+    "completionTokens": 12233,
+    "reasoningTokens": 10358,
+    "costUsd": 2.5506425
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. Several earlier gaps are addressed, but the required review remains bypassable, the page digest still hides executable changes, and narration QA can approve reversed clinical statements. The ABG compensation logic also retains a clinically unsafe assumption. Two new tests do not establish their advertised guarantees. This assessment is based on static review; tests were not executed.",
+  "counts": {
+    "blocker": 7,
+    "major": 1,
+    "minor": 0
+  }
+}
