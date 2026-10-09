@@ -1,0 +1,92 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "1682fb87bdba6f86ef8a36649d6cf571dd7fb19c",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T09:57:07.801Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 108,
+      "title": "Tag normalization still hides executable changes inside quoted attributes",
+      "problem": "Quoted values are initially preserved, but the final replacements run over the entire assembled tag, including those values. In particular, /\\s*=\\s*/ removes meaningful JavaScript whitespace. Consequently, pageDigest produces identical output for onclick=\"if (1 = = 1) alert(1)\" and onclick=\"if (1 == 1) alert(1)\", although the first handler is invalid and the second executes.",
+      "failure_scenario": "A generated-page change activates a previously invalid event handler by changing '= =' to '=='. collectChanges sends '(no textual change)' and no full file, so the executable change bypasses review. The new quoted-attribute tests exercise newlines and ordinary spaces, but not the final replacements that corrupt preserved values.",
+      "fix": "Apply all normalization exclusively to unquoted segments, or preserve complete tags exactly. Add a regression asserting that these two handlers produce different digests, including an end-to-end collection test.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/tests/diagram-gate.test.js",
+      "line": 71,
+      "title": "A fresh visual approval can leave stale question pairings publishable",
+      "problem": "The shipping guard checks only whether each diagram has a current visual PASS. It never checks whether the shipped pairings were approved against that diagram's current clinical content. buildItemMap drops diagramHash, while freshness filtering happens only when map-diagrams.mjs is run. Running the visual-review workflow alone can therefore satisfy this guard without renewing or removing old pairing decisions.",
+      "failure_scenario": "An existing detemir question has a reviewed pairing with p.type='long'. This change narrows that row to glargine U-100 and makes the matcher reject detemir. After a fresh visual PASS, the guard accepts the unchanged map, even though the old pairing can still draw the glargine profile for the detemir question. I could not verify whether an unshown runtime consumer independently rejects such stale pairings; neither this guard nor the serialized map establishes that protection.",
+      "fix": "Bind shipped pairings to the diagram revision used in their pairing review and enforce that binding during build or consumption. Alternatively, regenerate and validate the map from current decision records as a required publication step. Add a regression where clinical content changes and a fresh visual PASS must not revive an old pairing.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 144,
+      "title": "Faithful D5W and D10W transcripts fail the word-level audio check",
+      "problem": "The abbreviation joining handles a hyphen after a single letter but not the suffix after a spelled-out number. speechTokens('D-five-W') becomes ['d5', 'w'], whereas speechTokens('D5W') becomes ['d5w']; D-ten-W has the same problem. Both spoken forms occur in the actual tonicity narration. The new faithful-transcript tests duplicate this normalization in asTranscribed, generating the same incorrect split instead of testing an independently written transcript.",
+      "failure_scenario": "The tonicity/dextrose clip is spoken correctly and transcribed using the standard abbreviations 'D5W and D10W'. audioCheck rejects it on both takes, discards the narration entry and fails the run despite correct audio.",
+      "fix": "Normalize complete spoken abbreviations, including their trailing letters. Add literal positive fixtures using 'D5W' and 'D10W' against the real narration, alongside negative fixtures with changed concentrations; do not generate those expected transcripts with the production normalizer.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 165377,
+    "completionTokens": 15952,
+    "reasoningTokens": 15020,
+    "costUsd": 2.864805
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. The page digest still hides executable changes, the new publication guard does not establish that existing pairings remain approved for changed diagrams, and the narration gate rejects faithful D5W/D10W transcripts. This was a static review; tests and external GitHub environment/branch-protection settings were not verified.",
+  "counts": {
+    "blocker": 2,
+    "major": 1,
+    "minor": 0
+  }
+}
