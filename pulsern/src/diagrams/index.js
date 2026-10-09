@@ -3,6 +3,7 @@
 import { abg } from "./abg.jsx";
 import { potassium } from "./potassium.jsx";
 import { tonicity } from "./tonicity.jsx";
+import { insulin } from "./insulin.jsx";
 
-export const DIAGRAMS = Object.fromEntries([abg, potassium, tonicity].map((d) => [d.id, d]));
+export const DIAGRAMS = Object.fromEntries([abg, potassium, tonicity, insulin].map((d) => [d.id, d]));
 export const diagramFor = (id) => DIAGRAMS[id] ?? null;

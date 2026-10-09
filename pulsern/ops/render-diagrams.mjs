@@ -95,6 +95,9 @@ try {
               const ox = Math.min(p.x + p.width, q.x + q.width) - Math.max(p.x, q.x);
               const oy = Math.min(p.y + p.height, q.y + q.height) - Math.max(p.y, q.y);
               if (ox > 1.5 && oy > 2.5) out.push(`"${texts[a].s}" overlaps "${texts[c].s}"`);
+              /* Same line, not overlapping, but touching: reads as one run-on
+                 word ("10–30 min1–2 h"). Overlap alone missed this. */
+              else if (oy > Math.min(p.height, q.height) * 0.6 && ox > -4 && ox <= 1.5) out.push(`"${texts[a].s}" crowds "${texts[c].s}" (gap ${(-ox).toFixed(1)})`);
             }
             return out;
           });
