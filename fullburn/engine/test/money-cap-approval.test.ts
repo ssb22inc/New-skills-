@@ -72,13 +72,20 @@ describe("human approval is owed for the money caps only (ruling 2026-10-06)", (
  * reports the commit that added it as signature-verified and authored by the
  * maintainer account. */
 describe("money-cap approvals are authenticated by GitHub's commit record (X5-03)", () => {
-  const ok = { path: "fullburn/APPROVALS/a.md", status: "added", auth: { verified: true, authorLogin: "Maintainer" } };
+  const ok = { path: "fullburn/APPROVALS/a.md", status: "added", auth: { verified: true, authorLogin: "Maintainer", committerLogin: "maintainer" } };
   it("accepts only verified commits by the maintainer, case-insensitively", () => {
     expect(checkApprovalAuthentication([ok], "maintainer").ok).toBe(true);
     expect(checkApprovalAuthentication([{ ...ok, auth: { verified: false, authorLogin: "maintainer" } }], "maintainer").ok, "an unsigned commit counted").toBe(false);
     expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "other" } }], "maintainer").ok, "another account counted").toBe(false);
     expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: null } }], "maintainer").ok, "an unlinked author counted").toBe(false);
     expect(checkApprovalAuthentication([{ ...ok, auth: null }], "maintainer").ok, "no record counted").toBe(false);
+    // X7-02: the signer is the committer; naming the maintainer as author is not signing.
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer", committerLogin: "other" } }], "maintainer").ok, "another account's signature counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer", committerLogin: null } }], "maintainer").ok, "an unlinked signer counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer" } }], "maintainer").ok, "a record with no signer counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer", committerLogin: "web-flow" } }], "maintainer").ok, "GitHub's web signer was refused").toBe(true);
+    expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, { verified: true, authorLogin: "maintainer", committerLogin: "other" }] }], "maintainer").ok, "a later edit signed by another account counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer", committerLogin: "other" } }], "maintainer").reason).toContain("signed by other");
     // X6-03: every commit that touched the document must pass.
     expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, ok.auth] }], "maintainer").ok).toBe(true);
     expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, { verified: false, authorLogin: "maintainer" }] }], "maintainer").ok, "a later unsigned edit counted").toBe(false);
@@ -98,17 +105,18 @@ describe("money-cap approvals are authenticated by GitHub's commit record (X5-03
     expect(nonCap.ok, "a non-cap change demanded a maintainer").toBe(true);
     const block = ["approves: fullburn/config/src/caps.ts", `base-commit: ${base.baseCommit}`, "from-content-hash: b", "content-hash: h"].join("\n");
     const cap = (auth: unknown) => checkMoneyCapGate({ ...base, maintainer: "maintainer", changedFiles: [{ status: "modified", path: "fullburn/config/src/caps.ts" }], approvalDocs: [{ path: "fullburn/APPROVALS/x.md", status: "added", content: block, authoredBy: "A Human <h@x>", auth }] });
-    expect(cap({ verified: true, authorLogin: "maintainer" }).ok).toBe(true);
-    expect(cap({ verified: false, authorLogin: "maintainer" }).ok, "a correct approval in an unsigned commit opened the cap gate").toBe(false);
+    expect(cap({ verified: true, authorLogin: "maintainer", committerLogin: "maintainer" }).ok).toBe(true);
+    expect(cap({ verified: true, authorLogin: "maintainer", committerLogin: "other" }).ok, "a correct approval signed by another account opened the cap gate").toBe(false);
+    expect(cap({ verified: false, authorLogin: "maintainer", committerLogin: "maintainer" }).ok, "a correct approval in an unsigned commit opened the cap gate").toBe(false);
   });
 
   it("reads GitHub's record faithfully and fails closed on anything else", async () => {
-    expect(commitAuthFromApi({ commit: { verification: { verified: true } }, author: { login: "m" } })).toEqual({ verified: true, authorLogin: "m" });
-    expect(commitAuthFromApi({ commit: { verification: { verified: "true" } }, author: null })).toEqual({ verified: false, authorLogin: null });
+    expect(commitAuthFromApi({ commit: { verification: { verified: true } }, author: { login: "m" }, committer: { login: "s" } })).toEqual({ verified: true, authorLogin: "m", committerLogin: "s" });
+    expect(commitAuthFromApi({ commit: { verification: { verified: "true" } }, author: null })).toEqual({ verified: false, authorLogin: null, committerLogin: null });
     expect(commitAuthFromApi(null)).toBeNull();
     const sha = "a".repeat(40);
     const reply = (status: number, body: unknown) => async () => ({ status, json: async () => body }) as unknown as Response;
-    expect(await fetchCommitAuth({ repo: "o/r", sha, token: "t", fetchImpl: reply(200, { commit: { verification: { verified: true } }, author: { login: "m" } }) })).toEqual({ verified: true, authorLogin: "m" });
+    expect(await fetchCommitAuth({ repo: "o/r", sha, token: "t", fetchImpl: reply(200, { commit: { verification: { verified: true } }, author: { login: "m" }, committer: { login: "m" } }) })).toEqual({ verified: true, authorLogin: "m", committerLogin: "m" });
     expect(await fetchCommitAuth({ repo: "o/r", sha, token: "t", fetchImpl: reply(404, {}) })).toBeNull();
     expect(await fetchCommitAuth({ repo: "o/r", sha, token: "", fetchImpl: reply(200, {}) }), "no token still fetched").toBeNull();
     expect(await fetchCommitAuth({ repo: "o/r", sha: "not-a-sha", token: "t", fetchImpl: reply(200, {}) })).toBeNull();

@@ -18,12 +18,20 @@ export async function fetchCommitAuth({ repo, sha, token, apiUrl = "https://api.
   }
 }
 
-/** The two facts the decision needs, from a GitHub "get a commit" body. */
+/** The three facts the decision needs, from a GitHub "get a commit" body.
+ *
+ * THE SIGNER IS THE COMMITTER, NOT THE AUTHOR (cross-family finding X7-02,
+ * 2026-10-09). GitHub marks a signature verified when the key belongs to the
+ * account behind the COMMITTER identity; the author field is free text any
+ * signer may fill with the maintainer's linked email. `committerLogin` is that
+ * signing account as GitHub resolved it ("web-flow" for a commit GitHub itself
+ * signed on a web edit, whose author is then the signed-in user). */
 export function commitAuthFromApi(body) {
   if (!body || typeof body !== "object") return null;
   return {
     verified: body?.commit?.verification?.verified === true,
     authorLogin: typeof body?.author?.login === "string" ? body.author.login : null,
+    committerLogin: typeof body?.committer?.login === "string" ? body.committer.login : null,
   };
 }
 

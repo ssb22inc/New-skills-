@@ -909,14 +909,21 @@ export function checkApprovalAuthentication(approvalDocs, maintainer) {
      * refuses the document. */
     const list = Array.isArray(d?.auth) ? d.auth : [d?.auth];
     const a = list.length === 0 ? null : list.find((x) => !x || x.verified !== true || typeof x.authorLogin !== "string" || x.authorLogin.toLowerCase() !== want) ?? null;
-    if (list.length === 0 || a !== null || list.some((x) => !x)) {
-      bad.push(`${d?.path ?? "(unnamed)"} (${list.length === 0 || !a ? "no GitHub record" : a.verified !== true ? "commit not signature-verified" : `authored by ${a.authorLogin ?? "no account"}`})`);
+    /** WHO SIGNED, NOT ONLY WHO IS NAMED (cross-family finding X7-02,
+     * 2026-10-09). The capability removed: another account with its own
+     * registered key signing a commit whose author field names the
+     * maintainer. GitHub's verified flag binds the key to the COMMITTER, so
+     * the committer must be the maintainer, or GitHub's own web-flow signer
+     * (a web edit, which GitHub authors as the signed-in user). */
+    const s = a !== null ? null : list.find((x) => !x || typeof x.committerLogin !== "string" || (x.committerLogin.toLowerCase() !== want && x.committerLogin !== "web-flow")) ?? null;
+    if (list.length === 0 || a !== null || s !== null || list.some((x) => !x)) {
+      bad.push(`${d?.path ?? "(unnamed)"} (${list.length === 0 || (!a && !s) ? "no GitHub record" : a ? (a.verified !== true ? "commit not signature-verified" : `authored by ${a.authorLogin ?? "no account"}`) : `signed by ${s.committerLogin ?? "no account"}`})`);
     }
   }
   if (bad.length > 0) {
-    return { ok: false, reason: `money-cap approvals must be added by a verified commit authored by @${maintainer}: ${bad.join(", ")}` };
+    return { ok: false, reason: `money-cap approvals must be added by a verified commit authored and signed by @${maintainer}: ${bad.join(", ")}` };
   }
-  return { ok: true, reason: `approvals added by verified commits authored by @${maintainer}` };
+  return { ok: true, reason: `approvals added by verified commits authored and signed by @${maintainer}` };
 }
 
 /** The money-cap gate as CI and `done` run it: the transition approvals AND,

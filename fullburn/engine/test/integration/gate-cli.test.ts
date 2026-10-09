@@ -74,9 +74,9 @@ function gateEnv(extra: Record<string, string>, script: string, ...args: string[
  * test overrides a sha. The CLI is run ASYNC against it — a synchronous child
  * would block the event loop this server answers on. */
 async function withGithub<T>(
-  fn: (env: Record<string, string>, override: Map<string, { verified: boolean; login: string | null }>) => Promise<T>,
+  fn: (env: Record<string, string>, override: Map<string, { verified: boolean; login: string | null; committer?: string | null }>) => Promise<T>,
 ): Promise<T> {
-  const override = new Map<string, { verified: boolean; login: string | null }>();
+  const override = new Map<string, { verified: boolean; login: string | null; committer?: string | null }>();
   const server = createServer((req, res) => {
     const m = /\/repos\/o\/r\/commits\/([0-9a-f]{40})$/.exec(req.url ?? "");
     if (!m || req.headers.authorization !== "Bearer test-token") {
@@ -84,8 +84,15 @@ async function withGithub<T>(
       return;
     }
     const o = override.get(m[1]!) ?? { verified: true, login: "maintainer" };
+    // The signer defaults to the author; X7-02 cases set it apart.
+    const committer = o.committer === undefined ? o.login : o.committer;
     res.writeHead(200, { "content-type": "application/json" }).end(
-      JSON.stringify({ sha: m[1], commit: { verification: { verified: o.verified } }, author: o.login === null ? null : { login: o.login } }),
+      JSON.stringify({
+        sha: m[1],
+        commit: { verification: { verified: o.verified } },
+        author: o.login === null ? null : { login: o.login },
+        committer: committer === null ? null : { login: committer },
+      }),
     );
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -264,6 +271,15 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     const other = await gateAsync(env, "class2-gate.mjs", repo, base);
     expect(other.code, `another account's approval opened the gate:\n${other.out}`).toBe(1);
     expect(other.out).toMatch(/authored by someone-else/);
+    /** X7-02 (GPT-6 Astra, 2026-10-09): another account signs a commit whose
+     * author names the maintainer; GitHub reports it verified. The signer is
+     * the committer, and it is not the maintainer. MUTATION: X7-02a. */
+    override.set(approvalCommit, { verified: true, login: "maintainer", committer: "someone-else" });
+    const signedByOther = await gateAsync(env, "class2-gate.mjs", repo, base);
+    expect(signedByOther.code, `an approval signed by another account opened the gate:\n${signedByOther.out}`).toBe(1);
+    expect(signedByOther.out).toMatch(/signed by someone-else/);
+    override.set(approvalCommit, { verified: true, login: "maintainer", committer: "web-flow" });
+    expect((await gateAsync(env, "class2-gate.mjs", repo, base)).code, "a GitHub web edit by the maintainer was refused").toBe(0);
     /** X6-03 (GPT-6 Astra, 2026-10-06): the maintainer's verified commit adds
      * the approval; a LATER unsigned commit rewrites it. Only the addition was
      * authenticated, while the gate parsed the rewritten bytes.
