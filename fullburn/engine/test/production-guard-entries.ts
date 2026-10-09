@@ -92,6 +92,7 @@ export function productionGuardEntries(): ProductionGuard[] {
     { name: "langfuse: a non-2xx reply", file: LF, type: LangfuseSinkError, expect: /ingestion returned HTTP/, fire: () => lf(reply(401, "")).emit(event) },
     { name: "langfuse: an unreadable 207", file: LF, type: LangfuseSinkError, expect: /unreadable multi-status/, fire: () => lf(reply(207, "x")).emit(event) },
     { name: "langfuse: a rejected event", file: LF, type: LangfuseSinkError, expect: /rejected the trace event/, fire: () => lf(reply(207, JSON.stringify({ errors: [{ id: "e" }] }))).emit(event) },
+    { name: "langfuse: an acknowledgement of nothing", file: LF, type: LangfuseSinkError, expect: /did not acknowledge exactly the events sent/, fire: () => lf(reply(207, JSON.stringify({ successes: [], errors: [] }))).emit(event) },
     // ---- engine/src/vault-crypto.ts ----
     { name: "vault: a KEK needs an id", file: VC, type: VaultError, expect: /KEK requires an id/, fire: () => importKek("", RAW) },
     { name: "vault: a KEK is 256 bits", file: VC, type: VaultError, expect: /exactly 32 bytes/, fire: () => importKek("k", new Uint8Array(16)) },
