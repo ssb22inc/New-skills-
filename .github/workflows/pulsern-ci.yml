@@ -44,6 +44,13 @@ jobs:
       - name: Tests
         run: npm test
 
+      # The explainer player mounted in a real browser: pause really stops
+      # the motion, and reduced motion never advances on its own.
+      - name: Browser for the player checks
+        run: npx playwright install --with-deps chromium
+      - name: Player checks
+        run: node ops/check-player.mjs
+
       - name: Production build
         run: npm run build
         env:

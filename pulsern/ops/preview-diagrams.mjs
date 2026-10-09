@@ -28,8 +28,22 @@ import { createRoot } from "react-dom/client";
 import { DIAGRAMS } from "${root}/src/diagrams/index.js";
 import { Explainer } from "${root}/src/explainer.jsx";
 
+/* ?audio=silent gives every narrated step a short silent clip, so the
+   narration path of the player can be exercised without real recordings
+   (ops/check-player.mjs). Built in the page: a 0.4 s silent 8 kHz WAV. */
+function silentClip() {
+  const n = 3200, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+  v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+
 function Preview() {
   const params = new URLSearchParams(location.search);
+  const silent = React.useMemo(() => (params.get("audio") === "silent" ? silentClip() : null), []);
   const [theme, setTheme] = React.useState(params.get("theme") === "dim" ? "dim" : "light");
   const only = params.get("only");
   const list = Object.values(DIAGRAMS).filter((d) => !only || d.id === only);
@@ -42,7 +56,8 @@ function Preview() {
         </button>
       </header>
       <p className="pv-note">The real player and diagrams, as built for the app. Press “Watch the explainer” to see each one move.</p>
-      {list.map((d) => <Explainer key={d.id} diagram={d} />)}
+      {list.map((d) => <Explainer key={d.id} diagram={d}
+        audio={silent ? Object.fromEntries(d.steps.filter((s) => !s.dynamic).map((s) => [s.key, silent])) : null} />)}
     </div>
   );
 }

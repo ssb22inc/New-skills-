@@ -49,13 +49,23 @@ export const DIAGRAM_REVIEW_SCHEMA = {
 
 /* The images, in the order they are attached, with what each one is. */
 export function imagePlan(diagram, gallery) {
+  /* Every frame a student can see: the inline overview and every explainer
+     step, in BOTH themes. Dark-theme step frames used to be left out, so a
+     dark-only defect in a step annotation could keep a passing verdict
+     (Astra, PR #133 review, finding 14). A missing frame is an error, not a
+     smaller review. */
   const mine = gallery.filter((g) => g.id === diagram.id);
   const pick = (theme, key) => mine.find((g) => g.theme === theme && g.key === key);
   const plan = [];
-  const push = (g, label) => { if (g) plan.push({ file: g.file, label }); };
-  push(pick("light", "static"), "light theme — inline, as shown under a rationale");
-  push(pick("dark", "static"), "dark theme — inline");
-  for (const s of diagram.steps) push(pick("light", s.key), `light theme — explainer step "${s.key}"`);
+  const missing = [];
+  for (const theme of ["light", "dark"]) {
+    for (const key of ["static", ...diagram.steps.map((s) => s.key)]) {
+      const g = pick(theme, key);
+      if (!g) { missing.push(`${theme}/${key}`); continue; }
+      plan.push({ file: g.file, label: `${theme} theme — ${key === "static" ? "inline, as shown under a rationale" : `explainer step "${key}"`}` });
+    }
+  }
+  if (missing.length) throw new Error(`imagePlan(${diagram.id}): missing rendered frames ${missing.join(", ")}`);
   return plan;
 }
 

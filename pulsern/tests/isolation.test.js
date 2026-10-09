@@ -38,3 +38,20 @@ describe("precautionFor", () => {
     expect(precautionFor("Encourage oral fluid intake")).toBeNull();
   });
 });
+
+/* PR #133 review, finding 10: the overview listed chickenpox under airborne
+   only; the contact requirement appeared only in the last step. */
+describe("chickenpox is shown as airborne + contact wherever it appears", () => {
+  it("in the static diagram, its description, the airborne step and the facts", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { isolation } = await import("../src/diagrams/isolation.jsx");
+    const html = renderToStaticMarkup(React.createElement(isolation.Diagram, {}));
+    expect(html).toContain("chickenpox (+ contact)");
+    expect(html).toMatch(/<desc[^>]*>[^<]*Chickenpox needs airborne and contact precautions/);
+    const step = isolation.steps.find((s) => s.key === "airborne");
+    expect(step.caption).toMatch(/Chickenpox also needs contact precautions/);
+    expect(step.narration).toMatch(/contact precautions/);
+    expect(isolation.facts.join(" ")).toMatch(/airborne AND contact/);
+  });
+});

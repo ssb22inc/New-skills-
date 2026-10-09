@@ -14,14 +14,22 @@ const gallery = [
 ];
 
 describe("what Astra is shown", () => {
-  it("both themes inline, then every explainer step — and only this diagram", () => {
+  /* PR #133 review, finding 14: dark-theme step frames were never shown. */
+  it("every frame in both themes — overview and every step — and only this diagram", () => {
     const plan = imagePlan(d, gallery);
-    expect(plan.map((p) => p.file)).toEqual(["/l-static.png", "/d-static.png", ...d.steps.map((s) => `/l-${s.key}.png`)]);
+    expect(plan.map((p) => p.file)).toEqual([
+      "/l-static.png", ...d.steps.map((s) => `/l-${s.key}.png`),
+      "/d-static.png", ...d.steps.map((s) => `/d-${s.key}.png`),
+    ]);
+  });
+  it("refuses to review with a frame missing", () => {
+    expect(() => imagePlan(d, gallery.filter((g) => !(g.theme === "dark" && g.key === d.steps[1].key)))).toThrow(/missing rendered frames dark\//);
   });
   it("labels each image so findings can point at one", () => {
     const p = diagramReviewPrompt(d, imagePlan(d, gallery), "rules");
     expect(p).toContain("Image 1: light theme — inline");
-    expect(p).toContain(`Image 3: light theme — explainer step "${d.steps[0].key}"`);
+    expect(p).toContain(`Image 2: light theme — explainer step "${d.steps[0].key}"`);
+    expect(p).toContain(`dark theme — explainer step "${d.steps[0].key}"`);
   });
   it("gives every clinical claim, caption and narration script", () => {
     const p = diagramReviewPrompt(d, imagePlan(d, gallery), "rules");

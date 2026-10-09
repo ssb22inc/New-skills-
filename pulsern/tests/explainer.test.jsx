@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Explainer, captionMs, stepCaption, stepsFor, clipFor, verificationLabel, MIN_STEP_MS, WORDS_PER_SECOND } from "../src/explainer.jsx";
+import { Explainer, captionMs, stepCaption, stepsFor, clipFor, verificationLabel, afterClip, MIN_STEP_MS, WORDS_PER_SECOND } from "../src/explainer.jsx";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("caption timing", () => {
@@ -145,4 +145,20 @@ describe("every registered diagram", () => {
       });
     });
   }
+});
+
+/* PR #133 review, finding 16. The mounted-player version of this is
+   ops/check-player.mjs, run in CI with a real browser. */
+describe("when a clip ends", () => {
+  it("never moves on by itself under reduced motion", () => {
+    let went = null;
+    expect(afterClip({ reduce: true, step: 1, n: 5, go: (i) => { went = i; } })).toBe(false);
+    expect(went).toBeNull();
+  });
+  it("moves to the next step otherwise, and stops after the last", () => {
+    let went = null;
+    expect(afterClip({ reduce: false, step: 1, n: 5, go: (i) => { went = i; } })).toBe(true);
+    expect(went).toBe(2);
+    expect(afterClip({ reduce: false, step: 4, n: 5, go: () => { throw new Error("no step 5"); } })).toBe(false);
+  });
 });

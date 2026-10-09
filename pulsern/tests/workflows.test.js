@@ -245,3 +245,27 @@ describe("records the workflows commit are committable", () => {
     }
   });
 });
+
+/* PR #133 review, finding 17: pushes made with the workflow token trigger no
+   other workflow, so a bot-pushed commit was never reviewed. Each job that
+   pushes asks for the trusted, range-verified review explicitly. */
+describe("bot pushes are reviewed", () => {
+  const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
+  it.each(files)("%s requests the Astra review of what it pushed", (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    expect(w).toMatch(/^  actions: write/m);
+    expect(w).toMatch(/echo "pushed=true" >> "\$GITHUB_OUTPUT"; echo "head=\$\(git rev-parse HEAD\)"/);
+    const step = w.slice(w.indexOf("- name: Request the Astra review of what was just pushed"));
+    expect(step).toMatch(/if: always\(\) && steps\.save\.outputs\.pushed == 'true'/);
+    expect(step).toContain("actions/workflows/pulsern-astra-review.yml/dispatches");
+    // through the verified path: the PR number and its head, from the default branch
+    expect(step).toMatch(/inputs:\{head:\$head,pr:\$pr\}/);
+    expect(step).toContain("--arg ref \"$DEFAULT_BRANCH\"");
+  });
+  it.each(files)("%s never pastes a dispatch input into a shell script", (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const scripts = [...w.matchAll(/^(\s+)run: \|\n((?:\1  .*\n|\s*\n)+)/gm)].map((m) => m[2]);
+    expect(scripts.length).toBeGreaterThan(0);
+    for (const sc of scripts) expect(sc).not.toMatch(/\$\{\{\s*inputs\./);
+  });
+});

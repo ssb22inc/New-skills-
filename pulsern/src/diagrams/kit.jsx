@@ -45,20 +45,28 @@ export const C = {
 const Focus = React.createContext({ focus: null });
 
 /* A group dims when a step focuses on others. focus=null shows everything
-   at full strength — the static diagram in a rationale. */
+   at full strength — the static diagram in a rationale.
+
+   Focus passes DOWN: everything inside a focused group is in focus. Groups
+   nest (the IV fluid lists sit inside "fluids"), and dimming each nested
+   group on its own put the very lists a step was about at 18% opacity
+   (Astra, PR #133 review, finding 13). */
+const InFocus = React.createContext(false);
 export function G({ id, children, ...rest }) {
   const { focus } = React.useContext(Focus);
-  const on = !focus || focus.includes(id);
+  const inherited = React.useContext(InFocus);
+  const on = !focus || inherited || focus.includes(id);
   return (
-    <g data-g={id} className="dg-g" style={{ opacity: on ? 1 : 0.18 }} {...rest}>
-      {children}
+    <g data-g={id} className="dg-g" style={{ opacity: inherited ? 1 : on ? 1 : 0.18 }} {...rest}>
+      <InFocus.Provider value={!!focus && on}>{children}</InFocus.Provider>
     </g>
   );
 }
 
 /* Which step the player is on. The Explainer provides it; a diagram drawn
    outside the player (a rationale, a screenshot) sees stepKey null. */
-export const StepContext = React.createContext({ stepKey: null, collect: null });
+/* `still`: the player is paused — show the finished picture, no motion. */
+export const StepContext = React.createContext({ stepKey: null, collect: null, still: false });
 
 /* Motion is live only after mount, in a browser, without reduced-motion.
    Server and static renders therefore always show the finished picture,
@@ -78,8 +86,11 @@ function useLive() {
    and are what the adversarial reviewer audits alongside the image. */
 export function Frame({ h, title, desc, focus = null, children }) {
   const tid = React.useId();
-  const { stepKey, collect = null } = React.useContext(StepContext);
-  const live = useLive();
+  const { stepKey, collect = null, still = false } = React.useContext(StepContext);
+  /* Paused means paused: the step's finished picture, with every animation
+     removed — not a picture that keeps moving behind a "Play" button (Astra,
+     PR #133 review, finding 15). Pressing Play plays the step again. */
+  const live = useLive() && !still;
   return (
     <Motion.Provider value={{ stepKey, live, collect }}>
     <Focus.Provider value={{ focus }}>
@@ -242,8 +253,12 @@ export function Arrow({ x1, y1, x2, y2, color = "teal", sw = 2, dash, curve = 0 
 }
 
 /* A rounded label chip: the workhorse for terms and values. */
-export function Chip({ x, y, text, color = "teal", fill, anchor = "middle", size = 11, mono = false, pad = 7 }) {
-  const w = Math.max(24, text.length * size * (mono ? 0.62 : 0.56) + pad * 2);
+export function Chip({ x, y, text, color = "teal", fill, anchor = "middle", size: wanted = 11, mono = false, pad = 7, maxW = 344 }) {
+  /* A label computed from data (an ABG verdict) can be long: shrink the
+     type to fit the canvas rather than run off it. */
+  const per = mono ? 0.62 : 0.56;
+  const size = Math.min(wanted, (maxW - pad * 2) / (text.length * per));
+  const w = Math.max(24, text.length * size * per + pad * 2);
   const left = anchor === "middle" ? x - w / 2 : anchor === "end" ? x - w : x;
   return (
     <g>

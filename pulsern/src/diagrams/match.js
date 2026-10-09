@@ -44,15 +44,17 @@ export function extractAbg(text) {
   return ph != null && paco2 != null && hco3 != null ? { ph, paco2, hco3 } : null;
 }
 
-/* Insulin type and the time it was given. Degludec is deliberately NOT
-   mapped: its duration (~42 h) is outside the diagram's long-acting row,
-   and drawing it as glargine would be wrong. Exactly one type and one time,
-   or null. */
+/* Insulin type and the time it was given. The long-acting row is glargine
+   U-100 only (~24 h). Products whose action differs are deliberately NOT
+   mapped, because drawing them on that row would be wrong (Astra, PR #133
+   review, finding 9): degludec (~42 h), glargine U-300 / Toujeo (up to
+   ~36 h) and detemir (dose-dependent, often shorter than 24 h). Exactly one
+   type and one time, or null. */
 const INSULIN_TYPES = [
   ["rapid", /\b(?:lispro|aspart|glulisine|humalog|novolog|apidra|rapid[- ]acting)\b/i],
   ["short", /\bregular(?:\s+insulin)?\b|\bhumulin r\b|\bnovolin r\b|\bshort[- ]acting insulin\b/i],
   ["nph", /\bNPH\b|\bisophane\b|\bhumulin n\b|\bnovolin n\b|\bintermediate[- ]acting\b/i],
-  ["long", /\b(?:glargine|detemir|lantus|levemir|basaglar|toujeo)\b/i],
+  ["long", /\b(?:glargine|lantus|basaglar|semglee)\b/i],
 ];
 function clockFrom(text) {
   const hits = new Set();
@@ -70,7 +72,7 @@ function clockFrom(text) {
 }
 export function extractInsulin(text) {
   const t = String(text ?? "");
-  if (/degludec|tresiba/i.test(t)) return null;
+  if (/degludec|tresiba|detemir|levemir|toujeo|U-?300|300\s*units?\s*\/\s*mL/i.test(t)) return null;
   const types = INSULIN_TYPES.filter(([, re]) => re.test(t)).map(([k]) => k);
   if (types.length !== 1) return null;
   const givenAt = clockFrom(t);

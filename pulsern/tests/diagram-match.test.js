@@ -89,6 +89,16 @@ describe("insulin type and time", () => {
     const { extractInsulin } = await import("../src/diagrams/match.js");
     expect(extractInsulin("Insulin degludec at 2100")).toBeNull();
   });
+  /* PR #133 review, finding 9: different basal products were drawn as one
+     24-hour profile. Only glargine U-100 is drawn on the long-acting row. */
+  it("maps glargine U-100 to the long-acting row and nothing else basal", async () => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin("Insulin glargine at 2100")).toEqual({ type: "long", givenAt: "21:00" });
+    expect(extractInsulin("Lantus 20 units at 2100")).toEqual({ type: "long", givenAt: "21:00" });
+    for (const t of ["Toujeo at 2100", "insulin glargine U-300 at 2100", "insulin detemir at 2100", "Levemir at 2100", "Tresiba at 2100"]) {
+      expect(extractInsulin(t), t).toBeNull();
+    }
+  });
   it("proposes the insulin diagram for an insulin question", () => {
     expect(proposePairs({ stem: "A client received NPH insulin at 0700. When is hypoglycemia most likely?", options: [], rationale: "" }))
       .toEqual([{ d: "insulin", p: { type: "nph", givenAt: "07:00" } }]);
