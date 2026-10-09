@@ -6,7 +6,8 @@
    Usage: node ops/review-diagrams.mjs [--only id] [--force]
           node ops/review-diagrams.mjs --prepare <dir> [--source <tree>/pulsern]   (no secrets: render + data)
           node ops/review-diagrams.mjs --prepared <dir> --into <branch>/pulsern
-   Env:   OPENROUTER_API_KEY and DIAGRAM_ATTEST_KEY (not for --prepare)
+   Env:   OPENROUTER_API_KEY, PULSERN_ATTEST_PRIVATE_KEY and PULSERN_ATTEST_PUBLIC_KEY
+          (not for --prepare)
    Exit:  0 all PASS · 1 any FAIL or review error
 
    In CI the branch is rendered by a job with no secrets (--prepare) using
@@ -23,7 +24,8 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
-import { sourceKey, attestKey, signApproval } from "./diagram-attest.mjs";
+import { sourceKey, signApproval } from "./diagram-attest.mjs";
+import { signerFrom } from "./attest.mjs";
 import { DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest, diagramSources } from "./review-diagrams-lib.mjs";
 import { readPrepared, reviewPlan, readFrame, headCommit, reviewEntries, localEntries, checkInventory } from "./prepared.mjs";
 import { stepInventory, frameIds } from "./diagram-attest.mjs";
@@ -38,7 +40,7 @@ const PREPARED = arg("--prepared") && resolve(arg("--prepared"));
 const INTO = arg("--into");
 const SOURCE = arg("--source");
 /* Reviews are signed, and only signed verdicts are reused (round 25). */
-const SECRET = PREPARE ? null : attestKey();
+const SIGNER = PREPARE ? null : signerFrom();
 if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
 const DIR = "reports/diagram-review";
 const INDEX = join(DIR, "index.json");
@@ -108,10 +110,10 @@ try {
        read from the branch's files, and the key from exactly what is sent. */
     const { prompt, key } = diagramRequest(d, d.images, RULES, pngs, (id) => diagramSources(id));
     const prev = index[d.id];
-    if (canReuse(prev, key, FORCE, frameIds(d.images), d.id, SECRET)) {
+    if (canReuse(prev, key, FORCE, frameIds(d.images), d.id, SIGNER)) {
       /* Everything the verdict rests on is byte-identical, so it still
          describes what students see: carry it to the current code. */
-      if (prev.sourceKey !== SOURCE_KEY) { prev.sourceKey = SOURCE_KEY; prev.sig = signApproval(d.id, prev, SECRET); mkdirSync(DIR, { recursive: true }); writeFileSync(INDEX, JSON.stringify(index, null, 2) + "\n"); }
+      if (prev.sourceKey !== SOURCE_KEY) { prev.sourceKey = SOURCE_KEY; prev.sig = signApproval(d.id, prev, SIGNER); mkdirSync(DIR, { recursive: true }); writeFileSync(INDEX, JSON.stringify(index, null, 2) + "\n"); }
       console.log(`${d.id}: unchanged since ${prev.reviewedAt} — ${prev.verdict}`);
       if (prev.verdict !== "PASS") failed++;
       continue;
@@ -119,7 +121,7 @@ try {
     if (prev && prev.key === key && !prev.completed) console.log(`${d.id}: the last attempt did not complete (${prev.verdict}) — retrying`);
     if (Date.now() > RUN_DEADLINE) { console.log(`${d.id}: not started — the run is near its time limit; re-run to review it`); failed++; continue; }
     const r = await reviewAndRecord({
-      d, key, images: pngs.length, model: REVIEW_MODEL, cost: lastReviewCost, dir: DIR, index, sourceKey: SOURCE_KEY, write, secret: SECRET,
+      d, key, images: pngs.length, model: REVIEW_MODEL, cost: lastReviewCost, dir: DIR, index, sourceKey: SOURCE_KEY, write, signer: SIGNER,
       ask: async () => parseJson(await review(prompt, 32000, { images: pngs, responseFormat: DIAGRAM_REVIEW_SCHEMA, effort: "high" })),
     });
     console.log(`${d.id}: ${r.verdict}${r.counts ? ` (${r.counts.blocker}B ${r.counts.major}M ${r.counts.minor}m)` : ""}${r.error ? ` — ${r.error}` : ""}`);

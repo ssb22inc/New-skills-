@@ -67,10 +67,10 @@ describe("the shipped map", () => {
   const Q = (id) => ({ id, stem: `stem ${id}`, rationale: "r", options: ["a", "b"], answer: 0 });
   const items = new Map([3, 9, 12, 100].map((id) => [id, Q(id)]));
   const decisions = {
-    "12:abg": { attach: true, shown: { ph: 7.3, paco2: 55, hco3: 24 }, fp: "aaaaaaaa" },
-    "3:tonicity": { attach: true, shown: null, fp: "bbbbbbbb" },
-    "3:potassium": { attach: false, shown: null, fp: "bbbbbbbb" },
-    "100:potassium": { attach: true, shown: { k: 6.2 }, fp: "cccccccc" },
+    "12:abg": { attach: true, values_confirmed: true, extracted: { ph: 7.3, paco2: 55, hco3: 24 }, fp: "aaaaaaaa" },
+    "3:tonicity": { attach: true, extracted: null, fp: "bbbbbbbb" },
+    "3:potassium": { attach: false, extracted: null, fp: "bbbbbbbb" },
+    "100:potassium": { attach: true, values_confirmed: true, extracted: { k: 6.2 }, fp: "cccccccc" },
   };
   it("contains only attached pairs, each with its question fingerprint", () => {
     const m = buildItemMap(decisions, DIAGRAMS, null, items);
@@ -79,8 +79,8 @@ describe("the shipped map", () => {
     expect(JSON.stringify(m)).not.toContain('"attach"');
   });
   it("never ships a pairing it could not verify on screen", () => {
-    expect(buildItemMap({ "77:abg": { attach: true, shown: null } }, DIAGRAMS, null, items).pairs).toEqual({});   // no current question
-    expect(buildItemMap({ "9:retired": { attach: true, shown: null, fp: "dddddddd" } }, DIAGRAMS, null, items).pairs).toEqual({});
+    expect(buildItemMap({ "77:abg": { attach: true, extracted: null } }, DIAGRAMS, null, items).pairs).toEqual({});   // no current question
+    expect(buildItemMap({ "9:retired": { attach: true, extracted: null, fp: "dddddddd" } }, DIAGRAMS, null, items).pairs).toEqual({});
   });
   it("is byte-identical for the same decisions in any order", () => {
     const shuffled = Object.fromEntries(Object.entries(decisions).reverse());
@@ -100,7 +100,7 @@ describe("the shipped map", () => {
     const q = Q(12);
     const oldFormat = fnv1a(`${q.stem}\u0000${q.rationale}`);
     expect(oldFormat).not.toBe(fingerprint(q));
-    const m = buildItemMap({ "12:abg": { attach: true, shown: { ph: 7.3, paco2: 55, hco3: 24 }, fp: oldFormat } }, DIAGRAMS, null, items);
+    const m = buildItemMap({ "12:abg": { attach: true, values_confirmed: true, extracted: { ph: 7.3, paco2: 55, hco3: 24 }, fp: oldFormat } }, DIAGRAMS, null, items);
     expect(m.pairs["12"][0].f).toBe(fingerprint(q));
     expect(pairsFor(JSON.parse(JSON.stringify(m)), q, DIAGRAMS).map((x) => x.diagram.id)).toEqual(["abg"]);
   });

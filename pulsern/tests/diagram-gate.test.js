@@ -9,13 +9,16 @@ import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { approval, sourceKey, readReviewIndex, mapIsCurrent, stepInventory, diagramSteps, expectedFrames, frameIds, signApproval, verifyApproval } from "../ops/diagram-attest.mjs";
-import { publishable, sameProposal, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey } from "../ops/map-diagrams-lib.mjs";
+import { publishable, sameProposal, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey, signDecision, verifyDecision, signMap, verifyMap, buildItemMap } from "../ops/map-diagrams-lib.mjs";
+import { verifierFrom, PUBLIC_ENV } from "../ops/attest.mjs";
+import { testKeys } from "./helpers/attest-keys.js";
 
-const KEY = "t".repeat(40);
-const signed = (id, e, key = KEY) => ({ ...e, sig: signApproval(id, e, key) });
+const KEYS = testKeys(), KEY = KEYS.verifier;
+const signed = (id, e, signer = KEYS.signer) => ({ ...e, sig: signApproval(id, e, signer) });
+const signedDecision = (key, d, signer = KEYS.signer) => ({ ...d, sig: signDecision(key, d, signer) });
 const dg = { id: "abg", title: "ABG", facts: ["f"], steps: [{ key: "ph", caption: "c", narration: "n" }] };
 const q = { id: 7, stem: "pH 7.30, PaCO2 55, HCO3 24", options: ["a", "b"], rationale: "r", answer: "a" };
-const decision = { attach: true, itemHash: itemHash(q), diagramHash: diagramHash(dg), fp: "abc", shown: null };
+const decision = { attach: true, itemHash: itemHash(q), diagramHash: diagramHash(dg), fp: "abc", extracted: null };
 
 describe("approval of a diagram for publication", () => {
   it("fails closed when missing, failed or stale", () => {
@@ -26,7 +29,7 @@ describe("approval of a diagram for publication", () => {
     expect(approval(idx({ verdict: "PASS", sourceKey: "old", frames }), "abg", "k1", steps, KEY)).toEqual({ ok: false, why: "changed since its review" });
     expect(approval(idx({ verdict: "PASS", sourceKey: "k1", frames }), "abg", "k1", steps, KEY)).toEqual({ ok: true, why: null });
     expect(() => approval(idx({ verdict: "PASS", sourceKey: "k1", frames }), "abg", "k1")).toThrow(/real steps are required/);
-    expect(() => approval(idx({ verdict: "PASS", sourceKey: "k1", frames }), "abg", "k1", steps)).toThrow(/no key/);
+    expect(() => approval(idx({ verdict: "PASS", sourceKey: "k1", frames }), "abg", "k1", steps)).toThrow(/no public key/);
   });
 
   /* Astra, PR #134 review, round 25: every field of an index entry is
@@ -36,7 +39,7 @@ describe("approval of a diagram for publication", () => {
     const steps = ["ph"], frames = frameIds(expectedFrames(steps));
     const forged = { key: "k", sourceKey: "k1", frames, verdict: "PASS", completed: true, reviewedAt: "2026-10-09T00:00:00.000Z", model: "m", report: "r.md" };
     expect(approval({ abg: forged }, "abg", "k1", steps, KEY)).toEqual({ ok: false, why: "not signed by the review job" });
-    expect(approval({ abg: signed("abg", forged, "x".repeat(40)) }, "abg", "k1", steps, KEY).ok, "signed with another key").toBe(false);
+    expect(approval({ abg: signed("abg", forged, KEYS.other) }, "abg", "k1", steps, KEY).ok, "signed with another key").toBe(false);
     expect(approval({ abg: { ...signed("abg", { ...forged, verdict: "FAIL" }), verdict: "PASS" } }, "abg", "k1", steps, KEY).ok, "a FAIL relabelled PASS").toBe(false);
     expect(approval({ abg: signed("tonicity", forged) }, "abg", "k1", steps, KEY).ok, "another diagram's signature").toBe(false);
     expect(approval({ abg: signed("abg", forged) }, "abg", "k1", steps, KEY)).toEqual({ ok: true, why: null });
@@ -78,11 +81,29 @@ describe("approval of a diagram for publication", () => {
   });
 
   it("publishes a confirmed pairing only for an approved diagram", () => {
-    const decisions = { [decisionKey(7, "abg")]: decision };
+    const decisions = { "7:abg": signedDecision("7:abg", decision) };
     const items = new Map([[7, q]]);
-    expect(Object.keys(publishable(decisions, items, { abg: dg }, () => true))).toEqual(["7:abg"]);
+    expect(Object.keys(publishable(decisions, items, { abg: dg }, () => true, null, KEY))).toEqual(["7:abg"]);
     // the drawing failed its visual review: the pairing review's "attach" is not enough
-    expect(publishable(decisions, items, { abg: dg }, () => false)).toEqual({});
+    expect(publishable(decisions, items, { abg: dg }, () => false, null, KEY)).toEqual({});
+    expect(() => publishable(decisions, items, { abg: dg }, () => true)).toThrow(/no public key/);
+  });
+
+  /* Astra, PR #134 review, round 26: the decision cache is in the branch,
+     so an "attach" with altered values skipped the reviewer and shipped
+     other numbers than the ones confirmed. */
+  it("publishes only signed decisions, and only the values that were signed", () => {
+    const items = new Map([[100, { ...q, id: 100, stem: "K 6.2" }]]);
+    const real = { attach: true, values_confirmed: true, extracted: { k: 6.2 }, itemHash: itemHash(items.get(100)), diagramHash: diagramHash(dg), reviewedAt: "t", model: "m" };
+    const ok = signedDecision("100:abg", real);
+    expect(verifyDecision("100:abg", ok, KEY)).toBe(true);
+    // the cached copy of what is shown is not trusted: values come from the signed fields
+    const tamperedShown = { ...ok, shown: { k: 2.9 } };
+    expect(buildItemMap(publishable({ "100:abg": tamperedShown }, items, { abg: dg }, () => true, null, KEY), { abg: dg }, null, items).pairs["100"][0].p).toEqual({ k: 6.2 });
+    // altering a signed field voids the decision
+    for (const forged of [{ ...ok, extracted: { k: 2.9 } }, { ...ok, values_confirmed: true, attach: true, sig: undefined }, { ...real, extracted: { k: 2.9 }, sig: signDecision("100:abg", { ...real, extracted: { k: 2.9 } }, KEYS.other) }, signedDecision("101:abg", real)]) {
+      expect(publishable({ "100:abg": forged }, items, { abg: dg }, () => true, null, KEY)).toEqual({});
+    }
   });
 
   /* PR #134 review, finding 6: this used to call sourceKey() twice on an
@@ -125,18 +146,18 @@ describe("approval of a diagram for publication", () => {
      different content or different extracted values. */
   it("retires a pairing whose extracted values today's matcher no longer reads", () => {
     const longDecision = { ...decision, extracted: { type: "long", givenAt: "21:00" } };
-    const decisions = { [decisionKey(7, "abg")]: longDecision };
+    const decisions = { "7:abg": signedDecision("7:abg", longDecision) };
     const items = new Map([[7, q]]);
     const nowProposes = new Map([[7, [{ d: "abg", p: null }]]]);   // e.g. detemir: no longer read as long-acting
-    expect(publishable(decisions, items, { abg: dg }, () => true, nowProposes)).toEqual({});
+    expect(publishable(decisions, items, { abg: dg }, () => true, nowProposes, KEY)).toEqual({});
     const stillProposes = new Map([[7, [{ d: "abg", p: { type: "long", givenAt: "21:00" } }]]]);
-    expect(Object.keys(publishable(decisions, items, { abg: dg }, () => true, stillProposes))).toEqual(["7:abg"]);
+    expect(Object.keys(publishable(decisions, items, { abg: dg }, () => true, stillProposes, KEY))).toEqual(["7:abg"]);
     expect(sameProposal([], "abg", null)).toBe(false);   // not proposed at all any more
   });
   it("retires a pairing approved for different clinical content, even after a fresh visual pass", () => {
-    const decisions = { [decisionKey(7, "abg")]: decision };
+    const decisions = { "7:abg": signedDecision("7:abg", decision) };
     const changed = { ...dg, facts: ["a corrected fact"] };
-    expect(publishable(decisions, new Map([[7, q]]), { abg: changed }, () => true)).toEqual({});
+    expect(publishable(decisions, new Map([[7, q]]), { abg: changed }, () => true, null, KEY)).toEqual({});
   });
   it("requires a map with pairings to be rebuilt after any drawing or matcher change", () => {
     const withPairs = { pairs: { "7": [{ d: "abg", f: "x", v: "y" }] }, sourceKey: "old" };
@@ -151,25 +172,42 @@ describe("approval of a diagram for publication", () => {
     const used = new Set(Object.values(map.pairs).flat().map((p) => p.d));
     const index = readReviewIndex(), key = sourceKey();
     const steps = stepInventory();
-    /* CI holds no signing key, so here the signature can only be required
-       to be present; the mapper — which writes this map in the paid job —
-       verifies it with the key (round 25). With the key in the
-       environment, the full check runs. */
-    const secret = process.env.DIAGRAM_ATTEST_KEY;
-    for (const id of used) {
-      if (secret) { expect(approval(index, id, key, steps[id], secret), id).toEqual({ ok: true, why: null }); continue; }
-      const e = index[id];
-      expect(e?.verdict, id).toBe("PASS");
-      expect(e.sourceKey, id).toBe(key);
-      expect(e.frames, id).toEqual(frameIds(expectedFrames(steps[id])));
-      expect(e.sig, `${id} carries the review job's signature`).toMatch(/^[0-9a-f]{64}$/);
-    }
+    if (!used.size) return;   // an empty map ships nothing and needs no signature
+    /* A map with pairings is checked against the public key pinned in a
+       repository variable: the map must be the paid mapper's, and every
+       diagram it uses must carry the review job's signed PASS (round 26:
+       this test once checked only that a signature LOOKED right). */
+    expect(process.env[PUBLIC_ENV], `${PUBLIC_ENV} must be set to check a map with pairings (HUMAN_TASKS H20)`).toBeTruthy();
+    expect(publicationProblems(map, index, key, steps, verifierFrom()), "item-map.json").toEqual([]);
+  });
+
+  it("refuses a hand-written map, and an approval whose signature only looks right", () => {
+    const steps = { abg: ["ph"] }, key = "k1", frames = frameIds(expectedFrames(steps.abg));
+    const entry = { key: "rk", sourceKey: key, frames, verdict: "PASS", completed: true, reviewedAt: "t", model: "m", report: "r.md" };
+    const map = { version: 2, sourceKey: key, pairs: { "7": [{ d: "abg", f: "x", v: "y" }] } };
+    expect(publicationProblems(signMap(map, KEYS.signer), { abg: signed("abg", entry) }, key, steps, KEY)).toEqual([]);
+    expect(publicationProblems(map, { abg: signed("abg", entry) }, key, steps, KEY)).toEqual(["the map is not signed by the mapper"]);
+    expect(publicationProblems({ ...map, sig: "A".repeat(86) + "==" }, { abg: signed("abg", entry) }, key, steps, KEY)).toEqual(["the map is not signed by the mapper"]);
+    expect(publicationProblems(signMap(map, KEYS.other), { abg: signed("abg", entry) }, key, steps, KEY)).toEqual(["the map is not signed by the mapper"]);
+    expect(publicationProblems(signMap(map, KEYS.signer), { abg: { ...entry, sig: "A".repeat(86) + "==" } }, key, steps, KEY)).toEqual(["abg: not signed by the review job"]);
+    expect(publicationProblems({ ...signMap(map, KEYS.signer), pairs: { "7": [{ d: "abg", p: { k: 2.9 }, f: "x", v: "y" }] } }, { abg: signed("abg", entry) }, key, steps, KEY)).toEqual(["the map is not signed by the mapper"]);
   });
 });
 
+/* What the merge gate checks for a map with pairings. */
+function publicationProblems(map, index, key, steps, verifier) {
+  const out = [];
+  if (!verifyMap(map, verifier)) out.push("the map is not signed by the mapper");
+  for (const id of new Set(Object.values(map.pairs).flat().map((p) => p.d))) {
+    const a = steps[id] ? approval(index, id, key, steps[id], verifier) : { ok: false, why: "not a diagram in the source" };
+    if (!a.ok) out.push(`${id}: ${a.why}`);
+  }
+  return out;
+}
+
 describe("a pairing run tells the truth about failures", () => {
   const blank = () => ({ asked: 0, attached: 0, attachedWithValues: 0, rejected: 0, failedBatches: [], stoppedFor: null });
-  const base = { diagrams: { abg: dg }, maxUsd: 15, spent: () => 0, fingerprintOf: () => "fp", model: "m" };
+  const base = { diagrams: { abg: dg }, maxUsd: 15, spent: () => 0, fingerprintOf: () => "fp", model: "m", signer: KEYS.signer };
 
   it("fails the run when every batch fails", async () => {
     const run = blank();
@@ -184,6 +222,7 @@ describe("a pairing run tells the truth about failures", () => {
       ask: async () => ({ decisions: [{ id: 7, attach: true, values_confirmed: false, reason: "fits" }] }) });
     expect(run.asked).toBe(1);
     expect(decisions["7:abg"].attach).toBe(true);
+    expect(verifyDecision("7:abg", decisions["7:abg"], KEY), "every decision is signed").toBe(true);
     expect(exitCodeFor(run)).toBe(0);
   });
 
@@ -199,7 +238,7 @@ describe("a pairing run tells the truth about failures", () => {
 describe("the pairing CLI under plain Node", () => {
   it("starts without a .jsx import error", () => {
     const r = spawnSync(process.execPath, ["ops/map-diagrams.mjs", "--dry-run"], {
-      encoding: "utf8", timeout: 90_000, env: { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9", DIAGRAM_ATTEST_KEY: "k".repeat(40) },
+      encoding: "utf8", timeout: 90_000, env: { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9", ...KEYS.env },
     });
     const out = `${r.stdout}\n${r.stderr}`;
     expect(out).not.toMatch(/Unknown file extension|ERR_UNKNOWN_FILE_EXTENSION/);
@@ -210,10 +249,10 @@ describe("the pairing CLI under plain Node", () => {
   }, 120_000);
   it("refuses to judge approvals without the signing key", () => {
     const env = { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9" };
-    delete env.DIAGRAM_ATTEST_KEY;
+    delete env.PULSERN_ATTEST_PRIVATE_KEY;
     const r = spawnSync(process.execPath, ["ops/map-diagrams.mjs", "--dry-run"], { encoding: "utf8", timeout: 90_000, env });
     expect(r.status).not.toBe(0);
-    expect(`${r.stdout}\n${r.stderr}`).toMatch(/DIAGRAM_ATTEST_KEY is not set/);
+    expect(`${r.stdout}\n${r.stderr}`).toMatch(/PULSERN_ATTEST_PRIVATE_KEY is not set/);
     expect(`${r.stdout}\n${r.stderr}`).not.toContain("Reading practice questions…");
   }, 120_000);
 });

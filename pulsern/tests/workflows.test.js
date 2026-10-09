@@ -357,6 +357,24 @@ describe("jobs that push refuse the default branch in every spelling", () => {
    production service-role key (narration) or the OpenRouter key in the
    environment. Now the branch's code runs only in a job with no secrets,
    and the job with secrets runs only the default branch's scripts. */
+/* Round 26: signed records are checked in CI with the public key, which
+   is a repository variable; the private key exists only in the paid jobs. */
+describe("the signing keys", () => {
+  const all = readdirSync(LIVE_DIR).filter((f) => /^pulsern-.*\.yml$/.test(f)).map((f) => [f, readFileSync(join(LIVE_DIR, f), "utf8")]);
+  it("the private key is a secret, used only by the three paid jobs", () => {
+    const users = all.filter(([, w]) => w.includes("PULSERN_ATTEST_PRIVATE_KEY")).map(([f]) => f).sort();
+    expect(users).toEqual(["pulsern-diagram-map.yml", "pulsern-diagram-review.yml", "pulsern-narrate.yml"]);
+    for (const [f, w] of all) for (const m of w.matchAll(/PULSERN_ATTEST_PRIVATE_KEY: (.+)/g)) expect(m[1], f).toBe("${{ secrets.PULSERN_ATTEST_PRIVATE_KEY }}");
+  });
+  it("the public key comes from a repository variable, never from the branch", () => {
+    for (const [f, w] of all) for (const m of w.matchAll(/PULSERN_ATTEST_PUBLIC_KEY: (.+)/g)) expect(m[1], f).toBe("${{ vars.PULSERN_ATTEST_PUBLIC_KEY }}");
+    for (const f of ["pulsern-ci.yml", "pulsern-seo-guardian.yml"]) {
+      const w = all.find(([n]) => n === f)[1];
+      expect(w, f).toMatch(/run: npm test\n\s+env:\n\s+PULSERN_ATTEST_PUBLIC_KEY: \$\{\{ vars\.PULSERN_ATTEST_PUBLIC_KEY \}\}/);
+    }
+  });
+});
+
 describe("paid workflows never run branch code with secrets", () => {
   const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
   /* A small structural reader for these files: jobs are the 2-space keys

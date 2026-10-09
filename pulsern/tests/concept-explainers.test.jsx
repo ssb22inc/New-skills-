@@ -107,8 +107,8 @@ describe("the shipped map file", () => {
   it("shows exactly what the mapper produced, for the question it was made for", async () => {
     const { buildItemMap } = await import("../ops/map-diagrams-lib.mjs");
     const m = buildItemMap({
-      "1:abg": { attach: true, shown: { ph: 7.3, paco2: 55, hco3: 24 }, fp: fingerprint(bankQ) },
-      "1:tonicity": { attach: false, shown: null, fp: fingerprint(bankQ) },
+      "1:abg": { attach: true, values_confirmed: true, extracted: { ph: 7.3, paco2: 55, hco3: 24 }, fp: fingerprint(bankQ) },
+      "1:tonicity": { attach: false, extracted: null, fp: fingerprint(bankQ) },
     }, DIAGRAMS, "a".repeat(24), new Map([[1, bankQ]]));
     expect(m.version).toBe(2);
     const shown = pairsFor(JSON.parse(JSON.stringify(m)), bankQ, DIAGRAMS);

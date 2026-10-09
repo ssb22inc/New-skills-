@@ -205,7 +205,8 @@ jobs:
         working-directory: trusted/pulsern
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          DIAGRAM_ATTEST_KEY: ${{ secrets.DIAGRAM_ATTEST_KEY }}
+          PULSERN_ATTEST_PRIVATE_KEY: ${{ secrets.PULSERN_ATTEST_PRIVATE_KEY }}
+          PULSERN_ATTEST_PUBLIC_KEY: ${{ vars.PULSERN_ATTEST_PUBLIC_KEY }}
         run: |
           set +e
           [[ -z "$ONLY" || "$ONLY" =~ ^[a-z0-9-]+$ ]] || { echo "::error::only must be a diagram id"; exit 1; }

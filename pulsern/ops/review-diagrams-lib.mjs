@@ -182,9 +182,9 @@ export function renderReviewMarkdown(r) {
    before frames were recorded is re-reviewed, never carried (round 24) —
    and the review job's signature: the index is in the branch, so an entry
    the branch wrote itself is never taken as a review (round 25). */
-export const canReuse = (prev, key, force = false, frames = null, id = null, secret = null) => !force && !!prev && prev.key === key && prev.completed === true &&
+export const canReuse = (prev, key, force = false, frames = null, id = null, verifier = null) => !force && !!prev && prev.key === key && prev.completed === true &&
   Array.isArray(frames) && Array.isArray(prev.frames) && prev.frames.length === frames.length && prev.frames.every((f, i) => f === frames[i]) &&
-  typeof id === "string" && typeof secret === "string" && verifyApproval(id, prev, secret);
+  typeof id === "string" && typeof verifier?.verify === "function" && verifyApproval(id, prev, verifier);
 
 /* One diagram's review. `ask` returns the reviewer's parsed answer. The
    result says whether a valid review completed, separately from what it
@@ -212,15 +212,15 @@ export async function reviewOne({ d, key, images, ask, model, now = () => new Da
    paid attempt, and the paid call has its own timeout, shorter than the
    job's, so the save steps still run (Astra, PR #134 review, round 13). */
 export const REVIEW_CALL_TIMEOUT_MS = 12 * 60 * 1000;
-export async function reviewAndRecord({ d, key, images, ask, model, dir, index, sourceKey, write, secret, now = () => new Date().toISOString(), cost = () => null, timeoutMs = REVIEW_CALL_TIMEOUT_MS }) {
-  if (typeof secret !== "string" || secret.length < 32) throw new Error("reviewAndRecord: no signing key — a review that cannot be signed is not recorded");
+export async function reviewAndRecord({ d, key, images, ask, model, dir, index, sourceKey, write, signer, now = () => new Date().toISOString(), cost = () => null, timeoutMs = REVIEW_CALL_TIMEOUT_MS }) {
+  if (typeof signer?.sign !== "function") throw new Error("reviewAndRecord: no signing key — a review that cannot be signed is not recorded");
   const startedAt = now();
   const base = `${dir}/${d.id}/${startedAt.replace(/[:.]/g, "-")}-${key}`;
   const record = (r) => {
     write(`${base}.md`, renderReviewMarkdown(r));
     write(`${base}.json`, JSON.stringify(r, null, 2) + "\n");
     const entry = { key, sourceKey, frames: frameIds(d.images), verdict: r.verdict, completed: r.completed, reviewedAt: r.reviewedAt, model, report: `${base}.md`, counts: r.counts ?? null };
-    index[d.id] = { ...entry, sig: signApproval(d.id, entry, secret) };
+    index[d.id] = { ...entry, sig: signApproval(d.id, entry, signer) };
     write(`${dir}/index.json`, JSON.stringify(index, null, 2) + "\n");
   };
   record({ id: d.id, title: d.title, model, reviewedAt: startedAt, images, key, findings: [], usage: null, completed: false, verdict: "ERROR",

@@ -292,8 +292,21 @@ export const narratedSteps = (diagram) => diagram.steps.filter((s) => !s.dynamic
    hash of its bytes. Anything recorded under an older, weaker rule — or
    the old input-named storage — is recorded and checked again (Astra,
    PR #134 review, finding 7). */
-export function isCurrentClip(entry, id) {
-  return !!entry && entry.id === id && entry.qa === QA_VERSION && /^[0-9a-f]{32}$/.test(entry.audio ?? "") && String(entry.url ?? "").endsWith(`/${entry.audio}.mp3`);
+/* A clip record is the narration job's word that THIS recording passed
+   the audio check for THIS script, so the job signs it (ops/attest.mjs),
+   binding the diagram, step, script id and fingerprint, QA version, audio
+   hash and URL. Its public fields alone prove nothing: a record copied
+   from another step, with this step's script id, used to be skipped as
+   current (Astra, PR #134 review, round 26). */
+const clipFields = (diagram, step, e) => [diagram, step, e.id ?? null, e.textFp ?? null, e.qa ?? null, e.audio ?? null, e.url ?? null];
+export const signClip = (diagram, step, e, signer) => signer.sign("narration-clip", clipFields(diagram, step, e));
+export function verifyClip(diagram, step, e, verifier) {
+  if (typeof verifier?.verify !== "function") throw new Error("verifyClip: no public key to check the signature with");
+  return !!e && verifier.verify("narration-clip", clipFields(diagram, step, e), e.sig);
+}
+export function isCurrentClip(entry, id, { diagram, step, verifier } = {}) {
+  return !!entry && entry.id === id && entry.qa === QA_VERSION && /^[0-9a-f]{32}$/.test(entry.audio ?? "") && String(entry.url ?? "").endsWith(`/${entry.audio}.mp3`) &&
+    verifyClip(diagram, step, entry, verifier);
 }
 
 /* Records each clip: up to two takes, each checked against its script.

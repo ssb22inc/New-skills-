@@ -33,9 +33,10 @@ import { REVIEW_MODEL, GEN_MODEL } from "./models.mjs";
 import { FatalLlmError } from "./llm.mjs";
 import {
   itemHash, diagramHash, decisionKey, isFresh, pairingPrompt, PAIRING_SCHEMA,
-  buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor,
+  buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor, verifyDecision, signMap,
 } from "./map-diagrams-lib.mjs";
-import { sourceKey, readReviewIndex, approval, stepInventory, attestKey } from "./diagram-attest.mjs";
+import { sourceKey, readReviewIndex, approval, stepInventory } from "./diagram-attest.mjs";
+import { signerFrom } from "./attest.mjs";
 import { readPrepared, mapPlan, headCommit, checkInventory } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
@@ -72,8 +73,8 @@ const REVIEWS = readReviewIndex();
 const STEPS = stepInventory();
 /* Only a review the review job signed counts (round 25). The prepare job
    decides nothing about approval, so it needs no key. */
-const SECRET = PREPARE ? null : attestKey();
-const approvedNow = (id) => !!STEPS[id] && approval(REVIEWS, id, KEY, STEPS[id], SECRET).ok;
+const SIGNER = PREPARE ? null : signerFrom();
+const approvedNow = (id) => !!STEPS[id] && approval(REVIEWS, id, KEY, STEPS[id], SIGNER).ok;
 /* What today's matcher proposes for each question; filled once the bank
    is read. A decision ships only if its values still match. */
 const PROPOSALS = new Map();
@@ -81,8 +82,9 @@ const PROPOSALS = new Map();
 function save(diagrams, items) {
   mkdirSync("reports/diagram-map", { recursive: true });
   writeFileSync(CACHE, serializeDecisions(decisions));
-  const fresh = publishable(decisions, items, diagrams, approvedNow, PROPOSALS);
-  writeFileSync(MAP, JSON.stringify(buildItemMap(fresh, diagrams, KEY, items)) + "\n");
+  const fresh = publishable(decisions, items, diagrams, approvedNow, PROPOSALS, SIGNER);
+  const map = buildItemMap(fresh, diagrams, KEY, items);
+  writeFileSync(MAP, JSON.stringify(Object.keys(map.pairs).length ? signMap(map, SIGNER) : map) + "\n");
   const spend = reviewSpend();
   run.spendUsd = spend.costUsd;
   run.calls = spend.calls;
@@ -121,7 +123,7 @@ try {
   }
   run.heldBack = {};
   if (!PREPARE) for (const id of Object.keys(DIAGRAMS)) {
-    const a = STEPS[id] ? approval(REVIEWS, id, KEY, STEPS[id], SECRET) : { ok: false, why: "not a diagram in the source" };
+    const a = STEPS[id] ? approval(REVIEWS, id, KEY, STEPS[id], SIGNER) : { ok: false, why: "not a diagram in the source" };
     if (!a.ok) run.heldBack[id] = a.why;
   }
   if (Object.keys(run.heldBack).length) console.log(`Held back, not reviewed for pairing: ${JSON.stringify(run.heldBack)}`);
@@ -151,7 +153,7 @@ try {
       if (!approvedNow(pair.d)) continue;   // never pay to pair a diagram that cannot ship
       run.candidates[pair.d] = (run.candidates[pair.d] ?? 0) + 1;
       const prev = decisions[decisionKey(q.id, pair.d)];
-      if (isFresh(prev, itemHash(q), diagramHash(dg)) && sameProposal(proposed, pair.d, prev.extracted)) continue;
+      if (isFresh(prev, itemHash(q), diagramHash(dg)) && sameProposal(proposed, pair.d, prev.extracted) && verifyDecision(decisionKey(q.id, pair.d), prev, SIGNER)) continue;
       (queue[pair.d] ??= []).push({ ...q, extracted: pair.p ?? null });
     }
   }
@@ -161,7 +163,7 @@ try {
   if (DRY) { save(DIAGRAMS, items); console.log("Dry run: nothing sent."); }
   else {
     await pairAll({
-      queue, diagrams: DIAGRAMS, decisions, run, limit: LIMIT, maxUsd: MAX_USD, model: REVIEW_MODEL,
+      queue, diagrams: DIAGRAMS, decisions, run, limit: LIMIT, maxUsd: MAX_USD, model: REVIEW_MODEL, signer: SIGNER,
       ask: async (dg, batch) => parseJson(await review(pairingPrompt(dg, batch), 12000, { writer: GEN_MODEL, responseFormat: PAIRING_SCHEMA })),
       spent: () => reviewSpend().costUsd,
       isFatal: (e) => e instanceof FatalLlmError,

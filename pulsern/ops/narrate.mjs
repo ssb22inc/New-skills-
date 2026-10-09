@@ -20,7 +20,8 @@
    Usage: node ops/narrate.mjs [--voice marin] [--only diagramId] [--dry-run]
           node ops/narrate.mjs --prepare plan.json          (no secrets: reads the steps)
           node ops/narrate.mjs --prepared plan.json --into <branch>/pulsern [--voice …]
-   Env:   OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (not needed for --dry-run or --prepare)
+   Env:   OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, PULSERN_ATTEST_PRIVATE_KEY,
+          PULSERN_ATTEST_PUBLIC_KEY (not needed for --dry-run or --prepare)
 
    In CI the two halves run in separate jobs: --prepare on the branch with
    no secrets, and --prepared from the default branch's trusted copy of this
@@ -30,7 +31,8 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { readPrepared, narrationPlan, headCommit } from "./prepared.mjs";
-import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll, isDuplicateUpload } from "./narrate-lib.mjs";
+import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll, isDuplicateUpload, signClip } from "./narrate-lib.mjs";
+import { signerFrom, verifierFrom, PUBLIC_ENV } from "./attest.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -43,6 +45,10 @@ if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout
 /* Read the plan before moving: its path is relative to where we started. */
 const PLAN = PREPARED ? narrationPlan(readPrepared(PREPARED, "narration", { into: INTO })) : null;
 if (INTO) process.chdir(INTO);   // every path below is the branch checkout's
+/* Clip records are signed by this job and only a signed record counts as
+   recorded (round 26). A dry run without the public key treats every clip
+   as unrecorded. */
+const KEYS = PREPARE ? null : DRY ? (process.env[PUBLIC_ENV] ? verifierFrom() : { verify: () => false }) : signerFrom();
 const MANIFEST = "src/diagrams/narration.json";
 const BUCKET = "explainers";
 const startedAt = new Date().toISOString();
@@ -129,7 +135,7 @@ try {
     manifest.clips[d.id] ??= {};
     for (const s of d.steps) {
       const id = clipId({ text: s.narration, voice: VOICE });
-      if (isCurrentClip(manifest.clips[d.id][s.key], id)) { report.skippedUnchanged++; continue; }
+      if (isCurrentClip(manifest.clips[d.id][s.key], id, { diagram: d.id, step: s.key, verifier: KEYS })) { report.skippedUnchanged++; continue; }
       /* The script changed (or was never recorded): drop any old clip NOW, so
          a failure below can never leave stale audio attached to new words. */
       delete manifest.clips[d.id][s.key];
@@ -168,10 +174,11 @@ try {
         /* Same name means the same bytes, so an existing object is exactly
            this clip — anything else is a real failure. */
         if (error && !isDuplicateUpload(error)) throw new Error(`upload: ${error.message}`);
-        manifest.clips[d.id][s.key] = {
+        const record = {
           id, qa: QA_VERSION, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(check.similarity * 1000) / 1000,
           url: `${process.env.SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${path}`, bytes: mp3.length,
         };
+        manifest.clips[d.id][s.key] = { ...record, sig: signClip(d.id, s.key, record, KEYS) };
         report.recorded.push({ diagram: d.id, step: s.key, similarity: check.similarity, bytes: mp3.length });
         console.log(`  ✓ ${d.id}/${s.key}: ${(mp3.length / 1024).toFixed(0)} KB, audio check ${check.similarity.toFixed(3)}`);
       },

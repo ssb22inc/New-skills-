@@ -195,6 +195,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PULSERN_ATTEST_PRIVATE_KEY: ${{ secrets.PULSERN_ATTEST_PRIVATE_KEY }}
+          PULSERN_ATTEST_PUBLIC_KEY: ${{ vars.PULSERN_ATTEST_PUBLIC_KEY }}
         run: |
           set +e
           node ops/narrate.mjs --prepared "$RUNNER_TEMP/prepared/narration.json" --into "$GITHUB_WORKSPACE/branch/pulsern" --voice "$VOICE"

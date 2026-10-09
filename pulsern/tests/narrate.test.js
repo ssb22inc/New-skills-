@@ -1,6 +1,9 @@
 /* Narration: clip identity, and the check that audio says what the script says. */
 import { describe, it, expect } from "vitest";
-import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD, recordAll, isDuplicateUpload } from "../ops/narrate-lib.mjs";
+import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD, recordAll, isDuplicateUpload, signClip, verifyClip } from "../ops/narrate-lib.mjs";
+import { verifierFrom, PUBLIC_ENV } from "../ops/attest.mjs";
+import { testKeys } from "./helpers/attest-keys.js";
+const KEYS = testKeys();
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("clip identity", () => {
@@ -218,23 +221,48 @@ describe("the audio check on the real scripts", () => {
    check, or stored under input-derived names, were skipped and kept. */
 describe("which recorded clips a re-run may keep", () => {
   const audio = "a".repeat(32);
-  const good = { id: "abc", qa: QA_VERSION, audio, url: `https://x/storage/v1/object/public/explainers/abg/${audio}.mp3` };
+  const where = { diagram: "abg", step: "ph", verifier: KEYS.verifier };
+  const record = (e) => ({ ...e, sig: signClip("abg", "ph", e, KEYS.signer) });
+  const plain = { id: "abc", qa: QA_VERSION, textFp: "t1", audio, url: `https://x/storage/v1/object/public/explainers/abg/${audio}.mp3` };
+  const good = record(plain);
   it("keeps a clip approved by the current check and stored by its bytes", () => {
-    expect(isCurrentClip(good, "abc")).toBe(true);
+    expect(isCurrentClip(good, "abc", where)).toBe(true);
   });
   it("re-records a clip from an older check, old storage, or other words", () => {
-    expect(isCurrentClip({ ...good, qa: undefined }, "abc")).toBe(false);
-    expect(isCurrentClip({ ...good, qa: QA_VERSION - 1 }, "abc")).toBe(false);
-    expect(isCurrentClip({ ...good, audio: undefined, url: "https://x/abg/ph-abc.mp3" }, "abc")).toBe(false);
-    expect(isCurrentClip({ ...good, url: "https://x/abg/ph-abc.mp3" }, "abc")).toBe(false);
-    expect(isCurrentClip(good, "different-words")).toBe(false);
-    expect(isCurrentClip(undefined, "abc")).toBe(false);
+    expect(isCurrentClip(record({ ...plain, qa: undefined }), "abc", where)).toBe(false);
+    expect(isCurrentClip(record({ ...plain, qa: QA_VERSION - 1 }), "abc", where)).toBe(false);
+    expect(isCurrentClip(record({ ...plain, audio: undefined, url: "https://x/abg/ph-abc.mp3" }), "abc", where)).toBe(false);
+    expect(isCurrentClip(record({ ...plain, url: "https://x/abg/ph-abc.mp3" }), "abc", where)).toBe(false);
+    expect(isCurrentClip(good, "different-words", where)).toBe(false);
+    expect(isCurrentClip(undefined, "abc", where)).toBe(false);
+    expect(() => isCurrentClip(good, "abc", { diagram: "abg", step: "ph" })).toThrow(/no public key/);
   });
-  it("has no legacy clips in the shipped manifest", async () => {
+  /* Astra, PR #134 review, round 26: a record's public fields proved
+     nothing, so another step's recording with this step's script id was
+     skipped as current. */
+  it("keeps only a record the narration job signed for this step and this recording", () => {
+    const otherAudio = "b".repeat(32);
+    const otherStep = { ...plain, id: "xyz", textFp: "t2", audio: otherAudio, url: `https://x/storage/v1/object/public/explainers/abg/${otherAudio}.mp3` };
+    const signedOther = { ...otherStep, sig: signClip("abg", "lungs", otherStep, KEYS.signer) };
+    // the other step's recording, relabelled with this step's script
+    expect(isCurrentClip({ ...signedOther, id: "abc", textFp: "t1" }, "abc", where)).toBe(false);
+    // a valid record moved to another step
+    expect(isCurrentClip(good, "abc", { ...where, step: "lungs" })).toBe(false);
+    // unsigned, signed by another key, or with the audio swapped
+    expect(isCurrentClip(plain, "abc", where)).toBe(false);
+    expect(isCurrentClip({ ...plain, sig: signClip("abg", "ph", plain, KEYS.other) }, "abc", where)).toBe(false);
+    expect(isCurrentClip({ ...good, audio: otherAudio, url: otherStep.url }, "abc", where)).toBe(false);
+  });
+  it("ships only clip records the narration job signed", async () => {
     const { readFileSync } = await import("node:fs");
     const m = JSON.parse(readFileSync("src/diagrams/narration.json", "utf8"));
-    for (const [d, steps] of Object.entries(m.clips)) for (const [k, e] of Object.entries(steps)) {
+    const clips = Object.entries(m.clips).flatMap(([d, steps]) => Object.entries(steps).map(([k, e]) => [d, k, e]));
+    if (!clips.length) return;
+    expect(process.env[PUBLIC_ENV], `${PUBLIC_ENV} must be set to check recorded clips (HUMAN_TASKS H20)`).toBeTruthy();
+    const verifier = verifierFrom();
+    for (const [d, k, e] of clips) {
       expect(e.qa, `${d}/${k}`).toBe(QA_VERSION);
+      expect(verifyClip(d, k, e, verifier), `${d}/${k} is signed by the narration job`).toBe(true);
     }
   });
 });

@@ -45,6 +45,8 @@ jobs:
         id: tests
         continue-on-error: true
         run: npm test
+        env:
+          PULSERN_ATTEST_PUBLIC_KEY: ${{ vars.PULSERN_ATTEST_PUBLIC_KEY }}
       - name: Capture authentic product screenshot evidence
         id: product_capture
         continue-on-error: true

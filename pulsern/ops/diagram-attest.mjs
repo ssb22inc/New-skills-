@@ -11,7 +11,7 @@
    the review job runs again — which re-pays only for diagrams whose
    rendering actually changed. Missing, failed or stale: not approved.
    Fail closed. */
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 import { parseAst } from "rolldown/parseAst";
 import { readFileSync, readdirSync, existsSync, realpathSync, statSync } from "node:fs";
 import { join, posix, resolve, sep } from "node:path";
@@ -100,7 +100,8 @@ export function resolveImport(root, rel, spec, packages = packageNames(root)) {
   return candidates[0];
 }
 
-export function diagramSources(id, root = ".") {
+/* Every project module reachable from these entry points, as text. */
+export function moduleClosure(entries, root = ".") {
   /* Only the project's own source tree may be read: a path that leaves
      src/ — by "../" or through a symlink — is refused before anything is
      read, so nothing outside it (a git config, /proc, a secret) can be
@@ -134,8 +135,16 @@ export function diagramSources(id, root = ".") {
       if (found) visit(found);
     }
   };
-  visit(`src/diagrams/${id}.jsx`);
-  visit("src/explainer.jsx");
+  for (const e of entries) visit(e);
+  return parts.join("\n\n");
+}
+
+export function diagramSources(id, root = ".") {
+  /* The registry the app and the renderer actually load is followed too,
+     with everything it imports: a wrapper or helper added there changes
+     what students see without touching the diagram's own file (Astra,
+     PR #134 review, round 26). */
+  const parts = [moduleClosure([`src/diagrams/${id}.jsx`, "src/diagrams/index.js", "src/explainer.jsx"], root)];
   parts.push(`// ===== src/App.jsx (theme tokens) =====\n${themeBlock(readFileSync(join(root, "src/App.jsx"), "utf8"))}`);
   return parts.join("\n\n");
 }
@@ -199,6 +208,10 @@ export function sourceKey(root = ".") {
      dependency set, wherever in src/ it lives (round 22: a .mjs or nested
      dependency changed without invalidating an approval). */
   for (const id of diagramIds(root)) h.update(`\0sources:${id}\0`).update(diagramSources(id, root));
+  /* And the matcher, with everything it imports: it decides which values a
+     pairing draws, so a change anywhere in it re-checks every pairing
+     (round 26). */
+  h.update("\0matcher\0").update(moduleClosure(["src/diagrams/match.js"], root));
   return h.digest("hex").slice(0, 24);
 }
 
@@ -208,35 +221,27 @@ export function readReviewIndex(root = ".") {
 }
 
 /* Who may say a review happened. The index lives in the branch, so
-   anything in it could have been written by the branch: every field of an
-   entry is public or computable, so a hand-made "completed PASS" matched
-   the cache and the approval check alike (Astra, PR #134 review, round
-   25). The paid review job signs each entry it records with a key that
-   exists only in the protected pulsern-paid environment; a reused verdict
-   and an approval both require that signature. */
-export const ATTEST_ENV = "DIAGRAM_ATTEST_KEY";
-export function attestKey(env = process.env) {
-  const k = env[ATTEST_ENV];
-  if (typeof k !== "string" || k.length < 32) throw new Error(`${ATTEST_ENV} is not set (at least 32 characters) — review approvals cannot be signed or checked without it`);
-  return k;
-}
-const signedFields = (id, e) => JSON.stringify([id, e.key ?? null, e.sourceKey ?? null, e.frames ?? null, e.verdict ?? null, e.completed ?? null, e.reviewedAt ?? null, e.model ?? null, e.report ?? null]);
-export const signApproval = (id, e, secret) => createHmac("sha256", secret).update(signedFields(id, e)).digest("hex");
-export function verifyApproval(id, e, secret) {
-  if (typeof secret !== "string" || !secret) throw new Error("verifyApproval: no key to check the signature with");
-  if (!e || typeof e.sig !== "string" || !/^[0-9a-f]{64}$/.test(e.sig)) return false;
-  return timingSafeEqual(Buffer.from(signApproval(id, e, secret), "hex"), Buffer.from(e.sig, "hex"));
+   anything in it could have been written by the branch (Astra, PR #134
+   review, round 25). The paid review job signs each entry it records
+   (ops/attest.mjs); a reused verdict and an approval both require that
+   signature, checked against the pinned public key (round 26: CI could
+   only check the signature's shape). */
+const approvalFields = (id, e) => [id, e.key ?? null, e.sourceKey ?? null, e.frames ?? null, e.verdict ?? null, e.completed ?? null, e.reviewedAt ?? null, e.model ?? null, e.report ?? null];
+export const signApproval = (id, e, signer) => signer.sign("diagram-review", approvalFields(id, e));
+export function verifyApproval(id, e, verifier) {
+  if (!verifier || typeof verifier.verify !== "function") throw new Error("verifyApproval: no public key to check the signature with");
+  return !!e && verifier.verify("diagram-review", approvalFields(id, e), e.sig);
 }
 
 /* { ok, why } for one diagram id. `steps` is the diagram's real step list
    (stepInventory, or the registry): a PASS counts only if its review was
    shown every one of those frames (round 24), and only if the review job
    signed it (round 25). */
-export function approval(index, id, key, steps, secret) {
+export function approval(index, id, key, steps, verifier) {
   if (!Array.isArray(steps)) throw new Error(`approval(${id}): the diagram's real steps are required`);
   const e = index[id];
   if (!e) return { ok: false, why: "never reviewed" };
-  if (!verifyApproval(id, e, secret)) return { ok: false, why: "not signed by the review job" };
+  if (!verifyApproval(id, e, verifier)) return { ok: false, why: "not signed by the review job" };
   if (e.verdict !== "PASS") return { ok: false, why: `review verdict ${e.verdict}` };
   if (e.sourceKey !== key) return { ok: false, why: "changed since its review" };
   if (!sameList(e.frames, frameIds(expectedFrames(steps)))) return { ok: false, why: "its review did not cover every step" };

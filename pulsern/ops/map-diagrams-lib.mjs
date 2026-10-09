@@ -22,6 +22,27 @@ export function isFresh(prev, qHash, dHash) {
   return !!prev && prev.itemHash === qHash && prev.diagramHash === dHash;
 }
 
+/* A pairing decision is the paid reviewer's, so the paid job signs it
+   (ops/attest.mjs). The cache lives in the branch: an unsigned or edited
+   decision is never reused and never published (Astra, PR #134 review,
+   round 26: a cached "attach" with altered values skipped the reviewer
+   and shipped other numbers). What is published is derived from the
+   signed fields, never from a separate cached copy. */
+const decisionFields = (key, d) => [key, d.attach ?? null, d.values_confirmed ?? null, d.extracted ?? null, d.itemHash ?? null, d.diagramHash ?? null, d.reviewedAt ?? null, d.model ?? null];
+export const signDecision = (key, d, signer) => signer.sign("pairing-decision", decisionFields(key, d));
+export function verifyDecision(key, d, verifier) {
+  if (typeof verifier?.verify !== "function") throw new Error("verifyDecision: no public key to check the signature with");
+  return !!d && verifier.verify("pairing-decision", decisionFields(key, d), d.sig);
+}
+/* The published map is signed too, so CI can tell a map the paid mapper
+   wrote from one written by hand. */
+const mapFields = (m) => [JSON.stringify({ version: m?.version ?? null, sourceKey: m?.sourceKey ?? null, pairs: m?.pairs ?? null })];
+export const signMap = (m, signer) => ({ ...m, sig: signer.sign("item-map", mapFields(m)) });
+export function verifyMap(m, verifier) {
+  if (typeof verifier?.verify !== "function") throw new Error("verifyMap: no public key to check the signature with");
+  return !!m && verifier.verify("item-map", mapFields(m), m.sig);
+}
+
 export const BATCH_SIZE = 15;
 export function batches(list, size = BATCH_SIZE) {
   const out = [];
@@ -132,7 +153,8 @@ export function buildItemMap(decisions, diagrams, sourceKey = null, items = null
     const dg = diagrams?.[did];
     if (!dg) continue;     // no diagram, no content to bind the pairing to
     const f = fingerprint(q), v = diagramFp(dg);
-    (pairs[qid] ??= []).push(d.shown == null ? { d: did, f, v } : { d: did, p: d.shown, f, v });
+    const shown = shownAs(d, d.extracted);   // from the signed fields, never a cached copy
+    (pairs[qid] ??= []).push(shown == null ? { d: did, f, v } : { d: did, p: shown, f, v });
   }
   /* sourceKey: the drawing code this map was built against. A map with
      pairings must be rebuilt after any drawing or matcher change
@@ -151,9 +173,11 @@ export function serializeDecisions(decisions) {
 /* The decisions that may ship: still about the current question and the
    current diagram, AND for a diagram whose visual review passes as it is
    now (`approved(id)`). Anything else is held back — fail closed. */
-export function publishable(decisions, items, diagrams, approved, proposals = null) {
+export function publishable(decisions, items, diagrams, approved, proposals = null, verifier = null) {
+  if (typeof verifier?.verify !== "function") throw new Error("publishable: no public key to check decisions with");
   const out = {};
   for (const [key, d] of Object.entries(decisions)) {
+    if (!verifyDecision(key, d, verifier)) continue;
     const [qid, did] = key.split(":");
     const q = items.get(Number(qid));
     const dg = diagrams[did];
@@ -178,7 +202,8 @@ export function sameProposal(proposed, did, extracted) {
    run cannot end looking successful (Astra, PR #133 review, finding 12).
    Everything that costs money or touches the network is passed in, so this
    is tested with a reviewer that throws. */
-export async function pairAll({ queue, diagrams, decisions, run, limit = Infinity, maxUsd, ask, spent, isFatal = () => false, onBatch = () => {}, fingerprintOf, model, now = () => new Date().toISOString() }) {
+export async function pairAll({ queue, diagrams, decisions, run, limit = Infinity, maxUsd, ask, spent, isFatal = () => false, onBatch = () => {}, fingerprintOf, model, signer, now = () => new Date().toISOString() }) {
+  if (typeof signer?.sign !== "function") throw new Error("pairAll: no signing key — a decision that cannot be signed is not recorded");
   let budgetLeft = limit;
   outer: for (const [did, list] of Object.entries(queue)) {
     const dg = diagrams[did];
@@ -190,11 +215,13 @@ export async function pairAll({ queue, diagrams, decisions, run, limit = Infinit
         for (const dec of got) {
           const it = byId.get(dec.id);
           const shown = shownAs(dec, it.extracted);
-          decisions[decisionKey(dec.id, did)] = {
+          const key = decisionKey(dec.id, did);
+          const record = {
             attach: dec.attach, values_confirmed: dec.values_confirmed, reason: dec.reason,
             extracted: it.extracted, shown, itemHash: itemHash(it), diagramHash: diagramHash(dg), fp: fingerprintOf(it),
             reviewedAt: now(), model,
           };
+          decisions[key] = { ...record, sig: signDecision(key, record, signer) };
           run.asked += 1;
           if (dec.attach) { run.attached += 1; if (shown) run.attachedWithValues += 1; } else run.rejected += 1;
         }

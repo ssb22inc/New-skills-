@@ -4,7 +4,8 @@ import { describe, it, expect } from "vitest";
 import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne, reviewAndRecord, diagramRequest, diagramSources } from "../ops/review-diagrams-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 import { signApproval, verifyApproval } from "../ops/diagram-attest.mjs";
-const SECRET = "s".repeat(40);
+import { testKeys } from "./helpers/attest-keys.js";
+const KEYS = testKeys(), SIGNER = KEYS.signer;
 const K = { prompt: "the review prompt", source: "export const x = 1;" };
 
 const d = DIAGRAMS.abg;
@@ -92,12 +93,12 @@ describe("the saved report", () => {
 describe("an error is retried, a verdict is reused", () => {
   const ok = { assessment: "Fine.", findings: [] };
   const F = ["light/static", "dark/static"];
-  const sign = (e, id = "abg") => ({ ...e, sig: signApproval(id, e, SECRET) });
+  const sign = (e, id = "abg") => ({ ...e, sig: signApproval(id, e, SIGNER) });
   it("retries after an error and then reuses the completed review", async () => {
     const index = {};
     const run = async (ask) => {
       const prev = index.abg;
-      if (canReuse(prev, "k1", false, F, "abg", SECRET)) return "reused";
+      if (canReuse(prev, "k1", false, F, "abg", SIGNER)) return "reused";
       const r = await reviewOne({ d, key: "k1", images: 2, model: "m", ask });
       index.abg = sign({ key: "k1", frames: F, verdict: r.verdict, completed: r.completed });
       return r.verdict;
@@ -115,36 +116,36 @@ describe("an error is retried, a verdict is reused", () => {
     expect(canReuse({ key: "k", verdict: "FAIL" }, "k"), "an old entry with no completion record").toBe(false);
   });
   it("still reuses a completed FAIL — a real verdict is not re-bought", () => {
-    expect(canReuse(sign({ key: "k", verdict: "FAIL", completed: true, frames: F }), "k", false, F, "abg", SECRET)).toBe(true);
-    expect(canReuse(sign({ key: "k", verdict: "FAIL", completed: true, frames: F }), "k", true, F, "abg", SECRET)).toBe(false);
+    expect(canReuse(sign({ key: "k", verdict: "FAIL", completed: true, frames: F }), "k", false, F, "abg", SIGNER)).toBe(true);
+    expect(canReuse(sign({ key: "k", verdict: "FAIL", completed: true, frames: F }), "k", true, F, "abg", SIGNER)).toBe(false);
   });
   /* Round 24: a verdict is carried only with the same frames on record —
      never for an entry from before frames were recorded. */
   it("reuses a verdict only for the same frame set", () => {
     const prev = sign({ key: "k", verdict: "PASS", completed: true, frames: F });
-    expect(canReuse(prev, "k", false, ["light/static"], "abg", SECRET)).toBe(false);
-    expect(canReuse(sign({ key: "k", verdict: "PASS", completed: true }), "k", false, F, "abg", SECRET)).toBe(false);
+    expect(canReuse(prev, "k", false, ["light/static"], "abg", SIGNER)).toBe(false);
+    expect(canReuse(sign({ key: "k", verdict: "PASS", completed: true }), "k", false, F, "abg", SIGNER)).toBe(false);
     expect(canReuse(prev, "k")).toBe(false);
   });
   /* Round 25: the cache is in the branch, so a hand-written entry with the
      right key, frames and "completed PASS" suppressed the paid call. */
   it("never takes an entry the review job did not sign as a review", async () => {
     const forged = { key: "k1", sourceKey: "s", frames: F, verdict: "PASS", completed: true, reviewedAt: "2026-10-09T00:00:00.000Z", model: "m", report: "x.md" };
-    expect(canReuse(forged, "k1", false, F, "abg", SECRET)).toBe(false);
-    expect(canReuse({ ...forged, sig: "0".repeat(64) }, "k1", false, F, "abg", SECRET)).toBe(false);
-    expect(canReuse({ ...forged, sig: signApproval("abg", forged, "z".repeat(40)) }, "k1", false, F, "abg", SECRET), "signed with another key").toBe(false);
-    expect(canReuse(sign(forged, "tonicity"), "k1", false, F, "abg", SECRET), "another diagram's signature").toBe(false);
+    expect(canReuse(forged, "k1", false, F, "abg", SIGNER)).toBe(false);
+    expect(canReuse({ ...forged, sig: "0".repeat(64) }, "k1", false, F, "abg", SIGNER)).toBe(false);
+    expect(canReuse({ ...forged, sig: signApproval("abg", forged, KEYS.other) }, "k1", false, F, "abg", SIGNER), "signed with another key").toBe(false);
+    expect(canReuse(sign(forged, "tonicity"), "k1", false, F, "abg", SIGNER), "another diagram's signature").toBe(false);
     // the run: a forged cache entry does not stop the reviewer being asked
     const index = { abg: forged };
     let asked = 0;
-    if (!canReuse(index.abg, "k1", false, F, "abg", SECRET)) {
+    if (!canReuse(index.abg, "k1", false, F, "abg", SIGNER)) {
       const { write } = { write: () => {} };
-      await reviewAndRecord({ d: { ...d, images: [{ theme: "light", key: "static" }, { theme: "dark", key: "static" }] }, key: "k1", images: 2, model: "m", dir: "r", index, sourceKey: "s", write, secret: SECRET,
+      await reviewAndRecord({ d: { ...d, images: [{ theme: "light", key: "static" }, { theme: "dark", key: "static" }] }, key: "k1", images: 2, model: "m", dir: "r", index, sourceKey: "s", write, signer: SIGNER,
         ask: async () => { asked++; return ok; } });
     }
     expect(asked).toBe(1);
-    expect(verifyApproval("abg", index.abg, SECRET)).toBe(true);
-    expect(canReuse(index.abg, "k1", false, F, "abg", SECRET)).toBe(true);
+    expect(verifyApproval("abg", index.abg, SIGNER)).toBe(true);
+    expect(canReuse(index.abg, "k1", false, F, "abg", SIGNER)).toBe(true);
   });
 });
 
@@ -158,7 +159,7 @@ describe("a paid diagram review is recorded before it is asked", () => {
     const { files, write } = store();
     const index = {};
     let release;
-    const pending = reviewAndRecord({ d, key: "k1", images: 2, model: "m", dir: "r", index, sourceKey: "s", write, secret: SECRET,
+    const pending = reviewAndRecord({ d, key: "k1", images: 2, model: "m", dir: "r", index, sourceKey: "s", write, signer: SIGNER,
       now: () => "2026-10-09T12:00:00.000Z", ask: () => new Promise((res) => { release = res; }) });
     await new Promise((r) => setTimeout(r, 10));
     const json = Object.keys(files).find((p) => p.endsWith(".json") && p.startsWith("r/abg/"));
@@ -174,7 +175,7 @@ describe("a paid diagram review is recorded before it is asked", () => {
   it("gives up on a reviewer that never answers, and keeps the record", async () => {
     const { files, write } = store();
     const index = {};
-    const r = await reviewAndRecord({ d, key: "k2", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, secret: SECRET,
+    const r = await reviewAndRecord({ d, key: "k2", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, signer: SIGNER,
       timeoutMs: 30, ask: () => new Promise(() => {}) });
     expect(r).toMatchObject({ verdict: "ERROR", completed: false });
     expect(r.error).toMatch(/no answer within/);
@@ -191,8 +192,8 @@ describe("a paid diagram review is recorded before it is asked", () => {
     const index = {};
     let t = 0;
     const now = () => `2026-10-09T12:00:0${t++}.000Z`;
-    await reviewAndRecord({ d, key: "k", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, secret: SECRET, now, ask: async () => { throw new Error("boom"); } });
-    await reviewAndRecord({ d, key: "k", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, secret: SECRET, now, ask: async () => answer });
+    await reviewAndRecord({ d, key: "k", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, signer: SIGNER, now, ask: async () => { throw new Error("boom"); } });
+    await reviewAndRecord({ d, key: "k", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, signer: SIGNER, now, ask: async () => answer });
     expect(Object.keys(files).filter((p) => p.endsWith(".json") && p.startsWith("r/abg/"))).toHaveLength(2);
   });
 });
@@ -256,6 +257,8 @@ describe("a review covers everything the drawing depends on", () => {
     writeFileSync(join(root, "src/diagrams/kit.jsx"), `import { tone } from "./tone";\nexport function Gauge(v) { ${kitBranch} }\n`);
     writeFileSync(join(root, "src/diagrams/tone.js"), "export const tone = 1;\n");
     writeFileSync(join(root, "src/explainer.jsx"), 'import { DIAGRAM_CSS } from "./diagrams/kit.jsx";\nexport const E = 1;\n');
+    writeFileSync(join(root, "src/diagrams/index.js"), 'export const DIAGRAMS = {};\n');
+    writeFileSync(join(root, "src/diagrams/match.js"), 'export const proposePairs = () => [];\n');
     writeFileSync(join(root, "src/App.jsx"), '.app{--teal:#0a7}.app[data-theme="dim"]{--teal:#3c9}');
     writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { react: "18" } }));
     return root;
@@ -402,6 +405,43 @@ describe("a review covers everything the drawing depends on", () => {
     writeFileSync(join(root, "src/diagrams/style.css"), '@import "./more.css";\n');
     writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import "./style.css";\n');
     expect(() => diagramSources("abg", root)).toThrow(/style\.css is not a JavaScript module or JSON/);
+    rmSync(root, { recursive: true, force: true });
+  });
+  /* Round 26: the registry the renderer runs was not in a diagram's own
+     review, so a wrapper added there kept the diagram's approval. */
+  it("covers the registry the app loads: a wrapper there needs a new review", async () => {
+    const { sourceKey } = await import("../ops/diagram-attest.mjs");
+    const root = tree("return v;");
+    writeFileSync(join(root, "src/diagrams/index.js"), 'import { A } from "./abg.jsx";\nexport const DIAGRAMS = { abg: A };\n');
+    const pngs = [Buffer.from([1])];
+    const before = { s: diagramSources("abg", root), k: sourceKey(root) };
+    const ra = diagramRequest(DIAGRAMS.abg, [{ label: "x" }], "rules", pngs, () => before.s);
+    expect(before.s).toContain("===== src/diagrams/index.js =====");
+    writeFileSync(join(root, "src/diagrams/index.js"), 'import { A } from "./abg.jsx";\nconst wrap = (f) => (x) => (x > 7.5 ? "wrong" : f(x));\nexport const DIAGRAMS = { abg: wrap(A) };\n');
+    const after = diagramSources("abg", root);
+    expect(after).toContain('x > 7.5 ? "wrong"');
+    const rb = diagramRequest(DIAGRAMS.abg, [{ label: "x" }], "rules", pngs, () => after);
+    expect(rb.key).not.toBe(ra.key);
+    expect(rb.prompt).toContain('x > 7.5 ? "wrong"');
+    expect(sourceKey(root)).not.toBe(before.k);
+    rmSync(root, { recursive: true, force: true });
+  });
+  it("follows helpers imported only by the registry or the matcher", async () => {
+    const { sourceKey } = await import("../ops/diagram-attest.mjs");
+    const root = tree("return v;");
+    mkdirSync(join(root, "src/clinical"), { recursive: true });
+    writeFileSync(join(root, "src/clinical/caption.js"), "export const cap = (ph) => (ph < 7.35 ? 'acidosis' : 'normal');\n");
+    writeFileSync(join(root, "src/clinical/read.js"), "export const readK = (s) => Number(/K (\\d\\.\\d)/.exec(s)?.[1]);\n");
+    writeFileSync(join(root, "src/diagrams/index.js"), 'import { cap } from "../clinical/caption.js";\nexport const DIAGRAMS = { cap };\n');
+    writeFileSync(join(root, "src/diagrams/match.js"), 'import { readK } from "/src/clinical/read.js";\nexport const proposePairs = (q) => [readK(q.stem)];\n');
+    const k0 = sourceKey(root), s0 = diagramSources("abg", root);
+    expect(s0).toContain("src/clinical/caption.js");
+    writeFileSync(join(root, "src/clinical/caption.js"), "export const cap = (ph) => (ph < 7.2 ? 'acidosis' : 'normal');\n");
+    expect(diagramSources("abg", root)).not.toBe(s0);
+    const k1 = sourceKey(root);
+    expect(k1).not.toBe(k0);
+    writeFileSync(join(root, "src/clinical/read.js"), "export const readK = (s) => 2.9;\n");
+    expect(sourceKey(root), "a matcher helper change re-checks every pairing").not.toBe(k1);
     rmSync(root, { recursive: true, force: true });
   });
   it("refuses to build a request when an import cannot be found", () => {
