@@ -313,10 +313,24 @@ export async function recordAll(work, { synthesise, transcribe, store, save, rep
       for (let take = 1; take <= 2; take++) {
         mp3 = await synthesise(s.narration);
         report.characters += s.narration.length;
-        heard = await transcribe(mp3);
+        /* Kept the moment it is paid for — before transcription, which can
+           fail or hang (Astra, PR #134 review, round 20) — and the same
+           record is finalised once the check is known. */
+        const rec = { diagram: d.id, step: s.key, take, pass: false, similarity: null, mismatch: null, heard: null, error: "not yet transcribed", file: null };
+        report.takes.push(rec);
+        rec.file = (await keepTake({ d, s, take, mp3, stage: "synthesised", heard: null, check: null, error: rec.error })) ?? null;
+        save();
+        try {
+          heard = await transcribe(mp3);
+        } catch (e) {
+          rec.error = `transcription failed: ${String(e.message).slice(0, 200)}`;
+          await keepTake({ d, s, take, mp3, stage: "transcription failed", heard: null, check: null, error: rec.error });
+          save();
+          throw e;
+        }
         check = audioCheck(s.narration, heard);
-        const kept = await keepTake({ d, s, take, mp3, heard, check });
-        report.takes.push({ diagram: d.id, step: s.key, take, pass: check.pass, similarity: check.similarity, mismatch: check.mismatch, heard, file: kept ?? null });
+        Object.assign(rec, { pass: check.pass, similarity: check.similarity, mismatch: check.mismatch, heard, error: null });
+        await keepTake({ d, s, take, mp3, stage: "checked", heard, check, error: null });
         save();
         if (check.pass) break;
         log(`  … ${d.id}/${s.key} take ${take}: ${check.mismatch ? `said “${check.mismatch.heard}” where the script says “${check.mismatch.expected}”` : `similarity ${check.similarity.toFixed(3)}`}`);

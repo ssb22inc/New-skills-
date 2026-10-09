@@ -397,12 +397,12 @@ describe("spoken numbers", () => {
 describe("recording stops at a clip that fails twice", () => {
   const work = ["one", "two", "three"].map((k) => ({ d: { id: "abg" }, s: { key: k, narration: `Step ${k} says the pH is low.` }, id: k }));
   const setup = (heardFor) => {
-    const calls = [], stored = [], kept = [], report = { characters: 0, failedQa: [], errors: [], recorded: [] };
-    return { calls, stored, kept, report, deps: {
+    const calls = [], stored = [], kept = [], stages = [], report = { characters: 0, failedQa: [], errors: [], recorded: [] };
+    return { calls, stored, kept, stages, report, deps: {
       synthesise: async (text) => { calls.push(text); return Buffer.from(text); },
       transcribe: async (mp3) => heardFor(mp3.toString()),
       store: async (item) => { stored.push(item.s.key); },
-      keepTake: async ({ s, take, check }) => { kept.push(`${s.key}#${take}:${check.pass ? "pass" : "fail"}`); return `takes/${s.key}-${take}.mp3`; },
+      keepTake: async ({ s, take, stage, check }) => { if (stage === "checked") kept.push(`${s.key}#${take}:${check.pass ? "pass" : "fail"}`); stages.push(`${s.key}#${take}:${stage}`); return `takes/${s.key}-${take}.mp3`; },
       save: () => {}, report, log: () => {},
     } };
   };
@@ -424,6 +424,19 @@ describe("recording stops at a clip that fails twice", () => {
       ["one", 1, true, "takes/one-1.mp3"], ["two", 1, false, "takes/two-1.mp3"], ["two", 2, false, "takes/two-2.mp3"],
     ]);
     expect(report.takes[1].heard).toBe("Something else entirely.");
+  });
+  /* Round 20: the recording was lost if transcription failed. */
+  it("keeps a take the moment it is paid for, even when transcription then fails", async () => {
+    const { stages, stored, report, deps } = setup((t) => t);
+    const failing = { ...deps, transcribe: async (mp3) => { if (mp3.toString().includes("two")) throw new Error("transcribe 503"); return mp3.toString(); } };
+    const code = await recordAll(work, failing);
+    expect(code).toBe(1);
+    expect(stages).toEqual(expect.arrayContaining(["two#1:synthesised", "two#1:transcription failed"]));
+    expect(stages.indexOf("two#1:synthesised")).toBeLessThan(stages.indexOf("two#1:transcription failed"));
+    expect(stored).not.toContain("two");                       // never published
+    const t = report.takes.find((x) => x.step === "two");
+    expect(t).toMatchObject({ pass: false, file: "takes/two-1.mp3" });
+    expect(t.error).toMatch(/transcription failed: transcribe 503/);
   });
   it("refuses to run without somewhere to keep the takes", async () => {
     const { deps } = setup((t) => t);

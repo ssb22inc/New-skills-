@@ -124,11 +124,11 @@ try {
     const TAKES = `reports/narration-takes/${startedAt.replace(/[:.]/g, "-")}`;
     code = await recordAll(work, {
       synthesise, transcribe, save, report,
-      keepTake: ({ d, s, take, mp3, heard, check }) => {
+      keepTake: ({ d, s, take, mp3, stage, heard, check, error }) => {
         mkdirSync(TAKES, { recursive: true });
         const base = `${TAKES}/${d.id}--${s.key}--take${take}`;
         writeFileSync(`${base}.mp3`, mp3);
-        writeFileSync(`${base}.json`, JSON.stringify({ diagram: d.id, step: s.key, take, script: s.narration, heard, pass: check.pass, similarity: check.similarity, mismatch: check.mismatch }, null, 2) + "\n");
+        writeFileSync(`${base}.json`, JSON.stringify({ diagram: d.id, step: s.key, take, stage, script: s.narration, heard, pass: check?.pass ?? false, similarity: check?.similarity ?? null, mismatch: check?.mismatch ?? null, error }, null, 2) + "\n");
         return `${base}.mp3`;
       },
       store: async ({ d, s, id }, mp3, check) => {

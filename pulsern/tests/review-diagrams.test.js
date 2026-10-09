@@ -1,7 +1,7 @@
 /* Astra's visual and clinical review of concept diagrams — the parts that
    decide what is sent and what a verdict means. No model is called. */
 import { describe, it, expect } from "vitest";
-import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne, reviewAndRecord, diagramRequest } from "../ops/review-diagrams-lib.mjs";
+import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne, reviewAndRecord, diagramRequest, diagramSources } from "../ops/review-diagrams-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 const K = { prompt: "the review prompt", source: "export const x = 1;" };
 
@@ -201,5 +201,46 @@ describe("the reviewer sees the logic, not only the example", () => {
     expect(after.key).not.toBe(before.key);
     expect(after.prompt).toContain("ph < 7.30");
     expect(before.prompt).not.toContain("ph < 7.30");
+  });
+});
+
+/* Astra, PR #134 review, round 20: kit.jsx draws every gauge and chip but
+   was in neither the request nor the key, so a change there kept a PASS. */
+describe("a review covers everything the drawing depends on", () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require("node:fs");
+  const { join } = require("node:path");
+  const { tmpdir } = require("node:os");
+  const tree = (kitBranch) => {
+    const root = mkdtempSync(join(tmpdir(), "diagram-src-"));
+    mkdirSync(join(root, "src/diagrams"), { recursive: true });
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import React from "react";\nimport { Gauge } from "./kit.jsx";\nexport const A = 1;\n');
+    writeFileSync(join(root, "src/diagrams/kit.jsx"), `import { tone } from "./tone";\nexport function Gauge(v) { ${kitBranch} }\n`);
+    writeFileSync(join(root, "src/diagrams/tone.js"), "export const tone = 1;\n");
+    writeFileSync(join(root, "src/explainer.jsx"), 'import { DIAGRAM_CSS } from "./diagrams/kit.jsx";\nexport const E = 1;\n');
+    writeFileSync(join(root, "src/App.jsx"), '.app{--teal:#0a7}.app[data-theme="dim"]{--teal:#3c9}');
+    return root;
+  };
+  it("follows imports transitively and includes the explainer and theme", () => {
+    const root = tree("return v;");
+    const s = diagramSources("abg", root);
+    for (const p of ["src/diagrams/abg.jsx", "src/diagrams/kit.jsx", "src/diagrams/tone.js", "src/explainer.jsx", "theme tokens"]) expect(s).toContain(p);
+    expect(s.match(/===== src\/diagrams\/kit\.jsx =====/g)).toHaveLength(1);   // visited once
+    rmSync(root, { recursive: true, force: true });
+  });
+  it("a kit.jsx branch the example never draws still invalidates the approval and is shown", () => {
+    const a = tree("return v;"), b = tree("if (v < 20) return 'off-scale marker moved'; return v;");
+    const pngs = [Buffer.from([1])];
+    const ra = diagramRequest(DIAGRAMS.abg, [{ label: "x" }], "rules", pngs, (id) => diagramSources(id, a));
+    const rb = diagramRequest(DIAGRAMS.abg, [{ label: "x" }], "rules", pngs, (id) => diagramSources(id, b));
+    expect(rb.key).not.toBe(ra.key);
+    expect(rb.prompt).toContain("off-scale marker moved");
+    expect(canReuse({ key: ra.key, completed: true, verdict: "PASS" }, rb.key)).toBe(false);
+    rmSync(a, { recursive: true, force: true }); rmSync(b, { recursive: true, force: true });
+  });
+  it("refuses to build a request when an import cannot be found", () => {
+    const root = tree("return v;");
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import { X } from "./missing.jsx";\n');
+    expect(() => diagramSources("abg", root)).toThrow(/not found/);
+    rmSync(root, { recursive: true, force: true });
   });
 });

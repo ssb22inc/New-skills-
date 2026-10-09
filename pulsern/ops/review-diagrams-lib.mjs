@@ -9,6 +9,9 @@
    As with code review, Astra finds and arithmetic decides: any blocker or
    major finding fails the diagram, whatever the summary says. */
 import { createHash } from "node:crypto";
+import { readFileSync, existsSync } from "node:fs";
+import { join, posix } from "node:path";
+import { themeBlock } from "./diagram-attest.mjs";
 import { diagramHash } from "./map-diagrams-lib.mjs";
 
 export const AREAS = ["clinical", "visual", "consistency", "accessibility", "pedagogy", "rules"];
@@ -230,4 +233,32 @@ export function diagramRequest(d, plan, rules, pngs, readSource) {
   const source = readSource(d.id);
   const prompt = diagramReviewPrompt(d, plan, rules, source);
   return { prompt, key: reviewKey(d, pngs, { prompt, source }) };
+}
+
+/* Everything a diagram's drawing depends on, as one reviewable text: its
+   own file, every local module it imports (followed transitively — kit.jsx
+   draws the gauges, chips and frames), the explainer that plays it, and
+   the app's theme tokens. This text goes into the review request AND its
+   cache key, so an approval is reused only while all of it is unchanged
+   (Astra, PR #134 review, round 20: a change to kit.jsx kept a cached PASS
+   that never saw it). */
+export function diagramSources(id, root = ".") {
+  const seen = new Set();
+  const parts = [];
+  const visit = (rel) => {
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const text = readFileSync(join(root, rel), "utf8");
+    parts.push(`// ===== ${rel} =====\n${text}`);
+    for (const m of text.matchAll(/^\s*import\s[^;]*?from\s+["'](\.{1,2}\/[^"']+)["']/gm)) {
+      const target = posix.normalize(posix.join(posix.dirname(rel), m[1]));
+      const found = [target, `${target}.jsx`, `${target}.js`].find((p) => existsSync(join(root, p)));
+      if (!found) throw new Error(`diagramSources: ${rel} imports ${m[1]}, which was not found — refusing to review without it`);
+      if (/\.(jsx?|mjs)$/.test(found)) visit(found);
+    }
+  };
+  visit(`src/diagrams/${id}.jsx`);
+  visit("src/explainer.jsx");
+  parts.push(`// ===== src/App.jsx (theme tokens) =====\n${themeBlock(readFileSync(join(root, "src/App.jsx"), "utf8"))}`);
+  return parts.join("\n\n");
 }
