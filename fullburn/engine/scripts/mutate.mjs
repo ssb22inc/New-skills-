@@ -327,8 +327,9 @@ const MUTATIONS = [
   ["H-07 typeof guard", "engine/src/grade-registry.ts", 'return typeof actual === "number" && Number.isFinite(actual);', "return Number.isFinite(Number(actual));"],
   ["DT-03 inDomain", "engine/src/grade-registry.ts", "  if (t.domainMin !== undefined && actual < t.domainMin) return false;", "  if (false) return false;"],
   ["H-12 own-property recording", "engine/src/transport-brand.ts", "Object.hasOwn(this.#outputs, this.#currentCase) ? this.#outputs[this.#currentCase] : undefined", "this.#outputs[this.#currentCase]"],
-  ["R3-CP-08 -z diff (class2)", "engine/scripts/class2-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
-  ["R3-CP-08 -z diff (adversary)", "engine/scripts/adversary-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
+  // Re-targeted 2026-10-09: the diff calls became argument vectors (X7-04).
+  ["R3-CP-08 -z diff (class2)", "engine/scripts/class2-gate.mjs", 'git(["diff", "--name-status", "-z", "-M",', 'git(["diff", "--name-status", "-M",'],
+  ["R3-CP-08 -z diff (adversary)", "engine/scripts/adversary-gate.mjs", '"diff", "--name-status", "-z", "-M",', '"diff", "--name-status", "-M",'],
 
   // ---- r11 findings ----
   // R11-07: the ledger left the instance. Give the production meter its own
@@ -1329,8 +1330,8 @@ const MUTATIONS = [
     "    this.#generation += 1;\n    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);",
     "    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);"],
   ["X6-03 every commit touching an approval is authenticated (CLI)", "engine/scripts/class2-gate.mjs",
-    "  const touchedIn = git(`log --format=%H ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).split(\"\\n\").map((l) => l.trim()).filter(Boolean);",
-    "  const touchedIn = git(`log --diff-filter=A --format=%H -1 ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).split(\"\\n\").map((l) => l.trim()).filter(Boolean);"],
+    "  const touchedIn = git([\"log\", \"--format=%H\", `${baseRef}..HEAD`, \"--\", d.path])",
+    "  const touchedIn = git([\"log\", \"--diff-filter=A\", \"-1\", \"--format=%H\", `${baseRef}..HEAD`, \"--\", d.path])"],
   ["X6-03b every commit record must pass (decision)", "engine/scripts/gate-lib.mjs",
     "    if (list.length === 0 || a !== null || list.some((x) => !x)) {",
     "    if (list.length === 0) {"],
