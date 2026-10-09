@@ -308,7 +308,7 @@ describe("letters that name things are not fillers", () => {
     expect(audioCheck(script, script.toLowerCase()).pass).toBe(true);
   });
   it("re-checks clips approved under the weaker rule", () => {
-    expect(QA_VERSION).toBeGreaterThanOrEqual(12);
+    expect(QA_VERSION).toBeGreaterThanOrEqual(13);
   });
 });
 
@@ -447,5 +447,17 @@ describe("an upload counts as done only when it really is", () => {
     expect(code).toBe(1);
     expect(manifest).toEqual({});
     expect(report.errors[0].error).toMatch(/does not exist/);
+  });
+});
+
+/* Astra, PR #134 review, round 18: "E-R" joined to "er" and was then
+   dropped as a hesitation, so "E-R tablets" heard as "tablets" passed. */
+describe("ER is never a filler", () => {
+  it.each(["E-R", "ER", "E.R."])("'%s' must be heard", (spelling) => {
+    const script = `${spelling} tablets release the medication slowly over the whole day, so never crush them.`;
+    expect(audioCheck(script, "Tablets release the medication slowly over the whole day, so never crush them.").pass).toBe(false);
+    for (const heard of ["E-R", "ER", "E.R."]) {
+      expect(audioCheck(script, `${heard} tablets release the medication slowly over the whole day, so never crush them.`).pass, heard).toBe(true);
+    }
   });
 });

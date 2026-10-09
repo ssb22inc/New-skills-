@@ -114,3 +114,29 @@ describe("registry and matchers stay in step", () => {
     expect(Object.keys(MATCHERS).sort()).toEqual(Object.keys(DIAGRAMS).sort());
   });
 });
+
+/* Astra, PR #134 review, round 18: "U 300" and a non-breaking-hyphen
+   "U‑300" slipped past the U-300 exclusion and drew the U-100 profile. */
+describe("insulin concentration", () => {
+  const ch = (cp) => String.fromCodePoint(cp);
+  it.each([
+    ["space", "U 300"], ["non-breaking hyphen", `U${ch(0x2011)}300`], ["en dash", `U${ch(0x2013)}300`],
+    ["minus sign", `U${ch(0x2212)}300`], ["no-break space", `U${ch(0xa0)}300`], ["plain", "U-300"], ["joined", "U300"],
+  ])("refuses glargine written with a %s: %s", async (_, u) => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin(`Insulin glargine ${u} was given at 2100.`)).toBeNull();
+  });
+  it("refuses any concentration other than U-100", async () => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin("Regular insulin U-500 was given at 0700.")).toBeNull();
+    expect(extractInsulin("Insulin lispro U-200 was given at 0700.")).toBeNull();
+    expect(extractInsulin("Insulin glargine 300 units/mL was given at 2100.")).toBeNull();
+    expect(extractInsulin("Insulin glargine 300 units per mL was given at 2100.")).toBeNull();
+  });
+  it("still reads U-100 glargine", async () => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin("Insulin glargine U-100 was given at 2100.")).toEqual({ type: "long", givenAt: "21:00" });
+    expect(extractInsulin(`Insulin glargine U${ch(0x2011)}100 was given at 2100.`)).toEqual({ type: "long", givenAt: "21:00" });
+    expect(extractInsulin("Insulin glargine was given at 2100.")).toEqual({ type: "long", givenAt: "21:00" });
+  });
+});

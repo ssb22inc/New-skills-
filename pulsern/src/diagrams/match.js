@@ -70,9 +70,22 @@ function clockFrom(text) {
   }
   return hits.size === 1 ? [...hits][0] : null;
 }
+/* Any stated concentration other than U-100 — U-300 glargine, U-500
+   regular, U-200 — has a different action profile from the one drawn, so
+   no profile is chosen. Spellings are normalised first: every Unicode
+   hyphen or dash and every kind of space, so "U 300", "U\u2011300" and
+   "U\u2013300" are all caught (Astra, PR #134 review, round 18). */
+const DASHES = /[\u2010-\u2015\u2212\u00AD\uFE58\uFE63\uFF0D]/g;
+const SPACES = /[\s\u00A0\u2007\u202F\u2060\uFEFF]+/g;
+export const normaliseDosing = (text) => String(text ?? "").replace(DASHES, "-").replace(SPACES, " ");
+function unsupportedConcentration(t) {
+  for (const m of t.matchAll(/\bU ?-? ?(\d{2,4})\b/gi)) if (Number(m[1]) !== 100) return true;
+  for (const m of t.matchAll(/\b(\d{2,4}) ?units? ?(?:\/|per) ?(?:mL|milliliter)\b/gi)) if (Number(m[1]) !== 100) return true;
+  return /\bconcentrated insulin\b/i.test(t);
+}
 export function extractInsulin(text) {
-  const t = String(text ?? "");
-  if (/degludec|tresiba|detemir|levemir|toujeo|U-?300|300\s*units?\s*\/\s*mL/i.test(t)) return null;
+  const t = normaliseDosing(text);
+  if (/degludec|tresiba|detemir|levemir|toujeo/i.test(t) || unsupportedConcentration(t)) return null;
   const types = INSULIN_TYPES.filter(([, re]) => re.test(t)).map(([k]) => k);
   if (types.length !== 1) return null;
   const givenAt = clockFrom(t);

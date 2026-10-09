@@ -189,8 +189,11 @@ export function criticalTerms(text) {
    contains anti-B" is a different fact — and no list of contexts can be
    complete (Astra, PR #134 review, round 15). Every "a" must be heard, so
    a transcript that drops or adds one fails and the clip is re-recorded.
-   "an" and "the" are never clinical labels and stay droppable. */
-const FILLER = new Set(["an", "the", "um", "uh", "er", "erm"]);
+   "an" and "the" are never clinical labels and stay droppable. Nor is
+   "er": it is ER — emergency room, extended release — however it is
+   spelled (ER, E.R., E-R), so it must be heard too (Astra, PR #134
+   review, round 18: "E-R tablets" heard as "tablets" passed). */
+const FILLER = new Set(["an", "the", "um", "uh", "erm"]);
 /* One token per unit, however it is written or said (plurals are already
    dropped): micrograms are never grams or milligrams. */
 const UNIT_ALIASES = {
@@ -200,9 +203,10 @@ const UNIT_ALIASES = {
   microl: "mcl", microliter: "mcl", microlitre: "mcl",
   milliequivalent: "meq", millimole: "mmol",
 };
-/* Every "a" is a token (see FILLER), so a letter A needs no special
-   handling: dropping it fails whatever its role. "ER" is kept apart from
-   the filler "er": it is the emergency room. */
+/* Every "a" and "er" is a token (see FILLER), so neither needs special
+   handling: dropping one fails whatever its role. "E.R." is written as
+   "ER" so its dots cannot split it; "E-R" joins to "er" with the other
+   spelled-out letters. */
 /* A blood group or Rh written with a sign is read as the words, so the
    sign survives as a token and a transcript that drops it fails (Astra,
    PR #134 review, round 12: "A−" and "A" normalised the same). Only a sign
@@ -211,7 +215,7 @@ const GROUP_SIGN = /\b(AB|A|B|O|Rh)(\+|\u2212|-(?![A-Za-z0-9]))(?=[\s,.;:)!?]|$)
 function keepLetters(text) {
   return String(text)
     .replace(GROUP_SIGN, (m, g, s) => `${g} ${s === "+" ? "positive" : "negative"}`)
-    .replace(/\bE\.?R\.?(?![A-Za-z])/g, "letterER");
+    .replace(/\bE\.R\.?(?![A-Za-z])/g, "ER");
 }
 export function speechTokens(text) {
   /* Letters spelled out with hyphens ("P-A-C-O-2", "N-ninety-five", "I-V")
@@ -268,7 +272,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 12;
+export const QA_VERSION = 13;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);
