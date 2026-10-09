@@ -14,6 +14,7 @@
      misread rather than drawn. */
 
 import { precautionFor } from "./isolation.jsx";
+import { stageFrom } from "./pressure-injury.jsx";
 
 const num = (s) => Number(String(s).replace(/,/g, ""));
 
@@ -96,6 +97,12 @@ export const MATCHERS = {
   isolation: {
     candidate: /isolation|precautions|\bPPE\b|\bN95\b|respirator|airborne|droplet|negative[- ]pressure|\bgown\b/i,
     extract: (t) => precautionFor(t),
+  },
+  "pressure-injury": {
+    /* Eschar and slough alone are not enough: burn and surgical-wound
+       items use both words, and this diagram is about pressure. */
+    candidate: /pressure (?:injury|injuries|ulcer|ulcers|sore|sores)|decubitus|\bbraden\b|unstageable|deep tissue (?:pressure )?injury/i,
+    extract: (t) => stageFrom(t),
   },
   insulin: {
     /* Insulin must be named: "hypoglycemia" alone pulls in questions about

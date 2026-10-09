@@ -5,6 +5,7 @@ import { potassium } from "./potassium.jsx";
 import { tonicity } from "./tonicity.jsx";
 import { insulin } from "./insulin.jsx";
 import { isolation } from "./isolation.jsx";
+import { pressureInjury } from "./pressure-injury.jsx";
 
-export const DIAGRAMS = Object.fromEntries([abg, potassium, tonicity, insulin, isolation].map((d) => [d.id, d]));
+export const DIAGRAMS = Object.fromEntries([abg, potassium, tonicity, insulin, isolation, pressureInjury].map((d) => [d.id, d]));
 export const diagramFor = (id) => DIAGRAMS[id] ?? null;
