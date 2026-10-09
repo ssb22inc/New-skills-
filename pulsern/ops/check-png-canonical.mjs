@@ -9,11 +9,10 @@
 
    Runs every PNG tracked under pulsern/ plus built-in fixtures. Exit 1 on
    any difference. Needs Chromium (CI installs it for the player checks). */
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { launchBrowser } from "./browser.mjs";
-import { canonicalPng, encodeCanonicalPng } from "./png-canonical.mjs";
+import { canonicalPng, encodeCanonicalPng, trackedPngs } from "./png-canonical.mjs";
 
 const CRC = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -64,7 +63,7 @@ function fixtureLowAlpha(text) {
   return Buffer.concat([SIG, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(Buffer.from(row))), chunk("IEND", Buffer.alloc(0))]);
 }
 
-const tracked = execFileSync("git", ["ls-files", "--", "*.png", "*.PNG"], { encoding: "utf8" }).split("\n").filter(Boolean);
+const tracked = trackedPngs();
 const cases = [
   ...tracked.map((f) => ({ name: f, bytes: readFileSync(f) })),
   { name: "fixture: Paeth-filtered RGBA with transparency", bytes: fixtureRgba() },

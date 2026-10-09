@@ -327,3 +327,15 @@ export async function recordAll(work, { synthesise, transcribe, store, save, rep
   }
   return report.errors.length || report.failedQa.length ? 1 : 0;
 }
+
+/* Did a storage upload fail only because this exact object already exists?
+   Objects are named by the hash of their bytes, so that case is success.
+   Only the provider's explicit conflict counts — status 409 or its
+   "Duplicate" error — never a message that merely mentions existence:
+   "bucket does not exist" was once read as a duplicate and a dead URL was
+   published (Astra, PR #134 review, round 17). */
+export function isDuplicateUpload(error) {
+  if (!error) return false;
+  const status = String(error.statusCode ?? error.status ?? "");
+  return status === "409" || error.error === "Duplicate" || /^the resource already exists$/i.test(String(error.message ?? "").trim());
+}

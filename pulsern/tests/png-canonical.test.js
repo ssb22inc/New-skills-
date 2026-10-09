@@ -5,9 +5,11 @@
 import { describe, it, expect } from "vitest";
 import { inflateSync } from "node:zlib";
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { canonicalDeflate, decodePng, encodeCanonicalPng, canonicalPng, isCanonicalPng, premultipliedRepresentative } from "../ops/png-canonical.mjs";
+import { canonicalDeflate, decodePng, encodeCanonicalPng, canonicalPng, isCanonicalPng, premultipliedRepresentative, trackedPngs } from "../ops/png-canonical.mjs";
 
 describe("canonical deflate", () => {
   it.each([
@@ -28,7 +30,7 @@ describe("canonical deflate", () => {
 
 describe("canonical PNG", () => {
   it("keeps every pixel of the repository's real images", () => {
-    const files = execFileSync("git", ["ls-files", "public"], { encoding: "utf8" }).split("\n").filter((f) => /\.png$/i.test(f));
+    const files = trackedPngs();
     expect(files.length).toBeGreaterThan(0);
     for (const f of files) {
       const orig = decodePng(readFileSync(f));
@@ -96,5 +98,24 @@ describe("canonical PNG", () => {
   it("refuses what it cannot represent", () => {
     expect(() => decodePng(Buffer.from("not a png"))).toThrow();
     expect(isCanonicalPng(Buffer.from("GIF89a"))).toBe(false);
+  });
+});
+
+/* Astra, PR #134 review, round 17: git's display form escapes unusual
+   names, so a tracked "pédiatrie.png" could not be opened. */
+describe("finding tracked images", () => {
+  it("returns real, openable paths for accented, spaced and newline names", () => {
+    const dir = mkdtempSync(join(tmpdir(), "png-names-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    const png = encodeCanonicalPng({ width: 1, height: 1, colour: 2, pixels: Buffer.from([1, 2, 3]) });
+    const names = ["public/pédiatrie.png", "public/with space.PNG", "public/new\nline.png", "public/notes.txt"];
+    mkdirSync(join(dir, "public"), { recursive: true });
+    for (const n of names) writeFileSync(join(dir, n), png);
+    run("add", "-A"); run("commit", "-qm", "x");
+    const found = trackedPngs(dir).sort();
+    expect(found).toEqual(["public/new\nline.png", "public/pédiatrie.png", "public/with space.PNG"].sort());
+    for (const f of found) expect(readFileSync(join(dir, f)).equals(png)).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
   });
 });

@@ -3,6 +3,7 @@
 import { describe, it, expect } from "vitest";
 import { imagePlan, diagramReviewPrompt, validateReview, verdictFor, reviewKey, renderReviewMarkdown, DIAGRAM_REVIEW_SCHEMA, canReuse, reviewOne, reviewAndRecord } from "../ops/review-diagrams-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
+const K = { prompt: "the review prompt", source: "export const x = 1;" };
 
 const d = DIAGRAMS.abg;
 const gallery = [
@@ -63,13 +64,13 @@ describe("what a verdict means", () => {
 describe("paying only when something changed", () => {
   const png = (b) => Buffer.from([b]);
   it("keeps the verdict for an identical render and identical words", () => {
-    expect(reviewKey(d, [png(1), png(2)])).toBe(reviewKey(d, [png(1), png(2)]));
+    expect(reviewKey(d, [png(1), png(2)], K)).toBe(reviewKey(d, [png(1), png(2)], K));
   });
   it("re-reviews when a single pixel of a render changes", () => {
-    expect(reviewKey(d, [png(1), png(3)])).not.toBe(reviewKey(d, [png(1), png(2)]));
+    expect(reviewKey(d, [png(1), png(3)], K)).not.toBe(reviewKey(d, [png(1), png(2)], K));
   });
   it("re-reviews when a clinical claim changes", () => {
-    expect(reviewKey({ ...d, facts: [...d.facts, "new claim"] }, [png(1)])).not.toBe(reviewKey(d, [png(1)]));
+    expect(reviewKey({ ...d, facts: [...d.facts, "new claim"] }, [png(1)], K)).not.toBe(reviewKey(d, [png(1)], K));
   });
 });
 
@@ -156,5 +157,28 @@ describe("a paid diagram review is recorded before it is asked", () => {
     await reviewAndRecord({ d, key: "k", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, now, ask: async () => { throw new Error("boom"); } });
     await reviewAndRecord({ d, key: "k", images: 1, model: "m", dir: "r", index, sourceKey: "s", write, now, ask: async () => answer });
     expect(Object.keys(files).filter((p) => p.endsWith(".json") && p.startsWith("r/abg/"))).toHaveLength(2);
+  });
+});
+
+/* Astra, PR #134 review, round 17: a change to the worked-example caption
+   logic kept a cached approval, because only static words and pixels were
+   in the key. */
+describe("the review key covers everything the verdict rests on", () => {
+  const d = DIAGRAMS.abg;
+  const pngs = [Buffer.from([1, 2, 3])];
+  const base = { prompt: diagramReviewPrompt(d, [{ label: "x" }], "rules"), source: "function interpret() { return 1; }" };
+  it("changes when only the dynamic caption changes", () => {
+    const changed = { ...d, dynamicCaption: (p) => `${d.dynamicCaption(p)} — and this is now wrong.` };
+    expect(reviewKey(changed, pngs, { ...base, prompt: diagramReviewPrompt(changed, [{ label: "x" }], "rules") })).not.toBe(reviewKey(d, pngs, base));
+    // even if the example's own caption happened to be unchanged, the function differs
+    const sameExample = { ...d, dynamicCaption: (p) => (p === d.example ? d.dynamicCaption(p) : "wrong for every other value") };
+    expect(reviewKey(sameExample, pngs, base)).not.toBe(reviewKey(d, pngs, base));
+  });
+  it("changes when the diagram's source or the prompt changes", () => {
+    expect(reviewKey(d, pngs, { ...base, source: base.source + " " })).not.toBe(reviewKey(d, pngs, base));
+    expect(reviewKey(d, pngs, { ...base, prompt: base.prompt + "!" })).not.toBe(reviewKey(d, pngs, base));
+  });
+  it("refuses to compute a key without the prompt and source", () => {
+    expect(() => reviewKey(d, pngs)).toThrow(/required/);
   });
 });

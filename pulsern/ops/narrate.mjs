@@ -23,7 +23,7 @@ import { createServer } from "vite";
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll } from "./narrate-lib.mjs";
+import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll, isDuplicateUpload } from "./narrate-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -127,7 +127,7 @@ try {
         const { error } = await sb.storage.from(BUCKET).upload(path, mp3, { contentType: "audio/mpeg", cacheControl: "31536000", upsert: false });
         /* Same name means the same bytes, so an existing object is exactly
            this clip — anything else is a real failure. */
-        if (error && !/exist|duplicate|409/i.test(`${error.message} ${error.statusCode ?? ""}`)) throw new Error(`upload: ${error.message}`);
+        if (error && !isDuplicateUpload(error)) throw new Error(`upload: ${error.message}`);
         manifest.clips[d.id][s.key] = {
           id, qa: QA_VERSION, audio: audioHash, voice: VOICE, model: TTS.model, textFp: textFp(s.narration), similarity: Math.round(check.similarity * 1000) / 1000,
           url: `${process.env.SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${BUCKET}/${path}`, bytes: mp3.length,

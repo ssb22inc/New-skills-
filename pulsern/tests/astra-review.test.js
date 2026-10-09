@@ -105,8 +105,9 @@ describe("scope (no cross-contamination; nothing in PulseRN exempt)", () => {
     expect(classifyPath("pulsern/package-lock.json").mode).toBe("lockfile");
   });
 
-  it("skips only the reviewer's own past reports inside PulseRN", () => {
-    expect(classifyPath("pulsern/reports/astra/2026-10-08-x.md")).toEqual({ mode: "skip", why: "earlier review reports" });
+  it("exempts nothing inside PulseRN, past reports included", () => {
+    // round 17: nothing inside PulseRN is exempt by path
+    expect(classifyPath("pulsern/reports/astra/2026-10-08-x.md").mode).toBe("review");
   });
 
   it("keeps the generated-page list in step with what the generators write", () => {
@@ -143,10 +144,26 @@ describe("collecting from real git output (Astra finding #3)", () => {
     expect(accented.diff).toContain("hand-written, accented name");
   });
 
-  it("collects nothing from other projects and names the skipped report", () => {
+  it("collects nothing from other projects, and reviews a file under reports/astra like any other", () => {
     const { files, skipped } = collectChanges("base", "HEAD", { cwd: repo });
     expect(files.some((f) => f.path.startsWith("fullburn/"))).toBe(false);
-    expect(skipped).toEqual([{ path: "pulsern/reports/astra/old.md", why: "earlier review reports" }]);
+    expect(skipped).toEqual([]);
+    expect(files.find((f) => f.path === "pulsern/reports/astra/old.md").diff).toContain("old report");
+  });
+  it("never passes a change of only reports/astra files without asking the model (round 17)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-rep-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    writeFileSync(join(dir, "keep"), "x"); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    mkdirSync(join(dir, "pulsern/reports/astra"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/reports/astra/debug.md"), "SUPABASE_SERVICE_ROLE_KEY=eyJ.leaked\n");
+    run("add", "-A"); run("commit", "-qm", "h");
+    let prompt = null;
+    const { report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir },
+      { callModel: async (a) => { prompt = a.prompt; return { text: JSON.stringify({ assessment: "x", findings: [] }), usage: {}, model: "m" }; } });
+    expect(prompt).toContain("SUPABASE_SERVICE_ROLE_KEY=eyJ.leaked");
+    expect(report.filesReviewed).toEqual(["pulsern/reports/astra/debug.md"]);
+    rmSync(dir, { recursive: true, force: true });
   });
 
   /* The bypass Astra described: a page dropped into a generated directory. */

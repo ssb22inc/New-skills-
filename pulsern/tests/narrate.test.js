@@ -1,6 +1,6 @@
 /* Narration: clip identity, and the check that audio says what the script says. */
 import { describe, it, expect } from "vitest";
-import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD, recordAll } from "../ops/narrate-lib.mjs";
+import { clipId, textFp, wordsToNumbers, normaliseSpeech, speechSimilarity, passesQa, audioCheck, criticalTerms, speechTokens, signsAndRanges, isCurrentClip, QA_VERSION, narratedSteps, TTS, QA_THRESHOLD, recordAll, isDuplicateUpload } from "../ops/narrate-lib.mjs";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("clip identity", () => {
@@ -418,5 +418,34 @@ describe("recording stops at a clip that fails twice", () => {
     const { stored, deps } = setup((t) => t);
     expect(await recordAll(work, deps)).toBe(0);
     expect(stored).toEqual(["one", "two", "three"]);
+  });
+});
+
+/* Astra, PR #134 review, round 17: any error mentioning "exist" was taken
+   for a duplicate, so "bucket does not exist" shipped a dead URL. */
+describe("an upload counts as done only when it really is", () => {
+  it("accepts only the provider's explicit already-exists conflict", () => {
+    expect(isDuplicateUpload({ statusCode: "409", error: "Duplicate", message: "The resource already exists" })).toBe(true);
+    expect(isDuplicateUpload({ status: 409, message: "x" })).toBe(true);
+    expect(isDuplicateUpload({ statusCode: "404", error: "Bucket not found", message: "The specified bucket does not exist" })).toBe(false);
+    expect(isDuplicateUpload({ statusCode: "400", message: "Object does not exist" })).toBe(false);
+    expect(isDuplicateUpload({ message: "duplicate key value violates unique constraint" })).toBe(false);
+    expect(isDuplicateUpload(null)).toBe(false);
+  });
+  it("records no clip when storing it fails", async () => {
+    const report = { characters: 0, failedQa: [], errors: [], recorded: [] };
+    const manifest = {};
+    const work = [{ d: { id: "abg" }, s: { key: "ph", narration: "The pH is low." }, id: "ph" }];
+    const code = await recordAll(work, {
+      synthesise: async (t) => Buffer.from(t), transcribe: async (m) => m.toString(), save: () => {}, report, log: () => {},
+      store: async () => {
+        const error = { statusCode: "404", message: "The specified bucket does not exist" };
+        if (error && !isDuplicateUpload(error)) throw new Error(`upload: ${error.message}`);
+        manifest.ph = "written";
+      },
+    });
+    expect(code).toBe(1);
+    expect(manifest).toEqual({});
+    expect(report.errors[0].error).toMatch(/does not exist/);
   });
 });

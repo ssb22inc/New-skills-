@@ -121,12 +121,19 @@ export function verdictFor(findings) {
   return { verdict: counts.blocker + counts.major ? "FAIL" : "PASS", counts };
 }
 
-/* What a verdict rests on: the diagram's words and its rendered pixels. If
-   neither changed, the earlier verdict still stands and is not paid for
-   again; if either changed, it is reviewed again. */
-export function reviewKey(diagram, pngBuffers) {
-  const h = createHash("sha256").update(diagramHash(diagram));
-  for (const b of pngBuffers) h.update(b);
+/* What a verdict rests on: everything the reviewer was given — the exact
+   prompt, including the computed worked-example caption — the rendered
+   pixels, and the diagram's own source, which holds the logic that writes
+   captions and verdicts for every other set of values. If none changed,
+   the earlier verdict still stands and is not paid for again; if any did,
+   it is reviewed again (Astra, PR #134 review, round 17: a changed
+   dynamicCaption kept a cached approval, because only the static words
+   and pixels were in the key). */
+export function reviewKey(diagram, pngBuffers, { prompt, source } = {}) {
+  if (typeof prompt !== "string" || typeof source !== "string") throw new Error("reviewKey: the review prompt and the diagram's source are required");
+  const h = createHash("sha256").update(diagramHash(diagram)).update("\0").update(String(diagram.dynamicCaption ?? ""))
+    .update("\0").update(prompt).update("\0").update(source);
+  for (const b of pngBuffers) h.update("\0").update(b);
   return h.digest("hex").slice(0, 16);
 }
 

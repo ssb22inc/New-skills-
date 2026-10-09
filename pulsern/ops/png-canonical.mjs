@@ -30,6 +30,7 @@
    real browser that the pixels survive. */
 import { inflateSync } from "node:zlib";
 import { readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -207,6 +208,15 @@ export function encodeCanonicalPng({ width, height, colour, pixels }) {
 }
 
 export const canonicalPng = (buf) => encodeCanonicalPng(decodePng(buf));
+
+/* Every tracked PNG under `cwd`, as real paths. Read NUL-separated: git's
+   display form quotes and octal-escapes names with accents, tabs or
+   newlines, and those strings are not openable paths (Astra, PR #134
+   review, round 17). */
+export function trackedPngs(cwd = process.cwd()) {
+  const out = execFileSync("git", ["ls-files", "-z"], { cwd, encoding: "utf8" });
+  return out.split("\0").filter((p) => /\.png$/i.test(p));
+}
 export function isCanonicalPng(buf) {
   try { return canonicalPng(buf).equals(buf); } catch { return false; }
 }

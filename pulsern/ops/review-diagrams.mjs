@@ -56,7 +56,8 @@ try {
     if (ONLY && d.id !== ONLY) continue;
     const plan = imagePlan(d, gallery);
     const pngs = plan.map((p) => readFileSync(p.file));
-    const key = reviewKey(d, pngs);
+    const prompt = diagramReviewPrompt(d, plan, rules);
+    const key = reviewKey(d, pngs, { prompt, source: readFileSync(`src/diagrams/${d.id}.jsx`, "utf8") });
     const prev = index[d.id];
     if (canReuse(prev, key, FORCE)) {
       /* Every reviewed image is byte-identical, so the verdict still describes
@@ -70,7 +71,7 @@ try {
     if (Date.now() > RUN_DEADLINE) { console.log(`${d.id}: not started — the run is near its time limit; re-run to review it`); failed++; continue; }
     const r = await reviewAndRecord({
       d, key, images: plan.length, model: REVIEW_MODEL, cost: lastReviewCost, dir: DIR, index, sourceKey: SOURCE_KEY, write,
-      ask: async () => parseJson(await review(diagramReviewPrompt(d, plan, rules), 32000, { images: pngs, responseFormat: DIAGRAM_REVIEW_SCHEMA, effort: "high" })),
+      ask: async () => parseJson(await review(prompt, 32000, { images: pngs, responseFormat: DIAGRAM_REVIEW_SCHEMA, effort: "high" })),
     });
     console.log(`${d.id}: ${r.verdict}${r.counts ? ` (${r.counts.blocker}B ${r.counts.major}M ${r.counts.minor}m)` : ""}${r.error ? ` — ${r.error}` : ""}`);
     if (r.verdict !== "PASS") failed++;

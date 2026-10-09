@@ -19,7 +19,10 @@
       of those directories and ship it unreviewed. Generated pages are now
       reviewed in a compact form — their visible text, scripts and links — and
       the lockfile as a list of dependency changes. Only files outside PulseRN
-      and earlier review reports are left out, and both are named.
+      are left out. Nothing inside it is exempt by path: past reports live on
+      the separate reviews branch, so a file here under reports/astra is new
+      content like any other and is reviewed (Astra, PR #134 review, round
+      17: the path exemption let a new file skip review entirely).
 
    3. NOTHING IS SILENTLY CUT. Whole-file context is shed before any diff is;
       if the diffs alone do not fit, the review FAILS and says so.
@@ -65,7 +68,6 @@ const IN_SCOPE = [/^pulsern\//, /^\.github\/workflows\/pulsern-[^/]+\.ya?ml$/];
    the generators by tests/astra-review.test.js. */
 const GENERATED_PAGE = /^pulsern\/public\/(compare|learn|pricing|methodology|how-it-works|editorial-policy|free-nclex-practice-test)\/.*\.html$|^pulsern\/public\/sitemap\.xml$/;
 const LOCKFILE = /^pulsern\/package-lock\.json$/;
-const OWN_REPORTS = /^pulsern\/reports\/astra\//;
 
 /* The repository's control plane: workflows, actions and settings outside
    PulseRN's own workflows. This reviewer does not judge them (other
@@ -82,7 +84,6 @@ export function classifyPath(path) {
     if (CONTROL_PLANE.test(path)) return { mode: "refuse", why: "repository control plane outside PulseRN's own workflows: a PulseRN review cannot certify it" };
     return { mode: "skip", why: "outside PulseRN" };
   }
-  if (OWN_REPORTS.test(path)) return { mode: "skip", why: "earlier review reports" };
   if (LOCKFILE.test(path)) return { mode: "lockfile", why: "reviewed as a dependency-change summary" };
   if (GENERATED_PAGE.test(path)) return { mode: "page", why: "generated page: reviewed as visible text, scripts and links" };
   return { mode: "review", why: null };
