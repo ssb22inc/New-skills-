@@ -13,6 +13,8 @@
    - Values outside a physiologically possible range are rejected as a
      misread rather than drawn. */
 
+import { precautionFor } from "./isolation.jsx";
+
 const num = (s) => Number(String(s).replace(/,/g, ""));
 
 /* All distinct values a pattern finds; ambiguity is detected by the caller. */
@@ -90,6 +92,10 @@ export const MATCHERS = {
   potassium: {
     candidate: /potassium|hyperkalemi|hypokalemi|\bK\+|\bK⁺|peaked T|U wave/i,
     extract: extractPotassium,
+  },
+  isolation: {
+    candidate: /isolation|precautions|\bPPE\b|\bN95\b|respirator|airborne|droplet|negative[- ]pressure|\bgown\b/i,
+    extract: (t) => precautionFor(t),
   },
   insulin: {
     /* Insulin must be named: "hypoglycemia" alone pulls in questions about
