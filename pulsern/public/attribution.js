@@ -1,3 +1,4 @@
+(function () {
 /* First-touch marketing attribution.
    ------------------------------------------------------------------
    Without this, a sale cannot be traced back to the ad that produced it, so
@@ -51,7 +52,7 @@ const isOwnFlow = (host) => OWN_FLOW_HOSTS.some((re) => re.test(host));
    be unit-tested without a browser. Returns null when there is nothing worth
    recording — an untagged organic visit should not overwrite a real first
    touch with empty values. */
-export function readAttribution(href, referrer = "") {
+function readAttribution(href, referrer = "") {
   try {
     const url = new URL(href);
     const out = {};
@@ -88,7 +89,7 @@ export function readAttribution(href, referrer = "") {
 
 /* Records the first touch if none is stored yet. Later visits never overwrite
    it — that is the whole point of first touch. */
-export function captureAttribution(href = window.location.href, referrer = document.referrer) {
+function captureAttribution(href = window.location.href, referrer = document.referrer) {
   try {
     if (localStorage.getItem(KEY)) return;
     const a = readAttribution(href, referrer);
@@ -97,7 +98,7 @@ export function captureAttribution(href = window.location.href, referrer = docum
   } catch { /* private mode, storage disabled — reporting only */ }
 }
 
-export function storedAttribution() {
+function storedAttribution() {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "null"); } catch { return null; }
 }
 
@@ -105,7 +106,7 @@ export function storedAttribution() {
    a second write a no-op, so this is safe to call on every sign-in and does not
    need to track whether it has already run. A duplicate is the expected case
    for a returning student and is not an error worth surfacing. */
-export async function flushAttribution(supabase, userId) {
+async function flushAttribution(supabase, userId) {
   const a = storedAttribution();
   if (!a || !userId) return;
   try {
@@ -127,3 +128,6 @@ export async function flushAttribution(supabase, userId) {
     console.warn("attribution not recorded:", e?.message ?? e);
   }
 }
+
+try { captureAttribution(); } catch { /* reporting only */ }
+})();

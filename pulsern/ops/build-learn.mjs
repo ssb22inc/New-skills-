@@ -13,6 +13,7 @@ import { createHash } from "node:crypto";
 import { ARTICLES } from "./learn-content.mjs";
 import { MANIFEST_GENERATED_AT, POLICY_VERSION, SEARCH_INTENTS, intentFor, sourcesFor } from "./seo-content-policy.mjs";
 import { COMMERCIAL_PAGES } from "./commercial-content.mjs";
+import { ATTRIBUTION_BOOT_TAG, writeAttributionBoot } from "./attribution-boot.mjs";
 
 const SITE = "https://www.pulsern.app";
 const OUT = "public/learn";
@@ -141,6 +142,7 @@ function head({ title, description, url, jsonld }) {
 <meta property="og:image" content="${SITE}/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="${SITE}/og.png">
+${ATTRIBUTION_BOOT_TAG}
 <script type="application/ld+json">
 ${JSON.stringify(jsonld, null, 2)}
 </script>
@@ -327,6 +329,7 @@ ${sections}
 }
 
 /* ---- build ---- */
+writeAttributionBoot();
 if (existsSync(OUT)) rmSync(OUT, { recursive: true });
 mkdirSync(OUT, { recursive: true });
 

@@ -3,6 +3,7 @@
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { PLANS, fmtUsd } from "../src/pricing.js";
 import { COMMERCIAL_PAGES, COMMERCIAL_SOURCES, commercialEvidence, relatedCommercial } from "./commercial-content.mjs";
+import { ATTRIBUTION_BOOT_TAG, writeAttributionBoot } from "./attribution-boot.mjs";
 
 const SITE = "https://www.pulsern.app";
 const AUTHOR = `${SITE}/about/#sheldon-bennett-rn`;
@@ -35,7 +36,7 @@ function page({ slug, title, description, eyebrow, h1, body, schema, published, 
       ...(schema ? [schema] : []),
     ],
   };
-  return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}</style></head><body>
+  return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image">${ATTRIBUTION_BOOT_TAG}<script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}</style></head><body>
   <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/pricing/">Pricing</a><a href="/?signin=1">Sign in</a></div></nav></header>
   <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${published ? `<p class="meta">Published and last verified <time datetime="${esc(updated)}">${esc(updated)}</time> · editorial owner <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a></p>` : ""}${body}${relatedSection}
   <div class="callout"><strong>Ready for a focused study session?</strong><br><a class="button" href="/?start=1">Start the 1-day free pass</a><a class="button alt" href="/learn/">Read the nursing-study guides</a></div></main>
@@ -121,6 +122,11 @@ const pages = [
   },
 ];
 
+/* Static product pages do not load the marketing bundle. The tag is the same
+   first-touch capture the homepage runs, written out before the HTML so a
+   campaign that lands here is already stored when the bare homepage CTA is
+   clicked. */
+writeAttributionBoot();
 const evidence = commercialEvidence();
 for (const data of [...pages, ...COMMERCIAL_PAGES.map((item) => ({ ...item, contentSha256: evidence.pages.find((page) => page.route === `/${item.slug}/`)?.contentSha256 }))]) {
   const directory = `public/${data.slug}`;
