@@ -65,3 +65,42 @@ describe("proposing pairs", () => {
     expect(MATCHERS.tonicity.candidate.test("Which solution is hypotonic?")).toBe(true);
   });
 });
+
+describe("insulin type and time", () => {
+  it("reads military time", async () => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin("The client received NPH insulin at 0700.")).toEqual({ type: "nph", givenAt: "07:00" });
+  });
+  it("reads clock time with am/pm", async () => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin("Insulin lispro was given at 5:30 pm")).toEqual({ type: "rapid", givenAt: "17:30" });
+    expect(extractInsulin("regular insulin at 12:15 am")).toEqual({ type: "short", givenAt: "00:15" });
+  });
+  it("returns null with two insulin types (a mixed dose) rather than pick one", async () => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin("NPH and regular insulin at 0700")).toBeNull();
+  });
+  it("returns null with no administration time", async () => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin("The client uses insulin glargine daily.")).toBeNull();
+  });
+  /* Degludec lasts ~42 h; drawing it as glargine would be wrong. */
+  it("never maps degludec onto the long-acting row", async () => {
+    const { extractInsulin } = await import("../src/diagrams/match.js");
+    expect(extractInsulin("Insulin degludec at 2100")).toBeNull();
+  });
+  it("proposes the insulin diagram for an insulin question", () => {
+    expect(proposePairs({ stem: "A client received NPH insulin at 0700. When is hypoglycemia most likely?", options: [], rationale: "" }))
+      .toEqual([{ d: "insulin", p: { type: "nph", givenAt: "07:00" } }]);
+  });
+});
+
+/* A diagram with no matcher is never proposed for any question, so it
+   would sit in the library unseen — the insulin diagram did exactly that
+   until this test existed. */
+describe("registry and matchers stay in step", () => {
+  it("every registered diagram has a matcher, and every matcher a diagram", async () => {
+    const { DIAGRAMS } = await import("../src/diagrams/index.js");
+    expect(Object.keys(MATCHERS).sort()).toEqual(Object.keys(DIAGRAMS).sort());
+  });
+});

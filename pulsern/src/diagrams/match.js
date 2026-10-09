@@ -41,6 +41,39 @@ export function extractAbg(text) {
   return ph != null && paco2 != null && hco3 != null ? { ph, paco2, hco3 } : null;
 }
 
+/* Insulin type and the time it was given. Degludec is deliberately NOT
+   mapped: its duration (~42 h) is outside the diagram's long-acting row,
+   and drawing it as glargine would be wrong. Exactly one type and one time,
+   or null. */
+const INSULIN_TYPES = [
+  ["rapid", /\b(?:lispro|aspart|glulisine|humalog|novolog|apidra|rapid[- ]acting)\b/i],
+  ["short", /\bregular(?:\s+insulin)?\b|\bhumulin r\b|\bnovolin r\b|\bshort[- ]acting insulin\b/i],
+  ["nph", /\bNPH\b|\bisophane\b|\bhumulin n\b|\bnovolin n\b|\bintermediate[- ]acting\b/i],
+  ["long", /\b(?:glargine|detemir|lantus|levemir|basaglar|toujeo)\b/i],
+];
+function clockFrom(text) {
+  const hits = new Set();
+  for (const m of text.matchAll(/\bat\s+(\d{4})\b/g)) {           // military: "at 0700"
+    const h = Number(m[1].slice(0, 2)), mi = Number(m[1].slice(2));
+    if (h <= 23 && mi <= 59) hits.add(`${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`);
+  }
+  for (const m of text.matchAll(/\bat\s+(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?/gi)) {
+    let h = Number(m[1]); const mi = Number(m[2]); const ap = (m[3] ?? "").toLowerCase().replace(/\./g, "");
+    if (ap === "pm" && h < 12) h += 12;
+    if (ap === "am" && h === 12) h = 0;
+    if (h <= 23 && mi <= 59) hits.add(`${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`);
+  }
+  return hits.size === 1 ? [...hits][0] : null;
+}
+export function extractInsulin(text) {
+  const t = String(text ?? "");
+  if (/degludec|tresiba/i.test(t)) return null;
+  const types = INSULIN_TYPES.filter(([, re]) => re.test(t)).map(([k]) => k);
+  if (types.length !== 1) return null;
+  const givenAt = clockFrom(t);
+  return givenAt ? { type: types[0], givenAt } : null;
+}
+
 export function extractPotassium(text) {
   const k = one(K, String(text ?? ""), 1.5, 9.5);
   return k != null ? { k } : null;
@@ -57,6 +90,12 @@ export const MATCHERS = {
   potassium: {
     candidate: /potassium|hyperkalemi|hypokalemi|\bK\+|\bK⁺|peaked T|U wave/i,
     extract: extractPotassium,
+  },
+  insulin: {
+    /* Insulin must be named: "hypoglycemia" alone pulls in questions about
+       other causes, and each one is a paid "no". */
+    candidate: /\binsulin\b|\blispro\b|\baspart\b|\bglargine\b|\bdetemir\b|\bNPH\b/i,
+    extract: extractInsulin,
   },
   /* Tonicity: either the concept is named outright, or a specific IV fluid
      appears together with a fluid-balance problem. A fluid name alone is not
