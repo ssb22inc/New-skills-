@@ -5,7 +5,7 @@
      12 a run whose every batch failed still reported success. */
 import { describe, it, expect } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { approval, sourceKey, readReviewIndex, mapIsCurrent, stepInventory, diagramSteps, expectedFrames, frameIds, signApproval, verifyApproval } from "../ops/diagram-attest.mjs";
@@ -129,6 +129,8 @@ describe("approval of a diagram for publication", () => {
         expect(touch(rel, (t) => t + "\n// changed\n"), rel).not.toBe(base);
       }
       expect(touch("src/App.jsx", (t) => t.replace("--teal:#0E7C6B", "--teal:#0E7C6C")), "theme colour").not.toBe(base);
+      // round 29: the monitor tokens sit in their own block, and the renderer draws with them
+      expect(touch("src/App.jsx", (t) => t.replace("--ecg:#3BE08F", "--ecg:#3BE08E")), "monitor token").not.toBe(base);
       expect(touch("src/App.jsx", (t) => t + "\n// unrelated app code\n"), "app code outside the theme").toBe(base);
       for (const rel of ["src/diagrams/item-map.json", "src/diagrams/narration.json"]) {
         expect(touch(rel, (t) => t.replace(/\}\s*$/, ',"x":1}')), rel).toBe(base);
@@ -247,10 +249,28 @@ describe("the pairing CLI under plain Node", () => {
        a "held back" message that disappears once every diagram passes). */
     expect(out).toContain("Reading practice questions…");
   }, 120_000);
-  it("refuses to judge approvals without the signing key", () => {
-    const env = { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9" };
+  /* Round 29: a dry run signs nothing, so it must not need the private
+     key — and it changes no record. A real run without the private key is
+     refused before it reads anything. */
+  it("dry-runs with only the public key, or none, and changes no record", () => {
+    const files = ["src/diagrams/item-map.json", "reports/diagram-map/decisions.json"];
+    const before = files.map((f) => (existsSync(f) ? readFileSync(f, "utf8") : null));
+    for (const env of [{ PULSERN_ATTEST_PUBLIC_KEY: KEYS.env.PULSERN_ATTEST_PUBLIC_KEY }, {}]) {
+      const e = { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9", ...env };
+      if (!env.PULSERN_ATTEST_PUBLIC_KEY) delete e.PULSERN_ATTEST_PUBLIC_KEY;
+      delete e.PULSERN_ATTEST_PRIVATE_KEY;
+      const r = spawnSync(process.execPath, ["ops/map-diagrams.mjs", "--dry-run"], { encoding: "utf8", timeout: 90_000, env: e });
+      const out = `${r.stdout}\n${r.stderr}`;
+      expect(out).not.toMatch(/PRIVATE_KEY is not set/);
+      expect(out).toContain("Reading practice questions…");
+      if (!env.PULSERN_ATTEST_PUBLIC_KEY) expect(out).toMatch(/cannot be checked/);
+    }
+    expect(files.map((f) => (existsSync(f) ? readFileSync(f, "utf8") : null))).toEqual(before);
+  }, 240_000);
+  it("refuses a real run without the private key, before reading anything", () => {
+    const env = { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9", PULSERN_ATTEST_PUBLIC_KEY: KEYS.env.PULSERN_ATTEST_PUBLIC_KEY };
     delete env.PULSERN_ATTEST_PRIVATE_KEY;
-    const r = spawnSync(process.execPath, ["ops/map-diagrams.mjs", "--dry-run"], { encoding: "utf8", timeout: 90_000, env });
+    const r = spawnSync(process.execPath, ["ops/map-diagrams.mjs"], { encoding: "utf8", timeout: 90_000, env });
     expect(r.status).not.toBe(0);
     expect(`${r.stdout}\n${r.stderr}`).toMatch(/PULSERN_ATTEST_PRIVATE_KEY is not set/);
     expect(`${r.stdout}\n${r.stderr}`).not.toContain("Reading practice questions…");

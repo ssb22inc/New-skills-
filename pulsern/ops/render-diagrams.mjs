@@ -18,27 +18,14 @@ import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { launchBrowser } from "./browser.mjs";
+import { themeTokensFrom } from "./diagram-attest.mjs";
 
 
 /* The theme tokens are read from App.jsx itself, so the render can never
-   drift from what students actually see. */
+   drift from what students actually see — by the same extraction the
+   approval key uses (diagram-attest.mjs). */
 export function themeTokens(root = ".") {
-  const src = readFileSync(join(root, "src/App.jsx"), "utf8");
-  const blocks = [...src.matchAll(/((?:\s*--[a-z0-9-]+:[^;]+;)+)/g)].map((m) => m[1]);
-  const light = blocks.find((b) => /--paper:#F3F6F4/.test(b));
-  const dark = blocks.find((b) => /--paper:#151A18/.test(b));
-  if (!light || !dark) throw new Error("Could not find the light/dark token blocks in src/App.jsx");
-  // ECG/monitor tokens live in a separate block in the light theme.
-  const extra = blocks.filter((b) => /--mon:|--read-size:/.test(b) && b !== light && b !== dark).join("");
-  /* In the app the dim theme is an override on the same .app element: it
-     inherits every light token it does not redefine (the monitor's --mon and
-     --ecg among them). Dark renders cascade the same way — without the light
-     base they drew black, trace-less ECG strips. */
-  const out = { light: light + extra, dark: light + extra + dark };
-  for (const [name, css] of Object.entries(out)) {
-    if (!/--mon:/.test(css) || !/--ecg:/.test(css)) throw new Error(`${name} theme is missing the monitor tokens`);
-  }
-  return out;
+  return themeTokensFrom(readFileSync(join(root, "src/App.jsx"), "utf8"));
 }
 
 const page = (body, tokens, css, WIDTH) => `<!doctype html><html><head><meta charset="utf-8">

@@ -29,10 +29,30 @@ export const frameLabel = (theme, key) => `${theme} theme — ${key === "static"
 export const frameIds = (frames) => frames.map((f) => `${f.theme}/${f.key}`);
 const sameList = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => x === b[i]);
 
+/* The colour tokens the frames are drawn with, light and dark — one
+   extraction for the renderer, the reviewer's source and the approval key
+   (Astra, PR #134 review, round 29: the key hashed only two blocks while
+   the renderer also used the monitor tokens). */
+export function themeTokensFrom(src) {
+  const blocks = [...src.matchAll(/((?:\s*--[a-z0-9-]+:[^;]+;)+)/g)].map((m) => m[1]);
+  const light = blocks.find((b) => /--paper:#F3F6F4/.test(b));
+  const dark = blocks.find((b) => /--paper:#151A18/.test(b));
+  if (!light || !dark) throw new Error("Could not find the light/dark token blocks in src/App.jsx");
+  // ECG/monitor tokens live in a separate block in the light theme.
+  const extra = blocks.filter((b) => /--mon:|--read-size:/.test(b) && b !== light && b !== dark).join("");
+  /* In the app the dim theme is an override on the same .app element: it
+     inherits every light token it does not redefine (the monitor's --mon and
+     --ecg among them). Dark renders cascade the same way — without the light
+     base they drew black, trace-less ECG strips. */
+  const out = { light: light + extra, dark: light + extra + dark };
+  for (const [name, css] of Object.entries(out)) {
+    if (!/--mon:/.test(css) || !/--ecg:/.test(css)) throw new Error(`${name} theme is missing the monitor tokens`);
+  }
+  return out;
+}
 export function themeBlock(appSource) {
-  const m = /\.app\{([\s\S]*?)\}\s*\.app\[data-theme="dim"\]\{([\s\S]*?)\}/.exec(appSource);
-  if (!m) throw new Error("diagram-attest: could not find the theme tokens in src/App.jsx");
-  return m[1] + m[2];
+  const t = themeTokensFrom(appSource);
+  return `light:${t.light}\ndark:${t.dark}`;
 }
 
 /* Everything a diagram's drawing depends on, as one reviewable text: its
@@ -62,6 +82,10 @@ export function importsOf(rel, text) {
     if ((n.type === "ImportDeclaration" || n.type === "ExportAllDeclaration" || n.type === "ExportNamedDeclaration") && n.source) literal(n.source, "re-export");
     if (n.type === "ImportExpression") literal(n.source, "import()");
     if (n.type === "CallExpression" && n.callee?.type === "Identifier" && n.callee.name === "require") literal(n.arguments?.[0], "require()");
+    /* import.meta loads files the walk cannot see — import.meta.glob
+       expands to modules, new URL(…, import.meta.url) to assets — so any
+       use of it is refused (round 29). */
+    if (n.type === "MetaProperty" && n.meta?.name === "import") throw new Error(`diagramSources: ${rel} uses import.meta, which can load files this walk cannot follow — refusing to review without knowing what it loads`);
     for (const k of Object.keys(n)) if (k !== "parent") walk(n[k]);
   };
   walk(ast);

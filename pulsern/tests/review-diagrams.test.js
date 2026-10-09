@@ -259,7 +259,7 @@ describe("a review covers everything the drawing depends on", () => {
     writeFileSync(join(root, "src/explainer.jsx"), 'import { DIAGRAM_CSS } from "./diagrams/kit.jsx";\nexport const E = 1;\n');
     writeFileSync(join(root, "src/diagrams/index.js"), 'export const DIAGRAMS = {};\n');
     writeFileSync(join(root, "src/diagrams/match.js"), 'export const proposePairs = () => [];\n');
-    writeFileSync(join(root, "src/App.jsx"), '.app{--teal:#0a7}.app[data-theme="dim"]{--teal:#3c9}');
+    writeFileSync(join(root, "src/App.jsx"), '.app{--paper:#F3F6F4;--teal:#0a7;--mon:#000;--ecg:#0f0;}.app[data-theme="dim"]{--paper:#151A18;--teal:#3c9;}');
     writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies: { react: "18" } }));
     return root;
   };
@@ -442,6 +442,18 @@ describe("a review covers everything the drawing depends on", () => {
     expect(k1).not.toBe(k0);
     writeFileSync(join(root, "src/clinical/read.js"), "export const readK = (s) => 2.9;\n");
     expect(sourceKey(root), "a matcher helper change re-checks every pairing").not.toBe(k1);
+    rmSync(root, { recursive: true, force: true });
+  });
+  /* Round 29: import.meta.glob loads files the walk never saw. */
+  it("refuses import.meta, which loads files the walk cannot follow", async () => {
+    const { importsOf } = await import("../ops/diagram-attest.mjs");
+    expect(() => importsOf("x.js", 'const t = import.meta.glob("../clinical/*.json", { eager: true });')).toThrow(/import\.meta/);
+    expect(() => importsOf("x.js", 'const u = new URL("./table.json", import.meta.url);')).toThrow(/import\.meta/);
+    const root = tree("return v;");
+    mkdirSync(join(root, "src/clinical"), { recursive: true });
+    writeFileSync(join(root, "src/clinical/limits.json"), '{"low": 7.35}');
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'const tables = import.meta.glob("../clinical/*.json", { eager: true, import: "default" });\nexport const A = tables;\n');
+    expect(() => diagramSources("abg", root)).toThrow(/import\.meta/);
     rmSync(root, { recursive: true, force: true });
   });
   it("refuses to build a request when an import cannot be found", () => {

@@ -36,7 +36,7 @@ import {
   buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor, verifyDecision, signMap,
 } from "./map-diagrams-lib.mjs";
 import { sourceKey, readReviewIndex, approval, stepInventory } from "./diagram-attest.mjs";
-import { signerFrom } from "./attest.mjs";
+import { signerFrom, verifierFrom, PUBLIC_ENV } from "./attest.mjs";
 import { readPrepared, mapPlan, headCommit, checkInventory, requireClean } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
@@ -74,7 +74,11 @@ const REVIEWS = readReviewIndex();
 const STEPS = stepInventory();
 /* Only a review the review job signed counts (round 25). The prepare job
    decides nothing about approval, so it needs no key. */
-const SIGNER = PREPARE ? null : signerFrom();
+/* A dry run signs nothing, so it needs only the public key — and without
+   it, every record is reported as unverifiable rather than refusing to run
+   (round 29). Only a run that writes signed records needs the private key. */
+const SIGNER = PREPARE ? null : DRY ? (process.env[PUBLIC_ENV] ? verifierFrom() : { verify: () => false, unverifiable: true }) : signerFrom();
+if (SIGNER?.unverifiable) console.log(`${PUBLIC_ENV} is not set: existing approvals and decisions cannot be checked, so this dry run treats them all as unverified (nothing is changed).`);
 const approvedNow = (id) => !!STEPS[id] && approval(REVIEWS, id, KEY, STEPS[id], SIGNER).ok;
 /* What today's matcher proposes for each question; filled once the bank
    is read. A decision ships only if its values still match. */
