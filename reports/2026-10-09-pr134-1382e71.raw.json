@@ -1,0 +1,113 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "1382e7159ba63b5aec39c065690192003f595936",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T13:07:37.478Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/check-png-canonical.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/png-canonical.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/ops/save-results.sh",
+    "pulsern/src/concept-explainers.jsx",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/fingerprint.js",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/concept-explainers.test.jsx",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/insulin.test.js",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/map-diagrams.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/png-canonical.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/save-results.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 85,
+      "title": "New files can masquerade as historical review reports and bypass review",
+      "problem": "OWN_REPORTS exempts every file under pulsern/reports/astra based solely on its path. It does not establish that the file is a historical report or came from the trusted reviewer. The exemption also occurs before the new byte and symlink checks. A change containing only such files returns PASS without calling the model.",
+      "failure_scenario": "A PR adds pulsern/reports/astra/debug.md containing a service-role credential copied from an operational log. collectChanges skips its contents, and runReview reports that there is nothing to review. The credential is committed despite the non-negotiable secrets rule.",
+      "fix": "Review newly added or modified files in this directory like other PulseRN files. Keep trusted review archives on the separate reviews branch, or require independently verified provenance before exempting an archive entry. Add an end-to-end test proving an arbitrary new file here cannot obtain a no-review PASS.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/review-diagrams.mjs",
+      "line": 61,
+      "title": "Cached visual approval can be renewed after a worked caption changes",
+      "problem": "The reuse key covers diagramHash and PNG bytes, but diagramHash excludes dynamicCaption and its computed output. The review prompt includes that output. This branch nevertheless replaces the old sourceKey with the current one whenever the narrower key matches, certifying clinical text that was not part of the cached review.",
+      "failure_scenario": "Only abg.dynamicCaption changes, introducing an incorrect worked-example interpretation. The drawing, facts and static steps remain unchanged, so the PNGs and reviewKey remain identical. The review job skips Astra, updates sourceKey, and the publication guard accepts the diagram with its new, unreviewed caption.",
+      "fix": "Bind cache reuse to all content actually submitted for review, including computed captions and dynamic-step flags. Changes to clinical caption-generation logic must also invalidate the relevant approval rather than being treated as layout-only changes. Add a regression that changes only dynamicCaption and requires a new review.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/narrate.mjs",
+      "line": 130,
+      "title": "Upload failures mentioning nonexistence are treated as successful duplicates",
+      "problem": "The duplicate-error test matches any occurrence of 'exist', not just an already-existing object. An error such as 'The specified bucket does not exist' is therefore ignored, and the manifest and report record the clip as successfully shipped despite no upload.",
+      "failure_scenario": "The bucket becomes unavailable after the initial getBucket check, and an upload returns a 404 message containing 'does not exist'. The run publishes a dead audio URL and can finish successfully. The player then fails to play that narration.",
+      "fix": "Accept only the provider's explicit already-exists error code/status. Throw for not-found and other failures. Add upload-boundary tests covering both a genuine duplicate and a nonexistence error, asserting that the latter never writes a manifest entry.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/check-png-canonical.mjs",
+      "line": 67,
+      "title": "Git-quoted PNG filenames break the new mandatory CI check",
+      "problem": "git ls-files is read in its display format and split on newlines. Git quotes and escapes filenames containing non-ASCII characters, tabs or newlines. Those display strings are passed directly to readFileSync rather than decoded as filenames. The new PNG unit test uses the same unsafe enumeration.",
+      "failure_scenario": "A valid tracked image named public/pédiatrie.png passes the reviewer's exact UTF-8 path handling, but this check attempts to open Git's quoted, octal-escaped representation and throws ENOENT. The mandatory CI job fails before testing the image.",
+      "fix": "Use git ls-files -z and split on NUL in both this script and tests/png-canonical.test.js. Add a fixture repository with an accented PNG filename to exercise the actual enumeration and read path.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 233917,
+    "completionTokens": 15019,
+    "reasoningTokens": 13984,
+    "costUsd": 0.984894
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. The review gate still accepts an unreviewed path, visual approvals can be renewed without reviewing changed captions, and two operational paths mishandle failures or filenames. This was a static review; I could not execute the suite or verify the live GitHub environment and required-status configuration.",
+  "counts": {
+    "blocker": 2,
+    "major": 2,
+    "minor": 0
+  }
+}
