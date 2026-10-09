@@ -13,8 +13,9 @@ import { deflateSync } from "node:zlib";
 import {
   classifyPath, planContext, buildPrompt, validateResult, verdictFor, renderMarkdown, reportBaseName,
   FINDINGS_SCHEMA, MAX_FULL_FILE_CHARS, pageDigest, lockDigest, textDiff, parseNameStatusZ,
-  collectChanges, runReview, exactText, reviewableImage, isStrictPng, isStrictWebp, reviewText, fromReviewText,
+  collectChanges, runReview, exactText, reviewableImage, reviewText, fromReviewText,
 } from "../ops/astra-review.mjs";
+import { encodeCanonicalPng, canonicalDeflate, canonicalPng } from "../ops/png-canonical.mjs";
 
 const finding = (severity, extra = {}) => ({
   severity, file: "pulsern/src/x.js", line: 3, title: "t", problem: "p",
@@ -282,11 +283,15 @@ describe("digests", () => {
       const sum = Buffer.alloc(4); sum.writeUInt32BE(crc(body));
       return Buffer.concat([len, body, sum]);
     };
-    /* A real, decodable 1x1 RGB PNG whose one pixel is (n, n, n). */
-    const PNG = (n) => {
-      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 2;
-      return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(Buffer.from([0, n, n, n]))), chunk("IEND", Buffer.alloc(0))]);
-    };
+    const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const ihdrOf = (colour, depth = 8) => { const h = Buffer.alloc(13); h.writeUInt32BE(1, 0); h.writeUInt32BE(1, 4); h[8] = depth; h[9] = colour; return chunk("IHDR", h); };
+    /* A canonical 1x1 RGB PNG whose one pixel is (n, n, n). */
+    const PNG = (n) => encodeCanonicalPng({ width: 1, height: 1, colour: 2, pixels: Buffer.from([n, n, n]) });
+    /* The same pixels as an ordinary encoder writes them: decodable, valid,
+       but not canonical. */
+    const libPng = (n) => Buffer.concat([SIG, ihdrOf(2), chunk("IDAT", deflateSync(Buffer.from([0, n, n, n]))), chunk("IEND", Buffer.alloc(0))]);
+    /* A chunk inserted right after IHDR (8-byte signature + 25-byte IHDR). */
+    const afterIhdr = (png, type, data) => Buffer.concat([png.subarray(0, 33), chunk(type, data), png.subarray(33)]);
     /* The same pixels with a chunk added just before IEND. */
     const withChunk = (png, type, data) => Buffer.concat([png.subarray(0, png.length - 12), chunk(type, data), png.subarray(png.length - 12)]);
     const secret = Buffer.from("Comment\0SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiJ9.service");
@@ -374,6 +379,17 @@ describe("digests", () => {
         ["pulsern/public/private.png", PNG(1), withChunk(PNG(1), "prVt", secret)],
         // bytes hidden after the end of the compressed image data
         ["pulsern/public/idat.png", PNG(1), trailingIdat(1)],
+        // round 11, Astra's case: a "suggested palette" in an RGB PNG is
+        // never drawn, so a key padded to a palette length hides there
+        ["pulsern/public/plte.png", PNG(1), afterIhdr(PNG(1), "PLTE", Buffer.concat([secret, Buffer.alloc((3 - (secret.length % 3)) % 3)]))],
+        // the colour of a fully transparent pixel is never drawn either
+        ["pulsern/public/alpha.png", PNG(1), Buffer.concat([SIG, ihdrOf(6), chunk("IDAT", canonicalDeflate(Buffer.from([0, 0x4b, 0x45, 0x59, 0]))), chunk("IEND", Buffer.alloc(0))])],
+        // 16-bit samples: the low byte does not show on screen
+        ["pulsern/public/deep.png", PNG(1), Buffer.concat([SIG, ihdrOf(2, 16), chunk("IDAT", canonicalDeflate(Buffer.from([0, 1, 0x4b, 1, 0x45, 1, 0x59]))), chunk("IEND", Buffer.alloc(0))])],
+        // same pixels, ordinary encoder: compression choices can carry bits
+        ["pulsern/public/lib.png", PNG(1), libPng(2)],
+        // WebP is no longer accepted at all
+        ["pulsern/public/pic.webp", null, Buffer.concat([Buffer.from("RIFF"), Buffer.from([16, 0, 0, 0]), Buffer.from("WEBPVP8 "), Buffer.from([4, 0, 0, 0, 0x9d, 0x01, 0x2a, 0xff])])],
       ]) {
         const dir = repoWith([[path, a, b]]);
         expect(() => collectChanges("b", "HEAD", { cwd: dir }), path).toThrow(/cannot pass/);
@@ -385,7 +401,7 @@ describe("digests", () => {
         expect(code, path).not.toBe(0);
         rmSync(dir, { recursive: true, force: true });
       }
-    });
+    }, 60000);
 
     /* Round 8, Astra's case: a windows-1252 page whose script compares 0xE9
        with 0xEA, changed to compare 0xE9 with 0xE9. */
@@ -456,28 +472,21 @@ describe("digests", () => {
       expect(exactText(null)).toBeNull();
     });
 
-    it("accepts only a well-formed image under its own extension", () => {
+    it("accepts only the canonical PNG of the pixels, under its own extension", () => {
       expect(reviewableImage("a/b.png", PNG(1))).toBe("image/png");
       expect(reviewableImage("a/b.PNG", PNG(1))).toBe("image/png");
       expect(reviewableImage("a/b.html", PNG(1))).toBeNull();
       expect(reviewableImage("a/b.png", Buffer.concat([PNG(1), Buffer.from("x")]))).toBeNull();
-      const bad = PNG(1); bad[bad.length - 20] ^= 1;   // a flipped bit: the CRC no longer matches
+      const bad = PNG(1); bad[bad.length - 20] ^= 1;
       expect(reviewableImage("a/b.png", bad)).toBeNull();
-      expect(isStrictPng(PNG(1))).toBe(true);
-      const webp = (extra = Buffer.alloc(0)) => {
-        const body = Buffer.concat([Buffer.from("WEBP"), Buffer.from("VP8L"), Buffer.from([2, 0, 0, 0, 0x2f, 0]), extra]);
-        const size = Buffer.alloc(4); size.writeUInt32LE(body.length);
-        return Buffer.concat([Buffer.from("RIFF"), size, body]);
-      };
-      expect(isStrictWebp(webp())).toBe(true);
-      expect(isStrictWebp(Buffer.concat([webp(), Buffer.from("<script>")]))).toBe(false);
-      // metadata chunks, even well-formed ones, are refused
-      const exif = Buffer.concat([Buffer.from("EXIF"), Buffer.from([8, 0, 0, 0]), Buffer.from("secret!!")]);
-      expect(isStrictWebp(webp(exif))).toBe(false);
-      // PNG: ancillary text and trailing image data are refused; pixel chunks are not
-      expect(isStrictPng(withChunk(PNG(1), "tEXt", secret))).toBe(false);
-      expect(isStrictPng(trailingIdat(1))).toBe(false);
-      expect(isStrictPng(withChunk(PNG(1), "pHYs", Buffer.from([0, 0, 11, 19, 0, 0, 11, 19, 1])))).toBe(true);
+      // a valid PNG from an ordinary encoder is refused until canonicalised
+      expect(reviewableImage("a/b.png", libPng(7))).toBeNull();
+      expect(canonicalPng(libPng(7)).equals(PNG(7))).toBe(true);
+      expect(reviewableImage("a/b.png", canonicalPng(libPng(7)))).toBe("image/png");
+      // even a harmless pixel-description chunk is refused: one file per image
+      expect(reviewableImage("a/b.png", withChunk(PNG(1), "pHYs", Buffer.from([0, 0, 11, 19, 0, 0, 11, 19, 1])))).toBeNull();
+      expect(reviewableImage("a/b.png", withChunk(PNG(1), "tEXt", secret))).toBeNull();
+      expect(reviewableImage("a/b.png", trailingIdat(1))).toBeNull();
     });
   });
 

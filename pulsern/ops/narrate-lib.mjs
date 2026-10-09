@@ -165,8 +165,16 @@ const NAMES_A = /\b(hepatitis|hep|vitamin|vitamins|type|group|blood|influenza|fl
    passed, because every "a" was discarded as an article). A capital A
    inside a sentence, and an "a" after a word that takes a letter, is a
    letter; "ER" is the emergency room. An article stays droppable. */
+/* An "A" followed by what only a letter can be followed by — a blood-group
+   sign or word (A positive, A−, A+), a list comma, "or"/"and" — is a
+   letter wherever it stands, including at the start of a sentence (Astra,
+   PR #134 review, round 10: "A positive packed red cells…" heard without
+   the A passed). An article never precedes these, except "a positive"/"a
+   negative" as adjectives; keeping those too only makes the check stricter. */
+const LETTER_A_BEFORE = /\bA(?=\s*(?:\+|\u2212|-(?![A-Za-z0-9]))|\s+(?:positive|negative|pos|neg|rh|plus|minus|and|or|nor|vs\.?|versus)\b|\s*[,;:/)]|\s*$)/gi;
 function keepLetters(text) {
   return String(text)
+    .replace(LETTER_A_BEFORE, "letterA")
     .replace(NAMES_A, (m, w) => `${w} letterA`)
     .replace(/(?<=[A-Za-z0-9,;:)]\s+)A\b(?![-'’])/g, "letterA")
     .replace(/\bE\.?R\.?(?![A-Za-z])/g, "letterER");
@@ -216,7 +224,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 6;
+export const QA_VERSION = 7;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);

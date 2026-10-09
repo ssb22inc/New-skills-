@@ -109,6 +109,30 @@ describe("compensation that goes too far", () => {
     expect(r).toMatchObject({ compensation: null, mixedPossible: true, mixed: "respiratory alkalosis" });
     expect(r.reading).not.toMatch(/^Metabolic acidosis, fully compensated/);
   });
+  /* Round 11: the decision and the display must use the same bounds. */
+  it("decides on the same rounded bounds it shows, so the direction cannot flip", () => {
+    // 0.7×34.3+21 = 45.01 ± 2 → shown 43.0–47.0; PaCO2 43 is on the boundary, so inside
+    const r = read(7.52, 43, 34.3);
+    expect(r).toMatchObject({ disorder: "metabolic alkalosis", compensation: "none", mixedPossible: false });
+    // just below the shown bound: low, so an added respiratory ALKALOSIS
+    expect(read(7.52, 42.9, 34.3)).toMatchObject({ mixedPossible: true, mixed: "respiratory alkalosis" });
+    expect(read(7.52, 42.9, 34.3).reading).toMatch(/about 43–47/);
+    // every flagged case names the disorder on the side the value actually missed
+    for (let paco2 = 20; paco2 <= 70; paco2 += 0.1) {
+      for (const hco3 of [12.3, 18.7, 29.9, 34.3, 38.1]) {
+        for (const ph of [7.2, 7.38, 7.42, 7.55]) {
+          const x = read(ph, Math.round(paco2 * 10) / 10, hco3);
+          if (!x.mixed) continue;
+          const c = x.reading.match(/about ([\d.]+)–([\d.]+)/);
+          const [lo] = [Number(c[1])];
+          const value = Number(x.reading.match(/(PaCO₂|HCO₃⁻) ([\d.]+) is/)[2]);
+          const isPaco2 = /PaCO₂ [\d.]+ is/.test(x.reading);
+          const low = value < lo;
+          expect(x.mixed).toBe(isPaco2 ? (low ? "respiratory alkalosis" : "respiratory acidosis") : (low ? "metabolic acidosis" : "metabolic alkalosis"));
+        }
+      }
+    }
+  });
   it("names the second disorder from the direction of the miss", () => {
     expect(read(7.48, 50, 35).mixed).toBe("respiratory acidosis");     // PaCO2 above 0.7×35+21+2
     expect(read(7.52, 40, 34).mixed).toBe("respiratory alkalosis");    // PaCO2 below 0.7×34+21−2

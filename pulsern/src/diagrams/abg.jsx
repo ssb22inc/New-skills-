@@ -40,9 +40,16 @@ const r1 = (n) => Math.round(n * 10) / 10;
 /* The expected range of the compensating value for a primary disorder, and
    whether the actual value is beyond it (overshoot) or short of it. */
 export function compensationLimit(primary, kind, { paco2, hco3 }) {
-  const range = (name, value, lo, hi, towardLow) => {
-    const out = value < lo ? (towardLow ? "beyond" : "short") : value > hi ? (towardLow ? "short" : "beyond") : null;
-    return { name, value, expected: [r1(lo), r1(hi)], beyond: out === "beyond", short: out === "short" };
+  /* One rounding, to the 0.1 the values are reported in, used both to
+     decide and to display — so a value shown as on the boundary is inside
+     it, and the side it misses on is the side the decision used (Astra,
+     PR #134 review, round 11: unrounded bounds flagged PaCO2 43 as low
+     against 43.01, then the rounded 43 named the opposite disorder). */
+  const range = (name, value, rawLo, rawHi, towardLow) => {
+    const lo = r1(rawLo), hi = r1(rawHi);
+    const low = value < lo, high = value > hi;
+    const out = low ? (towardLow ? "beyond" : "short") : high ? (towardLow ? "short" : "beyond") : null;
+    return { name, value, expected: [lo, hi], beyond: out === "beyond", short: out === "short", low, high };
   };
   // towardLow: compensation pushes this value DOWN (so below the range is overshoot)
   if (primary === "metabolic" && kind === "acidosis") return range("PaCO₂", paco2, 1.5 * hco3 + 6, 1.5 * hco3 + 10, true);
@@ -62,10 +69,9 @@ const offRange = (c) => !!(c && (c.beyond || c.short));
    PaCO₂ lower than expected is an added respiratory alkalosis, higher an
    added respiratory acidosis; an HCO₃⁻ lower than expected an added
    metabolic acidosis, higher an added metabolic alkalosis. */
-const secondDisorder = (c) => {
-  const low = c.value < c.expected[0];
-  return c.name === "PaCO₂" ? (low ? "respiratory alkalosis" : "respiratory acidosis") : (low ? "metabolic acidosis" : "metabolic alkalosis");
-};
+const secondDisorder = (c) => (c.name === "PaCO₂"
+  ? (c.low ? "respiratory alkalosis" : "respiratory acidosis")
+  : (c.low ? "metabolic acidosis" : "metabolic alkalosis"));
 /* Off the expected range: the ROME result is only a preliminary pattern. */
 const mixedResult = (primary, kind, rome, c) => ({
   disorder: `${primary} ${kind}`, primary, compensation: null, romePattern: rome, mixedPossible: true, mixed: secondDisorder(c),

@@ -252,6 +252,10 @@ describe("letters that name things are not fillers", () => {
     ["Night blindness is a sign of low vitamin A.", "Night blindness is a sign of low vitamin."],
     ["A client with blood group A can receive group O cells.", "A client with blood group can receive group O cells."],
     ["Group A strep can follow a sore throat.", "Group strep can follow a sore throat."],
+    // round 11, Astra's case: a blood group at the start of a sentence
+    ["A positive packed red cells are ABO-compatible with an A positive recipient.", "Positive packed red cells are ABO-compatible with an A positive recipient."],
+    ["A negative donors can give to A positive and A negative recipients.", "Negative donors can give to A positive and A negative recipients."],
+    ["A, B, AB and O are the four ABO blood groups taught for transfusion safety checks.", "B, AB and O are the four ABO blood groups taught for transfusion safety checks."],
     ["Send the client to the ER now and report the potassium result to the provider right away.", "Send the client to the now and report the potassium result to the provider right away."],
   ])("fails when the letter is dropped: %s", (script, heard) => {
     expect(audioCheck(script, heard).pass).toBe(false);
@@ -262,11 +266,15 @@ describe("letters that name things are not fillers", () => {
     expect(speechTokens("Vitamin A")).toEqual(speechTokens("vitamin a"));
     expect(speechTokens("the E.R.")).toEqual(speechTokens("the ER"));
   });
+  it("keeps a sign-written blood group too", () => {
+    expect(speechTokens("A+ blood")).toContain("lettera");
+    expect(speechTokens("Give A\u2212 cells")).toContain("lettera");
+  });
   it("still treats an article as droppable", () => {
     expect(speechTokens("A client needs a dose")).toEqual(speechTokens("client needs dose"));
     expect(speechTokens("Give the client an apple")).toEqual(speechTokens("Give client apple"));
   });
   it("re-checks clips approved under the weaker rule", () => {
-    expect(QA_VERSION).toBeGreaterThanOrEqual(6);
+    expect(QA_VERSION).toBeGreaterThanOrEqual(7);
   });
 });
