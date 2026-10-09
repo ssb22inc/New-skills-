@@ -1892,15 +1892,21 @@ async function runSharded(n) {
   const base = join(tmpdir(), `fullburn-mutate-${process.pid}`);
   const trees = Array.from({ length: n }, (_, i) => join(base, `shard-${i}`));
   const children = [];
-  const killShards = () => {
+  /** SIGTERM, NOT SIGKILL, to each shard harness: its own handler kills its
+   * suite's process group and restores its worktree. A SIGKILL here orphaned
+   * every shard's vitest workers (measured on the first smoke run). */
+  const killShards = (sig = "SIGTERM") => {
     for (const c of children) {
+      if (c.exitCode !== null || c.signalCode !== null) continue;
       try {
-        process.kill(-c.pid, "SIGKILL");
+        process.kill(c.pid, sig);
       } catch {
         /* already gone */
       }
     }
   };
+  const shardsGone = () => children.every((c) => c.exitCode !== null || c.signalCode !== null);
+  let interrupted = false;
   const removeTrees = async () => {
     for (const t of trees) await git(["worktree", "remove", "--force", t]).catch(() => undefined);
     rmSync(base, { recursive: true, force: true });
@@ -1908,12 +1914,20 @@ async function runSharded(n) {
   };
   // On a crash the worktrees stay in the temp directory; the prune above
   // drops their registrations on the next run. The checkout is never touched.
-  process.on("exit", killShards);
+  process.on("exit", () => killShards());
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"]) {
     process.on(sig, () => {
+      if (interrupted) return;
+      interrupted = true;
       killShards();
       console.error(`\nMUTATION HARNESS INTERRUPTED by ${sig} — shards stopped, result is void`);
-      void removeTrees().finally(() => process.exit(130));
+      const stop = async () => {
+        // Up to 15 s for every shard to stop its own suite, then force.
+        for (let i = 0; i < 150 && !shardsGone(); i++) await new Promise((r) => setTimeout(r, 100));
+        killShards("SIGKILL");
+        await removeTrees();
+      };
+      void stop().finally(() => process.exit(130));
     });
   }
   mkdirSync(base, { recursive: true });
@@ -1950,6 +1964,8 @@ async function runSharded(n) {
         }),
     ),
   );
+  // An interrupt owns the exit from here: no merge, no verdict.
+  if (interrupted) await new Promise(() => {});
   await removeTrees();
   const merged = mergeShardResults(runs, MUTATIONS.length);
   if (!merged.ok) {
