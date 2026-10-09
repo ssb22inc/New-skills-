@@ -1,0 +1,103 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "5c62331730c60a0cc01fbe6d832ed316cd2f18fa",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T13:33:12.232Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/check-png-canonical.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/png-canonical.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/ops/save-results.sh",
+    "pulsern/src/concept-explainers.jsx",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/fingerprint.js",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/concept-explainers.test.jsx",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/insulin.test.js",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/map-diagrams.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/png-canonical.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/save-results.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/diagrams/match.js",
+      "line": 83,
+      "title": "The concentration guard misses the standard \"300 U/mL\" notation",
+      "problem": "unsupportedConcentration recognizes \"U-300\" and \"300 units/mL\", but not \"300 U/mL\". Consequently, extractInsulin(\"Insulin glargine 300 U/mL was given at 2100.\") returns the long-acting U-100 profile instead of null.",
+      "failure_scenario": "A question specifies glargine 300 U/mL. The mapper proposes {type:\"long\",givenAt:\"21:00\"}; if those values are confirmed, the worked example draws the U-100/~24-hour profile for a U-300 product. This is precisely the formulation mismatch the new guard is intended to prevent.",
+      "fix": "Recognize concentration units such as U/mL as well as units/mL, including supported spelling variants. Add regression tests proving this input produces no patient-specific insulin profile while 100 U/mL remains supported.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/review-diagrams.mjs",
+      "line": 74,
+      "title": "Changed dynamic logic is hashed but never shown to the diagram reviewer",
+      "problem": "The new review key includes the diagram source, but the model request still contains only diagramReviewPrompt and the example screenshots. Neither the source nor the behavior of non-example branches is included. Changing dynamic-caption or interpretation logic can therefore trigger a fresh review without exposing the changed behavior to that reviewer.",
+      "failure_scenario": "A dynamicCaption or interpretation branch changes only for values other than diagram.example, leaving the facts, example caption and screenshots unchanged. The key changes, but Astra receives the same review material as before and can return PASS; that result is then stamped with the new sourceKey. The new tests check key invalidation, not whether the changed logic reaches the actual model request.",
+      "fix": "Include the relevant dynamic interpretation/caption source and dependencies in the review request, or supply computed captions and renders covering the values being published. Add a request-level test showing that a non-example logic change becomes visible to the reviewer, rather than merely changing the cache key.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 309,
+      "title": "Failed paid narration takes are discarded rather than retained",
+      "problem": "Each retry overwrites mp3, heard and check. Only a passing take reaches store; after two failures, the report retains only the final transcript and mismatch. No failed audio bytes or first-attempt result are persisted, despite the narration workflow's promise that every paid recording is kept.",
+      "failure_scenario": "The first take says the wrong clinical term and the second passes, or both takes fail. The first paid recording and its verification evidence disappear in either case; when both fail, both recordings disappear. The workflow artifacts contain the manifest and reports, so they cannot recover these takes for an owner audit.",
+      "fix": "Persist each take and its transcript/QA result before retrying or stopping, in a private audit location included in retained artifacts. Continue publishing only passing clips to the student-facing manifest.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 233864,
+    "completionTokens": 17867,
+    "reasoningTokens": 17058,
+    "costUsd": 3.8166425
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. A common insulin concentration notation still selects the wrong formulation, and the diagram-review and narration-retention paths do not fully enforce their stated guarantees. This was a static review; I did not execute the tests or workflows.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
