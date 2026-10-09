@@ -10,6 +10,8 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { attestationsFromGhVerify } from "./attestation.mjs";
 import {
+  REGULAR_FILES_SCOPE,
+  checkRegularFilesOnly,
   REVIEW_SIGNER_WORKFLOW,
   TRUSTED_REVIEW_REF,
   VERIFIED_TREE_SCOPE,
@@ -68,6 +70,13 @@ try {
   assertCleanTree(repoRoot);
 } catch (err) {
   console.error(`ADVERSARY GATE FAIL: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+}
+
+// X7-01: a symlink's content is outside the hash this gate binds to.
+const regular = checkRegularFilesOnly(execFileSync("git", ["-C", repoRoot, "ls-files", "-s", "-z", "--", ...REGULAR_FILES_SCOPE], { encoding: "utf8" }));
+if (!regular.ok) {
+  console.error(`ADVERSARY GATE FAIL: ${regular.reason}`);
   process.exit(1);
 }
 

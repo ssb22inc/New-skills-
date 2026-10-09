@@ -1,6 +1,6 @@
 import { execFile, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -299,6 +299,20 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     expect(noMaintainer.code, "the gate opened with no maintainer configured").toBe(1);
   }));
 
+  /** X7-01: a non-cap path made a link would otherwise pass this gate as an
+   * ordinary change. MUTATION: X7-01c. */
+  it("a symlink anywhere in the protected tree is refused, cap path or not", () => {
+    const base = git("rev-parse", "HEAD").trim();
+    write("elsewhere.md", "outside\n");
+    rmSync(join(repo, "fullburn/README.md"));
+    symlinkSync("../elsewhere.md", join(repo, "fullburn/README.md"));
+    git("add", "-A");
+    git("commit", "-q", "-m", "link the readme out");
+    const res = gate("class2-gate.mjs", repo, base);
+    expect(res.code, `a symlink in the protected tree passed the class-2 gate:\n${res.out}`).toBe(1);
+    expect(res.out).toMatch(/README\.md \(mode 120000, a symlink\)/);
+  });
+
   it("refuses to run at all without a base ref", () => {
     expect(gate("class2-gate.mjs", repo).code).toBe(1);
   });
@@ -389,6 +403,32 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     expect(gate("adversary-gate.mjs", repo, base).code).toBe(0);
     write("fullburn/config/src/caps.ts", "export const CAPS = { dailyAiSpendUsd: 999999 };\n");
     expect(gate("adversary-gate.mjs", repo, base).code, "an unstaged cap edit sailed past").toBe(1);
+  });
+
+  /** X7-01 (GPT-6 Astra, 2026-10-09): the hash binds git's entry for a path,
+   * the code reads through it. A cap module made a link to a sibling
+   * project's file changed with the hash — and a fresh PASS — unchanged.
+   * MUTATION: X7-01a (decision), X7-01b (adversary CLI), X7-01c (class-2 CLI). */
+  it("a protected path that is a symlink blocks the gate, even under a fresh PASS", () => {
+    write("fullburn/PHASE", "0\n");
+    write("pulsern/caps.ts", "export const CAPS = { dailyAiSpendUsd: 5 };\n");
+    rmSync(join(repo, "fullburn/config/src/caps.ts"));
+    symlinkSync("../../../pulsern/caps.ts", join(repo, "fullburn/config/src/caps.ts"));
+    git("add", "-A");
+    git("commit", "-q", "-m", "caps through a link");
+    const tree = currentTreeHash();
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "add a PASS report");
+    const base = git("rev-parse", "HEAD").trim();
+    const res = gate("adversary-gate.mjs", repo, base);
+    expect(res.code, `a symlinked cap module passed the adversary gate:\n${res.out}`).toBe(1);
+    expect(res.out).toMatch(/regular files.*caps\.ts \(mode 120000, a symlink\)/s);
+    // The sibling edit the finding describes: the hash does not move.
+    write("pulsern/caps.ts", "export const CAPS = { dailyAiSpendUsd: 5000 };\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "edit the sibling");
+    expect(currentTreeHash(), "the premise: a referent edit leaves the hash unchanged").toBe(tree);
   });
 
   /** MUTATION: relax the APPROVALS clause in checkReportsAppendOnly. */

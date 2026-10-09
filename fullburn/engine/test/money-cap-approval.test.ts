@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { HUMAN_APPROVAL_PATTERNS, checkApprovalAuthentication, checkClass2Approvals, checkMoneyCapGate, isClass2, needsHumanApproval } from "../scripts/gate-lib.mjs";
+import { HUMAN_APPROVAL_PATTERNS, REGULAR_FILES_SCOPE, checkApprovalAuthentication, checkRegularFilesOnly, checkClass2Approvals, checkMoneyCapGate, isClass2, needsHumanApproval } from "../scripts/gate-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "../scripts/github-auth.mjs";
 
@@ -124,5 +124,26 @@ describe("money-cap approvals are authenticated by GitHub's commit record (X5-03
     expect(repoFromRemote("https://github.com/ssb22inc/New-skills-.git")).toBe("ssb22inc/New-skills-");
     expect(repoFromRemote("http://local_proxy@127.0.0.1:1234/git/ssb22inc/New-skills-")).toBe("ssb22inc/New-skills-");
     expect(repoFromRemote("")).toBeNull();
+  });
+});
+
+/** X7-01 (GPT-6 Astra, 2026-10-09): only regular files in the protected tree.
+ * MUTATION: X7-01a. */
+describe("protected paths are regular files (X7-01)", () => {
+  const z = (...entries: string[]) => entries.join("\0") + "\0";
+  it("refuses a symlink or a submodule, accepts regular and executable files", () => {
+    expect(checkRegularFilesOnly(z("100644 " + "a".repeat(40) + " 0\tfullburn/a.ts", "100755 " + "b".repeat(40) + " 0\tfullburn/run.sh")).ok).toBe(true);
+    const link = checkRegularFilesOnly(z("100644 " + "a".repeat(40) + " 0\tfullburn/a.ts", "120000 " + "c".repeat(40) + " 0\tfullburn/config/src/caps.ts"));
+    expect(link.ok, "a symlinked cap module counted as a regular file").toBe(false);
+    expect(link.reason).toContain("fullburn/config/src/caps.ts (mode 120000, a symlink)");
+    expect(checkRegularFilesOnly(z("160000 " + "d".repeat(40) + " 0\tfullburn/vendor")).ok, "a submodule counted").toBe(false);
+    // The newline form and a path containing a newline under -z.
+    expect(checkRegularFilesOnly("120000 " + "c".repeat(40) + " 0\tfullburn/x\n").ok).toBe(false);
+    expect(checkRegularFilesOnly(z("120000 " + "c".repeat(40) + " 0\tfullburn/odd\nname")).reason).toContain("odd\nname");
+    expect(checkRegularFilesOnly("").ok).toBe(true);
+  });
+  it("the scope it is run over covers the reports and approvals the hash excludes", () => {
+    expect(REGULAR_FILES_SCOPE).toEqual(expect.arrayContaining(["fullburn/", "fullburn/reports/", "fullburn/APPROVALS/", ".claude/agents/", "DONE.md"]));
+    expect(REGULAR_FILES_SCOPE.some((p: string) => p.startsWith(":!")), "an exclusion survived into the regular-file scope").toBe(false);
   });
 });

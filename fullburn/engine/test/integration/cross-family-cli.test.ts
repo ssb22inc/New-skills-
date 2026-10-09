@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
 
@@ -84,6 +86,29 @@ describe("cross-family runner — fails closed at every step before a report exi
     expect(r.out).toMatch(/DRY RUN/);
     expect(r.out).toMatch(/tree [0-9a-f]{40} \(\d+ files, \d+ bytes/);
     expect(newReports()).toEqual([]);
+  });
+
+  /** X7-01 (GPT-6 Astra, 2026-10-09): the bundle reads the filesystem and the
+   * hash reads the index, so a link in the target would send the reviewer
+   * bytes the report's tree does not bind. MUTATION: X7-01e. */
+  it("a target whose protected tree holds a symlink is refused before anything is built or sent", async () => {
+    const target = mkdtempSync(join(tmpdir(), "fullburn-xf-link-"));
+    try {
+      const g = (...a: string[]) => spawnSync("git", ["-C", target, ...a], { encoding: "utf8" });
+      g("init", "-q", "-b", "main");
+      mkdirSync(join(target, "fullburn/config/src"), { recursive: true });
+      writeFileSync(join(target, "outside.ts"), "export const CAPS = {};\n");
+      symlinkSync("../../../outside.ts", join(target, "fullburn/config/src/caps.ts"));
+      writeFileSync(join(target, "fullburn/PHASE"), "0\n");
+      g("add", "-A");
+      g("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "link");
+      const r = await run({ OPENROUTER_API_KEY: undefined, FULLBURN_CROSS_FAMILY_ALLOW_DIRTY: undefined }, ["--target", target, "--dry-run"]);
+      expect(r.code, r.out).toBe(2);
+      expect(r.out).toMatch(/regular files.*caps\.ts \(mode 120000, a symlink\)/s);
+      expect(newReports()).toEqual([]);
+    } finally {
+      rmSync(target, { recursive: true, force: true });
+    }
   });
 
   it("allow-dirty does nothing on the production router: a dirty tree refuses before any network", async () => {

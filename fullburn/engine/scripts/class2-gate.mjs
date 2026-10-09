@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { checkMoneyCapGate, selectApprovalDocs } from "./gate-lib.mjs";
+import { REGULAR_FILES_SCOPE, checkMoneyCapGate, checkRegularFilesOnly, selectApprovalDocs } from "./gate-lib.mjs";
 import { fetchCommitAuth } from "./github-auth.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
 
@@ -28,6 +28,14 @@ if (!baseRef) {
 // quoting — `$(...)` and backticks still ran inside its double quotes, with the
 // job's token in the environment. Every git call is an argument vector.
 const git = (args, encoding = "utf8") => execFileSync("git", ["-C", repoRoot, ...args], { encoding });
+
+// X7-01: a cap file or an approval that is a link reads content no approval
+// binds. Refused before anything is read through the filesystem.
+const regular = checkRegularFilesOnly(git(["ls-files", "-s", "-z", "--", ...REGULAR_FILES_SCOPE]));
+if (!regular.ok) {
+  console.error(`CLASS-2 GATE FAIL: ${regular.reason}`);
+  process.exit(1);
+}
 const diff = git(["diff", "--name-status", "-z", "-M", `${baseRef}...HEAD`]);
 const changedFiles = parseNameStatusZ(diff);
 

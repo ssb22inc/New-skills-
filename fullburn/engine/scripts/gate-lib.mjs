@@ -535,6 +535,34 @@ export const VERIFIED_TREE_SCOPE = Object.freeze([
   ":!fullburn/APPROVALS/",
 ]);
 
+/** Every path whose BYTES a gate reads: the verified scope plus the reports
+ * and approvals it excludes from the hash (X7-01). */
+export const REGULAR_FILES_SCOPE = Object.freeze([...VERIFIED_TREE_SCOPE.filter((p) => !p.startsWith(":!")), "fullburn/reports/", "fullburn/APPROVALS/"]);
+
+/** ONLY REGULAR FILES IN THE PROTECTED TREE (cross-family finding X7-01,
+ * 2026-10-09). The verified-tree hash and the money-cap gate see git's INDEX
+ * entry for a path; the gates, the reviewer bundle and the runtime read the
+ * filesystem, which follows a symlink. A protected file made a link to a
+ * sibling project's file could then change with the hash unchanged and no
+ * approval owed. The capability removed: a protected path whose content lives
+ * outside the protected tree. Anything but mode 100644/100755 — a symlink
+ * (120000) or a submodule (160000) — is refused, wherever it points.
+ *
+ * Input: `git ls-files -s -z` (or the newline form) over REGULAR_FILES_SCOPE. */
+export function checkRegularFilesOnly(lsFilesStage) {
+  const text = String(lsFilesStage ?? "");
+  const records = text.includes("\0") ? text.split("\0") : text.split("\n");
+  const bad = [];
+  for (const r of records) {
+    const m = /^(\d{6}) [0-9a-f]+ \d\t([\s\S]+)$/.exec(r);
+    if (!m) continue;
+    if (m[1] !== "100644" && m[1] !== "100755") bad.push(`${m[2]} (mode ${m[1]}${m[1] === "120000" ? ", a symlink" : m[1] === "160000" ? ", a submodule" : ""})`);
+  }
+  return bad.length === 0
+    ? { ok: true, reason: "every protected path is a regular file" }
+    : { ok: false, reason: `protected paths must be regular files — a link's content lives outside the hash and the approvals that bind it: ${bad.join(", ")}` };
+}
+
 /** `git status --porcelain` lines that mean the worktree has moved ahead of the
  * index. "XY path": X is the index state, Y the worktree state — staged changes
  * are already in the verified-tree hash, unstaged edits and untracked files are

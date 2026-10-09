@@ -45,8 +45,10 @@ export function parseArgs(argv) {
 /** DONE.md §3: refuses a dirty tree or a mid-harness marker. A canary file left
  * by a crashed run of this checker is recovered BEFORE this is consulted, so it
  * is never a refusal reason of its own. */
-export function preflightRefusals({ porcelain, markerExists }) {
+export function preflightRefusals({ porcelain, markerExists, regularFiles = { ok: true } }) {
   const out = [];
+  // X7-01: a link in the protected tree carries content the tree hash does not.
+  if (regularFiles?.ok !== true) out.push(String(regularFiles?.reason ?? "protected paths could not be shown to be regular files"));
   const dirty = String(porcelain ?? "")
     .split("\n")
     .filter((l) => l.trim().length > 0);

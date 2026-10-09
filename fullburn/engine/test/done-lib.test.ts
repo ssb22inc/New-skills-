@@ -21,6 +21,9 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
   /** MUTATION: stop refusing a dirty tree, or a marker. */
   it("refuses a dirty tree and a mid-harness marker; accepts a clean one", () => {
     expect(preflightRefusals({ porcelain: "", markerExists: false })).toEqual([]);
+    // X7-01: a link in the protected tree refuses the run, naming it.
+    expect(preflightRefusals({ porcelain: "", markerExists: false, regularFiles: { ok: false, reason: "fullburn/x (mode 120000, a symlink)" } })).toEqual(["fullburn/x (mode 120000, a symlink)"]);
+    expect(preflightRefusals({ porcelain: "", markerExists: false, regularFiles: null as never }).length, "an unknown regular-file result was read as clean").toBe(1);
     expect(preflightRefusals({ porcelain: "?? x.ts\n", markerExists: false }).join(" ")).toMatch(/dirty/);
     expect(preflightRefusals({ porcelain: " M fullburn/PHASE\n", markerExists: false }).join(" ")).toMatch(/dirty/);
     expect(preflightRefusals({ porcelain: "", markerExists: true }).join(" ")).toMatch(/marker/);

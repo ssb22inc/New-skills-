@@ -44,7 +44,7 @@ import {
   splitReportsByFamily,
   verdict,
 } from "./done-lib.mjs";
-import { REVIEW_SIGNER_WORKFLOW, TRUSTED_REVIEW_REF, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { REGULAR_FILES_SCOPE, REVIEW_SIGNER_WORKFLOW, TRUSTED_REVIEW_REF, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkRegularFilesOnly, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
 import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "./github-auth.mjs";
 import { attestationsFromApi, attestationsFromGhVerify } from "./attestation.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
@@ -151,7 +151,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
     // ── PRE-FLIGHT ──────────────────────────────────────────────────────────
     const porcelain = (await git(["status", "--porcelain"])).out;
-    const refusals = preflightRefusals({ porcelain, markerExists: existsSync(MARKER) });
+    const regularFiles = checkRegularFilesOnly((await git(["ls-files", "-s", "-z", "--", ...REGULAR_FILES_SCOPE])).out);
+    const refusals = preflightRefusals({ porcelain, markerExists: existsSync(MARKER), regularFiles });
     if (refusals.length > 0) {
       console.error("DONE: REFUSED\n  " + refusals.join("\n  "));
       process.exit(2);
