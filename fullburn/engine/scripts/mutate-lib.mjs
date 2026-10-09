@@ -410,3 +410,71 @@ export function summaryLine(out, err) {
   const m = SUMMARY.exec(out ?? "") ?? SUMMARY.exec(err ?? "");
   return m ? m[1].trim() : "failed";
 }
+
+/** SHARDED RUNS (human decision 2026-10-09). One suite run is ~60 s and the
+ * table is ~480 entries, so a serial run is ~8 h. `--shards N` runs N
+ * children, each in its own git worktree of HEAD, each taking the entries
+ * whose index ≡ i (mod N) and each running the FULL meta-check first. The
+ * decisions — which flags mean what, which entries a shard owns, and whether
+ * N shard outputs add up to one valid run — live here, where the default
+ * suite drives them; the runner only spawns and prints. */
+export function parseShardFlags(argv) {
+  const args = [...(argv ?? [])];
+  // A flag given without a value is an error, never a silent serial run.
+  const at = (flag) => {
+    const i = args.indexOf(flag);
+    return i === -1 ? undefined : (args[i + 1] ?? "");
+  };
+  const shards = at("--shards");
+  const shard = at("--shard");
+  if (shards === undefined && shard === undefined) return { mode: "serial" };
+  if (shards !== undefined && shard !== undefined) return { error: "--shards (parent) and --shard (child) are exclusive" };
+  if (shards !== undefined) {
+    if (!/^[1-9]\d?$/.test(shards)) return { error: `--shards takes a count from 1 to 99, got ${JSON.stringify(shards)}` };
+    return Number(shards) === 1 ? { mode: "serial" } : { mode: "parent", shards: Number(shards) };
+  }
+  const m = /^(\d{1,2})\/([1-9]\d?)$/.exec(String(shard));
+  if (!m || Number(m[1]) >= Number(m[2])) return { error: `--shard takes i/N with 0 <= i < N, got ${JSON.stringify(shard)}` };
+  return { mode: "child", shard: Number(m[1]), shards: Number(m[2]) };
+}
+
+/** The entries shard `i` of `n` owns: every index ≡ i (mod n). Together the
+ * shards cover the table exactly once. */
+export function shardEntries(entries, i, n) {
+  return entries.filter((_, k) => k % n === i);
+}
+
+/** N shard outputs → one run, or void. A shard that did not pass every
+ * meta-canary, did not print its own summary, exited other than 0 or 1, or
+ * reported a different number of entries than it owns makes the WHOLE run
+ * void: a partial run must never print a total. */
+export function mergeShardResults(shardRuns, total, canaryNames = META_CANARIES.map((c) => c.name)) {
+  const ENTRY = /^(CAUGHT {13}|\*\*\* SURVIVED \*\*\* {3}|PATTERN-NOT-FOUND {2})(.*)$/;
+  const lines = [];
+  let survived = 0;
+  let notFound = 0;
+  let reported = 0;
+  if (!Array.isArray(shardRuns) || shardRuns.length === 0) return { ok: false, reason: "no shard ran — HARNESS RESULT IS VOID." };
+  for (const [i, r] of shardRuns.entries()) {
+    const out = String(r?.out ?? "");
+    const tag = `shard ${i}/${shardRuns.length}`;
+    if (r?.code !== 0 && r?.code !== 1) return { ok: false, reason: `${tag} exited ${r?.code} — HARNESS RESULT IS VOID.` };
+    const missing = canaryNames.filter((n) => !new RegExp(`^\\s*ok\\s+${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "m").test(out));
+    if (missing.length > 0) return { ok: false, reason: `${tag} did not pass its meta-check (${missing.join("; ")}) — HARNESS RESULT IS VOID.` };
+    const summary = /^(\d+) mutations: (\d+) caught, (\d+) survived, (\d+) not found$/m.exec(out);
+    if (!summary) return { ok: false, reason: `${tag} printed no summary — HARNESS RESULT IS VOID.` };
+    const own = Number(r.owns);
+    const entryLines = out.split("\n").filter((l) => ENTRY.test(l));
+    if (Number(summary[1]) !== own || entryLines.length !== own) {
+      return { ok: false, reason: `${tag} owns ${own} entries but reported ${summary[1]} (${entryLines.length} lines) — HARNESS RESULT IS VOID.` };
+    }
+    for (const l of entryLines) {
+      if (l.startsWith("*** SURVIVED")) survived += 1;
+      else if (l.startsWith("PATTERN-NOT-FOUND")) notFound += 1;
+      lines.push(l);
+    }
+    reported += own;
+  }
+  if (reported !== total) return { ok: false, reason: `shards reported ${reported} of ${total} entries — HARNESS RESULT IS VOID.` };
+  return { ok: true, lines, survived, notFound, caught: total - survived - notFound, total };
+}

@@ -262,7 +262,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         results.push({ id: "C5", title: "§2.1.5 mutation harness: 0 survived, 0 stale, meta-check passed in the same run", status: "FAIL", command: "npm run mutate", observed: "NOT MEASURED — skipped by --skip-mutate; this flag can never make C5 pass" });
       } else {
         console.log("running the mutation harness (this takes ~50 minutes)…");
-        const r = await run("node", [`${ROOT}/engine/scripts/mutate.mjs`]);
+        // SHARDED (human decision 2026-10-09): ~480 entries at ~60 s each is
+        // ~8 h serially. Each shard runs the full meta-check in its own
+        // worktree; mergeShardResults voids the run if any shard is incomplete.
+        const shards = /^[1-9]$/.test(process.env.FULLBURN_MUTATE_SHARDS ?? "") ? process.env.FULLBURN_MUTATE_SHARDS : "3";
+        const r = await run("node", [`${ROOT}/engine/scripts/mutate.mjs`, "--shards", shards]);
         const mc = mutateCondition(parseMutate(r.out + r.err), r.code);
         results.push({ id: "C5", title: "§2.1.5 mutation harness: 0 survived, 0 stale, meta-check passed in the same run", status: mc.status, command: "node engine/scripts/mutate.mjs", observed: mc.observed });
       }

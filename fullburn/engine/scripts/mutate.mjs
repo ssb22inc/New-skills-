@@ -12,18 +12,22 @@
  *
  * PATTERN-NOT-FOUND means the code moved and the entry is now stale — it is a
  * failure to investigate, not a pass. */
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import {
   MARKER,
   META_CANARIES,
   applyEntry,
   classifyRun,
   harnessVerdict,
+  mergeShardResults,
   metaCheckVerdict,
+  parseShardFlags,
   recoverInFlight,
+  shardEntries,
   summaryLine,
   tableEndOf, acquireRunLock, releaseRunLock } from "./mutate-lib.mjs";
 
@@ -1306,6 +1310,25 @@ const MUTATIONS = [
   ["X7-05b the redaction set starts unloaded", "engine/src/gateway.ts",
     "  let redactionLoaded = false;",
     "  let redactionLoaded = true;"],
+  // ---- sharded harness runs (2026-10-09) ----
+  ["MS-01 a shard's entries are its residue class", "engine/scripts/mutate-lib.mjs",
+    "  return entries.filter((_, k) => k % n === i);",
+    "  return entries.filter((_, k) => k % n === 0);"],
+  ["MS-02 a shard's exit code must be 0 or 1", "engine/scripts/mutate-lib.mjs",
+    "    if (r?.code !== 0 && r?.code !== 1) return",
+    "    if (false) return"],
+  ["MS-03 every shard passes every meta-canary", "engine/scripts/mutate-lib.mjs",
+    "    if (missing.length > 0) return",
+    "    if (false) return"],
+  ["MS-04 a shard reports exactly the entries it owns", "engine/scripts/mutate-lib.mjs",
+    "    if (Number(summary[1]) !== own || entryLines.length !== own) {",
+    "    if (false) {"],
+  ["MS-05 the shards together cover the table", "engine/scripts/mutate-lib.mjs",
+    "  if (reported !== total) return",
+    "  if (false) return"],
+  ["MS-06 a shard with no summary voids the run", "engine/scripts/mutate-lib.mjs",
+    "    if (!summary) return { ok: false, reason: `${tag} printed no summary",
+    "    if (false) return { ok: false, reason: `${tag} printed no summary"],
   // ---- X7-09: recorded evidence serves recorded outputs only; a live eval path (2026-10-09) ----
   ["X7-09a a recorded-evidence map is not served through a live transport", "engine/src/gateway.ts",
     "    if (provenance === \"servable\" && !isRecordedTransport(deps.transport) && !productionServable(deps.bindings)) {",
@@ -1631,6 +1654,12 @@ const MUTATIONS = [
 // and carries the same guard; the file that enforces the acceptance bar was the
 // one place it had not been applied.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const flags = parseShardFlags(process.argv.slice(2));
+  if (flags.error) {
+    console.error(`MUTATION HARNESS REFUSED: ${flags.error}`);
+    process.exit(2);
+  }
+  if (flags.mode === "parent") await runSharded(flags.shards);
   /** Runs the suite ASYNCHRONOUSLY.
    *
    * It used `execSync`, which blocks the event loop for the whole run — so the
@@ -1795,7 +1824,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // print "N mutations: N caught" for a run that stopped a third of the way in
   // (adversary finding R10-07b). An interrupted run has no result, and the
   // handler saying so and exiting 130 is the whole of the correct behaviour.
+  // A CHILD of a sharded run measures only the entries it owns (`--shard i/N`);
+  // its worktree is its own, so its marker, lock and restore are too.
+  const owned = new Set(flags.mode === "child" ? shardEntries(MUTATIONS, flags.shard, flags.shards) : MUTATIONS);
+  let k = -1;
   for (const [name, file, from, to] of MUTATIONS) {
+    k += 1;
+    if (!owned.has(MUTATIONS[k])) continue;
     const { found, failure } = await measure(file, from, to);
     if (!found) {
       console.log(`PATTERN-NOT-FOUND  ${name}  (${file})`);
@@ -1812,7 +1847,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.log(`CAUGHT             ${name}  |  ${failure}`);
     }
   }
-  console.log(`\n${MUTATIONS.length} mutations: ${MUTATIONS.length - survived - notFound} caught, ${survived} survived, ${notFound} not found`);
+  console.log(`\n${owned.size} mutations: ${owned.size - survived - notFound} caught, ${survived} survived, ${notFound} not found`);
 
   // EXIT NON-ZERO, so this can be a CI stage rather than a ritual.
   const verdict = harnessVerdict(survived, notFound);
@@ -1820,4 +1855,116 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(`\n${verdict.reason}`);
     process.exit(1);
   }
+}
+
+/** THE SHARDED PARENT. Never mutates anything itself: it takes the run lock
+ * in this checkout, refuses an uncommitted tree (the shards measure HEAD),
+ * builds one git worktree per shard with a node_modules whose workspace links
+ * point INTO that worktree (the shared ones point at this checkout, where a
+ * shard's mutation would be invisible), runs `--shard i/N` in each, and hands
+ * every output to `mergeShardResults`. Any signal kills every shard's process
+ * group — each restores its own worktree — and the worktrees are removed on
+ * every exit. */
+async function runSharded(n) {
+  const lock = acquireRunLock();
+  if (!lock.ok) {
+    console.error(`MUTATION HARNESS REFUSED: ${lock.reason} — two harnesses cannot share a tree (X3-03)`);
+    process.exit(2);
+  }
+  // ASYNC git, never a blocking process call: the signal handlers below must
+  // be able to run at any moment (R9-03 — the invariant suite enforces it).
+  const git = (args) =>
+    new Promise((ok, fail) => {
+      const c = spawn("git", ["-C", REPO_ROOT, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      c.stdout.on("data", (d) => (out += d));
+      c.on("close", (code) => (code === 0 ? ok(out) : fail(new Error(`git ${args[0]} exited ${code}`))));
+      c.on("error", fail);
+    });
+  process.on("exit", () => releaseRunLock());
+  // A previous sharded run that died leaves worktree registrations behind.
+  await git(["worktree", "prune"]);
+  if ((await git(["status", "--porcelain"])).trim() !== "") {
+    console.error("MUTATION HARNESS REFUSED: a sharded run measures HEAD, and the tree has uncommitted changes — commit them or run serially");
+    process.exit(2);
+  }
+  const head = (await git(["rev-parse", "HEAD"])).trim();
+  const base = join(tmpdir(), `fullburn-mutate-${process.pid}`);
+  const trees = Array.from({ length: n }, (_, i) => join(base, `shard-${i}`));
+  const children = [];
+  const killShards = () => {
+    for (const c of children) {
+      try {
+        process.kill(-c.pid, "SIGKILL");
+      } catch {
+        /* already gone */
+      }
+    }
+  };
+  const removeTrees = async () => {
+    for (const t of trees) await git(["worktree", "remove", "--force", t]).catch(() => undefined);
+    rmSync(base, { recursive: true, force: true });
+    await git(["worktree", "prune"]).catch(() => undefined);
+  };
+  // On a crash the worktrees stay in the temp directory; the prune above
+  // drops their registrations on the next run. The checkout is never touched.
+  process.on("exit", killShards);
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"]) {
+    process.on(sig, () => {
+      killShards();
+      console.error(`\nMUTATION HARNESS INTERRUPTED by ${sig} — shards stopped, result is void`);
+      void removeTrees().finally(() => process.exit(130));
+    });
+  }
+  mkdirSync(base, { recursive: true });
+  const shared = join(ROOT, "node_modules");
+  for (const t of trees) {
+    await git(["worktree", "add", "--detach", t, head]);
+    const nm = join(t, "fullburn", "node_modules");
+    mkdirSync(join(nm, "@fullburn"), { recursive: true });
+    for (const e of readdirSync(shared)) {
+      if (e !== "@fullburn") symlinkSync(join(shared, e), join(nm, e));
+    }
+    for (const pkg of readdirSync(join(shared, "@fullburn"))) symlinkSync(join(t, "fullburn", pkg), join(nm, "@fullburn", pkg));
+  }
+  console.log(`SHARDED RUN — ${n} shards over HEAD ${head.slice(0, 12)}, ${MUTATIONS.length} entries\n`);
+  const runs = await Promise.all(
+    trees.map(
+      (t, i) =>
+        new Promise((done) => {
+          const child = spawn(process.execPath, [join(t, "fullburn/engine/scripts/mutate.mjs"), "--shard", `${i}/${n}`], {
+            cwd: join(t, "fullburn"),
+            stdio: ["ignore", "pipe", "pipe"],
+            detached: true,
+          });
+          children.push(child);
+          let out = "";
+          child.stdout.on("data", (d) => {
+            out += d;
+            // Progress only, prefixed so no parser reads it as a result line.
+            for (const l of String(d).split("\n")) if (/^(CAUGHT|\*\*\* SURVIVED|PATTERN-NOT-FOUND)/.test(l)) console.error(`[${i}] ${l}`);
+          });
+          child.stderr.on("data", (d) => (out += d));
+          child.on("close", (code) => done({ code, out, owns: shardEntries(MUTATIONS, i, n).length }));
+          child.on("error", () => done({ code: -1, out, owns: shardEntries(MUTATIONS, i, n).length }));
+        }),
+    ),
+  );
+  await removeTrees();
+  const merged = mergeShardResults(runs, MUTATIONS.length);
+  if (!merged.ok) {
+    console.error(`META-CHECK FAILED: ${merged.reason}`);
+    process.exit(1);
+  }
+  console.log(`META-CHECK — every one of ${n} shards passed its own meta-check\n`);
+  for (const c of META_CANARIES) console.log(`  ok   ${c.name}`);
+  console.log("");
+  for (const l of merged.lines) console.log(l);
+  console.log(`\n${merged.total} mutations: ${merged.caught} caught, ${merged.survived} survived, ${merged.notFound} not found`);
+  const verdict = harnessVerdict(merged.survived, merged.notFound);
+  if (!verdict.ok) {
+    console.error(`\n${verdict.reason}`);
+    process.exit(1);
+  }
+  process.exit(0);
 }
