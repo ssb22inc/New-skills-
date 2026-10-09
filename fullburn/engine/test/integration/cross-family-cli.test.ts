@@ -132,7 +132,7 @@ describe("cross-family runner — fails closed at every step before a report exi
   });
 
   it("an answer that is not the contract writes no report (the raw answer is kept for inspection)", async () => {
-    const url = await serve(() => ({ status: 200, json: answer("openai/gpt-6-astra", "I think it is fine.") }));
+    const url = await serve(() => ({ status: 200, json: answer("openai/gpt-6-luna", "I think it is fine.") }));
     const r = await run({ OPENROUTER_API_KEY: "test-key", FULLBURN_CROSS_FAMILY_ENDPOINT: url });
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/not the contract/);
@@ -148,7 +148,7 @@ describe("cross-family runner — fails closed at every step before a report exi
     const url = await serve(() => {
       n += 1;
       if (n === 1) return { status: 401, json: { error: { message: `bad token ${KEY}` } } };
-      return { status: 200, json: answer("openai/gpt-6-astra", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [`saw ${KEY}`], limitations: [`token ${KEY} quoted`] })) };
+      return { status: 200, json: answer("openai/gpt-6-luna", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [`saw ${KEY}`], limitations: [`token ${KEY} quoted`] })) };
     });
     const r1 = await run({ OPENROUTER_API_KEY: KEY, FULLBURN_CROSS_FAMILY_ENDPOINT: url });
     expect(r1.code).toBe(1);
@@ -171,8 +171,8 @@ describe("cross-family runner — fails closed at every step before a report exi
     const url = await serve(() => {
       n += 1;
       if (n === 1) return { status: 200, json: answer(`openai/${KEY}`, JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [], limitations: [] })) };
-      if (n === 2) return { status: 200, json: answer("openai/gpt-6-astra", JSON.stringify({ verdict: KEY, findings: [], invariants_checked: [], limitations: [] })) };
-      return { status: 200, json: answer("openai/gpt-6-astra", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [], limitations: ["x"] }), KEY) };
+      if (n === 2) return { status: 200, json: answer("openai/gpt-6-luna", JSON.stringify({ verdict: KEY, findings: [], invariants_checked: [], limitations: [] })) };
+      return { status: 200, json: answer("openai/gpt-6-luna", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [], limitations: ["x"] }), KEY) };
     });
     for (let i = 0; i < 3; i++) {
       const r = await run({ OPENROUTER_API_KEY: KEY, FULLBURN_CROSS_FAMILY_ENDPOINT: url });
@@ -194,7 +194,7 @@ describe("cross-family runner — fails closed at every step before a report exi
     let received = "";
     const url = await serve((body) => {
       received = body;
-      return { status: 200, json: answer("openai/gpt-6-astra", cleanReview, "gen-abc") };
+      return { status: 200, json: answer("openai/gpt-6-luna", cleanReview, "gen-abc") };
     });
     const r = await run({ OPENROUTER_API_KEY: "test-key", FULLBURN_CROSS_FAMILY_ENDPOINT: url });
     // The stand-in said PASS; the endpoint is not production; the report says FAIL.
@@ -205,13 +205,13 @@ describe("cross-family runner — fails closed at every step before a report exi
     const lines = text.split("\n");
     expect(lines[1]).toBe("Verdict: FAIL");
     expect(lines[2]).toMatch(/^verified-tree: [0-9a-f]{40}$/);
-    expect(lines[4]).toBe("Reviewer-family: OpenAI (gpt-6-astra via OpenRouter)");
+    expect(lines[4]).toBe("Reviewer-family: OpenAI (gpt-6-luna via OpenRouter)");
     expect(text).toMatch(/not the production router/);
     expect(text).toContain("Response id: gen-abc");
     expect(r.out).toMatch(/sha256 [0-9a-f]{64}/);
     // The request carried the human-owned definition and the real tree.
     const req = JSON.parse(received);
-    expect(req.model).toBe("openai/gpt-6-astra");
+    expect(req.model).toBe("openai/gpt-6-luna");
     expect(req.messages[0].content).toContain("You are the adversary.");
     expect(req.messages[1].content).toContain("===== FILE: fullburn/engine/src/gateway.ts");
     expect(req.provider).toEqual({ allow_fallbacks: false });

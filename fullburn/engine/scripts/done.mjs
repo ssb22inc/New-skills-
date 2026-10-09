@@ -26,7 +26,7 @@ import {
   ENGINE_REQUIREMENTS,
   PHASE0_REQUIREMENTS,
   automatedGateAck,
-  astraRoundCondition,
+  reviewerRoundCondition,
   canaryIsStale,
   class2Condition,
   isNonClaudeFamily,
@@ -245,8 +245,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
           : { ok: false, reason: `${crossRes.report}: ${prov.reason}` };
         if (!prov.ok) artifact = null;
       }
-      const c2 = astraRoundCondition(crossRes);
-      results.push({ id: "C2", title: "§2.1.2 (amended 2026-10-06) adversary round by GPT Astra PASS against this tree", status: c2.status, command: "astraRoundCondition(C3)", observed: c2.observed });
+      const c2 = reviewerRoundCondition(crossRes);
+      results.push({ id: "C2", title: "§2.1.2 (amended 2026-10-06, reviewer GPT-6 Luna since 2026-10-09) adversary round PASS against this tree", status: c2.status, command: "reviewerRoundCondition(C3)", observed: c2.observed });
       results.push({ id: "C3", title: "§2.1.3 cross-family read PASS against the SAME tree, artifact committed", status: crossRes.ok ? "PASS" : "FAIL", command: `checkAdversaryReport(non-Claude reports only, tree ${tree.slice(0, 12)})`, observed: crossRes.reason });
 
       // 4 — zero open findings

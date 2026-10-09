@@ -1231,7 +1231,7 @@ const MUTATIONS = [
   ["R9-01 the committed r9 report is pinned, not blocking", "engine/scripts/gate-lib.mjs",
     "  [\"ADVERSARY_REPORT_phase0.r9.md\", \"149d4541\"],",
     ""],
-  ["AR-01 C2 needs GPT Astra's PASS", "engine/scripts/done-lib.mjs",
+  ["AR-01 C2 needs the cross-family reviewer's PASS", "engine/scripts/done-lib.mjs",
     "  if (!crossFamily || crossFamily.ok !== true) {",
     "  if (!crossFamily) {"],
   // ---- 2026-10-06: the GPT Astra reviewer's route through the Law 11 scan (L54) ----
@@ -1311,6 +1311,10 @@ const MUTATIONS = [
   ["X7-05b the redaction set starts unloaded", "engine/src/gateway.ts",
     "  let redactionLoaded = false;",
     "  let redactionLoaded = true;"],
+  // ---- the reviewer is GPT-6 Luna (human instruction 2026-10-09, L63) ----
+  ["XF-LUNA the reviewer pin is GPT-6 Luna", "engine/scripts/cross-family-lib.mjs",
+    "export const REVIEWER_MODEL = \"openai/gpt-6-luna\";",
+    "export const REVIEWER_MODEL = \"openai/gpt-6-astra\";"],
   // ---- sharded harness runs (2026-10-09) ----
   ["MS-01 a shard's entries are its residue class", "engine/scripts/mutate-lib.mjs",
     "  return entries.filter((_, k) => k % n === i);",

@@ -4,7 +4,14 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/** These tests spawn the gate CLIs as child processes, up to ten in one test
+ * (~2.2 s idle). Under a sharded mutation run — three suites on four cores —
+ * that crossed vitest's 5 s default and the test timed out with nothing wrong,
+ * voiding the run's meta-check twice (2026-10-09). A longer TIMEOUT, not a
+ * retry: a real failure still fails on its first run. */
+vi.setConfig({ testTimeout: 60_000 });
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { VERIFIED_TREE_SCOPE } from "../../scripts/gate-lib.mjs";
 
@@ -386,7 +393,7 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -417,7 +424,7 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     git("add", "-A");
     git("commit", "-q", "-m", "caps through a link");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -439,7 +446,7 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     git("commit", "-q", "-m", "sign the caps");
     const base = git("rev-parse", "HEAD").trim();
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     // Rewrite the signed approval to say something the human never signed.
     write("fullburn/APPROVALS/2026-08-16-caps.md", "Approved-by: someone else\napproves: everything, forever\n");
     git("add", "-A");
@@ -469,7 +476,7 @@ describe("adversary-gate CLI — a PASS is a statement about the workflow too (R
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase and the CI");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -489,7 +496,7 @@ describe("adversary-gate CLI — a PASS is a statement about the workflow too (R
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase and the CI");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -515,7 +522,7 @@ describe("adversary-gate CLI — a PASS for another phase is not a PASS for this
     const tree = currentTreeHash();
     // Bound to the CURRENT tree and reading PASS: only the phase binding can
     // stop it, so a pass here would be for the wrong reason.
-    write("fullburn/reports/ADVERSARY_REPORT_phase1.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase1.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a phase-1 PASS");
     const base = git("rev-parse", "HEAD").trim();
@@ -569,7 +576,7 @@ describe("adversary-gate CLI", () => {
     write("fullburn/PHASE", "0\n");
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase");
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.x9.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.x9.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "a handwritten PASS");
     expect(gateEnv({}, "adversary-gate.mjs", repo, base).code, "an attested PASS was refused").toBe(0);
@@ -602,7 +609,7 @@ describe("adversary-gate CLI", () => {
     const base = git("rev-parse", "HEAD").trim();
     // Bound to the CURRENT tree, so only the append-only rule can stop it —
     // otherwise this would pass for the wrong reason (staleness).
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "edit the FAIL into a PASS");
     const res = gate("adversary-gate.mjs", repo, base);

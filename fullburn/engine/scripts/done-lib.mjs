@@ -198,15 +198,16 @@ export function isNonClaudeFamily(family) {
 }
 
 /** DONE.md §2.1.2 AS AMENDED BY THE HUMAN'S INSTRUCTION OF 2026-10-06 (ledger
- * L53): "all AI review and adversarial AI action should be done by GPT Astra".
+ * L53): "all AI review and adversarial AI action should be done by GPT Astra";
+ * since 2026-10-09 (L63) the reviewer is GPT-6 Luna.
  * The same-family Claude round is retired; the adversary round is the
  * cross-family read, so C2 is C3's verdict — the same predicate, so the two
  * rows cannot disagree, and anything short of a PASS is a FAIL. */
-export function astraRoundCondition(crossFamily) {
+export function reviewerRoundCondition(crossFamily) {
   if (!crossFamily || crossFamily.ok !== true) {
-    return { status: "FAIL", observed: `no GPT Astra adversary PASS at this tree${crossFamily?.reason ? ` — ${crossFamily.reason}` : ""}` };
+    return { status: "FAIL", observed: `no cross-family reviewer (GPT-6 Luna) PASS at this tree${crossFamily?.reason ? ` — ${crossFamily.reason}` : ""}` };
   }
-  return { status: "PASS", observed: `GPT Astra adversary PASS at this tree — ${crossFamily.reason}` };
+  return { status: "PASS", observed: `cross-family reviewer (GPT-6 Luna) PASS at this tree — ${crossFamily.reason}` };
 }
 
 /** DONE.md §2.1.10 AS AMENDED BY THE HUMAN'S RULING OF 2026-10-06 (ledger

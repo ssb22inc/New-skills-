@@ -1666,8 +1666,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const clean = { verdict: "PASS", findings: [], invariants_checked: [], limitations: [] };
           const report = xf.renderCrossReport({ phase: "0", round: "x1", tree: "a".repeat(40), commit: "c", branch: "b", requestedModel: xf.REVIEWER_MODEL, servedModel: xf.REVIEWER_MODEL, endpoint: xf.PRODUCTION_ENDPOINT, review: clean, verdict: xf.crossVerdict(clean), bundle: { included: [], omitted: [], bytes: 0 }, usage: null, responseId: null, addendumHash: "h", definitionHash: "h", startedAt: "t" });
           return (
-            xf.REVIEWER_MODEL === "openai/gpt-6-astra" &&
-            xf.servedModelAcceptable(xf.REVIEWER_MODEL, "openai/gpt-6-astra-pro").ok === false &&
+            xf.REVIEWER_MODEL === "openai/gpt-6-luna" &&
+            xf.servedModelAcceptable(xf.REVIEWER_MODEL, "openai/gpt-6-luna-pro").ok === false &&
             xf.servedModelAcceptable(xf.REVIEWER_MODEL, "anthropic/claude-x").ok === false &&
             xf.crossVerdict({ ...clean, findings: [{ id: "x", severity: 5, title: "t", file: "f", evidence: "e", reproduction: "r" }] }).verdict === "FAIL" &&
             xf.crossVerdict(clean, "http://127.0.0.1:9/x").verdict === "FAIL" &&
@@ -1926,6 +1926,11 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
         },
+      },
+      {
+        row: "L63",
+        claim: "the reviewer is pinned to openai/gpt-6-luna, its pro variant is refused, and the family stays non-Claude",
+        holds: () => xfLib.REVIEWER_MODEL === "openai/gpt-6-luna" && xfLib.servedModelAcceptable(xfLib.REVIEWER_MODEL, "openai/gpt-6-luna-pro").ok === false && doneLib.isNonClaudeFamily(xfLib.REVIEWER_FAMILY_LINE),
       },
       {
         row: "L62",

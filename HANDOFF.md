@@ -15,7 +15,7 @@ on any disagreement about *state*.
 - **Save every paid review, whatever its verdict.** The review workflow commits and attests the report on FAIL as well as PASS; a read whose report is lost is money wasted. (Human instruction, 2026-10-07.)
 - **Leave every API key un-rotated until the human says otherwise.** (Human instruction, 2026-10-06.)
 - **No cross-contamination with any other project** in this repository. (Human instruction, 2026-10-06.)
-- **All AI review and adversarial action is GPT Astra's; no same-family review.** (Human instructions, 2026-10-06.)
+- **All AI review and adversarial action is GPT-6 Luna's (`openai/gpt-6-luna`, since 2026-10-09; GPT Astra before); no same-family review.** (Human instructions, 2026-10-06 and 2026-10-09.)
 
 ## Tree and branch
 

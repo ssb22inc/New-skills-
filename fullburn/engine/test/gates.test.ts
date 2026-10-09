@@ -8,7 +8,7 @@ const TREE = "abc1234def5678";
 const OTHER_TREE = "0123456789abcdef";
 // Every fixture report declares a non-Claude reviewer: since 2026-10-06 (L55)
 // only such a reviewer's PASS opens the gate.
-const FAMILY = "Reviewer-family: OpenAI (gpt-6-astra)";
+const FAMILY = "Reviewer-family: OpenAI (gpt-6-luna)";
 const report = (verdict: string, tree = TREE) => ["# ADVERSARY_REPORT_phase0", `Verdict: ${verdict}`, `verified-tree: ${tree}`, FAMILY].join("\n");
 const goodReport = report("PASS (CONDITIONAL — live ledger open)");
 
@@ -67,7 +67,7 @@ describe("adversary-report gate (AC 4, Law 9, §10.3, R5)", () => {
       content: ["# r", "Verdict: PASS", `verified-tree: ${TREE}`, ...(family === null ? [] : [family])].join("\n"),
     });
     const gate = (r: { name: string; content: string }) => checkAdversaryReport({ phase: "0", reports: [r], currentTreeHash: TREE });
-    expect(gate(mk("Reviewer-family: OpenAI (gpt-6-astra)")).ok).toBe(true);
+    expect(gate(mk("Reviewer-family: OpenAI (gpt-6-luna)")).ok).toBe(true);
     expect(gate(mk("Reviewer-family: Claude (same-family engine-adversary)")).ok, "a Claude PASS opened the gate").toBe(false);
     expect(gate(mk("Reviewer-family: anthropic/claude-opus")).ok, "an Anthropic PASS opened the gate").toBe(false);
     expect(gate(mk(null)).ok, "an undeclared reviewer's PASS opened the gate").toBe(false);

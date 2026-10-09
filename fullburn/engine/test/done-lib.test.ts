@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, astraRoundCondition, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, reviewerRoundCondition, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -133,7 +133,7 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
   it("same-family and cross-family reports are two disjoint populations", () => {
     const r9 = { name: "ADVERSARY_REPORT_phase0.r9.md", content: "# r9\nVerdict: PASS\nverified-tree: abc\n" };
     const claude = { name: "ADVERSARY_REPORT_phase0.r15.md", content: "# r15\nVerdict: PASS\nverified-tree: abc\n\nReviewer-family: Claude (same family as the builder)\n" };
-    const x1 = { name: "ADVERSARY_REPORT_phase0.x1.md", content: "# x1\nVerdict: PASS\nverified-tree: abc\n\nReviewer-family: OpenAI (gpt-6-astra via OpenRouter)\n" };
+    const x1 = { name: "ADVERSARY_REPORT_phase0.x1.md", content: "# x1\nVerdict: PASS\nverified-tree: abc\n\nReviewer-family: OpenAI (gpt-6-luna via OpenRouter)\n" };
     const { same, cross } = splitReportsByFamily([r9, claude, x1]);
     expect(same.map((r: { name: string }) => r.name)).toEqual([r9.name, claude.name]);
     expect(cross.map((r: { name: string }) => r.name)).toEqual([x1.name]);
@@ -172,11 +172,11 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
   /** MUTATION: let C2 pass without the Astra read passing. Instruction of
    * 2026-10-06 (L53): every adversary round is GPT Astra's. */
   it("C2 passes only on the GPT Astra adversary's PASS at this tree", () => {
-    expect(astraRoundCondition({ ok: true, reason: "r" }).status).toBe("PASS");
-    expect(astraRoundCondition({ ok: false, reason: "stale" }).status, "a failing Astra read passed C2").toBe("FAIL");
-    expect(astraRoundCondition({ ok: false, reason: "stale" }).observed).toContain("stale");
-    expect(astraRoundCondition(undefined).status, "no Astra read passed C2").toBe("FAIL");
-    expect(astraRoundCondition({ reason: "unmeasured" }).status).toBe("FAIL");
+    expect(reviewerRoundCondition({ ok: true, reason: "r" }).status).toBe("PASS");
+    expect(reviewerRoundCondition({ ok: false, reason: "stale" }).status, "a failing Astra read passed C2").toBe("FAIL");
+    expect(reviewerRoundCondition({ ok: false, reason: "stale" }).observed).toContain("stale");
+    expect(reviewerRoundCondition(undefined).status, "no Astra read passed C2").toBe("FAIL");
+    expect(reviewerRoundCondition({ reason: "unmeasured" }).status).toBe("FAIL");
   });
 
   /** MUTATION: grant the automated ack without a C3 PASS. Ruling 2026-10-06

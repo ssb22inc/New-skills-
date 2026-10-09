@@ -610,7 +610,7 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
 
   // ONLY A NON-CLAUDE REVIEWER'S PASS OPENS THE GATE (human instruction
   // 2026-10-06, L55: no review may be done by the same family as the builder;
-  // every review is GPT Astra's). A same-family PASS bound to this tree is not
+  // every review is the cross-family reviewer's — GPT-6 Luna since 2026-10-09). A same-family PASS bound to this tree is not
   // evidence; a same-family FAIL still blocks above, because a FAIL is never
   // the dangerous direction. The family line is the runner's line 5, read
   // through the same visible-header rules as the verdict and the binding.
@@ -620,7 +620,7 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
   if (sameFamilyPass) {
     return {
       ok: false,
-      reason: `${sameFamilyPass.name}: a PASS from a same-family or undeclared reviewer — only a non-Claude reviewer (GPT Astra) can open this gate`,
+      reason: `${sameFamilyPass.name}: a PASS from a same-family or undeclared reviewer — only a non-Claude reviewer (GPT-6 Luna) can open this gate`,
     };
   }
 
