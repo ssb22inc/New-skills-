@@ -1,0 +1,110 @@
+{
+  "model": "openai/gpt-6-astra",
+  "mode": "trusted",
+  "meta": {
+    "base": "2994d8ae53705dc4206507b5daec4812f290372b",
+    "head": "9b7e06534a855cbabb1424ead0dbefc36ab9dd6d",
+    "pr": "134"
+  },
+  "reviewedAt": "2026-10-09T10:59:07.360Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-ci.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    ".github/workflows/pulsern-diagram-review.yml",
+    ".github/workflows/pulsern-narrate.yml",
+    "pulsern/.gitignore",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/check-player.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams-lib.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/narrate.mjs",
+    "pulsern/ops/preview-diagrams.mjs",
+    "pulsern/ops/review-diagrams-lib.mjs",
+    "pulsern/ops/review-diagrams.mjs",
+    "pulsern/ops/save-results.sh",
+    "pulsern/src/concept-explainers.jsx",
+    "pulsern/src/diagrams/abg.jsx",
+    "pulsern/src/diagrams/fingerprint.js",
+    "pulsern/src/diagrams/insulin.jsx",
+    "pulsern/src/diagrams/isolation.jsx",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/kit.jsx",
+    "pulsern/src/diagrams/match.js",
+    "pulsern/src/diagrams/tonicity.jsx",
+    "pulsern/src/explainer.jsx",
+    "pulsern/tests/abg.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/concept-explainers.test.jsx",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/diagram-match.test.js",
+    "pulsern/tests/diagram-motion.test.js",
+    "pulsern/tests/explainer.test.jsx",
+    "pulsern/tests/insulin.test.js",
+    "pulsern/tests/isolation.test.js",
+    "pulsern/tests/map-diagrams.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/save-results.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 236,
+      "title": "Binary-extension files can pass review without their contents being reviewed",
+      "problem": "This branch replaces every matching file with only its hash and size. It neither verifies that the file is actually binary nor requires a separate content review. A hash identifies a change; it cannot establish the accuracy of an image, PDF or recording. runReview can still return PASS for these files.",
+      "failure_scenario": "A PR replaces a public clinical diagram PNG or educational PDF with incorrect content. Astra receives only two hashes and byte counts, so the changed clinical material is never inspected. Likewise, text stored under a matching extension is hidden solely because of its filename.",
+      "fix": "Fail closed for assets whose contents cannot be represented for review. Route supported images/documents/audio through an appropriate trusted review path bound to the exact bytes. Detect text independently of the extension and include its actual changes. Add tests proving that a hash-only asset summary cannot certify publication.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/astra-review.mjs",
+      "line": 222,
+      "title": "UTF-8 decoding can erase executable changes before the lossless page digest",
+      "problem": "The page blobs are read through gitIn with encoding: \"utf8\". Invalid UTF-8 bytes are replaced with U+FFFD before pageDigest runs. Different byte sequences can therefore produce identical digests, despite the new lossless guarantee. Generated-page entries have no raw diff or full-file fallback.",
+      "failure_scenario": "Use a page under public/learn with <meta charset=\"windows-1252\"> and an inline script comparing string literals containing bytes 0xE9 and 0xEA. Changing the second literal to 0xE9 changes the browser's comparison from false to true. Node decodes both versions as a comparison between replacement characters, so collectChanges reports no textual change and omits the executable modification.",
+      "fix": "Read blobs as buffers and verify lossless decoding before constructing a textual digest. Reject unsupported encodings rather than replacing bytes silently, or use an encoding-aware representation that preserves every changed byte. Add a real-git regression test using these non-UTF-8 HTML buffers.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/tests/save-results.test.js",
+      "line": 60,
+      "title": "The executable-permission test fixes the script instead of checking it",
+      "problem": "chmodSync(SCRIPT, 0o755) succeeds even when the checked-in script is not executable. It also repairs the actual script before the subsequent save tests invoke it, masking the same defect throughout the suite.",
+      "failure_scenario": "Commit save-results.sh with mode 100644. npm test changes it to executable and passes all the save tests. The diagram-map, diagram-review and narration workflows do not run this repair; they invoke ops/save-results.sh directly and fail with Permission denied after doing the paid work.",
+      "fix": "Remove the chmod mutation. Assert executable access or the tracked executable mode without modifying the source file, and let the direct-invocation tests fail naturally when the bit is absent.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": ".github/workflows/pulsern-astra-review.yml",
+      "line": 53,
+      "title": "Manual PR resolution lacks pull-requests read permission",
+      "problem": "Once an explicit permissions block is supplied, omitted GITHUB_TOKEN permissions are disabled. The new resolver calls GET /repos/$REPO/pulls/$IN_PR using that token, but only contents: write is granted. Reading a private repository's PR requires pull-requests: read. Repository visibility was not provided, so I could not verify whether this currently affects this deployment.",
+      "failure_scenario": "In a private repository, a diagram or narration workflow pushes results and dispatches the trusted review with a PR number. The resolver's PR lookup fails with an authorization error before setting the review range or posting a status. Manual re-review fails the same way.",
+      "fix": "Grant pull-requests: read to the trusted review workflow, retaining the App-only status publisher. Add a permission check alongside the existing workflow tests.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 209149,
+    "completionTokens": 14332,
+    "reasoningTokens": 13293,
+    "costUsd": 3.330955
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. Two paths still allow content or executable changes to escape meaningful review, and a new test repairs the defect it claims to detect. Manual PR reviews also lack a permission required for private repositories. I could not run the tests/build or verify repository visibility and GitHub protection settings.",
+  "counts": {
+    "blocker": 3,
+    "major": 1,
+    "minor": 0
+  }
+}
