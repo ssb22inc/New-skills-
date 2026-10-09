@@ -106,7 +106,7 @@ jobs:
       # Pushes made with the workflow token do not trigger other workflows, so
       # the review this commit needs is requested explicitly — through the
       # trusted, range-verified dispatch (Astra, PR #133 review, finding 17).
-      - name: Request the Astra review of what was just pushed
+      - name: Request CI and the Astra review of what was just pushed
         if: always() && steps.save.outputs.pushed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -117,6 +117,13 @@ jobs:
         run: |
           set -euo pipefail
           api() { curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$@"; }
+          # CI on the commit actually pushed — after any rebase — so the
+          # publication guards (fresh map, current manifest, tests) run on the
+          # final tree, not on the one the job started from (Astra, PR #134
+          # review, round 5).
+          jq -n --arg ref "$BRANCH" '{ref:$ref}' |
+            api -X POST "https://api.github.com/repos/$REPO/actions/workflows/pulsern-ci.yml/dispatches" -d @- >/dev/null
+          echo "Started pulsern-ci on $BRANCH ($HEAD_SHA)."
           pr=$(api "https://api.github.com/repos/$REPO/pulls?state=open&head=$OWNER:$BRANCH" | jq -r '.[0].number // empty')
           if [ -z "$pr" ]; then echo "No open PR for $BRANCH: its review will run when one is opened."; exit 0; fi
           jq -n --arg ref "$DEFAULT_BRANCH" --arg head "$HEAD_SHA" --arg pr "$pr" '{ref:$ref,inputs:{head:$head,pr:$pr}}' |

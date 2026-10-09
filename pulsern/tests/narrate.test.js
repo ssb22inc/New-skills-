@@ -83,39 +83,46 @@ describe("which steps are recorded", () => {
    passed "it does lower the potassium" for "it does not" (0.976). */
 describe("the audio check on the real scripts", () => {
   const scripts = Object.values(DIAGRAMS).flatMap((d) => narratedSteps(d).map((st) => [`${d.id}/${st.key}`, st.narration]));
-  /* How a transcriber writes speech: digits, not number words. */
+  /* How a transcriber writes speech: digits, and spelled-out letters as
+     the abbreviation ("D-five-W" → "D5W", "P-A-C-O-2" → "PaCO2"). */
   const asTranscribed = (t) => {
-    // how a transcriber writes speech: digits, and abbreviations not spelled out
     let x = t;
-    while (/\b([A-Za-z])-(?=[A-Za-z0-9])/.test(x)) x = x.replace(/\b([A-Za-z])-(?=[A-Za-z0-9])/g, "$1§");
+    for (let prev = null; prev !== x;) {
+      prev = x;
+      x = x.replace(/\b([A-Za-z])-(?=[A-Za-z0-9])/g, "$1§").replace(/(?<=[A-Za-z0-9§])-([A-Za-z])\b/g, "§$1");
+    }
     return wordsToNumbers(x).replace(/§/g, "").replace(/\s+/g, " ");
   };
+  /* Every corruption test first proves its UNcorrupted transcript passes,
+     so it can only pass by catching the corruption — not because the
+     baseline already failed (Astra, PR #134 review, round 5: the dextrose
+     baseline failed before any mutation, so its tests proved nothing). */
+  const caughtOnly = (script, baseline, corrupted) => {
+    expect(corrupted, "the corruption must change the transcript").not.toBe(baseline);
+    expect(audioCheck(script, baseline), "uncorrupted baseline").toMatchObject({ pass: true });
+    expect(audioCheck(script, corrupted).pass, "corrupted").toBe(false);
+  };
 
-  /* Positive checks against transcripts written the way a transcriber
-     writes are the hand-written fixtures below; this only pins that every
-     script passes against itself. */
-  it.each(scripts)("%s passes against its own words", (_, script) => {
+  it.each(scripts)("%s passes against its own words and its transcribed form", (_, script) => {
     expect(audioCheck(script, script).pass).toBe(true);
+    expect(audioCheck(script, asTranscribed(script)).pass).toBe(true);
   });
 
   const NEG = /\b(not|never|no|without)\b/i;
   it.each(scripts.filter(([, t]) => NEG.test(t)))("%s fails when a negation is dropped", (_, script) => {
-    const corrupted = script.replace(NEG, "").replace(/\s{2,}/g, " ");
-    expect(audioCheck(script, corrupted).pass).toBe(false);
+    caughtOnly(script, script, script.replace(NEG, "").replace(/\s{2,}/g, " "));
   });
 
-  it.each(scripts.filter(([, t]) => /\d|\b(one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty)\b/i.test(wordsToNumbers(t))))(
-    "%s fails when a number is changed", (_, script) => {
-      const heard = asTranscribed(script);
-      const corrupted = heard.replace(/\d+(?:\.\d+)?/, (n) => String(Number(n) + 1));
-      expect(audioCheck(script, corrupted).pass).toBe(false);
-    });
+  it.each(scripts.filter(([, t]) => /\d/.test(asTranscribed(t))))("%s fails when a number is changed", (_, script) => {
+    const heard = asTranscribed(script);
+    caughtOnly(script, heard, heard.replace(/\d+(?:\.\d+)?/, (n) => String(Number(n) + 1)));
+  });
 
   const SWAP = [["above", "below"], ["below", "above"], ["into", "out of"], ["out of", "into"], ["high", "low"], ["low", "high"], ["first", "last"]];
   it.each(scripts.filter(([, t]) => SWAP.some(([w]) => new RegExp(`\\b${w}\\b`, "i").test(t))))(
     "%s fails when a direction is reversed", (_, script) => {
       const [w, r] = SWAP.find(([x]) => new RegExp(`\\b${x}\\b`, "i").test(script));
-      expect(audioCheck(script, script.replace(new RegExp(`\\b${w}\\b`, "i"), r)).pass).toBe(false);
+      caughtOnly(script, script, script.replace(new RegExp(`\\b${w}\\b`, "i"), r));
     });
 
   /* PR #134 review, finding 4: a recording that swapped the diagnosis
@@ -124,17 +131,26 @@ describe("the audio check on the real scripts", () => {
     ["hypokalemia", "hyperkalemia"], ["airborne", "droplet"], ["droplet", "airborne"], ["contact", "droplet"], ["calcium", "potassium"], ["swell", "shrink"]];
   it("fails Astra's case: the ABG pH step with acidosis heard as alkalosis", () => {
     const ph = DIAGRAMS.abg.steps.find((s) => s.key === "ph").narration;
-    expect(audioCheck(ph, ph.replace("acidosis", "alkalosis")).pass).toBe(false);
+    caughtOnly(ph, ph, ph.replace("acidosis", "alkalosis"));
   });
   it.each(scripts.filter(([, t]) => SWAPS.some(([w]) => new RegExp(`\\b${w}\\b`, "i").test(t))))(
     "%s fails when a clinical term is swapped", (_, script) => {
       const [w, r] = SWAPS.find(([x]) => new RegExp(`\\b${x}\\b`, "i").test(script));
-      expect(audioCheck(script, asTranscribed(script).replace(new RegExp(`\\b${w}\\b`, "i"), r)).pass).toBe(false);
+      const heard = asTranscribed(script);
+      caughtOnly(script, heard, heard.replace(new RegExp(`\\b${w}\\b`, "i"), r));
     });
   /* Not just a list of known swaps: change ANY word that carries meaning. */
   it.each(scripts)("%s fails when its longest word is replaced", (_, script) => {
     const longest = script.split(/[^A-Za-z]+/).sort((a, b) => b.length - a.length)[0];
-    expect(audioCheck(script, script.replace(longest, "something")).pass).toBe(false);
+    caughtOnly(script, script, script.replace(longest, "something"));
+  });
+  /* Round 5: ".45" lost its decimal point and matched "45". */
+  it("never lets a leading decimal point vanish", () => {
+    const lungs = DIAGRAMS.abg.steps.find((s) => s.key === "lungs").narration;
+    const heard = asTranscribed(lungs);
+    caughtOnly(lungs, heard, heard.replace("above 45", "above .45"));
+    expect(audioCheck("a level of zero point four five", "a level of .45").pass).toBe(true);
+    expect(audioCheck("a level of zero point four five", "a level of 45").pass).toBe(false);
   });
   /* Hand-written transcripts — how a transcriber actually writes these
      clips — NOT generated by the code under test (Astra, PR #134 review:

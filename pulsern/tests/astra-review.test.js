@@ -131,8 +131,8 @@ describe("collecting from real git output (Astra finding #3)", () => {
     const page = files.find((f) => f.path === "pulsern/public/learn/bow-tie/index.html");
     expect(page.form).toBe("page digest");
     expect(page.diff).toContain(`+TAG ${JSON.stringify('<script src="https://evil.example/x.js">')}`);
-    expect(page.diff).toMatch(/^-TEXT Old guide text\.$/m);
-    expect(page.diff).toMatch(/^\+TEXT New guide text\.$/m);
+    expect(page.diff).toContain(`-TEXT ${JSON.stringify("Old guide text.")}`);
+    expect(page.diff).toContain(`+TEXT ${JSON.stringify("New guide text.")}`);
   });
 
   it("shows a swapped download source in the lockfile summary", () => {
@@ -146,13 +146,13 @@ describe("collecting from real git output (Astra finding #3)", () => {
 describe("digests", () => {
   it("captures what a reader sees and what a browser runs", () => {
     const d = pageDigest(`<title>T</title><meta name="description" content="D"><script type="application/ld+json">{"a":1}</script><script>alert(1)</script><a href="/x" onclick="steal()">go</a><iframe src="https://x"></iframe><p>Body &amp; text</p>`);
-    expect(d).toContain("TEXT T");
+    expect(d).toContain('TEXT "T"');
     expect(d).toContain(`TAG ${JSON.stringify('<meta name="description" content="D">')}`);
     expect(d).toContain('SCRIPT-BODY "{\\"a\\":1}"');
     expect(d).toContain('SCRIPT-BODY "alert(1)"');
     expect(d).toContain(`TAG ${JSON.stringify('<a href="/x" onclick="steal()">')}`);
     expect(d).toContain(`TAG ${JSON.stringify('<iframe src="https://x">')}`);
-    expect(d).toContain("TEXT Body & text");
+    expect(d).toContain('TEXT "Body &amp; text"');
   });
 
   /* PR #133 review, finding 2: an unquoted script source with an empty
@@ -229,8 +229,27 @@ describe("digests", () => {
     expect(f.diff).toContain("window.x=alert(1)");
     rmSync(dir, { recursive: true, force: true });
   });
-  it("still ignores whitespace in the text a student reads", () => {
-    expect(textDiff(pageDigest('<p class="a">Hi  there</p>'), pageDigest('<p class="a">\n Hi there\n</p>'), "p")).toBe("");
+  /* Round 5: nothing is normalised any more — a false "</scriptx>"
+     turned code into "text", and text whitespace was then collapsed. */
+  it("shows code activated behind a false </scriptx> close, end to end", () => {
+    const a = "<script>/* </scriptx> */ // disabled alert(1)</script>";
+    const b = "<script>/* </scriptx> */ // disabled\nalert(1)</script>";
+    expect(pageDigest(a)).not.toBe(pageDigest(b));
+    const dir = mkdtempSync(join(tmpdir(), "astra-sx-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    const page = "pulsern/public/learn/z/index.html";
+    mkdirSync(join(dir, "pulsern/public/learn/z"), { recursive: true });
+    writeFileSync(join(dir, page), a); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, page), b); run("add", "-A"); run("commit", "-qm", "h");
+    const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === page);
+    expect(f.diff).toContain("disabled\\nalert(1)");
+    rmSync(dir, { recursive: true, force: true });
+  });
+  it("is lossless: any byte that changes shows", () => {
+    for (const [a, b] of [["<p>Hi  there</p>", "<p>Hi there</p>"], ["<p>x</p>", "<p>x</p>\n"], ["<b>a</b>", "<b >a</b>"]]) {
+      expect(pageDigest(a), `${a} vs ${b}`).not.toBe(pageDigest(b));
+    }
   });
 
   /* PR #133 review, finding 3: a git dependency moved to another commit at

@@ -81,24 +81,20 @@ export const MAX_FULL_FILE_CHARS = 60_000;
    Compact forms for generated pages and the lockfile
    --------------------------------------------------------------------------- */
 
-const decode = (s) => s
-  .replace(/&nbsp;|&#160;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
-  .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 
 /* One line per thing a browser sees, in document order, so a line diff of
-   two digests shows exactly what changed for a reader — and for a browser.
+   two digests shows exactly what changed — for a reader and for a browser.
 
-   Exact where it matters: script and style bodies, comments, and every
-   quoted attribute value are kept byte-for-byte (JSON-escaped onto one
-   line), because whitespace there can change behaviour — a newline ends a
-   // comment and activates the code after it (Astra, PR #134 review,
-   finding 3). Whitespace is collapsed only where HTML ignores it: between
-   attributes, inside the tag name, and in text. An earlier digest kept only
-   what it recognised, so an unquoted <script src=…> vanished from review
-   (PR #133 review, finding 2). */
-const TAG = /<(?:"[^"]*"|'[^']*'|[^'">])*>/y;
-const squash = (s) => s.replace(/\s+/g, " ").trim();
+   LOSSLESS. Every tag, comment, script/style body and run of text is kept
+   byte-for-byte (JSON-escaped onto one line); the digest only splits the
+   page into lines so the diff is readable. Five rounds of review each found
+   a way that "insignificant" normalisation hid an executable change —
+   unquoted attributes, whitespace in handlers, a newline after a //
+   comment, a false </scriptx> close (Astra, PR #133–#134 reviews) — so
+   nothing is normalised any more. A regenerated page whose markup really
+   changed is a real change and is shown. */
 const exact = (s) => JSON.stringify(s);
+const TAG = /<(?:"[^"]*"|'[^']*'|[^'">])*>/y;
 /* Tags are kept VERBATIM (JSON-escaped onto one line). Every attempt to
    normalise whitespace inside a tag eventually hid a behaviour change —
    last, "onerror=window.x =alert(1)" vs "onerror=window.x=alert(1)",
@@ -108,7 +104,7 @@ export function pageDigest(html) {
   const src = String(html ?? "");
   const out = [];
   let i = 0, text = "";
-  const flushText = () => { const t = squash(decode(text)); if (t) out.push(`TEXT ${t}`); text = ""; };
+  const flushText = () => { if (text.length) out.push(`TEXT ${exact(text)}`); text = ""; };
   while (i < src.length) {
     if (src.startsWith("<!--", i)) {
       const end = src.indexOf("-->", i + 4);
@@ -129,7 +125,11 @@ export function pageDigest(html) {
         /* Raw-text elements: the body is code or CSS, kept exactly. */
         const raw = /^<(script|style)\b/i.exec(tag)?.[1]?.toLowerCase();
         if (raw) {
-          const close = src.toLowerCase().indexOf(`</${raw}`, i);
+          /* A real end tag only: "</script" followed by whitespace, "/" or ">".
+             "</scriptx>" does not close a script (Astra, PR #134, round 5). */
+          const closeRe = new RegExp(`</${raw}(?=[\\s/>])`, "ig");
+          closeRe.lastIndex = i;
+          const close = closeRe.exec(src)?.index ?? -1;
           const end = close < 0 ? src.length : close;
           const body = src.slice(i, end);
           if (body.length) out.push(`${raw.toUpperCase()}-BODY ${exact(body)}`);

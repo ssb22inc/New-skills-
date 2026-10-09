@@ -282,8 +282,11 @@ describe("bot pushes are reviewed", () => {
     const w = readFileSync(join(LIVE_DIR, f), "utf8");
     expect(w).toMatch(/^  actions: write/m);
     expect(w).toMatch(/echo "pushed=true" >> "\$GITHUB_OUTPUT"; echo "head=\$\(git rev-parse HEAD\)"/);
-    const step = w.slice(w.indexOf("- name: Request the Astra review of what was just pushed"));
+    const step = w.slice(w.indexOf("- name: Request CI and the Astra review of what was just pushed"));
     expect(step).toMatch(/if: always\(\) && steps\.save\.outputs\.pushed == 'true'/);
+    // CI on the pushed head (round 5): a workflow-token push starts no CI by itself
+    expect(step).toContain("actions/workflows/pulsern-ci.yml/dispatches");
+    expect(step.indexOf("pulsern-ci.yml/dispatches")).toBeLessThan(step.indexOf("pulls?state=open"));
     expect(step).toContain("actions/workflows/pulsern-astra-review.yml/dispatches");
     // through the verified path: the PR number and its head, from the default branch
     expect(step).toMatch(/inputs:\{head:\$head,pr:\$pr\}/);

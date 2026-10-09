@@ -82,6 +82,9 @@ export function wordsToNumbers(text) {
    five"). A hyphen BETWEEN two numbers is a range: "3-5" reads "3 to 5". */
 export function signsAndRanges(text) {
   return String(text)
+    /* ".45" is 0.45, never 45: a leading decimal point is a digit's
+       business (Astra, PR #134 review, round 5). */
+    .replace(/(^|[^0-9])\.(?=\d)/g, "$10.")
     .replace(/(\d)\s*[-–]\s*(?=\d)/g, "$1 to ")
     .replace(/(^|[^A-Za-z0-9])[-−–](?=\s*\d)/g, "$1 minus ")
     .replace(/\bnegative\b/gi, "minus");
@@ -161,7 +164,7 @@ export function speechTokens(text) {
     .replace(/\bcan['’]t\b/g, "can not").replace(/\bwon['’]t\b/g, "will not").replace(/n['’]t\b/g, " not")
     .replace(/\bcannot\b/g, "can not").replace(/['’]s\b/g, "s").replace(/['’](re|ve|ll|d|m)\b/g, " $1");
   return wordsToNumbers(expanded).replace(/§/g, "").replace(/(\d)\.(?!\d)/g, "$1 ").split(/[^a-z0-9.]+/)
-    .map((w) => w.replace(/^\.+|\.+$/g, "")).filter(Boolean)
+    .map((w) => w.replace(/\.+$/g, "").replace(/^\.+(?!\d)/, "")).filter(Boolean)
     /* plural -s dropped from longer words, but not -ss/-is/-us (acidosis) */
     .map((w) => (w.length > 4 && /s$/.test(w) && !/(ss|is|us)$/.test(w) ? w.slice(0, -1) : w))
     .filter((w) => !FILLER.has(w));
@@ -187,7 +190,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 3;
+export const QA_VERSION = 4;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);
