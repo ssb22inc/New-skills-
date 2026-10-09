@@ -67,7 +67,8 @@ if (PREPARED) {
 } else {
   const { renderDiagrams } = await import("./render-diagrams.mjs");
   const root = SOURCE ? resolve(SOURCE) : ".";
-  const before = PREPARE ? worktree(root) : null;
+  /* The tree must be exactly the pinned commit, before and after rendering. */
+  if (PREPARE && worktree(root) !== "") throw new Error(`${root} has changes beyond its commit — refusing to prepare frames that may not show it`);
   const { gallery, lintFailures, data } = await renderDiagrams({ outDir: resolve(tmpdir(), `pulsern-diagram-review-${Date.now()}`), only: ONLY, root });
   if (lintFailures.length) {
     console.error("Layout lint failed — fix these before spending on a review:");
@@ -77,8 +78,7 @@ if (PREPARED) {
   entries = localEntries(Object.values(data), gallery, (p) => readFileSync(p), ONLY);
   checkInventory(entries.map((x) => x.data), stepInventory(root), ONLY);
   if (PREPARE) {
-    /* The tree is exactly the pinned commit, before and after rendering. */
-    if (before !== "" || worktree(root) !== "") throw new Error(`${root} has changes beyond its commit — refusing to prepare frames that may not show it`);
+    if (worktree(root) !== "") throw new Error(`${root} has changes beyond its commit — refusing to prepare frames that may not show it`);
     mkdirSync(PREPARE, { recursive: true });
     for (const { data, pngs } of entries) {
       mkdirSync(join(PREPARE, data.id), { recursive: true });

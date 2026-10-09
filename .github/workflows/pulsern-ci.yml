@@ -40,14 +40,16 @@ jobs:
 
       - run: npm ci
 
+      # Before the tests: the diagram renderer's tests draw in a real browser.
+      - name: Browser for the tests and player checks
+        run: npx playwright install --with-deps chromium
+
       # Includes the workflow-placement guard.
       - name: Tests
         run: npm test
 
       # The explainer player mounted in a real browser: pause really stops
       # the motion, and reduced motion never advances on its own.
-      - name: Browser for the player checks
-        run: npx playwright install --with-deps chromium
       - name: Player checks
         run: node ops/check-player.mjs
       # Canonical PNG conversion checked by Chromium's own decoder: every
