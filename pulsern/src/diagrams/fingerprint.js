@@ -12,8 +12,8 @@
    FNV-1a, 32-bit: deterministic, dependency-free, identical in Node and the
    browser. It guards against mismatches, not tampering — the map is a
    reviewed file in the repository, not user input. */
-export function fingerprint(q) {
-  const s = `${q?.stem ?? ""}\u0000${q?.rationale ?? ""}`;
+export function fnv1a(text) {
+  const s = String(text ?? "");
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -21,3 +21,5 @@ export function fingerprint(q) {
   }
   return h.toString(16).padStart(8, "0");
 }
+
+export const fingerprint = (q) => fnv1a(`${q?.stem ?? ""}\u0000${q?.rationale ?? ""}`);

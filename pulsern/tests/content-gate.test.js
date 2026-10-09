@@ -95,7 +95,9 @@ describe("no content script escapes the gate", () => {
      the reason it is outside this gate. A new script that calls a model fails
      this test until someone decides which it is. */
   const INFRA = { llm: "the shared client", review: "the gate itself", "astra-review": "code review, not content" };
-  const OUTSIDE = { "seo-adversary-ai": "public-page SEO release gate; its model is set in its workflow and is a separate owner decision" };
+  const OUTSIDE = {
+    "seo-adversary-ai": "public-page SEO release gate; its model is set in its workflow and is a separate owner decision",
+  };
 
   it("accounts for every ops script that calls a model", () => {
     const callers = readdirSync("ops").filter((f) => f.endsWith(".mjs"))

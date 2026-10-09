@@ -5,7 +5,7 @@
    a rationale. If any of it fails to load, the rationale simply stands on
    its own: a diagram is an enhancement, never a dependency. */
 import React from "react";
-import { fingerprint } from "./diagrams/fingerprint.js";
+import { fingerprint, fnv1a } from "./diagrams/fingerprint.js";
 
 /* At most two diagrams under one rationale: more is a wall, not a help. */
 export const MAX_PER_QUESTION = 2;
@@ -22,12 +22,27 @@ export function pairsFor(map, q, registry) {
     .map((e) => ({ diagram: registry[e.d], params: e.p ?? null }));
 }
 
+/* Pure: the recorded clips for a diagram, keyed by step. A clip is used
+   only if the words it recorded are still the words on the step — if a
+   script was edited and not yet re-recorded, that step falls back to a
+   timed caption rather than playing old audio over new words. */
+export function audioFor(manifest, diagram) {
+  const clips = manifest?.clips?.[diagram?.id];
+  if (!clips) return null;
+  const out = {};
+  for (const s of diagram.steps) {
+    const c = clips[s.key];
+    if (!s.dynamic && s.narration && c?.url && c.textFp === fnv1a(s.narration)) out[s.key] = c.url;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 export function ConceptExplainers({ q }) {
   const [mods, setMods] = React.useState(null);
   React.useEffect(() => {
     let live = true;
-    Promise.all([import("./diagrams/item-map.json"), import("./diagrams/index.js"), import("./explainer.jsx")])
-      .then(([map, reg, ex]) => { if (live) setMods({ map: map.default ?? map, registry: reg.DIAGRAMS, Explainer: ex.Explainer }); })
+    Promise.all([import("./diagrams/item-map.json"), import("./diagrams/index.js"), import("./explainer.jsx"), import("./diagrams/narration.json")])
+      .then(([map, reg, ex, nar]) => { if (live) setMods({ map: map.default ?? map, registry: reg.DIAGRAMS, Explainer: ex.Explainer, narration: nar.default ?? nar }); })
       .catch(() => { /* the rationale stands alone */ });
     return () => { live = false; };
   }, []);
@@ -36,6 +51,6 @@ export function ConceptExplainers({ q }) {
   if (!pairs.length) return null;
   const { Explainer } = mods;
   return pairs.map(({ diagram, params }) => (
-    <Explainer key={`${q.id}-${diagram.id}`} diagram={diagram} params={params} />
+    <Explainer key={`${q.id}-${diagram.id}`} diagram={diagram} params={params} audio={audioFor(mods.narration, diagram)} />
   ));
 }
