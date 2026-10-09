@@ -198,3 +198,50 @@ describe("prepared diagrams are checked against the source's own steps", () => {
     expect(() => checkInventory([prepared("tonicity", inventory.tonicity)], inventory, "abg")).toThrow(/not the diagrams in the source/);
   });
 });
+
+/* Astra, PR #134 review, round 25: the prepare job ran the branch's own
+   render script, so nothing proved the frames showed the pinned source.
+   Now the trusted script renders a source tree it is pointed at; the
+   tree's diagram code runs only in the browser, and a tree that differs
+   from its commit is refused. */
+describe("frames are rendered from the source tree by the trusted renderer", () => {
+  const { cpSync } = require("node:fs");
+  const git = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8" });
+  const source = () => {
+    const root = mkdtempSync(join(tmpdir(), "render-src-"));
+    cpSync("src", join(root, "src"), { recursive: true });
+    cpSync("package.json", join(root, "package.json"));
+    const abg = join(root, "src/diagrams/abg.jsx");
+    // the title says where the diagram code actually ran
+    writeFileSync(abg, readFileSync(abg, "utf8").replace('title: "Reading an ABG"', 'title: typeof process === "undefined" ? "ABG drawn in the browser" : "ABG drawn in Node"'));
+    git(root, "init", "-q"); git(root, "add", "-A");
+    git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "source");
+    return root;
+  };
+  const prepare = (root, out) => spawnSync(process.execPath, ["ops/review-diagrams.mjs", "--prepare", out, "--source", root, "--only", "abg"], { encoding: "utf8", timeout: 240_000 });
+
+  it("renders the given tree in the browser, and records its commit", () => {
+    const root = source(), out = mkdtempSync(join(tmpdir(), "render-out-"));
+    try {
+      const r = prepare(root, out);
+      expect(r.status, r.stderr).toBe(0);
+      const plan = JSON.parse(readFileSync(join(out, "plan.json"), "utf8"));
+      expect(plan.commit).toBe(git(root, "rev-parse", "HEAD").trim());
+      expect(plan.diagrams.map((d) => d.title)).toEqual(["ABG drawn in the browser"]);
+      expect(plan.diagrams[0].steps.map((s) => s.key)).toEqual(["ph", "lungs", "kidneys", "rome", "worked", "compensation"]);
+      expect(readFileSync(join(out, "abg/0.png")).subarray(1, 4).toString()).toBe("PNG");
+      expect(git(root, "status", "--porcelain", "--ignored"), "rendering left the tree untouched").toBe("");
+    } finally { rmSync(root, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); }
+  }, 300_000);
+
+  it("refuses a tree that differs from its commit", () => {
+    const root = source(), out = mkdtempSync(join(tmpdir(), "render-out-"));
+    try {
+      writeFileSync(join(root, "src/diagrams/stray.txt"), "not committed\n");
+      const r = prepare(root, out);
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toMatch(/changes beyond its commit/);
+      expect(existsSync(join(out, "plan.json"))).toBe(false);
+    } finally { rmSync(root, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); }
+  }, 300_000);
+});

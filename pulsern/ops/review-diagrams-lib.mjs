@@ -51,7 +51,7 @@ export const DIAGRAM_REVIEW_SCHEMA = {
 /* The frames a diagram's review must show, in order: the inline overview
    and every explainer step, in both themes. Defined here, by trusted code,
    from the step keys — never taken from prepared data (round 22). */
-import { THEMES, expectedFrames, frameLabel, frameIds } from "./diagram-attest.mjs";
+import { THEMES, expectedFrames, frameLabel, frameIds, signApproval, verifyApproval } from "./diagram-attest.mjs";
 export { THEMES, expectedFrames, frameLabel, frameIds };
 
 /* The images, in the order they are attached, with what each one is. */
@@ -178,10 +178,13 @@ export function renderReviewMarkdown(r) {
    timeout, bad key, malformed answer — is not a verdict and is retried on
    the next run (Astra, PR #134 review, round 6: errors were cached as FAIL,
    and the normal re-run could never recover). */
-/* A cached verdict also needs the same frame set on record: an entry from
-   before frames were recorded is re-reviewed, never carried (round 24). */
-export const canReuse = (prev, key, force = false, frames = null) => !force && !!prev && prev.key === key && prev.completed === true &&
-  Array.isArray(frames) && Array.isArray(prev.frames) && prev.frames.length === frames.length && prev.frames.every((f, i) => f === frames[i]);
+/* A cached verdict also needs the same frame set on record — an entry from
+   before frames were recorded is re-reviewed, never carried (round 24) —
+   and the review job's signature: the index is in the branch, so an entry
+   the branch wrote itself is never taken as a review (round 25). */
+export const canReuse = (prev, key, force = false, frames = null, id = null, secret = null) => !force && !!prev && prev.key === key && prev.completed === true &&
+  Array.isArray(frames) && Array.isArray(prev.frames) && prev.frames.length === frames.length && prev.frames.every((f, i) => f === frames[i]) &&
+  typeof id === "string" && typeof secret === "string" && verifyApproval(id, prev, secret);
 
 /* One diagram's review. `ask` returns the reviewer's parsed answer. The
    result says whether a valid review completed, separately from what it
@@ -209,13 +212,15 @@ export async function reviewOne({ d, key, images, ask, model, now = () => new Da
    paid attempt, and the paid call has its own timeout, shorter than the
    job's, so the save steps still run (Astra, PR #134 review, round 13). */
 export const REVIEW_CALL_TIMEOUT_MS = 12 * 60 * 1000;
-export async function reviewAndRecord({ d, key, images, ask, model, dir, index, sourceKey, write, now = () => new Date().toISOString(), cost = () => null, timeoutMs = REVIEW_CALL_TIMEOUT_MS }) {
+export async function reviewAndRecord({ d, key, images, ask, model, dir, index, sourceKey, write, secret, now = () => new Date().toISOString(), cost = () => null, timeoutMs = REVIEW_CALL_TIMEOUT_MS }) {
+  if (typeof secret !== "string" || secret.length < 32) throw new Error("reviewAndRecord: no signing key — a review that cannot be signed is not recorded");
   const startedAt = now();
   const base = `${dir}/${d.id}/${startedAt.replace(/[:.]/g, "-")}-${key}`;
   const record = (r) => {
     write(`${base}.md`, renderReviewMarkdown(r));
     write(`${base}.json`, JSON.stringify(r, null, 2) + "\n");
-    index[d.id] = { key, sourceKey, frames: frameIds(d.images), verdict: r.verdict, completed: r.completed, reviewedAt: r.reviewedAt, report: `${base}.md`, counts: r.counts ?? null };
+    const entry = { key, sourceKey, frames: frameIds(d.images), verdict: r.verdict, completed: r.completed, reviewedAt: r.reviewedAt, model, report: `${base}.md`, counts: r.counts ?? null };
+    index[d.id] = { ...entry, sig: signApproval(d.id, entry, secret) };
     write(`${dir}/index.json`, JSON.stringify(index, null, 2) + "\n");
   };
   record({ id: d.id, title: d.title, model, reviewedAt: startedAt, images, key, findings: [], usage: null, completed: false, verdict: "ERROR",
@@ -254,7 +259,7 @@ export { diagramSources } from "./diagram-attest.mjs";
 export function reviewData(d, images) {
   return {
     id: d.id, title: d.title, facts: d.facts,
-    workedCaption: d.dynamicCaption ? d.dynamicCaption(d.example) : null,
+    workedCaption: typeof d.dynamicCaption === "function" ? d.dynamicCaption(d.example) : (d.workedCaption ?? null),
     steps: d.steps.map((s) => ({ key: s.key, dynamic: !!s.dynamic, focus: s.focus ?? [], caption: s.dynamic ? null : s.caption, narration: s.dynamic ? null : s.narration })),
     images: images.map((p) => ({ theme: p.theme, key: p.key })),
   };

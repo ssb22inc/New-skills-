@@ -35,7 +35,7 @@ import {
   itemHash, diagramHash, decisionKey, isFresh, pairingPrompt, PAIRING_SCHEMA,
   buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor,
 } from "./map-diagrams-lib.mjs";
-import { sourceKey, readReviewIndex, approval, stepInventory } from "./diagram-attest.mjs";
+import { sourceKey, readReviewIndex, approval, stepInventory, attestKey } from "./diagram-attest.mjs";
 import { readPrepared, mapPlan, headCommit, checkInventory } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
@@ -70,7 +70,10 @@ const REVIEWS = readReviewIndex();
 /* The real steps, read from the source by this script (round 24): an
    approval counts only if its review covered every one of them. */
 const STEPS = stepInventory();
-const approvedNow = (id) => !!STEPS[id] && approval(REVIEWS, id, KEY, STEPS[id]).ok;
+/* Only a review the review job signed counts (round 25). The prepare job
+   decides nothing about approval, so it needs no key. */
+const SECRET = PREPARE ? null : attestKey();
+const approvedNow = (id) => !!STEPS[id] && approval(REVIEWS, id, KEY, STEPS[id], SECRET).ok;
 /* What today's matcher proposes for each question; filled once the bank
    is read. A decision ships only if its values still match. */
 const PROPOSALS = new Map();
@@ -117,8 +120,8 @@ try {
     ({ proposePairs } = await vite.ssrLoadModule("/src/diagrams/match.js"));
   }
   run.heldBack = {};
-  for (const id of Object.keys(DIAGRAMS)) {
-    const a = STEPS[id] ? approval(REVIEWS, id, KEY, STEPS[id]) : { ok: false, why: "not a diagram in the source" };
+  if (!PREPARE) for (const id of Object.keys(DIAGRAMS)) {
+    const a = STEPS[id] ? approval(REVIEWS, id, KEY, STEPS[id], SECRET) : { ok: false, why: "not a diagram in the source" };
     if (!a.ok) run.heldBack[id] = a.why;
   }
   if (Object.keys(run.heldBack).length) console.log(`Held back, not reviewed for pairing: ${JSON.stringify(run.heldBack)}`);

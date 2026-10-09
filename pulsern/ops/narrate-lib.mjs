@@ -192,8 +192,10 @@ export function criticalTerms(text) {
    "an" and "the" are never clinical labels and stay droppable. Nor is
    "er": it is ER — emergency room, extended release — however it is
    spelled (ER, E.R., E-R), so it must be heard too (Astra, PR #134
-   review, round 18: "E-R tablets" heard as "tablets" passed). */
-const FILLER = new Set(["an", "the", "um", "uh", "erm"]);
+   review, round 18: "E-R tablets" heard as "tablets" passed). Nor is
+   "um": it is the micrometre written in ASCII, so "5 um" heard as "five"
+   must fail (round 25). */
+const FILLER = new Set(["an", "the", "uh", "erm"]);
 /* One token per unit, however it is written or said (plurals are already
    dropped): micrograms are never grams or milligrams. */
 const UNIT_ALIASES = {
@@ -201,6 +203,7 @@ const UNIT_ALIASES = {
   milligram: "mg", gram: "g", kilogram: "kg",
   milliliter: "ml", millilitre: "ml",
   microl: "mcl", microliter: "mcl", microlitre: "mcl",
+  um: "um", microm: "um", micrometer: "um", micrometre: "um", micron: "um",
   milliequivalent: "meq", millimole: "mmol",
 };
 /* Every "a" and "er" is a token (see FILLER), so neither needs special
@@ -272,7 +275,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 13;
+export const QA_VERSION = 14;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);

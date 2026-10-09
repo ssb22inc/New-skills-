@@ -9,8 +9,10 @@ name: pulsern-diagram-review
 # Unchanged diagrams keep their earlier verdict. Every paid review is
 # committed back to the branch, PASS or FAIL.
 #
-# Two jobs (Astra, PR #134 review, round 21): "prepare" checks out the chosen
-# branch and runs its code with NO secrets, only to turn it into data;
+# Two jobs (Astra, PR #134 review, round 21): "prepare" renders the chosen
+# branch with NO secrets, using the DEFAULT branch's renderer — the branch's
+# diagram code runs only inside the browser, so the frames are the trusted
+# renderer's pictures of the pinned commit (round 25);
 # "paid" runs the DEFAULT branch's scripts with the secrets, reads that data,
 # and commits the results to the branch. Dispatch from the default branch.
 # The secrets belong in the "pulsern-paid" environment, restricted to the
@@ -37,8 +39,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 1. The branch's code runs HERE, with no secrets: it only turns the branch
-  #    into data (ops/prepared.mjs). Its token can read, not write.
+  # 1. No secrets HERE. The default branch's scripts render the branch,
+  #    whose own code runs only inside the browser, and turn it into data
+  #    (ops/prepared.mjs). Its token can read, not write.
   prepare:
     runs-on: ubuntu-latest
     permissions:
@@ -53,7 +56,7 @@ jobs:
     timeout-minutes: 60
     defaults:
       run:
-        working-directory: pulsern
+        working-directory: trusted/pulsern
     steps:
       # Only a plain feature-branch name is accepted, and never the default
       # branch: "refs/heads/main", tags, SHAs and other aliases are refused
@@ -92,15 +95,33 @@ jobs:
         run: |
           [ "$REF" = "refs/heads/$DEFAULT_BRANCH" ] || { echo "::error::Dispatch this workflow from $DEFAULT_BRANCH; choose the branch to work on with the branch input."; exit 1; }
 
+      # The renderer is the default branch's (this run's own commit); the
+      # branch is checked out beside it as data. Nothing from the branch is
+      # installed, and none of its scripts run (round 25).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
+          path: branch
           persist-credentials: false
 
       - name: Pin the commit
         id: pin
+        working-directory: branch
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Refuse links and special files in the branch checkout
+        working-directory: .
+        run: |
+          bad=$(find branch -path branch/.git -prune -o \( -type l -o \( ! -type f ! -type d \) \) -print)
+          if [ -n "$bad" ]; then echo "::error::Links or special files found; refusing to run:"; echo "$bad"; exit 1; fi
+
+      # No Actions cache (round 24).
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -108,11 +129,11 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
 
-      - name: Turn the branch into data (no secrets)
+      - name: Render the branch with the default branch's renderer (no secrets)
         run: |
           [[ -z "${ONLY:-}" || "$ONLY" =~ ^[a-z0-9-]+$ ]] || { echo "::error::only must be a diagram id"; exit 1; }
           mkdir -p "$RUNNER_TEMP/prepared"
-          node ops/review-diagrams.mjs --prepare "$RUNNER_TEMP/prepared/review" ${ONLY:+--only "$ONLY"}
+          node ops/review-diagrams.mjs --prepare "$RUNNER_TEMP/prepared/review" --source "$GITHUB_WORKSPACE/branch/pulsern" ${ONLY:+--only "$ONLY"}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -184,6 +205,7 @@ jobs:
         working-directory: trusted/pulsern
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DIAGRAM_ATTEST_KEY: ${{ secrets.DIAGRAM_ATTEST_KEY }}
         run: |
           set +e
           [[ -z "$ONLY" || "$ONLY" =~ ^[a-z0-9-]+$ ]] || { echo "::error::only must be a diagram id"; exit 1; }

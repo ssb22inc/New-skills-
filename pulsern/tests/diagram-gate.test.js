@@ -8,9 +8,11 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync, cpSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { approval, sourceKey, readReviewIndex, mapIsCurrent, stepInventory, diagramSteps, expectedFrames, frameIds } from "../ops/diagram-attest.mjs";
+import { approval, sourceKey, readReviewIndex, mapIsCurrent, stepInventory, diagramSteps, expectedFrames, frameIds, signApproval, verifyApproval } from "../ops/diagram-attest.mjs";
 import { publishable, sameProposal, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey } from "../ops/map-diagrams-lib.mjs";
 
+const KEY = "t".repeat(40);
+const signed = (id, e, key = KEY) => ({ ...e, sig: signApproval(id, e, key) });
 const dg = { id: "abg", title: "ABG", facts: ["f"], steps: [{ key: "ph", caption: "c", narration: "n" }] };
 const q = { id: 7, stem: "pH 7.30, PaCO2 55, HCO3 24", options: ["a", "b"], rationale: "r", answer: "a" };
 const decision = { attach: true, itemHash: itemHash(q), diagramHash: diagramHash(dg), fp: "abc", shown: null };
@@ -18,11 +20,26 @@ const decision = { attach: true, itemHash: itemHash(q), diagramHash: diagramHash
 describe("approval of a diagram for publication", () => {
   it("fails closed when missing, failed or stale", () => {
     const steps = ["ph", "lungs"], frames = frameIds(expectedFrames(steps));
-    expect(approval({}, "abg", "k1", steps)).toEqual({ ok: false, why: "never reviewed" });
-    expect(approval({ abg: { verdict: "FAIL", sourceKey: "k1", frames } }, "abg", "k1", steps).ok).toBe(false);
-    expect(approval({ abg: { verdict: "PASS", sourceKey: "old", frames } }, "abg", "k1", steps)).toEqual({ ok: false, why: "changed since its review" });
-    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1", frames } }, "abg", "k1", steps)).toEqual({ ok: true, why: null });
-    expect(() => approval({ abg: { verdict: "PASS", sourceKey: "k1", frames } }, "abg", "k1")).toThrow(/real steps are required/);
+    const idx = (e) => ({ abg: signed("abg", e) });
+    expect(approval({}, "abg", "k1", steps, KEY)).toEqual({ ok: false, why: "never reviewed" });
+    expect(approval(idx({ verdict: "FAIL", sourceKey: "k1", frames }), "abg", "k1", steps, KEY).ok).toBe(false);
+    expect(approval(idx({ verdict: "PASS", sourceKey: "old", frames }), "abg", "k1", steps, KEY)).toEqual({ ok: false, why: "changed since its review" });
+    expect(approval(idx({ verdict: "PASS", sourceKey: "k1", frames }), "abg", "k1", steps, KEY)).toEqual({ ok: true, why: null });
+    expect(() => approval(idx({ verdict: "PASS", sourceKey: "k1", frames }), "abg", "k1")).toThrow(/real steps are required/);
+    expect(() => approval(idx({ verdict: "PASS", sourceKey: "k1", frames }), "abg", "k1", steps)).toThrow(/no key/);
+  });
+
+  /* Astra, PR #134 review, round 25: every field of an index entry is
+     public or computable, so an entry the branch wrote itself — correct
+     key, sourceKey and frames, completed PASS — was taken as a review. */
+  it("does not approve an entry the review job did not sign", () => {
+    const steps = ["ph"], frames = frameIds(expectedFrames(steps));
+    const forged = { key: "k", sourceKey: "k1", frames, verdict: "PASS", completed: true, reviewedAt: "2026-10-09T00:00:00.000Z", model: "m", report: "r.md" };
+    expect(approval({ abg: forged }, "abg", "k1", steps, KEY)).toEqual({ ok: false, why: "not signed by the review job" });
+    expect(approval({ abg: signed("abg", forged, "x".repeat(40)) }, "abg", "k1", steps, KEY).ok, "signed with another key").toBe(false);
+    expect(approval({ abg: { ...signed("abg", { ...forged, verdict: "FAIL" }), verdict: "PASS" } }, "abg", "k1", steps, KEY).ok, "a FAIL relabelled PASS").toBe(false);
+    expect(approval({ abg: signed("tonicity", forged) }, "abg", "k1", steps, KEY).ok, "another diagram's signature").toBe(false);
+    expect(approval({ abg: signed("abg", forged) }, "abg", "k1", steps, KEY)).toEqual({ ok: true, why: null });
   });
 
   /* Astra, PR #134 review, round 24: a PASS recorded from prepared data
@@ -31,10 +48,11 @@ describe("approval of a diagram for publication", () => {
   it("does not approve a PASS whose review left out a real step", () => {
     const real = ["ph", "lungs", "kidneys"];
     const without = frameIds(expectedFrames(["ph", "lungs"]));
-    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1", frames: without } }, "abg", "k1", real)).toEqual({ ok: false, why: "its review did not cover every step" });
-    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1", frames: frameIds(expectedFrames([])) } }, "abg", "k1", real).ok).toBe(false);
-    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1" } }, "abg", "k1", real).ok, "an entry with no frames on record").toBe(false);
-    expect(approval({ abg: { verdict: "PASS", sourceKey: "k1", frames: frameIds(expectedFrames(real)) } }, "abg", "k1", real).ok).toBe(true);
+    const idx = (e) => ({ abg: signed("abg", { verdict: "PASS", sourceKey: "k1", ...e }) });
+    expect(approval(idx({ frames: without }), "abg", "k1", real, KEY)).toEqual({ ok: false, why: "its review did not cover every step" });
+    expect(approval(idx({ frames: frameIds(expectedFrames([])) }), "abg", "k1", real, KEY).ok).toBe(false);
+    expect(approval(idx({}), "abg", "k1", real, KEY).ok, "an entry with no frames on record").toBe(false);
+    expect(approval(idx({ frames: frameIds(expectedFrames(real)) }), "abg", "k1", real, KEY).ok).toBe(true);
   });
 
   it("reads each diagram's steps from its source exactly as the app defines them", async () => {
@@ -133,7 +151,19 @@ describe("approval of a diagram for publication", () => {
     const used = new Set(Object.values(map.pairs).flat().map((p) => p.d));
     const index = readReviewIndex(), key = sourceKey();
     const steps = stepInventory();
-    for (const id of used) expect(approval(index, id, key, steps[id]), id).toEqual({ ok: true, why: null });
+    /* CI holds no signing key, so here the signature can only be required
+       to be present; the mapper — which writes this map in the paid job —
+       verifies it with the key (round 25). With the key in the
+       environment, the full check runs. */
+    const secret = process.env.DIAGRAM_ATTEST_KEY;
+    for (const id of used) {
+      if (secret) { expect(approval(index, id, key, steps[id], secret), id).toEqual({ ok: true, why: null }); continue; }
+      const e = index[id];
+      expect(e?.verdict, id).toBe("PASS");
+      expect(e.sourceKey, id).toBe(key);
+      expect(e.frames, id).toEqual(frameIds(expectedFrames(steps[id])));
+      expect(e.sig, `${id} carries the review job's signature`).toMatch(/^[0-9a-f]{64}$/);
+    }
   });
 });
 
@@ -169,7 +199,7 @@ describe("a pairing run tells the truth about failures", () => {
 describe("the pairing CLI under plain Node", () => {
   it("starts without a .jsx import error", () => {
     const r = spawnSync(process.execPath, ["ops/map-diagrams.mjs", "--dry-run"], {
-      encoding: "utf8", timeout: 90_000, env: { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9" },
+      encoding: "utf8", timeout: 90_000, env: { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9", DIAGRAM_ATTEST_KEY: "k".repeat(40) },
     });
     const out = `${r.stdout}\n${r.stderr}`;
     expect(out).not.toMatch(/Unknown file extension|ERR_UNKNOWN_FILE_EXTENSION/);
@@ -177,5 +207,13 @@ describe("the pairing CLI under plain Node", () => {
        state of the diagrams (PR #134 review, finding 8: this once required
        a "held back" message that disappears once every diagram passes). */
     expect(out).toContain("Reading practice questions…");
+  }, 120_000);
+  it("refuses to judge approvals without the signing key", () => {
+    const env = { ...process.env, PULSERN_SUPABASE_URL: "http://127.0.0.1:9" };
+    delete env.DIAGRAM_ATTEST_KEY;
+    const r = spawnSync(process.execPath, ["ops/map-diagrams.mjs", "--dry-run"], { encoding: "utf8", timeout: 90_000, env });
+    expect(r.status).not.toBe(0);
+    expect(`${r.stdout}\n${r.stderr}`).toMatch(/DIAGRAM_ATTEST_KEY is not set/);
+    expect(`${r.stdout}\n${r.stderr}`).not.toContain("Reading practice questions…");
   }, 120_000);
 });

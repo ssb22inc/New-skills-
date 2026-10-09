@@ -428,15 +428,35 @@ describe("paid workflows never run branch code with secrets", () => {
     const prep = jobs(f).prepare;
     const st = steps(prep);
     const guard = st.findIndex((s) => s.text.startsWith("name: Run only from the default branch"));
-    const co = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@"));
+    const co = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@") && /ref: \$\{\{ inputs\.branch \}\}/.test(s.text));
     expect(guard).toBeGreaterThanOrEqual(0);
     expect(st[guard].run).toContain('[ "$REF" = "refs/heads/$DEFAULT_BRANCH" ]');
-    expect(st[co].text).toMatch(/ref: \$\{\{ inputs\.branch \}\}\n\s+persist-credentials: false/);
+    expect(st[co].text).toMatch(/ref: \$\{\{ inputs\.branch \}\}\n(\s+path: branch\n)?\s+persist-credentials: false/);
     expect(guard).toBeLessThan(co);
     expect(prep).toMatch(/node ops\/[a-z-]+\.mjs --prepare /);
     // round 22: the prepared commit is pinned and handed to the paid job
     expect(prep).toMatch(/outputs:\n      sha: \$\{\{ steps\.pin\.outputs\.sha \}\}/);
-    expect(prep).toMatch(/id: pin\n\s+run: echo "sha=\$\(git rev-parse HEAD\)" >> "\$GITHUB_OUTPUT"/);
+    expect(prep).toMatch(/id: pin\n\s+(working-directory: branch\n\s+)?run: echo "sha=\$\(git rev-parse HEAD\)" >> "\$GITHUB_OUTPUT"/);
+  });
+  /* Round 25: the frames came from the branch's own render script, so
+     nothing proved they showed the pinned source. The diagram review's
+     prepare job now runs only the default branch's scripts, with the branch
+     checked out beside them as data. */
+  it("pulsern-diagram-review.yml: the prepare job renders the branch with the default branch's scripts", () => {
+    const prep = jobs("pulsern-diagram-review.yml").prepare;
+    const st = steps(prep);
+    expect(prep).toMatch(/defaults:\n\s+run:\n\s+working-directory: trusted\/pulsern/);
+    const trusted = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@") && /ref: \$\{\{ github\.sha \}\}\n\s+path: trusted\n\s+persist-credentials: false/.test(s.text));
+    const branch = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@") && /path: branch/.test(s.text));
+    expect(trusted).toBeGreaterThanOrEqual(0);
+    expect(branch).toBeGreaterThan(trusted);
+    // nothing runs in the branch checkout but reading its commit and refusing links
+    for (const s of st.filter((s) => s.run)) {
+      if (s.wd === "branch") expect(s.run.trim()).toBe('echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"');
+      else expect(s.wd === null || s.wd === ".", s.name).toBe(true);
+    }
+    expect(prep).toMatch(/node ops\/review-diagrams\.mjs --prepare "\$RUNNER_TEMP\/prepared\/review" --source "\$GITHUB_WORKSPACE\/branch\/pulsern"/);
+    expect(prep).not.toMatch(/npm (ci|install)[^\n]*branch/);
   });
 });
 

@@ -4,12 +4,15 @@
    review is saved, PASS or FAIL.
 
    Usage: node ops/review-diagrams.mjs [--only id] [--force]
-          node ops/review-diagrams.mjs --prepare <dir>        (no secrets: render + data)
+          node ops/review-diagrams.mjs --prepare <dir> [--source <tree>/pulsern]   (no secrets: render + data)
           node ops/review-diagrams.mjs --prepared <dir> --into <branch>/pulsern
-   Env:   OPENROUTER_API_KEY (not for --prepare)
+   Env:   OPENROUTER_API_KEY and DIAGRAM_ATTEST_KEY (not for --prepare)
    Exit:  0 all PASS · 1 any FAIL or review error
 
-   In CI the branch is rendered by a job with no secrets (--prepare), and
+   In CI the branch is rendered by a job with no secrets (--prepare) using
+   the DEFAULT branch's copy of this script and its renderer: the branch's
+   diagram code runs only inside the browser (render-diagrams.mjs), so the
+   frames are this script's pictures of the pinned source. Then
    the review is run by the DEFAULT branch's copy of this script, reading
    the frames and words as data and writing into the branch checkout. The
    prompt, the source shown to the reviewer and the cache key are all built
@@ -17,19 +20,25 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
 import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
-import { sourceKey } from "./diagram-attest.mjs";
+import { sourceKey, attestKey, signApproval } from "./diagram-attest.mjs";
 import { DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest, diagramSources } from "./review-diagrams-lib.mjs";
 import { readPrepared, reviewPlan, readFrame, headCommit, reviewEntries, localEntries, checkInventory } from "./prepared.mjs";
 import { stepInventory, frameIds } from "./diagram-attest.mjs";
 
+/* Everything that differs from the commit, ignored files included. */
+const worktree = (root) => execFileSync("git", ["status", "--porcelain", "--ignored", "--untracked-files=all", "--", "."], { cwd: root, encoding: "utf8" }).split("\n").filter((l) => l && !/^!! (pulsern\/)?node_modules\//.test(l)).join("\n");
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const ONLY = arg("--only");
 const FORCE = process.argv.includes("--force");
 const PREPARE = arg("--prepare") && resolve(arg("--prepare"));
 const PREPARED = arg("--prepared") && resolve(arg("--prepared"));
 const INTO = arg("--into");
+const SOURCE = arg("--source");
+/* Reviews are signed, and only signed verdicts are reused (round 25). */
+const SECRET = PREPARE ? null : attestKey();
 if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
 const DIR = "reports/diagram-review";
 const INDEX = join(DIR, "index.json");
@@ -57,27 +66,25 @@ if (PREPARED) {
   checkInventory(prepared, stepInventory("."), ONLY);
 } else {
   const { renderDiagrams } = await import("./render-diagrams.mjs");
-  const { createServer } = await import("vite");
-  const { gallery, lintFailures } = await renderDiagrams({ outDir: resolve(tmpdir(), `pulsern-diagram-review-${Date.now()}`), only: ONLY });
+  const root = SOURCE ? resolve(SOURCE) : ".";
+  const before = PREPARE ? worktree(root) : null;
+  const { gallery, lintFailures, data } = await renderDiagrams({ outDir: resolve(tmpdir(), `pulsern-diagram-review-${Date.now()}`), only: ONLY, root });
   if (lintFailures.length) {
     console.error("Layout lint failed — fix these before spending on a review:");
     for (const f of lintFailures) console.error(`  ✗ ${f}`);
     process.exit(1);
   }
-  const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
-  try {
-    const { DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js");
-    entries = localEntries(Object.values(DIAGRAMS), gallery, (p) => readFileSync(p), ONLY);
-  } finally {
-    await vite.close();
-  }
+  entries = localEntries(Object.values(data), gallery, (p) => readFileSync(p), ONLY);
+  checkInventory(entries.map((x) => x.data), stepInventory(root), ONLY);
   if (PREPARE) {
+    /* The tree is exactly the pinned commit, before and after rendering. */
+    if (before !== "" || worktree(root) !== "") throw new Error(`${root} has changes beyond its commit — refusing to prepare frames that may not show it`);
     mkdirSync(PREPARE, { recursive: true });
     for (const { data, pngs } of entries) {
       mkdirSync(join(PREPARE, data.id), { recursive: true });
       pngs.forEach((b, n) => writeFileSync(join(PREPARE, data.id, `${n}.png`), b));
     }
-    writeFileSync(join(PREPARE, "plan.json"), JSON.stringify({ kind: "diagram-review", commit: headCommit(), diagrams: entries.map((x) => x.data) }, null, 2) + "\n");
+    writeFileSync(join(PREPARE, "plan.json"), JSON.stringify({ kind: "diagram-review", commit: headCommit(root), diagrams: entries.map((x) => x.data) }, null, 2) + "\n");
     console.log(`Prepared ${entries.length} diagram(s) → ${PREPARE}`);
     process.exit(0);
   }
@@ -101,10 +108,10 @@ try {
        read from the branch's files, and the key from exactly what is sent. */
     const { prompt, key } = diagramRequest(d, d.images, RULES, pngs, (id) => diagramSources(id));
     const prev = index[d.id];
-    if (canReuse(prev, key, FORCE, frameIds(d.images))) {
+    if (canReuse(prev, key, FORCE, frameIds(d.images), d.id, SECRET)) {
       /* Everything the verdict rests on is byte-identical, so it still
          describes what students see: carry it to the current code. */
-      if (prev.sourceKey !== SOURCE_KEY) { prev.sourceKey = SOURCE_KEY; mkdirSync(DIR, { recursive: true }); writeFileSync(INDEX, JSON.stringify(index, null, 2) + "\n"); }
+      if (prev.sourceKey !== SOURCE_KEY) { prev.sourceKey = SOURCE_KEY; prev.sig = signApproval(d.id, prev, SECRET); mkdirSync(DIR, { recursive: true }); writeFileSync(INDEX, JSON.stringify(index, null, 2) + "\n"); }
       console.log(`${d.id}: unchanged since ${prev.reviewedAt} — ${prev.verdict}`);
       if (prev.verdict !== "PASS") failed++;
       continue;
@@ -112,7 +119,7 @@ try {
     if (prev && prev.key === key && !prev.completed) console.log(`${d.id}: the last attempt did not complete (${prev.verdict}) — retrying`);
     if (Date.now() > RUN_DEADLINE) { console.log(`${d.id}: not started — the run is near its time limit; re-run to review it`); failed++; continue; }
     const r = await reviewAndRecord({
-      d, key, images: pngs.length, model: REVIEW_MODEL, cost: lastReviewCost, dir: DIR, index, sourceKey: SOURCE_KEY, write,
+      d, key, images: pngs.length, model: REVIEW_MODEL, cost: lastReviewCost, dir: DIR, index, sourceKey: SOURCE_KEY, write, secret: SECRET,
       ask: async () => parseJson(await review(prompt, 32000, { images: pngs, responseFormat: DIAGRAM_REVIEW_SCHEMA, effort: "high" })),
     });
     console.log(`${d.id}: ${r.verdict}${r.counts ? ` (${r.counts.blocker}B ${r.counts.major}M ${r.counts.minor}m)` : ""}${r.error ? ` — ${r.error}` : ""}`);

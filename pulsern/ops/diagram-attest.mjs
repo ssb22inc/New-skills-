@@ -11,7 +11,7 @@
    the review job runs again — which re-pays only for diagrams whose
    rendering actually changed. Missing, failed or stale: not approved.
    Fail closed. */
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { parseAst } from "rolldown/parseAst";
 import { readFileSync, readdirSync, existsSync, realpathSync, statSync } from "node:fs";
 import { join, posix, resolve, sep } from "node:path";
@@ -121,7 +121,14 @@ export function diagramSources(id, root = ".") {
     let text;
     try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { throw new Error(`diagramSources: ${rel} is not text, so the reviewer cannot be shown it — refusing to review without it`); }
     parts.push(`// ===== ${rel} =====\n${text}`);
-    if (!/\.(jsx?|mjs)$/.test(rel)) return;   // data (JSON, CSS…) is shown but has no imports
+    /* Only formats this walk can fully follow: JavaScript modules are
+       parsed and their imports traversed, JSON is data with none. Anything
+       else Vite can load — TypeScript, CSS with its own @import, assets —
+       is refused rather than shown as a dead end whose own dependencies
+       would escape the review and the key (Astra, PR #134 review, round
+       25: a .ts module's imports were never followed). */
+    if (/\.json$/.test(rel)) return;
+    if (!/\.(jsx?|mjs)$/.test(rel)) throw new Error(`diagramSources: ${rel} is not a JavaScript module or JSON, so its own dependencies cannot be followed — refusing to review without them`);
     for (const spec of importsOf(rel, text)) {
       const found = resolveImport(root, rel, spec, packages);
       if (found) visit(found);
@@ -200,13 +207,36 @@ export function readReviewIndex(root = ".") {
   return existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : {};
 }
 
+/* Who may say a review happened. The index lives in the branch, so
+   anything in it could have been written by the branch: every field of an
+   entry is public or computable, so a hand-made "completed PASS" matched
+   the cache and the approval check alike (Astra, PR #134 review, round
+   25). The paid review job signs each entry it records with a key that
+   exists only in the protected pulsern-paid environment; a reused verdict
+   and an approval both require that signature. */
+export const ATTEST_ENV = "DIAGRAM_ATTEST_KEY";
+export function attestKey(env = process.env) {
+  const k = env[ATTEST_ENV];
+  if (typeof k !== "string" || k.length < 32) throw new Error(`${ATTEST_ENV} is not set (at least 32 characters) — review approvals cannot be signed or checked without it`);
+  return k;
+}
+const signedFields = (id, e) => JSON.stringify([id, e.key ?? null, e.sourceKey ?? null, e.frames ?? null, e.verdict ?? null, e.completed ?? null, e.reviewedAt ?? null, e.model ?? null, e.report ?? null]);
+export const signApproval = (id, e, secret) => createHmac("sha256", secret).update(signedFields(id, e)).digest("hex");
+export function verifyApproval(id, e, secret) {
+  if (typeof secret !== "string" || !secret) throw new Error("verifyApproval: no key to check the signature with");
+  if (!e || typeof e.sig !== "string" || !/^[0-9a-f]{64}$/.test(e.sig)) return false;
+  return timingSafeEqual(Buffer.from(signApproval(id, e, secret), "hex"), Buffer.from(e.sig, "hex"));
+}
+
 /* { ok, why } for one diagram id. `steps` is the diagram's real step list
    (stepInventory, or the registry): a PASS counts only if its review was
-   shown every one of those frames (round 24). */
-export function approval(index, id, key, steps) {
+   shown every one of those frames (round 24), and only if the review job
+   signed it (round 25). */
+export function approval(index, id, key, steps, secret) {
   if (!Array.isArray(steps)) throw new Error(`approval(${id}): the diagram's real steps are required`);
   const e = index[id];
   if (!e) return { ok: false, why: "never reviewed" };
+  if (!verifyApproval(id, e, secret)) return { ok: false, why: "not signed by the review job" };
   if (e.verdict !== "PASS") return { ok: false, why: `review verdict ${e.verdict}` };
   if (e.sourceKey !== key) return { ok: false, why: "changed since its review" };
   if (!sameList(e.frames, frameIds(expectedFrames(steps)))) return { ok: false, why: "its review did not cover every step" };

@@ -489,3 +489,19 @@ describe("ER is never a filler", () => {
     }
   });
 });
+
+/* Astra, PR #134 review, round 25: "um" was dropped as a hesitation, but
+   it is also the micrometre written in ASCII, so a clip that lost the unit
+   passed. */
+describe("micrometres are a unit, not a filler", () => {
+  const MU = String.fromCodePoint(0x3bc), MICRO = String.fromCodePoint(0xb5);
+  it.each(["um", MU + "m", MICRO + "m", "micrometers", "micrometres", "microns"])("fails when %s is not heard", (u) => {
+    expect(audioCheck(`The particles measure 5 ${u}.`, "The particles measure five.").pass).toBe(false);
+  });
+  it.each([["um", "five micrometers"], [MU + "m", "five micrometres"], ["micrometers", "5 um"], [MICRO + "m", "five microns"]])("passes %s heard as %s", (u, heard) => {
+    expect(audioCheck(`The particles measure 5 ${u}.`, `The particles measure ${heard}.`).pass).toBe(true);
+  });
+  it("re-checks clips approved when um was a filler", () => {
+    expect(QA_VERSION).toBeGreaterThanOrEqual(14);
+  });
+});

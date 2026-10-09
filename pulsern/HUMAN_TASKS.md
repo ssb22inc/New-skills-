@@ -89,7 +89,12 @@ Claude Code executes everything else. These run in parallel with the build.
   tags: "Selected branches" → add only the default branch (`main`). Add
   these environment secrets (same values as the repository secrets):
   `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `OPENROUTER_API_KEY`. Do not rotate the keys for this.
+  `OPENROUTER_API_KEY`. Do not rotate the keys for this. Also add one new
+  secret, `DIAGRAM_ATTEST_KEY`: any random value of at least 32
+  characters (for example the output of `openssl rand -hex 32`). The
+  diagram review signs each verdict with it, and only signed verdicts are
+  reused or allow a diagram to be paired with questions, so a hand-written
+  "PASS" in a branch counts for nothing.
 
   Why: the narration, diagram-pairing and diagram-review workflows now run
   in two jobs. The first checks out the chosen branch and runs its code
