@@ -1508,6 +1508,10 @@ const MUTATIONS = [
   ["XC-03 the verified tree is Fullburn's workflows only", "engine/scripts/gate-lib.mjs",
     "  \".github/CODEOWNERS\",\n  \":(glob).github/workflows/fullburn-*\",",
     "  \".github/\","],
+  // ---- x7 (GPT-6 Astra, 2026-10-09) ----
+  ["X7-04 no pull-request path reaches a shell", "engine/scripts/class2-gate.mjs",
+    "const git = (args, encoding = \"utf8\") => execFileSync(\"git\", [\"-C\", repoRoot, ...args], { encoding });",
+    "const git = (args, encoding = \"utf8\") => execFileSync(\"/bin/sh\", [\"-c\", `git -C \"${repoRoot}\" ${args.map((x) => `\"${x}\"`).join(\" \")}`], { encoding });"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────

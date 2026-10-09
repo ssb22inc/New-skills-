@@ -6,7 +6,7 @@
  * Usage: node class2-gate.mjs <repo-root> <base-ref> */
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { checkMoneyCapGate, selectApprovalDocs } from "./gate-lib.mjs";
 import { fetchCommitAuth } from "./github-auth.mjs";
@@ -23,12 +23,16 @@ if (!baseRef) {
 // containing a space or a non-ASCII byte arrived as `"fullburn/config/src/a b.ts"`
 // and matched no CLASS2_PATTERN, so the file left the protected set entirely
 // (adversary finding R3-CP-08).
-const diff = execSync(`git -C ${JSON.stringify(repoRoot)} diff --name-status -z -M ${baseRef}...HEAD`, { encoding: "utf8" });
+// NO SHELL, ANYWHERE IN THIS GATE (cross-family finding X7-04, 2026-10-09):
+// paths and refs come from the pull request, and JSON.stringify is not shell
+// quoting — `$(...)` and backticks still ran inside its double quotes, with the
+// job's token in the environment. Every git call is an argument vector.
+const git = (args, encoding = "utf8") => execFileSync("git", ["-C", repoRoot, ...args], { encoding });
+const diff = git(["diff", "--name-status", "-z", "-M", `${baseRef}...HEAD`]);
 const changedFiles = parseNameStatusZ(diff);
 
 // Approval entries are only credible if they arrived with the change they
 // approve. Who wrote them is H19's job: CODEOWNERS on APPROVALS/**.
-const git = (cmd) => execSync(`git -C ${JSON.stringify(repoRoot)} ${cmd}`, { encoding: "utf8" });
 
 // WHICH files are credible approval documents is `selectApprovalDocs`'
 // decision, driven by the default suite. Inline here, dropping the "added"
@@ -42,13 +46,11 @@ const approvalDocs = selectApprovalDocs(changedFiles)
     // Who committed the approval. Self-asserted and therefore not proof of a
     // human — but it does refuse the automation principal signing its own work
     // (R7-07). CODEOWNERS + branch protection is the half that proves identity.
-    authoredBy: git(`log -1 --format=${JSON.stringify("%an <%ae>")} -- ${JSON.stringify(f.path)}`).trim(),
+    authoredBy: git(["log", "-1", "--format=%an <%ae>", "--", f.path]).trim(),
   }));
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
-const resolvedBase = execSync(`git -C ${JSON.stringify(repoRoot)} rev-parse ${JSON.stringify(baseRef)}`, {
-  encoding: "utf8",
-}).trim();
+const resolvedBase = git(["rev-parse", "--verify", `${baseRef}^{commit}`]).trim();
 
 // WHO added each approval, as GitHub records it (X5-03): the commit in this
 // range that added the document, its signature verification and its author's
@@ -56,7 +58,7 @@ const resolvedBase = execSync(`git -C ${JSON.stringify(repoRoot)} rev-parse ${JS
 // X6-03: every commit in the range that touched the document, not only the
 // one that added it — the bytes parsed are the current ones.
 for (const d of approvalDocs) {
-  const touchedIn = git(`log --format=%H ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).split("\n").map((l) => l.trim()).filter(Boolean);
+  const touchedIn = git(["log", "--format=%H", `${baseRef}..HEAD`, "--", d.path]).split("\n").map((l) => l.trim()).filter(Boolean);
   d.auth = [];
   for (const sha of touchedIn) {
     d.auth.push(await fetchCommitAuth({
@@ -75,7 +77,7 @@ const res = checkMoneyCapGate({
   hashOf: (p) => sha(readFileSync(join(repoRoot, p))),
   // The content this transition starts FROM, read at the PR base.
   baseHashOf: (p) =>
-    sha(execSync(`git -C ${JSON.stringify(repoRoot)} show ${JSON.stringify(`${baseRef}:${p}`)}`, { encoding: "buffer" })),
+    sha(git(["show", `${baseRef}:${p}`], "buffer")),
   // The commit this PR branches from. An approval names it, so an approval
   // issued for one PR cannot be replayed into another (R3-CP-01).
   baseCommit: resolvedBase,

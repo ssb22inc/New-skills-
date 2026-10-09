@@ -1,6 +1,6 @@
 import { execFile, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -285,6 +285,34 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
 
   it("refuses to run at all without a base ref", () => {
     expect(gate("class2-gate.mjs", repo).code).toBe(1);
+  });
+});
+
+/** X7-04 (GPT-6 Astra, 2026-10-09): approval paths come from the pull request
+ * and were interpolated into shell commands with JSON quoting — `$(...)` ran
+ * inside the trusted gate, with the job token in its environment. Every git
+ * call is an argument vector now. MUTATION: X7-04. */
+describe("no pull-request path reaches a shell", () => {
+  it("an approval file named with a command substitution runs nothing", () => {
+    const sentinel = join(repo, "gate-shell-sentinel");
+    const base = git("rev-parse", "HEAD").trim();
+    write("fullburn/config/src/caps.ts", "export const CAPS = { dailyAiSpendUsd: 500 };\n");
+    for (const name of [`$(touch ${sentinel})`, `\`touch ${sentinel}\``]) {
+      write(`fullburn/APPROVALS/${name}.md`, "approves: fullburn/config/src/caps.ts\n");
+    }
+    git("add", "-A");
+    git("commit", "-q", "-m", "hostile approval names");
+    gate("class2-gate.mjs", repo, base);
+    gate("owed-approvals.mjs", repo, base);
+    gate("adversary-gate.mjs", repo, base);
+    expect(existsSync(sentinel), "a pull-request filename executed a shell command inside a gate").toBe(false);
+  });
+
+  it("no gate script can spawn a shell", () => {
+    for (const f of readdirSync(SCRIPTS).filter((n) => n.endsWith(".mjs"))) {
+      const src = readFileSync(join(SCRIPTS, f), "utf8");
+      expect(/\bexecSync\s*\(|shell:\s*true|["'`](?:ba|z|da)?sh["'`]\s*,\s*\[\s*["'`]-c/.test(src), `${f} can spawn a shell`).toBe(false);
+    }
   });
 });
 
