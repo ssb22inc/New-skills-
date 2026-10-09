@@ -22,4 +22,28 @@ export function fnv1a(text) {
   return h.toString(16).padStart(8, "0");
 }
 
-export const fingerprint = (q) => fnv1a(`${q?.stem ?? ""}\u0000${q?.rationale ?? ""}`);
+/* Key-order-independent JSON, so the app and the pairing job (which read
+   the same row through different code) always fingerprint it identically. */
+export function canonical(v) {
+  if (v === undefined) return "null";
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`;
+}
+
+/* Everything the pairing review read and the values were extracted from:
+   stem, rationale, options and the keyed answer. An edit to ANY of them —
+   an option corrected from NPH to regular, a changed answer — retires the
+   pairing until it is re-confirmed (Astra, PR #134 review, round 6: options
+   and answer were left out, so a corrected item kept its old diagram). */
+export const fingerprint = (q) =>
+  fnv1a([q?.stem ?? "", q?.rationale ?? "", canonical(q?.options ?? null), canonical(q?.answer ?? null)].join("\u0000"));
+
+/* A fingerprint of a diagram's clinical content — its claims, captions and
+   narration. Every shipped pairing carries the fingerprint of the content
+   its pairing review approved, and the app shows a pairing only while the
+   diagram still has that content: change what a diagram teaches and its
+   old pairings stop showing until they are re-confirmed (Astra, PR #134
+   review). Same input as the pairing cache's diagramHash. */
+export const diagramFp = (d) =>
+  fnv1a(JSON.stringify([d?.id, d?.title, d?.facts, (d?.steps ?? []).map((s) => [s.key, s.caption, s.narration])]));

@@ -2,11 +2,12 @@
    for — and nowhere else. */
 import { describe, it, expect } from "vitest";
 import { pairsFor, audioFor, MAX_PER_QUESTION } from "../src/concept-explainers.jsx";
-import { fingerprint, fnv1a } from "../src/diagrams/fingerprint.js";
+import { fingerprint, fnv1a, diagramFp } from "../src/diagrams/fingerprint.js";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 const bankQ = { id: 1, stem: "ABG: pH 7.30, PaCO2 55, HCO3 24. Interpret.", rationale: "Respiratory acidosis." };
-const map = { version: 1, pairs: { "1": [{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 }, f: fingerprint(bankQ) }] } };
+const v = (id) => diagramFp(DIAGRAMS[id]);
+const map = { version: 2, pairs: { "1": [{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 }, f: fingerprint(bankQ), v: v("abg") }] } };
 
 describe("pairsFor", () => {
   it("returns the confirmed diagram with its confirmed values", () => {
@@ -24,6 +25,20 @@ describe("pairsFor", () => {
   it("stops showing when the question is edited after review", () => {
     expect(pairsFor(map, { ...bankQ, rationale: "Edited rationale." }, DIAGRAMS)).toEqual([]);
   });
+  /* Round 6: options and the answer feed the pairing and its values, so an
+     edit to either must retire the pairing too. */
+  it("stops showing when only an option or only the answer is edited", () => {
+    const q = { id: 9, stem: "NPH insulin was given at 0700.", rationale: "Peak risk.", options: ["NPH", "regular"], answer: 0 };
+    const m = { pairs: { "9": [{ d: "insulin", p: { type: "nph", givenAt: "07:00" }, f: fingerprint(q), v: v("insulin") }] } };
+    expect(pairsFor(m, q, DIAGRAMS)).toHaveLength(1);
+    expect(pairsFor(m, { ...q, options: ["regular", "regular"] }, DIAGRAMS)).toEqual([]);
+    expect(pairsFor(m, { ...q, answer: 1 }, DIAGRAMS)).toEqual([]);
+  });
+  it("fingerprints the same row identically whatever order its JSON keys arrive in", () => {
+    const a = { id: 1, stem: "s", rationale: "r", options: { a: 1, b: [2, { c: 3, d: 4 }] }, answer: { x: 1, y: 2 } };
+    const b = { id: 1, stem: "s", rationale: "r", options: { b: [2, { d: 4, c: 3 }], a: 1 }, answer: { y: 2, x: 1 } };
+    expect(fingerprint(a)).toBe(fingerprint(b));
+  });
 
   it("ignores a pairing for a diagram that no longer exists", () => {
     const m = { pairs: { "1": [{ d: "retired-diagram", f: fingerprint(bankQ) }] } };
@@ -31,14 +46,26 @@ describe("pairsFor", () => {
   });
 
   it("passes concept-only pairings through as params null", () => {
-    const m = { pairs: { "1": [{ d: "tonicity", f: fingerprint(bankQ) }] } };
+    const m = { pairs: { "1": [{ d: "tonicity", f: fingerprint(bankQ), v: v("tonicity") }] } };
     expect(pairsFor(m, bankQ, DIAGRAMS)[0].params).toBeNull();
   });
 
   it(`never stacks more than ${MAX_PER_QUESTION} under one rationale`, () => {
     const f = fingerprint(bankQ);
-    const m = { pairs: { "1": [{ d: "abg", f }, { d: "potassium", f }, { d: "tonicity", f }] } };
+    const m = { pairs: { "1": [{ d: "abg", f, v: v("abg") }, { d: "potassium", f, v: v("potassium") }, { d: "tonicity", f, v: v("tonicity") }] } };
     expect(pairsFor(m, bankQ, DIAGRAMS)).toHaveLength(MAX_PER_QUESTION);
+  });
+
+  /* PR #134 review: a pairing approved for what a diagram USED to teach
+     must stop showing once the diagram's content changes. */
+  it("stops showing when the diagram's clinical content has changed since the pairing was approved", () => {
+    const old = { ...DIAGRAMS.insulin, facts: ["Long-acting insulin (glargine, detemir): about 24 hours."] };
+    const m = { pairs: { "1": [{ d: "insulin", f: fingerprint(bankQ), v: diagramFp(old) }] } };
+    expect(pairsFor(m, bankQ, DIAGRAMS)).toEqual([]);
+    expect(pairsFor({ pairs: { "1": [{ d: "insulin", f: fingerprint(bankQ), v: v("insulin") }] } }, bankQ, DIAGRAMS)).toHaveLength(1);
+  });
+  it("shows nothing for a pairing that carries no content fingerprint", () => {
+    expect(pairsFor({ pairs: { "1": [{ d: "abg", f: fingerprint(bankQ) }] } }, bankQ, DIAGRAMS)).toEqual([]);
   });
 
   it("is safe with no map, no question, or no id", () => {
@@ -57,16 +84,36 @@ describe("fingerprint", () => {
 });
 
 describe("the shipped map file", () => {
-  it("is valid and only references diagrams that exist", async () => {
+  /* Version 2: every pairing carries the content fingerprint (v) of the
+     diagram it was approved for, and a map with pairings records the
+     drawing code it was built against (sourceKey; checked against the live
+     code in tests/diagram-gate.test.js). */
+  it("is version 2, and every pairing is complete and current", async () => {
     const m = (await import("../src/diagrams/item-map.json")).default;
-    expect(m.version).toBe(1);
-    for (const [qid, entries] of Object.entries(m.pairs)) {
+    expect(m.version).toBe(2);
+    const entries = Object.entries(m.pairs);
+    if (entries.length) expect(m.sourceKey).toMatch(/^[0-9a-f]{24}$/);
+    for (const [qid, list] of entries) {
       expect(qid).toMatch(/^\d+$/);
-      for (const e of entries) {
+      for (const e of list) {
         expect(DIAGRAMS[e.d], `unknown diagram ${e.d}`).toBeDefined();
         expect(e.f).toMatch(/^[0-9a-f]{8}$/);
+        expect(e.v, `${qid}:${e.d} approved for older diagram content`).toBe(diagramFp(DIAGRAMS[e.d]));
       }
     }
+  });
+
+  /* Producer to consumer: what the mapper writes is what the app shows. */
+  it("shows exactly what the mapper produced, for the question it was made for", async () => {
+    const { buildItemMap } = await import("../ops/map-diagrams-lib.mjs");
+    const m = buildItemMap({
+      "1:abg": { attach: true, values_confirmed: true, extracted: { ph: 7.3, paco2: 55, hco3: 24 }, fp: fingerprint(bankQ) },
+      "1:tonicity": { attach: false, extracted: null, fp: fingerprint(bankQ) },
+    }, DIAGRAMS, "a".repeat(24), new Map([[1, bankQ]]));
+    expect(m.version).toBe(2);
+    const shown = pairsFor(JSON.parse(JSON.stringify(m)), bankQ, DIAGRAMS);
+    expect(shown.map((x) => [x.diagram.id, x.params])).toEqual([["abg", { ph: 7.3, paco2: 55, hco3: 24 }]]);
+    expect(pairsFor(m, { ...bankQ, stem: "another question" }, DIAGRAMS)).toEqual([]);
   });
 });
 

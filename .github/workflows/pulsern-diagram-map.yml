@@ -8,6 +8,13 @@ name: pulsern-diagram-map
 # ordinary commit on a pull request and goes through the Astra code review
 # like anything else. Saved even when the run stops early: every paid
 # decision is kept.
+#
+# Two jobs (Astra, PR #134 review, round 21): "prepare" checks out the chosen
+# branch and runs its code with NO secrets, only to turn it into data;
+# "paid" runs the DEFAULT branch's scripts with the secrets, reads that data,
+# and commits the results to the branch. Dispatch from the default branch.
+# The secrets belong in the "pulsern-paid" environment, restricted to the
+# default branch, so no other ref's copy of this file can read them.
 
 on:
   workflow_dispatch:
@@ -26,67 +33,249 @@ on:
 
 permissions:
   contents: write
+  actions: write        # request the trusted Astra review of what this job pushes
+  pull-requests: read   # find the branch's open PR
 
 concurrency:
   group: pulsern-diagram-map-${{ inputs.branch }}
   cancel-in-progress: false
 
 jobs:
-  map:
+  # 1. The branch's code runs HERE, with no secrets: it only turns the branch
+  #    into data (ops/prepared.mjs). Its token can read, not write.
+  prepare:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # The exact commit prepared: the paid job works on this commit only
+    # (Astra, PR #134 review, round 22: both jobs used the moving branch name).
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
+    env:
+      BRANCH: ${{ inputs.branch }}
+      MAX_USD: ${{ inputs.max_usd }}
+      LIMIT: ${{ inputs.limit }}
     timeout-minutes: 120
     defaults:
       run:
-        working-directory: pulsern
+        working-directory: trusted/pulsern
     steps:
+      # Only a plain feature-branch name is accepted, and never the default
+      # branch: "refs/heads/main", tags, SHAs and other aliases are refused
+      # outright, so checkout, push, concurrency and PR lookup all see the
+      # same exact branch (Astra, PR #134 review, round 6).
       - name: Refuse to write to main
         working-directory: .
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          case "${{ inputs.branch }}" in
-            main|master) echo "::error::Results are committed to the branch given; run on a feature branch."; exit 1 ;;
-          esac
+          set -euo pipefail
+          fail() { echo "::error::$1 Results are committed to the branch given; run on a feature branch."; exit 1; }
+          [[ "$BRANCH" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] || fail "'$BRANCH' is not a plain branch name."
+          case "$BRANCH" in refs/*|*/|*..*|*.lock|HEAD) fail "'$BRANCH' is not a plain branch name." ;; esac
+          git check-ref-format --branch "$BRANCH" >/dev/null 2>&1 || fail "'$BRANCH' is not a valid branch name."
+          for protected in "$DEFAULT_BRANCH" main master; do
+            [ "$BRANCH" = "$protected" ] && fail "'$BRANCH' is protected."
+          done
+          [[ "$BRANCH" =~ ^[0-9a-f]{7,40}$ ]] && fail "'$BRANCH' looks like a commit, not a branch."
+          # It must be an existing branch of this repository — not a tag or commit.
+          curl -fsS -o /dev/null -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/branches/$(jq -rn --arg b "$BRANCH" '$b|@uri')" || fail "'$BRANCH' is not an existing branch."
+          echo "Writing to feature branch '$BRANCH'."
+
+      # The paid job's code must be the reviewed default branch's: a run
+      # dispatched from any other ref is refused before anything runs, and
+      # the pulsern-paid environment (default branch only) withholds the
+      # secrets from it as well (Astra, PR #134 review, round 21).
+      - name: Run only from the default branch
+        working-directory: .
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF: ${{ github.ref }}
+        run: |
+          [ "$REF" = "refs/heads/$DEFAULT_BRANCH" ] || { echo "::error::Dispatch this workflow from $DEFAULT_BRANCH; choose the branch to work on with the branch input."; exit 1; }
+
+      # The default branch's scripts (this run's own commit) do the work; the
+      # branch is checked out beside them as data. Nothing from the branch is
+      # installed, and its code runs only inside the browser (round 28).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
 
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
+          path: branch
+          persist-credentials: false
 
+      - name: Pin the commit
+        id: pin
+        working-directory: branch
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse links and special files in the branch checkout
+        working-directory: .
+        run: |
+          bad=$(find branch -path branch/.git -prune -o \( -type l -o \( ! -type f ! -type d \) \) -print)
+          if [ -n "$bad" ]; then echo "::error::Links or special files found; refusing to run:"; echo "$bad"; exit 1; fi
+
+      # No Actions cache (round 24).
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: pulsern/package-lock.json
 
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: Read the branch and run its matcher with the default branch's scripts (no secrets)
+        run: |
+          mkdir -p "$RUNNER_TEMP/prepared"
+          node ops/map-diagrams.mjs --prepare "$RUNNER_TEMP/prepared/map.json" --source "$GITHUB_WORKSPACE/branch/pulsern"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prepared/
+          if-no-files-found: error
+          retention-days: 7
+
+  # 2. The paid work, with the secrets: only the DEFAULT branch's scripts run
+  #    here (checked out as "trusted"). The branch is checked out as data
+  #    ("branch") — nothing in it is installed or executed — and receives
+  #    the results.
+  paid:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: pulsern-paid
+    env:
+      BRANCH: ${{ inputs.branch }}
+      MAX_USD: ${{ inputs.max_usd }}
+      LIMIT: ${{ inputs.limit }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: branch/pulsern
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+
+      # The prepared commit itself, never the branch's moving tip, and no
+      # credential stored in it: the push below gets its token only for that
+      # one step (round 22).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          path: branch
+          persist-credentials: false
+
+      # No Actions cache, here or in the prepare job: branch code there can
+      # write cache entries, and a restored archive lands after the trusted
+      # checkout (Astra, PR #134 review, round 24).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+        working-directory: trusted/pulsern
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prepared-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/prepared
+
+      # The branch and the prepared data are data. A symlink or special file
+      # in either could make a later step or the artifact upload read
+      # something else — a token, /proc — so any is refused, and every later
+      # step that reads, uploads or saves them requires this check to have
+      # passed, "always()" steps included (rounds 22–23).
+      - name: Refuse links and special files in the branch checkout and prepared data
+        id: links
+        working-directory: .
+        run: |
+          bad=$(find branch -path branch/.git -prune -o \( -type l -o \( ! -type f ! -type d \) \) -print; find "$RUNNER_TEMP/prepared" \( -type l -o \( ! -type f ! -type d \) \) -print)
+          if [ -n "$bad" ]; then echo "::error::Links or special files found; refusing to run:"; echo "$bad"; exit 1; fi
 
       - name: Pair diagrams with questions (Astra-confirmed)
         id: map
+        working-directory: trusted/pulsern
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PULSERN_ATTEST_PRIVATE_KEY: ${{ secrets.PULSERN_ATTEST_PRIVATE_KEY }}
+          PULSERN_ATTEST_PUBLIC_KEY: ${{ vars.PULSERN_ATTEST_PUBLIC_KEY }}
         run: |
           set +e
-          node ops/map-diagrams.mjs --max-usd "${{ inputs.max_usd }}" ${{ inputs.limit != '' && format('--limit {0}', inputs.limit) || '' }}
+          [[ "$MAX_USD" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "::error::max_usd must be a number"; exit 1; }
+          [[ -z "$LIMIT" || "$LIMIT" =~ ^[0-9]+$ ]] || { echo "::error::limit must be a whole number"; exit 1; }
+          node ops/map-diagrams.mjs --prepared "$RUNNER_TEMP/prepared/map.json" --into "$GITHUB_WORKSPACE/branch/pulsern" --max-usd "$MAX_USD" ${LIMIT:+--limit "$LIMIT"}
           echo "rc=$?" >> "$GITHUB_OUTPUT"
           exit 0
 
       - name: Show the run report
-        if: always()
+        if: always() && steps.links.outcome == 'success'
         run: cat reports/diagram-map/run-*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
+      # Kept whatever happens to the push below: a conflicting concurrent
+      # update to the branch must not cost a paid run its results.
+      - name: Keep the results as an artifact
+        if: always() && steps.links.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulsern-diagram-map-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            branch/pulsern/src/diagrams/item-map.json
+            branch/pulsern/reports/diagram-map/
+          if-no-files-found: ignore
+          retention-days: 90
+
       - name: Commit results to the branch (always — every paid decision is kept)
-        if: always()
+        id: save
+        if: always() && steps.links.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECT_BASE: ${{ needs.prepare.outputs.sha }}
         run: |
+          # The push token, for this step's git calls only — never written to disk.
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git config user.name "pulsern-diagram-map"
           git config user.email "pulsern-diagram-map@users.noreply.github.com"
-          git add src/diagrams/item-map.json reports/diagram-map/
-          if git diff --cached --quiet; then echo "Nothing new to save."; exit 0; fi
-          git commit -q -m "Diagram pairings: Astra-confirmed run (rc=${{ steps.map.outputs.rc }})"
-          for attempt in 1 2 3; do
-            git push -q origin "HEAD:${{ inputs.branch }}" && { echo "Saved."; exit 0; }
-            git pull -q --rebase origin "${{ inputs.branch }}" || true
-            sleep $((attempt * 5))
-          done
-          echo "::error::Could not push the results."; exit 1
+          # Commit, push, and confirm the commit reached the branch; a conflict
+          # fails instead of reporting a save (Astra, PR #134 review, round 7).
+          "$GITHUB_WORKSPACE/trusted/pulsern/ops/save-results.sh" "$BRANCH" "Diagram pairings: Astra-confirmed run (rc=${{ steps.map.outputs.rc }})" src/diagrams/item-map.json reports/diagram-map/
 
+      # Pushes made with the workflow token do not trigger other workflows, so
+      # the review this commit needs is requested explicitly — through the
+      # trusted, range-verified dispatch (Astra, PR #133 review, finding 17).
+      - name: Request CI and the Astra review of what was just pushed
+        if: always() && steps.links.outcome == 'success' && steps.save.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          HEAD_SHA: ${{ steps.save.outputs.head }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          api() { curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$@"; }
+          # CI on the commit actually pushed — after any rebase — so the
+          # publication guards (fresh map, current manifest, tests) run on the
+          # final tree, not on the one the job started from (Astra, PR #134
+          # review, round 5).
+          jq -n --arg ref "$BRANCH" '{ref:$ref}' |
+            api -X POST "https://api.github.com/repos/$REPO/actions/workflows/pulsern-ci.yml/dispatches" -d @- >/dev/null
+          echo "Started pulsern-ci on $BRANCH ($HEAD_SHA)."
+          pr=$(api "https://api.github.com/repos/$REPO/pulls?state=open&head=$OWNER:$BRANCH" | jq -r '.[0].number // empty')
+          if [ -z "$pr" ]; then echo "No open PR for $BRANCH: its review will run when one is opened."; exit 0; fi
+          jq -n --arg ref "$DEFAULT_BRANCH" --arg head "$HEAD_SHA" --arg pr "$pr" '{ref:$ref,inputs:{head:$head,pr:$pr}}' |
+            api -X POST "https://api.github.com/repos/$REPO/actions/workflows/pulsern-astra-review.yml/dispatches" -d @- >/dev/null
+          echo "Requested the Astra review of PR #$pr at $HEAD_SHA."
       - name: Verdict
         if: always()
         run: |

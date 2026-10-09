@@ -10,6 +10,7 @@
    major finding fails the diagram, whatever the summary says. */
 import { createHash } from "node:crypto";
 import { diagramHash } from "./map-diagrams-lib.mjs";
+import { REVIEWER_NAME } from "./models.mjs";
 
 export const AREAS = ["clinical", "visual", "consistency", "accessibility", "pedagogy", "rules"];
 export const SEVERITIES = ["blocker", "major", "minor"];
@@ -47,23 +48,39 @@ export const DIAGRAM_REVIEW_SCHEMA = {
   },
 };
 
+/* The frames a diagram's review must show, in order: the inline overview
+   and every explainer step, in both themes. Defined here, by trusted code,
+   from the step keys — never taken from prepared data (round 22). */
+import { THEMES, expectedFrames, frameLabel, frameIds, signApproval, verifyApproval } from "./diagram-attest.mjs";
+export { THEMES, expectedFrames, frameLabel, frameIds };
+
 /* The images, in the order they are attached, with what each one is. */
 export function imagePlan(diagram, gallery) {
+  /* Every frame a student can see: the inline overview and every explainer
+     step, in BOTH themes. Dark-theme step frames used to be left out, so a
+     dark-only defect in a step annotation could keep a passing verdict
+     (Astra, PR #133 review, finding 14). A missing frame is an error, not a
+     smaller review. */
   const mine = gallery.filter((g) => g.id === diagram.id);
   const pick = (theme, key) => mine.find((g) => g.theme === theme && g.key === key);
   const plan = [];
-  const push = (g, label) => { if (g) plan.push({ file: g.file, label }); };
-  push(pick("light", "static"), "light theme — inline, as shown under a rationale");
-  push(pick("dark", "static"), "dark theme — inline");
-  for (const s of diagram.steps) push(pick("light", s.key), `light theme — explainer step "${s.key}"`);
+  const missing = [];
+  for (const theme of ["light", "dark"]) {
+    for (const key of ["static", ...diagram.steps.map((s) => s.key)]) {
+      const g = pick(theme, key);
+      if (!g) { missing.push(`${theme}/${key}`); continue; }
+      plan.push({ file: g.file, theme, key, label: frameLabel(theme, key) });
+    }
+  }
+  if (missing.length) throw new Error(`imagePlan(${diagram.id}): missing rendered frames ${missing.join(", ")}`);
   return plan;
 }
 
-export function diagramReviewPrompt(diagram, plan, rulesExcerpt) {
+export function diagramReviewPrompt(diagram, plan, rulesExcerpt, source = null) {
   const steps = diagram.steps.map((s, i) => [
     `  ${i + 1}. key "${s.key}"${s.dynamic ? " (worked example — caption computed from the example values)" : ""}`,
     `     in focus: ${(s.focus ?? []).join(", ") || "(everything)"}`,
-    `     caption: ${s.dynamic ? diagram.dynamicCaption?.(diagram.example) : s.caption}`,
+    `     caption: ${s.dynamic ? diagram.workedCaption ?? diagram.dynamicCaption?.(diagram.example) : s.caption}`,
     s.dynamic ? "     narration: (none — never recorded)" : `     narration script: ${s.narration}`,
   ].join("\n")).join("\n");
   return `You are the adversarial reviewer for PulseRN, an NCLEX-RN study app used by nursing students. Below is a concept diagram that will appear under practice-question rationales and as a step-by-step narrated explainer. It was drawn and written by a Claude model; you are from a different lab so that you do not share its blind spots. Find what is wrong before a student sees it. Do not be agreeable and do not pad.
@@ -92,7 +109,12 @@ SEVERITY: blocker = wrong or unsafe clinical content, or a picture that teaches 
 "where" names the image number and/or step key and the element.
 
 PROJECT RULES:
-${rulesExcerpt}`;
+${rulesExcerpt}${source == null ? "" : `
+
+THE DIAGRAM'S SOURCE — the code that draws it and writes its worked-example caption and verdict for EVERY set of values a question can supply, not only the example pictured. Review this logic as strictly as the pictures: a wrong branch for other values is a clinical error even if the example is right (Astra, PR #134 review, round 19):
+\`\`\`jsx
+${source}
+\`\`\``}`;
 }
 
 export function validateReview(obj) {
@@ -111,19 +133,27 @@ export function verdictFor(findings) {
   return { verdict: counts.blocker + counts.major ? "FAIL" : "PASS", counts };
 }
 
-/* What a verdict rests on: the diagram's words and its rendered pixels. If
-   neither changed, the earlier verdict still stands and is not paid for
-   again; if either changed, it is reviewed again. */
-export function reviewKey(diagram, pngBuffers) {
-  const h = createHash("sha256").update(diagramHash(diagram));
-  for (const b of pngBuffers) h.update(b);
+/* What a verdict rests on: everything the reviewer was given — the exact
+   prompt, including the computed worked-example caption — the rendered
+   pixels, and the diagram's own source, which holds the logic that writes
+   captions and verdicts for every other set of values. If none changed,
+   the earlier verdict still stands and is not paid for again; if any did,
+   it is reviewed again (Astra, PR #134 review, round 17: a changed
+   dynamicCaption kept a cached approval, because only the static words
+   and pixels were in the key). */
+export function reviewKey(diagram, pngBuffers, { prompt, source } = {}) {
+  if (typeof prompt !== "string" || typeof source !== "string") throw new Error("reviewKey: the review prompt and the diagram's source are required");
+  /* The caption logic itself is in `source` (the diagram's file and its
+     imports), which the reviewer is also shown. */
+  const h = createHash("sha256").update(diagramHash(diagram)).update("\0").update(prompt).update("\0").update(source);
+  for (const b of pngBuffers) h.update("\0").update(b);
   return h.digest("hex").slice(0, 16);
 }
 
 export function renderReviewMarkdown(r) {
   const rank = (s) => SEVERITIES.indexOf(s);
   const lines = [
-    `# Astra diagram review — ${r.title} — ${r.verdict}`, "",
+    `# ${REVIEWER_NAME} diagram review — ${r.title} — ${r.verdict}`, "",
     `| | |`, `|---|---|`,
     `| Reviewer | \`${r.model}\` |`,
     `| Reviewed at | ${r.reviewedAt} |`,
@@ -141,4 +171,96 @@ export function renderReviewMarkdown(r) {
     });
   } else lines.push("_No findings._", "");
   return lines.join("\n");
+}
+
+/* May an earlier result be reused instead of paying for a new review?
+   Only a COMPLETED review of byte-identical images. An operational error —
+   timeout, bad key, malformed answer — is not a verdict and is retried on
+   the next run (Astra, PR #134 review, round 6: errors were cached as FAIL,
+   and the normal re-run could never recover). */
+/* A cached verdict also needs the same frame set on record — an entry from
+   before frames were recorded is re-reviewed, never carried (round 24) —
+   and the review job's signature: the index is in the branch, so an entry
+   the branch wrote itself is never taken as a review (round 25). */
+export const canReuse = (prev, key, force = false, frames = null, id = null, verifier = null) => !force && !!prev && prev.key === key && prev.completed === true &&
+  Array.isArray(frames) && Array.isArray(prev.frames) && prev.frames.length === frames.length && prev.frames.every((f, i) => f === frames[i]) &&
+  typeof id === "string" && typeof verifier?.verify === "function" && verifyApproval(id, prev, verifier);
+
+/* One diagram's review. `ask` returns the reviewer's parsed answer. The
+   result says whether a valid review completed, separately from what it
+   concluded. */
+export async function reviewOne({ d, key, images, ask, model, now = () => new Date().toISOString(), cost = () => null }) {
+  const r = { id: d.id, title: d.title, model, reviewedAt: now(), images, key, findings: [], usage: null, error: null, completed: false };
+  try {
+    const parsed = validateReview(await ask());
+    r.usage = { costUsd: cost() };
+    r.assessment = parsed.assessment;
+    r.findings = parsed.findings;
+    Object.assign(r, verdictFor(parsed.findings));
+    r.completed = true;
+  } catch (e) {
+    r.error = String(e?.message ?? e);
+    r.verdict = "ERROR";   // not a clinical verdict; never PASS, never cached
+  }
+  return r;
+}
+
+/* One diagram's paid review, recorded around the call. A checkpoint report
+   — "started, did not finish" — and its index entry are written BEFORE the
+   reviewer is asked, and the same files are overwritten with the result.
+   A run killed or hung mid-call therefore still leaves a record of the
+   paid attempt, and the paid call has its own timeout, shorter than the
+   job's, so the save steps still run (Astra, PR #134 review, round 13). */
+export const REVIEW_CALL_TIMEOUT_MS = 12 * 60 * 1000;
+export async function reviewAndRecord({ d, key, images, ask, model, dir, index, sourceKey, write, signer, now = () => new Date().toISOString(), cost = () => null, timeoutMs = REVIEW_CALL_TIMEOUT_MS }) {
+  if (typeof signer?.sign !== "function") throw new Error("reviewAndRecord: no signing key — a review that cannot be signed is not recorded");
+  const startedAt = now();
+  const base = `${dir}/${d.id}/${startedAt.replace(/[:.]/g, "-")}-${key}`;
+  const record = (r) => {
+    write(`${base}.md`, renderReviewMarkdown(r));
+    write(`${base}.json`, JSON.stringify(r, null, 2) + "\n");
+    const entry = { key, sourceKey, frames: frameIds(d.images), verdict: r.verdict, completed: r.completed, reviewedAt: r.reviewedAt, model, report: `${base}.md`, counts: r.counts ?? null };
+    index[d.id] = { ...entry, sig: signApproval(d.id, entry, signer) };
+    write(`${dir}/index.json`, JSON.stringify(index, null, 2) + "\n");
+  };
+  record({ id: d.id, title: d.title, model, reviewedAt: startedAt, images, key, findings: [], usage: null, completed: false, verdict: "ERROR",
+    error: `The review was started but did not finish: the run stopped while waiting for ${REVIEWER_NAME}. The request may have been charged.` });
+  let timer;
+  const timed = () => Promise.race([
+    ask(),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`no answer within ${timeoutMs / 1000} s; the request may have been charged`)), timeoutMs); }),
+  ]);
+  try {
+    const r = await reviewOne({ d, key, images, ask: timed, model, now: () => startedAt, cost });
+    record(r);
+    return { ...r, report: `${base}.md` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* What one diagram's review request is made of, and the key it is cached
+   under: the prompt carries the diagram's own source, so any logic the
+   key covers is also in front of the reviewer (round 19). */
+export function diagramRequest(d, plan, rules, pngs, readSource) {
+  const source = readSource(d.id);
+  const prompt = diagramReviewPrompt(d, plan, rules, source);
+  return { prompt, key: reviewKey(d, pngs, { prompt, source }) };
+}
+
+/* Everything a diagram's drawing depends on (diagramSources) lives in
+   diagram-attest.mjs, so the review and the publication freshness key are
+   built from ONE dependency set (Astra, PR #134 review, round 22). */
+export { diagramSources } from "./diagram-attest.mjs";
+
+/* A diagram as plain data — what the review is about, with the worked
+   caption already computed. The secret-less prepare job writes this; the
+   trusted job reviews only this, never the module itself. */
+export function reviewData(d, images) {
+  return {
+    id: d.id, title: d.title, facts: d.facts,
+    workedCaption: typeof d.dynamicCaption === "function" ? d.dynamicCaption(d.example) : (d.workedCaption ?? null),
+    steps: d.steps.map((s) => ({ key: s.key, dynamic: !!s.dynamic, focus: s.focus ?? [], caption: s.dynamic ? null : s.caption, narration: s.dynamic ? null : s.narration })),
+    images: images.map((p) => ({ theme: p.theme, key: p.key })),
+  };
 }

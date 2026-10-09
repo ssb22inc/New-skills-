@@ -41,8 +41,8 @@ async function settle(promise) {
 }
 
 describe("model registry", () => {
-  it("makes Astra the reviewer and keeps the writer in another family", () => {
-    expect(REVIEW_MODEL).toBe("openai/gpt-6-astra");
+  it("makes Luna the reviewer and keeps the writer in another family", () => {
+    expect(REVIEW_MODEL).toBe("openai/gpt-6-luna");
     expect(familyOf(GEN_MODEL)).not.toBe(familyOf(REVIEW_MODEL));
     expect(() => assertCrossFamily(GEN_MODEL, REVIEW_MODEL)).not.toThrow();
   });
@@ -58,14 +58,14 @@ describe("model registry", () => {
     expect(() => assertCrossFamily("", REVIEW_MODEL)).toThrow(/Cannot determine/);
   });
 
-  it("knows Astra takes no sampling temperature", () => {
-    expect(acceptsTemperature("openai/gpt-6-astra")).toBe(false);
+  it("knows Luna takes no sampling temperature", () => {
+    expect(acceptsTemperature("openai/gpt-6-luna")).toBe(false);
     expect(acceptsTemperature("anthropic/claude-sonnet-4.6")).toBe(true);
   });
 });
 
 describe("what goes over the wire", () => {
-  it("never sends temperature to Astra, even when a caller asks for it", async () => {
+  it("never sends temperature to Luna, even when a caller asks for it", async () => {
     stubFetch(ok("fine"));
     await llmCall({ model: REVIEW_MODEL, prompt: "x", temperature: 0.7 });
     expect(sent[0]).not.toHaveProperty("temperature");

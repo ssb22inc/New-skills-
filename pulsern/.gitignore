@@ -3,7 +3,14 @@ dist/
 .env
 .env.*
 .vercel/
-reports/
+# Local and CI scratch output is ignored, EXCEPT the records the review
+# workflows commit back: paid reviews, pairing decisions and narration runs
+# are kept by owner instruction, and an ignored path made every one of those
+# commits fail. (A whole ignored directory cannot be re-included, hence /*.)
+reports/*
+!reports/diagram-review/
+!reports/diagram-map/
+!reports/narration/
 
 # repo-root .gitignore excludes *.sql; migrations must be tracked
 !supabase/migrations/*.sql

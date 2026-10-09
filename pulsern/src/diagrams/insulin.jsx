@@ -17,7 +17,10 @@ export const INSULINS = {
   rapid:  { name: "Rapid-acting",  eg: "lispro, aspart, glulisine", onset: [10 / 60, 30 / 60], peak: [1, 2],  duration: [3, 5] },
   short:  { name: "Short-acting",  eg: "regular",                   onset: [0.5, 1],          peak: [2, 4],  duration: [5, 8] },
   nph:    { name: "Intermediate",  eg: "NPH",                       onset: [1, 2],            peak: [4, 12], duration: [12, 18] },
-  long:   { name: "Long-acting",   eg: "glargine, detemir",         onset: [1, 2],            peak: null,    duration: [24, 24] },
+  /* Glargine U-100 only. Detemir (dose-dependent, often shorter), glargine
+     U-300 (up to ~36 h) and degludec (~42 h) act differently and are never
+     drawn on this row. */
+  long:   { name: "Long-acting",   eg: "glargine (U-100)",          onset: [1, 2],            peak: null,    duration: [24, 24] },
 };
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -141,7 +144,7 @@ export const INSULIN_EXAMPLE = { type: "nph", givenAt: "07:00" };
 const ROWS = [["rapid", "Rapid · lispro", "10–30 min", "1–2 h", "3–5 h"],
   ["short", "Short · regular", "30–60 min", "2–4 h", "5–8 h"],
   ["nph", "Intermed. · NPH", "1–2 h", "4–12 h", "12–18 h"],
-  ["long", "Long · glargine", "1–2 h", "none", "~24 h"]];
+  ["long", "Long · glargine U-100", "1–2 h", "none", "~24 h"]];
 
 export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   const concept = params === null;
@@ -151,7 +154,7 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   const bandMid = mine?.peak ? (hx(mine.peak[0]) + hx(mine.peak[1])) / 2 : 0;
   return (
     <Frame h={416} focus={focus} title="Insulin onset, peak and duration"
-      desc="Typical action of four insulin types over 24 hours. Rapid-acting: onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours, given with a meal. Short-acting regular: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine or detemir: onset 1 to 2 hours, no peak, about 24 hours. Hypoglycemia risk is highest at the peak.">
+      desc="Typical action of four insulin types over 24 hours. Rapid-acting: onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours, given with a meal. Short-acting regular: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no peak, about 24 hours; detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest at the peak.">
       <G id="axes">
         <T x={18} y={20} size={12} weight={700}>Insulin effect over 24 hours</T>
         <T x={342} y={20} size={10} anchor="end" color={C.muted}>typical ranges</T>
@@ -200,15 +203,15 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
           </OnStep>
         ))}
         <T x={18} y={270} size={10.5} weight={700} color={C.muted}>Type</T>
-        <T x={124} y={270} size={10.5} weight={700} color={C.muted}>Onset</T>
-        <T x={204} y={270} size={10.5} weight={700} color={C.muted}>Peak</T>
-        <T x={268} y={270} size={10.5} weight={700} color={C.muted}>Lasts</T>
+        <T x={150} y={270} size={10.5} weight={700} color={C.muted}>Onset</T>
+        <T x={222} y={270} size={10.5} weight={700} color={C.muted}>Peak</T>
+        <T x={282} y={270} size={10.5} weight={700} color={C.muted}>Lasts</T>
         {ROWS.map(([k, a, b, c, d], i) => (
           <g key={k}>
             <T x={18} y={290 + i * 19} size={11}>{a}</T>
-            <T x={124} y={290 + i * 19} size={11} mono>{b}</T>
-            <T x={204} y={290 + i * 19} size={11} mono color={c === "none" ? C.muted : C.ink}>{c}</T>
-            <T x={268} y={290 + i * 19} size={11} mono>{d}</T>
+            <T x={150} y={290 + i * 19} size={11} mono>{b}</T>
+            <T x={222} y={290 + i * 19} size={11} mono color={c === "none" ? C.muted : C.ink}>{c}</T>
+            <T x={282} y={290 + i * 19} size={11} mono>{d}</T>
           </g>
         ))}
       </G>
@@ -257,7 +260,8 @@ export const insulin = {
     "Typical rapid-acting insulin (lispro, aspart, glulisine): onset 10–30 minutes, peak 1–2 hours, duration 3–5 hours.",
     "Typical short-acting (regular) insulin: onset 30–60 minutes, peak 2–4 hours, duration 5–8 hours.",
     "Typical intermediate-acting (NPH) insulin: onset 1–2 hours, peak 4–12 hours, duration 12–18 hours.",
-    "Long-acting insulin (glargine, detemir): onset 1–2 hours, no pronounced peak, duration about 24 hours.",
+    "Long-acting insulin glargine U-100: onset 1–2 hours, no pronounced peak, duration about 24 hours.",
+    "Other basal insulins differ: detemir's duration is dose-dependent and can be shorter than 24 hours; glargine U-300 lasts up to about 36 hours; degludec about 42 hours.",
     "The risk of hypoglycemia is greatest when an insulin is at its peak.",
     "Action times vary by product and source; the product's labeling is the authority.",
   ],
@@ -270,8 +274,8 @@ export const insulin = {
       narration: "Short-acting regular insulin starts in thirty to sixty minutes and peaks at two to four hours." },
     { key: "nph", focus: ["axes", "nph", "table"], caption: "Intermediate NPH starts in 1 to 2 hours, with a long, broad peak from about 4 to 12 hours.",
       narration: "Intermediate-acting N-P-H starts in one to two hours, and has a long, broad peak from about four to twelve hours." },
-    { key: "long", focus: ["axes", "long", "table"], caption: "Long-acting glargine and detemir have no pronounced peak — a steady background level for about 24 hours.",
-      narration: "Long-acting glargine and detemir have no pronounced peak. They provide a steady background level for about twenty-four hours." },
+    { key: "long", focus: ["axes", "long", "table"], caption: "Long-acting glargine U-100 has no pronounced peak — a steady background level for about 24 hours. Others last differently, including glargine U-300, so check the product.",
+      narration: "Long-acting glargine U-one-hundred has no pronounced peak. It provides a steady background level for about twenty-four hours. Other basal insulins last differently, including glargine U-three-hundred, so always check the product." },
     { key: "risk", focus: ["axes", "rapid", "short", "nph", "peak-risk"], caption: "The peak is when hypoglycemia is most likely. Know when each client's insulin peaks, and make sure food and glucose checks line up with it.",
       narration: "The peak is when hypoglycemia is most likely. Know when each client's insulin peaks, and make sure food and glucose checks line up with it." },
     { key: "worked", focus: ["axes", "worked", "peak-risk"], dynamic: true, caption: null, narration: null },

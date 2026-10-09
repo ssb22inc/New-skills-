@@ -40,9 +40,26 @@ jobs:
 
       - run: npm ci
 
+      # Before the tests: the diagram renderer's tests draw in a real browser.
+      - name: Browser for the tests and player checks
+        run: npx playwright install --with-deps chromium
+
       # Includes the workflow-placement guard.
+      # The public key that checks signed review, pairing and narration
+      # records (ops/attest.mjs); a branch cannot change a repository variable.
       - name: Tests
         run: npm test
+        env:
+          PULSERN_ATTEST_PUBLIC_KEY: ${{ vars.PULSERN_ATTEST_PUBLIC_KEY }}
+
+      # The explainer player mounted in a real browser: pause really stops
+      # the motion, and reduced motion never advances on its own.
+      - name: Player checks
+        run: node ops/check-player.mjs
+      # Canonical PNG conversion checked by Chromium's own decoder: every
+      # tracked image and fixture must draw identically after conversion.
+      - name: Canonical image checks
+        run: node ops/check-png-canonical.mjs
 
       - name: Production build
         run: npm run build

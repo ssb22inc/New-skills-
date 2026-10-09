@@ -155,7 +155,7 @@ export function TonicityDiagram({ focus = null }) {
   );
   return (
     <Frame h={498} focus={focus} title="IV fluid tonicity"
-      desc="Isotonic fluid: no net water movement, the cell keeps its shape and volume stays in the vessels. Hypotonic fluid: fewer particles outside the cell, so water moves into cells and they swell. Hypertonic fluid: more particles outside the cell, so water moves out of cells into the vessels and cells shrink. Dextrose fluids act like what is left once the dextrose is metabolized: D5W and D10W like free water (hypotonic), D5 half normal saline like half normal saline (hypotonic), D5 normal saline and D5LR like their isotonic bases. Do not give hypotonic fluids with increased intracranial pressure. Monitor isotonic and hypertonic infusions for fluid overload.">
+      desc="Isotonic fluid: no net water movement across cell membranes, so cells keep their shape; it expands the extracellular fluid, in the blood vessels and the tissue spaces. Hypotonic fluid: fewer particles outside the cell, so water moves into cells and they swell. Hypertonic fluid: more particles outside the cell, so water moves out of cells into the surrounding extracellular fluid and cells shrink. Dextrose fluids act like what is left once the dextrose is metabolized: D5W and D10W like free water (hypotonic), D5 half normal saline like half normal saline (hypotonic), D5 normal saline and D5LR like their isotonic bases. Do not give hypotonic fluids with increased intracranial pressure. Monitor isotonic and hypertonic infusions for fluid overload.">
       <T x={180} y={14} size={10.5} anchor="middle" color={C.muted}>Water moves toward the side with MORE particles</T>
       <g>
         <Dot p={[118, 29]} />
@@ -163,7 +163,7 @@ export function TonicityDiagram({ focus = null }) {
         <Drop x={214} y={29} s={0.9} />
         <T x={220} y={32} size={9.5} color={C.muted}>water</T>
       </g>
-      <Panel id="iso" step="isotonic" x={8} title="Isotonic" sub={["no net shift", "stays in vessels"]} r={22} flow="both" outside={7} seed={11} />
+      <Panel id="iso" step="isotonic" x={8} title="Isotonic" sub={["no shift in/out", "expands ECF volume"]} r={22} flow="both" outside={7} seed={11} />
       <Panel id="hypo" step={["hypotonic", "safety"]} x={125} title="Hypotonic" sub={["water moves IN", "cell swells"]} r={26} flow="in" outside={2} seed={23} />
       <Panel id="hyper" step="hypertonic" x={242} title="Hypertonic" sub={["water moves OUT", "cell shrinks"]} r={15} crenated flow="out" outside={14} seed={37} />
       <G id="fluids">
@@ -202,7 +202,7 @@ export const tonicity = {
   example: {},
   facts: [
     "Across a cell membrane, water moves toward the side with the higher concentration of dissolved particles.",
-    "Isotonic fluids cause no net water shift into or out of cells and expand intravascular volume. Examples: 0.9% NaCl, lactated Ringer's.",
+    "Isotonic fluids cause no net water shift into or out of cells. They expand extracellular fluid volume: they cross capillary walls freely, so after equilibration most of the infused volume is in the interstitial space and only roughly a quarter remains in the vessels. Examples: 0.9% NaCl, lactated Ringer's.",
     "Hypotonic fluids move water into cells, which swell. Examples: 0.45% NaCl, 0.225% NaCl.",
     "Hypertonic fluids pull water out of cells into the vascular space, and cells shrink. Examples: 3% NaCl, D5 0.9% NaCl, D5 0.45% NaCl, D5LR, D10W.",
     "Tonicity of dextrose fluids is stated as in the bag; once the dextrose is metabolised the fluid acts like what remains: D5W and D10W like free water (hypotonic), D5 0.45% NaCl like 0.45% NaCl (hypotonic), D5 0.9% NaCl and D5LR like 0.9% NaCl and lactated Ringer's (isotonic).",
@@ -210,12 +210,12 @@ export const tonicity = {
     "Clients receiving isotonic or hypertonic fluids are monitored for fluid volume overload.",
   ],
   steps: [
-    { key: "isotonic", focus: ["iso"], caption: "Isotonic fluid matches the blood, so water doesn't shift in or out of cells. It stays in the vessels and expands circulating volume.",
-      narration: "Isotonic fluid matches the blood, so water doesn't shift into or out of the cells. It stays in the vessels and expands the circulating volume." },
+    { key: "isotonic", focus: ["iso"], caption: "Isotonic fluid matches the blood, so water doesn't shift into or out of cells. It expands the fluid outside the cells — in the vessels and the tissues — which is why it is used to replace volume.",
+      narration: "Isotonic fluid matches the blood, so water doesn't shift into or out of the cells. It expands the fluid outside the cells — in the blood vessels and in the tissues — which is why it is used to replace volume." },
     { key: "hypotonic", focus: ["hypo"], caption: "Hypotonic fluid has fewer particles than the cell, so water moves into the cell and it swells.",
       narration: "Hypotonic fluid has fewer particles than the inside of the cell, so water moves into the cell, and the cell swells." },
-    { key: "hypertonic", focus: ["hyper"], caption: "Hypertonic fluid has more particles, so water is pulled out of the cell into the vessel, and the cell shrinks.",
-      narration: "Hypertonic fluid has more particles, so water is pulled out of the cell and into the vessel, and the cell shrinks." },
+    { key: "hypertonic", focus: ["hyper"], caption: "Hypertonic fluid has more particles, so water is pulled out of the cell into the fluid around it, and the cell shrinks.",
+      narration: "Hypertonic fluid has more particles, so water is pulled out of the cell and into the fluid around it, and the cell shrinks." },
     { key: "bags", focus: ["fluids"], caption: "Know which bag is which. Each fluid is classified as it is in the bag — and every bag with dextrose carries a catch.",
       narration: "Know which bag is which. Each fluid is classified as it is in the bag — and every bag with dextrose in it carries a catch." },
     { key: "dextrose", focus: ["fluids", "dextrose"], caption: "The body uses dextrose fast, then the fluid acts like what is left. D5W and D10W become free water — hypotonic. D5 ½NS becomes ½NS. D5NS and D5LR become isotonic.",

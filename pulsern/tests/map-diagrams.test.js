@@ -4,6 +4,8 @@
    a decision that cannot be trusted is never turned into a diagram on a
    student's screen, and nothing is paid for twice. */
 import { describe, it, expect } from "vitest";
+import { diagramFp, fingerprint } from "../src/diagrams/fingerprint.js";
+import { DIAGRAMS } from "../src/diagrams/index.js";
 import {
   itemHash, diagramHash, isFresh, batches, readDecisions, shownAs, buildItemMap, pairingPrompt, PAIRING_SCHEMA, serializeDecisions,
 } from "../ops/map-diagrams-lib.mjs";
@@ -62,27 +64,45 @@ describe("what a student is shown", () => {
 });
 
 describe("the shipped map", () => {
+  const Q = (id) => ({ id, stem: `stem ${id}`, rationale: "r", options: ["a", "b"], answer: 0 });
+  const items = new Map([3, 9, 12, 100].map((id) => [id, Q(id)]));
   const decisions = {
-    "12:abg": { attach: true, shown: { ph: 7.3, paco2: 55, hco3: 24 }, fp: "aaaaaaaa" },
-    "3:tonicity": { attach: true, shown: null, fp: "bbbbbbbb" },
-    "3:potassium": { attach: false, shown: null, fp: "bbbbbbbb" },
-    "100:potassium": { attach: true, shown: { k: 6.2 }, fp: "cccccccc" },
+    "12:abg": { attach: true, values_confirmed: true, extracted: { ph: 7.3, paco2: 55, hco3: 24 }, fp: "aaaaaaaa" },
+    "3:tonicity": { attach: true, extracted: null, fp: "bbbbbbbb" },
+    "3:potassium": { attach: false, extracted: null, fp: "bbbbbbbb" },
+    "100:potassium": { attach: true, values_confirmed: true, extracted: { k: 6.2 }, fp: "cccccccc" },
   };
   it("contains only attached pairs, each with its question fingerprint", () => {
-    const m = buildItemMap(decisions);
-    expect(m.pairs["3"]).toEqual([{ d: "tonicity", f: "bbbbbbbb" }]);
-    expect(m.pairs["12"]).toEqual([{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 }, f: "aaaaaaaa" }]);
+    const m = buildItemMap(decisions, DIAGRAMS, null, items);
+    expect(m.pairs["3"]).toEqual([{ d: "tonicity", f: fingerprint(Q(3)), v: diagramFp(DIAGRAMS.tonicity) }]);
+    expect(m.pairs["12"]).toEqual([{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 }, f: fingerprint(Q(12)), v: diagramFp(DIAGRAMS.abg) }]);
     expect(JSON.stringify(m)).not.toContain('"attach"');
   });
   it("never ships a pairing it could not verify on screen", () => {
-    expect(buildItemMap({ "9:abg": { attach: true, shown: null } }).pairs).toEqual({});
+    expect(buildItemMap({ "77:abg": { attach: true, extracted: null } }, DIAGRAMS, null, items).pairs).toEqual({});   // no current question
+    expect(buildItemMap({ "9:retired": { attach: true, extracted: null, fp: "dddddddd" } }, DIAGRAMS, null, items).pairs).toEqual({});
   });
   it("is byte-identical for the same decisions in any order", () => {
     const shuffled = Object.fromEntries(Object.entries(decisions).reverse());
-    expect(JSON.stringify(buildItemMap(shuffled))).toBe(JSON.stringify(buildItemMap(decisions)));
+    expect(JSON.stringify(buildItemMap(shuffled, DIAGRAMS, null, items))).toBe(JSON.stringify(buildItemMap(decisions, DIAGRAMS, null, items)));
   });
   it("orders question ids numerically", () => {
-    expect(Object.keys(buildItemMap(decisions).pairs)).toEqual(["3", "12", "100"]);
+    expect(Object.keys(buildItemMap(decisions, DIAGRAMS, null, items).pairs)).toEqual(["3", "12", "100"]);
+  });
+  it("records the drawing code it was built against", () => {
+    expect(buildItemMap(decisions, DIAGRAMS, "k1", items).sourceKey).toBe("k1");
+  });
+  /* Round 7: a cached decision carrying an OLD-format fingerprint (stem and
+     rationale only) was copied into the map, and the app silently hid it. */
+  it("recomputes the question fingerprint instead of copying a cached one", async () => {
+    const { fnv1a } = await import("../src/diagrams/fingerprint.js");
+    const { pairsFor } = await import("../src/concept-explainers.jsx");
+    const q = Q(12);
+    const oldFormat = fnv1a(`${q.stem}\u0000${q.rationale}`);
+    expect(oldFormat).not.toBe(fingerprint(q));
+    const m = buildItemMap({ "12:abg": { attach: true, values_confirmed: true, extracted: { ph: 7.3, paco2: 55, hco3: 24 }, fp: oldFormat } }, DIAGRAMS, null, items);
+    expect(m.pairs["12"][0].f).toBe(fingerprint(q));
+    expect(pairsFor(JSON.parse(JSON.stringify(m)), q, DIAGRAMS).map((x) => x.diagram.id)).toEqual(["abg"]);
   });
 });
 

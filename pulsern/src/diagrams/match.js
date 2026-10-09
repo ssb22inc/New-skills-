@@ -44,15 +44,17 @@ export function extractAbg(text) {
   return ph != null && paco2 != null && hco3 != null ? { ph, paco2, hco3 } : null;
 }
 
-/* Insulin type and the time it was given. Degludec is deliberately NOT
-   mapped: its duration (~42 h) is outside the diagram's long-acting row,
-   and drawing it as glargine would be wrong. Exactly one type and one time,
-   or null. */
+/* Insulin type and the time it was given. The long-acting row is glargine
+   U-100 only (~24 h). Products whose action differs are deliberately NOT
+   mapped, because drawing them on that row would be wrong (Astra, PR #133
+   review, finding 9): degludec (~42 h), glargine U-300 / Toujeo (up to
+   ~36 h) and detemir (dose-dependent, often shorter than 24 h). Exactly one
+   type and one time, or null. */
 const INSULIN_TYPES = [
   ["rapid", /\b(?:lispro|aspart|glulisine|humalog|novolog|apidra|rapid[- ]acting)\b/i],
   ["short", /\bregular(?:\s+insulin)?\b|\bhumulin r\b|\bnovolin r\b|\bshort[- ]acting insulin\b/i],
   ["nph", /\bNPH\b|\bisophane\b|\bhumulin n\b|\bnovolin n\b|\bintermediate[- ]acting\b/i],
-  ["long", /\b(?:glargine|detemir|lantus|levemir|basaglar|toujeo)\b/i],
+  ["long", /\b(?:glargine|lantus|basaglar|semglee)\b/i],
 ];
 function clockFrom(text) {
   const hits = new Set();
@@ -68,9 +70,23 @@ function clockFrom(text) {
   }
   return hits.size === 1 ? [...hits][0] : null;
 }
+/* Any stated concentration other than U-100 — U-300 glargine, U-500
+   regular, U-200 — has a different action profile from the one drawn, so
+   no profile is chosen. Spellings are normalised first: every Unicode
+   hyphen or dash and every kind of space, so "U 300", "U\u2011300" and
+   "U\u2013300" are all caught (Astra, PR #134 review, round 18). */
+const DASHES = /[\u2010-\u2015\u2212\u00AD\uFE58\uFE63\uFF0D]/g;
+const SPACES = /[\s\u00A0\u2007\u202F\u2060\uFEFF]+/g;
+export const normaliseDosing = (text) => String(text ?? "").replace(DASHES, "-").replace(SPACES, " ");
+function unsupportedConcentration(t) {
+  for (const m of t.matchAll(/\bU ?-? ?(\d{2,4})\b/gi)) if (Number(m[1]) !== 100) return true;
+  /* "300 units/mL", "300 U/mL", "300 IU/mL", "300 units per milliliter" */
+  for (const m of t.matchAll(/\b(\d{2,4}) ?(?:units?|U|IU) ?(?:\/|per) ?(?:mL|ml|milliliters?|millilitres?|cc)\b/gi)) if (Number(m[1]) !== 100) return true;
+  return /\bconcentrated insulin\b/i.test(t);
+}
 export function extractInsulin(text) {
-  const t = String(text ?? "");
-  if (/degludec|tresiba/i.test(t)) return null;
+  const t = normaliseDosing(text);
+  if (/degludec|tresiba|detemir|levemir|toujeo/i.test(t) || unsupportedConcentration(t)) return null;
   const types = INSULIN_TYPES.filter(([, re]) => re.test(t)).map(([k]) => k);
   if (types.length !== 1) return null;
   const givenAt = clockFrom(t);

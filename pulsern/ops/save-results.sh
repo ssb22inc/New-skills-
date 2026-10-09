@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Commits a paid run's results and pushes them to the run's branch, shared by
+# the diagram-map, diagram-review and narrate workflows.
+#
+#   ops/save-results.sh <branch> <commit message> <path>...
+#
+# Paths that do not exist are skipped (a run that stopped early may not have
+# written them all). Writes pushed=true and head=<sha> to $GITHUB_OUTPUT only
+# after checking that the results commit, or its rebased copy, is on the
+# remote branch. A rebase conflict aborts the rebase and fails: the earlier
+# loop ignored the failed rebase, and its next push of the unchanged remote
+# tip "succeeded", reporting a save that never happened (Astra, PR #134
+# review, round 7). The workflows upload the same paths as an artifact first,
+# so a failed save never loses the results.
+#
+# EXPECT_BASE=<sha>: the results were computed from exactly that commit, so
+# they may only land directly on top of it. If the branch has moved, nothing
+# is rebased and the save fails (Astra, PR #134 review, round 22: results
+# made from one tree must not be committed onto another).
+set -uo pipefail
+
+if [ "$#" -lt 3 ]; then echo "usage: save-results.sh <branch> <message> <path>..." >&2; exit 2; fi
+branch=$1; msg=$2; shift 2
+out=${GITHUB_OUTPUT:-/dev/null}
+delay=${SAVE_RETRY_DELAY:-5}
+
+fail() { echo "::error::$1"; exit 1; }
+
+# A path the run never created is skipped; one that exists must be staged
+# in full, or the save fails — a partial save must never report success
+# (Astra, PR #134 review, round 21: a failed `git add` was ignored).
+for p in "$@"; do
+  [ -e "$p" ] || continue
+  git add -- "$p" || fail "Could not stage $p; nothing was saved."
+  [ -z "$(git ls-files --others --exclude-standard -- "$p")" ] || fail "Part of $p could not be staged; nothing was saved."
+  [ -z "$(git ls-files --others --ignored --exclude-standard -- "$p")" ] || fail "Part of $p is git-ignored and would be lost; nothing was saved."
+  git diff --quiet -- "$p" || fail "$p still has unstaged changes; nothing was saved."
+done
+if git diff --cached --quiet; then
+  echo "Nothing new to save."
+  exit 0
+fi
+git commit -q -m "$msg" || fail "Could not commit the results."
+# The change itself, independent of where it is applied: survives a rebase.
+want=$(git show HEAD | git patch-id --stable | cut -d' ' -f1)
+[ -n "$want" ] || fail "Could not fingerprint the results commit."
+
+if [ -n "${EXPECT_BASE:-}" ]; then
+  [ "$(git rev-parse HEAD~1)" = "$EXPECT_BASE" ] || fail "The results were not committed on top of $EXPECT_BASE; nothing was saved."
+  git fetch -q origin "$branch" || fail "Could not read $branch to check it has not moved; nothing was saved."
+  tip=$(git rev-parse FETCH_HEAD)
+  [ "$tip" = "$EXPECT_BASE" ] || fail "$branch moved during the run (from ${EXPECT_BASE:0:12} to ${tip:0:12}); the results are for the old commit and were not saved to the branch (they are in this run's artifact)."
+  # The lease makes the push itself refuse if the branch moves now.
+  git push -q --force-with-lease="refs/heads/$branch:$EXPECT_BASE" origin "HEAD:refs/heads/$branch" || fail "$branch moved while saving; the results were not saved to the branch (they are in this run's artifact)."
+  head=$(git rev-parse HEAD)
+  git fetch -q origin "$branch" || fail "Pushed, but could not read the branch back to confirm the save."
+  [ "$(git rev-parse FETCH_HEAD)" = "$head" ] || fail "Pushed, but $branch is not at $head."
+  echo "Saved $head to $branch."
+  { echo "pushed=true"; echo "head=$head"; } >> "$out"
+  exit 0
+fi
+
+for attempt in 1 2 3; do
+  if [ "$(git show HEAD | git patch-id --stable | cut -d' ' -f1)" != "$want" ]; then
+    fail "The results commit is no longer at HEAD; nothing was saved."
+  fi
+  if git push -q origin "HEAD:$branch"; then
+    head=$(git rev-parse HEAD)
+    git fetch -q origin "$branch" || fail "Pushed, but could not read the branch back to confirm the save."
+    git merge-base --is-ancestor "$head" FETCH_HEAD || fail "Pushed, but $head is not on $branch."
+    echo "Saved $head to $branch."
+    { echo "pushed=true"; echo "head=$head"; } >> "$out"
+    exit 0
+  fi
+  [ "$attempt" = 3 ] && break
+  sleep $((attempt * delay))
+  git fetch -q origin "$branch" || continue
+  if ! git rebase -q FETCH_HEAD; then
+    git rebase --abort 2>/dev/null
+    fail "The results conflict with a concurrent update to $branch; not saved to the branch (they are in this run's artifact)."
+  fi
+done
+fail "Could not push the results (they are in this run's artifact)."

@@ -230,7 +230,7 @@ export function IsolationDiagram({ params = null, focus = null }) {
   const lit = new Set(params?.types ?? []);
   return (
     <Frame h={442} focus={focus} title="Transmission-based precautions"
-      desc="Standard precautions, including hand hygiene, for every client. Contact precautions (spread by touch; MRSA, VRE, C. difficile, scabies, RSV): gown and gloves, private room or cohort, dedicated equipment; soap and water for C. difficile because alcohol rub does not kill its spores. Droplet precautions (large droplets that fall within about 3 feet; influenza, pertussis, mumps, rubella, meningococcal meningitis): surgical mask on entering the room, private room. Airborne precautions (tiny particles that stay in the air; tuberculosis, measles, chickenpox): N95 respirator, negative-pressure room with the door closed. Clients wear a surgical mask when transported on droplet or airborne precautions.">
+      desc="Standard precautions, including hand hygiene, for every client. Contact precautions (spread by touch; MRSA, VRE, C. difficile, scabies, RSV): gown and gloves, private room or cohort, dedicated equipment; soap and water for C. difficile because alcohol rub does not kill its spores. Droplet precautions (large droplets that fall within about 3 feet; influenza, pertussis, mumps, rubella, meningococcal meningitis): surgical mask on entering the room, private room. Airborne precautions (tiny particles that stay in the air; tuberculosis, measles, chickenpox): N95 respirator, negative-pressure room with the door closed. Chickenpox needs airborne and contact precautions together. Clients wear a surgical mask when transported on droplet or airborne precautions.">
       <G id="standard">
         <Box x={8} y={6} w={344} h={34} r={10} fill={C.card} lift />
         <HandWash x={24} y={23} />
@@ -250,7 +250,7 @@ export function IsolationDiagram({ params = null, focus = null }) {
         badges={(cy) => <Badge cx={52} cy={cy}><Mask x={0} y={2} /></Badge>} />
       <Row id="airborne" y={278} highlight={lit.has("airborne")}
         title="Airborne — tiny particles hang in air" how="travel on air currents, farther than droplets"
-        examples="TB · measles · chickenpox"
+        examples="TB · measles · chickenpox (+ contact)"
         wear="fit-tested N95 respirator" room="negative pressure, door closed"
         scene={(x, y) => <AirborneScene x={x} y={y} />}
         badges={(cy) => <><Badge cx={36} cy={cy}><N95 x={0} y={4} /></Badge><Badge cx={68} cy={cy}><NegRoom x={2} y={0} /></Badge></>} />
@@ -275,7 +275,7 @@ export const isolation = {
     "Standard precautions apply to every client; transmission-based precautions are added on top of them.",
     "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, lice, RSV) require a gown and gloves, a private room or cohorting, and dedicated equipment.",
     "Droplet precautions (e.g., influenza, pertussis, mumps, rubella, meningococcal meningitis) require a surgical mask on entering the room and a private room; the client wears a surgical mask when transported.",
-    "Airborne precautions (e.g., tuberculosis, measles, chickenpox) require a fit-tested N95 respirator and a negative-pressure airborne infection isolation room with the door closed; the client wears a surgical mask when transported.",
+    "Airborne precautions (e.g., tuberculosis, measles, chickenpox) require a fit-tested N95 respirator and a negative-pressure airborne infection isolation room with the door closed; the client wears a surgical mask when transported. Chickenpox (varicella) requires airborne AND contact precautions until the lesions are crusted.",
     "Chickenpox (varicella) requires both airborne and contact precautions.",
     "Alcohol-based hand rub does not kill C. difficile spores; hands are washed with soap and water.",
   ],
@@ -288,8 +288,8 @@ export const isolation = {
       narration: "Here is the C. diff trap. Alcohol hand rub does not kill its spores, so wash your hands with soap and water." },
     { key: "droplet", focus: ["droplet"], caption: "Droplet: large droplets that fall within about 3 feet — flu, pertussis, mumps, rubella, meningococcal meningitis. Put on a surgical mask as you enter the room.",
       narration: "Droplet precautions are for large droplets that fall within about three feet — influenza, pertussis, mumps, rubella, and meningococcal meningitis. Put on a surgical mask as you enter the room." },
-    { key: "airborne", focus: ["airborne"], caption: "Airborne: tiny particles that hang in the air — TB, measles, chickenpox. A fit-tested N95 respirator, and a negative-pressure room with the door kept closed.",
-      narration: "Airborne precautions are for tiny particles that hang in the air — tuberculosis, measles, and chickenpox. Wear a fit-tested N-ninety-five respirator, and keep the client in a negative-pressure room with the door closed." },
+    { key: "airborne", focus: ["airborne"], caption: "Airborne: tiny particles that hang in the air — TB, measles, chickenpox. A fit-tested N95 respirator, and a negative-pressure room with the door kept closed. Chickenpox also needs contact precautions: gown and gloves.",
+      narration: "Airborne precautions are for tiny particles that hang in the air — tuberculosis, measles, and chickenpox. Wear a fit-tested N-ninety-five respirator, and keep the client in a negative-pressure room with the door closed. Chickenpox also needs contact precautions, so add a gown and gloves." },
     { key: "transport", focus: ["droplet", "airborne"], caption: "If a client on droplet or airborne precautions must leave the room, the client wears a surgical mask. Chickenpox needs airborne and contact precautions together.",
       narration: "If a client on droplet or airborne precautions has to leave the room, the client wears a surgical mask. And remember, chickenpox needs airborne and contact precautions together." },
   ],

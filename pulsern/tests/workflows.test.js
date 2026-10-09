@@ -154,7 +154,32 @@ describe("workflow placement", () => {
       expect(post.split("\n").slice(0, 3).join("\n")).toContain("if: always()");
       expect(post).toContain('context:"pulsern/astra-review"');
       expect(post).toContain("statuses/$HEAD_SHA");
-      expect(w).toContain("statuses: write");
+    });
+
+    /* PR #134 review, finding 1: a check inside a dispatchable workflow is
+       not a trust boundary. Only the App — whose key is confined to the
+       main-only environment — can post the required status. */
+    it("posts statuses only with the App token from the main-only environment", () => {
+      const w = wf();
+      const perms = w.slice(w.indexOf("\npermissions:"), w.indexOf("\nconcurrency:"));
+      expect(perms).not.toMatch(/statuses:\s*write/);
+      expect(w).toMatch(/^    environment: astra-review$/m);
+      const tokenStep = w.slice(w.indexOf("- name: Status publisher token"), w.indexOf("- name: Mark the commit under review as pending"));
+      expect(tokenStep).toContain("secrets.ASTRA_APP_KEY");
+      expect(tokenStep).toMatch(/permissions:\{statuses:"write"\}/);
+      const statusCalls = [...w.matchAll(/Bearer \$(\w+)" -H "Accept: application\/vnd\.github\+json" \\\n\s+"https:\/\/api\.github\.com\/repos\/\$REPO\/statuses/g)].map((m) => m[1]);
+      expect(statusCalls).toEqual(["STATUS_TOKEN", "STATUS_TOKEN"]);
+    });
+
+    /* PR #134 review, finding 2: a PR aimed at another branch reviews only
+       part of a head that a PR into main also carries. */
+    it("only lets a review of a PR INTO the default branch post a status", () => {
+      const w = wf();
+      const r = w.slice(w.indexOf("- name: Resolve what to review"), w.indexOf("- name: Status publisher token"));
+      expect(r).toContain('into_default() { [ "$1" = "$DEFAULT_BRANCH" ] && [ "$2" = "$REPO" ]; }');
+      expect(r).toMatch(/into_default "\$EV_BASE_REF" "\$EV_BASE_REPO" && post=true/);
+      expect(r).toMatch(/into_default "\$pr_base_ref" "\$pr_base_repo" && post=true/);
+      expect(r).not.toMatch(/echo "POST_STATUS=true"/);
     });
 
     /* Finding #5: cancelling a run mid-call threw away a paid review. */
@@ -187,9 +212,338 @@ describe("workflow placement", () => {
       }
     });
 
+    /* PR #133 review, finding 1 (blocker): a dispatch with base = head for
+       any commit posted a pass without a review, and a dispatch from a
+       feature branch ran that branch's reviewer as if trusted. */
+    describe("manual re-review", () => {
+      const resolve = () => {
+        const w = wf();
+        return w.slice(w.indexOf("- name: Resolve what to review"), w.indexOf("- name: Status publisher token"));
+      };
+      it("only runs the reviewer from the default branch", () => {
+        expect(resolve()).toMatch(/"\$GITHUB_REF" != "refs\/heads\/\$DEFAULT_BRANCH"[\s\S]*exit 1/);
+      });
+      it("reads a PR's range from GitHub and refuses a head that is not the PR's", () => {
+        const r = resolve();
+        expect(r).toContain("api.github.com/repos/$REPO/pulls/$IN_PR");
+        expect(r).toMatch(/"\$IN_HEAD" != "\$pr_head"[\s\S]*exit 1/);
+        expect(r).toContain('echo "BASE_SHA=$pr_base"');
+        expect(r).not.toMatch(/BASE_SHA=\$IN_BASE"; echo "PR=\$IN_PR/);
+      });
+      it("never posts a status for a report-only range", () => {
+        const w = wf();
+        expect(resolve()).toMatch(/echo "PR="; echo "POST_STATUS=false"/);
+        // and an unconfigured App means report-only too, never the workflow token
+        expect(w).toMatch(/not configured[\s\S]*echo "POST_STATUS=false" >> "\$GITHUB_ENV"; exit 0/);
+        for (const step of ["- name: Mark the commit under review as pending", "- name: Post the verdict on the reviewed commit"]) {
+          const head = w.slice(w.indexOf(step)).split("\n").slice(0, 3).join("\n");
+          expect(head, step).toMatch(/env\.POST_STATUS == 'true'/);
+        }
+        // and its verdict still fails the run
+        expect(w).toMatch(/- name: Report-only verdict\s+if: always\(\) && env\.POST_STATUS != 'true'/);
+      });
+      it("takes inputs through the environment, never pasted into the script", () => {
+        expect(resolve()).not.toMatch(/run:[\s\S]*\$\{\{ inputs\./);
+      });
+    });
+
+    /* Round 8: an explicit permissions block disables everything it omits,
+       and the resolver reads /pulls/{n} with the workflow token. */
+    it("can read the PR it resolves, and gets no more than it needs", () => {
+      const w = wf();
+      const block = w.slice(w.indexOf("\npermissions:"), w.indexOf("\nconcurrency:"));
+      const perms = [...block.matchAll(/^  ([a-z-]+): (\w+)/gm)].map((m) => `${m[1]}=${m[2]}`).sort();
+      expect(perms).toEqual(["contents=write", "pull-requests=read"]);
+    });
+
     it("does not spend money on unrelated labels", () => {
       expect(wf()).toMatch(/github\.event\.action != 'labeled' \|\| github\.event\.label\.name == 'astra-review'/);
     });
   });
 });
 
+
+/* The review workflows commit their records back. If git ignores the path,
+   every one of those commits fails — and the paid results go with it. That
+   was true of all three until this test existed. */
+describe("records the workflows commit are committable", () => {
+  const { execFileSync } = require("node:child_process");
+  const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
+  it.each(files)("%s commits only paths git will accept", (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const line = /trusted\/pulsern\/ops\/save-results\.sh" "\$BRANCH" "[^"\n]*" ([^\n]+)\n/.exec(w);
+    expect(line, "save step goes through the shared, checked save script").not.toBeNull();
+    const paths = line[1].trim().split(/\s+/);
+    // the artifact kept before the push holds the same paths
+    const art = w.slice(w.indexOf("- name: Keep the results as an artifact"), w.indexOf("id: save"));
+    expect(art).toMatch(/if: always\(\) && steps\.links\.outcome == 'success'\s+uses: actions\/upload-artifact@v4/);
+    for (const p of paths) expect(art).toContain(`branch/pulsern/${p}`);
+    // round 19: every paid narration take is kept in the artifact (never committed)
+    if (f === "pulsern-narrate.yml") expect(art).toContain("branch/pulsern/reports/narration-takes/");
+    for (const p of paths) {
+      const probe = p.endsWith("/") ? `${p}probe.json` : p;
+      let ignored = true;
+      try { execFileSync("git", ["check-ignore", "-q", probe], { cwd: join(LIVE_DIR, "../../pulsern") }); } catch { ignored = false; }
+      expect(ignored, `${probe} is git-ignored`).toBe(false);
+    }
+  });
+});
+
+/* PR #133 review, finding 17: pushes made with the workflow token trigger no
+   other workflow, so a bot-pushed commit was never reviewed. Each job that
+   pushes asks for the trusted, range-verified review explicitly. */
+describe("bot pushes are reviewed", () => {
+  const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
+  it.each(files)("%s requests the Astra review of what it pushed", (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    expect(w).toMatch(/^  actions: write/m);
+    expect(w).toContain("trusted/pulsern/ops/save-results.sh\" \"$BRANCH\"");
+    expect(w).not.toMatch(/pull -q --rebase[^\n]*\|\| true/);
+    const step = w.slice(w.indexOf("- name: Request CI and the Astra review of what was just pushed"));
+    expect(step).toMatch(/if: always\(\) && steps\.links\.outcome == 'success' && steps\.save\.outputs\.pushed == 'true'/);
+    // CI on the pushed head (round 5): a workflow-token push starts no CI by itself
+    expect(step).toContain("actions/workflows/pulsern-ci.yml/dispatches");
+    expect(step.indexOf("pulsern-ci.yml/dispatches")).toBeLessThan(step.indexOf("pulls?state=open"));
+    expect(step).toContain("actions/workflows/pulsern-astra-review.yml/dispatches");
+    // through the verified path: the PR number and its head, from the default branch
+    expect(step).toMatch(/inputs:\{head:\$head,pr:\$pr\}/);
+    expect(step).toContain("--arg ref \"$DEFAULT_BRANCH\"");
+  });
+  it.each(files)("%s never pastes a dispatch input into a shell script", (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const scripts = [...w.matchAll(/^(\s+)run: \|\n((?:\1  .*\n|\s*\n)+)/gm)].map((m) => m[2]);
+    expect(scripts.length).toBeGreaterThan(0);
+    for (const sc of scripts) expect(sc).not.toMatch(/\$\{\{\s*inputs\./);
+  });
+});
+
+/* PR #134 review, round 6: "refs/heads/main" passed a guard that refused
+   only the literal words main/master. Each workflow's real guard script is
+   extracted and RUN here against hostile inputs, with the GitHub branch
+   lookup stubbed to know two real branches. */
+describe("jobs that push refuse the default branch in every spelling", () => {
+  const { execFileSync } = require("node:child_process");
+  const { mkdtempSync, writeFileSync } = require("node:fs");
+  const { tmpdir } = require("node:os");
+  const guardOf = (f) => {
+    const lines = readFileSync(join(LIVE_DIR, f), "utf8").split("\n");
+    const i = lines.findIndex((l) => l.trim() === "- name: Refuse to write to main");
+    const j = lines.findIndex((l, k) => k > i && l.trim() === "run: |");
+    const body = [];
+    for (const l of lines.slice(j + 1)) { if (l.trim() && !l.startsWith(" ".repeat(10))) break; body.push(l.slice(10)); }
+    const stub = 'curl() { url="${@: -1}"; case "$url" in */branches/feature%2Fx|*/branches/claude%2Fwork) return 0;; *) return 22;; esac; }';
+    return `${stub}\n${body.join("\n")}`;
+  };
+  const accepts = (script, branch) => {
+    const dir = mkdtempSync(join(tmpdir(), "guard-"));
+    writeFileSync(join(dir, "g.sh"), script);
+    try {
+      execFileSync("bash", [join(dir, "g.sh")], { env: { ...process.env, BRANCH: branch, DEFAULT_BRANCH: "trunk", REPO: "o/r", GH_TOKEN: "x" }, stdio: "pipe" });
+      return true;
+    } catch { return false; }
+  };
+  it.each(["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"])("%s", (f) => {
+    const g = guardOf(f);
+    for (const ok of ["feature/x", "claude/work"]) expect(accepts(g, ok), ok).toBe(true);
+    for (const bad of ["trunk", "main", "master", "refs/heads/main", "refs/heads/feature/x", "HEAD", "a..b", "x.lock", "has space",
+      "2994d8ae53705dc4206507b5daec4812f290372b", "abc1234", "v1.0", "not-a-branch"]) {
+      expect(accepts(g, bad), bad).toBe(false);
+    }
+  });
+});
+
+/* Astra, PR #134 review, round 21: the paid jobs checked out the chosen
+   branch, installed its dependencies and ran its scripts with the
+   production service-role key (narration) or the OpenRouter key in the
+   environment. Now the branch's code runs only in a job with no secrets,
+   and the job with secrets runs only the default branch's scripts. */
+/* Round 26: signed records are checked in CI with the public key, which
+   is a repository variable; the private key exists only in the paid jobs. */
+describe("the signing keys", () => {
+  const all = readdirSync(LIVE_DIR).filter((f) => /^pulsern-.*\.yml$/.test(f)).map((f) => [f, readFileSync(join(LIVE_DIR, f), "utf8")]);
+  it("the private key is a secret, used only by the three paid jobs", () => {
+    const users = all.filter(([, w]) => w.includes("PULSERN_ATTEST_PRIVATE_KEY")).map(([f]) => f).sort();
+    expect(users).toEqual(["pulsern-diagram-map.yml", "pulsern-diagram-review.yml", "pulsern-narrate.yml"]);
+    for (const [f, w] of all) for (const m of w.matchAll(/PULSERN_ATTEST_PRIVATE_KEY: (.+)/g)) expect(m[1], f).toBe("${{ secrets.PULSERN_ATTEST_PRIVATE_KEY }}");
+  });
+  it("the public key comes from a repository variable, never from the branch", () => {
+    for (const [f, w] of all) for (const m of w.matchAll(/PULSERN_ATTEST_PUBLIC_KEY: (.+)/g)) expect(m[1], f).toBe("${{ vars.PULSERN_ATTEST_PUBLIC_KEY }}");
+    for (const f of ["pulsern-ci.yml", "pulsern-seo-guardian.yml"]) {
+      const w = all.find(([n]) => n === f)[1];
+      expect(w, f).toMatch(/run: npm test\n\s+env:\n\s+PULSERN_ATTEST_PUBLIC_KEY: \$\{\{ vars\.PULSERN_ATTEST_PUBLIC_KEY \}\}/);
+    }
+  });
+});
+
+describe("paid workflows never run branch code with secrets", () => {
+  const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
+  /* A small structural reader for these files: jobs are the 2-space keys
+     under "jobs:", steps the 6-space "- " items within a job. */
+  const jobs = (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const body = w.slice(w.indexOf("\njobs:\n") + 7);
+    const out = {};
+    const parts = body.split(/^  ([a-z-]+):\n/m);
+    for (let i = 1; i < parts.length; i += 2) out[parts[i]] = parts[i + 1];
+    return out;
+  };
+  const steps = (job) => job.slice(job.indexOf("    steps:\n") + 11).split(/^      - /m).slice(1).map((t) => ({
+    text: t,
+    name: /^(?:name: )?(.*)$/m.exec(t)?.[1]?.replace(/^name: /, "") ?? "",
+    uses: /^(?:uses: |\s+uses: )?(actions\/[a-z-]+@v\d+)/m.exec(t)?.[1] ?? null,
+    wd: /^\s+working-directory: (\S+)/m.exec(t)?.[1] ?? null,
+    run: /run: \|\n([\s\S]*)$/.exec(t)?.[1] ?? (/^\s*run: (.+)$/m.exec(t)?.[1] ?? ""),
+  }));
+  /* Astra, PR #134 review, round 24: the branch code in the prepare job
+     can write to the Actions cache, and the paid job restored the npm
+     cache after its trusted checkout — a poisoned archive could replace a
+     trusted script. Neither job restores or saves any cache. */
+  it.each(files)("%s: no job restores or saves an Actions cache", (f) => {
+    for (const [name, job] of Object.entries(jobs(f))) {
+      const code = job.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+      expect(code, `${f} ${name}`).not.toMatch(/^\s+cache(-dependency-path)?:/m);
+      expect(code, `${f} ${name}`).not.toMatch(/actions\/cache|cache-restore|cache-save|ACTIONS_CACHE/i);
+      for (const st of steps(job).filter((s) => /setup-(node|python|go|java)/.test(s.text))) expect(st.text, `${f} ${name}`).not.toMatch(/cache/);
+    }
+  });
+  it.each(files)("%s: secrets appear only in the paid job, which is in the protected environment", (f) => {
+    const j = jobs(f);
+    expect(Object.keys(j).sort()).toEqual(["paid", "prepare"]);
+    expect(j.prepare).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
+    expect(j.prepare).toMatch(/^    permissions:\n      contents: read\n/m);
+    expect(j.paid).toMatch(/^    environment: pulsern-paid$/m);
+    expect(j.paid).toMatch(/^    needs: prepare$/m);
+    expect(j.paid).toMatch(/secrets\.(OPENAI|OPENROUTER)_API_KEY/);
+  });
+  it.each(files)("%s: the paid job runs only the trusted checkout's scripts", (f) => {
+    const paid = jobs(f).paid;
+    expect(paid).toMatch(/^    defaults:\n      run:\n        working-directory: branch\/pulsern$/m);
+    const st = steps(paid);
+    const checkouts = st.filter((s) => s.text.startsWith("uses: actions/checkout@"));
+    expect(checkouts.map((s) => [/path: (\S+)/.exec(s.text)?.[1], /ref: (.+)/.exec(s.text)?.[1]])).toEqual([["trusted", "${{ github.sha }}"], ["branch", "${{ needs.prepare.outputs.sha }}"]]);
+    // round 22: no credential stored in either checkout
+    for (const c of checkouts) expect(c.text).toMatch(/persist-credentials: false/);
+    // links and special files refused before any trusted script runs on the branch
+    const refuse = st.findIndex((s) => s.text.startsWith("name: Refuse links and special files in the branch checkout"));
+    const work = st.findIndex((s) => /--prepared /.test(s.run));
+    expect(refuse).toBeGreaterThan(-1);
+    expect(refuse).toBeLessThan(work);
+    expect(st[refuse].run).toMatch(/find branch .*-type l/);
+    // the push token only in the save step, with the pinned base
+    const save = st.find((s) => /\bid: save\b/.test(s.text));
+    expect(save.text).toMatch(/EXPECT_BASE: \$\{\{ needs\.prepare\.outputs\.sha \}\}/);
+    expect(save.run).toMatch(/GIT_CONFIG_VALUE_0="AUTHORIZATION: basic/);
+    expect(paid.replace(save.text, "")).not.toMatch(/extraheader/);
+    for (const s of st.filter((x) => x.run)) {
+      const where = s.wd ?? "branch/pulsern";
+      if (/\bnode ops\/|\bnpm (ci|install|run)\b|\bnpx\b/.test(s.run)) expect(where, s.name).toBe("trusted/pulsern");
+      // in the branch checkout only git and the TRUSTED save script run
+      if (where === "branch/pulsern") expect(s.run.replace(/"\$GITHUB_WORKSPACE\/trusted\/pulsern\/ops\/save-results\.sh"/g, ""), s.name).not.toMatch(/ops\/[a-z-]+\.(mjs|sh)/);
+    }
+    expect(paid).toMatch(/--prepared "\$RUNNER_TEMP\/prepared\/[^"]+" --into "\$GITHUB_WORKSPACE\/branch\/pulsern"/);
+  });
+  it.each(files)("%s: the prepare job runs the branch with no secrets and refuses a non-default dispatch", (f) => {
+    const prep = jobs(f).prepare;
+    const st = steps(prep);
+    const guard = st.findIndex((s) => s.text.startsWith("name: Run only from the default branch"));
+    const co = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@") && /ref: \$\{\{ inputs\.branch \}\}/.test(s.text));
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(st[guard].run).toContain('[ "$REF" = "refs/heads/$DEFAULT_BRANCH" ]');
+    expect(st[co].text).toMatch(/ref: \$\{\{ inputs\.branch \}\}\n(\s+path: branch\n)?\s+persist-credentials: false/);
+    expect(guard).toBeLessThan(co);
+    expect(prep).toMatch(/node ops\/[a-z-]+\.mjs --prepare /);
+    // round 22: the prepared commit is pinned and handed to the paid job
+    expect(prep).toMatch(/outputs:\n      sha: \$\{\{ steps\.pin\.outputs\.sha \}\}/);
+    expect(prep).toMatch(/id: pin\n\s+(working-directory: branch\n\s+)?run: echo "sha=\$\(git rev-parse HEAD\)" >> "\$GITHUB_OUTPUT"/);
+  });
+  /* Round 25: the frames came from the branch's own render script, so
+     nothing proved they showed the pinned source. The diagram review's
+     prepare job now runs only the default branch's scripts, with the branch
+     checked out beside them as data. */
+  it.each([
+    ["pulsern-diagram-review.yml", /node ops\/review-diagrams\.mjs --prepare "\$RUNNER_TEMP\/prepared\/review" --source "\$GITHUB_WORKSPACE\/branch\/pulsern"/],
+    ["pulsern-diagram-map.yml", /node ops\/map-diagrams\.mjs --prepare "\$RUNNER_TEMP\/prepared\/map\.json" --source "\$GITHUB_WORKSPACE\/branch\/pulsern"/],
+    ["pulsern-narrate.yml", /node ops\/narrate\.mjs --prepare "\$RUNNER_TEMP\/prepared\/narration\.json" --source "\$GITHUB_WORKSPACE\/branch\/pulsern"/],
+  ])("%s: the prepare job reads the branch with the default branch's scripts (rounds 25, 28)", (f, command) => {
+    const prep = jobs(f).prepare;
+    const st = steps(prep);
+    expect(prep).toMatch(/defaults:\n\s+run:\n\s+working-directory: trusted\/pulsern/);
+    const trusted = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@") && /ref: \$\{\{ github\.sha \}\}\n\s+path: trusted\n\s+persist-credentials: false/.test(s.text));
+    const branch = st.findIndex((s) => s.text.startsWith("uses: actions/checkout@") && /path: branch/.test(s.text));
+    expect(trusted).toBeGreaterThanOrEqual(0);
+    expect(branch).toBeGreaterThan(trusted);
+    // nothing runs in the branch checkout but reading its commit
+    for (const s of st.filter((s) => s.run)) {
+      if (s.wd === "branch") expect(s.run.trim()).toBe('echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"');
+      else expect(s.wd === null || s.wd === ".", s.name).toBe(true);
+    }
+    expect(prep).toMatch(command);
+    expect(prep).not.toMatch(/npm (ci|install)[^\n]*branch/);
+  });
+});
+
+/* Round 22: the link refusal is real shell, run here against real trees —
+   a report symlinked at a mock credential must stop the job before any
+   upload or trusted step can read through it. */
+describe("the paid job refuses links in the branch it was given", () => {
+  const { execFileSync, spawnSync } = require("node:child_process");
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = require("node:fs");
+  const { tmpdir } = require("node:os");
+  const script = (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const i = w.indexOf("- name: Refuse links and special files in the branch checkout and prepared data");
+    const block = w.slice(i, w.indexOf("\n      - ", i + 10));
+    return block.slice(block.indexOf("run: |\n") + 7).split("\n").map((l) => l.replace(/^ {10}/, "")).join("\n");
+  };
+  const tree = () => {
+    const ws = mkdtempSync(join(tmpdir(), "paid-ws-"));
+    mkdirSync(join(ws, "branch/.git"), { recursive: true });
+    writeFileSync(join(ws, "branch/.git/config"), "[http]\n\textraheader = AUTHORIZATION: basic c2VudGluZWw=\n");
+    mkdirSync(join(ws, "branch/pulsern/reports/narration"), { recursive: true });
+    writeFileSync(join(ws, "branch/pulsern/reports/narration/run.md"), "ok\n");
+    mkdirSync(join(ws, "tmp/prepared/review/abg"), { recursive: true });
+    writeFileSync(join(ws, "tmp/prepared/review/abg/0.png"), "png");
+    return ws;
+  };
+  const run = (f, ws) => spawnSync("bash", ["-e", "-o", "pipefail", "-c", script(f)], { cwd: ws, encoding: "utf8", env: { ...process.env, RUNNER_TEMP: join(ws, "tmp") } });
+  it.each(["pulsern-narrate.yml", "pulsern-diagram-map.yml", "pulsern-diagram-review.yml"])("%s: a symlinked report stops the job; a clean tree passes", (f) => {
+    const ws = tree();
+    expect(run(f, ws).status).toBe(0);
+    symlinkSync("/proc/self/environ", join(ws, "branch/pulsern/reports/narration/run-env.md"));
+    const r = run(f, ws);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/run-env\.md/);
+    rmSync(join(ws, "branch/pulsern/reports/narration/run-env.md"));
+    symlinkSync("/proc/self/environ", join(ws, "tmp/prepared/review/abg/1.png"));
+    const p = run(f, ws);
+    expect(p.status).toBe(1);
+    expect(p.stdout).toMatch(/1\.png/);
+    rmSync(ws, { recursive: true, force: true });
+  });
+});
+
+/* Round 23: the check failed the job, but report, upload and save steps
+   marked always() still read the rejected checkout. */
+describe("nothing reads the branch after the link check fails", () => {
+  const files = ["pulsern-diagram-map.yml", "pulsern-narrate.yml", "pulsern-diagram-review.yml"];
+  it.each(files)("%s: every later always() step requires the check to have passed", (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const paid = w.slice(w.indexOf("\n  paid:\n"));
+    const after = paid.slice(paid.indexOf("        id: links\n"));
+    const steps = after.split(/^      - /m).slice(1);
+    expect(steps.length).toBeGreaterThan(3);
+    for (const s of steps) {
+      const cond = /^\s+if: (.+)$/m.exec(s)?.[1];
+      if (!cond || !/always\(\)/.test(cond)) continue;   // default success(): skipped after a failure
+      if (s.startsWith("name: Verdict")) {
+        // the verdict reads only step outputs, never the branch
+        expect(s).not.toMatch(/branch\/|reports\/|cat /);
+        continue;
+      }
+      expect(cond, s.split("\n")[0]).toContain("steps.links.outcome == 'success'");
+    }
+    // and the check runs after the prepared data is downloaded, before any trusted script
+    expect(paid.indexOf("actions/download-artifact@")).toBeLessThan(paid.indexOf("id: links"));
+    expect(paid.indexOf("id: links")).toBeLessThan(paid.indexOf("--prepared "));
+  });
+});
