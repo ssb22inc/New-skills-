@@ -60,10 +60,10 @@ function useDiagramCss() {
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export function Explainer({ diagram, params, startInPlayer = false, rnVerified = false, audio = null }) {
+export function Explainer({ diagram, params, startInPlayer = false, initialStep = 0, rnVerified = false, audio = null }) {
   useDiagramCss();
   const n = diagram.steps.length;
-  const [step, setStep] = React.useState(startInPlayer ? 0 : -1);   // -1 = static overview
+  const [step, setStep] = React.useState(startInPlayer ? Math.max(0, Math.min(diagram.steps.length - 1, initialStep)) : -1);   // -1 = static overview
   const [playing, setPlaying] = React.useState(false);
   const [elapsed, setElapsed] = React.useState(0);
   const audioRef = React.useRef(null);
@@ -136,8 +136,10 @@ export function Explainer({ diagram, params, startInPlayer = false, rnVerified =
           <button type="button" className="dg-btn" onClick={() => { go(0); setPlaying(!reduce); }}>▶ Watch the explainer</button>
         </div>
       )}
+      {/* The RN badge is a pill; the AI note is plain text, because a long
+          pill wraps into a broken shape at phone width. */}
       <p className="dg-ai">
-        <span className={`dg-badge${badge.rn ? " rn" : ""}`}>{badge.text}</span>
+        {badge.rn ? <span className="dg-badge rn">{badge.text}</span> : <span>{badge.text}</span>}
         {clipUrl ? " · Narration is a synthetic voice." : ""}
       </p>
     </section>

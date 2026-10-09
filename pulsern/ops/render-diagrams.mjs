@@ -49,6 +49,9 @@ try {
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { DIAGRAMS } = await vite.ssrLoadModule("/src/diagrams/index.js");
   const { DIAGRAM_CSS } = await vite.ssrLoadModule("/src/diagrams/kit.jsx");
+  /* The real player, not a reconstruction of it: a preview that differs
+     from the app is a preview that misleads. */
+  const { Explainer } = await vite.ssrLoadModule("/src/explainer.jsx");
   const tokens = themeTokens();
 
   const browser = await launchBrowser();
@@ -61,13 +64,13 @@ try {
     if (ONLY && d.id !== ONLY) continue;
     const dir = join(OUT, d.id);
     mkdirSync(dir, { recursive: true });
-    const frames = [{ focus: null, caption: "(static — as shown inside a rationale)" }, ...d.steps];
+    const frames = [null, ...d.steps.map((_, i) => i)];   // null = inline (as in a rationale)
     for (const theme of ["light", "dark"]) {
       for (let i = 0; i < frames.length; i++) {
-        const s = frames[i];
-        const caption = s.dynamic ? d.dynamicCaption(d.example) : s.caption;
-        const svg = renderToStaticMarkup(React.createElement(d.Diagram, { params: d.example, focus: s.focus }));
-        const body = `<div class="shot"><div class="dg-wrap"><div class="dg-head"><span class="dg-title">${d.title}</span>${i ? `<span class="dg-badge">${i} / ${d.steps.length}</span>` : ""}</div>${svg}<p class="dg-caption">${caption ?? ""}</p></div></div>`;
+        const el = frames[i] == null
+          ? React.createElement(Explainer, { diagram: d })
+          : React.createElement(Explainer, { diagram: d, startInPlayer: true, initialStep: frames[i] });
+        const body = `<div class="shot">${renderToStaticMarkup(el)}</div>`;
         await pg.setContent(page(body, tokens[theme], DIAGRAM_CSS), { waitUntil: "networkidle" });
         await pg.evaluate(() => document.fonts.ready);
         /* Layout lint, measured in a real browser with the real fonts: no
