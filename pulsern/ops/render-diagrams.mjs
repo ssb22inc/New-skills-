@@ -20,7 +20,7 @@ import { launchBrowser } from "./browser.mjs";
 
 /* The theme tokens are read from App.jsx itself, so the render can never
    drift from what students actually see. */
-function themeTokens() {
+export function themeTokens() {
   const src = readFileSync("src/App.jsx", "utf8");
   const blocks = [...src.matchAll(/((?:\s*--[a-z0-9-]+:[^;]+;)+)/g)].map((m) => m[1]);
   const light = blocks.find((b) => /--paper:#F3F6F4/.test(b));

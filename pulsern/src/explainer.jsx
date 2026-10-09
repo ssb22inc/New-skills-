@@ -14,7 +14,7 @@
    Without audio the player still works: captions advance on a reading-speed
    timer. With prefers-reduced-motion it never advances on its own. */
 import React from "react";
-import { DIAGRAM_CSS } from "./diagrams/kit.jsx";
+import { DIAGRAM_CSS, StepContext } from "./diagrams/kit.jsx";
 
 /* ---------- pure helpers (tested without a DOM) ---------- */
 
@@ -131,7 +131,11 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
         <span className="dg-title">{diagram.title}</span>
         {inSteps ? <span className="dg-badge" aria-hidden="true">{step + 1} / {n}</span> : null}
       </div>
-      <D params={params === undefined ? diagram.example : params} focus={inSteps ? steps[step].focus : null} />
+      {/* The step key lets each step play its own motion (a wound deepening,
+          water crossing a membrane); without it the diagram is static. */}
+      <StepContext.Provider value={{ stepKey: inSteps ? steps[step].key : null }}>
+        <D params={params === undefined ? diagram.example : params} focus={inSteps ? steps[step].focus : null} />
+      </StepContext.Provider>
       {inSteps ? (
         <>
           <p className="dg-caption" aria-live="polite">{caption}</p>
