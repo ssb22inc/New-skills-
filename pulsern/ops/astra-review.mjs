@@ -48,7 +48,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { llmCall } from "./llm.mjs";
 import { isCanonicalPng } from "./png-canonical.mjs";
-import { REVIEW_MODEL, assertCrossFamily } from "./models.mjs";
+import { REVIEW_MODEL, REVIEWER_NAME, assertCrossFamily } from "./models.mjs";
 
 /* The author of the code under review, so the cross-family check is real. */
 export const AUTHOR_MODEL_FAMILY_PROBE = "anthropic/claude";
@@ -513,7 +513,7 @@ const esc = (s) => String(s ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 
 export function renderMarkdown(r) {
   const lines = [];
-  lines.push(`# Astra review — ${r.verdict}`);
+  lines.push(`# ${REVIEWER_NAME} review — ${r.verdict}`);
   lines.push("");
   lines.push(`| | |`);
   lines.push(`|---|---|`);
@@ -621,7 +621,7 @@ export async function runReview({ base, head, pr = null, outDir, rulesPath, cwd 
     /* Checkpoint BEFORE spending. If this process is killed during the paid
        call — a cancelled run, a timeout, a lost runner — this is the report
        that survives, and it says plainly that the review did not finish. */
-    report.error = "The review was started but did not finish: the run was stopped while waiting for Astra. Recorded as a failure.";
+    report.error = `The review was started but did not finish: the run was stopped while waiting for ${REVIEWER_NAME}. Recorded as a failure.`;
     report.verdict = "FAIL";
     save();
 

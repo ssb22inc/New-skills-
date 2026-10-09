@@ -7,7 +7,7 @@
    nothing says so.
 
    Standing instruction from the owner (2026-10-06): all AI review and
-   adversarial action is GPT Astra's, and nothing is ever reviewed by a model
+   adversarial action belongs to one named OpenAI reviewer, and nothing is ever reviewed by a model
    from the same family that wrote it. The second half is not a preference. A
    model grading its own family's output shares its blind spots, so the review
    catches least exactly where it is needed most. assertCrossFamily() turns
@@ -15,13 +15,16 @@
    has to remember. */
 
 export const GEN_MODEL = "anthropic/claude-sonnet-4.6";
-export const REVIEW_MODEL = "openai/gpt-6-astra";
+/* Owner decision 2026-10-09: the adversarial reviewer is GPT Luna (it was
+   GPT Astra until then). Every review, gate and audit reads it from here. */
+export const REVIEW_MODEL = "openai/gpt-6-luna";
+export const REVIEWER_NAME = "Luna";
 
 /* Reasoning models reject or silently ignore sampling temperature. Sending
    0.7 to one is at best a no-op and at worst a 400 that would take a factory
    down the moment the reviewer switched — so the client asks this before
    sending it, rather than every caller having to know. */
-const NO_TEMPERATURE = new Set(["openai/gpt-6-astra"]);
+const NO_TEMPERATURE = new Set(["openai/gpt-6-astra", "openai/gpt-6-luna"]);
 export const acceptsTemperature = (model) => !NO_TEMPERATURE.has(model);
 
 /* The vendor prefix is the family. Good enough here because the question is

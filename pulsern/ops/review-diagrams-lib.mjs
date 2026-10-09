@@ -10,6 +10,7 @@
    major finding fails the diagram, whatever the summary says. */
 import { createHash } from "node:crypto";
 import { diagramHash } from "./map-diagrams-lib.mjs";
+import { REVIEWER_NAME } from "./models.mjs";
 
 export const AREAS = ["clinical", "visual", "consistency", "accessibility", "pedagogy", "rules"];
 export const SEVERITIES = ["blocker", "major", "minor"];
@@ -153,7 +154,7 @@ export function reviewKey(diagram, pngBuffers, { prompt, source } = {}) {
 export function renderReviewMarkdown(r) {
   const rank = (s) => SEVERITIES.indexOf(s);
   const lines = [
-    `# Astra diagram review — ${r.title} — ${r.verdict}`, "",
+    `# ${REVIEWER_NAME} diagram review — ${r.title} — ${r.verdict}`, "",
     `| | |`, `|---|---|`,
     `| Reviewer | \`${r.model}\` |`,
     `| Reviewed at | ${r.reviewedAt} |`,
@@ -216,7 +217,7 @@ export async function reviewAndRecord({ d, key, images, ask, model, dir, index, 
     write(`${dir}/index.json`, JSON.stringify(index, null, 2) + "\n");
   };
   record({ id: d.id, title: d.title, model, reviewedAt: startedAt, images, key, findings: [], usage: null, completed: false, verdict: "ERROR",
-    error: "The review was started but did not finish: the run stopped while waiting for Astra. The request may have been charged." });
+    error: `The review was started but did not finish: the run stopped while waiting for ${REVIEWER_NAME}. The request may have been charged.` });
   let timer;
   const timed = () => Promise.race([
     ask(),

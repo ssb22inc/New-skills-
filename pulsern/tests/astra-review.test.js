@@ -374,7 +374,7 @@ describe("digests", () => {
       process.env.OPENROUTER_API_KEY = "test-key";
       globalThis.fetch = async (url, init) => {
         sent.push(JSON.parse(init.body));
-        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ model: "openai/gpt-6-astra", choices: [{ message: { content: JSON.stringify({ assessment: "ok", findings: [] }) } }], usage: { cost: 0 } }) };
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ model: "openai/gpt-6-luna", choices: [{ message: { content: JSON.stringify({ assessment: "ok", findings: [] }) } }], usage: { cost: 0 } }) };
       };
       try {
         const outDir = mkdtempSync(join(tmpdir(), "astra-out-"));
@@ -765,20 +765,20 @@ describe("running a review end to end (Astra finding #5)", () => {
     const pending = runReview(opts(dir), { callModel: () => new Promise((r) => { release = r; }) });
     await new Promise((r) => setTimeout(r, 50));
     const md = readFileSync(join(dir, "2026-10-08-pr7-" + g("rev-parse", "HEAD").trim().slice(0, 7) + ".md"), "utf8");
-    expect(md).toContain("# Astra review — FAIL");
+    expect(md).toContain("# Luna review — FAIL");
     expect(md).toContain("did not finish");
-    release({ text: JSON.stringify({ assessment: "ok", findings: [] }), usage: { costUsd: 0.1 }, model: "openai/gpt-6-astra" });
+    release({ text: JSON.stringify({ assessment: "ok", findings: [] }), usage: { costUsd: 0.1 }, model: "openai/gpt-6-luna" });
     await pending;
   });
 
   it("replaces the checkpoint with the real verdict when the call completes", async () => {
     const dir = out();
-    const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text: JSON.stringify({ assessment: "clean", findings: [] }), usage: { costUsd: 0.5 }, model: "openai/gpt-6-astra" }) });
+    const { code, report } = await runReview(opts(dir), { callModel: async () => ({ text: JSON.stringify({ assessment: "clean", findings: [] }), usage: { costUsd: 0.5 }, model: "openai/gpt-6-luna" }) });
     expect(code).toBe(0);
     expect(report.verdict).toBe("PASS");
     const [md] = readdirSync(dir).filter((f) => f.endsWith(".md"));
     const text = readFileSync(join(dir, md), "utf8");
-    expect(text).toContain("# Astra review — PASS");
+    expect(text).toContain("# Luna review — PASS");
     expect(text).not.toContain("did not finish");
   });
 
@@ -809,13 +809,13 @@ describe("running a review end to end (Astra finding #5)", () => {
 
 describe("the saved report", () => {
   const base = {
-    model: "openai/gpt-6-astra", mode: "trusted", meta: { base: "a".repeat(40), head: "b".repeat(40), pr: "12" },
+    model: "openai/gpt-6-luna", mode: "trusted", meta: { base: "a".repeat(40), head: "b".repeat(40), pr: "12" },
     reviewedAt: "2026-10-08T20:00:00.000Z", filesReviewed: ["pulsern/src/x.js"], skipped: [],
     usage: { costUsd: 0.4123, promptTokens: 30000, completionTokens: 2000 },
   };
   it("leads with the verdict and records the cost", () => {
     const md = renderMarkdown({ ...base, verdict: "FAIL", counts: { blocker: 1, major: 0, minor: 0 }, assessment: "a", findings: [finding("blocker")] });
-    expect(md.split("\n")[0]).toBe("# Astra review — FAIL");
+    expect(md.split("\n")[0]).toBe("# Luna review — FAIL");
     expect(md).toContain("$0.4123");
   });
   it("says the change was read as data by the trusted reviewer", () => {

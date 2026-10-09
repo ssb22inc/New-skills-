@@ -158,7 +158,7 @@ jobs:
       - name: Mark the commit under review as pending
         if: env.POST_STATUS == 'true'
         run: |
-          jq -n --arg u "$RUN_URL" '{state:"pending",context:"pulsern/astra-review",description:"Astra is reviewing this commit",target_url:$u}' |
+          jq -n --arg u "$RUN_URL" '{state:"pending",context:"pulsern/astra-review",description:"Luna is reviewing this commit",target_url:$u}' |
             curl -fsS -X POST -H "Authorization: Bearer $STATUS_TOKEN" -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$REPO/statuses/$HEAD_SHA" -d @- >/dev/null
 
@@ -289,9 +289,9 @@ jobs:
             STATE="${GATE_STATE:-failure}"; DESC="${GATE_WHY:-Review could not run}"
           else
             case "$RC" in
-              0) STATE=success; DESC="Astra: PASS" ;;
-              1) STATE=failure; DESC="Astra: FAIL — see the report" ;;
-              *) STATE=failure; DESC="Astra review did not complete — recorded as a failure" ;;
+              0) STATE=success; DESC="Luna: PASS" ;;
+              1) STATE=failure; DESC="Luna: FAIL — see the report" ;;
+              *) STATE=failure; DESC="Luna review did not complete — recorded as a failure" ;;
             esac
           fi
           echo "$STATE: $DESC"
@@ -306,5 +306,5 @@ jobs:
         env:
           RC: ${{ steps.review.outputs.rc }}
         run: |
-          [ "$RC" = "0" ] && { echo "Astra: PASS (report only)"; exit 0; }
-          echo "::error::Astra: FAIL or incomplete (rc=${RC:-none}) — see the report"; exit 1
+          [ "$RC" = "0" ] && { echo "Luna: PASS (report only)"; exit 0; }
+          echo "::error::Luna: FAIL or incomplete (rc=${RC:-none}) — see the report"; exit 1
