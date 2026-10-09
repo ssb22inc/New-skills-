@@ -36,14 +36,15 @@ jobs:
           cache: npm
           cache-dependency-path: pulsern/package-lock.json
       - run: npm ci
-      - name: Unit and negative-fixture tests
-        id: tests
-        continue-on-error: true
-        run: npm test
+      # Before the tests: the diagram renderer's tests draw in a real browser.
       - name: Install accessibility browser
         id: browser
         continue-on-error: true
         run: npx playwright install --with-deps chromium
+      - name: Unit and negative-fixture tests
+        id: tests
+        continue-on-error: true
+        run: npm test
       - name: Capture authentic product screenshot evidence
         id: product_capture
         continue-on-error: true
