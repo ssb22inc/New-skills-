@@ -49,6 +49,28 @@ describe("canonical PNG", () => {
     const png = encodeCanonicalPng({ width: 2, height: 1, colour: 6, pixels: Buffer.from([1, 2, 3, 0, 4, 5, 6, 7]) });
     expect([...decodePng(png).pixels]).toEqual([0, 0, 0, 0, 4, 5, 6, 7]);
   });
+  /* Round 12: tRNS was ignored and a transparent background became
+     opaque. Anything that changes how the image is drawn is refused
+     before a byte is written. */
+  it("refuses a source whose rendering depends on a chunk it would drop", () => {
+    const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+    const crc = (b) => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const body = Buffer.concat([Buffer.from(t, "latin1"), d]); const s = Buffer.alloc(4); s.writeUInt32BE(crc(body)); return Buffer.concat([l, body, s]); };
+    const base = encodeCanonicalPng({ width: 2, height: 1, colour: 2, pixels: Buffer.from([255, 0, 0, 0, 0, 255]) });
+    const insert = (type, data) => Buffer.concat([base.subarray(0, 33), chunk(type, data), base.subarray(33)]);
+    for (const [type, data] of [
+      ["tRNS", Buffer.from([0, 255, 0, 0, 0, 0])],      // red is transparent
+      ["gAMA", Buffer.from([0, 0, 0xb1, 0x8f])],
+      ["iCCP", Buffer.from("p\0\0x")],
+      ["eXIf", Buffer.from("MM")],
+      ["acTL", Buffer.alloc(8)],
+      ["zzZz", Buffer.from("unknown")],
+    ]) {
+      expect(() => canonicalPng(insert(type, data)), type).toThrow(new RegExp(type));
+    }
+    // chunks that do not affect drawing are simply dropped
+    expect(canonicalPng(insert("tEXt", Buffer.from("Comment\0x"))).equals(base)).toBe(true);
+  });
   it("refuses what it cannot represent", () => {
     expect(() => decodePng(Buffer.from("not a png"))).toThrow();
     expect(isCanonicalPng(Buffer.from("GIF89a"))).toBe(false);

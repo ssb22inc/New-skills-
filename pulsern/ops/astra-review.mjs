@@ -207,6 +207,22 @@ export function parseNameStatusZ(out) {
   }
   return entries;
 }
+/* --raw -z output: ":oldmode newmode oldsha newsha S" then the path. The
+   modes say what a path IS — a regular file, an executable, a symlink
+   (120000) or a submodule (160000) — which the blob alone does not (Astra,
+   PR #134 review, round 12: a page that was a symlink reached review as
+   the text of its target path). */
+export function parseRawZ(out) {
+  const parts = String(out ?? "").split("\0");
+  const entries = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const m = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([A-Z])\d*$/.exec(parts[i]);
+    if (!m) break;
+    entries.push({ oldMode: m[1], newMode: m[2], status: m[3], path: parts[i + 1] });
+  }
+  return entries;
+}
+const LINK_MODES = new Set(["120000", "160000"]);
 
 /* How text reaches the reviewer. Characters a model cannot see — controls,
    line/paragraph separators, zero-width and bidirectional formatting, the
@@ -239,6 +255,7 @@ export function exactText(buf) {
    palette, unused sample bits or compression choice can carry bytes the
    reviewer does not see (Astra, PR #134 review, rounds 9-11). Any other
    image, WebP included, fails the review closed. */
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 export function reviewableImage(path, buf) {
   return /\.png$/i.test(path) && buf && buf.length <= MAX_IMAGE_BYTES && isCanonicalPng(buf) ? "image/png" : null;
 }
@@ -260,9 +277,9 @@ export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
   /* Paths are read as bytes and decoded exactly: a lossy decode once
      turned an unreadable name into a different path whose read "failed"
      quietly, and the file went to review as empty (round 9). */
-  const names = exactText(bytes("diff", "--name-status", "--no-renames", "-z", `${base}...${head}`));
+  const names = exactText(bytes("diff", "--raw", "--no-abbrev", "--no-renames", "-z", `${base}...${head}`));
   if (names === undefined) throw new Error("a changed path is not valid UTF-8, so it cannot be named to the reviewer and the change cannot pass");
-  const entries = parseNameStatusZ(names);
+  const entries = parseRawZ(names);
   const mergeBase = git("merge-base", base, head).trim();
   /* A side that should exist must be read; only the known-absent side of
      an addition or deletion is null. */
@@ -278,24 +295,33 @@ export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
   for (const e of entries) {
     const c = classifyPath(e.path);
     if (c.mode === "skip") { if (c.why !== "outside PulseRN") skipped.push({ path: e.path, why: c.why }); continue; }
+    /* A symlink or submodule is not its own content: what ships is
+       whatever it points to, which may be outside the review entirely. A
+       change that leaves one in place is refused; removing one is fine. */
+    if (LINK_MODES.has(e.newMode) || e.oldMode === "160000") { unrepresentable.push(`${e.path} (symlink or submodule)`); continue; }
+    const modeNote = e.oldMode !== "000000" && e.newMode !== "000000" && e.oldMode !== e.newMode ? `mode ${e.oldMode} → ${e.newMode}\n` : "";
     const wasBuf = e.status === "A" ? null : blob(mergeBase, e.path);
     const nowBuf = e.status === "D" ? null : blob(head, e.path);
     const before = exactText(wasBuf), after = exactText(nowBuf);
     const isText = before !== undefined && after !== undefined;
 
     if (!isText) {
-      const sides = [["before", wasBuf], ["after", nowBuf]].filter(([, b]) => b != null);
-      /* The extension must be the image's own, so a page (.html), a
-         lockfile or any source file can never be sent as pixels. */
-      const ok = sides.every(([, b]) => reviewableImage(e.path, b));
-      if (!ok) { unrepresentable.push(e.path); continue; }
-      const line = (b) => (b == null ? "(absent)" : `sha256 ${sha256(b)} · ${b.length} bytes · ${reviewableImage(e.path, b)}`);
-      for (const [side, b] of sides) images.push({ path: e.path, side, mime: reviewableImage(e.path, b), sha256: sha256(b), bytes: b });
-      files.push({ status: e.status, path: e.path, form: "image", diff: `image ${reviewText(e.path)} (shown to you as attached images)\n- ${line(wasBuf)}\n+ ${line(nowBuf)}\n`, full: null });
+      /* Only NEW bytes must be canonical: the extension must be the
+         image's own, so a page, lockfile or source file can never be sent
+         as pixels. The old side is already on the base branch, so
+         replacing or deleting it adds nothing hidden; it is shown when it
+         is a PNG and named by hash otherwise (Astra, PR #134 review,
+         round 12: a legacy screenshot could never be updated). */
+      if (nowBuf != null && !reviewableImage(e.path, nowBuf)) { unrepresentable.push(e.path); continue; }
+      const oldShown = wasBuf != null && /\.png$/i.test(e.path) && wasBuf.length <= MAX_IMAGE_BYTES && wasBuf.subarray(0, 8).equals(PNG_SIGNATURE);
+      const line = (b, shown) => (b == null ? "(absent)" : `sha256 ${sha256(b)} · ${b.length} bytes${shown ? " · image/png, attached" : " · not shown (already on the base branch)"}`);
+      if (oldShown) images.push({ path: e.path, side: "before", mime: "image/png", sha256: sha256(wasBuf), bytes: wasBuf });
+      if (nowBuf != null) images.push({ path: e.path, side: "after", mime: "image/png", sha256: sha256(nowBuf), bytes: nowBuf });
+      files.push({ status: e.status, path: e.path, form: "image", diff: `${modeNote}image ${reviewText(e.path)}\n- ${line(wasBuf, oldShown)}\n+ ${line(nowBuf, nowBuf != null)}\n`, full: null });
     } else if (c.mode === "page") {
-      files.push({ status: e.status, path: e.path, form: "page digest", diff: reviewText(textDiff(before == null ? "" : pageDigest(before), after == null ? "" : pageDigest(after), e.path)), full: null });
+      files.push({ status: e.status, path: e.path, form: "page digest", diff: reviewText(modeNote + textDiff(before == null ? "" : pageDigest(before), after == null ? "" : pageDigest(after), e.path)), full: null });
     } else if (c.mode === "lockfile") {
-      files.push({ status: e.status, path: e.path, form: "dependency summary", diff: reviewText(textDiff(before == null ? "" : lockDigest(before), after == null ? "" : lockDigest(after), e.path)), full: null });
+      files.push({ status: e.status, path: e.path, form: "dependency summary", diff: reviewText(modeNote + textDiff(before == null ? "" : lockDigest(before), after == null ? "" : lockDigest(after), e.path)), full: null });
     } else {
       /* --text: never let git decide a source file is "binary" and replace
          its changes with a one-line marker (Astra, PR #134 review, round 7).
@@ -303,7 +329,7 @@ export function collectChanges(base, head, { cwd = process.cwd() } = {}) {
          exactly. */
       const diff = exactText(bytes("diff", "--text", "--no-renames", "--no-ext-diff", "--no-textconv", "-U25", `${base}...${head}`, "--", e.path));
       if (diff === undefined) { unrepresentable.push(e.path); continue; }
-      if (!diff && before !== after) throw new Error(`git showed no diff for ${e.path} although it changed, so the change cannot pass`);
+      if (!diff && (before !== after || modeNote)) throw new Error(`git showed no diff for ${e.path} although it changed, so the change cannot pass`);
       files.push({ status: e.status, path: e.path, form: "diff", diff: reviewText(diff), full: after == null ? null : reviewText(after) });
     }
   }

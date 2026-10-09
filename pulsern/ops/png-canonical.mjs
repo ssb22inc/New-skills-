@@ -18,7 +18,16 @@
    there is nowhere left to hide anything.
 
    To make an image acceptable:   node ops/png-canonical.mjs file.png …
-   (rewrites each file in place; it must already be 8-bit grey/RGB(A)). */
+   (rewrites each file in place; it must already be 8-bit grey/RGB(A)).
+
+   Conversion never changes how an image looks. A source carrying anything
+   that affects rendering — transparency (tRNS), colour management (gAMA,
+   cHRM, sRGB, iCCP, cICP, mDCV, cLLI), orientation (eXIf), animation
+   (acTL/fcTL/fdAT) or any chunk not listed below — is refused before a
+   byte is written (Astra, PR #134 review, round 12: tRNS was dropped and a
+   transparent background became opaque). Only chunks a browser ignores
+   when drawing are discarded. ops/check-png-canonical.mjs confirms in a
+   real browser that the pixels survive. */
 import { inflateSync } from "node:zlib";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -26,6 +35,9 @@ import { fileURLToPath } from "node:url";
 const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const CHANNELS = { 0: 1, 2: 3, 4: 2, 6: 4 };
 const MAX_RAW = 64 * 1024 * 1024;
+/* Chunks that do not change what is drawn, so dropping them is safe.
+   PLTE is listed because in a grey/RGB(A) image it is only a suggestion. */
+const IGNORABLE = new Set(["IHDR", "IDAT", "IEND", "tEXt", "zTXt", "iTXt", "tIME", "pHYs", "bKGD", "sBIT", "hIST", "sPLT", "PLTE"]);
 
 const CRC = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -56,6 +68,7 @@ export function decodePng(buf) {
     const type = buf.subarray(at + 4, at + 8).toString("latin1");
     if (at + 12 + len > buf.length) throw new Error("truncated chunk");
     const data = buf.subarray(at + 8, at + 8 + len);
+    if (!IGNORABLE.has(type)) throw new Error(`the ${type} chunk changes how the image is drawn; re-export it as a plain 8-bit sRGB PNG (alpha in an alpha channel) first`);
     if (type === "IHDR") ihdr = data;
     if (type === "IDAT") idat.push(data);
     at += 12 + len;

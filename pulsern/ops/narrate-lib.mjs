@@ -172,8 +172,14 @@ const NAMES_A = /\b(hepatitis|hep|vitamin|vitamins|type|group|blood|influenza|fl
    the A passed). An article never precedes these, except "a positive"/"a
    negative" as adjectives; keeping those too only makes the check stricter. */
 const LETTER_A_BEFORE = /\bA(?=\s*(?:\+|\u2212|-(?![A-Za-z0-9]))|\s+(?:positive|negative|pos|neg|rh|plus|minus|and|or|nor|vs\.?|versus)\b|\s*[,;:/)]|\s*$)/gi;
+/* A blood group or Rh written with a sign is read as the words, so the
+   sign survives as a token and a transcript that drops it fails (Astra,
+   PR #134 review, round 12: "A−" and "A" normalised the same). Only a sign
+   attached to the group, not a spaced dash. */
+const GROUP_SIGN = /\b(AB|A|B|O|Rh)(\+|\u2212|-(?![A-Za-z0-9]))(?=[\s,.;:)!?]|$)/gi;
 function keepLetters(text) {
   return String(text)
+    .replace(GROUP_SIGN, (m, g, s) => `${g} ${s === "+" ? "positive" : "negative"}`)
     .replace(LETTER_A_BEFORE, "letterA")
     .replace(NAMES_A, (m, w) => `${w} letterA`)
     .replace(/(?<=[A-Za-z0-9,;:)]\s+)A\b(?![-'’])/g, "letterA")
@@ -224,7 +230,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 7;
+export const QA_VERSION = 8;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);

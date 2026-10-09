@@ -5,8 +5,8 @@
    one fails here rather than in a review nobody reads. */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readdirSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readdirSync, readFileSync, existsSync, symlinkSync } from "node:fs";
+import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -470,6 +470,64 @@ describe("digests", () => {
       expect(exactText(Buffer.from([0x61, 0xe9]))).toBeUndefined();
       expect(exactText(Buffer.from([0xef, 0xbb, 0xbf, 0x61]))).toBe(`${ch(0xfeff)}a`);
       expect(exactText(null)).toBeNull();
+    });
+
+    /* Round 12: a page that is a symlink reached review as its target's
+       path, while the build would publish the target — here an unreviewed
+       file under the excluded reports directory. */
+    it("refuses a symlink or submodule anywhere in the change, end to end", async () => {
+      for (const link of ["pulsern/public/learn/example/index.html", "pulsern/src/evil.js"]) {
+        const dir = mkdtempSync(join(tmpdir(), "astra-link-"));
+        const run = (...x) => execFileSync("git", x, { cwd: dir, encoding: "utf8" });
+        run("init", "-q"); run("config", "user.email", "t@t"); run("config", "user.name", "t");
+        writeFileSync(join(dir, "keep"), "x"); run("add", "-A"); run("commit", "-qm", "b"); run("tag", "b");
+        mkdirSync(join(dir, "pulsern/reports/astra"), { recursive: true });
+        writeFileSync(join(dir, "pulsern/reports/astra/payload.html"), "<script>steal()</script>");
+        mkdirSync(join(dir, link, ".."), { recursive: true });
+        symlinkSync(relative(join(dir, link, ".."), join(dir, "pulsern/reports/astra/payload.html")), join(dir, link));
+        run("add", "-A"); run("commit", "-qm", "h");
+        expect(() => collectChanges("b", "HEAD", { cwd: dir }), link).toThrow(/symlink or submodule/);
+        let called = false;
+        const { report } = await runReview({ base: "b", head: "HEAD", outDir: mkdtempSync(join(tmpdir(), "astra-out-")), rulesPath: "CLAUDE.md", cwd: dir }, { callModel: async () => { called = true; return ok(); } });
+        expect(called).toBe(false);
+        expect(report.verdict).toBe("FAIL");
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("shows a mode change even in a compact page digest", () => {
+      const path = "pulsern/public/learn/z/index.html";
+      const dir = repoWith([[path, "<p>a</p>", "<p>b</p>"]]);
+      execFileSync("git", ["update-index", "--chmod=+x", path], { cwd: dir });
+      execFileSync("git", ["commit", "-qm", "x"], { cwd: dir });
+      const f = collectChanges("b", "HEAD", { cwd: dir }).files.find((x) => x.path === path);
+      expect(f.diff).toContain("mode 100644 → 100755");
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    /* Round 12: only new bytes must be canonical. An existing image from an
+       ordinary encoder can be replaced or deleted. */
+    it("lets a legacy image be replaced by a canonical one, or deleted", () => {
+      const path = "pulsern/public/shot.png";
+      let dir = repoWith([[path, libPng(3), PNG(4)]]);
+      let r = collectChanges("b", "HEAD", { cwd: dir });
+      expect(r.images.map((i) => i.side)).toEqual(["before", "after"]);
+      expect(r.images[0].bytes.equals(libPng(3))).toBe(true);
+      rmSync(dir, { recursive: true, force: true });
+
+      dir = repoWith([[path, libPng(3), "placeholder"]]);
+      execFileSync("git", ["rm", "-q", path], { cwd: dir });
+      execFileSync("git", ["commit", "-qm", "rm"], { cwd: dir });
+      r = collectChanges("b", "HEAD", { cwd: dir });
+      const f = r.files.find((x) => x.path === path);
+      expect(f.status).toBe("D");
+      expect(f.diff).toContain("+ (absent)");
+      rmSync(dir, { recursive: true, force: true });
+
+      // but new bytes must still be canonical
+      dir = repoWith([[path, libPng(3), libPng(4)]]);
+      expect(() => collectChanges("b", "HEAD", { cwd: dir })).toThrow(/cannot pass/);
+      rmSync(dir, { recursive: true, force: true });
     });
 
     it("accepts only the canonical PNG of the pixels, under its own extension", () => {

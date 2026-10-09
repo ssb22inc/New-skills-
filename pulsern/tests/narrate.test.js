@@ -266,6 +266,28 @@ describe("letters that name things are not fillers", () => {
     expect(speechTokens("Vitamin A")).toEqual(speechTokens("vitamin a"));
     expect(speechTokens("the E.R.")).toEqual(speechTokens("the ER"));
   });
+  /* Round 12: the Rh sign itself must be heard. */
+  describe("blood-group signs", () => {
+    const MINUS = String.fromCodePoint(0x2212);
+    const script = `Group A${MINUS} red cells lack the Rh D antigen. Check compatibility before transfusion.`;
+    it("fails Astra's case: 'A−' heard as 'A'", () => {
+      expect(audioCheck(script, "Group A red cells lack the Rh D antigen. Check compatibility before transfusion.").pass).toBe(false);
+    });
+    it("passes a faithful reading of the sign", () => {
+      expect(audioCheck(script, "Group A negative red cells lack the Rh D antigen. Check compatibility before transfusion.").pass).toBe(true);
+      expect(speechTokens("O+ donors")).toEqual(speechTokens("O positive donors"));
+      expect(speechTokens("AB- plasma")).toEqual(speechTokens("AB negative plasma"));
+      expect(speechTokens("Rh- mother")).toEqual(speechTokens("Rh negative mother"));
+    });
+    it("fails when the sign is changed or added", () => {
+      expect(audioCheck(script, "Group A positive red cells lack the Rh D antigen. Check compatibility before transfusion.").pass).toBe(false);
+      expect(audioCheck("Group O red cells are the universal donor for emergency transfusion in most protocols.", "Group O negative red cells are the universal donor for emergency transfusion in most protocols.").pass).toBe(false);
+    });
+    it("leaves hyphenated words and spaced dashes alone", () => {
+      expect(speechTokens("vitamin B-12")).toEqual(speechTokens("vitamin B12"));
+      expect(speechTokens("O-ring")).not.toContain("negative");
+    });
+  });
   it("keeps a sign-written blood group too", () => {
     expect(speechTokens("A+ blood")).toContain("lettera");
     expect(speechTokens("Give A\u2212 cells")).toContain("lettera");
@@ -275,6 +297,6 @@ describe("letters that name things are not fillers", () => {
     expect(speechTokens("Give the client an apple")).toEqual(speechTokens("Give client apple"));
   });
   it("re-checks clips approved under the weaker rule", () => {
-    expect(QA_VERSION).toBeGreaterThanOrEqual(7);
+    expect(QA_VERSION).toBeGreaterThanOrEqual(8);
   });
 });
