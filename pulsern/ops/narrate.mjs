@@ -29,7 +29,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { readPrepared, narrationPlan } from "./prepared.mjs";
+import { readPrepared, narrationPlan, headCommit } from "./prepared.mjs";
 import { TTS, QA_MODEL, QA_THRESHOLD, QA_VERSION, clipId, textFp, audioCheck, narratedSteps, isCurrentClip, recordAll, isDuplicateUpload } from "./narrate-lib.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
@@ -41,7 +41,7 @@ const PREPARED = arg("--prepared");
 const INTO = arg("--into");
 if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
 /* Read the plan before moving: its path is relative to where we started. */
-const PLAN = PREPARED ? narrationPlan(readPrepared(PREPARED, "narration")) : null;
+const PLAN = PREPARED ? narrationPlan(readPrepared(PREPARED, "narration", { into: INTO })) : null;
 if (INTO) process.chdir(INTO);   // every path below is the branch checkout's
 const MANIFEST = "src/diagrams/narration.json";
 const BUCKET = "explainers";
@@ -119,7 +119,7 @@ let code = 0;
 try {
   const diagrams = await loadSteps();
   if (PREPARE) {
-    writeFileSync(PREPARE, JSON.stringify({ kind: "narration", diagrams }, null, 2) + "\n");
+    writeFileSync(PREPARE, JSON.stringify({ kind: "narration", commit: headCommit(), diagrams }, null, 2) + "\n");
     console.log(`Prepared ${diagrams.reduce((n, d) => n + d.steps.length, 0)} narration step(s) → ${PREPARE}`);
     process.exit(0);
   }

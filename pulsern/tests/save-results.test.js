@@ -30,10 +30,11 @@ function concurrent(file, text) {
   execFileSync("git", ["commit", "-q", "-m", "concurrent"], { cwd: other, env: ENV });
   git(other, "push", "-q", "origin", `HEAD:${BRANCH}`);
 }
-function save(...paths) {
+function save(...paths) { return saveWith({}, ...paths); }
+function saveWith(extraEnv, ...paths) {
   const out = join(dir, "output.txt");
   writeFileSync(out, "");
-  const r = spawnSync(SCRIPT, [BRANCH, "results", ...paths], { cwd: runner, env: { ...ENV, GITHUB_OUTPUT: out }, encoding: "utf8" });
+  const r = spawnSync(SCRIPT, [BRANCH, "results", ...paths], { cwd: runner, env: { ...ENV, GITHUB_OUTPUT: out, ...extraEnv }, encoding: "utf8" });
   return { code: r.status, log: r.stdout + r.stderr, out: readFileSync(out, "utf8") };
 }
 const remoteFile = (file) => {
@@ -129,6 +130,27 @@ describe("save-results.sh", () => {
     const r = save("reports/run.md");
     expect(r.code).toBe(1);
     expect(r.log).not.toMatch(/Nothing new to save/);
+  });
+  /* Round 22: results made from one commit must land only on that commit. */
+  describe("pinned to the commit the results were made from", () => {
+    it("saves directly on top of it when the branch has not moved", () => {
+      const base = git(runner, "rev-parse", "HEAD");
+      write(runner, "src/item-map.json", '{"pairs":{"a":1}}\n');
+      const r = saveWith({ EXPECT_BASE: base }, "src/item-map.json");
+      expect(r.code, r.log).toBe(0);
+      expect(git(remote, "rev-parse", `${BRANCH}~1`)).toBe(base);
+    });
+    it("refuses, and rebases nothing, when the branch moved — even without a conflict", () => {
+      const base = git(runner, "rev-parse", "HEAD");
+      write(runner, "src/item-map.json", '{"pairs":{"a":1}}\n');
+      concurrent("README", "someone else\n");
+      const moved = git(remote, "rev-parse", BRANCH);
+      const r = saveWith({ EXPECT_BASE: base }, "src/item-map.json");
+      expect(r.code).toBe(1);
+      expect(r.log).toMatch(/moved during the run/);
+      expect(r.out).toBe("");
+      expect(git(remote, "rev-parse", BRANCH)).toBe(moved);
+    });
   });
   it("says so, and claims nothing, when there is nothing to save", () => {
     const r = save("src/item-map.json");

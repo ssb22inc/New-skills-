@@ -12,6 +12,11 @@
 # tip "succeeded", reporting a save that never happened (Astra, PR #134
 # review, round 7). The workflows upload the same paths as an artifact first,
 # so a failed save never loses the results.
+#
+# EXPECT_BASE=<sha>: the results were computed from exactly that commit, so
+# they may only land directly on top of it. If the branch has moved, nothing
+# is rebased and the save fails (Astra, PR #134 review, round 22: results
+# made from one tree must not be committed onto another).
 set -uo pipefail
 
 if [ "$#" -lt 3 ]; then echo "usage: save-results.sh <branch> <message> <path>..." >&2; exit 2; fi
@@ -39,6 +44,21 @@ git commit -q -m "$msg" || fail "Could not commit the results."
 # The change itself, independent of where it is applied: survives a rebase.
 want=$(git show HEAD | git patch-id --stable | cut -d' ' -f1)
 [ -n "$want" ] || fail "Could not fingerprint the results commit."
+
+if [ -n "${EXPECT_BASE:-}" ]; then
+  [ "$(git rev-parse HEAD~1)" = "$EXPECT_BASE" ] || fail "The results were not committed on top of $EXPECT_BASE; nothing was saved."
+  git fetch -q origin "$branch" || fail "Could not read $branch to check it has not moved; nothing was saved."
+  tip=$(git rev-parse FETCH_HEAD)
+  [ "$tip" = "$EXPECT_BASE" ] || fail "$branch moved during the run (from ${EXPECT_BASE:0:12} to ${tip:0:12}); the results are for the old commit and were not saved to the branch (they are in this run's artifact)."
+  # The lease makes the push itself refuse if the branch moves now.
+  git push -q --force-with-lease="refs/heads/$branch:$EXPECT_BASE" origin "HEAD:refs/heads/$branch" || fail "$branch moved while saving; the results were not saved to the branch (they are in this run's artifact)."
+  head=$(git rev-parse HEAD)
+  git fetch -q origin "$branch" || fail "Pushed, but could not read the branch back to confirm the save."
+  [ "$(git rev-parse FETCH_HEAD)" = "$head" ] || fail "Pushed, but $branch is not at $head."
+  echo "Saved $head to $branch."
+  { echo "pushed=true"; echo "head=$head"; } >> "$out"
+  exit 0
+fi
 
 for attempt in 1 2 3; do
   if [ "$(git show HEAD | git patch-id --stable | cut -d' ' -f1)" != "$want" ]; then

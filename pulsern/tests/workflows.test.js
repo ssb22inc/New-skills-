@@ -390,7 +390,20 @@ describe("paid workflows never run branch code with secrets", () => {
     expect(paid).toMatch(/^    defaults:\n      run:\n        working-directory: branch\/pulsern$/m);
     const st = steps(paid);
     const checkouts = st.filter((s) => s.text.startsWith("uses: actions/checkout@"));
-    expect(checkouts.map((s) => [/path: (\S+)/.exec(s.text)?.[1], /ref: (.+)/.exec(s.text)?.[1]])).toEqual([["trusted", "${{ github.sha }}"], ["branch", "${{ inputs.branch }}"]]);
+    expect(checkouts.map((s) => [/path: (\S+)/.exec(s.text)?.[1], /ref: (.+)/.exec(s.text)?.[1]])).toEqual([["trusted", "${{ github.sha }}"], ["branch", "${{ needs.prepare.outputs.sha }}"]]);
+    // round 22: no credential stored in either checkout
+    for (const c of checkouts) expect(c.text).toMatch(/persist-credentials: false/);
+    // links and special files refused before any trusted script runs on the branch
+    const refuse = st.findIndex((s) => s.text.startsWith("name: Refuse links and special files in the branch checkout"));
+    const work = st.findIndex((s) => /--prepared /.test(s.run));
+    expect(refuse).toBeGreaterThan(-1);
+    expect(refuse).toBeLessThan(work);
+    expect(st[refuse].run).toMatch(/find branch .*-type l/);
+    // the push token only in the save step, with the pinned base
+    const save = st.find((s) => /\bid: save\b/.test(s.text));
+    expect(save.text).toMatch(/EXPECT_BASE: \$\{\{ needs\.prepare\.outputs\.sha \}\}/);
+    expect(save.run).toMatch(/GIT_CONFIG_VALUE_0="AUTHORIZATION: basic/);
+    expect(paid.replace(save.text, "")).not.toMatch(/extraheader/);
     for (const s of st.filter((x) => x.run)) {
       const where = s.wd ?? "branch/pulsern";
       if (/\bnode ops\/|\bnpm (ci|install|run)\b|\bnpx\b/.test(s.run)) expect(where, s.name).toBe("trusted/pulsern");
@@ -409,5 +422,40 @@ describe("paid workflows never run branch code with secrets", () => {
     expect(st[co].text).toMatch(/ref: \$\{\{ inputs\.branch \}\}\n\s+persist-credentials: false/);
     expect(guard).toBeLessThan(co);
     expect(prep).toMatch(/node ops\/[a-z-]+\.mjs --prepare /);
+    // round 22: the prepared commit is pinned and handed to the paid job
+    expect(prep).toMatch(/outputs:\n      sha: \$\{\{ steps\.pin\.outputs\.sha \}\}/);
+    expect(prep).toMatch(/id: pin\n\s+run: echo "sha=\$\(git rev-parse HEAD\)" >> "\$GITHUB_OUTPUT"/);
+  });
+});
+
+/* Round 22: the link refusal is real shell, run here against real trees —
+   a report symlinked at a mock credential must stop the job before any
+   upload or trusted step can read through it. */
+describe("the paid job refuses links in the branch it was given", () => {
+  const { execFileSync, spawnSync } = require("node:child_process");
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = require("node:fs");
+  const { tmpdir } = require("node:os");
+  const script = (f) => {
+    const w = readFileSync(join(LIVE_DIR, f), "utf8");
+    const i = w.indexOf("- name: Refuse links and special files in the branch checkout");
+    const block = w.slice(i, w.indexOf("\n      - ", i + 10));
+    return block.slice(block.indexOf("run: |\n") + 7).split("\n").map((l) => l.replace(/^ {10}/, "")).join("\n");
+  };
+  const tree = () => {
+    const ws = mkdtempSync(join(tmpdir(), "paid-ws-"));
+    mkdirSync(join(ws, "branch/.git"), { recursive: true });
+    writeFileSync(join(ws, "branch/.git/config"), "[http]\n\textraheader = AUTHORIZATION: basic c2VudGluZWw=\n");
+    mkdirSync(join(ws, "branch/pulsern/reports/narration"), { recursive: true });
+    writeFileSync(join(ws, "branch/pulsern/reports/narration/run.md"), "ok\n");
+    return ws;
+  };
+  it.each(["pulsern-narrate.yml", "pulsern-diagram-map.yml", "pulsern-diagram-review.yml"])("%s: a symlinked report stops the job; a clean tree passes", (f) => {
+    const ws = tree();
+    expect(spawnSync("bash", ["-c", script(f)], { cwd: ws, encoding: "utf8" }).status).toBe(0);
+    symlinkSync("../../../.git/config", join(ws, "branch/pulsern/reports/narration/git-token.txt"));
+    const r = spawnSync("bash", ["-c", script(f)], { cwd: ws, encoding: "utf8" });
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/git-token\.txt/);
+    rmSync(ws, { recursive: true, force: true });
   });
 });

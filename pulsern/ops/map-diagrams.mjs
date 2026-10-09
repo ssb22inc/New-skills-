@@ -36,7 +36,7 @@ import {
   buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor,
 } from "./map-diagrams-lib.mjs";
 import { sourceKey, readReviewIndex, approval } from "./diagram-attest.mjs";
-import { readPrepared, mapPlan } from "./prepared.mjs";
+import { readPrepared, mapPlan, headCommit } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes("--dry-run");
@@ -47,7 +47,7 @@ const PREPARE = arg("--prepare");
 const PREPARED = arg("--prepared");
 const INTO = arg("--into");
 if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
-const PLAN = PREPARED ? mapPlan(readPrepared(PREPARED, "diagram-map")) : null;
+const PLAN = PREPARED ? mapPlan(readPrepared(PREPARED, "diagram-map", { into: INTO })) : null;
 if (INTO) process.chdir(INTO);   // caches, map, reviews and reports: the branch checkout's
 
 /* Public by design (CLAUDE.md rule 2): the app ships these to every browser. */
@@ -129,7 +129,7 @@ try {
     for (const q of rows) { const p = proposePairs(q); if (p.length) proposals[q.id] = p.map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p })); }
     const diagrams = Object.values(DIAGRAMS).map((d) => ({ id: d.id, title: d.title, facts: d.facts,
       steps: d.steps.map((s) => ({ key: s.key, ...(s.dynamic ? { dynamic: true } : {}), ...(s.caption !== undefined ? { caption: s.caption } : {}), ...(s.narration !== undefined ? { narration: s.narration } : {}) })) }));
-    writeFileSync(PREPARE, JSON.stringify({ kind: "diagram-map", diagrams, proposals }) + "\n");
+    writeFileSync(PREPARE, JSON.stringify({ kind: "diagram-map", commit: headCommit(), diagrams, proposals }) + "\n");
     console.log(`Prepared ${diagrams.length} diagram(s), proposals for ${Object.keys(proposals).length} question(s) → ${PREPARE}`);
     process.exit(0);
   }

@@ -21,7 +21,7 @@ import { review, parseJson, lastReviewCost } from "./review.mjs";
 import { REVIEW_MODEL } from "./models.mjs";
 import { sourceKey } from "./diagram-attest.mjs";
 import { DIAGRAM_REVIEW_SCHEMA, canReuse, reviewAndRecord, diagramRequest, diagramSources, imagePlan, reviewData } from "./review-diagrams-lib.mjs";
-import { readPrepared, reviewPlan, readFrame } from "./prepared.mjs";
+import { readPrepared, reviewPlan, readFrame, headCommit } from "./prepared.mjs";
 
 const arg = (n, d = null) => { const i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : d; };
 const ONLY = arg("--only");
@@ -48,7 +48,7 @@ const RULES = rulesExcerpt();
    only its data and its frames. */
 let entries;
 if (PREPARED) {
-  entries = reviewPlan(readPrepared(join(PREPARED, "plan.json"), "diagram-review"))
+  entries = reviewPlan(readPrepared(join(PREPARED, "plan.json"), "diagram-review", { into: INTO }))
     .map((data) => ({ data, pngs: data.images.map((im) => readFrame(PREPARED, data.id, im.n)) }));
   process.chdir(INTO);   // the branch checkout: its source, index and reports
 } else {
@@ -76,7 +76,7 @@ if (PREPARED) {
       mkdirSync(join(PREPARE, data.id), { recursive: true });
       pngs.forEach((b, n) => writeFileSync(join(PREPARE, data.id, `${n}.png`), b));
     }
-    writeFileSync(join(PREPARE, "plan.json"), JSON.stringify({ kind: "diagram-review", diagrams: entries.map((x) => x.data) }, null, 2) + "\n");
+    writeFileSync(join(PREPARE, "plan.json"), JSON.stringify({ kind: "diagram-review", commit: headCommit(), diagrams: entries.map((x) => x.data) }, null, 2) + "\n");
     console.log(`Prepared ${entries.length} diagram(s) → ${PREPARE}`);
     process.exit(0);
   }

@@ -261,6 +261,33 @@ describe("a review covers everything the drawing depends on", () => {
     expect(canReuse({ key: ra.key, completed: true, verdict: "PASS" }, rb.key)).toBe(false);
     rmSync(a, { recursive: true, force: true }); rmSync(b, { recursive: true, force: true });
   });
+  /* Round 22: a relative import could climb out of the checkout and put
+     a git config or /proc contents into the paid request. */
+  it("refuses to read anything outside src/, by ../ or through a symlink", () => {
+    const { symlinkSync } = require("node:fs");
+    const root = tree("return v;");
+    writeFileSync(join(root, "secret.txt"), "GITHUB_TOKEN=ghs_sentinel");
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import s from "../../secret.txt";\n');
+    expect(() => diagramSources("abg", root)).toThrow(/leaves the project|outside src/);
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import s from "./leak.txt";\n');
+    symlinkSync(join(root, "secret.txt"), join(root, "src/diagrams/leak.txt"));
+    expect(() => diagramSources("abg", root)).toThrow(/outside src/);
+    rmSync(root, { recursive: true, force: true });
+  });
+  /* Round 22: the publication key hashed only top-level files, so a nested
+     or .mjs dependency could change under a current approval. */
+  it("the publication key covers every dependency the reviewer is shown", async () => {
+    const { sourceKey } = await import("../ops/diagram-attest.mjs");
+    const root = tree("return v;");
+    mkdirSync(join(root, "src/clinical"), { recursive: true });
+    writeFileSync(join(root, "src/diagrams/abg.jsx"), 'import { LOW } from "../clinical/limits.mjs";\nexport const A = LOW;\n');
+    writeFileSync(join(root, "src/clinical/limits.mjs"), "export const LOW = 7.35;\n");
+    const before = sourceKey(root);
+    expect(diagramSources("abg", root)).toContain("src/clinical/limits.mjs");
+    writeFileSync(join(root, "src/clinical/limits.mjs"), "export const LOW = 7.30;\n");
+    expect(sourceKey(root)).not.toBe(before);
+    rmSync(root, { recursive: true, force: true });
+  });
   it("refuses an import it cannot follow or show", () => {
     const root = tree("return v;");
     writeFileSync(join(root, "src/diagrams/abg.jsx"), "const n = 'x';\nconst m = () => import(`./${n}.js`);\n");

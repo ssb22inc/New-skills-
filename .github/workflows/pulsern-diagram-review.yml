@@ -43,6 +43,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # The exact commit prepared: the paid job works on this commit only
+    # (Astra, PR #134 review, round 22: both jobs used the moving branch name).
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
     env:
       BRANCH: ${{ inputs.branch }}
       ONLY: ${{ inputs.only }}
@@ -93,6 +97,10 @@ jobs:
           ref: ${{ inputs.branch }}
           persist-credentials: false
 
+      - name: Pin the commit
+        id: pin
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -137,10 +145,23 @@ jobs:
           path: trusted
           persist-credentials: false
 
+      # The prepared commit itself, never the branch's moving tip, and no
+      # credential stored in it: the push below gets its token only for that
+      # one step (round 22).
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ needs.prepare.outputs.sha }}
           path: branch
+          persist-credentials: false
+
+      # The branch is data. A symlink or special file in it could make a
+      # trusted step or the artifact upload read something else — a token,
+      # /proc — so any is refused before anything runs (round 22).
+      - name: Refuse links and special files in the branch checkout
+        working-directory: .
+        run: |
+          bad=$(find branch -path branch/.git -prune -o \( -type l -o \( ! -type f ! -type d \) \) -print)
+          if [ -n "$bad" ]; then echo "::error::The branch contains links or special files; refusing to run:"; echo "$bad"; exit 1; fi
 
       - uses: actions/setup-node@v4
         with:
@@ -188,7 +209,13 @@ jobs:
       - name: Commit the reports (always — every paid review is kept)
         id: save
         if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECT_BASE: ${{ needs.prepare.outputs.sha }}
         run: |
+          # The push token, for this step's git calls only — never written to disk.
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git config user.name "pulsern-diagram-review"
           git config user.email "pulsern-diagram-review@users.noreply.github.com"
           # Commit, push, and confirm the commit reached the branch; a conflict

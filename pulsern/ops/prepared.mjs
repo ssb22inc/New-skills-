@@ -11,6 +11,8 @@
    Everything read here is validated: ids that become file paths must be
    plain slugs, strings are bounded, and anything unexpected is refused. */
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { expectedFrames, frameLabel } from "./review-diagrams-lib.mjs";
 
 export const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const MAX_TEXT = 20_000;
@@ -20,10 +22,22 @@ export const slug = (v, what) => (typeof v === "string" && SLUG.test(v) ? v : fa
 export const text = (v, what, max = MAX_TEXT) => (typeof v === "string" && v.length <= max ? v : fail(`${what} is not a string of at most ${max} characters`));
 export const list = (v, what, max = 10_000) => (Array.isArray(v) && v.length <= max ? v : fail(`${what} is not a list of at most ${max}`));
 
-export function readPrepared(file, kind) {
+/* The commit a checkout is at. Prepared data carries the commit it was
+   made from, and the paid job refuses data made from any other commit
+   than the one it is about to write to — so frames rendered from one tree
+   can never be approved under another's key (Astra, PR #134 review, round
+   22: the two jobs each checked out the moving branch name). */
+export const headCommit = (dir = ".") => execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+
+export function readPrepared(file, kind, { into = null } = {}) {
   let data;
   try { data = JSON.parse(readFileSync(file, "utf8")); } catch (e) { fail(`${file} is not readable JSON (${e.message})`); }
   if (!data || typeof data !== "object" || data.kind !== kind) fail(`${file} is not a "${kind}" file`);
+  if (typeof data.commit !== "string" || !/^[0-9a-f]{40}$/.test(data.commit)) fail(`${file} does not say which commit it was made from`);
+  if (into != null) {
+    const at = headCommit(into);
+    if (at !== data.commit) fail(`${file} was made from ${data.commit.slice(0, 12)}, but the checkout to write to is at ${at.slice(0, 12)}`);
+  }
   return data;
 }
 
@@ -73,8 +87,18 @@ export function reviewPlan(data) {
           narration: s.narration == null ? null : text(s.narration, `${id}/${key} narration`, 4000),
         };
       }),
-      images: list(d.images, `${id} images`, 200).map((im, i) => ({ label: text(im?.label, `${id} image ${i + 1} label`, 300), n: i })),
+      images: list(d.images, `${id} images`, 400).map((im) => ({ theme: im?.theme, key: im?.key })),
     };
+  }).map((d) => {
+    /* The frame set is decided here, not by the data: every step and the
+       overview, in both themes, in order, no more and no fewer. Labels are
+       generated, never copied (round 22: an empty or light-only set was
+       accepted). */
+    const want = expectedFrames(d.steps.map((s) => s.key));
+    if (d.images.length !== want.length || want.some((w, i) => d.images[i].theme !== w.theme || d.images[i].key !== w.key)) {
+      fail(`${d.id} must have exactly ${want.length} frames (${want.map((w) => `${w.theme}/${w.key}`).join(", ")}), in that order`);
+    }
+    return { ...d, images: want.map((w, n) => ({ ...w, label: frameLabel(w.theme, w.key), n })) };
   });
 }
 export function readFrame(dir, id, n, maxBytes = 8 * 1024 * 1024) {

@@ -9,9 +9,6 @@
    As with code review, Astra finds and arithmetic decides: any blocker or
    major finding fails the diagram, whatever the summary says. */
 import { createHash } from "node:crypto";
-import { readFileSync, existsSync } from "node:fs";
-import { join, posix } from "node:path";
-import { themeBlock } from "./diagram-attest.mjs";
 import { diagramHash } from "./map-diagrams-lib.mjs";
 
 export const AREAS = ["clinical", "visual", "consistency", "accessibility", "pedagogy", "rules"];
@@ -50,6 +47,13 @@ export const DIAGRAM_REVIEW_SCHEMA = {
   },
 };
 
+/* The frames a diagram's review must show, in order: the inline overview
+   and every explainer step, in both themes. Defined here, by trusted code,
+   from the step keys — never taken from prepared data (round 22). */
+export const THEMES = ["light", "dark"];
+export const expectedFrames = (stepKeys) => THEMES.flatMap((theme) => ["static", ...stepKeys].map((key) => ({ theme, key })));
+export const frameLabel = (theme, key) => `${theme} theme — ${key === "static" ? "inline, as shown under a rationale" : `explainer step "${key}"`}`;
+
 /* The images, in the order they are attached, with what each one is. */
 export function imagePlan(diagram, gallery) {
   /* Every frame a student can see: the inline overview and every explainer
@@ -65,7 +69,7 @@ export function imagePlan(diagram, gallery) {
     for (const key of ["static", ...diagram.steps.map((s) => s.key)]) {
       const g = pick(theme, key);
       if (!g) { missing.push(`${theme}/${key}`); continue; }
-      plan.push({ file: g.file, label: `${theme} theme — ${key === "static" ? "inline, as shown under a rationale" : `explainer step "${key}"`}` });
+      plan.push({ file: g.file, theme, key, label: frameLabel(theme, key) });
     }
   }
   if (missing.length) throw new Error(`imagePlan(${diagram.id}): missing rendered frames ${missing.join(", ")}`);
@@ -236,47 +240,10 @@ export function diagramRequest(d, plan, rules, pngs, readSource) {
   return { prompt, key: reviewKey(d, pngs, { prompt, source }) };
 }
 
-/* Everything a diagram's drawing depends on, as one reviewable text: its
-   own file, every local module it imports (followed transitively — kit.jsx
-   draws the gauges, chips and frames), the explainer that plays it, and
-   the app's theme tokens. This text goes into the review request AND its
-   cache key, so an approval is reused only while all of it is unchanged
-   (Astra, PR #134 review, round 20: a change to kit.jsx kept a cached PASS
-   that never saw it). */
-export function diagramSources(id, root = ".") {
-  const seen = new Set();
-  const parts = [];
-  const visit = (rel) => {
-    if (seen.has(rel)) return;
-    seen.add(rel);
-    const buf = readFileSync(join(root, rel));
-    let text;
-    try { text = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch { throw new Error(`diagramSources: ${rel} is not text, so the reviewer cannot be shown it — refusing to review without it`); }
-    parts.push(`// ===== ${rel} =====\n${text}`);
-    if (!/\.(jsx?|mjs)$/.test(rel)) return;   // data (JSON, CSS…) is shown but has no imports
-    /* Every way a module can pull in another: import … from, export … from,
-       a bare side-effect import, and import("…"). A computed import path
-       cannot be followed, so it is refused rather than missed (round 21:
-       an imported JSON threshold was outside the review). */
-    if (/\bimport\s*\(\s*(?!["'][^"']+["']\s*\))/.test(text)) throw new Error(`diagramSources: ${rel} has an import() whose path is computed — refusing to review without knowing what it loads`);
-    const specs = [
-      ...text.matchAll(/^\s*(?:import|export)\s[^;]*?\bfrom\s+["']([^"']+)["']/gm),
-      ...text.matchAll(/^\s*import\s+["']([^"']+)["']/gm),
-      ...text.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g),
-    ].map((m) => m[1]);
-    for (const spec of specs) {
-      if (!spec.startsWith(".")) continue;   // packages (react) are not project code
-      const target = posix.normalize(posix.join(posix.dirname(rel), spec));
-      const found = [target, `${target}.jsx`, `${target}.js`, `${target}.mjs`, `${target}.json`].find((p) => existsSync(join(root, p)));
-      if (!found) throw new Error(`diagramSources: ${rel} imports ${spec}, which was not found — refusing to review without it`);
-      visit(found);
-    }
-  };
-  visit(`src/diagrams/${id}.jsx`);
-  visit("src/explainer.jsx");
-  parts.push(`// ===== src/App.jsx (theme tokens) =====\n${themeBlock(readFileSync(join(root, "src/App.jsx"), "utf8"))}`);
-  return parts.join("\n\n");
-}
+/* Everything a diagram's drawing depends on (diagramSources) lives in
+   diagram-attest.mjs, so the review and the publication freshness key are
+   built from ONE dependency set (Astra, PR #134 review, round 22). */
+export { diagramSources } from "./diagram-attest.mjs";
 
 /* A diagram as plain data — what the review is about, with the worked
    caption already computed. The secret-less prepare job writes this; the
@@ -286,6 +253,6 @@ export function reviewData(d, images) {
     id: d.id, title: d.title, facts: d.facts,
     workedCaption: d.dynamicCaption ? d.dynamicCaption(d.example) : null,
     steps: d.steps.map((s) => ({ key: s.key, dynamic: !!s.dynamic, focus: s.focus ?? [], caption: s.dynamic ? null : s.caption, narration: s.dynamic ? null : s.narration })),
-    images: images.map((p) => ({ label: p.label })),
+    images: images.map((p) => ({ theme: p.theme, key: p.key })),
   };
 }
