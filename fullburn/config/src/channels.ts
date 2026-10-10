@@ -37,10 +37,9 @@ export function requireActiveChannel(code: string): ChannelEntry {
   return resolveActiveChannel(CHANNELS, code);
 }
 
-/** @internal — the resolution rule over a given table, so a test can drive
- * it with an entry the frozen registry does not hold. Resolving a table you
- * built yourself returns only what you built: the authority is CHANNELS. */
-export function resolveActiveChannel(table: Readonly<Record<string, ChannelEntry>>, code: string): ChannelEntry {
+/** The resolution rule over a given table. NOT EXPORTED (cross-family finding
+ * x9 X-03): exported, it "activated" any caller-built table. */
+function resolveActiveChannel(table: Readonly<Record<string, ChannelEntry>>, code: string): ChannelEntry {
   // Own-property guard: inherited/polluted prototype entries are not channels.
   const c = Object.hasOwn(table, code) ? table[code] : undefined;
   if (c === undefined) throw new SwitchboardError(`unknown channel "${code}"`);
@@ -58,4 +57,15 @@ export function channelBundleGaps(c: ChannelEntry): string[] {
   if (!c.decisionAdversaryRules) gaps.push("decisionAdversaryRules");
   if (!c.fatigueModel) gaps.push("fatigueModel");
   return gaps;
+}
+
+/** The resolution rule, for the suite only: refuses outside the test runner
+ * (the spend ledger's fence), so no deployed caller can resolve a table it
+ * built (x9 X-03). */
+export function resolveActiveChannelForTests(table: Readonly<Record<string, ChannelEntry>>, code: string): ChannelEntry {
+  const marker = (globalThis as Record<string, unknown>)["__vitest_worker__"];
+  if (marker === undefined || marker === null) {
+    throw new SwitchboardError("resolveActiveChannelForTests ran outside a test runner — only the frozen registry resolves (x9 X-03)");
+  }
+  return resolveActiveChannel(table, code);
 }

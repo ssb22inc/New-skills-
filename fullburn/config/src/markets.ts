@@ -85,8 +85,8 @@ export function requireActiveMarket(code: string): MarketEntry {
   return resolveActiveMarket(MARKETS, code);
 }
 
-/** @internal — the resolution rule over a given table (see resolveActiveChannel). */
-export function resolveActiveMarket(table: Readonly<Record<string, MarketEntry>>, code: string): MarketEntry {
+/** The resolution rule over a given table — not exported (x9 X-03). */
+function resolveActiveMarket(table: Readonly<Record<string, MarketEntry>>, code: string): MarketEntry {
   // Own-property guard: inherited/polluted prototype entries are not markets.
   const m = Object.hasOwn(table, code) ? table[code] : undefined;
   if (m === undefined) throw new SwitchboardError(`unknown market "${code}"`);
@@ -106,4 +106,15 @@ export function marketBundleGaps(m: MarketEntry): string[] {
   if (m.languagePacks.length === 0) gaps.push("languagePacks");
   if (!m.dataResidency) gaps.push("dataResidency");
   return gaps;
+}
+
+/** The resolution rule, for the suite only: refuses outside the test runner
+ * (the spend ledger's fence), so no deployed caller can resolve a table it
+ * built (x9 X-03). */
+export function resolveActiveMarketForTests(table: Readonly<Record<string, MarketEntry>>, code: string): MarketEntry {
+  const marker = (globalThis as Record<string, unknown>)["__vitest_worker__"];
+  if (marker === undefined || marker === null) {
+    throw new SwitchboardError("resolveActiveMarketForTests ran outside a test runner — only the frozen registry resolves (x9 X-03)");
+  }
+  return resolveActiveMarket(table, code);
 }

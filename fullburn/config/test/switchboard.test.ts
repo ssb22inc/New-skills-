@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MARKETS, SwitchboardError, activeMarkets, assertActivationEarned, marketBundleGaps, requireActiveMarket, resolveActiveMarket, type Activation } from "@fullburn/config/markets";
-import { CHANNELS, activeChannels, channelBundleGaps, requireActiveChannel, resolveActiveChannel } from "@fullburn/config/channels";
+import { MARKETS, SwitchboardError, activeMarkets, assertActivationEarned, marketBundleGaps, requireActiveMarket, resolveActiveMarketForTests, type Activation } from "@fullburn/config/markets";
+import { CHANNELS, activeChannels, channelBundleGaps, requireActiveChannel, resolveActiveChannelForTests } from "@fullburn/config/channels";
 import { existsSync, readFileSync } from "node:fs";
 
 describe("switchboard (Law 18, §2.5, §10.2 'locked flags structurally inert', R13)", () => {
@@ -77,9 +77,9 @@ describe("an active flag carries its earned basis and a complete bundle (x8 X-03
 
   it("the accessors themselves refuse the finding's two edits: TikTok on by status, EU on without a pack", () => {
     const tiktokOn = { ...CHANNELS, tiktok: { ...CHANNELS["tiktok"]!, status: "on" as const } };
-    expect(() => resolveActiveChannel(tiktokOn, "tiktok"), "a status-only edit activated TikTok").toThrow(SwitchboardError);
+    expect(() => resolveActiveChannelForTests(tiktokOn, "tiktok"), "a status-only edit activated TikTok").toThrow(SwitchboardError);
     const euOn = { ...MARKETS, EU: { ...MARKETS["EU"]!, status: "on" as const, activation: bundle } };
-    expect(() => resolveActiveMarket(euOn, "EU"), "EU activated with no jurisdiction pack").toThrow(/jurisdictionPack/);
+    expect(() => resolveActiveMarketForTests(euOn, "EU"), "EU activated with no jurisdiction pack").toThrow(/jurisdictionPack/);
   });
 
   it("the launch set (US, Meta) is the only launch basis, and the real registry resolves", () => {
@@ -98,6 +98,24 @@ describe("an active flag carries its earned basis and a complete bundle (x8 X-03
         expect(existsSync(path), `${kind} ${code} names a report that is not committed`).toBe(true);
         expect(readFileSync(path, "utf8"), `${kind} ${code}'s report is not a PASS`).toMatch(/^Verdict: PASS$/m);
       }
+    }
+  });
+});
+
+/** x9 X-03 (GPT-6 Luna, 2026-10-10): the exported resolvers resolved any
+ * caller-built table. MUTATION: X9-03a, X9-03b. */
+describe("x9 only the frozen registry resolves outside the test runner", () => {
+  it("the test-only resolvers refuse outside the runner, even for a complete forged entry", () => {
+    const forged = { tiktok: { status: "on" as const, writeAdapter: "a", decisionAdversaryRules: "r", fatigueModel: "f", activation: { basis: "bundle" as const, adversaryReport: "ADVERSARY_REPORT_fake.md", liveData: true as const } } };
+    const forgedMarket = { EU: { status: "on" as const, jurisdictionPack: "p", paymentAdapters: ["s"], languagePacks: ["en"], localeClock: null, dataResidency: "eu", activation: forged.tiktok.activation } };
+    const g = globalThis as Record<string, unknown>;
+    const saved = g["__vitest_worker__"];
+    delete g["__vitest_worker__"];
+    try {
+      expect(() => resolveActiveChannelForTests(forged, "tiktok"), "a forged channel table resolved outside the runner").toThrow(/outside a test runner/);
+      expect(() => resolveActiveMarketForTests(forgedMarket, "EU"), "a forged market table resolved outside the runner").toThrow(/outside a test runner/);
+    } finally {
+      g["__vitest_worker__"] = saved;
     }
   });
 });

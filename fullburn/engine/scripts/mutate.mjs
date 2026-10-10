@@ -1349,6 +1349,13 @@ const MUTATIONS = [
   ["X9-02c any transport only inside the test runner", "engine/src/gateway.ts",
     "  return marker !== undefined && marker !== null;\n}",
     "  return true;\n}"],
+  // ---- x9 X-03: only the frozen registry resolves outside the test runner (2026-10-10) ----
+  ["X9-03a the channel test resolver is fenced to the test runner", "config/src/channels.ts",
+    "    throw new SwitchboardError(\"resolveActiveChannelForTests ran outside a test runner",
+    "    void new SwitchboardError(\"resolveActiveChannelForTests ran outside a test runner"],
+  ["X9-03b the market test resolver is fenced to the test runner", "config/src/markets.ts",
+    "    throw new SwitchboardError(\"resolveActiveMarketForTests ran outside a test runner",
+    "    void new SwitchboardError(\"resolveActiveMarketForTests ran outside a test runner"],
   // ---- the reviewer is GPT-6 Luna (human instruction 2026-10-09, L63) ----
   ["XF-LUNA the reviewer pin is GPT-6 Luna", "engine/scripts/cross-family-lib.mjs",
     "export const REVIEWER_MODEL = \"openai/gpt-6-luna\";",
