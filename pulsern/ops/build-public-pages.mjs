@@ -39,10 +39,11 @@ function page({ slug, title, description, eyebrow, h1, body, schema, published, 
   return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image">${ATTRIBUTION_BOOT_TAG}<script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}</style></head><body>
   <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/pricing/">Pricing</a><a href="/?signin=1">Sign in</a></div></nav></header>
   <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${published ? `<p class="meta">Published and last verified <time datetime="${esc(updated)}">${esc(updated)}</time> · editorial owner <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a></p>` : ""}${body}${relatedSection}
-  <div class="callout"><strong>Ready for a focused study session?</strong><br><a class="button" href="/?start=1">Start the 1-day free pass</a><a class="button alt" href="/learn/">Read the nursing-study guides</a></div></main>
+  <div class="callout"><strong>Ready for a focused study session?</strong><br><a class="button" href="/?start=1">Start the ${esc(free.name.toLowerCase())}</a><a class="button alt" href="/learn/">Read the nursing-study guides</a></div></main>
   <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div><p>Educational exam preparation only — not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN. Competitor trademarks belong to their respective owners; no affiliation or endorsement is implied.</p></div></footer></body></html>`;
 }
 
+const free = PLANS.find((p) => p.id === "pass1");
 const paid = PLANS.filter((p) => !p.addon && p.cents > 0);
 const addons = PLANS.filter((p) => p.addon);
 const offers = PLANS.filter((p) => !p.addon).map((p) => ({
@@ -78,11 +79,11 @@ const pages = [
   },
   {
     slug: "pricing", title: "NCLEX-RN prep pricing", eyebrow: "Clear pricing", h1: "Choose the study window that fits your plan.",
-    description: "Compare PulseRN NCLEX-RN prep access from a free 1-day pass to 30-, 60-, 90-, 180-, 360-, and 730-day plans.",
+    description: `Compare PulseRN NCLEX-RN prep access from a free ${free.days}-day pass to 30-, 60-, 90-, 180-, 360-, and 730-day plans.`,
     schema: { "@type": "Product", "@id": `${SITE}/#app`, name: "PulseRN", description: "Adaptive NCLEX-RN exam preparation", brand: { "@type": "Brand", name: "PulseRN" }, offers },
     body: `<p class="lead">Every paid plan includes the full study library and one to six readiness self-assessments, by plan length. The free pass includes study content but no readiness self-assessment.</p>
       <section aria-labelledby="plans"><h2 id="plans">Access plans</h2><div class="grid">
-      <article class="card"><span class="tag">Free</span><h3>1-Day Free Pass</h3><p class="price">$0</p><p>Unlimited study-content access for 24 hours. Readiness self-assessments are not included.</p></article>
+      <article class="card"><span class="tag">Free</span><h3>${esc(free.name)}</h3><p class="price">$0</p><p>${esc(free.blurb)}</p></article>
       ${paid.map((p) => `<article class="card${p.id === "sub90" ? " best" : ""}">${p.id === "sub90" ? '<span class="tag">Popular study window</span>' : ""}<h3>${esc(p.name)}</h3><p class="price">${esc(fmtUsd(p.cents))} <small>USD</small></p><p>${esc(p.blurb)}</p><p class="meta">${p.exams} readiness self-assessment${p.exams === 1 ? "" : "s"}</p></article>`).join("")}</div></section>
       <section><h2>Optional add-ons</h2><table><thead><tr><th>Add-on</th><th>What it adds</th><th>Price</th></tr></thead><tbody>${addons.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(p.blurb)}</td><td>${esc(fmtUsd(p.cents))} USD</td></tr>`).join("")}</tbody></table></section>
       <div class="callout"><strong>Important:</strong> A readiness result is an educational estimate based on activity inside PulseRN. It is not a prediction or guarantee of an NCLEX outcome.</div>`,

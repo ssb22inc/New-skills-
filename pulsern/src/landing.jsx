@@ -1,4 +1,7 @@
 import React from "react";
+import { planById } from "./pricing.js";
+
+const freePassLabel = planById("pass1").name.toLowerCase();
 
 const FEATURES = [
   ["Adaptive practice", "Questions adjust to your demonstrated level across the eight NCSBN client-needs categories."],
@@ -13,7 +16,7 @@ const FAQ = [
   ["Who created PulseRN?", "PulseRN was created by Sheldon Bennett, RN. The product combines nursing experience with a deliberately conservative approach to readiness reporting."],
   ["Does PulseRN use real NCLEX questions?", "No. PulseRN does not claim to reproduce live exam content. It provides original educational practice designed around published NCSBN formats and categories."],
   ["Can PulseRN tell me whether I will pass?", "No. Readiness is an estimate based on your work inside PulseRN. It cannot predict or guarantee an NCLEX result."],
-  ["Is there a free option?", "Yes. New learners can use a 1-day free pass for study content. Readiness self-assessments are included with paid plans."],
+  ["Is there a free option?", `Yes. New learners can use a ${freePassLabel} for study content. Readiness self-assessments are included with paid plans.`],
 ];
 
 const SAMPLES = [
@@ -161,7 +164,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <h1>NCLEX-RN practice that adapts to <span>how you learn.</span></h1>
             <p className="land-lead">Build clinical judgment with adaptive questions, every Next Gen item type, spaced-repetition review, and honest readiness estimates.</p>
             <div className="land-actions">
-              <button className="land-button" type="button" onClick={onStart}>Start the 1-day free pass</button>
+              <button className="land-button" type="button" onClick={onStart}>Start the {freePassLabel}</button>
               <a className="land-button secondary" href="/how-it-works/">See how it works</a>
             </div>
             <p className="land-note">No credit card for the free pass. Educational exam preparation only.</p>
@@ -292,7 +295,7 @@ export default function LandingPage({ onSignIn, onStart }) {
         <section className="land-final">
           <div className="land-container">
             <h2>Start with one focused study session.</h2>
-            <p>Create an account for a 1-day free pass to the study content. No credit card is required for the free pass.</p>
+            <p>Create an account for a {freePassLabel} to the study content. No credit card is required for the free pass.</p>
             <button className="land-button" type="button" onClick={onStart}>Create your free account</button>
           </div>
         </section>
