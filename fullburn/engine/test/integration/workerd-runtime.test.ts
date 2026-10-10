@@ -32,7 +32,7 @@ function declared(): { date: string; flags: string[] } {
 }
 
 const ENTRY = `
-import { ROLE_BINDINGS } from "@fullburn/config/models";
+import { ROLE_BINDINGS, evalCandidateBindings } from "@fullburn/config/models";
 import { llm } from "./src/gateway.ts";
 import { FrozenCapsSpendMeter } from "./src/spend-meter.ts";
 import { MemoryTraceSink, TraceContext } from "./src/tracing.ts";
@@ -57,11 +57,24 @@ export default {
       } catch (e) {
         customRefused = /not the production AI Gateway adapter/.test(String(e && e.message));
       }
+      // x10 X-03: a recorded transport serves only an eval candidate's map; the
+      // launch map through it is refused like any non-Gateway transport.
       const recorded = new RecordedTransport({ hw: { greeting: "hello from workerd" } });
       recorded.setCase("hw");
+      let recordedLaunchRefused = null;
+      try {
+        await llm(
+          { bindings: ROLE_BINDINGS, transport: recorded, vault: vaultForClient(backend, "fixture-testco"),
+            meter: new FrozenCapsSpendMeter(), sink: new MemoryTraceSink(), gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/acct/gw/", now: () => Date.now() },
+          { role: "hello-world", clientId: "fixture-testco", input: {}, trace: new TraceContext("workerd-r", "fixture-testco") },
+        );
+        recordedLaunchRefused = false;
+      } catch (e) {
+        recordedLaunchRefused = /not the production AI Gateway adapter/.test(String(e && e.message));
+      }
       const out = await llm(
         {
-          bindings: ROLE_BINDINGS,
+          bindings: evalCandidateBindings("hello-world", ROLE_BINDINGS["hello-world"]),
           transport: recorded,
           vault: vaultForClient(backend, "fixture-testco"),
           meter: new FrozenCapsSpendMeter(),
@@ -71,7 +84,7 @@ export default {
         },
         { role: "hello-world", clientId: "fixture-testco", input: {}, trace: new TraceContext("workerd-1", "fixture-testco") },
       );
-      return Response.json({ ok: true, out, traced: sink.events.map((e) => e.outcome), customRefused });
+      return Response.json({ ok: true, out, traced: sink.events.map((e) => e.outcome), customRefused, recordedLaunchRefused });
     } catch (e) {
       return Response.json({ ok: false, error: (e && e.constructor && e.constructor.name) + ": " + (e && e.message) });
     }
@@ -141,7 +154,7 @@ describe("the engine runs on the declared Workers target (X6-15)", () => {
     expect(date, "wrangler.toml declares no compatibility_date").not.toBe("");
 
     const withDeclared = await runUnderWorkerd(bundle, date, flags);
-    expect(withDeclared, JSON.stringify(withDeclared)).toMatchObject({ ok: true, out: { greeting: "hello from workerd" }, traced: ["ok"], customRefused: true });
+    expect(withDeclared, JSON.stringify(withDeclared)).toMatchObject({ ok: true, out: { greeting: "hello from workerd" }, traced: ["ok"], customRefused: true, recordedLaunchRefused: true });
 
     const withoutCompat = await runUnderWorkerd(bundle, date, flags.filter((f) => f !== "nodejs_compat"));
     expect(withoutCompat.ok, "the engine ran without nodejs_compat — then the flag is not what makes it work").toBe(false);

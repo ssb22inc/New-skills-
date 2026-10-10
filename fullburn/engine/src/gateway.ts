@@ -307,7 +307,7 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
      * honoured only inside the test runner — the same fence the spend ledger's
      * test-only reset uses. NARROWING, stated (L12): code that replaces the runtime's fetch
      * before the adapter module loads is indistinguishable from it. */
-    if (!servingTransportAllowed(deps.transport)) {
+    if (!servingTransportAllowed(deps.transport, provenance)) {
       throw new GatewayError("transport is not the production AI Gateway adapter on the runtime's own fetch, nor a recorded or live-eval transport — the Gateway credential is not handed to it (x9 X-02)");
     }
 
@@ -579,11 +579,14 @@ function errorClassFor(err: unknown): new (m: string) => Error {
 export type { TraceEvent };
 
 /** Which transports may receive the Gateway credential (x9 X-02): the genuine
- * HTTP adapter on the runtime's own fetch, a recorded transport, or a live
- * eval's wrapper — or, inside the test runner only, any transport. */
-export function servingTransportAllowed(t: unknown): boolean {
+ * HTTP adapter on the runtime's own fetch — or a recorded transport or a live
+ * eval's wrapper, and those ONLY for an eval candidate's map (cross-family
+ * finding x10 X-03, 2026-10-10: a recorded transport served the launch map as
+ * a successful production call that never reached the Gateway). Inside the
+ * test runner only, any transport. */
+export function servingTransportAllowed(t: unknown, provenance: "servable" | "candidate" | null = null): boolean {
   if (typeof t !== "object" || t === null) return false;
-  if (isRecordedTransport(t) || isLiveEvalTransport(t)) return true;
+  if ((isRecordedTransport(t) || isLiveEvalTransport(t)) && provenance === "candidate") return true;
   if (Object.getPrototypeOf(t) === AiGatewayHttpTransport.prototype && (t as AiGatewayHttpTransport).usesRuntimeFetch()) return true;
   const marker = (globalThis as Record<string, unknown>)["__vitest_worker__"];
   return marker !== undefined && marker !== null;

@@ -1522,6 +1522,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const gatewayHttp = await import("../../src/gateway-http.ts");
     const gatewayMod = await import("../../src/gateway.ts");
     const channelsMod = await import("@fullburn/config/channels");
+    const recordedMod = await import("../../src/transport-brand.ts");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1949,6 +1950,27 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         },
       },
       {
+        row: "L66",
+        claim: "no flag outside the launch set can be on whatever report it names, and a recorded transport never serves the launch map outside the test runner",
+        holds: () => {
+          let claimedRefused = false;
+          try {
+            marketsMod.assertActivationEarned("channel", "tiktok", { basis: "bundle", adversaryReport: "ADVERSARY_REPORT_x.md", liveData: true } as never, []);
+          } catch {
+            claimedRefused = true;
+          }
+          const g = globalThis as Record<string, unknown>;
+          const saved = g["__vitest_worker__"];
+          delete g["__vitest_worker__"];
+          try {
+            const rec = new recordedMod.RecordedTransport({});
+            return claimedRefused && gatewayMod.servingTransportAllowed(rec, "servable") === false && gatewayMod.servingTransportAllowed(rec, "candidate") === true;
+          } finally {
+            g["__vitest_worker__"] = saved;
+          }
+        },
+      },
+      {
         row: "L65",
         claim: "outside the test runner a hand-built transport cannot receive the Gateway credential, and no forged switchboard table resolves",
         holds: () => {
@@ -1971,7 +1993,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
       },
       {
         row: "L64",
-        claim: "an on-flag outside the launch set needs a live-data bundle activation and a complete bundle; a live eval refuses an injected fetch",
+        claim: "only the launch set can be on, with a complete bundle (x10 X-04 removed the bundle basis); a live eval refuses an injected fetch",
         holds: () => {
           const refuses = (f: () => void) => {
             try {
@@ -1983,10 +2005,11 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           };
           const statusOnly = refuses(() => marketsMod.assertActivationEarned("channel", "tiktok", undefined, []));
           const notLaunch = refuses(() => marketsMod.assertActivationEarned("market", "EU", { basis: "launch" }, []));
-          const noPack = refuses(() => marketsMod.assertActivationEarned("market", "EU", { basis: "bundle", adversaryReport: "ADVERSARY_REPORT_eu.md", liveData: true }, ["jurisdictionPack"]));
+          const noPack = refuses(() => marketsMod.assertActivationEarned("market", "US", { basis: "launch" }, ["jurisdictionPack"]));
+          const claimedReport = refuses(() => marketsMod.assertActivationEarned("channel", "tiktok", { basis: "bundle", adversaryReport: "ADVERSARY_REPORT_x.md", liveData: true } as never, []));
           const launchOk = !refuses(() => marketsMod.assertActivationEarned("market", "US", { basis: "launch" }, []));
           const injected = new gatewayHttp.AiGatewayHttpTransport({ gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/a/g/", fetchImpl: async () => ({ status: 200, text: async () => "{}" }) });
-          return statusOnly && notLaunch && noPack && launchOk && injected.usesRuntimeFetch() === false;
+          return statusOnly && notLaunch && noPack && claimedReport && launchOk && injected.usesRuntimeFetch() === false;
         },
       },
       {

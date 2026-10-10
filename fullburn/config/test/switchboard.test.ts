@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MARKETS, SwitchboardError, activeMarkets, assertActivationEarned, marketBundleGaps, requireActiveMarket, resolveActiveMarketForTests, type Activation } from "@fullburn/config/markets";
 import { CHANNELS, activeChannels, channelBundleGaps, requireActiveChannel, resolveActiveChannelForTests } from "@fullburn/config/channels";
-import { existsSync, readFileSync } from "node:fs";
 
 describe("switchboard (Law 18, §2.5, §10.2 'locked flags structurally inert', R13)", () => {
   it("launch config is exactly US + Meta on, Google staged, rest locked", () => {
@@ -53,52 +52,40 @@ describe("switchboard (Law 18, §2.5, §10.2 'locked flags structurally inert', 
   });
 });
 
-/** x8 X-03 (GPT-6 Luna, 2026-10-10): an "on" status alone activated a flag.
- * MUTATION: X8-03a..d. */
-describe("an active flag carries its earned basis and a complete bundle (x8 X-03)", () => {
+/** x8 X-03 → x10 X-04 (GPT-6 Luna, 2026-10-10): an "on" status alone
+ * activated a flag, and then a named report did. Only the launch set can be
+ * on in Phase 0. MUTATION: X8-03a, X8-03b, X8-03d, X8-03e. */
+describe("only the launch set can be on, with a complete bundle (x8 X-03, x10 X-04)", () => {
   const fullChannel = { status: "on" as const, writeAdapter: "a", decisionAdversaryRules: "r", fatigueModel: "f" };
   const fullMarket = { status: "on" as const, jurisdictionPack: "p", paymentAdapters: ["stripe"], languagePacks: ["en"], localeClock: null, dataResidency: "eu" };
-  const bundle: Activation = { basis: "bundle", adversaryReport: "ADVERSARY_REPORT_tiktok.x1.md", liveData: true };
+  const launch: Activation = { basis: "launch" };
+  const claimedBundle = { basis: "bundle", adversaryReport: "ADVERSARY_REPORT_fake.md", liveData: true } as unknown as Activation;
 
-  it("TikTok flipped on by status alone is refused; with its bundle and a live-data PASS named, it activates", () => {
-    expect(() => assertActivationEarned("channel", "tiktok", undefined, channelBundleGaps(fullChannel)), "status alone activated a channel").toThrow(/without an earned activation/);
-    expect(() => assertActivationEarned("channel", "tiktok", { basis: "launch" }, channelBundleGaps(fullChannel)), "a non-launch channel claimed the launch basis").toThrow(/without an earned activation/);
-    expect(() => assertActivationEarned("channel", "tiktok", { ...bundle, liveData: false } as never, channelBundleGaps(fullChannel)), "a bundle without live data activated").toThrow(/without an earned activation/);
-    expect(() => assertActivationEarned("channel", "tiktok", { ...bundle, adversaryReport: "../notes.md" }, channelBundleGaps(fullChannel))).toThrow(/without an earned activation/);
-    expect(() => assertActivationEarned("channel", "tiktok", bundle, channelBundleGaps(fullChannel))).not.toThrow();
+  it("TikTok on — by status alone, by claiming launch, or by naming a PASS report — is refused", () => {
+    expect(() => assertActivationEarned("channel", "tiktok", undefined, channelBundleGaps(fullChannel)), "status alone activated a channel").toThrow(/outside the launch set/);
+    expect(() => assertActivationEarned("channel", "tiktok", launch, channelBundleGaps(fullChannel)), "a non-launch channel claimed the launch basis").toThrow(/outside the launch set/);
+    expect(() => assertActivationEarned("channel", "tiktok", claimedBundle, channelBundleGaps(fullChannel)), "a named report activated a channel (x10 X-04)").toThrow(/outside the launch set/);
   });
 
-  it("EU on with no jurisdiction pack is refused whatever its basis", () => {
-    const eu = { ...fullMarket, jurisdictionPack: null };
-    expect(() => assertActivationEarned("market", "EU", bundle, marketBundleGaps(eu)), "a market with no jurisdiction pack activated").toThrow(/incomplete bundle \(jurisdictionPack\)/);
-    expect(() => assertActivationEarned("market", "EU", bundle, marketBundleGaps({ ...fullMarket, paymentAdapters: [], languagePacks: [], dataResidency: null }))).toThrow(/paymentAdapters, languagePacks, dataResidency/);
-    expect(() => assertActivationEarned("channel", "tiktok", bundle, channelBundleGaps({ ...fullChannel, writeAdapter: null }))).toThrow(/incomplete bundle \(writeAdapter\)/);
+  it("an incomplete bundle is refused even for the launch set", () => {
+    expect(() => assertActivationEarned("market", "US", launch, marketBundleGaps({ ...fullMarket, jurisdictionPack: null })), "a market with no jurisdiction pack activated").toThrow(/incomplete bundle \(jurisdictionPack\)/);
+    expect(() => assertActivationEarned("market", "US", launch, marketBundleGaps({ ...fullMarket, paymentAdapters: [], languagePacks: [], dataResidency: null }))).toThrow(/paymentAdapters, languagePacks, dataResidency/);
+    expect(() => assertActivationEarned("channel", "meta", launch, channelBundleGaps({ ...fullChannel, writeAdapter: null }))).toThrow(/incomplete bundle \(writeAdapter\)/);
   });
 
-  it("the accessors themselves refuse the finding's two edits: TikTok on by status, EU on without a pack", () => {
-    const tiktokOn = { ...CHANNELS, tiktok: { ...CHANNELS["tiktok"]!, status: "on" as const } };
-    expect(() => resolveActiveChannelForTests(tiktokOn, "tiktok"), "a status-only edit activated TikTok").toThrow(SwitchboardError);
-    const euOn = { ...MARKETS, EU: { ...MARKETS["EU"]!, status: "on" as const, activation: bundle } };
-    expect(() => resolveActiveMarketForTests(euOn, "EU"), "EU activated with no jurisdiction pack").toThrow(/jurisdictionPack/);
+  it("the accessors themselves refuse the finding's edits: TikTok on, EU on with a claimed report", () => {
+    const tiktokOn = { ...CHANNELS, tiktok: { ...CHANNELS["tiktok"]!, ...fullChannel, activation: claimedBundle } };
+    expect(() => resolveActiveChannelForTests(tiktokOn, "tiktok"), "TikTok activated").toThrow(SwitchboardError);
+    const euOn = { ...MARKETS, EU: { ...MARKETS["EU"]!, ...fullMarket, activation: claimedBundle } };
+    expect(() => resolveActiveMarketForTests(euOn, "EU"), "EU activated").toThrow(/outside the launch set/);
+    const usNoPack = { ...MARKETS, US: { ...MARKETS["US"]!, jurisdictionPack: null } };
+    expect(() => resolveActiveMarketForTests(usNoPack, "US"), "US activated with no jurisdiction pack").toThrow(/jurisdictionPack/);
   });
 
-  it("the launch set (US, Meta) is the only launch basis, and the real registry resolves", () => {
-    expect(() => assertActivationEarned("market", "US", { basis: "launch" }, [])).not.toThrow();
-    expect(() => assertActivationEarned("market", "EU", { basis: "launch" }, []), "EU claimed the launch basis").toThrow();
+  it("the launch set (US, Meta) resolves from the real registry", () => {
+    expect(() => assertActivationEarned("market", "US", launch, [])).not.toThrow();
     expect(requireActiveMarket("US").activation).toEqual({ basis: "launch" });
     expect(requireActiveChannel("meta").activation).toEqual({ basis: "launch" });
-  });
-
-  it("every bundle activation in the registry names a committed live-data adversary PASS", () => {
-    const reports = new URL("../../reports/", import.meta.url);
-    for (const [kind, table] of [["market", MARKETS], ["channel", CHANNELS]] as const) {
-      for (const [code, e] of Object.entries(table)) {
-        if (e.status !== "on" || e.activation?.basis !== "bundle") continue;
-        const path = new URL(e.activation.adversaryReport, reports);
-        expect(existsSync(path), `${kind} ${code} names a report that is not committed`).toBe(true);
-        expect(readFileSync(path, "utf8"), `${kind} ${code}'s report is not a PASS`).toMatch(/^Verdict: PASS$/m);
-      }
-    }
   });
 });
 
@@ -106,7 +93,7 @@ describe("an active flag carries its earned basis and a complete bundle (x8 X-03
  * caller-built table. MUTATION: X9-03a, X9-03b. */
 describe("x9 only the frozen registry resolves outside the test runner", () => {
   it("the test-only resolvers refuse outside the runner, even for a complete forged entry", () => {
-    const forged = { tiktok: { status: "on" as const, writeAdapter: "a", decisionAdversaryRules: "r", fatigueModel: "f", activation: { basis: "bundle" as const, adversaryReport: "ADVERSARY_REPORT_fake.md", liveData: true as const } } };
+    const forged = { tiktok: { status: "on" as const, writeAdapter: "a", decisionAdversaryRules: "r", fatigueModel: "f", activation: { basis: "launch" as const } } };
     const forgedMarket = { EU: { status: "on" as const, jurisdictionPack: "p", paymentAdapters: ["s"], languagePacks: ["en"], localeClock: null, dataResidency: "eu", activation: forged.tiktok.activation } };
     const g = globalThis as Record<string, unknown>;
     const saved = g["__vitest_worker__"];

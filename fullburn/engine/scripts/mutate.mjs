@@ -1320,19 +1320,12 @@ const MUTATIONS = [
   ["X8-03b the launch basis is the launch set's only", "config/src/markets.ts",
     "  if (activation?.basis === \"launch\" && launch.includes(code)) return;",
     "  if (activation?.basis === \"launch\") return;"],
-  ["X8-03c a bundle activation needs live data", "config/src/markets.ts",
-    "    activation.liveData === true &&",
-    "    true &&"],
   ["X8-03d the channel accessor checks the activation", "config/src/channels.ts",
     "  assertActivationEarned(\"channel\", code, c.activation, channelBundleGaps(c));",
     "  void channelBundleGaps;"],
   ["X8-03e the market accessor checks the activation", "config/src/markets.ts",
     "  assertActivationEarned(\"market\", code, m.activation, marketBundleGaps(m));",
     "  void marketBundleGaps;"],
-  ["X8-03f a bundle names an adversary report", "config/src/markets.ts",
-    "    /^ADVERSARY_REPORT_[\\w.-]+\\.md$/.test(activation.adversaryReport)",
-    "    activation.adversaryReport.length >= 0"],
-  // ---- x8 X-04: a live eval talks only to the runtime's own fetch (2026-10-10) ----
   ["X8-04a a live eval refuses a transport not on the runtime's fetch", "engine/src/live-eval.ts",
     "  if (!transport.usesRuntimeFetch()) {",
     "  if (false) {"],
@@ -1341,7 +1334,7 @@ const MUTATIONS = [
     "    this.#runtimeFetch = true;"],
   // ---- x9 X-02: the credential goes only to a transport that is the Gateway (2026-10-10) ----
   ["X9-02a llm refuses an unbranded transport outside the test runner", "engine/src/gateway.ts",
-    "    if (!servingTransportAllowed(deps.transport)) {",
+    "    if (!servingTransportAllowed(deps.transport, provenance)) {",
     "    if (false) {"],
   ["X9-02b the HTTP adapter counts only on the runtime's fetch", "engine/src/gateway.ts",
     "  if (Object.getPrototypeOf(t) === AiGatewayHttpTransport.prototype && (t as AiGatewayHttpTransport).usesRuntimeFetch()) return true;",
@@ -1349,6 +1342,14 @@ const MUTATIONS = [
   ["X9-02c any transport only inside the test runner", "engine/src/gateway.ts",
     "  return marker !== undefined && marker !== null;\n}",
     "  return true;\n}"],
+  ["X10-04 a flag outside the launch set is never on", "config/src/markets.ts",
+    "  throw new SwitchboardError(`${kind} \"${code}\" is on outside the launch set",
+    "  void new SwitchboardError(`${kind} \"${code}\" is on outside the launch set"],
+  ["X10-03 a recorded or live-eval transport serves an eval candidate only", "engine/src/gateway.ts",
+    "  if ((isRecordedTransport(t) || isLiveEvalTransport(t)) && provenance === \"candidate\") return true;",
+    "  if (isRecordedTransport(t) || isLiveEvalTransport(t)) return true;"],
+  // X8-03c and X8-03f were REMOVED 2026-10-10 with the code they targeted: x10 X-04
+  // removed the bundle activation basis (its live-data and report-name checks).
   // ---- x9 X-03: only the frozen registry resolves outside the test runner (2026-10-10) ----
   ["X9-03a the channel test resolver is fenced to the test runner", "config/src/channels.ts",
     "    throw new SwitchboardError(\"resolveActiveChannelForTests ran outside a test runner",

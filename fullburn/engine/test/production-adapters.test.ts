@@ -227,7 +227,10 @@ describe("x9 outside the test runner, only the Gateway adapter on the runtime's 
       expect(servingTransportAllowed({ async post() { return {}; } }), "a hand-built transport would receive the credential").toBe(false);
       expect(servingTransportAllowed(injected), "an adapter over an injected fetch would receive the credential").toBe(false);
       expect(servingTransportAllowed(runtime)).toBe(true);
-      expect(servingTransportAllowed(new RecordedTransport({}))).toBe(true);
+      // x10 X-03: a recorded transport serves an eval candidate only — never the launch map.
+      expect(servingTransportAllowed(new RecordedTransport({}), "candidate")).toBe(true);
+      expect(servingTransportAllowed(new RecordedTransport({}), "servable"), "a recorded transport would serve production").toBe(false);
+      expect(servingTransportAllowed(new RecordedTransport({})), "a recorded transport would serve with no provenance").toBe(false);
       expect(servingTransportAllowed(null)).toBe(false);
     });
     expect(servingTransportAllowed({ async post() { return {}; } }), "the test runner lost its mock transports").toBe(true);

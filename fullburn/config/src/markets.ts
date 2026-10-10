@@ -8,42 +8,32 @@ import { deepFreeze } from "./freeze.ts";
 
 export type FlagStatus = "on" | "staged" | "locked";
 
-/** WHY A FLAG IS ON (cross-family finding x8 X-03, GPT-6 Luna, 2026-10-10).
- * `status: "on"` alone activated an entry, so a one-word registry edit turned
- * on a locked channel, or a market with no jurisdiction pack. An "on" entry
- * now carries its basis: the LAUNCH set fixed by ENGINE_BUILD.md §2.5 (US,
- * Meta), or a BUNDLE that passed the adversary on live data, named by its
- * committed report. */
-export type Activation =
-  | { readonly basis: "launch" }
-  | { readonly basis: "bundle"; readonly adversaryReport: string; readonly liveData: true };
+/** WHY A FLAG IS ON (cross-family findings x8 X-03, x10 X-04, GPT-6 Luna,
+ * 2026-10-10). `status: "on"` alone activated an entry; x8's fix added a
+ * "bundle" basis naming an adversary report, and x10 showed that a named
+ * report is an assertion, not evidence — nothing at runtime can prove it is a
+ * live-data PASS for that bundle. Phase 0 has no live-data bundle pipeline at
+ * all, so the bundle basis is GONE: the only basis is the LAUNCH set fixed by
+ * ENGINE_BUILD.md §2.5 (US, Meta). The capability removed: turning on any
+ * market or channel outside the launch set, by any registry edit. The
+ * activation route for a later flag is that later phase's deliverable, and it
+ * arrives with its own evidence chain rather than a filename. */
+export type Activation = { readonly basis: "launch" };
 
-/** ENGINE_BUILD.md §2.5's launch: these, and only these, are on without a bundle report. */
+/** ENGINE_BUILD.md §2.5's launch: these, and only these, can be on. */
 export const LAUNCH_ACTIVE: Readonly<{ markets: readonly string[]; channels: readonly string[] }> = Object.freeze({
   markets: Object.freeze(["US"]),
   channels: Object.freeze(["meta"]),
 });
 
-/** An "on" entry must say why, and its bundle must be complete. The
- * capability removed: activating a flag by editing its status alone.
- * NARROWING, stated: that the named report exists and is a live-data PASS is
- * checked by the suite against reports/ (config/test/switchboard.test.ts), not
- * at runtime — a Worker cannot read the repository. */
+/** An "on" entry must be in the launch set, say so, and carry a complete bundle. */
 export function assertActivationEarned(kind: "market" | "channel", code: string, activation: Activation | null | undefined, missing: readonly string[]): void {
   if (missing.length > 0) {
     throw new SwitchboardError(`${kind} "${code}" is on with an incomplete bundle (${missing.join(", ")}) — no bundle, no activation (Law 18)`);
   }
   const launch = kind === "market" ? LAUNCH_ACTIVE.markets : LAUNCH_ACTIVE.channels;
   if (activation?.basis === "launch" && launch.includes(code)) return;
-  if (
-    activation?.basis === "bundle" &&
-    activation.liveData === true &&
-    typeof activation.adversaryReport === "string" &&
-    /^ADVERSARY_REPORT_[\w.-]+\.md$/.test(activation.adversaryReport)
-  ) {
-    return;
-  }
-  throw new SwitchboardError(`${kind} "${code}" is on without an earned activation — not in the launch set and no live-data adversary PASS named (Law 18)`);
+  throw new SwitchboardError(`${kind} "${code}" is on outside the launch set — no activation route exists before its bundle phase (Law 18, x10 X-04)`);
 }
 
 export interface MarketEntry {
