@@ -40,7 +40,7 @@ const render = (review: unknown, verdict: { verdict: string; why: string }, extr
 
 describe("cross-family read — the reviewer is pinned, read back, and cannot be forged", () => {
   it("the pinned reviewer is an exact non-Claude OpenRouter id, never a floating alias", () => {
-    expect(REVIEWER_MODEL).toBe("openai/gpt-6-astra");
+    expect(REVIEWER_MODEL).toBe("openai/gpt-6-luna");
     expect(REVIEWER_MODEL).not.toMatch(/latest|~/);
     expect(isNonClaudeFamily(REVIEWER_MODEL)).toBe(true);
   });
@@ -48,7 +48,7 @@ describe("cross-family read — the reviewer is pinned, read back, and cannot be
   /** MUTATION: XF-01 — accept a served model that differs from the request. */
   it("the served model must equal the request; a substitution or a Claude answer writes no report", () => {
     expect(servedModelAcceptable(REVIEWER_MODEL, REVIEWER_MODEL).ok).toBe(true);
-    expect(servedModelAcceptable(REVIEWER_MODEL, "openai/gpt-6-astra-pro").ok).toBe(false);
+    expect(servedModelAcceptable(REVIEWER_MODEL, "openai/gpt-6-luna-pro").ok).toBe(false);
     expect(servedModelAcceptable(REVIEWER_MODEL, "anthropic/claude-opus-5").ok).toBe(false);
     expect(servedModelAcceptable(REVIEWER_MODEL, "").ok).toBe(false);
     expect(servedModelAcceptable(REVIEWER_MODEL, undefined).ok).toBe(false);

@@ -21,6 +21,7 @@ export function memoryMeter(now: () => number, capsFor: CapsResolver): MemorySpe
 }
 import { MemoryTraceSink } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
+import { AiGatewayHttpTransport } from "../src/gateway-http.ts";
 
 /** `fixture-testco` is a fixture CLIENT in the real frozen caps table (config/caps.ts),
  * not an injected table: llm() reads its ceiling from config and a caller can
@@ -139,4 +140,23 @@ export function makeDeps(overrides: { now?: () => number; transport?: unknown; c
       now,
     },
   };
+}
+
+/** The production AI Gateway adapter over a stubbed fetch that answers each
+ * call with the next queued model output (X7-09's live-eval tests). */
+export function queuedGateway() {
+  const queue: unknown[] = [];
+  const calls: string[] = [];
+  const transport = new AiGatewayHttpTransport({
+    gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/test-account/fullburn/",
+    // Each call is recorded as "<url> model=<route>": the unified endpoint
+    // names the model in the body, which is what a rebind changes.
+    fetchImpl: async (url, init) => {
+      calls.push(`${url} model=${String((JSON.parse(String(init.body)) as { model?: unknown }).model)}`);
+      if (queue.length === 0) return { status: 500, text: async () => "no queued output" };
+      const content = JSON.stringify(queue.shift());
+      return { status: 200, text: async () => JSON.stringify({ choices: [{ message: { role: "assistant", content } }] }) };
+    },
+  });
+  return { transport, calls, queue };
 }

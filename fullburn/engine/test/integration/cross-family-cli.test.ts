@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
 
@@ -86,6 +88,29 @@ describe("cross-family runner — fails closed at every step before a report exi
     expect(newReports()).toEqual([]);
   });
 
+  /** X7-01 (GPT-6 Astra, 2026-10-09): the bundle reads the filesystem and the
+   * hash reads the index, so a link in the target would send the reviewer
+   * bytes the report's tree does not bind. MUTATION: X7-01e. */
+  it("a target whose protected tree holds a symlink is refused before anything is built or sent", async () => {
+    const target = mkdtempSync(join(tmpdir(), "fullburn-xf-link-"));
+    try {
+      const g = (...a: string[]) => spawnSync("git", ["-C", target, ...a], { encoding: "utf8" });
+      g("init", "-q", "-b", "main");
+      mkdirSync(join(target, "fullburn/config/src"), { recursive: true });
+      writeFileSync(join(target, "outside.ts"), "export const CAPS = {};\n");
+      symlinkSync("../../../outside.ts", join(target, "fullburn/config/src/caps.ts"));
+      writeFileSync(join(target, "fullburn/PHASE"), "0\n");
+      g("add", "-A");
+      g("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "link");
+      const r = await run({ OPENROUTER_API_KEY: undefined, FULLBURN_CROSS_FAMILY_ALLOW_DIRTY: undefined }, ["--target", target, "--dry-run"]);
+      expect(r.code, r.out).toBe(2);
+      expect(r.out).toMatch(/regular files.*caps\.ts \(mode 120000, a symlink\)/s);
+      expect(newReports()).toEqual([]);
+    } finally {
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
   it("allow-dirty does nothing on the production router: a dirty tree refuses before any network", async () => {
     // No stand-in: the endpoint is production. The key is fake and nothing is
     // sent, because the refusal comes first — and this only proves anything
@@ -107,7 +132,7 @@ describe("cross-family runner — fails closed at every step before a report exi
   });
 
   it("an answer that is not the contract writes no report (the raw answer is kept for inspection)", async () => {
-    const url = await serve(() => ({ status: 200, json: answer("openai/gpt-6-astra", "I think it is fine.") }));
+    const url = await serve(() => ({ status: 200, json: answer("openai/gpt-6-luna", "I think it is fine.") }));
     const r = await run({ OPENROUTER_API_KEY: "test-key", FULLBURN_CROSS_FAMILY_ENDPOINT: url });
     expect(r.code).toBe(1);
     expect(r.out).toMatch(/not the contract/);
@@ -123,7 +148,7 @@ describe("cross-family runner — fails closed at every step before a report exi
     const url = await serve(() => {
       n += 1;
       if (n === 1) return { status: 401, json: { error: { message: `bad token ${KEY}` } } };
-      return { status: 200, json: answer("openai/gpt-6-astra", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [`saw ${KEY}`], limitations: [`token ${KEY} quoted`] })) };
+      return { status: 200, json: answer("openai/gpt-6-luna", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [`saw ${KEY}`], limitations: [`token ${KEY} quoted`] })) };
     });
     const r1 = await run({ OPENROUTER_API_KEY: KEY, FULLBURN_CROSS_FAMILY_ENDPOINT: url });
     expect(r1.code).toBe(1);
@@ -146,8 +171,8 @@ describe("cross-family runner — fails closed at every step before a report exi
     const url = await serve(() => {
       n += 1;
       if (n === 1) return { status: 200, json: answer(`openai/${KEY}`, JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [], limitations: [] })) };
-      if (n === 2) return { status: 200, json: answer("openai/gpt-6-astra", JSON.stringify({ verdict: KEY, findings: [], invariants_checked: [], limitations: [] })) };
-      return { status: 200, json: answer("openai/gpt-6-astra", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [], limitations: ["x"] }), KEY) };
+      if (n === 2) return { status: 200, json: answer("openai/gpt-6-luna", JSON.stringify({ verdict: KEY, findings: [], invariants_checked: [], limitations: [] })) };
+      return { status: 200, json: answer("openai/gpt-6-luna", JSON.stringify({ verdict: "PASS", findings: [], invariants_checked: [], limitations: ["x"] }), KEY) };
     });
     for (let i = 0; i < 3; i++) {
       const r = await run({ OPENROUTER_API_KEY: KEY, FULLBURN_CROSS_FAMILY_ENDPOINT: url });
@@ -169,7 +194,7 @@ describe("cross-family runner — fails closed at every step before a report exi
     let received = "";
     const url = await serve((body) => {
       received = body;
-      return { status: 200, json: answer("openai/gpt-6-astra", cleanReview, "gen-abc") };
+      return { status: 200, json: answer("openai/gpt-6-luna", cleanReview, "gen-abc") };
     });
     const r = await run({ OPENROUTER_API_KEY: "test-key", FULLBURN_CROSS_FAMILY_ENDPOINT: url });
     // The stand-in said PASS; the endpoint is not production; the report says FAIL.
@@ -180,13 +205,13 @@ describe("cross-family runner — fails closed at every step before a report exi
     const lines = text.split("\n");
     expect(lines[1]).toBe("Verdict: FAIL");
     expect(lines[2]).toMatch(/^verified-tree: [0-9a-f]{40}$/);
-    expect(lines[4]).toBe("Reviewer-family: OpenAI (gpt-6-astra via OpenRouter)");
+    expect(lines[4]).toBe("Reviewer-family: OpenAI (gpt-6-luna via OpenRouter)");
     expect(text).toMatch(/not the production router/);
     expect(text).toContain("Response id: gen-abc");
     expect(r.out).toMatch(/sha256 [0-9a-f]{64}/);
     // The request carried the human-owned definition and the real tree.
     const req = JSON.parse(received);
-    expect(req.model).toBe("openai/gpt-6-astra");
+    expect(req.model).toBe("openai/gpt-6-luna");
     expect(req.messages[0].content).toContain("You are the adversary.");
     expect(req.messages[1].content).toContain("===== FILE: fullburn/engine/src/gateway.ts");
     expect(req.provider).toEqual({ allow_fallbacks: false });

@@ -878,6 +878,65 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const { evalCandidateBindings } = await import("@fullburn/config/models");
           return viaLlm({ bindings: evalCandidateBindings("genome-tagger", "gpt-5") });
         } },
+      // X7-09 (cross-family, 2026-10-09): recorded evidence never serves live.
+      { name: "a map earned on recorded evidence is refused through a live transport", file: "engine/src/gateway.ts", type: BindingError,
+        expect: /earned on recorded eval evidence/, fire: () =>
+          viaLlm({ bindings: bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", genuineAttestation()) }) },
+      { name: "a live eval through anything but the production adapter is refused", file: "engine/src/live-eval.ts", type: BindingError,
+        expect: /production AiGatewayHttpTransport itself/, fire: async () => {
+          const { runLiveEval } = await import("../../src/live-eval.ts");
+          const { deps, transport } = mkDeps();
+          return runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN_SETS["genome-tagger"]!, transport as never, SWEEP_CLIENT);
+        } },
+      { name: "a production binding from recorded evidence is refused", file: "engine/src/live-eval.ts", type: BindingError,
+        expect: /needs a live eval run/, fire: async () => {
+          const { bindRoleLive } = await import("../../src/live-eval.ts");
+          return bindRoleLive(ROLE_BINDINGS, "genome-tagger", "qwen-72b", genuineAttestation());
+        } },
+      { name: "a production binding over a recorded-evidence base is refused", file: "engine/src/live-eval.ts", type: BindingError,
+        expect: /base map is not production-servable/, fire: async () => {
+          const { bindRoleLive, runLiveEval } = await import("../../src/live-eval.ts");
+          const { queuedGateway } = await import("../helpers.ts");
+          const { deps } = mkDeps();
+          const gw = queuedGateway();
+          gw.queue.push(...GOLDEN_SETS["genome-tagger"]!.map((c) => c.expected));
+          const live = await runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN_SETS["genome-tagger"]!, gw.transport, SWEEP_CLIENT);
+          return bindRoleLive(bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", genuineAttestation()), "genome-tagger", "qwen-72b", live.attestation);
+        } },
+      // ---- engine/src/eval-harness.ts (in the graph since live-eval, X7-09) ----
+      { name: "runEval through a live transport is refused", file: "engine/src/eval-harness.ts", type: Error,
+        expect: /runEval serves recorded outputs only/, fire: async () => {
+          const { runEval } = await import("../../src/eval-harness.ts");
+          const { deps, transport } = mkDeps();
+          return runEval(deps, "genome-tagger", "qwen-72b", GOLDEN_SETS["genome-tagger"]!, transport as never, SWEEP_CLIENT);
+        } },
+      { name: "an eval of an unknown role is refused", file: "engine/src/eval-harness.ts", type: Error,
+        expect: /^unknown role/, fire: async () => {
+          const { runEval, RecordedTransport } = await import("../../src/eval-harness.ts");
+          return runEval(mkDeps().deps, "no-such-role", "qwen-72b", GOLDEN_SETS["genome-tagger"]!, new RecordedTransport({}), SWEEP_CLIENT);
+        } },
+      { name: "an eval over an empty golden set is refused", file: "engine/src/eval-harness.ts", type: Error,
+        expect: /empty golden set/, fire: async () => {
+          const { runEval, RecordedTransport } = await import("../../src/eval-harness.ts");
+          return runEval(mkDeps().deps, "genome-tagger", "qwen-72b", [], new RecordedTransport({}), SWEEP_CLIENT);
+        } },
+      { name: "an eval over a substituted case list is refused", file: "engine/src/eval-harness.ts", type: Error,
+        expect: /does not match the ids declared on its role card/, fire: async () => {
+          const { runEval, RecordedTransport } = await import("../../src/eval-harness.ts");
+          return runEval(mkDeps().deps, "genome-tagger", "qwen-72b", GOLDEN_SETS["genome-tagger"]!.slice(1), new RecordedTransport({}), SWEEP_CLIENT);
+        } },
+      { name: "a golden case asserting fewer fields than the card requires is refused", file: "engine/src/eval-harness.ts", type: Error,
+        expect: /must assert exactly the fields the role card requires/, fire: async () => {
+          const { runEval, RecordedTransport } = await import("../../src/eval-harness.ts");
+          const set = GOLDEN_SETS["genome-tagger"]!.map((c, i) => (i === 0 ? { ...c, expected: {} } : c));
+          return runEval(mkDeps().deps, "genome-tagger", "qwen-72b", set as never, new RecordedTransport({}), SWEEP_CLIENT);
+        } },
+      { name: "a golden set whose expectations were rewritten is refused", file: "engine/src/eval-harness.ts", type: Error,
+        expect: /is not the role's canonical set/, fire: async () => {
+          const { runEval, RecordedTransport } = await import("../../src/eval-harness.ts");
+          const set = GOLDEN_SETS["genome-tagger"]!.map((c, i) => (i === 0 ? { ...c, expected: Object.fromEntries(Object.keys(c.expected).map((k) => [k, "rewritten"])) } : c));
+          return runEval(mkDeps().deps, "genome-tagger", "qwen-72b", set as never, new RecordedTransport({}), SWEEP_CLIENT);
+        } },
       // X-05 (cross-family, 2026-09-24): the gateway base is pinned, and checked before the vault.
       { name: "a gateway base that is not a URL is refused", file: "engine/src/gateway.ts", type: GatewayError,
         expect: /gatewayBaseUrl is not a URL/, fire: () => viaLlm({ gatewayBaseUrl: "not a url" }) },
@@ -1441,6 +1500,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const { walk: walkTree } = await import("../../scripts/leak-check.mjs");
     const { execFileSync } = await import("node:child_process");
     const { relative: relPath } = await import("node:path");
+    const liveEval = await import("../../src/live-eval.ts");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1606,8 +1666,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const clean = { verdict: "PASS", findings: [], invariants_checked: [], limitations: [] };
           const report = xf.renderCrossReport({ phase: "0", round: "x1", tree: "a".repeat(40), commit: "c", branch: "b", requestedModel: xf.REVIEWER_MODEL, servedModel: xf.REVIEWER_MODEL, endpoint: xf.PRODUCTION_ENDPOINT, review: clean, verdict: xf.crossVerdict(clean), bundle: { included: [], omitted: [], bytes: 0 }, usage: null, responseId: null, addendumHash: "h", definitionHash: "h", startedAt: "t" });
           return (
-            xf.REVIEWER_MODEL === "openai/gpt-6-astra" &&
-            xf.servedModelAcceptable(xf.REVIEWER_MODEL, "openai/gpt-6-astra-pro").ok === false &&
+            xf.REVIEWER_MODEL === "openai/gpt-6-luna" &&
+            xf.servedModelAcceptable(xf.REVIEWER_MODEL, "openai/gpt-6-luna-pro").ok === false &&
             xf.servedModelAcceptable(xf.REVIEWER_MODEL, "anthropic/claude-x").ok === false &&
             xf.crossVerdict({ ...clean, findings: [{ id: "x", severity: 5, title: "t", file: "f", evidence: "e", reproduction: "r" }] }).verdict === "FAIL" &&
             xf.crossVerdict(clean, "http://127.0.0.1:9/x").verdict === "FAIL" &&
@@ -1865,6 +1925,24 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           utcMeter.settle(utcMeter.reserve("pulsern", 1));
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
+        },
+      },
+      {
+        row: "L63",
+        claim: "the reviewer is pinned to openai/gpt-6-luna, its pro variant is refused, and the family stays non-Claude",
+        holds: () => xfLib.REVIEWER_MODEL === "openai/gpt-6-luna" && xfLib.servedModelAcceptable(xfLib.REVIEWER_MODEL, "openai/gpt-6-luna-pro").ok === false && doneLib.isNonClaudeFamily(xfLib.REVIEWER_FAMILY_LINE),
+      },
+      {
+        row: "L62",
+        claim: "a symlink in the protected tree is refused over the verified scope plus reports/ and APPROVALS/; an approval signed by another account is refused; a bindRole map is not production-servable",
+        holds: () => {
+          const link = gateLib.checkRegularFilesOnly(`120000 ${"c".repeat(40)} 0\tfullburn/config/src/caps.ts\0`).ok === false;
+          const scope = ["fullburn/reports/", "fullburn/APPROVALS/"].every((p) => gateLib.REGULAR_FILES_SCOPE.includes(p));
+          const doc = (committerLogin: string) => [{ path: "fullburn/APPROVALS/a.md", auth: { verified: true, authorLogin: "maintainer", committerLogin } }];
+          const signer = gateLib.checkApprovalAuthentication(doc("other"), "maintainer").ok === false && gateLib.checkApprovalAuthentication(doc("maintainer"), "maintainer").ok === true;
+          const recorded = modelsMod.attestEvalRun("genome-tagger", "qwen-72b", modelsMod.GOLDEN_SETS["genome-tagger"]!.map((c) => ({ caseId: c.id, output: c.expected })));
+          const notProduction = !liveEval.productionServable(modelsMod.bindRole(modelsMod.ROLE_BINDINGS, "genome-tagger", "qwen-72b", recorded)) && liveEval.productionServable(modelsMod.ROLE_BINDINGS);
+          return link && scope && signer && notProduction;
         },
       },
     ];

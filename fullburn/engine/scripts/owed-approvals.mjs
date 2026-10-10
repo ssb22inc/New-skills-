@@ -16,7 +16,7 @@
  * Usage: node owed-approvals.mjs <repo-root> <base-ref> */
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { approvalTransition, class2TouchedPaths } from "./gate-lib.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
@@ -28,11 +28,12 @@ if (!baseRef) {
   process.exit(1);
 }
 
-const git = (cmd, encoding = "utf8") => execSync(`git -C ${JSON.stringify(repoRoot)} ${cmd}`, { encoding });
+// No shell (X7-04): every git call is an argument vector.
+const git = (args, encoding = "utf8") => execFileSync("git", ["-C", repoRoot, ...args], { encoding });
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
-const baseCommit = git(`rev-parse ${JSON.stringify(baseRef)}`).trim();
+const baseCommit = git(["rev-parse", "--verify", `${baseRef}^{commit}`]).trim();
 
-const changed = parseNameStatusZ(git(`diff --name-status -z -M ${baseRef}...HEAD`));
+const changed = parseNameStatusZ(git(["diff", "--name-status", "-z", "-M", `${baseRef}...HEAD`]));
 const touched = class2TouchedPaths(changed);
 
 if (touched.length === 0) {
@@ -43,7 +44,7 @@ if (touched.length === 0) {
 // The same hash functions class2-gate.mjs passes in, so the printed transition
 // is byte-for-byte the one the gate will look for.
 const hashOf = (p) => sha(readFileSync(join(repoRoot, p)));
-const baseHashOf = (p) => sha(git(`show ${JSON.stringify(`${baseRef}:${p}`)}`, "buffer"));
+const baseHashOf = (p) => sha(git(["show", `${baseRef}:${p}`], "buffer"));
 
 console.log(`# Class-2 approvals owed — ${touched.length} entr(y|ies)`);
 console.log(`# base-commit: ${baseCommit}`);

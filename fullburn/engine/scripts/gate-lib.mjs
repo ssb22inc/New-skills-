@@ -535,6 +535,34 @@ export const VERIFIED_TREE_SCOPE = Object.freeze([
   ":!fullburn/APPROVALS/",
 ]);
 
+/** Every path whose BYTES a gate reads: the verified scope plus the reports
+ * and approvals it excludes from the hash (X7-01). */
+export const REGULAR_FILES_SCOPE = Object.freeze([...VERIFIED_TREE_SCOPE.filter((p) => !p.startsWith(":!")), "fullburn/reports/", "fullburn/APPROVALS/"]);
+
+/** ONLY REGULAR FILES IN THE PROTECTED TREE (cross-family finding X7-01,
+ * 2026-10-09). The verified-tree hash and the money-cap gate see git's INDEX
+ * entry for a path; the gates, the reviewer bundle and the runtime read the
+ * filesystem, which follows a symlink. A protected file made a link to a
+ * sibling project's file could then change with the hash unchanged and no
+ * approval owed. The capability removed: a protected path whose content lives
+ * outside the protected tree. Anything but mode 100644/100755 — a symlink
+ * (120000) or a submodule (160000) — is refused, wherever it points.
+ *
+ * Input: `git ls-files -s -z` (or the newline form) over REGULAR_FILES_SCOPE. */
+export function checkRegularFilesOnly(lsFilesStage) {
+  const text = String(lsFilesStage ?? "");
+  const records = text.includes("\0") ? text.split("\0") : text.split("\n");
+  const bad = [];
+  for (const r of records) {
+    const m = /^(\d{6}) [0-9a-f]+ \d\t([\s\S]+)$/.exec(r);
+    if (!m) continue;
+    if (m[1] !== "100644" && m[1] !== "100755") bad.push(`${m[2]} (mode ${m[1]}${m[1] === "120000" ? ", a symlink" : m[1] === "160000" ? ", a submodule" : ""})`);
+  }
+  return bad.length === 0
+    ? { ok: true, reason: "every protected path is a regular file" }
+    : { ok: false, reason: `protected paths must be regular files — a link's content lives outside the hash and the approvals that bind it: ${bad.join(", ")}` };
+}
+
 /** `git status --porcelain` lines that mean the worktree has moved ahead of the
  * index. "XY path": X is the index state, Y the worktree state — staged changes
  * are already in the verified-tree hash, unstaged edits and untracked files are
@@ -582,7 +610,7 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
 
   // ONLY A NON-CLAUDE REVIEWER'S PASS OPENS THE GATE (human instruction
   // 2026-10-06, L55: no review may be done by the same family as the builder;
-  // every review is GPT Astra's). A same-family PASS bound to this tree is not
+  // every review is the cross-family reviewer's — GPT-6 Luna since 2026-10-09). A same-family PASS bound to this tree is not
   // evidence; a same-family FAIL still blocks above, because a FAIL is never
   // the dangerous direction. The family line is the runner's line 5, read
   // through the same visible-header rules as the verdict and the binding.
@@ -592,7 +620,7 @@ export function checkAdversaryReport({ phase, reportContent, reports, currentTre
   if (sameFamilyPass) {
     return {
       ok: false,
-      reason: `${sameFamilyPass.name}: a PASS from a same-family or undeclared reviewer — only a non-Claude reviewer (GPT Astra) can open this gate`,
+      reason: `${sameFamilyPass.name}: a PASS from a same-family or undeclared reviewer — only a non-Claude reviewer (GPT-6 Luna) can open this gate`,
     };
   }
 
@@ -909,14 +937,21 @@ export function checkApprovalAuthentication(approvalDocs, maintainer) {
      * refuses the document. */
     const list = Array.isArray(d?.auth) ? d.auth : [d?.auth];
     const a = list.length === 0 ? null : list.find((x) => !x || x.verified !== true || typeof x.authorLogin !== "string" || x.authorLogin.toLowerCase() !== want) ?? null;
-    if (list.length === 0 || a !== null || list.some((x) => !x)) {
-      bad.push(`${d?.path ?? "(unnamed)"} (${list.length === 0 || !a ? "no GitHub record" : a.verified !== true ? "commit not signature-verified" : `authored by ${a.authorLogin ?? "no account"}`})`);
+    /** WHO SIGNED, NOT ONLY WHO IS NAMED (cross-family finding X7-02,
+     * 2026-10-09). The capability removed: another account with its own
+     * registered key signing a commit whose author field names the
+     * maintainer. GitHub's verified flag binds the key to the COMMITTER, so
+     * the committer must be the maintainer, or GitHub's own web-flow signer
+     * (a web edit, which GitHub authors as the signed-in user). */
+    const s = a !== null ? null : list.find((x) => !x || typeof x.committerLogin !== "string" || (x.committerLogin.toLowerCase() !== want && x.committerLogin !== "web-flow")) ?? null;
+    if (list.length === 0 || a !== null || s !== null || list.some((x) => !x)) {
+      bad.push(`${d?.path ?? "(unnamed)"} (${list.length === 0 || (!a && !s) ? "no GitHub record" : a ? (a.verified !== true ? "commit not signature-verified" : `authored by ${a.authorLogin ?? "no account"}`) : `signed by ${s.committerLogin ?? "no account"}`})`);
     }
   }
   if (bad.length > 0) {
-    return { ok: false, reason: `money-cap approvals must be added by a verified commit authored by @${maintainer}: ${bad.join(", ")}` };
+    return { ok: false, reason: `money-cap approvals must be added by a verified commit authored and signed by @${maintainer}: ${bad.join(", ")}` };
   }
-  return { ok: true, reason: `approvals added by verified commits authored by @${maintainer}` };
+  return { ok: true, reason: `approvals added by verified commits authored and signed by @${maintainer}` };
 }
 
 /** The money-cap gate as CI and `done` run it: the transition approvals AND,

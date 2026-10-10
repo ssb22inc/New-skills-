@@ -5,11 +5,13 @@
  *   and read PASS; any fresh FAIL blocks regardless
  * - PRs may not modify, delete or rename existing ADVERSARY_REPORT files */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { attestationsFromGhVerify } from "./attestation.mjs";
 import {
+  REGULAR_FILES_SCOPE,
+  checkRegularFilesOnly,
   REVIEW_SIGNER_WORKFLOW,
   TRUSTED_REVIEW_REF,
   VERIFIED_TREE_SCOPE,
@@ -35,11 +37,10 @@ const TREE_SCOPE = VERIFIED_TREE_SCOPE;
  * (adversary finding R2-19): a brand-new unstaged module is exactly what the
  * index-based hash cannot see. */
 export function assertCleanTree(root) {
-  const scope = TREE_SCOPE.map((s) => JSON.stringify(s)).join(" ");
   // Reading git is this file's job; deciding which lines mean "moved ahead of
   // the index" is `dirtyWorktreeLines`', where a test can drive it.
   const dirty = dirtyWorktreeLines(
-    execSync(`git -C ${JSON.stringify(root)} status --porcelain -- ${scope}`, { encoding: "utf8" }),
+    execFileSync("git", ["-C", root, "status", "--porcelain", "--", ...TREE_SCOPE], { encoding: "utf8" }),
   );
   if (dirty.length > 0) {
     throw new Error(
@@ -49,9 +50,8 @@ export function assertCleanTree(root) {
 }
 
 export function currentFullburnTreeHash(root) {
-  const scope = TREE_SCOPE.map((s) => JSON.stringify(s)).join(" ");
-  const out = execSync(`git -C ${JSON.stringify(root)} ls-files -s -- ${scope}`, { encoding: "utf8" });
-  return execSync(`git -C ${JSON.stringify(root)} hash-object --stdin`, { input: out, encoding: "utf8" }).trim();
+  const out = execFileSync("git", ["-C", root, "ls-files", "-s", "--", ...TREE_SCOPE], { encoding: "utf8" });
+  return execFileSync("git", ["-C", root, "hash-object", "--stdin"], { input: out, encoding: "utf8" }).trim();
 }
 
 const phase = readFileSync(join(repoRoot, "fullburn/PHASE"), "utf8").trim();
@@ -70,6 +70,13 @@ try {
   assertCleanTree(repoRoot);
 } catch (err) {
   console.error(`ADVERSARY GATE FAIL: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+}
+
+// X7-01: a symlink's content is outside the hash this gate binds to.
+const regular = checkRegularFilesOnly(execFileSync("git", ["-C", repoRoot, "ls-files", "-s", "-z", "--", ...REGULAR_FILES_SCOPE], { encoding: "utf8" }));
+if (!regular.ok) {
+  console.error(`ADVERSARY GATE FAIL: ${regular.reason}`);
   process.exit(1);
 }
 
@@ -112,7 +119,8 @@ if (baseRef) {
   // -z: NUL-separated, never quoted. A report path containing a space or a
   // non-ASCII byte was quoted by git and compared literally, walking out of the
   // append-only check (adversary finding R3-CP-08).
-  const diff = execSync(`git -C ${JSON.stringify(repoRoot)} diff --name-status -z -M ${baseRef}...HEAD`, { encoding: "utf8" });
+  // No shell (X7-04): the base ref is an argument, never shell text.
+  const diff = execFileSync("git", ["-C", repoRoot, "diff", "--name-status", "-z", "-M", `${baseRef}...HEAD`], { encoding: "utf8" });
   const ao = checkReportsAppendOnly(parseNameStatusZ(diff));
   if (!ao.ok) {
     console.error(`ADVERSARY GATE FAIL: ${ao.reason}`);

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { containsSecret, redactValue } from "../src/redact.ts";
 import { CapError } from "@fullburn/config/caps";
-import { llm } from "../src/gateway.ts";
+import { WITHHELD_BEFORE_REDACTION, llm } from "../src/gateway.ts";
 import { FrozenCapsSpendMeter, MemorySpendMeter } from "../src/spend-meter.ts";
 import { TraceContext } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
@@ -390,4 +390,38 @@ describe("x4 trace identity and output safety (cross-family, 2026-10-04)", () =>
     }
   });
 });
+});
+
+/** X7-05 (GPT-6 Astra, 2026-10-09): every refusal before the first vault read
+ * serialized the caller's input against an EMPTY redaction set, so a
+ * credential the caller put in the input reached the sink verbatim.
+ * MUTATION: X7-05a, X7-05b. */
+describe("x7 an early refusal copies no uncleared input into telemetry", () => {
+  const input = { note: "visible-note", leaked: CANARY_SECRET };
+  const early: Array<[string, (d: ReturnType<typeof makeDeps>) => [Parameters<typeof llm>[0], Parameters<typeof llm>[1]]]> = [
+    ["no trace context", (d) => [{ ...d.deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input, trace: null as unknown as TraceContext }]],
+    ["another client's trace", (d) => [{ ...d.deps, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input, trace: new TraceContext("h-x7-05", "other-client") }]],
+    ["an unevaluated binding map", (d) => [{ ...d.deps, bindings: { ...ROLE_BINDINGS } }, { role: "hello-world", clientId: TEST_CLIENT, input, trace: trace("h-x7-05b") }]],
+    ["a gateway origin that is not the gateway", (d) => [{ ...d.deps, bindings: ROLE_BINDINGS, gatewayBaseUrl: "https://example.invalid/" }, { role: "hello-world", clientId: TEST_CLIENT, input, trace: trace("h-x7-05c") }]],
+    ["another client's vault", (d) => [{ ...d.deps, bindings: ROLE_BINDINGS, vault: vaultForClient(d.backend, "other-client") }, { role: "hello-world", clientId: TEST_CLIENT, input, trace: trace("h-x7-05d") }]],
+  ];
+  for (const [name, build] of early) {
+    it(`${name}: refused, traced, and the input withheld`, async () => {
+      const d = makeDeps();
+      const [deps, req] = build(d);
+      await expect(llm(deps, req)).rejects.toThrow();
+      expect(d.sink.events.length, "the refusal was not traced").toBe(1);
+      expect(JSON.stringify(d.sink.events), "the credential in the input reached the sink").not.toContain(CANARY_SECRET);
+      expect(d.sink.events[0]!.input).toBe(WITHHELD_BEFORE_REDACTION);
+    });
+  }
+
+  it("once the redaction set is loaded, a failure trace keeps the input, redacted", async () => {
+    const d = makeDeps();
+    const transport = { async post() { throw new Error("upstream down"); } };
+    await expect(llm({ ...d.deps, transport, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input, trace: trace("h-x7-05e") })).rejects.toThrow();
+    const text = JSON.stringify(d.sink.events);
+    expect(text).not.toContain(CANARY_SECRET);
+    expect(text, "a loaded redaction set still withheld the input").toContain("visible-note");
+  });
 });

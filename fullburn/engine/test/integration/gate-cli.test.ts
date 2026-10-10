@@ -1,10 +1,17 @@
 import { execFile, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/** These tests spawn the gate CLIs as child processes, up to ten in one test
+ * (~2.2 s idle). Under a sharded mutation run — three suites on four cores —
+ * that crossed vitest's 5 s default and the test timed out with nothing wrong,
+ * voiding the run's meta-check twice (2026-10-09). A longer TIMEOUT, not a
+ * retry: a real failure still fails on its first run. */
+vi.setConfig({ testTimeout: 60_000 });
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { VERIFIED_TREE_SCOPE } from "../../scripts/gate-lib.mjs";
 
@@ -74,9 +81,9 @@ function gateEnv(extra: Record<string, string>, script: string, ...args: string[
  * test overrides a sha. The CLI is run ASYNC against it — a synchronous child
  * would block the event loop this server answers on. */
 async function withGithub<T>(
-  fn: (env: Record<string, string>, override: Map<string, { verified: boolean; login: string | null }>) => Promise<T>,
+  fn: (env: Record<string, string>, override: Map<string, { verified: boolean; login: string | null; committer?: string | null }>) => Promise<T>,
 ): Promise<T> {
-  const override = new Map<string, { verified: boolean; login: string | null }>();
+  const override = new Map<string, { verified: boolean; login: string | null; committer?: string | null }>();
   const server = createServer((req, res) => {
     const m = /\/repos\/o\/r\/commits\/([0-9a-f]{40})$/.exec(req.url ?? "");
     if (!m || req.headers.authorization !== "Bearer test-token") {
@@ -84,8 +91,15 @@ async function withGithub<T>(
       return;
     }
     const o = override.get(m[1]!) ?? { verified: true, login: "maintainer" };
+    // The signer defaults to the author; X7-02 cases set it apart.
+    const committer = o.committer === undefined ? o.login : o.committer;
     res.writeHead(200, { "content-type": "application/json" }).end(
-      JSON.stringify({ sha: m[1], commit: { verification: { verified: o.verified } }, author: o.login === null ? null : { login: o.login } }),
+      JSON.stringify({
+        sha: m[1],
+        commit: { verification: { verified: o.verified } },
+        author: o.login === null ? null : { login: o.login },
+        committer: committer === null ? null : { login: committer },
+      }),
     );
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -264,6 +278,15 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     const other = await gateAsync(env, "class2-gate.mjs", repo, base);
     expect(other.code, `another account's approval opened the gate:\n${other.out}`).toBe(1);
     expect(other.out).toMatch(/authored by someone-else/);
+    /** X7-02 (GPT-6 Astra, 2026-10-09): another account signs a commit whose
+     * author names the maintainer; GitHub reports it verified. The signer is
+     * the committer, and it is not the maintainer. MUTATION: X7-02a. */
+    override.set(approvalCommit, { verified: true, login: "maintainer", committer: "someone-else" });
+    const signedByOther = await gateAsync(env, "class2-gate.mjs", repo, base);
+    expect(signedByOther.code, `an approval signed by another account opened the gate:\n${signedByOther.out}`).toBe(1);
+    expect(signedByOther.out).toMatch(/signed by someone-else/);
+    override.set(approvalCommit, { verified: true, login: "maintainer", committer: "web-flow" });
+    expect((await gateAsync(env, "class2-gate.mjs", repo, base)).code, "a GitHub web edit by the maintainer was refused").toBe(0);
     /** X6-03 (GPT-6 Astra, 2026-10-06): the maintainer's verified commit adds
      * the approval; a LATER unsigned commit rewrites it. Only the addition was
      * authenticated, while the gate parsed the rewritten bytes.
@@ -283,8 +306,50 @@ describe("class2-gate CLI (N-03 leg B, R3-CP-08)", () => {
     expect(noMaintainer.code, "the gate opened with no maintainer configured").toBe(1);
   }));
 
+  /** X7-01: a non-cap path made a link would otherwise pass this gate as an
+   * ordinary change. MUTATION: X7-01c. */
+  it("a symlink anywhere in the protected tree is refused, cap path or not", () => {
+    const base = git("rev-parse", "HEAD").trim();
+    write("elsewhere.md", "outside\n");
+    rmSync(join(repo, "fullburn/README.md"));
+    symlinkSync("../elsewhere.md", join(repo, "fullburn/README.md"));
+    git("add", "-A");
+    git("commit", "-q", "-m", "link the readme out");
+    const res = gate("class2-gate.mjs", repo, base);
+    expect(res.code, `a symlink in the protected tree passed the class-2 gate:\n${res.out}`).toBe(1);
+    expect(res.out).toMatch(/README\.md \(mode 120000, a symlink\)/);
+  });
+
   it("refuses to run at all without a base ref", () => {
     expect(gate("class2-gate.mjs", repo).code).toBe(1);
+  });
+});
+
+/** X7-04 (GPT-6 Astra, 2026-10-09): approval paths come from the pull request
+ * and were interpolated into shell commands with JSON quoting — `$(...)` ran
+ * inside the trusted gate, with the job token in its environment. Every git
+ * call is an argument vector now. MUTATION: X7-04. */
+describe("no pull-request path reaches a shell", () => {
+  it("an approval file named with a command substitution runs nothing", () => {
+    const sentinel = join(repo, "gate-shell-sentinel");
+    const base = git("rev-parse", "HEAD").trim();
+    write("fullburn/config/src/caps.ts", "export const CAPS = { dailyAiSpendUsd: 500 };\n");
+    for (const name of [`$(touch ${sentinel})`, `\`touch ${sentinel}\``]) {
+      write(`fullburn/APPROVALS/${name}.md`, "approves: fullburn/config/src/caps.ts\n");
+    }
+    git("add", "-A");
+    git("commit", "-q", "-m", "hostile approval names");
+    gate("class2-gate.mjs", repo, base);
+    gate("owed-approvals.mjs", repo, base);
+    gate("adversary-gate.mjs", repo, base);
+    expect(existsSync(sentinel), "a pull-request filename executed a shell command inside a gate").toBe(false);
+  });
+
+  it("no gate script can spawn a shell", () => {
+    for (const f of readdirSync(SCRIPTS).filter((n) => n.endsWith(".mjs"))) {
+      const src = readFileSync(join(SCRIPTS, f), "utf8");
+      expect(/\bexecSync\s*\(|shell:\s*true|["'`](?:ba|z|da)?sh["'`]\s*,\s*\[\s*["'`]-c/.test(src), `${f} can spawn a shell`).toBe(false);
+    }
   });
 });
 
@@ -328,7 +393,7 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -347,6 +412,32 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     expect(gate("adversary-gate.mjs", repo, base).code, "an unstaged cap edit sailed past").toBe(1);
   });
 
+  /** X7-01 (GPT-6 Astra, 2026-10-09): the hash binds git's entry for a path,
+   * the code reads through it. A cap module made a link to a sibling
+   * project's file changed with the hash — and a fresh PASS — unchanged.
+   * MUTATION: X7-01a (decision), X7-01b (adversary CLI), X7-01c (class-2 CLI). */
+  it("a protected path that is a symlink blocks the gate, even under a fresh PASS", () => {
+    write("fullburn/PHASE", "0\n");
+    write("pulsern/caps.ts", "export const CAPS = { dailyAiSpendUsd: 5 };\n");
+    rmSync(join(repo, "fullburn/config/src/caps.ts"));
+    symlinkSync("../../../pulsern/caps.ts", join(repo, "fullburn/config/src/caps.ts"));
+    git("add", "-A");
+    git("commit", "-q", "-m", "caps through a link");
+    const tree = currentTreeHash();
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
+    git("add", "-A");
+    git("commit", "-q", "-m", "add a PASS report");
+    const base = git("rev-parse", "HEAD").trim();
+    const res = gate("adversary-gate.mjs", repo, base);
+    expect(res.code, `a symlinked cap module passed the adversary gate:\n${res.out}`).toBe(1);
+    expect(res.out).toMatch(/regular files.*caps\.ts \(mode 120000, a symlink\)/s);
+    // The sibling edit the finding describes: the hash does not move.
+    write("pulsern/caps.ts", "export const CAPS = { dailyAiSpendUsd: 5000 };\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "edit the sibling");
+    expect(currentTreeHash(), "the premise: a referent edit leaves the hash unchanged").toBe(tree);
+  });
+
   /** MUTATION: relax the APPROVALS clause in checkReportsAppendOnly. */
   it("rewriting a signed approval is refused — APPROVALS is append-only too", () => {
     write("fullburn/PHASE", "0\n");
@@ -355,7 +446,7 @@ describe("adversary-gate CLI — the tree hash reads the index, so the worktree 
     git("commit", "-q", "-m", "sign the caps");
     const base = git("rev-parse", "HEAD").trim();
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     // Rewrite the signed approval to say something the human never signed.
     write("fullburn/APPROVALS/2026-08-16-caps.md", "Approved-by: someone else\napproves: everything, forever\n");
     git("add", "-A");
@@ -385,7 +476,7 @@ describe("adversary-gate CLI — a PASS is a statement about the workflow too (R
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase and the CI");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -405,7 +496,7 @@ describe("adversary-gate CLI — a PASS is a statement about the workflow too (R
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase and the CI");
     const tree = currentTreeHash();
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a PASS report");
     const base = git("rev-parse", "HEAD").trim();
@@ -431,7 +522,7 @@ describe("adversary-gate CLI — a PASS for another phase is not a PASS for this
     const tree = currentTreeHash();
     // Bound to the CURRENT tree and reading PASS: only the phase binding can
     // stop it, so a pass here would be for the wrong reason.
-    write("fullburn/reports/ADVERSARY_REPORT_phase1.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase1.md", `# r\nVerdict: PASS\nverified-tree: ${tree}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "add a phase-1 PASS");
     const base = git("rev-parse", "HEAD").trim();
@@ -485,7 +576,7 @@ describe("adversary-gate CLI", () => {
     write("fullburn/PHASE", "0\n");
     git("add", "-A");
     git("commit", "-q", "-m", "declare the phase");
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.x9.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.x9.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "a handwritten PASS");
     expect(gateEnv({}, "adversary-gate.mjs", repo, base).code, "an attested PASS was refused").toBe(0);
@@ -518,7 +609,7 @@ describe("adversary-gate CLI", () => {
     const base = git("rev-parse", "HEAD").trim();
     // Bound to the CURRENT tree, so only the append-only rule can stop it —
     // otherwise this would pass for the wrong reason (staleness).
-    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-astra)\n`);
+    write("fullburn/reports/ADVERSARY_REPORT_phase0.md", `# r\nVerdict: PASS\nverified-tree: ${currentTreeHash()}\nReviewer-family: OpenAI (gpt-6-luna)\n`);
     git("add", "-A");
     git("commit", "-q", "-m", "edit the FAIL into a PASS");
     const res = gate("adversary-gate.mjs", repo, base);

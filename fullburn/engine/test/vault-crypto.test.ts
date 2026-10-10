@@ -172,7 +172,8 @@ describe("vault auto-rotation (§15 'auto-rotated', breach runbook)", () => {
     await backend.put("a", "k", "leaked");
     await backend.unlock("a");
     const rec = await backend.revokeAndRotate("a", "k", async () => "replacement", revoke);
-    expect(rec).toEqual({ value: "replacement", version: 2 });
+    // Version 2 is the quarantine written before the provider was called (X7-07).
+    expect(rec).toEqual({ value: "replacement", version: 3 });
     expect(revoked, "the old value was never revoked at the provider").toEqual(["leaked"]);
     expect(backend.read("a", "k")?.value).toBe("replacement");
 
@@ -265,11 +266,27 @@ class PausableStore implements CipherStore {
     }
     return v;
   }
-  compareAndSwap(key: string, expected: string | null, next: string): Promise<boolean> {
+  casGate: { key: string; release: Promise<void>; hit: () => void } | null = null;
+  async compareAndSwap(key: string, expected: string | null, next: string): Promise<boolean> {
+    const g = this.casGate;
+    if (g && key === g.key) {
+      this.casGate = null;
+      g.hit();
+      await g.release;
+    }
     return this.inner.compareAndSwap(key, expected, next);
   }
   list(prefix: string): Promise<string[]> {
     return this.inner.list(prefix);
+  }
+  /** Pauses the next compare-and-swap on `key` BEFORE it reaches the store. */
+  pauseNextCas(key: string): { reached: Promise<void>; release: () => void } {
+    let release!: () => void;
+    let hit!: () => void;
+    const releaseP = new Promise<void>((r) => (release = r));
+    const reached = new Promise<void>((r) => (hit = r));
+    this.casGate = { key, release: releaseP, hit };
+    return { reached, release };
   }
   pauseNextGet(key: string): { reached: Promise<void>; release: () => void } {
     let release!: () => void;
@@ -394,5 +411,171 @@ describe("x6 vault findings (GPT-6 Astra, 2026-10-06)", () => {
     expect(backend.read("a", "s2")?.value).toBe("also-compromised");
     await backend.revokeAndRotate("a", "s2", async () => { throw new Error("x"); }, async () => {}).catch(() => undefined);
     expect(backend.read("a", "s2"), "a quarantined secret stayed readable in the unlocked session").toBeNull();
+  });
+});
+
+/** A barrier a test holds an external call on. */
+function barrier(): { reached: Promise<void>; hold: () => Promise<void>; release: () => void } {
+  let release!: () => void;
+  let hit!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const reached = new Promise<void>((r) => (hit = r));
+  return { reached, release, hold: async () => { hit(); await gate; } };
+}
+
+describe("x7 vault findings (GPT-6 Astra, 2026-10-09)", () => {
+  /** X7-06: an unlock that STARTED after a write's opening bump read the old
+   * record and installed it once the write ended. MUTATION: X7-06a, X7-06b. */
+  it("an unlock that starts during a write and reads the old record installs nothing", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "old");
+    const cas = store.pauseNextCas(slotKey("a", "s"));
+    const writing = backend.put("a", "s", "new");
+    await cas.reached; // the write has bumped the generation and not yet swapped
+    const read = store.pauseNextGet(slotKey("a", "s"));
+    const unlocking = backend.unlock("a").then(() => null, (e: unknown) => e as Error);
+    await read.reached; // the unlock has read the OLD record
+    cas.release();
+    await writing;
+    read.release();
+    expect((await unlocking)?.message, "an unlock overlapping a write's end installed what it read").toMatch(/while this unlock was in flight/);
+    await backend.unlock("a");
+    expect(backend.read("a", "s")?.value).toBe("new");
+  });
+
+  it("the same schedule against a quarantine cannot reinstall the compromised value", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "compromised");
+    const cas = store.pauseNextCas(slotKey("a", "s"));
+    const breach = backend.revokeAndRotate("a", "s", async () => { throw new Error("issuer down"); }, async () => {}).catch((e: unknown) => e as Error);
+    await cas.reached; // the quarantine is about to be written
+    const read = store.pauseNextGet(slotKey("a", "s"));
+    const unlocking = backend.unlock("a").then(() => null, (e: unknown) => e as Error);
+    await read.reached;
+    cas.release();
+    expect(((await breach) as Error).message).toMatch(/QUARANTINED/);
+    read.release();
+    expect((await unlocking)?.message).toMatch(/while this unlock was in flight/);
+    expect(() => backend.read("a", "s"), "compromised plaintext was installed across a quarantine").toThrow(/locked/);
+  });
+
+  /** X6-08 at the quarantine: an unlock that read the compromised record and
+   * finished while the quarantine write was still in flight. MUTATION: X6-08. */
+  it("an unlock that finishes while a quarantine is being written installs nothing", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "compromised");
+    const read = store.pauseNextGet(slotKey("a", "s"));
+    const unlocking = backend.unlock("a").then(() => null, (e: unknown) => e as Error);
+    await read.reached; // the unlock has read the compromised record
+    const cas = store.pauseNextCas(slotKey("a", "s"));
+    const breach = backend.revokeAndRotate("a", "s", async () => { throw new Error("issuer down"); }, async () => {}).catch((e: unknown) => e as Error);
+    await cas.reached; // the quarantine write has started, not yet swapped
+    read.release();
+    expect((await unlocking)?.message, "an unlock finishing inside a quarantine write completed").toMatch(/while this unlock was in flight/);
+    expect(() => backend.read("a", "s"), "the compromised value was readable while its quarantine was being written").toThrow(/locked/);
+    cas.release();
+    expect(((await breach) as Error).message).toMatch(/QUARANTINED/);
+  });
+
+  /** X7-07: the revoker and issuer were awaited with the compromised value
+   * still cached and stored. MUTATION: X7-07a, VC-06. */
+  it("while the provider is revoking or issuing, the compromised value is unreadable — cached or freshly unlocked", async () => {
+    for (const stage of ["revoke", "issue"] as const) {
+      const store = new PausableStore();
+      const k = await importKek("k1", rawKey(1));
+      const backend = new EncryptedVaultBackend(store, k);
+      await backend.put("a", "s", "compromised");
+      await backend.unlock("a");
+      const b = barrier();
+      const breach = backend.revokeAndRotate(
+        "a",
+        "s",
+        async () => { if (stage === "issue") await b.hold(); return "replacement"; },
+        async () => { if (stage === "revoke") await b.hold(); },
+      );
+      await b.reached;
+      expect(backend.read("a", "s"), `the cached compromised value was readable during ${stage}`).toBeNull();
+      const other = new EncryptedVaultBackend(store, k);
+      await other.unlock("a");
+      expect(other.read("a", "s"), `a fresh unlock read the compromised value during ${stage}`).toBeNull();
+      b.release();
+      expect((await breach).value).toBe("replacement");
+    }
+  });
+
+  it("the cached value is gone before the breach rotation's first read of the store", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "compromised");
+    await backend.unlock("a");
+    const read = store.pauseNextGet(slotKey("a", "s"));
+    const breach = backend.revokeAndRotate("a", "s", async () => "replacement", async () => {});
+    await read.reached;
+    expect(backend.read("a", "s"), "the compromised value was readable while the breach loaded it").toBeNull();
+    read.release();
+    await breach;
+  });
+
+  it("a store failure after revocation leaves the slot quarantined, not the old value installed", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "compromised");
+    await backend.unlock("a");
+    const failing = store.inner.compareAndSwap.bind(store.inner);
+    let broken = false;
+    store.inner.compareAndSwap = async (key, expected, next) => { if (broken) throw new Error("store down"); return failing(key, expected, next); };
+    await expect(backend.revokeAndRotate("a", "s", async () => "replacement", async () => { broken = true; })).rejects.toThrow(/store down/);
+    expect(backend.read("a", "s")).toBeNull();
+    broken = false;
+    const fresh = new EncryptedVaultBackend(store, k);
+    await fresh.unlock("a");
+    expect(fresh.read("a", "s"), "a store failure after revocation left the compromised value readable").toBeNull();
+  });
+
+  /** X7-08: a stale breach rotation completed with `put`, which re-reads.
+   * MUTATION: X7-08a, X7-08b. */
+  it("a breach rotation completes only over its own quarantine — a newer write wins", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "v1");
+    const b = barrier();
+    const a = backend.revokeAndRotate("a", "s", async () => { await b.hold(); return "stale-replacement"; }, async () => {}).catch((e: unknown) => e as Error);
+    await b.reached; // A has quarantined v1 and is waiting on its issuer
+    // B: a second breach rotation now finds the quarantine and refuses.
+    await expect(backend.revokeAndRotate("a", "s", async () => "b", async () => {})).rejects.toThrow(/already quarantined/);
+    // An operator writes a fresh value over the quarantine.
+    await backend.put("a", "s", "operator-value");
+    b.release();
+    expect(((await a) as Error).message).toMatch(/written by something else during its breach rotation/);
+    const fresh = new EncryptedVaultBackend(store, k);
+    await fresh.unlock("a");
+    expect(fresh.read("a", "s")?.value, "a stale breach rotation overwrote a newer write").toBe("operator-value");
+  });
+
+  it("two breach rotations from the same record: the later one finds the slot moved and does nothing", async () => {
+    const store = new PausableStore();
+    const k = await importKek("k1", rawKey(1));
+    const backend = new EncryptedVaultBackend(store, k);
+    await backend.put("a", "s", "v1");
+    const read = store.pauseNextGet(slotKey("a", "s"));
+    const revokedByA: string[] = [];
+    const a = backend.revokeAndRotate("a", "s", async () => "from-a", async (_c, _n, v) => { revokedByA.push(v); }).catch((e: unknown) => e as Error);
+    await read.reached; // A has read v1
+    await expect(backend.revokeAndRotate("a", "s", async () => { throw new Error("issuer down"); }, async () => {})).rejects.toThrow(/QUARANTINED/);
+    read.release();
+    expect(((await a) as Error).message).toMatch(/changed while its breach rotation began/);
+    expect(revokedByA, "a superseded rotation still called the provider").toEqual([]);
+    const fresh = new EncryptedVaultBackend(store, k);
+    await fresh.unlock("a");
+    expect(fresh.read("a", "s"), "a stale breach rotation un-quarantined the slot").toBeNull();
   });
 });

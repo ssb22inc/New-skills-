@@ -45,8 +45,10 @@ export function parseArgs(argv) {
 /** DONE.md §3: refuses a dirty tree or a mid-harness marker. A canary file left
  * by a crashed run of this checker is recovered BEFORE this is consulted, so it
  * is never a refusal reason of its own. */
-export function preflightRefusals({ porcelain, markerExists }) {
+export function preflightRefusals({ porcelain, markerExists, regularFiles = { ok: true } }) {
   const out = [];
+  // X7-01: a link in the protected tree carries content the tree hash does not.
+  if (regularFiles?.ok !== true) out.push(String(regularFiles?.reason ?? "protected paths could not be shown to be regular files"));
   const dirty = String(porcelain ?? "")
     .split("\n")
     .filter((l) => l.trim().length > 0);
@@ -196,15 +198,16 @@ export function isNonClaudeFamily(family) {
 }
 
 /** DONE.md §2.1.2 AS AMENDED BY THE HUMAN'S INSTRUCTION OF 2026-10-06 (ledger
- * L53): "all AI review and adversarial AI action should be done by GPT Astra".
+ * L53): "all AI review and adversarial AI action should be done by GPT Astra";
+ * since 2026-10-09 (L63) the reviewer is GPT-6 Luna.
  * The same-family Claude round is retired; the adversary round is the
  * cross-family read, so C2 is C3's verdict — the same predicate, so the two
  * rows cannot disagree, and anything short of a PASS is a FAIL. */
-export function astraRoundCondition(crossFamily) {
+export function reviewerRoundCondition(crossFamily) {
   if (!crossFamily || crossFamily.ok !== true) {
-    return { status: "FAIL", observed: `no GPT Astra adversary PASS at this tree${crossFamily?.reason ? ` — ${crossFamily.reason}` : ""}` };
+    return { status: "FAIL", observed: `no cross-family reviewer (GPT-6 Luna) PASS at this tree${crossFamily?.reason ? ` — ${crossFamily.reason}` : ""}` };
   }
-  return { status: "PASS", observed: `GPT Astra adversary PASS at this tree — ${crossFamily.reason}` };
+  return { status: "PASS", observed: `cross-family reviewer (GPT-6 Luna) PASS at this tree — ${crossFamily.reason}` };
 }
 
 /** DONE.md §2.1.10 AS AMENDED BY THE HUMAN'S RULING OF 2026-10-06 (ledger
@@ -275,7 +278,7 @@ export const PHASE0_REQUIREMENTS = Object.freeze([
   { id: "D-switchboard", what: "deliverable: switchboard skeleton — US + Meta on, everything else locked and structurally inert", command: ["vitest", "run", "config/test/switchboard.test.ts"] },
   { id: "D-vault", what: "deliverable: OAuth secrets vault with a leak check executed as a CI stage", command: ["vitest", "run", "engine/test/vault.test.ts", "engine/test/integration/leak-cli.test.ts"] },
   { id: "D-vault-rotation", what: "deliverable: vault is encrypted and auto-rotated — the mechanism (AES-256-GCM at rest, tenant-bound AAD, scheduled rotation, breach re-issue, KEK re-key)", command: ["vitest", "run", "engine/test/vault-crypto.test.ts"] },
-  { id: "D-vault-live", what: "deliverable: the deployed Worker holds its KEK as a secret binding, its sealed records in KV, and runs rotateDue on a cron trigger", command: null, why: "H7 — the KEK, the KV namespace and the cron trigger are infrastructure, not observable from the sandbox" },
+  { id: "D-vault-live", what: "deliverable: the deployed Worker holds its KEK as a secret binding, its sealed records in a Durable Object CipherStore (compare-and-swap; Workers KV has none — X7-12), and runs rotateDue on a cron trigger", command: null, why: "H7 — the KEK, the Durable Object store and the cron trigger are infrastructure, not observable from the sandbox" },
   { id: "D-adversary", what: "deliverable: CLAUDE.md + adversary agent installed and discoverable", command: ["vitest", "run", "engine/test/invariants/invariants.test.ts", "-t", "discovery mirror"] },
   { id: "D-ci", what: "deliverable: CI pipeline — every workflow SHA-pinned, permission-declared, scope-filtered inside the job", command: ["vitest", "run", "engine/test/invariants/invariants.test.ts", "-t", "workflow hygiene"] },
   { id: "D-warehouse", what: "deliverable: ClickHouse Cloud + Airbyte provisioned", command: null, why: "H3/H4 — infrastructure, not observable from the sandbox" },

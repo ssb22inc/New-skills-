@@ -94,11 +94,20 @@ describe("AI Gateway HTTP transport (X5-12)", () => {
   });
 });
 
-describe("Langfuse trace sink (X5-12)", () => {
-  const opts = (fetchImpl: FetchLike) => ({ host: "https://langfuse.example.invalid", publicKey: "pk-lf-test", secretKey: "sk-lf-test", fetchImpl, newId: () => "evt-1", now: () => 0 });
+/** Acknowledges every event of the posted batch, as Langfuse's ingestion
+ * endpoint does on success. */
+const ackAll = (call: Call) => ({
+  status: 207,
+  body: JSON.stringify({ successes: (JSON.parse(call.body) as { batch: { id: string }[] }).batch.map((e) => ({ id: e.id, status: 201 })), errors: [] }),
+});
+const lfEvent = (clientId = TEST_CLIENT, traceId = "t") => ({ traceId, clientId, role: "r", model: "m", startedAtMs: 0, input: {}, output: {}, costUsd: 0, outcome: "ok" as const });
 
-  it("delivers every llm() decision as a trace-create with basic auth", async () => {
-    const lf = stubFetch(() => ({ status: 207, body: JSON.stringify({ successes: [{ id: "evt-1", status: 201 }], errors: [] }) }));
+describe("Langfuse trace sink (X5-12)", () => {
+  const counter = () => { let n = 0; return () => `evt-${++n}`; };
+  const opts = (fetchImpl: FetchLike) => ({ host: "https://langfuse.example.invalid", publicKey: "pk-lf-test", secretKey: "sk-lf-test", fetchImpl, newId: counter(), now: () => 0 });
+
+  it("delivers every llm() decision as a namespaced trace plus a generation, with basic auth", async () => {
+    const lf = stubFetch(ackAll);
     const gw = stubFetch(() => ({ status: 200, body: chat('{"greeting":"hi"}') }));
     const { deps } = makeDeps({ transport: new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: gw.fetch }) });
     await llm({ ...deps, sink: new LangfuseTraceSink(opts(lf.fetch)), bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("t-lf") });
@@ -106,7 +115,8 @@ describe("Langfuse trace sink (X5-12)", () => {
     expect(lf.calls[0]!.url).toBe("https://langfuse.example.invalid/api/public/ingestion");
     expect(lf.calls[0]!.headers["authorization"]).toBe(`Basic ${btoa("pk-lf-test:sk-lf-test")}`);
     const batch = JSON.parse(lf.calls[0]!.body).batch;
-    expect(batch[0]).toMatchObject({ type: "trace-create", body: { id: "t-lf", name: "hello-world", userId: TEST_CLIENT, output: { greeting: "hi" } } });
+    expect(batch[0]).toMatchObject({ type: "trace-create", body: { id: `${TEST_CLIENT}/t-lf`, name: "hello-world", userId: TEST_CLIENT } });
+    expect(batch[1]).toMatchObject({ type: "generation-create", body: { traceId: `${TEST_CLIENT}/t-lf`, name: "hello-world", output: { greeting: "hi" } } });
     expect(JSON.stringify(batch)).not.toContain(CANARY_SECRET);
   });
 
@@ -119,13 +129,53 @@ describe("Langfuse trace sink (X5-12)", () => {
     ]) {
       const lf = stubFetch(reply);
       const sink = new LangfuseTraceSink(opts(lf.fetch));
-      await expect(sink.emit({ traceId: "t", clientId: TEST_CLIENT, role: "r", model: "m", startedAtMs: 0, input: {}, output: {}, costUsd: 0, outcome: "ok" })).rejects.toBeInstanceOf(LangfuseSinkError);
+      await expect(sink.emit(lfEvent())).rejects.toBeInstanceOf(LangfuseSinkError);
       const gw = stubFetch(() => ({ status: 200, body: chat('{"greeting":"hi"}') }));
       const { deps } = makeDeps({ transport: new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: gw.fetch }) });
       await expect(llm({ ...deps, sink, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("t-lf-fail") }), "an untraced call succeeded").rejects.toBeInstanceOf(TraceEmitError);
     }
     expect(() => new LangfuseTraceSink({ host: "http://x.invalid", publicKey: "a", secretKey: "b" })).toThrow(LangfuseSinkError);
     expect(() => new LangfuseTraceSink({ host: "https://x.invalid", publicKey: "", secretKey: "b" })).toThrow(LangfuseSinkError);
+  });
+
+  /** X7-10 (GPT-6 Astra, 2026-10-09): a reply acknowledging nothing — or the
+   * wrong event, or one event twice — passed as delivered.
+   * MUTATION: X7-10a, X7-10b, LF-24. */
+  it("only a positive acknowledgement of exactly the events sent counts as delivered", async () => {
+    const ids = (call: Call) => (JSON.parse(call.body) as { batch: { id: string }[] }).batch.map((e) => e.id);
+    for (const [name, reply] of [
+      ["no acknowledgement at all", () => ({ status: 207, body: JSON.stringify({ successes: [], errors: [] }) })],
+      ["a 200 with an empty body", () => ({ status: 200, body: "" })],
+      ["a 200 with no successes field", () => ({ status: 200, body: JSON.stringify({ errors: [] }) })],
+      ["an unrelated event id", (c: Call) => ({ status: 207, body: JSON.stringify({ successes: ids(c).map(() => ({ id: "someone-else" })), errors: [] }) })],
+      ["one event acknowledged twice, the other not", (c: Call) => ({ status: 207, body: JSON.stringify({ successes: [{ id: ids(c)[0] }, { id: ids(c)[0] }], errors: [] }) })],
+      ["every event plus an extra", (c: Call) => ({ status: 207, body: JSON.stringify({ successes: [...ids(c), "extra"].map((id) => ({ id })), errors: [] }) })],
+    ] as const) {
+      const sink = new LangfuseTraceSink(opts(stubFetch(reply as (c: Call) => { status: number; body: string }).fetch));
+      await expect(sink.emit(lfEvent()), `${name} counted as delivered`).rejects.toBeInstanceOf(LangfuseSinkError);
+    }
+    await expect(new LangfuseTraceSink(opts(stubFetch(ackAll).fetch)).emit(lfEvent())).resolves.toBeUndefined();
+  });
+
+  /** X7-11 (GPT-6 Astra, 2026-10-09): two clients' contexts with the same
+   * caller-chosen trace id targeted one remote trace. MUTATION: X7-11a, X7-11b. */
+  it("two clients with the same trace id, and two decisions under one trace, never share a remote id", async () => {
+    const lf = stubFetch(ackAll);
+    const sink = new LangfuseTraceSink(opts(lf.fetch));
+    await sink.emit(lfEvent("client-a", "shared-id"));
+    await sink.emit(lfEvent("client-b", "shared-id"));
+    await sink.emit(lfEvent("client-a", "shared-id"));
+    const batches = lf.calls.map((c) => (JSON.parse(c.body) as { batch: { type: string; body: { id: string; traceId?: string } }[] }).batch);
+    const traceIds = batches.map((b) => b[0]!.body.id);
+    expect(traceIds[0], "two clients shared one remote trace").not.toBe(traceIds[1]);
+    expect(traceIds[0], "one client's trace id was not stable").toBe(traceIds[2]);
+    const decisionIds = batches.map((b) => b[1]!.body.id);
+    expect(new Set(decisionIds).size, "two decisions shared one remote id").toBe(3);
+    // The separator cannot be forged: a client id that embeds it maps elsewhere.
+    await sink.emit(lfEvent("a/b", "c"));
+    await sink.emit(lfEvent("a", "b/c"));
+    const forged = lf.calls.slice(-2).map((c) => (JSON.parse(c.body) as { batch: { body: { id: string } }[] }).batch[0]!.body.id);
+    expect(forged[0]).not.toBe(forged[1]);
   });
 });
 

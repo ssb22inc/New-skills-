@@ -31,7 +31,7 @@ import {
   renderCrossReport,
   servedModelAcceptable,
 } from "./cross-family-lib.mjs";
-import { VERIFIED_TREE_SCOPE } from "./gate-lib.mjs";
+import { REGULAR_FILES_SCOPE, VERIFIED_TREE_SCOPE, checkRegularFilesOnly } from "./gate-lib.mjs";
 import { looksBinary } from "./scan-lib.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/\/$/, "");
@@ -96,6 +96,13 @@ async function main(argv) {
   const refusal = preflightRefusal({ dirty: porcelain.trim() !== "", endpoint, allowDirty: process.env.FULLBURN_CROSS_FAMILY_ALLOW_DIRTY === "1", dryRun });
   if (refusal) {
     console.error(`CROSS-FAMILY READ: REFUSED — ${refusal}:\n${porcelain}`);
+    return 2;
+  }
+  // X7-01: the bundle reads the filesystem, the hash reads the index; a link
+  // would send the reviewer bytes the hash does not bind.
+  const regular = checkRegularFilesOnly((await tgit(["ls-files", "-s", "-z", "--", ...REGULAR_FILES_SCOPE])).out);
+  if (!regular.ok) {
+    console.error(`CROSS-FAMILY READ: REFUSED — ${regular.reason}`);
     return 2;
   }
   // The same hash the completion checker prints: `git ls-files -s` over the

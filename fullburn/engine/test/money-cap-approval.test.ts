@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { HUMAN_APPROVAL_PATTERNS, checkApprovalAuthentication, checkClass2Approvals, checkMoneyCapGate, isClass2, needsHumanApproval } from "../scripts/gate-lib.mjs";
+import { HUMAN_APPROVAL_PATTERNS, REGULAR_FILES_SCOPE, checkApprovalAuthentication, checkRegularFilesOnly, checkClass2Approvals, checkMoneyCapGate, isClass2, needsHumanApproval } from "../scripts/gate-lib.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "../scripts/github-auth.mjs";
 
@@ -72,13 +72,20 @@ describe("human approval is owed for the money caps only (ruling 2026-10-06)", (
  * reports the commit that added it as signature-verified and authored by the
  * maintainer account. */
 describe("money-cap approvals are authenticated by GitHub's commit record (X5-03)", () => {
-  const ok = { path: "fullburn/APPROVALS/a.md", status: "added", auth: { verified: true, authorLogin: "Maintainer" } };
+  const ok = { path: "fullburn/APPROVALS/a.md", status: "added", auth: { verified: true, authorLogin: "Maintainer", committerLogin: "maintainer" } };
   it("accepts only verified commits by the maintainer, case-insensitively", () => {
     expect(checkApprovalAuthentication([ok], "maintainer").ok).toBe(true);
     expect(checkApprovalAuthentication([{ ...ok, auth: { verified: false, authorLogin: "maintainer" } }], "maintainer").ok, "an unsigned commit counted").toBe(false);
     expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "other" } }], "maintainer").ok, "another account counted").toBe(false);
     expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: null } }], "maintainer").ok, "an unlinked author counted").toBe(false);
     expect(checkApprovalAuthentication([{ ...ok, auth: null }], "maintainer").ok, "no record counted").toBe(false);
+    // X7-02: the signer is the committer; naming the maintainer as author is not signing.
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer", committerLogin: "other" } }], "maintainer").ok, "another account's signature counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer", committerLogin: null } }], "maintainer").ok, "an unlinked signer counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer" } }], "maintainer").ok, "a record with no signer counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer", committerLogin: "web-flow" } }], "maintainer").ok, "GitHub's web signer was refused").toBe(true);
+    expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, { verified: true, authorLogin: "maintainer", committerLogin: "other" }] }], "maintainer").ok, "a later edit signed by another account counted").toBe(false);
+    expect(checkApprovalAuthentication([{ ...ok, auth: { verified: true, authorLogin: "maintainer", committerLogin: "other" } }], "maintainer").reason).toContain("signed by other");
     // X6-03: every commit that touched the document must pass.
     expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, ok.auth] }], "maintainer").ok).toBe(true);
     expect(checkApprovalAuthentication([{ ...ok, auth: [ok.auth, { verified: false, authorLogin: "maintainer" }] }], "maintainer").ok, "a later unsigned edit counted").toBe(false);
@@ -98,17 +105,18 @@ describe("money-cap approvals are authenticated by GitHub's commit record (X5-03
     expect(nonCap.ok, "a non-cap change demanded a maintainer").toBe(true);
     const block = ["approves: fullburn/config/src/caps.ts", `base-commit: ${base.baseCommit}`, "from-content-hash: b", "content-hash: h"].join("\n");
     const cap = (auth: unknown) => checkMoneyCapGate({ ...base, maintainer: "maintainer", changedFiles: [{ status: "modified", path: "fullburn/config/src/caps.ts" }], approvalDocs: [{ path: "fullburn/APPROVALS/x.md", status: "added", content: block, authoredBy: "A Human <h@x>", auth }] });
-    expect(cap({ verified: true, authorLogin: "maintainer" }).ok).toBe(true);
-    expect(cap({ verified: false, authorLogin: "maintainer" }).ok, "a correct approval in an unsigned commit opened the cap gate").toBe(false);
+    expect(cap({ verified: true, authorLogin: "maintainer", committerLogin: "maintainer" }).ok).toBe(true);
+    expect(cap({ verified: true, authorLogin: "maintainer", committerLogin: "other" }).ok, "a correct approval signed by another account opened the cap gate").toBe(false);
+    expect(cap({ verified: false, authorLogin: "maintainer", committerLogin: "maintainer" }).ok, "a correct approval in an unsigned commit opened the cap gate").toBe(false);
   });
 
   it("reads GitHub's record faithfully and fails closed on anything else", async () => {
-    expect(commitAuthFromApi({ commit: { verification: { verified: true } }, author: { login: "m" } })).toEqual({ verified: true, authorLogin: "m" });
-    expect(commitAuthFromApi({ commit: { verification: { verified: "true" } }, author: null })).toEqual({ verified: false, authorLogin: null });
+    expect(commitAuthFromApi({ commit: { verification: { verified: true } }, author: { login: "m" }, committer: { login: "s" } })).toEqual({ verified: true, authorLogin: "m", committerLogin: "s" });
+    expect(commitAuthFromApi({ commit: { verification: { verified: "true" } }, author: null })).toEqual({ verified: false, authorLogin: null, committerLogin: null });
     expect(commitAuthFromApi(null)).toBeNull();
     const sha = "a".repeat(40);
     const reply = (status: number, body: unknown) => async () => ({ status, json: async () => body }) as unknown as Response;
-    expect(await fetchCommitAuth({ repo: "o/r", sha, token: "t", fetchImpl: reply(200, { commit: { verification: { verified: true } }, author: { login: "m" } }) })).toEqual({ verified: true, authorLogin: "m" });
+    expect(await fetchCommitAuth({ repo: "o/r", sha, token: "t", fetchImpl: reply(200, { commit: { verification: { verified: true } }, author: { login: "m" }, committer: { login: "m" } }) })).toEqual({ verified: true, authorLogin: "m", committerLogin: "m" });
     expect(await fetchCommitAuth({ repo: "o/r", sha, token: "t", fetchImpl: reply(404, {}) })).toBeNull();
     expect(await fetchCommitAuth({ repo: "o/r", sha, token: "", fetchImpl: reply(200, {}) }), "no token still fetched").toBeNull();
     expect(await fetchCommitAuth({ repo: "o/r", sha: "not-a-sha", token: "t", fetchImpl: reply(200, {}) })).toBeNull();
@@ -116,5 +124,26 @@ describe("money-cap approvals are authenticated by GitHub's commit record (X5-03
     expect(repoFromRemote("https://github.com/ssb22inc/New-skills-.git")).toBe("ssb22inc/New-skills-");
     expect(repoFromRemote("http://local_proxy@127.0.0.1:1234/git/ssb22inc/New-skills-")).toBe("ssb22inc/New-skills-");
     expect(repoFromRemote("")).toBeNull();
+  });
+});
+
+/** X7-01 (GPT-6 Astra, 2026-10-09): only regular files in the protected tree.
+ * MUTATION: X7-01a. */
+describe("protected paths are regular files (X7-01)", () => {
+  const z = (...entries: string[]) => entries.join("\0") + "\0";
+  it("refuses a symlink or a submodule, accepts regular and executable files", () => {
+    expect(checkRegularFilesOnly(z("100644 " + "a".repeat(40) + " 0\tfullburn/a.ts", "100755 " + "b".repeat(40) + " 0\tfullburn/run.sh")).ok).toBe(true);
+    const link = checkRegularFilesOnly(z("100644 " + "a".repeat(40) + " 0\tfullburn/a.ts", "120000 " + "c".repeat(40) + " 0\tfullburn/config/src/caps.ts"));
+    expect(link.ok, "a symlinked cap module counted as a regular file").toBe(false);
+    expect(link.reason).toContain("fullburn/config/src/caps.ts (mode 120000, a symlink)");
+    expect(checkRegularFilesOnly(z("160000 " + "d".repeat(40) + " 0\tfullburn/vendor")).ok, "a submodule counted").toBe(false);
+    // The newline form and a path containing a newline under -z.
+    expect(checkRegularFilesOnly("120000 " + "c".repeat(40) + " 0\tfullburn/x\n").ok).toBe(false);
+    expect(checkRegularFilesOnly(z("120000 " + "c".repeat(40) + " 0\tfullburn/odd\nname")).reason).toContain("odd\nname");
+    expect(checkRegularFilesOnly("").ok).toBe(true);
+  });
+  it("the scope it is run over covers the reports and approvals the hash excludes", () => {
+    expect(REGULAR_FILES_SCOPE).toEqual(expect.arrayContaining(["fullburn/", "fullburn/reports/", "fullburn/APPROVALS/", ".claude/agents/", "DONE.md"]));
+    expect(REGULAR_FILES_SCOPE.some((p: string) => p.startsWith(":!")), "an exclusion survived into the regular-file scope").toBe(false);
   });
 });

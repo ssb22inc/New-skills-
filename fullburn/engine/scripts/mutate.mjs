@@ -12,18 +12,23 @@
  *
  * PATTERN-NOT-FOUND means the code moved and the entry is now stale — it is a
  * failure to investigate, not a pass. */
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import {
   MARKER,
   META_CANARIES,
   applyEntry,
   classifyRun,
   harnessVerdict,
+  mergeShardResults,
   metaCheckVerdict,
+  parseShardFlags,
   recoverInFlight,
+  shardEntries,
+  failedTestNames,
   summaryLine,
   tableEndOf, acquireRunLock, releaseRunLock } from "./mutate-lib.mjs";
 
@@ -327,8 +332,9 @@ const MUTATIONS = [
   ["H-07 typeof guard", "engine/src/grade-registry.ts", 'return typeof actual === "number" && Number.isFinite(actual);', "return Number.isFinite(Number(actual));"],
   ["DT-03 inDomain", "engine/src/grade-registry.ts", "  if (t.domainMin !== undefined && actual < t.domainMin) return false;", "  if (false) return false;"],
   ["H-12 own-property recording", "engine/src/transport-brand.ts", "Object.hasOwn(this.#outputs, this.#currentCase) ? this.#outputs[this.#currentCase] : undefined", "this.#outputs[this.#currentCase]"],
-  ["R3-CP-08 -z diff (class2)", "engine/scripts/class2-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
-  ["R3-CP-08 -z diff (adversary)", "engine/scripts/adversary-gate.mjs", 'diff --name-status -z -M', 'diff --name-status -M'],
+  // Re-targeted 2026-10-09: the diff calls became argument vectors (X7-04).
+  ["R3-CP-08 -z diff (class2)", "engine/scripts/class2-gate.mjs", 'git(["diff", "--name-status", "-z", "-M",', 'git(["diff", "--name-status", "-M",'],
+  ["R3-CP-08 -z diff (adversary)", "engine/scripts/adversary-gate.mjs", '"diff", "--name-status", "-z", "-M",', '"diff", "--name-status", "-M",'],
 
   // ---- r11 findings ----
   // R11-07: the ledger left the instance. Give the production meter its own
@@ -1109,7 +1115,7 @@ const MUTATIONS = [
     "    if (provenance === null) {",
     "    if (false) {"],
   ["XB-02 a candidate map is served only through recorded outputs", "engine/src/gateway.ts",
-    "    if (provenance === \"candidate\" && !isRecordedTransport(deps.transport)) {",
+    "    if (provenance === \"candidate\" && !isRecordedTransport(deps.transport) && !isLiveEvalTransport(deps.transport)) {",
     "    if (false) {"],
   ["XB-03 RecordedTransport is final", "engine/src/transport-brand.ts",
     "    if (new.target !== RecordedTransport) throw new TypeError(",
@@ -1183,9 +1189,11 @@ const MUTATIONS = [
   ["VC-05 an unchanged re-issue is a failed rotation", "engine/src/vault-crypto.ts",
     "        if (typeof next !== \"string\" || next.length === 0 || next === current) {\n          failed.push(name);",
     "        if (typeof next !== \"string\") {\n          failed.push(name);"],
+  // Re-targeted 2026-10-09 (X7-07): the quarantine moved from the failure
+  // branch to before the provider is called; the entry follows it.
   ["VC-06 a failed breach re-issue quarantines the secret", "engine/src/vault-crypto.ts",
-    "      await this.#write(clientId, name, \"\", true);\n      throw new VaultError",
-    "      throw new VaultError"],
+    "    const quarantine = await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, \"\", true);",
+    "    const quarantine = await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, current, false);"],
   ["VC-07 re-key re-seals records under an old KEK", "engine/src/vault-crypto.ts",
     "      if (!loaded || loaded.sealed.kek === this.#current.id) continue;",
     "      if (!loaded || true) continue;"],
@@ -1223,7 +1231,7 @@ const MUTATIONS = [
   ["R9-01 the committed r9 report is pinned, not blocking", "engine/scripts/gate-lib.mjs",
     "  [\"ADVERSARY_REPORT_phase0.r9.md\", \"149d4541\"],",
     ""],
-  ["AR-01 C2 needs GPT Astra's PASS", "engine/scripts/done-lib.mjs",
+  ["AR-01 C2 needs the cross-family reviewer's PASS", "engine/scripts/done-lib.mjs",
     "  if (!crossFamily || crossFamily.ok !== true) {",
     "  if (!crossFamily) {"],
   // ---- 2026-10-06: the GPT Astra reviewer's route through the Law 11 scan (L54) ----
@@ -1263,7 +1271,129 @@ const MUTATIONS = [
     "    const a = list.length === 0 ? null : list.find((x) => !x) ?? null;"],
   ["X5-03b the class-2 CLI reads each approval's GitHub record", "engine/scripts/class2-gate.mjs",
     "    d.auth.push(await fetchCommitAuth({",
-    "    d.auth.push({ verified: true, authorLogin: process.env.FULLBURN_MAINTAINER }); void ({"],
+    "    d.auth.push({ verified: true, authorLogin: process.env.FULLBURN_MAINTAINER, committerLogin: process.env.FULLBURN_MAINTAINER }); void ({"],
+  // ---- X7-10/11: Langfuse acknowledgement and remote id namespace (2026-10-09) ----
+  ["X7-10a an acknowledgement must name each event exactly once", "engine/src/langfuse-sink.ts",
+    "    if (acked.length !== sent.length || !sent.every((id) => acked.filter((a) => a === id).length === 1)) {",
+    "    if (acked.length > 0 && !sent.some((id) => acked.includes(id))) {"],
+  ["X7-10b a non-207 success is read, not accepted unread", "engine/src/langfuse-sink.ts",
+    "      ack = JSON.parse(text) as { successes?: unknown; errors?: unknown };",
+    "      ack = status === 207 ? (JSON.parse(text) as { successes?: unknown; errors?: unknown }) : { successes: batch.map((e) => ({ id: e.id })), errors: [] };"],
+  ["X7-11a the remote trace id carries the client", "engine/src/langfuse-sink.ts",
+    "    const remoteTraceId = `${encodeURIComponent(event.clientId)}/${encodeURIComponent(event.traceId)}`;",
+    "    const remoteTraceId = event.traceId;"],
+  ["X7-11b each decision has its own remote id", "engine/src/langfuse-sink.ts",
+    "        body: {\n          id: this.#newId(),\n          traceId: remoteTraceId,",
+    "        body: {\n          id: remoteTraceId,\n          traceId: remoteTraceId,"],
+  // ---- X7-06/07/08: vault write-end generation, quarantine first, exact completion (2026-10-09) ----
+  ["X7-06a a write invalidates an unlock when it ENDS", "engine/src/vault-crypto.ts",
+    "kept winning`);\n    } finally {\n      this.#generation += 1;",
+    "kept winning`);\n    } finally {\n      void 0;"],
+  ["X7-06b an exact replacement invalidates an unlock when it ends", "engine/src/vault-crypto.ts",
+    "      // X7-06: an unlock overlapping the end of this write refuses too.\n      this.#generation += 1;",
+    "      void 0;"],
+  ["X7-07a a breach rotation drops the cached value before its first await", "engine/src/vault-crypto.ts",
+    "    if (typeof revoke !== \"function\") throw new VaultError(\"revokeAndRotate requires a provider revoker\");\n    if (this.#unlockedClient === clientId) this.#plain.delete(name);",
+    "    if (typeof revoke !== \"function\") throw new VaultError(\"revokeAndRotate requires a provider revoker\");"],
+  ["X7-08a a breach rotation completes only over its own quarantine", "engine/src/vault-crypto.ts",
+    "    if ((await this.#replaceExactly(clientId, name, quarantine, qVersion, next)) === null) {",
+    "    if ((await this.put(clientId, name, next)) === null) {"],
+  ["VK-44 vault-crypto.ts — changed while its breach rotation began", "engine/src/vault-crypto.ts",
+    "      throw new VaultError(`secret \"${name}\" changed while its breach rotation began",
+    "      void new VaultError(`secret \"${name}\" changed while its breach rotation began"],
+  ["VK-45 vault-crypto.ts — written by something else during its breach rotation", "engine/src/vault-crypto.ts",
+    "      throw new VaultError(`secret \"${name}\" was written by something else during its breach rotation",
+    "      void new VaultError(`secret \"${name}\" was written by something else during its breach rotation"],
+  // ---- X7-05: no uncleared input in an early refusal's trace (2026-10-09) ----
+  ["X7-05a an early refusal's trace withholds the input", "engine/src/gateway.ts",
+    "        input: redactionLoaded ? redactValue(input, secrets) : WITHHELD_BEFORE_REDACTION,",
+    "        input: redactValue(input, secrets),"],
+  ["X7-05b the redaction set starts unloaded", "engine/src/gateway.ts",
+    "  let redactionLoaded = false;",
+    "  let redactionLoaded = true;"],
+  // ---- the reviewer is GPT-6 Luna (human instruction 2026-10-09, L63) ----
+  ["XF-LUNA the reviewer pin is GPT-6 Luna", "engine/scripts/cross-family-lib.mjs",
+    "export const REVIEWER_MODEL = \"openai/gpt-6-luna\";",
+    "export const REVIEWER_MODEL = \"openai/gpt-6-astra\";"],
+  // ---- sharded harness runs (2026-10-09) ----
+  ["MS-01 a shard's entries are its residue class", "engine/scripts/mutate-lib.mjs",
+    "  return entries.filter((_, k) => k % n === i);",
+    "  return entries.filter((_, k) => k % n === 0);"],
+  ["MS-02 a shard's exit code must be 0 or 1", "engine/scripts/mutate-lib.mjs",
+    "    if (r?.code !== 0 && r?.code !== 1) return",
+    "    if (false) return"],
+  ["MS-03 every shard passes every meta-canary", "engine/scripts/mutate-lib.mjs",
+    "    if (missing.length > 0) return",
+    "    if (false) return"],
+  ["MS-04 a shard reports exactly the entries it owns", "engine/scripts/mutate-lib.mjs",
+    "    if (Number(summary[1]) !== own || entryLines.length !== own) {",
+    "    if (false) {"],
+  ["MS-05 the shards together cover the table", "engine/scripts/mutate-lib.mjs",
+    "  if (reported !== total) return",
+    "  if (false) return"],
+  ["MS-06 a shard with no summary voids the run", "engine/scripts/mutate-lib.mjs",
+    "    if (!summary) return { ok: false, reason: `${tag} printed no summary",
+    "    if (false) return { ok: false, reason: `${tag} printed no summary"],
+  // ---- X7-09: recorded evidence serves recorded outputs only; a live eval path (2026-10-09) ----
+  ["X7-09a a recorded-evidence map is not served through a live transport", "engine/src/gateway.ts",
+    "    if (provenance === \"servable\" && !isRecordedTransport(deps.transport) && !productionServable(deps.bindings)) {",
+    "    if (false) {"],
+  ["X7-09b production binding needs live evidence", "engine/src/live-eval.ts",
+    "  if (!LIVE_ATTESTED.has(evalResult)) {",
+    "  if (false) {"],
+  ["X7-09c a production binding's base must be production-servable", "engine/src/live-eval.ts",
+    "  if (!productionServable(bindings)) {",
+    "  if (false) {"],
+  ["X7-09d a live eval runs through the production adapter itself", "engine/src/live-eval.ts",
+    "  if (typeof transport !== \"object\" || transport === null || Object.getPrototypeOf(transport) !== AiGatewayHttpTransport.prototype) {",
+    "  if (typeof transport !== \"object\" || transport === null) {"],
+  ["X7-09e a bindRoleLive result is production-servable", "engine/src/live-eval.ts",
+    "  PRODUCTION.add(next);\n  return next;",
+    "  return next;"],
+  ["X7-09f a live run's attestation is recorded as live", "engine/src/live-eval.ts",
+    "  LIVE_ATTESTED.add(result.attestation);",
+    "  void result.attestation;"],
+  ["X7-09g runEval serves recorded outputs only", "engine/src/eval-harness.ts",
+    "  if (!isRecordedTransport(recorded)) throw new Error(",
+    "  if (!isRecordedTransport(recorded)) void new Error("],
+  ["EH-01 eval-harness.ts — unknown role", "engine/src/eval-harness.ts",
+    "  if (card === undefined) throw new Error(`unknown role \"${role}\"`);",
+    "  if (card === undefined) void new Error(`unknown role \"${role}\"`);"],
+  ["EH-02 eval-harness.ts — empty golden set", "engine/src/eval-harness.ts",
+    "  if (goldenSet.length === 0) throw new Error(\"empty golden set",
+    "  if (goldenSet.length === 0) void new Error(\"empty golden set"],
+  ["EH-03 eval-harness.ts — golden set ids do not match the role card", "engine/src/eval-harness.ts",
+    "  if (supplied.length !== expected.length || expected.some((id, i) => id !== supplied[i])) {\n    throw new Error(",
+    "  if (supplied.length !== expected.length || expected.some((id, i) => id !== supplied[i])) {\n    void new Error("],
+  ["EH-04 eval-harness.ts — a golden case must assert every required field", "engine/src/eval-harness.ts",
+    "      throw new Error(\n        `golden case \"${gcase.id}\"",
+    "      void new Error(\n        `golden case \"${gcase.id}\""],
+  // ---- X7-01: only regular files in the protected tree (2026-10-09) ----
+  ["X7-01a a link or submodule is not a regular file", "engine/scripts/gate-lib.mjs",
+    "    if (m[1] !== \"100644\" && m[1] !== \"100755\") bad.push(",
+    "    if (false) bad.push("],
+  ["X7-01b the adversary gate refuses links in the protected tree", "engine/scripts/adversary-gate.mjs",
+    "if (!regular.ok) {\n  console.error(`ADVERSARY GATE FAIL: ${regular.reason}`);",
+    "if (false) {\n  console.error(`ADVERSARY GATE FAIL: ${regular.reason}`);"],
+  ["X7-01c the class-2 gate refuses links in the protected tree", "engine/scripts/class2-gate.mjs",
+    "if (!regular.ok) {\n  console.error(`CLASS-2 GATE FAIL: ${regular.reason}`);",
+    "if (false) {\n  console.error(`CLASS-2 GATE FAIL: ${regular.reason}`);"],
+  ["X7-01d done refuses a tree holding a link", "engine/scripts/done-lib.mjs",
+    "  if (regularFiles?.ok !== true) out.push(",
+    "  if (false) out.push("],
+  ["X7-01e the cross-family read refuses a target holding a link", "engine/scripts/cross-family-read.mjs",
+    "  if (!regular.ok) {\n    console.error(`CROSS-FAMILY READ: REFUSED — ${regular.reason}`);",
+    "  if (false) {\n    console.error(`CROSS-FAMILY READ: REFUSED — ${regular.reason}`);"],
+  ["X7-01f the regular-file scope includes reports and approvals", "engine/scripts/gate-lib.mjs",
+    "!p.startsWith(\":!\")), \"fullburn/reports/\", \"fullburn/APPROVALS/\"]);",
+    "!p.startsWith(\":!\"))]);"],
+  // ---- X7-02: the signer is the committer (2026-10-09) ----
+  ["X7-02a an approval must be signed by the maintainer, not only name it", "engine/scripts/gate-lib.mjs",
+    "    const s = a !== null ? null : list.find((x) => !x || typeof x.committerLogin !== \"string\" || (x.committerLogin.toLowerCase() !== want && x.committerLogin !== \"web-flow\")) ?? null;",
+    "    const s = null;"],
+  ["X7-02c the GitHub reader returns the signing account", "engine/scripts/github-auth.mjs",
+    "    committerLogin: typeof body?.committer?.login === \"string\" ? body.committer.login : null,",
+    "    committerLogin: typeof body?.author?.login === \"string\" ? body.author.login : null,"],
   ["X5-03c no maintainer, no authenticated approval", "engine/scripts/gate-lib.mjs",
     "  if (typeof maintainer !== \"string\" || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(maintainer)) {",
     "  if (false) {"],
@@ -1304,8 +1434,8 @@ const MUTATIONS = [
     "    if (target.origin !== this.#base.origin || !target.pathname.startsWith(this.#base.pathname)) {",
     "    if (false) {"],
   ["X5-12d a rejected Langfuse event fails the trace", "engine/src/langfuse-sink.ts",
-    "      if (!Array.isArray(errors) || errors.length > 0) throw",
-    "      if (false) throw"],
+    "    if (!Array.isArray(errors) || errors.length > 0) throw",
+    "    if (false) throw"],
   ["X5-12e a Langfuse non-2xx fails the trace", "engine/src/langfuse-sink.ts",
     "    if (status < 200 || status > 299) throw new LangfuseSinkError",
     "    if (false) throw new LangfuseSinkError"],
@@ -1323,16 +1453,18 @@ const MUTATIONS = [
     "          for (const v of [raw, value]) {",
     "          for (const v of [value]) {"],
   ["X6-07 a scheduled rotation writes only over the record it decided on", "engine/src/vault-crypto.ts",
-    "        if (!(await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, next))) {",
-    "        await this.put(clientId, name, next); if (false) {"],
+    "        if ((await this.#replaceExactly(clientId, name, loaded.raw, loaded.sealed.v, next)) === null) {",
+    "        if ((await this.put(clientId, name, next)) === null) {"],
   ["X6-08 every write invalidates an in-flight unlock", "engine/src/vault-crypto.ts",
-    "    this.#generation += 1;\n    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);",
-    "    if (quarantined && this.#unlockedClient === clientId) this.#plain.delete(name);"],
+    // Re-targeted 2026-10-09: #write no longer quarantines (X7-07); the
+    // start-of-write invalidation lives where quarantines are written.
+    "    // The cached plaintext is dropped first, before any await.\n    this.#generation += 1;",
+    "    // The cached plaintext is dropped first, before any await."],
   ["X6-03 every commit touching an approval is authenticated (CLI)", "engine/scripts/class2-gate.mjs",
-    "  const touchedIn = git(`log --format=%H ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).split(\"\\n\").map((l) => l.trim()).filter(Boolean);",
-    "  const touchedIn = git(`log --diff-filter=A --format=%H -1 ${JSON.stringify(`${baseRef}..HEAD`)} -- ${JSON.stringify(d.path)}`).split(\"\\n\").map((l) => l.trim()).filter(Boolean);"],
+    "  const touchedIn = git([\"log\", \"--format=%H\", `${baseRef}..HEAD`, \"--\", d.path])",
+    "  const touchedIn = git([\"log\", \"--diff-filter=A\", \"-1\", \"--format=%H\", `${baseRef}..HEAD`, \"--\", d.path])"],
   ["X6-03b every commit record must pass (decision)", "engine/scripts/gate-lib.mjs",
-    "    if (list.length === 0 || a !== null || list.some((x) => !x)) {",
+    "    if (list.length === 0 || a !== null || s !== null || list.some((x) => !x)) {",
     "    if (list.length === 0) {"],
   ["X6-12 only a chain-verified attestation counts", "engine/scripts/gate-lib.mjs",
     "      a && a.signatureVerified === true && a.chainVerified === true &&",
@@ -1411,11 +1543,14 @@ const MUTATIONS = [
     "    if (status < 200 || status > 299) throw new LangfuseSinkError(`Langfuse ingestion returned HTTP ${status}`);",
     "    if (status < 200 || status > 299) void new LangfuseSinkError(`Langfuse ingestion returned HTTP ${status}`);"],
   ["LF-22 langfuse-sink.ts — Langfuse ingestion returned an unreadable multi-st", "engine/src/langfuse-sink.ts",
-    "        throw new LangfuseSinkError(\"Langfuse ingestion returned an unreadable multi-status body\");",
-    "        void new LangfuseSinkError(\"Langfuse ingestion returned an unreadable multi-status body\");"],
+    "      throw new LangfuseSinkError(\"Langfuse ingestion returned an unreadable multi-status body\");",
+    "      void new LangfuseSinkError(\"Langfuse ingestion returned an unreadable multi-status body\");"],
   ["LF-23 langfuse-sink.ts — Langfuse ingestion rejected the trace event);", "engine/src/langfuse-sink.ts",
-    "      if (!Array.isArray(errors) || errors.length > 0) throw new LangfuseSinkError(\"Langfuse ingestion rejected the trace event\");",
-    "      if (!Array.isArray(errors) || errors.length > 0) void new LangfuseSinkError(\"Langfuse ingestion rejected the trace event\");"],
+    "    if (!Array.isArray(errors) || errors.length > 0) throw new LangfuseSinkError(\"Langfuse ingestion rejected the trace event\");",
+    "    if (!Array.isArray(errors) || errors.length > 0) void new LangfuseSinkError(\"Langfuse ingestion rejected the trace event\");"],
+  ["LF-24 langfuse-sink.ts — did not acknowledge exactly the events sent", "engine/src/langfuse-sink.ts",
+    "      throw new LangfuseSinkError(\"Langfuse ingestion did not acknowledge exactly the events sent\");",
+    "      void new LangfuseSinkError(\"Langfuse ingestion did not acknowledge exactly the events sent\");"],
   ["VK-24 vault-crypto.ts — KEK requires an id);", "engine/src/vault-crypto.ts",
     "  if (!id) throw new VaultError(\"KEK requires an id\");",
     "  if (!id) void new VaultError(\"KEK requires an id\");"],
@@ -1508,6 +1643,10 @@ const MUTATIONS = [
   ["XC-03 the verified tree is Fullburn's workflows only", "engine/scripts/gate-lib.mjs",
     "  \".github/CODEOWNERS\",\n  \":(glob).github/workflows/fullburn-*\",",
     "  \".github/\","],
+  // ---- x7 (GPT-6 Astra, 2026-10-09) ----
+  ["X7-04 no pull-request path reaches a shell", "engine/scripts/class2-gate.mjs",
+    "const git = (args, encoding = \"utf8\") => execFileSync(\"git\", [\"-C\", repoRoot, ...args], { encoding });",
+    "const git = (args, encoding = \"utf8\") => execFileSync(\"/bin/sh\", [\"-c\", `git -C \"${repoRoot}\" ${args.map((x) => `\"${x}\"`).join(\" \")}`], { encoding });"],
 ];
 
 // ── RUNS ONLY AS A CLI, NEVER ON IMPORT ─────────────────────────────────────
@@ -1520,6 +1659,12 @@ const MUTATIONS = [
 // and carries the same guard; the file that enforces the acceptance bar was the
 // one place it had not been applied.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const flags = parseShardFlags(process.argv.slice(2));
+  if (flags.error) {
+    console.error(`MUTATION HARNESS REFUSED: ${flags.error}`);
+    process.exit(2);
+  }
+  if (flags.mode === "parent") await runSharded(flags.shards);
   /** Runs the suite ASYNCHRONOUSLY.
    *
    * It used `execSync`, which blocks the event loop for the whole run — so the
@@ -1555,12 +1700,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       child.stderr.on("data", (d) => (err += d));
       child.on("close", (code) => {
         if (code === 0) return resolveRun(null);
+        lastFailed = failedTestNames(`${out}\n${err}`);
         resolveRun(summaryLine(out, err));
       });
       child.on("error", () => resolveRun("failed to start"));
       current = child;
     });
   let current = null;
+  let lastFailed = [];
 
   // A marker here means the PREVIOUS run died mid-mutation. Repair before
   // measuring anything, and say so — a silent repair would hide the fact that a
@@ -1668,6 +1815,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const got = classifyRun(failure);
     metaResults.push({ name: c.name, expect: c.expect, got });
     console.log(`  ${got === c.expect ? "ok  " : "FAIL"} ${c.name}  |  got ${got}${failure ? `  (${failure})` : ""}`);
+    if (got !== c.expect && lastFailed.length > 0) console.log(`       failing: ${lastFailed.join(" ; ")}`);
   }
   const meta = metaCheckVerdict(metaResults);
   if (!meta.ok) {
@@ -1684,7 +1832,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // print "N mutations: N caught" for a run that stopped a third of the way in
   // (adversary finding R10-07b). An interrupted run has no result, and the
   // handler saying so and exiting 130 is the whole of the correct behaviour.
+  // A CHILD of a sharded run measures only the entries it owns (`--shard i/N`);
+  // its worktree is its own, so its marker, lock and restore are too.
+  const owned = new Set(flags.mode === "child" ? shardEntries(MUTATIONS, flags.shard, flags.shards) : MUTATIONS);
+  let k = -1;
   for (const [name, file, from, to] of MUTATIONS) {
+    k += 1;
+    if (!owned.has(MUTATIONS[k])) continue;
     const { found, failure } = await measure(file, from, to);
     if (!found) {
       console.log(`PATTERN-NOT-FOUND  ${name}  (${file})`);
@@ -1701,7 +1855,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.log(`CAUGHT             ${name}  |  ${failure}`);
     }
   }
-  console.log(`\n${MUTATIONS.length} mutations: ${MUTATIONS.length - survived - notFound} caught, ${survived} survived, ${notFound} not found`);
+  console.log(`\n${owned.size} mutations: ${owned.size - survived - notFound} caught, ${survived} survived, ${notFound} not found`);
 
   // EXIT NON-ZERO, so this can be a CI stage rather than a ritual.
   const verdict = harnessVerdict(survived, notFound);
@@ -1709,4 +1863,140 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.error(`\n${verdict.reason}`);
     process.exit(1);
   }
+}
+
+/** THE SHARDED PARENT. Never mutates anything itself: it takes the run lock
+ * in this checkout, refuses an uncommitted tree (the shards measure HEAD),
+ * builds one git worktree per shard with a node_modules whose workspace links
+ * point INTO that worktree (the shared ones point at this checkout, where a
+ * shard's mutation would be invisible), runs `--shard i/N` in each, and hands
+ * every output to `mergeShardResults`. Any signal kills every shard's process
+ * group — each restores its own worktree — and the worktrees are removed on
+ * every exit. */
+async function runSharded(n) {
+  const lock = acquireRunLock();
+  if (!lock.ok) {
+    console.error(`MUTATION HARNESS REFUSED: ${lock.reason} — two harnesses cannot share a tree (X3-03)`);
+    process.exit(2);
+  }
+  // ASYNC git, never a blocking process call: the signal handlers below must
+  // be able to run at any moment (R9-03 — the invariant suite enforces it).
+  const git = (args) =>
+    new Promise((ok, fail) => {
+      const c = spawn("git", ["-C", REPO_ROOT, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      c.stdout.on("data", (d) => (out += d));
+      c.on("close", (code) => (code === 0 ? ok(out) : fail(new Error(`git ${args[0]} exited ${code}`))));
+      c.on("error", fail);
+    });
+  process.on("exit", () => releaseRunLock());
+  // A previous sharded run that died leaves worktree registrations behind.
+  await git(["worktree", "prune"]);
+  if ((await git(["status", "--porcelain"])).trim() !== "") {
+    console.error("MUTATION HARNESS REFUSED: a sharded run measures HEAD, and the tree has uncommitted changes — commit them or run serially");
+    process.exit(2);
+  }
+  const head = (await git(["rev-parse", "HEAD"])).trim();
+  const base = join(tmpdir(), `fullburn-mutate-${process.pid}`);
+  const trees = Array.from({ length: n }, (_, i) => join(base, `shard-${i}`));
+  const children = [];
+  /** SIGTERM, NOT SIGKILL, to each shard harness: its own handler kills its
+   * suite's process group and restores its worktree. A SIGKILL here orphaned
+   * every shard's vitest workers (measured on the first smoke run). */
+  const killShards = (sig = "SIGTERM") => {
+    for (const c of children) {
+      if (c.exitCode !== null || c.signalCode !== null) continue;
+      try {
+        process.kill(c.pid, sig);
+      } catch {
+        /* already gone */
+      }
+    }
+  };
+  const shardsGone = () => children.every((c) => c.exitCode !== null || c.signalCode !== null);
+  let interrupted = false;
+  const removeTrees = async () => {
+    for (const t of trees) await git(["worktree", "remove", "--force", t]).catch(() => undefined);
+    rmSync(base, { recursive: true, force: true });
+    await git(["worktree", "prune"]).catch(() => undefined);
+  };
+  // On a crash the worktrees stay in the temp directory; the prune above
+  // drops their registrations on the next run. The checkout is never touched.
+  process.on("exit", () => killShards());
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"]) {
+    process.on(sig, () => {
+      if (interrupted) return;
+      interrupted = true;
+      killShards();
+      console.error(`\nMUTATION HARNESS INTERRUPTED by ${sig} — shards stopped, result is void`);
+      const stop = async () => {
+        // Up to 15 s for every shard to stop its own suite, then force.
+        for (let i = 0; i < 150 && !shardsGone(); i++) await new Promise((r) => setTimeout(r, 100));
+        killShards("SIGKILL");
+        await removeTrees();
+      };
+      void stop().finally(() => process.exit(130));
+    });
+  }
+  mkdirSync(base, { recursive: true });
+  const shared = join(ROOT, "node_modules");
+  for (const t of trees) {
+    await git(["worktree", "add", "--detach", t, head]);
+    const nm = join(t, "fullburn", "node_modules");
+    mkdirSync(join(nm, "@fullburn"), { recursive: true });
+    for (const e of readdirSync(shared)) {
+      if (e !== "@fullburn") symlinkSync(join(shared, e), join(nm, e));
+    }
+    for (const pkg of readdirSync(join(shared, "@fullburn"))) symlinkSync(join(t, "fullburn", pkg), join(nm, "@fullburn", pkg));
+  }
+  console.log(`SHARDED RUN — ${n} shards over HEAD ${head.slice(0, 12)}, ${MUTATIONS.length} entries\n`);
+  const runs = await Promise.all(
+    trees.map(
+      (t, i) =>
+        new Promise((done) => {
+          const child = spawn(process.execPath, [join(t, "fullburn/engine/scripts/mutate.mjs"), "--shard", `${i}/${n}`], {
+            cwd: join(t, "fullburn"),
+            stdio: ["ignore", "pipe", "pipe"],
+            detached: true,
+          });
+          children.push(child);
+          let out = "";
+          child.stdout.on("data", (d) => {
+            out += d;
+            // Progress only, prefixed so no parser reads it as a result line.
+            for (const l of String(d).split("\n")) if (/^(CAUGHT|\*\*\* SURVIVED|PATTERN-NOT-FOUND)/.test(l)) console.error(`[${i}] ${l}`);
+          });
+          child.stderr.on("data", (d) => (out += d));
+          child.on("close", (code) => done({ code, out, owns: shardEntries(MUTATIONS, i, n).length }));
+          child.on("error", () => done({ code: -1, out, owns: shardEntries(MUTATIONS, i, n).length }));
+        }),
+    ),
+  );
+  // An interrupt owns the exit from here: no merge, no verdict.
+  if (interrupted) await new Promise(() => {});
+  await removeTrees();
+  const merged = mergeShardResults(runs, MUTATIONS.length);
+  if (!merged.ok) {
+    // Each shard's whole output is kept, outside the removed worktrees, so a
+    // void run can be diagnosed rather than re-run blind.
+    const logs = runs.map((r, i) => {
+      const f = join(tmpdir(), `fullburn-mutate-${process.pid}-shard-${i}.log`);
+      writeFileSync(f, r.out);
+      return f;
+    });
+    const failing = runs.flatMap((r, i) => [...String(r.out).matchAll(/^\s+failing: (.*)$/gm)].map((m) => `shard ${i}: ${m[1]}`));
+    console.error(`META-CHECK FAILED: ${merged.reason}${failing.length ? ` Failing tests — ${failing.join(" | ")}.` : ""} Shard logs: ${logs.join(", ")}`);
+    process.exit(1);
+  }
+  console.log(`META-CHECK — every one of ${n} shards passed its own meta-check\n`);
+  for (const c of META_CANARIES) console.log(`  ok   ${c.name}`);
+  console.log("");
+  for (const l of merged.lines) console.log(l);
+  console.log(`\n${merged.total} mutations: ${merged.caught} caught, ${merged.survived} survived, ${merged.notFound} not found`);
+  const verdict = harnessVerdict(merged.survived, merged.notFound);
+  if (!verdict.ok) {
+    console.error(`\n${verdict.reason}`);
+    process.exit(1);
+  }
+  process.exit(0);
 }

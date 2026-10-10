@@ -26,7 +26,7 @@ import {
   ENGINE_REQUIREMENTS,
   PHASE0_REQUIREMENTS,
   automatedGateAck,
-  astraRoundCondition,
+  reviewerRoundCondition,
   canaryIsStale,
   class2Condition,
   isNonClaudeFamily,
@@ -44,7 +44,7 @@ import {
   splitReportsByFamily,
   verdict,
 } from "./done-lib.mjs";
-import { REVIEW_SIGNER_WORKFLOW, TRUSTED_REVIEW_REF, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { REGULAR_FILES_SCOPE, REVIEW_SIGNER_WORKFLOW, TRUSTED_REVIEW_REF, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkRegularFilesOnly, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
 import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "./github-auth.mjs";
 import { attestationsFromApi, attestationsFromGhVerify } from "./attestation.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
@@ -151,7 +151,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
     // ── PRE-FLIGHT ──────────────────────────────────────────────────────────
     const porcelain = (await git(["status", "--porcelain"])).out;
-    const refusals = preflightRefusals({ porcelain, markerExists: existsSync(MARKER) });
+    const regularFiles = checkRegularFilesOnly((await git(["ls-files", "-s", "-z", "--", ...REGULAR_FILES_SCOPE])).out);
+    const refusals = preflightRefusals({ porcelain, markerExists: existsSync(MARKER), regularFiles });
     if (refusals.length > 0) {
       console.error("DONE: REFUSED\n  " + refusals.join("\n  "));
       process.exit(2);
@@ -244,8 +245,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
           : { ok: false, reason: `${crossRes.report}: ${prov.reason}` };
         if (!prov.ok) artifact = null;
       }
-      const c2 = astraRoundCondition(crossRes);
-      results.push({ id: "C2", title: "§2.1.2 (amended 2026-10-06) adversary round by GPT Astra PASS against this tree", status: c2.status, command: "astraRoundCondition(C3)", observed: c2.observed });
+      const c2 = reviewerRoundCondition(crossRes);
+      results.push({ id: "C2", title: "§2.1.2 (amended 2026-10-06, reviewer GPT-6 Luna since 2026-10-09) adversary round PASS against this tree", status: c2.status, command: "reviewerRoundCondition(C3)", observed: c2.observed });
       results.push({ id: "C3", title: "§2.1.3 cross-family read PASS against the SAME tree, artifact committed", status: crossRes.ok ? "PASS" : "FAIL", command: `checkAdversaryReport(non-Claude reports only, tree ${tree.slice(0, 12)})`, observed: crossRes.reason });
 
       // 4 — zero open findings
@@ -261,7 +262,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         results.push({ id: "C5", title: "§2.1.5 mutation harness: 0 survived, 0 stale, meta-check passed in the same run", status: "FAIL", command: "npm run mutate", observed: "NOT MEASURED — skipped by --skip-mutate; this flag can never make C5 pass" });
       } else {
         console.log("running the mutation harness (this takes ~50 minutes)…");
-        const r = await run("node", [`${ROOT}/engine/scripts/mutate.mjs`]);
+        // SHARDED (human decision 2026-10-09): ~480 entries at ~60 s each is
+        // ~8 h serially. Each shard runs the full meta-check in its own
+        // worktree; mergeShardResults voids the run if any shard is incomplete.
+        const shards = /^[1-9]$/.test(process.env.FULLBURN_MUTATE_SHARDS ?? "") ? process.env.FULLBURN_MUTATE_SHARDS : "3";
+        const r = await run("node", [`${ROOT}/engine/scripts/mutate.mjs`, "--shards", shards]);
         const mc = mutateCondition(parseMutate(r.out + r.err), r.code);
         results.push({ id: "C5", title: "§2.1.5 mutation harness: 0 survived, 0 stale, meta-check passed in the same run", status: mc.status, command: "node engine/scripts/mutate.mjs", observed: mc.observed });
       }

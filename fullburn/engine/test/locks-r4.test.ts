@@ -360,7 +360,7 @@ describe("control plane — the verdict a human sees is the verdict the gate rea
       "````",
       "Nineteen severity-1 findings remain open. Do not merge.",
     ]);
-    const passReport = bind(["# earlier", "Verdict: PASS", `verified-tree: ${TREE}`, "Reviewer-family: OpenAI (gpt-6-astra)"]);
+    const passReport = bind(["# earlier", "Verdict: PASS", `verified-tree: ${TREE}`, "Reviewer-family: OpenAI (gpt-6-luna)"]);
     expect(parseVerdict(failReport)?.token).toBe("FAIL");
     const res = checkAdversaryReport({
       phase: "0",
@@ -416,7 +416,7 @@ describe("control plane — the verdict a human sees is the verdict the gate rea
     });
     expect(res.ok).toBe(false);
     // And the header form every real report already uses still works.
-    const real = bind(["# ADVERSARY REPORT phase0", "Verdict: PASS", "", `verified-tree: ${TREE}`, "Reviewer-family: OpenAI (gpt-6-astra)"]);
+    const real = bind(["# ADVERSARY REPORT phase0", "Verdict: PASS", "", `verified-tree: ${TREE}`, "Reviewer-family: OpenAI (gpt-6-luna)"]);
     expect(parseVerdict(real)?.token).toBe("PASS");
     expect(
       checkAdversaryReport({

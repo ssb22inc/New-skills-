@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, astraRoundCondition, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, reviewerRoundCondition, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -21,6 +21,9 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
   /** MUTATION: stop refusing a dirty tree, or a marker. */
   it("refuses a dirty tree and a mid-harness marker; accepts a clean one", () => {
     expect(preflightRefusals({ porcelain: "", markerExists: false })).toEqual([]);
+    // X7-01: a link in the protected tree refuses the run, naming it.
+    expect(preflightRefusals({ porcelain: "", markerExists: false, regularFiles: { ok: false, reason: "fullburn/x (mode 120000, a symlink)" } })).toEqual(["fullburn/x (mode 120000, a symlink)"]);
+    expect(preflightRefusals({ porcelain: "", markerExists: false, regularFiles: null as never }).length, "an unknown regular-file result was read as clean").toBe(1);
     expect(preflightRefusals({ porcelain: "?? x.ts\n", markerExists: false }).join(" ")).toMatch(/dirty/);
     expect(preflightRefusals({ porcelain: " M fullburn/PHASE\n", markerExists: false }).join(" ")).toMatch(/dirty/);
     expect(preflightRefusals({ porcelain: "", markerExists: true }).join(" ")).toMatch(/marker/);
@@ -130,7 +133,7 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
   it("same-family and cross-family reports are two disjoint populations", () => {
     const r9 = { name: "ADVERSARY_REPORT_phase0.r9.md", content: "# r9\nVerdict: PASS\nverified-tree: abc\n" };
     const claude = { name: "ADVERSARY_REPORT_phase0.r15.md", content: "# r15\nVerdict: PASS\nverified-tree: abc\n\nReviewer-family: Claude (same family as the builder)\n" };
-    const x1 = { name: "ADVERSARY_REPORT_phase0.x1.md", content: "# x1\nVerdict: PASS\nverified-tree: abc\n\nReviewer-family: OpenAI (gpt-6-astra via OpenRouter)\n" };
+    const x1 = { name: "ADVERSARY_REPORT_phase0.x1.md", content: "# x1\nVerdict: PASS\nverified-tree: abc\n\nReviewer-family: OpenAI (gpt-6-luna via OpenRouter)\n" };
     const { same, cross } = splitReportsByFamily([r9, claude, x1]);
     expect(same.map((r: { name: string }) => r.name)).toEqual([r9.name, claude.name]);
     expect(cross.map((r: { name: string }) => r.name)).toEqual([x1.name]);
@@ -169,11 +172,11 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
   /** MUTATION: let C2 pass without the Astra read passing. Instruction of
    * 2026-10-06 (L53): every adversary round is GPT Astra's. */
   it("C2 passes only on the GPT Astra adversary's PASS at this tree", () => {
-    expect(astraRoundCondition({ ok: true, reason: "r" }).status).toBe("PASS");
-    expect(astraRoundCondition({ ok: false, reason: "stale" }).status, "a failing Astra read passed C2").toBe("FAIL");
-    expect(astraRoundCondition({ ok: false, reason: "stale" }).observed).toContain("stale");
-    expect(astraRoundCondition(undefined).status, "no Astra read passed C2").toBe("FAIL");
-    expect(astraRoundCondition({ reason: "unmeasured" }).status).toBe("FAIL");
+    expect(reviewerRoundCondition({ ok: true, reason: "r" }).status).toBe("PASS");
+    expect(reviewerRoundCondition({ ok: false, reason: "stale" }).status, "a failing Astra read passed C2").toBe("FAIL");
+    expect(reviewerRoundCondition({ ok: false, reason: "stale" }).observed).toContain("stale");
+    expect(reviewerRoundCondition(undefined).status, "no Astra read passed C2").toBe("FAIL");
+    expect(reviewerRoundCondition({ reason: "unmeasured" }).status).toBe("FAIL");
   });
 
   /** MUTATION: grant the automated ack without a C3 PASS. Ruling 2026-10-06
@@ -232,5 +235,19 @@ describe("done-lib — the completion checker cannot be talked into a verdict", 
     expect(passing).toContain(completionSentence("phase", "abc123", "reports/x.md"));
     expect(reportPath("phase", "0", "abcdef1234567890")).toBe("reports/DONE_phase0_abcdef123456.md");
     expect(reportPath("engine", "0", "abcdef1234567890")).toBe("reports/DONE_engine_abcdef123456.md");
+  });
+});
+
+/** X7-12 (GPT-6 Astra, 2026-10-09): the vault deliverable described a KV
+ * store while vault-crypto.ts requires compare-and-swap, which KV lacks. The
+ * requirement text and the code's own statement must agree. */
+describe("the vault deliverable names the store the code requires (X7-12)", () => {
+  it("D-vault-live asks for a Durable Object, not KV", async () => {
+    const req = PHASE0_REQUIREMENTS.flatMap((r: { id: string; sub?: { id: string; what: string }[] }) => [r, ...(r.sub ?? [])]).find((r: { id: string }) => r.id === "D-vault-live") as { what: string; why: string } | undefined;
+    expect(req, "D-vault-live is gone").toBeDefined();
+    expect(req!.what).toMatch(/Durable Object/);
+    expect(`${req!.what} ${req!.why}`).not.toMatch(/\bin KV\b|KV namespace/);
+    const { readFileSync } = await import("node:fs");
+    expect(readFileSync(new URL("../src/vault-crypto.ts", import.meta.url), "utf8")).toMatch(/production CipherStore must be a Durable Object/);
   });
 });
