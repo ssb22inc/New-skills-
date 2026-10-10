@@ -1,5 +1,5 @@
 import { deepFreeze } from "./freeze.ts";
-import { SwitchboardError, type FlagStatus } from "./markets.ts";
+import { SwitchboardError, assertActivationEarned, type Activation, type FlagStatus } from "./markets.ts";
 
 /** The Switchboard, channel half (§2.5, §6.1). Launch: Meta on, Google staged
  * (adapter built in Phase 5, live on first baseline beat), all else locked. */
@@ -10,6 +10,8 @@ export interface ChannelEntry {
   readonly writeAdapter: string | null;
   readonly decisionAdversaryRules: string | null;
   readonly fatigueModel: string | null;
+  /** Required when status is "on" (x8 X-03). */
+  readonly activation?: Activation;
 }
 
 export const CHANNELS: Readonly<Record<string, ChannelEntry>> = deepFreeze({
@@ -18,6 +20,7 @@ export const CHANNELS: Readonly<Record<string, ChannelEntry>> = deepFreeze({
     writeAdapter: "adapters/meta-marketing-api", // Phase 6 deliverable; ref only
     decisionAdversaryRules: "rules/meta-decision",
     fatigueModel: "fatigue/meta",
+    activation: { basis: "launch" },
   },
   google: { status: "staged", writeAdapter: null, decisionAdversaryRules: null, fatigueModel: null },
   tiktok: { status: "locked", writeAdapter: null, decisionAdversaryRules: null, fatigueModel: null },
@@ -31,11 +34,28 @@ export function activeChannels(): string[] {
 /** The only way to obtain a channel for use. Staged (Google) refuses exactly
  * like locked: staged means BUILT, never LIVE, until its unlock rule fires. */
 export function requireActiveChannel(code: string): ChannelEntry {
+  return resolveActiveChannel(CHANNELS, code);
+}
+
+/** @internal — the resolution rule over a given table, so a test can drive
+ * it with an entry the frozen registry does not hold. Resolving a table you
+ * built yourself returns only what you built: the authority is CHANNELS. */
+export function resolveActiveChannel(table: Readonly<Record<string, ChannelEntry>>, code: string): ChannelEntry {
   // Own-property guard: inherited/polluted prototype entries are not channels.
-  const c = Object.hasOwn(CHANNELS, code) ? CHANNELS[code] : undefined;
+  const c = Object.hasOwn(table, code) ? table[code] : undefined;
   if (c === undefined) throw new SwitchboardError(`unknown channel "${code}"`);
   if (c.status !== "on") {
     throw new SwitchboardError(`channel "${code}" is ${c.status} — activation requires its bundle to pass adversary on live data (Law 18)`);
   }
+  assertActivationEarned("channel", code, c.activation, channelBundleGaps(c));
   return c;
+}
+
+/** The §2.5 channel bundle an active channel must carry. */
+export function channelBundleGaps(c: ChannelEntry): string[] {
+  const gaps: string[] = [];
+  if (!c.writeAdapter) gaps.push("writeAdapter");
+  if (!c.decisionAdversaryRules) gaps.push("decisionAdversaryRules");
+  if (!c.fatigueModel) gaps.push("fatigueModel");
+  return gaps;
 }
