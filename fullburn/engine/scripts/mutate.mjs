@@ -878,8 +878,10 @@ const MUTATIONS = [
     "    if (family !== null && isNonClaudeFamily(family)) cross.push(r);\n    else same.push(r);",
     "    if (family !== null && isNonClaudeFamily(family)) cross.push(r);\n    same.push(r);"],
   ["X2-13 the origin check precedes the priming vault read", "engine/src/gateway.ts",
-    "    assertGatewayBase(deps.gatewayBaseUrl);\n\n    // Prime the redaction set",
-    "    // Prime the redaction set"],
+    // Re-targeted 2026-10-10: the x9 X-02 transport check now sits between the
+    // origin check and the priming read; the entry still deletes the origin check.
+    "    assertGatewayBase(deps.gatewayBaseUrl);\n    /** THE CREDENTIAL GOES ONLY",
+    "    /** THE CREDENTIAL GOES ONLY"],
   ["X2-15 audit entries are frozen", "engine/src/spend-ledger.ts",
     "    this.#audit.push(Object.freeze({ clientId, available, reason, seq: this.nextSeq() }));",
     "    this.#audit.push({ clientId, available, reason, seq: this.nextSeq() });"],
@@ -1337,6 +1339,16 @@ const MUTATIONS = [
   ["X8-04b an injected or replaced fetch is not the runtime's", "engine/src/gateway-http.ts",
     "    this.#runtimeFetch = opts.fetchImpl === undefined && (f as unknown) === RUNTIME_FETCH;",
     "    this.#runtimeFetch = true;"],
+  // ---- x9 X-02: the credential goes only to a transport that is the Gateway (2026-10-10) ----
+  ["X9-02a llm refuses an unbranded transport outside the test runner", "engine/src/gateway.ts",
+    "    if (!servingTransportAllowed(deps.transport)) {",
+    "    if (false) {"],
+  ["X9-02b the HTTP adapter counts only on the runtime's fetch", "engine/src/gateway.ts",
+    "  if (Object.getPrototypeOf(t) === AiGatewayHttpTransport.prototype && (t as AiGatewayHttpTransport).usesRuntimeFetch()) return true;",
+    "  if (Object.getPrototypeOf(t) === AiGatewayHttpTransport.prototype) return true;"],
+  ["X9-02c any transport only inside the test runner", "engine/src/gateway.ts",
+    "  return marker !== undefined && marker !== null;\n}",
+    "  return true;\n}"],
   // ---- the reviewer is GPT-6 Luna (human instruction 2026-10-09, L63) ----
   ["XF-LUNA the reviewer pin is GPT-6 Luna", "engine/scripts/cross-family-lib.mjs",
     "export const REVIEWER_MODEL = \"openai/gpt-6-luna\";",

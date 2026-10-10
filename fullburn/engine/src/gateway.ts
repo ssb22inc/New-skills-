@@ -3,6 +3,7 @@ import { MODELS, ROLE_CARDS, bindingsProvenance, ownEntry, validateBindings, typ
 import { deepFreeze } from "@fullburn/config/freeze";
 import { isRecordedTransport } from "./transport-brand.ts";
 import { isLiveEvalTransport, productionServable } from "./live-eval.ts";
+import { AiGatewayHttpTransport } from "./gateway-http.ts";
 
 /** THE ONLY ORIGIN A CREDENTIAL IS EVER SENT TO. `gatewayBaseUrl` was
  * caller-controlled and unchecked: any origin received the vault key and the
@@ -296,6 +297,19 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
      * had happened anyway. The check is here, before any credential is read,
      * and the test now counts reads. */
     assertGatewayBase(deps.gatewayBaseUrl);
+    /** THE CREDENTIAL GOES ONLY TO A TRANSPORT THAT IS THE GATEWAY (cross-family
+     * finding x9 X-02, GPT-6 Luna, 2026-10-10). Any object with a `post()` was
+     * handed the vault's AI Gateway bearer, so a caller-built transport could
+     * ignore the URL, send the credential and the request elsewhere, and skip
+     * the Gateway's out-of-process cap. Checked here, before the first vault
+     * read. The capability removed, in a deployed Worker: choosing where the
+     * credential and the request go. A test transport (a mock, a stub) is
+     * honoured only inside the test runner — the same fence the spend ledger's
+     * test-only reset uses. NARROWING, stated (L12): code that replaces the runtime's fetch
+     * before the adapter module loads is indistinguishable from it. */
+    if (!servingTransportAllowed(deps.transport)) {
+      throw new GatewayError("transport is not the production AI Gateway adapter on the runtime's own fetch, nor a recorded or live-eval transport — the Gateway credential is not handed to it (x9 X-02)");
+    }
 
     // Prime the redaction set before the money checks (adversary finding A1's
     // residue): a meter or caps error thrown while `secrets` was still empty
@@ -563,3 +577,14 @@ function errorClassFor(err: unknown): new (m: string) => Error {
 }
 
 export type { TraceEvent };
+
+/** Which transports may receive the Gateway credential (x9 X-02): the genuine
+ * HTTP adapter on the runtime's own fetch, a recorded transport, or a live
+ * eval's wrapper — or, inside the test runner only, any transport. */
+export function servingTransportAllowed(t: unknown): boolean {
+  if (typeof t !== "object" || t === null) return false;
+  if (isRecordedTransport(t) || isLiveEvalTransport(t)) return true;
+  if (Object.getPrototypeOf(t) === AiGatewayHttpTransport.prototype && (t as AiGatewayHttpTransport).usesRuntimeFetch()) return true;
+  const marker = (globalThis as Record<string, unknown>)["__vitest_worker__"];
+  return marker !== undefined && marker !== null;
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
-import { llm, PreDispatchError } from "../src/gateway.ts";
+import { llm, PreDispatchError, servingTransportAllowed } from "../src/gateway.ts";
+import { RecordedTransport } from "../src/transport-brand.ts";
 import { AiGatewayHttpTransport, GatewayHttpError, type FetchLike } from "../src/gateway-http.ts";
 import { LangfuseTraceSink, LangfuseSinkError } from "../src/langfuse-sink.ts";
 import { TraceContext, TraceEmitError } from "../src/tracing.ts";
@@ -203,5 +204,32 @@ describe("the traced input is the dispatched input", () => {
     await call;
     expect(dispatched).toBe(JSON.stringify({ ask: "original", nested: { v: 1 } }));
     expect(sink.events.at(-1)!.input, "the trace recorded an input the provider never received").toEqual({ ask: "original", nested: { v: 1 } });
+  });
+});
+
+/** x9 X-02 (GPT-6 Luna, 2026-10-10): any object with post() received the
+ * Gateway credential. MUTATION: X9-02a..c. */
+describe("x9 outside the test runner, only the Gateway adapter on the runtime's fetch is served", () => {
+  const outsideRunner = <T>(f: () => T): T => {
+    const g = globalThis as Record<string, unknown>;
+    const saved = g["__vitest_worker__"];
+    delete g["__vitest_worker__"];
+    try {
+      return f();
+    } finally {
+      g["__vitest_worker__"] = saved;
+    }
+  };
+  it("refuses a hand-built transport and an adapter over an injected fetch; accepts the adapter on the runtime fetch and a recorded transport", () => {
+    const injected = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 200, text: async () => "{}" }) });
+    const runtime = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE });
+    outsideRunner(() => {
+      expect(servingTransportAllowed({ async post() { return {}; } }), "a hand-built transport would receive the credential").toBe(false);
+      expect(servingTransportAllowed(injected), "an adapter over an injected fetch would receive the credential").toBe(false);
+      expect(servingTransportAllowed(runtime)).toBe(true);
+      expect(servingTransportAllowed(new RecordedTransport({}))).toBe(true);
+      expect(servingTransportAllowed(null)).toBe(false);
+    });
+    expect(servingTransportAllowed({ async post() { return {}; } }), "the test runner lost its mock transports").toBe(true);
   });
 });

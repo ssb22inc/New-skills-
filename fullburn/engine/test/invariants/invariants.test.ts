@@ -878,6 +878,22 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const { evalCandidateBindings } = await import("@fullburn/config/models");
           return viaLlm({ bindings: evalCandidateBindings("genome-tagger", "gpt-5") });
         } },
+      // x9 X-02 (cross-family, 2026-10-10): outside the test runner, only the Gateway gets the credential.
+      { name: "an unbranded transport is refused outside the test runner", file: "engine/src/gateway.ts", type: GatewayError,
+        expect: /not the production AI Gateway adapter/, fire: async () => {
+          // Deps first: building them resets the ledger, which is fenced too.
+          const { deps } = mkDeps();
+          const g = globalThis as Record<string, unknown>;
+          const saved = g["__vitest_worker__"];
+          delete g["__vitest_worker__"];
+          try {
+            return await llm({ ...deps, bindings: ROLE_BINDINGS, transport: { async post() { return { greeting: "x" }; } } } as never, {
+              role: "hello-world", clientId: SWEEP_CLIENT, input: {}, trace: new TraceContext("sweep-x9", SWEEP_CLIENT),
+            } as never);
+          } finally {
+            g["__vitest_worker__"] = saved;
+          }
+        } },
       // X7-09 (cross-family, 2026-10-09): recorded evidence never serves live.
       { name: "a map earned on recorded evidence is refused through a live transport", file: "engine/src/gateway.ts", type: BindingError,
         expect: /earned on recorded eval evidence/, fire: () =>
