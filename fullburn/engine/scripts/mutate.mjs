@@ -1330,6 +1330,13 @@ const MUTATIONS = [
   ["X8-03f a bundle names an adversary report", "config/src/markets.ts",
     "    /^ADVERSARY_REPORT_[\\w.-]+\\.md$/.test(activation.adversaryReport)",
     "    activation.adversaryReport.length >= 0"],
+  // ---- x8 X-04: a live eval talks only to the runtime's own fetch (2026-10-10) ----
+  ["X8-04a a live eval refuses a transport not on the runtime's fetch", "engine/src/live-eval.ts",
+    "  if (!transport.usesRuntimeFetch()) {",
+    "  if (false) {"],
+  ["X8-04b an injected or replaced fetch is not the runtime's", "engine/src/gateway-http.ts",
+    "    this.#runtimeFetch = opts.fetchImpl === undefined && (f as unknown) === RUNTIME_FETCH;",
+    "    this.#runtimeFetch = true;"],
   // ---- the reviewer is GPT-6 Luna (human instruction 2026-10-09, L63) ----
   ["XF-LUNA the reviewer pin is GPT-6 Luna", "engine/scripts/cross-family-lib.mjs",
     "export const REVIEWER_MODEL = \"openai/gpt-6-luna\";",

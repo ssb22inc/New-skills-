@@ -160,3 +160,14 @@ export function queuedGateway() {
   });
   return { transport, calls, queue };
 }
+
+/** The production adapter over the RUNTIME's fetch (no fetchImpl) — a live
+ * eval accepts only this. The fetch is test/live-fetch-stub.ts's queue, which
+ * the calling test file must import first. */
+export async function runtimeGateway() {
+  const { liveQueue, liveCalls } = await import("./live-fetch-stub.ts");
+  liveQueue.length = 0; // nothing queued by an earlier test leaks into this one
+  liveCalls.length = 0;
+  const transport = new AiGatewayHttpTransport({ gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/test-account/fullburn/" });
+  return { transport, calls: liveCalls, queue: liveQueue };
+}

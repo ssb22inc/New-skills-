@@ -895,13 +895,14 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         } },
       { name: "a production binding over a recorded-evidence base is refused", file: "engine/src/live-eval.ts", type: BindingError,
         expect: /base map is not production-servable/, fire: async () => {
-          const { bindRoleLive, runLiveEval } = await import("../../src/live-eval.ts");
+          const { bindRoleLive } = await import("../../src/live-eval.ts");
+          return bindRoleLive(bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", genuineAttestation()), "genome-tagger", "qwen-72b", genuineAttestation());
+        } },
+      { name: "a live eval over an injected fetch is refused", file: "engine/src/live-eval.ts", type: BindingError,
+        expect: /runtime's own fetch/, fire: async () => {
+          const { runLiveEval } = await import("../../src/live-eval.ts");
           const { queuedGateway } = await import("../helpers.ts");
-          const { deps } = mkDeps();
-          const gw = queuedGateway();
-          gw.queue.push(...GOLDEN_SETS["genome-tagger"]!.map((c) => c.expected));
-          const live = await runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN_SETS["genome-tagger"]!, gw.transport, SWEEP_CLIENT);
-          return bindRoleLive(bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", genuineAttestation()), "genome-tagger", "qwen-72b", live.attestation);
+          return runLiveEval(mkDeps().deps, "genome-tagger", "qwen-72b", GOLDEN_SETS["genome-tagger"]!, queuedGateway().transport, SWEEP_CLIENT);
         } },
       // ---- engine/src/eval-harness.ts (in the graph since live-eval, X7-09) ----
       { name: "runEval through a live transport is refused", file: "engine/src/eval-harness.ts", type: Error,
