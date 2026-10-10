@@ -64,5 +64,8 @@ describe("first-answer activation", () => {
       .toBe("less than 1 hour left. Answer at least one question before it ends.");
     expect(trialBannerMessage({ expiresAt: null, answered: false, now: NOW }))
       .toBe("full study access. Answer at least one question before it ends.");
+    const in7d = new Date(NOW + 7 * 24 * 60 * 60 * 1000).toISOString();
+    expect(trialBannerMessage({ expiresAt: in7d, answered: false, now: NOW }))
+      .toBe("7 days left. Answer at least one question before it ends.");
   });
 });

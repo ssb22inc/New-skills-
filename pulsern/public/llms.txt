@@ -50,7 +50,7 @@ dosing or treatment instructions.
 ## Access and pricing
 
 - Free account required; progress syncs across devices.
-- A 1-day free pass provides study-content access without a readiness exam.
+- A 7-day free pass provides study-content access without a readiness exam.
 - Paid access periods run from 30 to 730 days and include stated numbers of
   readiness self-assessments. Current prices: https://www.pulsern.app/pricing/
 - Sign-in by email and password, or by passwordless email link.

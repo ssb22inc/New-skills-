@@ -345,7 +345,7 @@ function hitRow(u) {
    at 2am when a student is emailing you. */
 function accessPlain(a) {
   if (a.status === 'active') return 'Paid and active. Everything is unlocked until ' + day(a.expiresAt) + '.';
-  if (a.status === 'trial')  return 'On the free 1-day pass. Study tools work; readiness exams do not.';
+  if (a.status === 'trial')  return 'On the free 7-day pass. Study tools work; readiness exams do not.';
   if (a.status === 'expired') return 'Had access, and it has run out. They need to buy again to get back in.';
   return 'No plan has ever been created for this account.';
 }

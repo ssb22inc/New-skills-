@@ -187,8 +187,8 @@
         "risk": "commercial"
       },
       "published": "2026-09-03",
-      "updated": "2026-09-29",
-      "contentSha256": "129d8446ccd3559ec4693bc3b8b5692394bd3347eeb31f3e5f2c6cbd2e47f643",
+      "updated": "2026-10-10",
+      "contentSha256": "00b2d9e67bba49bc8b5c33df4434c9fe81aa1412cab0dd941798c727597559b4",
       "sourceSetSha256": "5eebb652a5a1bc50819d753b46673ef6834b104c8890f5405e30f3e71f0cef39",
       "sources": [
         {
@@ -285,7 +285,7 @@
         },
         {
           "id": "pulse-uworld-value",
-          "statement": "At the public 30-day prices observed, PulseRN listed a $99 paid plan and a no-card one-day study pass while UWorld listed $149 before a displayed promotion.",
+          "statement": "At the public 30-day prices observed, PulseRN listed a $99 paid plan and a no-card seven-day study pass while UWorld listed $149 before a displayed promotion.",
           "sourceIds": [
             "pulsern-pricing-2026-09-03",
             "uworld-nclex-rn-course-2026-09-03"
@@ -305,8 +305,8 @@
         "risk": "commercial"
       },
       "published": "2026-09-03",
-      "updated": "2026-09-29",
-      "contentSha256": "d962e4b82e7fe77be9f4c18cf0ca1d004be1c882034cacb5528f95a98eb9bdbf",
+      "updated": "2026-10-10",
+      "contentSha256": "613c5ce05b85b8a137b035c301f0e07cc60297e45b72d401c8618e9f5299d9c8",
       "sourceSetSha256": "a80848367ac02b94bf0b617e67326bc5dd67d662972faca5ec99af491e44358a",
       "sources": [
         {
@@ -403,7 +403,7 @@
         },
         {
           "id": "pulse-archer-trial",
-          "statement": "PulseRN publicly offers a one-day no-card study pass before a paid plan; Archer's cited page lists a lower one-month paid QBank and CAT entry price.",
+          "statement": "PulseRN publicly offers a seven-day no-card study pass before a paid plan; Archer's cited page lists a lower one-month paid QBank and CAT entry price.",
           "sourceIds": [
             "pulsern-home-2026-09-03",
             "pulsern-pricing-2026-09-03",
@@ -424,8 +424,8 @@
         "risk": "commercial"
       },
       "published": "2026-09-03",
-      "updated": "2026-09-29",
-      "contentSha256": "16e2bd3422c722a70d4b2d743df1e55eee5de4fa98d78606f5fc1531a9909610",
+      "updated": "2026-10-10",
+      "contentSha256": "4788bb0f9b675bb91f8885ab3b28b8416be1146bddd81c8aaf82ad0f12ffbed3",
       "sourceSetSha256": "539f35cfc20c80bb481f8512218777c5bd6a5b7663336bdc156829154f0227ad",
       "sources": [
         {
@@ -659,8 +659,8 @@
         "risk": "commercial"
       },
       "published": "2026-09-03",
-      "updated": "2026-09-29",
-      "contentSha256": "e8c77b51a70980380098e51ec3444f5ffe4f0a9e12ac99c3afa951ae5d9745d9",
+      "updated": "2026-10-10",
+      "contentSha256": "620c36a9ee250dda3a376ef180b6c58db4c918b77e592150ec5bc6a082b04365",
       "sourceSetSha256": "20ad8a90e94654e31155184c6dd983a2821d232c8b44ebd4190a9ff89eb5835f",
       "sources": [
         {
@@ -732,7 +732,7 @@
         },
         {
           "id": "pulse-free-day",
-          "statement": "PulseRN publicly lists a one-day free study-content pass without a readiness self-assessment.",
+          "statement": "PulseRN publicly lists a seven-day free study-content pass without a readiness self-assessment.",
           "sourceIds": [
             "pulsern-home-2026-09-03",
             "pulsern-pricing-2026-09-03"
