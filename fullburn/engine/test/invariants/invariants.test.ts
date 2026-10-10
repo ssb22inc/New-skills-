@@ -1502,6 +1502,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const { execFileSync } = await import("node:child_process");
     const { relative: relPath } = await import("node:path");
     const liveEval = await import("../../src/live-eval.ts");
+    const marketsMod = await import("@fullburn/config/markets");
+    const gatewayHttp = await import("../../src/gateway-http.ts");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1926,6 +1928,26 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           utcMeter.settle(utcMeter.reserve("pulsern", 1));
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
+        },
+      },
+      {
+        row: "L64",
+        claim: "an on-flag outside the launch set needs a live-data bundle activation and a complete bundle; a live eval refuses an injected fetch",
+        holds: () => {
+          const refuses = (f: () => void) => {
+            try {
+              f();
+              return false;
+            } catch {
+              return true;
+            }
+          };
+          const statusOnly = refuses(() => marketsMod.assertActivationEarned("channel", "tiktok", undefined, []));
+          const notLaunch = refuses(() => marketsMod.assertActivationEarned("market", "EU", { basis: "launch" }, []));
+          const noPack = refuses(() => marketsMod.assertActivationEarned("market", "EU", { basis: "bundle", adversaryReport: "ADVERSARY_REPORT_eu.md", liveData: true }, ["jurisdictionPack"]));
+          const launchOk = !refuses(() => marketsMod.assertActivationEarned("market", "US", { basis: "launch" }, []));
+          const injected = new gatewayHttp.AiGatewayHttpTransport({ gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/a/g/", fetchImpl: async () => ({ status: 200, text: async () => "{}" }) });
+          return statusOnly && notLaunch && noPack && launchOk && injected.usesRuntimeFetch() === false;
         },
       },
       {
