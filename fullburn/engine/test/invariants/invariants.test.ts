@@ -1520,6 +1520,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const liveEval = await import("../../src/live-eval.ts");
     const marketsMod = await import("@fullburn/config/markets");
     const gatewayHttp = await import("../../src/gateway-http.ts");
+    const gatewayMod = await import("../../src/gateway.ts");
+    const channelsMod = await import("@fullburn/config/channels");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1944,6 +1946,27 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           utcMeter.settle(utcMeter.reserve("pulsern", 1));
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
+        },
+      },
+      {
+        row: "L65",
+        claim: "outside the test runner a hand-built transport cannot receive the Gateway credential, and no forged switchboard table resolves",
+        holds: () => {
+          const g = globalThis as Record<string, unknown>;
+          const saved = g["__vitest_worker__"];
+          delete g["__vitest_worker__"];
+          try {
+            const transportRefused = gatewayMod.servingTransportAllowed({ async post() { return {}; } }) === false;
+            let forgedRefused = false;
+            try {
+              channelsMod.resolveActiveChannelForTests({}, "tiktok");
+            } catch (e) {
+              forgedRefused = /outside a test runner/.test(String((e as Error).message));
+            }
+            return transportRefused && forgedRefused && !("resolveActiveChannel" in channelsMod);
+          } finally {
+            g["__vitest_worker__"] = saved;
+          }
         },
       },
       {
