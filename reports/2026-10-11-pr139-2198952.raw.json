@@ -1,0 +1,16 @@
+{
+  "model": "openai/gpt-6-luna",
+  "mode": "trusted",
+  "meta": {
+    "base": "24a09102162b24e3fbfe370fd956c387c4752063",
+    "head": "21989528513be11e0396c84fbe631b77ecd8a858",
+    "pr": "139"
+  },
+  "reviewedAt": "2026-10-11T11:44:00.237Z",
+  "filesReviewed": [],
+  "skipped": [],
+  "findings": [],
+  "usage": null,
+  "error": "The review could not be completed: cannot put these changes in front of the reviewer, so the change cannot pass: pulsern/public/product/pulsern-lab-reference.png, pulsern/public/product/pulsern-today-dashboard.png (not valid UTF-8 text, and not a canonical PNG under 4 MB — run \"node pulsern/ops/png-canonical.mjs <file>\" on an 8-bit grey/RGB(A) PNG to make one)",
+  "verdict": "FAIL"
+}
