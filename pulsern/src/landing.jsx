@@ -15,8 +15,8 @@ const FEATURES = [
 const FAQ = [
   ["Who created PulseRN?", "Sheldon Bennett, a working hospital RN. He built PulseRN from how people actually learn and remember under pressure, then engineered the study loop around that."],
   ["Does PulseRN use real NCLEX questions?", "No. Practice is original and built around NCSBN's published test plan and item formats. PulseRN is not affiliated with NCSBN, and NCLEX is a registered trademark of NCSBN."],
-  ["Can PulseRN tell me whether I will pass?", "No. Readiness is an estimate of your work inside PulseRN. It shows you what to practice next. It does not predict or guarantee an NCLEX result."],
-  ["How is the content checked?", "Practice questions, case studies, flashcards, and readiness items are built around the published test plan and pass automated quality checks before they go live. That is not a per-question sign-off by a human. Public study guides are source-cited and approved by Sheldon Bennett, RN."],
+  ["Can PulseRN tell me whether I will pass?", "Readiness is an estimate built from your work in PulseRN. It shows you what to practice next. No prep program can guarantee an exam result."],
+  ["How is the content checked?", "Practice questions, case studies, flashcards, and readiness items are built around the published test plan and pass automated quality checks before they go live. Public study guides are source-cited and approved by Sheldon Bennett, RN."],
   ["Is there a free option?", `Yes. A ${freePassLabel}, no card needed, covers study content. Readiness self-assessments are included with paid plans.`],
 ];
 
@@ -248,7 +248,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">Sourced comparisons</div>
               <h2>See the fit before you choose a bank.</h2>
-              <p>Dated comparisons with UWorld, Archer Review, and Kaplan. Facts come from provider pages. No paid ranking, and no pass promise.</p>
+              <p>Dated comparisons with UWorld, Archer Review, and Kaplan. Facts come from provider pages. No paid ranking.</p>
             </div>
             <div className="land-grid">
               {COMPARISONS.map(([title, text, href]) => (
@@ -278,7 +278,7 @@ export default function LandingPage({ onSignIn, onStart }) {
                 ["01", "Answer before you review", "Every session starts with a question, not a lecture. Then read the rationale."],
                 ["02", "Miss it, and it returns", "Spaced repetition brings the item back on a calendar date, right before it would fade."],
                 ["03", "Work the weak spot", "Adaptive practice stays with a category until it is no longer the weak one."],
-                ["04", "Know what today is for", "A Today round, and a weekly plan once your exam date is set. Readiness is an estimate, not an exam result."],
+                ["04", "Know what today is for", "A Today round, and a weekly plan once your exam date is set. Readiness is an estimate built from your work in PulseRN."],
               ].map(([n, title, text]) => <article className="land-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></article>)}
             </div>
           </div>

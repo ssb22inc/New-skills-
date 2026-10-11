@@ -102,7 +102,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
         <section className="card">
           <p className="eyebrow">PulseRN access</p>
           <h2 className="h2">{ent?.status === "expired" ? "Your access has ended" : "Choose your runway"}</h2>
-          <p className="small">Built by a working hospital RN — for future RNs. Every plan opens the full adaptive QBank, 1,000+ flashcards, case-study library, AI tutor, and labs reference. Self-assessments are full 85-item NCLEX-style readiness exams — and no account is ever shown the same exam twice.</p>
+          <p className="small">Built by a working hospital RN, for future RNs. Every plan opens the full adaptive QBank, 1,000+ flashcards, case-study library, AI tutor, and labs reference. Self-assessments are full 85-item NCLEX-style readiness exams — and no account is ever shown the same exam twice.</p>
         </section>
       )}
       <section className="card">

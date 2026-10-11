@@ -22,9 +22,9 @@ dosing or treatment instructions.
   categories, including dedicated pediatric and geriatric populations.
 - **Readiness exams.** Ten standardized 85-question forms — the NCLEX-RN's
   minimum length — under a timed lockdown, never repeated to the same account.
-- **Readiness estimate.** An estimate of work inside PulseRN. It appears after
-  a minimum answer count and shows what to practice next. It does not predict
-  or guarantee an NCLEX result.
+- **Readiness estimate.** An estimate built from your work in PulseRN. It
+  appears after a minimum answer count and shows what to practice next. No
+  prep program can guarantee an exam result.
 - **AI tutor.** Explains why an answer is right or wrong, on demand.
 
 ## Honest limitations
@@ -32,22 +32,22 @@ dosing or treatment instructions.
 - PulseRN is not affiliated with, endorsed by, or connected to the NCSBN.
   NCLEX® is a registered trademark of the National Council of State Boards of
   Nursing, Inc.
-- The readiness estimate predicts nothing about an actual exam result. It is a
-  study signal, not a forecast.
+- Readiness is an estimate built from your work in PulseRN. No prep program
+  can guarantee an exam result.
 - Practice items are comparable to real exam items in style and rigor. They are
   never claimed to be identical to, drawn from, or predictive of live NCLEX
   content.
 - Practice questions, case studies, flashcards, and readiness items are built
   around NCSBN's published test plan and pass automated quality checks before
-  they go live. That is not a per-question sign-off by a human reviewer.
+  they go live.
 
 ## Authorship and review
 
 - Founder: **Sheldon Bennett, RN**, a working hospital RN who built PulseRN.
 - Public author profile: https://www.pulsern.app/about/#sheldon-bennett-rn
 - Public study guides are source-cited and approved by Sheldon Bennett, RN.
-  Practice items pass automated quality checks and are not individually
-  signed off by a human reviewer.
+  Practice questions, case studies, flashcards, and readiness items pass
+  automated quality checks before they go live.
 - Method and limitations: https://www.pulsern.app/methodology/
 - Editorial and correction policy: https://www.pulsern.app/editorial-policy/
 
