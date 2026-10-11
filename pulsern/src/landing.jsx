@@ -4,19 +4,20 @@ import { planById } from "./pricing.js";
 const freePassLabel = planById("pass1").name.toLowerCase();
 
 const FEATURES = [
-  ["Adaptive practice", "Questions adjust to your demonstrated level across the eight NCSBN client-needs categories."],
-  ["Next Gen item types", "Practice bow-tie, matrix, cloze, highlight, drag-and-drop, multiple-response, and calculation items."],
-  ["Spaced repetition", "Recall-first flashcards return on real calendar dates so review follows what you are most likely to forget."],
-  ["Readiness self-assessments", "Standardized 85-question forms are timed and never repeated. Results are estimates, not outcome predictions."],
-  ["Unfolding case studies", "Work through changing clinical records using the NCSBN Clinical Judgment Measurement Model."],
-  ["Explanations and tutoring", "Review rationales after answering and ask the AI tutor for a clearer explanation when you need one."],
+  ["Retrieval practice", "You learn by pulling the answer out of memory. Every session starts with a question, not a lecture."],
+  ["Spaced repetition", "What you miss comes back on a real calendar date, right before you would forget it, so it is there on exam day."],
+  ["Adaptive practice", "PulseRN finds your weak spots across the eight NCSBN client-needs categories and works them until they are strengths."],
+  ["A plan for each day", "A focused Today round, and a weekly plan built around your exam date, so you always know what to do next."],
+  ["Visual study cards", "ABGs, potassium and ECG changes, IV fluids, insulin, isolation, and pressure injuries, drawn so the concept clicks."],
+  ["The study library", "10,000+ practice questions, 500+ case studies, 1,100+ flashcards, dosage calculation, and an AI tutor when you want another explanation."],
 ];
 
 const FAQ = [
-  ["Who created PulseRN?", "PulseRN was created by Sheldon Bennett, RN. The product combines nursing experience with a deliberately conservative approach to readiness reporting."],
-  ["Does PulseRN use real NCLEX questions?", "No. PulseRN does not claim to reproduce live exam content. It provides original educational practice designed around published NCSBN formats and categories."],
-  ["Can PulseRN tell me whether I will pass?", "No. Readiness is an estimate based on your work inside PulseRN. It cannot predict or guarantee an NCLEX result."],
-  ["Is there a free option?", `Yes. New learners can use a ${freePassLabel} for study content. Readiness self-assessments are included with paid plans.`],
+  ["Who created PulseRN?", "Sheldon Bennett, a working hospital RN. He built PulseRN from how people actually learn and remember under pressure, then engineered the study loop around that."],
+  ["Does PulseRN use real NCLEX questions?", "No. Practice is original and built around NCSBN's published test plan and item formats. PulseRN is not affiliated with NCSBN, and NCLEX is a registered trademark of NCSBN."],
+  ["Can PulseRN tell me whether I will pass?", "No. Readiness is an estimate of your work inside PulseRN. It shows you what to practice next. It does not predict or guarantee an NCLEX result."],
+  ["How is the content checked?", "Practice questions, case studies, flashcards, and readiness items are built around the published test plan and pass automated quality checks before they go live. That is not a per-question sign-off by a human. Public study guides are source-cited and approved by Sheldon Bennett, RN."],
+  ["Is there a free option?", `Yes. A ${freePassLabel}, no card needed, covers study content. Readiness self-assessments are included with paid plans.`],
 ];
 
 const SAMPLES = [
@@ -28,7 +29,7 @@ const SAMPLES = [
 
 const COMPARISONS = [
   ["PulseRN vs UWorld", "Compare AI study help, question-bank scale, lab access, media depth, RN accountability, and current public pricing.", "/compare/pulsern-vs-uworld/"],
-  ["PulseRN vs Archer Review", "Compare an integrated RN-owned app with high-volume readiness, CAT, video, and live-support packages.", "/compare/pulsern-vs-archer/"],
+  ["PulseRN vs Archer Review", "Compare an app built by a working hospital RN with high-volume readiness, CAT, video, and live-support packages.", "/compare/pulsern-vs-archer/"],
   ["PulseRN vs Kaplan", "Compare a focused self-directed app with Kaplan’s strategy instruction, CAT practice, classes, and tutoring tiers.", "/compare/pulsern-vs-kaplan/"],
 ];
 
@@ -160,14 +161,14 @@ export default function LandingPage({ onSignIn, onStart }) {
       <main data-pulsern-landing="rendered-react">
         <section className="land-container land-hero">
           <div>
-            <div className="land-eyebrow">Created by a licensed RN — for future RNs</div>
-            <h1>NCLEX-RN practice that adapts to <span>how you learn.</span></h1>
-            <p className="land-lead">Build clinical judgment with adaptive questions, every Next Gen item type, spaced-repetition review, and honest readiness estimates.</p>
+            <div className="land-eyebrow">Built by a working hospital RN</div>
+            <h1>NCLEX-RN prep engineered around <span>how you learn.</span></h1>
+            <p className="land-lead">Every session starts with a question, not a lecture. What you miss comes back right before you would forget it. Built to get you ready to walk into the NCLEX confident.</p>
             <div className="land-actions">
               <button className="land-button" type="button" onClick={onStart}>Start the {freePassLabel}</button>
               <a className="land-button secondary" href="/how-it-works/">See how it works</a>
             </div>
-            <p className="land-note">No credit card for the free pass. Educational exam preparation only.</p>
+            <p className="land-note">No card needed for the free pass. Educational exam preparation only.</p>
             <p className="land-note" style={{ marginTop: 12 }}><a href="/app/">Open the study app</a> to install PulseRN from your browser.</p>
           </div>
           <figure className="land-product">
@@ -178,10 +179,10 @@ export default function LandingPage({ onSignIn, onStart }) {
 
         <section className="land-proof" aria-label="PulseRN facts">
           <div className="land-container land-proof-grid">
-            <div className="land-proof-cell"><b>Built for focused practice</b><span>Clear tools, conservative claims, and no false guarantees.</span></div>
-            <div className="land-proof-cell"><b>8 categories</b><span>NCSBN client-needs coverage</span></div>
-            <div className="land-proof-cell"><b>7 NGN formats</b><span>Plus standard multiple choice</span></div>
-            <div className="land-proof-cell"><b>85 questions</b><span>Per readiness self-assessment</span></div>
+            <div className="land-proof-cell"><b>Built for how you remember</b><span>Retrieval, spacing, and adaptive practice.</span></div>
+            <div className="land-proof-cell"><b>10,000+ questions</b><span>The same library on every paid plan</span></div>
+            <div className="land-proof-cell"><b>500+ case studies</b><span>Unfolding clinical judgment</span></div>
+            <div className="land-proof-cell"><b>1,100+ flashcards</b><span>Spaced on real calendar dates</span></div>
           </div>
         </section>
 
@@ -189,8 +190,8 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-container">
             <div className="land-section-head">
               <div className="land-eyebrow">Inside the app</div>
-              <h2>See your study workflow before you sign up.</h2>
-              <p>Start with one focused daily round, move into adaptive practice, and open the lab-reference drawer without leaving the question screen.</p>
+              <h2>A Today round, then the question that fits you.</h2>
+              <p>The day starts with what is due. Adaptive practice follows. The lab reference opens over the question, so the lookup stays on the item.</p>
             </div>
             <div className="land-screen-grid">
               <figure className="land-screen">
@@ -210,8 +211,8 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-container">
             <div className="land-section-head">
               <div className="land-eyebrow">One study system</div>
-              <h2>Practice, review, and understand what comes next.</h2>
-              <p>PulseRN connects question practice to targeted review so your next session is guided by the work you have already done.</p>
+              <h2>Engineered around how you learn and remember.</h2>
+              <p>PulseRN was researched and engineered around how people actually learn and remember under pressure. The loop is the product.</p>
             </div>
             <div className="land-grid">
               {FEATURES.map(([title, text], index) => (
@@ -228,8 +229,8 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-container">
             <div className="land-section-head">
               <div className="land-eyebrow">Free sample questions</div>
-              <h2>Try the reasoning before creating an account.</h2>
-              <p>Each public set includes five original questions, visible rationales, authoritative sources, and explicit RN-review status.</p>
+              <h2>Start with a question. No account needed.</h2>
+              <p>Four public sets, five original questions each. The answer, the rationale, and the sources are on the page.</p>
             </div>
             <div className="land-sample-grid">
               {SAMPLES.map(([title, text, href]) => (
@@ -246,8 +247,8 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-container">
             <div className="land-section-head">
               <div className="land-eyebrow">Sourced comparisons</div>
-              <h2>Choose by fit, not by a manufactured winner.</h2>
-              <p>PulseRN publishes the conflict, dates competitor facts, links provider-owned sources, and gives competing products credit for capabilities they document.</p>
+              <h2>See the fit before you choose a bank.</h2>
+              <p>Dated comparisons with UWorld, Archer Review, and Kaplan. Facts come from provider pages. No paid ranking, and no pass promise.</p>
             </div>
             <div className="land-grid">
               {COMPARISONS.map(([title, text, href]) => (
@@ -266,18 +267,18 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">How it works</div>
               <h2>A study loop you can explain.</h2>
-              <p>Your activity drives future practice and review. PulseRN shows estimates as estimates and keeps the learner—not an opaque score—in control.</p>
+              <p>You answer first. Missed items come back. Weak spots get the work. A Today round and a weekly plan are built around your exam date. Readiness is an estimate of your work in PulseRN.</p>
               <div className="land-author" id="author">
                 <div className="land-avatar" aria-hidden="true">RN</div>
-                <div><strong>Sheldon Bennett, RN</strong><p>Creator and clinical content owner. <a href="/about/#sheldon-bennett-rn">Read the author and review standards.</a></p></div>
+                <div><strong>Sheldon Bennett, RN</strong><p>A working hospital RN who built PulseRN around how people learn and remember under pressure. <a href="/about/#sheldon-bennett-rn">Read how the content is built.</a></p></div>
               </div>
             </div>
             <div className="land-steps">
               {[
-                ["01", "Choose a focus", "Study broadly or select a client-needs category."],
-                ["02", "Answer before reviewing", "Commit to an answer, then read the rationale and feedback."],
-                ["03", "Revisit weak knowledge", "Adaptive practice and scheduled flashcards bring back what needs attention."],
-                ["04", "Check progress carefully", "Use readiness estimates as one study signal—not as a promise of an exam result."],
+                ["01", "Answer before you review", "Every session starts with a question, not a lecture. Then read the rationale."],
+                ["02", "Miss it, and it returns", "Spaced repetition brings the item back on a calendar date, right before it would fade."],
+                ["03", "Work the weak spot", "Adaptive practice stays with a category until it is no longer the weak one."],
+                ["04", "Know what today is for", "A Today round, and a weekly plan once your exam date is set. Readiness is an estimate, not an exam result."],
               ].map(([n, title, text]) => <article className="land-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></article>)}
             </div>
           </div>
@@ -294,8 +295,8 @@ export default function LandingPage({ onSignIn, onStart }) {
 
         <section className="land-final">
           <div className="land-container">
-            <h2>Start with one focused study session.</h2>
-            <p>Create an account for a {freePassLabel} to the study content. No credit card is required for the free pass.</p>
+            <h2>Built to get you ready to walk into the NCLEX confident.</h2>
+            <p>A {freePassLabel} to the study content. No card needed.</p>
             <button className="land-button" type="button" onClick={onStart}>Create your free account</button>
           </div>
         </section>

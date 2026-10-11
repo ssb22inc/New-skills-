@@ -1,6 +1,6 @@
 # PulseRN
 
-> Adaptive NCLEX-RN exam preparation, built by a licensed registered nurse.
+> NCLEX-RN prep built by Sheldon Bennett, a working hospital RN, and engineered around how people learn and remember under pressure.
 > Web app at https://www.pulsern.app — installable to a phone home screen.
 
 PulseRN is a study platform for nursing students and graduates preparing for
@@ -22,8 +22,9 @@ dosing or treatment instructions.
   categories, including dedicated pediatric and geriatric populations.
 - **Readiness exams.** Ten standardized 85-question forms — the NCLEX-RN's
   minimum length — under a timed lockdown, never repeated to the same account.
-- **Readiness estimate.** A deliberately conservative signal labeled an
-  estimate, requiring a minimum answer count, that never promises an outcome.
+- **Readiness estimate.** An estimate of work inside PulseRN. It appears after
+  a minimum answer count and shows what to practice next. It does not predict
+  or guarantee an NCLEX result.
 - **AI tutor.** Explains why an answer is right or wrong, on demand.
 
 ## Honest limitations
@@ -36,14 +37,17 @@ dosing or treatment instructions.
 - Practice items are comparable to real exam items in style and rigor. They are
   never claimed to be identical to, drawn from, or predictive of live NCLEX
   content.
-- Content is reviewed for clinical accuracy before publication. Students are
-  told throughout to verify anything surprising against their course materials.
+- Practice questions, case studies, flashcards, and readiness items are built
+  around NCSBN's published test plan and pass automated quality checks before
+  they go live. That is not a per-question sign-off by a human reviewer.
 
 ## Authorship and review
 
-- Creator and clinical content owner: **Sheldon Bennett, RN**.
+- Founder: **Sheldon Bennett, RN**, a working hospital RN who built PulseRN.
 - Public author profile: https://www.pulsern.app/about/#sheldon-bennett-rn
-- Human clinical review remains required for AI-assisted educational content.
+- Public study guides are source-cited and approved by Sheldon Bennett, RN.
+  Practice items pass automated quality checks and are not individually
+  signed off by a human reviewer.
 - Method and limitations: https://www.pulsern.app/methodology/
 - Editorial and correction policy: https://www.pulsern.app/editorial-policy/
 
@@ -63,7 +67,7 @@ dosing or treatment instructions.
 - [Pricing](https://www.pulsern.app/pricing/) — current plans in USD
 - [About](https://www.pulsern.app/about/) — who built it and the method behind it
 - [Methodology](https://www.pulsern.app/methodology/) — adaptive practice, readiness, and limits
-- [Editorial policy](https://www.pulsern.app/editorial-policy/) — sources, human review, AI use, and corrections
+- [Editorial policy](https://www.pulsern.app/editorial-policy/) — sources, automated checks, guide review, AI use, and corrections
 - [Guides](https://www.pulsern.app/learn/) — free NCLEX-RN reference articles
 - [NCLEX prep comparisons](https://www.pulsern.app/compare/) — sourced product-fit comparisons without affiliate rankings
 - [Comparison methodology](https://www.pulsern.app/compare/methodology/) — evidence hierarchy, pricing dates, conflicts, and corrections
