@@ -27,7 +27,7 @@ dosing or treatment instructions.
   prep program can guarantee an exam result.
 - **AI tutor.** Explains why an answer is right or wrong, on demand.
 
-## Honest limitations
+## Accuracy notes
 
 - PulseRN is not affiliated with, endorsed by, or connected to NCSBN.
   NCLEX® is a registered trademark of the National Council of State Boards of

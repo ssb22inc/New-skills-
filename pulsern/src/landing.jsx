@@ -29,8 +29,8 @@ const SAMPLES = [
 
 const COMPARISONS = [
   ["PulseRN vs UWorld", "Compare AI study help, question-bank scale, lab access, media depth, RN accountability, and current public pricing.", "/compare/pulsern-vs-uworld/"],
-  ["PulseRN vs Archer Review", "Compare an app built by a working hospital RN with Archer’s high-volume readiness, CAT, video, and live-support packages.", "/compare/pulsern-vs-archer/"],
-  ["PulseRN vs Kaplan", "Compare a focused, self-directed app with Kaplan’s strategy instruction, CAT practice, classes, and tutoring tiers.", "/compare/pulsern-vs-kaplan/"],
+  ["PulseRN vs Archer Review", "Compare an app built by a working hospital RN with Archer's high-volume readiness, CAT, video, and live-support packages.", "/compare/pulsern-vs-archer/"],
+  ["PulseRN vs Kaplan", "Compare a focused, self-directed app with Kaplan's strategy instruction, CAT practice, classes, and tutoring tiers.", "/compare/pulsern-vs-kaplan/"],
 ];
 
 export default function LandingPage({ onSignIn, onStart }) {
@@ -203,7 +203,7 @@ export default function LandingPage({ onSignIn, onStart }) {
                 <figcaption><strong>Lab reference at your fingertips</strong> Open searchable educational reference ranges while you study, then return to the question where you left off.</figcaption>
               </figure>
             </div>
-            <p className="land-screen-note">Screens captured from PulseRN’s real interface using built-in demonstration content. Reference ranges vary by source and clinical context; this study tool is not medical advice.</p>
+            <p className="land-screen-note">Screens captured from PulseRN's real interface using built-in demonstration content. Reference ranges vary by source and clinical context; this study tool is not medical advice.</p>
           </div>
         </section>
 
@@ -304,7 +304,7 @@ export default function LandingPage({ onSignIn, onStart }) {
 
       <footer className="land-footer">
         <div className="land-container">
-          <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div></div>
+          <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div></div>
           <p className="land-disclaimer">Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse PulseRN.</p>
         </div>
       </footer>

@@ -962,7 +962,7 @@ function Tour({ trial, onAnswer, onSkip }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Quick tour, Settings, Sign out.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Quick tour, Settings, Sign out.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 7-day pass with full study access (no exams). Subscriptions: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). After a subscription: 7-day renewal $45 (content only) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
@@ -1009,7 +1009,7 @@ function HelpCenter({ open, setOpen, provider }) {
           <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
         </div>
         <div className="lab-body help-chat" aria-live="polite">
-          {!msgs.length && <p className="small">Ask me anything, for example: How does readiness work? Where do I set my exam date? What's the difference between preload and afterload? Account or billing questions go to the email above.</p>}
+          {!msgs.length && <p className="small">Ask me anything. For example: How does readiness work? Where do I set my exam date? What's the difference between preload and afterload? Account or billing questions go to the email above.</p>}
           {msgs.map((m, i) => (
             <p key={i} className={m.role === "you" ? "chat-msg you" : "chat-msg ai"}>{m.text}</p>
           ))}
@@ -1699,7 +1699,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
               <p className="small"><strong>Should be highlighted:</strong> {q.answer.map((i) => ext.tokens[i]).join(" · ")}</p>
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
-            {q.ai && <p className="small">✨ AI-generated practice item. Verify anything surprising against your course materials.</p>}
+            {q.ai && <p className="small">{calibration[q.id] !== undefined ? "✨ AI-assisted practice item that passed automated quality checks." : "✨ AI-assisted practice item."}</p>}
             {/* Astra-confirmed concept diagrams for this exact question (if any) */}
             <ConceptExplainers key={`dx${q.id}`} q={q} />
             <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
@@ -1798,7 +1798,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
           {cs.labs.map(([k, v]) => <span key={k} className="chip lab">{k} {v}</span>)}
         </div>
         <p className="small note">Nurse's note: {cs.note}</p>
-        {cs.ai && <p className="small">✨ AI-assisted case that passed automated quality checks. Verify anything surprising against your course materials.</p>}
+        {cs.ai && <p className="small">✨ AI-assisted case that passed automated quality checks.</p>}
         <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
       </section>
@@ -1999,7 +1999,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
           </div>
         )}
         {fcFlips < 3 && <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory. The flip is just the check.</p>}
-        <p className="small tip">Enter flips the card · grades set real calendar dates.{cur.ai ? " ✨ AI card. Verify anything surprising against your course materials." : ""}</p>
+        <p className="small tip">Enter flips the card · grades set real calendar dates.{cur.ai ? " ✨ AI-assisted card that passed automated quality checks." : ""}</p>
         <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. Reviews land right before you'd forget. That's the spacing effect doing the work.</Why>
       </section>
     </div>
@@ -2076,7 +2076,7 @@ function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvi
         <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
         <p className="small tip">All questions, case studies, flashcards, exams, and materials are the property of the owner of PulseRN and may not be copied, captured, or used outside this app without the owner's explicit consent.</p>
         <p className="small tip">NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. Educational exam preparation only.</p>
-        <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms · Privacy · Educational-use disclaimer</a></p>
+        <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms, Privacy, and Disclaimer</a></p>
       </section>
     </div>
   );
@@ -2103,7 +2103,7 @@ function ReportIssue({ itemId = null, caseId = null, label = "question" }) {
     setState(error ? "error" : "sent");
   };
 
-  if (state === "sent") return <p className="small tip">✅ Thanks. Your report goes straight to our nurse reviewer.</p>;
+  if (state === "sent") return <p className="small tip">✅ Thanks. Your report goes straight to the RN behind PulseRN.</p>;
   if (state === "idle") return (
     <button className="btn ghost tutor-btn" onClick={() => setState("open")}>⚠ Report a problem with this {label}</button>
   );

@@ -18,9 +18,9 @@ export const FULL_STANDALONE = 55, FULL_CASES = 5;
 
 /* ---- deterministic verdict tiers (self-assessment estimate) ---- */
 export function verdictFor(pct) {
-  if (pct >= 68) return { tier: "HIGH", label: "High readiness: performing above the passing standard", cls: "ok" };
-  if (pct >= 55) return { tier: "BORDERLINE", label: "Borderline: near the passing standard, so focus on your weak categories", cls: "warn" };
-  return { tier: "BELOW", label: "Below the passing standard: build fundamentals before test day", cls: "no" };
+  if (pct >= 68) return { tier: "HIGH", label: "High readiness (estimate): performing above the passing standard", cls: "ok" };
+  if (pct >= 55) return { tier: "BORDERLINE", label: "Borderline (estimate): near the passing standard, so focus on your weak categories", cls: "warn" };
+  return { tier: "BELOW", label: "Below the passing standard (estimate): build fundamentals before test day", cls: "no" };
 }
 
 /* score one item, all-or-nothing, same scorers as Practice */
@@ -243,7 +243,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
                 <span className="small"><strong>Readiness Exam {f}</strong></span>
                 <span className="small mono">{a ? `${qReady}/85 questions` : "…"}</span>
               </div>
-              {ready && <p className="small">Full-length 85-question exam · includes 5 case studies (30 questions)</p>}
+              {ready && <p className="small">85-question readiness exam · includes 5 case studies (30 questions)</p>}
               {past && <p className="small">Your result: <strong>{past.pct}%</strong> · {past.verdict} · {past.date}</p>}
               {done
                 ? <p className="small tip">Completed. Exams are never repeated, so this score stays an honest signal.</p>

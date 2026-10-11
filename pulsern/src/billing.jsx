@@ -102,7 +102,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
         <section className="card">
           <p className="eyebrow">PulseRN access</p>
           <h2 className="h2">{ent?.status === "expired" ? "Your access has ended" : "Choose your runway"}</h2>
-          <p className="small">Built by a working hospital RN, for future RNs. Every plan opens the full adaptive QBank, 1,100+ flashcards, the case-study library, the AI tutor, and the lab values reference. Self-assessments are full 85-item NCLEX-style readiness exams, and no account is ever shown the same exam twice.</p>
+          <p className="small">Built by a working hospital RN, for future RNs. Every plan opens the full adaptive QBank, 1,100+ flashcards, the case-study library, the AI tutor, and the lab reference. Self-assessments are 85-question NCLEX-style readiness exams, and no account is ever shown the same exam twice.</p>
         </section>
       )}
       <section className="card">
@@ -124,7 +124,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
           </div>
           <p className="small">{p.blurb}</p>
           <button className="btn" disabled={busy === p.id} onClick={() => buy(p.id)}>
-            {busy === p.id ? "Opening checkout…" : `Get the ${p.name} plan →`}
+            {busy === p.id ? "Opening checkout…" : `Get the ${p.name.toLowerCase()} plan →`}
           </button>
         </section>
       ))}
