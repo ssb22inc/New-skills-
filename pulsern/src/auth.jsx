@@ -148,7 +148,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
       <div className="auth-card">
         {onBack && <button className="auth-switch" type="button" onClick={onBack} style={{ marginBottom: 16 }}>&larr; Back to PulseRN</button>}
         <h1 className="auth-logo">PulseRN</h1>
-        <p className="auth-motto">Created by a licensed RN — for future RNs.</p>
+        <p className="auth-motto">Built by a working hospital RN, for future RNs.</p>
         <p className="auth-sub">{
           mode === "signup" ? "Create your account — progress syncs to every device."
           : mode === "forgot" ? "Enter your email and we'll send a reset link."

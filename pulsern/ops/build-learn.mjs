@@ -319,8 +319,8 @@ function renderIndex(all) {
   })}
 <main><a class="back" href="/">&larr; Back to PulseRN</a>
 <h1>NCLEX-RN <b>guides</b></h1>
-<p class="sub">Straight answers owned by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}</a>, with explicit source and clinical-review status. No fluff, no false promises.</p>
-<div class="cta"><p><b>Start with questions.</b> <a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN practice questions</a> with visible answers, rationales, sources, and RN-review status—no sign-in required.</p></div>
+<p class="sub">Guides written by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}</a>, a working hospital RN. Each approved guide is tied to its sources and a review record.</p>
+<div class="cta"><p><b>Start with a question.</b> <a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN practice questions</a> with the answer, the rationale, and the sources on the page. No sign-in required.</p></div>
 ${sections}
 </main><footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms &middot; Privacy &middot; Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>

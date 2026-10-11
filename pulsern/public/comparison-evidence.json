@@ -20,7 +20,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-09-29",
-      "contentSha256": "5d9755c453d71dc53a8bb6749894b004d67461dfc2b48ca49d8a607df1b9d892",
+      "contentSha256": "68c8eb226160f645d051531fb371d0afc3b165c90e75006b631ecd829d815bed",
       "sourceSetSha256": "20ad8a90e94654e31155184c6dd983a2821d232c8b44ebd4190a9ff89eb5835f",
       "sources": [
         {
@@ -104,7 +104,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-09-29",
-      "contentSha256": "651a781c151e0888fa0f559f29645879ef57135e9b1ea60a6221c9349bc1fa93",
+      "contentSha256": "d1aa15f598725b73eb245e2871bb594d2415dd34ab04a7d73aeef9cc4c432ed3",
       "sourceSetSha256": "20ad8a90e94654e31155184c6dd983a2821d232c8b44ebd4190a9ff89eb5835f",
       "sources": [
         {
@@ -188,8 +188,8 @@
       },
       "published": "2026-09-03",
       "updated": "2026-10-10",
-      "contentSha256": "00b2d9e67bba49bc8b5c33df4434c9fe81aa1412cab0dd941798c727597559b4",
-      "sourceSetSha256": "5eebb652a5a1bc50819d753b46673ef6834b104c8890f5405e30f3e71f0cef39",
+      "contentSha256": "aff8f737c4974b0d70fc764e800c361145150e7099348c6ab3233872100f580b",
+      "sourceSetSha256": "fc5843d4028c8c3ebbbd7f99353ad0d6bab182cab899d9916566992199a0de62",
       "sources": [
         {
           "id": "pulsern-home-2026-09-03",
@@ -221,7 +221,7 @@
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
           "accessedAt": "2026-09-29",
-          "locator": "Creator identity, RN verification, clinical review, and content ownership"
+          "locator": "Founder identity, hospital RN practice, license verification, and how practice items and guides are checked"
         },
         {
           "id": "pulsern-legal-2026-09-03",
@@ -276,7 +276,7 @@
         },
         {
           "id": "pulse-labs-rn",
-          "statement": "PulseRN documents a searchable lab reference and a verified working-RN creator and reviewer.",
+          "statement": "PulseRN documents a searchable lab reference and a verified working hospital RN founder, with digest-bound reviews of the public study guides.",
           "sourceIds": [
             "pulsern-home-2026-09-03",
             "pulsern-about-2026-09-03",
@@ -306,8 +306,8 @@
       },
       "published": "2026-09-03",
       "updated": "2026-10-10",
-      "contentSha256": "613c5ce05b85b8a137b035c301f0e07cc60297e45b72d401c8618e9f5299d9c8",
-      "sourceSetSha256": "a80848367ac02b94bf0b617e67326bc5dd67d662972faca5ec99af491e44358a",
+      "contentSha256": "48d02ac8bd2df98552daee2dd455d2f5c147c9da5651ae24365414281b552df8",
+      "sourceSetSha256": "834c6f64fb130c9f2684bb083030ff9cdf6bdf787ae6ca48fc4ea78a7b9a1205",
       "sources": [
         {
           "id": "pulsern-home-2026-09-03",
@@ -339,7 +339,7 @@
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
           "accessedAt": "2026-09-29",
-          "locator": "Creator identity, RN verification, clinical review, and content ownership"
+          "locator": "Founder identity, hospital RN practice, license verification, and how practice items and guides are checked"
         },
         {
           "id": "pulsern-legal-2026-09-03",
@@ -393,7 +393,7 @@
         },
         {
           "id": "pulse-integrated-tools",
-          "statement": "PulseRN documents AI nursing-study Q&A, lab reference, spaced repetition, adaptive practice, and RN ownership in one app.",
+          "statement": "PulseRN documents AI nursing-study Q&A, lab reference, spaced repetition, adaptive practice, and a working hospital RN founder in one app.",
           "sourceIds": [
             "pulsern-home-2026-09-03",
             "pulsern-how-it-works-2026-09-03",
@@ -425,8 +425,8 @@
       },
       "published": "2026-09-03",
       "updated": "2026-10-10",
-      "contentSha256": "4788bb0f9b675bb91f8885ab3b28b8416be1146bddd81c8aaf82ad0f12ffbed3",
-      "sourceSetSha256": "539f35cfc20c80bb481f8512218777c5bd6a5b7663336bdc156829154f0227ad",
+      "contentSha256": "9e950d8ba0d06cb13efec54e733e1dfe15e255c15c3e45537398caff1ea315d2",
+      "sourceSetSha256": "676b79ad4ae1d23366cbff7576862481945dc15277478fa32393f9e2d8e18eb5",
       "sources": [
         {
           "id": "pulsern-home-2026-09-03",
@@ -458,7 +458,7 @@
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
           "accessedAt": "2026-09-29",
-          "locator": "Creator identity, RN verification, clinical review, and content ownership"
+          "locator": "Founder identity, hospital RN practice, license verification, and how practice items and guides are checked"
         },
         {
           "id": "pulsern-legal-2026-09-03",
@@ -513,7 +513,7 @@
         },
         {
           "id": "pulse-tools",
-          "statement": "PulseRN documents a built-in lab reference, broad nursing-study Q&A, adaptive practice, spaced repetition, and named RN ownership.",
+          "statement": "PulseRN documents a built-in lab reference, broad nursing-study Q&A, adaptive practice, spaced repetition, and a working hospital RN founder.",
           "sourceIds": [
             "pulsern-home-2026-09-03",
             "pulsern-how-it-works-2026-09-03",
@@ -536,8 +536,8 @@
       },
       "published": "2026-09-03",
       "updated": "2026-09-29",
-      "contentSha256": "14b83e4a52778c5155d04b9b5a9635d35243f0e1846e590412ca8f025d2b56df",
-      "sourceSetSha256": "a3b34ce2526f2a7850b9011175501997e9260b0a7f57f48edd57d68a57a0a546",
+      "contentSha256": "c59ddd38d4cd1edf67abda3fa3cb534ff869c21673b9514dfc69b996b1c883c1",
+      "sourceSetSha256": "cc5355d97e9cac0bf9ef8372a598b797c9a881d564e1ffd88e557418ea15f817",
       "sources": [
         {
           "id": "pulsern-home-2026-09-03",
@@ -569,7 +569,7 @@
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
           "accessedAt": "2026-09-29",
-          "locator": "Creator identity, RN verification, clinical review, and content ownership"
+          "locator": "Founder identity, hospital RN practice, license verification, and how practice items and guides are checked"
         },
         {
           "id": "uworld-nclex-rn-course-2026-09-03",
@@ -660,7 +660,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-10-10",
-      "contentSha256": "620c36a9ee250dda3a376ef180b6c58db4c918b77e592150ec5bc6a082b04365",
+      "contentSha256": "4c2cbbdc2b06c770832d08f5035d9367817c08abcb54ed8e5229a6f84047c14a",
       "sourceSetSha256": "20ad8a90e94654e31155184c6dd983a2821d232c8b44ebd4190a9ff89eb5835f",
       "sources": [
         {
@@ -753,8 +753,8 @@
       },
       "published": "2026-09-03",
       "updated": "2026-09-29",
-      "contentSha256": "bbffa54f090f2fc524d55fd4353504d1e92d7a6b9fcd440ac83228f680c877fa",
-      "sourceSetSha256": "2de53940cd435f5d06003a944edeaf0724b7e88f58a947ad3427d0e861f06a4e",
+      "contentSha256": "8b1e280b814ae760c8c48236ca0b6e8f0cef659f67addf57a73214e1b2e26a16",
+      "sourceSetSha256": "07a6257f261c188eda0980af5823033c1c6a0f65946012886dd206805c5ca2a4",
       "sources": [
         {
           "id": "pulsern-home-2026-09-03",
@@ -786,7 +786,7 @@
           "title": "About PulseRN",
           "url": "https://www.pulsern.app/about/",
           "accessedAt": "2026-09-29",
-          "locator": "Creator identity, RN verification, clinical review, and content ownership"
+          "locator": "Founder identity, hospital RN practice, license verification, and how practice items and guides are checked"
         },
         {
           "id": "uworld-nclex-rn-course-2026-09-03",
