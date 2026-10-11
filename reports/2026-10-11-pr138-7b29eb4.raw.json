@@ -1,0 +1,74 @@
+{
+  "model": "openai/gpt-6-luna",
+  "mode": "trusted",
+  "meta": {
+    "base": "3d3c26cbb16989c572ce88e784c40df19cc94f6d",
+    "head": "7b29eb4fcddb73de69cc6d073dbd3130268723be",
+    "pr": "138"
+  },
+  "reviewedAt": "2026-10-11T04:19:50.711Z",
+  "filesReviewed": [
+    "pulsern/index.html",
+    "pulsern/ops/build-learn.mjs",
+    "pulsern/ops/build-public-pages.mjs",
+    "pulsern/ops/commercial-content.mjs",
+    "pulsern/public/about/index.html",
+    "pulsern/public/compare/best-affordable-nclex-prep/index.html",
+    "pulsern/public/compare/best-nclex-app-repeat-test-takers/index.html",
+    "pulsern/public/compare/best-nclex-question-banks/index.html",
+    "pulsern/public/compare/index.html",
+    "pulsern/public/compare/methodology/index.html",
+    "pulsern/public/compare/pulsern-vs-archer/index.html",
+    "pulsern/public/compare/pulsern-vs-kaplan/index.html",
+    "pulsern/public/compare/pulsern-vs-uworld/index.html",
+    "pulsern/public/comparison-evidence.json",
+    "pulsern/public/editorial-policy/index.html",
+    "pulsern/public/free-nclex-practice-test/index.html",
+    "pulsern/public/how-it-works/index.html",
+    "pulsern/public/learn/index.html",
+    "pulsern/public/legal/index.html",
+    "pulsern/public/llms.txt",
+    "pulsern/public/methodology/index.html",
+    "pulsern/public/pricing/index.html",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/billing.jsx",
+    "pulsern/src/landing.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/landing.jsx",
+      "line": 7,
+      "title": "Claims every session starts with a question, but Today starts with flashcards",
+      "problem": "The feature copy says every session starts with a question. The same page describes the Today round as putting due cards and adaptive questions in one session, and the homepage says the round does due flashcards before questions.",
+      "failure_scenario": "A learner opens Today with cards due and encounters flashcards first, contradicting the site's unqualified claim about every session.",
+      "fix": "Limit the claim to question-practice sessions, or change the Today flow so it actually starts with a question.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/landing.jsx",
+      "line": 8,
+      "title": "Promises cards return just before an individual learner would forget",
+      "problem": "The copy says missed items return 'right before you would forget it' and will therefore be there on exam day. The described product schedules reviews from recall feedback and calendar dates; that does not establish an individual's forgetting point or guarantee a review before their exam.",
+      "failure_scenario": "A learner trusts the claim that a missed concept will be resurfaced before the exam, but the scheduled due date falls after the exam or does not match when that learner would forget it.",
+      "fix": "Describe the actual behavior without claiming a personalized forgetting-time prediction or exam-day guarantee—for example, say that review dates are scheduled from recall feedback.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 144024,
+    "completionTokens": 6041,
+    "reasoningTokens": 5696,
+    "costUsd": 0.021023425
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Two material defects in the new product claims: one contradicts the described Today-round flow, and one promises precision the spaced-repetition schedule cannot establish.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
