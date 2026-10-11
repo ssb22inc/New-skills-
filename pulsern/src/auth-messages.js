@@ -45,8 +45,8 @@ export function explainAuthError(rawMessage, mode = "signin") {
     return {
       tone: "notice",
       text: mode === "signup"
-        ? `Your account is set up and we have emailed that address — check your inbox and spam. You can ask for another email in ${n} ${unit}.`
-        : `We have already emailed that address — check your inbox and spam. You can ask for another in ${n} ${unit}.`,
+        ? `Your account is set up, and we've emailed that address. Check your inbox and spam folder. You can ask for another email in ${n} ${unit}.`
+        : `We've already emailed that address. Check your inbox and spam folder. You can ask for another email in ${n} ${unit}.`,
       linkHint: false,
     };
   }
@@ -64,7 +64,7 @@ export function explainAuthError(rawMessage, mode = "signin") {
   if (NOT_CONFIRMED.test(msg)) {
     return {
       tone: "notice",
-      text: "Your account exists but has not been confirmed yet. Use the sign-in link below to go straight in — no confirmation needed.",
+      text: "Your account exists but hasn't been confirmed yet. Use the sign-in link below to go straight in. No confirmation needed.",
       linkHint: true,
     };
   }
@@ -72,7 +72,7 @@ export function explainAuthError(rawMessage, mode = "signin") {
   if (BAD_CREDENTIALS.test(msg)) {
     return {
       tone: "error",
-      text: "That email and password do not match. Try again, or use the sign-in link below to get in without a password.",
+      text: "That email and password don't match. Try again, or use the sign-in link below to get in without a password.",
       linkHint: true,
     };
   }
@@ -82,13 +82,13 @@ export function explainAuthError(rawMessage, mode = "signin") {
   }
 
   if (BAD_EMAIL.test(msg)) {
-    return { tone: "error", text: "That email address does not look right — check it for a typo.", linkHint: false };
+    return { tone: "error", text: "That email address doesn't look right. Check it for a typo.", linkHint: false };
   }
 
   if (RATE_LIMITED.test(msg)) {
     return {
       tone: "notice",
-      text: "Too many attempts just now. Wait a minute and try again — nothing is wrong with your account.",
+      text: "Too many attempts just now. Wait a minute and try again. Nothing is wrong with your account.",
       linkHint: true,
     };
   }

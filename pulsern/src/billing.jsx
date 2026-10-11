@@ -95,14 +95,14 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
       {trialBanner && (
         <section className="card" style={{ borderColor: "var(--accent)" }}>
           <p className="eyebrow">Free pass active</p>
-          <p className="small">You're on the {planById("pass1").name.toLowerCase()} — every study tool is open. Readiness exams unlock with any subscription below.</p>
+          <p className="small">You're on the {planById("pass1").name.toLowerCase()}, and every study tool is open. Readiness exams unlock with any subscription below.</p>
         </section>
       )}
       {!trialBanner && (
         <section className="card">
           <p className="eyebrow">PulseRN access</p>
           <h2 className="h2">{ent?.status === "expired" ? "Your access has ended" : "Choose your runway"}</h2>
-          <p className="small">Built by a working hospital RN, for future RNs. Every plan opens the full adaptive QBank, 1,000+ flashcards, case-study library, AI tutor, and labs reference. Self-assessments are full 85-item NCLEX-style readiness exams — and no account is ever shown the same exam twice.</p>
+          <p className="small">Built by a working hospital RN, for future RNs. Every plan opens the full adaptive QBank, 1,100+ flashcards, the case-study library, the AI tutor, and the lab values reference. Self-assessments are full 85-item NCLEX-style readiness exams, and no account is ever shown the same exam twice.</p>
         </section>
       )}
       <section className="card">
@@ -113,7 +113,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
             onKeyDown={(e) => { if (e.key === "Enter") apply(); }} />
           <button className="btn ghost" onClick={apply}>Apply</button>
         </div>
-        {applied && <p className="small tip">✅ Code <strong>{applied.code}</strong> applied — partner pricing shown below.</p>}
+        {applied && <p className="small tip">✅ Code <strong>{applied.code}</strong> applied. Partner pricing is shown below.</p>}
         {err && <p className="small" style={{ color: "var(--coral)" }}>{err}</p>}
       </section>
       {mains.map((p) => (
@@ -124,7 +124,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
           </div>
           <p className="small">{p.blurb}</p>
           <button className="btn" disabled={busy === p.id} onClick={() => buy(p.id)}>
-            {busy === p.id ? "Opening checkout…" : `Get ${p.name} →`}
+            {busy === p.id ? "Opening checkout…" : `Get the ${p.name} plan →`}
           </button>
         </section>
       ))}
@@ -160,7 +160,7 @@ export function PlanCard({ ent, onManage, isOwner = false }) {
   if (isOwner) return (
     <section className="card">
       <p className="eyebrow">Your plan · owner</p>
-      <p className="small"><strong>Owner — full development access.</strong> Paywall, exam locks, and content protection don't apply to this account. Exam runs from here never burn attempts.</p>
+      <p className="small"><strong>Owner: full development access.</strong> Paywall, exam locks, and content protection don't apply to this account. Exam runs from here never burn attempts.</p>
     </section>
   );
   if (!ent) return null;

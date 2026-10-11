@@ -93,7 +93,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
         options: { emailRedirectTo: authRedirectUrl() },
       });
       if (error) throw error;
-      setNotice("Check your email — tap the link and you're in. No password needed.");
+      setNotice("Check your email. Tap the link and you're in. No password needed.");
     } catch (err) {
       const m = explainAuthError(err.message, "signin");
       if (m.tone === "notice") setNotice(m.text); else setError(m.text);
@@ -150,7 +150,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
         <h1 className="auth-logo">PulseRN</h1>
         <p className="auth-motto">Built by a working hospital RN, for future RNs.</p>
         <p className="auth-sub">{
-          mode === "signup" ? "Create your account — progress syncs to every device."
+          mode === "signup" ? "Create your account. Your progress syncs to every device."
           : mode === "forgot" ? "Enter your email and we'll send a reset link."
           : "Sign in to continue studying."}</p>
         <div ref={msgRef} role="status" aria-live="polite">
@@ -219,7 +219,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
             {mode === "signin" ? "Create account" : "Sign in"}
           </button>
         </p>
-        <p className="auth-foot">Educational exam preparation only — not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/learn/" style={{ color: "#5b6472" }}>Guides</a> · <a href="/about/" style={{ color: "#5b6472" }}>About</a> · <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
+        <p className="auth-foot">Educational exam preparation only, not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/learn/" style={{ color: "#5b6472" }}>Guides</a> · <a href="/about/" style={{ color: "#5b6472" }}>About</a> · <a href="/legal/" style={{ color: "#5b6472" }}>Terms · Privacy · Disclaimer</a></p>
         <InstallCard scope="auth" headline="Install the PulseRN study app" message="Keep your study tools one tap away. Installation is handled by your browser; no app-store download is required." />
       </div>
     </main>
@@ -277,7 +277,7 @@ export class ErrorBoundary extends React.Component {
       <main className="auth-wrap">
         <div className="auth-card">
           <h1 className="auth-logo">PulseRN</h1>
-          <p className="auth-sub">Something went wrong on this screen. Your progress is saved to your account — reloading will pick up right where you left off.</p>
+          <p className="auth-sub">Something went wrong on this screen. Your progress is saved to your account, so reloading picks up right where you left off.</p>
           <button className="auth-btn" onClick={() => window.location.reload()}>Reload PulseRN</button>
         </div>
       </main>
