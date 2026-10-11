@@ -31,8 +31,8 @@ export function ProfileCard({ profile, setProfile, prompt = false, onDone, onDis
     setErr("");
     const wantsSms = reminders || offers;
     const e164 = phone.trim() ? normalizePhone(phone) : null;
-    if (wantsSms && !e164) { setErr("Enter a valid mobile number (e.g. 305-555-0123) to receive texts."); return; }
-    if (phone.trim() && !e164) { setErr("That phone number doesn't look right — use digits like 305-555-0123."); return; }
+    if (wantsSms && !e164) { setErr("Enter a valid mobile number (e.g., 305-555-0123) to receive texts."); return; }
+    if (phone.trim() && !e164) { setErr("That phone number doesn't look right. Use digits like 305-555-0123."); return; }
     setState("busy");
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) { setState("error"); return; }
@@ -47,7 +47,7 @@ export function ProfileCard({ profile, setProfile, prompt = false, onDone, onDis
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await supabase.from("profiles").upsert(row).select().maybeSingle();
-    if (error) { setState("error"); setErr("Couldn't save — try again."); return; }
+    if (error) { setState("error"); setErr("Couldn't save. Try again."); return; }
     setProfile(data ?? row);
     setState("saved");
     onDone?.();
@@ -56,7 +56,7 @@ export function ProfileCard({ profile, setProfile, prompt = false, onDone, onDis
   return (
     <section className="card" style={{ position: "relative" }}>
       {onDismiss && (
-        <button type="button" onClick={onDismiss} aria-label="Dismiss — you can always do this later in Stats"
+        <button type="button" onClick={onDismiss} aria-label="Dismiss. You can always do this later in Stats."
           style={{ position: "absolute", top: 8, right: 10, background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", padding: 4 }}>✕</button>
       )}
       <p className="eyebrow">{prompt ? "Finish setting up" : "Profile & notifications"}</p>

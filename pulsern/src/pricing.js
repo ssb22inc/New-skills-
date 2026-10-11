@@ -11,7 +11,7 @@ export const PLANS = [
   { id: "sub360", name: "360-Day",         days: 360, cents: 37900, exams: 5, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 5 self-assessments" },
   { id: "sub730", name: "730-Day",         days: 730, cents: 43900, exams: 6, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 6 self-assessments" },
   /* Post-subscription add-ons */
-  { id: "renew7", name: "7-Day Renewal",   days: 7,   cents: 4500,  exams: 0, addon: true, blurb: "Need a little more time? Full content access — no new self-assessment." },
+  { id: "renew7", name: "7-Day Renewal",   days: 7,   cents: 4500,  exams: 0, addon: true, blurb: "Need a little more time? Full content access, with no new self-assessment." },
   { id: "exam1",  name: "Extra Self-Assessment", days: 0, cents: 4500, exams: 1, addon: true, blurb: "One more never-seen readiness exam on your current subscription." },
 ];
 

@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     const amount = discountedCents(plan.cents, code);
 
     const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) return res.status(503).json({ error: "Payments are not switched on yet — the owner still needs to connect Stripe." });
+    if (!key) return res.status(503).json({ error: "Payments aren't switched on yet. The owner still needs to connect Stripe." });
 
     const site = process.env.SITE_URL || "https://www.pulsern.app";
     const form = new URLSearchParams({

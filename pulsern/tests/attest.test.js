@@ -12,7 +12,9 @@ describe("signing and checking records", () => {
     expect(k.verifier.verify("diagram-review", ["abg", "FAIL"], sig)).toBe(false);
     expect(k.verifier.verify("pairing-decision", ["abg", "PASS"], sig), "a signature cannot be replayed as another kind").toBe(false);
     expect(k.verifier.verify("diagram-review", ["abg", "PASS"], k.other.sign("diagram-review", ["abg", "PASS"]))).toBe(false);
-    for (const bad of [undefined, null, "", "0".repeat(64), "A".repeat(86) + "==", sig.slice(0, -4) + "AA=="]) expect(k.verifier.verify("diagram-review", ["abg", "PASS"], bad)).toBe(false);
+    const flipped = Buffer.from(sig, "base64");
+    flipped[flipped.length - 1] ^= 1;
+    for (const bad of [undefined, null, "", "0".repeat(64), "A".repeat(86) + "==", flipped.toString("base64")]) expect(k.verifier.verify("diagram-review", ["abg", "PASS"], bad)).toBe(false);
   });
   it("accepts a key pasted on one line with \\n escapes", () => {
     const env = Object.fromEntries(Object.entries(k.env).map(([n, v]) => [n, v.replace(/\n/g, "\\n")]));

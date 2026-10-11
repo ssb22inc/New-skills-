@@ -20,7 +20,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-09-29",
-      "contentSha256": "68c8eb226160f645d051531fb371d0afc3b165c90e75006b631ecd829d815bed",
+      "contentSha256": "c16b90e924e61dc946fb10024e0919b3f0d7d79dec644eb5f5c6a6179c9de2e0",
       "sourceSetSha256": "20ad8a90e94654e31155184c6dd983a2821d232c8b44ebd4190a9ff89eb5835f",
       "sources": [
         {
@@ -104,7 +104,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-09-29",
-      "contentSha256": "d1aa15f598725b73eb245e2871bb594d2415dd34ab04a7d73aeef9cc4c432ed3",
+      "contentSha256": "8198d2717f2d89b11f20e21e882d8716512d80c1f1011698d9b64d1d5d8228f4",
       "sourceSetSha256": "20ad8a90e94654e31155184c6dd983a2821d232c8b44ebd4190a9ff89eb5835f",
       "sources": [
         {
@@ -188,7 +188,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-10-10",
-      "contentSha256": "aff8f737c4974b0d70fc764e800c361145150e7099348c6ab3233872100f580b",
+      "contentSha256": "c4e28f3042e500996dd5a6c72b8a689dd3800015181eda860fdbbc65b7f05785",
       "sourceSetSha256": "fc5843d4028c8c3ebbbd7f99353ad0d6bab182cab899d9916566992199a0de62",
       "sources": [
         {
@@ -226,7 +226,7 @@
         {
           "id": "pulsern-legal-2026-09-03",
           "publisher": "PulseRN",
-          "title": "PulseRN terms, privacy, and educational disclaimer",
+          "title": "PulseRN Terms, Privacy, and Disclaimer",
           "url": "https://www.pulsern.app/legal/",
           "accessedAt": "2026-09-29",
           "locator": "AI-tutor limitations, lab-reference qualification, privacy, and educational-use boundary"
@@ -285,7 +285,7 @@
         },
         {
           "id": "pulse-uworld-value",
-          "statement": "At the public 30-day prices observed, PulseRN listed a $99 paid plan and a no-card seven-day study pass while UWorld listed $149 before a displayed promotion.",
+          "statement": "At the public 30-day prices observed, PulseRN listed a $99 paid plan and a no-card 7-day study pass while UWorld listed $149 before a displayed promotion.",
           "sourceIds": [
             "pulsern-pricing-2026-09-03",
             "uworld-nclex-rn-course-2026-09-03"
@@ -306,7 +306,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-10-10",
-      "contentSha256": "48d02ac8bd2df98552daee2dd455d2f5c147c9da5651ae24365414281b552df8",
+      "contentSha256": "274d68d2827181d240fb3cf92a85628ba5ae0dcdef73fd1e1dd8dc963c321e3f",
       "sourceSetSha256": "834c6f64fb130c9f2684bb083030ff9cdf6bdf787ae6ca48fc4ea78a7b9a1205",
       "sources": [
         {
@@ -344,7 +344,7 @@
         {
           "id": "pulsern-legal-2026-09-03",
           "publisher": "PulseRN",
-          "title": "PulseRN terms, privacy, and educational disclaimer",
+          "title": "PulseRN Terms, Privacy, and Disclaimer",
           "url": "https://www.pulsern.app/legal/",
           "accessedAt": "2026-09-29",
           "locator": "AI-tutor limitations, lab-reference qualification, privacy, and educational-use boundary"
@@ -403,7 +403,7 @@
         },
         {
           "id": "pulse-archer-trial",
-          "statement": "PulseRN publicly offers a seven-day no-card study pass before a paid plan; Archer's cited page lists a lower one-month paid QBank and CAT entry price.",
+          "statement": "PulseRN publicly offers a 7-day no-card study pass before a paid plan; Archer's cited page lists a lower one-month paid QBank and CAT entry price.",
           "sourceIds": [
             "pulsern-home-2026-09-03",
             "pulsern-pricing-2026-09-03",
@@ -425,7 +425,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-10-10",
-      "contentSha256": "9e950d8ba0d06cb13efec54e733e1dfe15e255c15c3e45537398caff1ea315d2",
+      "contentSha256": "5b7d94cdb8cb633619bc49053b1bd3925f107b413834140c89eadd5a755726ad",
       "sourceSetSha256": "676b79ad4ae1d23366cbff7576862481945dc15277478fa32393f9e2d8e18eb5",
       "sources": [
         {
@@ -463,7 +463,7 @@
         {
           "id": "pulsern-legal-2026-09-03",
           "publisher": "PulseRN",
-          "title": "PulseRN terms, privacy, and educational disclaimer",
+          "title": "PulseRN Terms, Privacy, and Disclaimer",
           "url": "https://www.pulsern.app/legal/",
           "accessedAt": "2026-09-29",
           "locator": "AI-tutor limitations, lab-reference qualification, privacy, and educational-use boundary"
@@ -536,7 +536,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-09-29",
-      "contentSha256": "c59ddd38d4cd1edf67abda3fa3cb534ff869c21673b9514dfc69b996b1c883c1",
+      "contentSha256": "54764ddea6658d158b6ce4a4afeee36c6ad44cb75dc6cc80e4bd5653763bec2c",
       "sourceSetSha256": "cc5355d97e9cac0bf9ef8372a598b797c9a881d564e1ffd88e557418ea15f817",
       "sources": [
         {
@@ -660,7 +660,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-10-10",
-      "contentSha256": "4c2cbbdc2b06c770832d08f5035d9367817c08abcb54ed8e5229a6f84047c14a",
+      "contentSha256": "4ddbefd5a82655f668b4ab6fdcd6838dd333e8775b1af92998e7d6fbe765f58b",
       "sourceSetSha256": "20ad8a90e94654e31155184c6dd983a2821d232c8b44ebd4190a9ff89eb5835f",
       "sources": [
         {
@@ -732,7 +732,7 @@
         },
         {
           "id": "pulse-free-day",
-          "statement": "PulseRN publicly lists a seven-day free study-content pass without a readiness self-assessment.",
+          "statement": "PulseRN publicly lists a 7-day free study-content pass without a readiness self-assessment.",
           "sourceIds": [
             "pulsern-home-2026-09-03",
             "pulsern-pricing-2026-09-03"
@@ -753,7 +753,7 @@
       },
       "published": "2026-09-03",
       "updated": "2026-09-29",
-      "contentSha256": "8b1e280b814ae760c8c48236ca0b6e8f0cef659f67addf57a73214e1b2e26a16",
+      "contentSha256": "4c6bba41fdac0061897ed11a37bca1ed5e6e5d9166b1fe800aa5c4cdf9a47b39",
       "sourceSetSha256": "07a6257f261c188eda0980af5823033c1c6a0f65946012886dd206805c5ca2a4",
       "sources": [
         {

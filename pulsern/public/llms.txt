@@ -1,7 +1,7 @@
 # PulseRN
 
 > NCLEX-RN prep built by Sheldon Bennett, a working hospital RN, and engineered around how people learn and remember under pressure.
-> Web app at https://www.pulsern.app — installable to a phone home screen.
+> Web app at https://www.pulsern.app, installable to a phone home screen.
 
 PulseRN is a study platform for nursing students and graduates preparing for
 the NCLEX-RN licensure examination. It is educational exam preparation only and
@@ -12,24 +12,24 @@ dosing or treatment instructions.
 
 - **Adaptive practice.** An Elo/Rasch ability engine estimates a student's level
   from their answers and serves questions matched to it, interleaved across the
-  eight NCSBN client-need categories.
+  eight NCSBN client-needs categories.
 - **Every Next Generation NCLEX item type.** Bow-tie, matrix, cloze, highlight,
   drag-and-drop, multiple response, dosage calculation, and standard multiple
-  choice — with the NCJMM clinical-judgment flow on case studies.
+  choice, with the NCJMM clinical-judgment flow on case studies.
 - **Spaced-repetition flashcards.** Real calendar scheduling with a
   type-before-flip recall step rather than passive self-grading.
 - **Case studies.** Multi-step unfolding patient scenarios across all eight
   categories, including dedicated pediatric and geriatric populations.
-- **Readiness exams.** Ten standardized 85-question forms — the NCLEX-RN's
-  minimum length — under a timed lockdown, never repeated to the same account.
+- **Readiness exams.** Ten standardized 85-question forms (the NCLEX-RN's
+  minimum length) under a timed lockdown, never repeated to the same account.
 - **Readiness estimate.** An estimate built from your work in PulseRN. It
   appears after a minimum answer count and shows what to practice next. No
   prep program can guarantee an exam result.
 - **AI tutor.** Explains why an answer is right or wrong, on demand.
 
-## Honest limitations
+## Accuracy notes
 
-- PulseRN is not affiliated with, endorsed by, or connected to the NCSBN.
+- PulseRN is not affiliated with, endorsed by, or connected to NCSBN.
   NCLEX® is a registered trademark of the National Council of State Boards of
   Nursing, Inc.
 - Readiness is an estimate built from your work in PulseRN. No prep program
@@ -55,23 +55,23 @@ dosing or treatment instructions.
 
 - Free account required; progress syncs across devices.
 - A 7-day free pass provides study-content access without a readiness exam.
-- Paid access periods run from 30 to 730 days and include stated numbers of
+- Paid access periods run from 30 to 730 days and include a set number of
   readiness self-assessments. Current prices: https://www.pulsern.app/pricing/
-- Sign-in by email and password, or by passwordless email link.
+- Sign in with an email and password, or with a passwordless email link.
 
 ## Pages
 
-- [Home](https://www.pulsern.app/) — product overview and sign-in
-- [Free NCLEX-RN practice test](https://www.pulsern.app/free-nclex-practice-test/) — 20 public questions across four reviewed sets
-- [How it works](https://www.pulsern.app/how-it-works/) — product workflow and limitations
-- [Pricing](https://www.pulsern.app/pricing/) — current plans in USD
-- [About](https://www.pulsern.app/about/) — who built it and the method behind it
-- [Methodology](https://www.pulsern.app/methodology/) — adaptive practice, readiness, and limits
-- [Editorial policy](https://www.pulsern.app/editorial-policy/) — sources, automated checks, guide review, AI use, and corrections
-- [Guides](https://www.pulsern.app/learn/) — free NCLEX-RN reference articles
-- [NCLEX prep comparisons](https://www.pulsern.app/compare/) — sourced product-fit comparisons without affiliate rankings
-- [Comparison methodology](https://www.pulsern.app/compare/methodology/) — evidence hierarchy, pricing dates, conflicts, and corrections
-- [Terms, Privacy, Disclaimer](https://www.pulsern.app/legal/)
+- [Home](https://www.pulsern.app/): product overview and sign-in
+- [Free NCLEX-RN practice test](https://www.pulsern.app/free-nclex-practice-test/): 20 public questions across four reviewed sets
+- [How it works](https://www.pulsern.app/how-it-works/): product workflow and limitations
+- [Pricing](https://www.pulsern.app/pricing/): current plans in USD
+- [About](https://www.pulsern.app/about/): who built it and the method behind it
+- [Methodology](https://www.pulsern.app/methodology/): adaptive practice, readiness, and limits
+- [Editorial policy](https://www.pulsern.app/editorial-policy/): sources, automated checks, guide review, AI use, and corrections
+- [Guides](https://www.pulsern.app/learn/): free NCLEX-RN reference articles
+- [NCLEX prep comparisons](https://www.pulsern.app/compare/): sourced product-fit comparisons without affiliate rankings
+- [Comparison methodology](https://www.pulsern.app/compare/methodology/): evidence hierarchy, pricing dates, conflicts, and corrections
+- [Terms, Privacy, and Disclaimer](https://www.pulsern.app/legal/)
 
 ## NCLEX preparation comparisons
 

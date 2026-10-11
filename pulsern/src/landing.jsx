@@ -5,19 +5,19 @@ const freePassLabel = planById("pass1").name.toLowerCase();
 
 const FEATURES = [
   ["Retrieval practice", "You learn by pulling the answer out of memory. Every session starts with a question, not a lecture."],
-  ["Spaced repetition", "What you miss comes back on a real calendar date, right before you would forget it, so it is there on exam day."],
-  ["Adaptive practice", "PulseRN finds your weak spots across the eight NCSBN client-needs categories and works them until they are strengths."],
-  ["A plan for each day", "A focused Today round, and a weekly plan built around your exam date, so you always know what to do next."],
-  ["Visual study cards", "ABGs, potassium and ECG changes, IV fluids, insulin, isolation, and pressure injuries, drawn so the concept clicks."],
+  ["Spaced repetition", "What you miss comes back on a real calendar date, right before you'd forget it, so it's there on exam day."],
+  ["Adaptive practice", "PulseRN finds your weak spots across the eight NCSBN client-needs categories and works them until they're strengths."],
+  ["A plan for each day", "A focused Today round and a weekly plan built around your exam date, so you always know what to do next."],
+  ["Visual study cards", "ABGs, potassium and ECG changes, IV fluids, insulin, isolation, and pressure injuries, drawn so each concept clicks."],
   ["The study library", "10,000+ practice questions, 500+ case studies, 1,100+ flashcards, dosage calculation, and an AI tutor when you want another explanation."],
 ];
 
 const FAQ = [
-  ["Who created PulseRN?", "Sheldon Bennett, a working hospital RN. He built PulseRN from how people actually learn and remember under pressure, then engineered the study loop around that."],
-  ["Does PulseRN use real NCLEX questions?", "No. Practice is original and built around NCSBN's published test plan and item formats. PulseRN is not affiliated with NCSBN, and NCLEX is a registered trademark of NCSBN."],
+  ["Who created PulseRN?", "Sheldon Bennett, a working hospital RN. He started from how people actually learn and remember under pressure, then engineered the study loop around it."],
+  ["Does PulseRN use real NCLEX questions?", "No. Practice items are original and built around NCSBN's published test plan and item formats. PulseRN is not affiliated with or endorsed by NCSBN. NCLEX® is a registered trademark of NCSBN."],
   ["Can PulseRN tell me whether I will pass?", "Readiness is an estimate built from your work in PulseRN. It shows you what to practice next. No prep program can guarantee an exam result."],
   ["How is the content checked?", "Practice questions, case studies, flashcards, and readiness items are built around the published test plan and pass automated quality checks before they go live. Public study guides are source-cited and approved by Sheldon Bennett, RN."],
-  ["Is there a free option?", `Yes. A ${freePassLabel}, no card needed, covers study content. Readiness self-assessments are included with paid plans.`],
+  ["Is there a free option?", `Yes. A ${freePassLabel} covers study content, and no card is needed. Readiness self-assessments are included with paid plans.`],
 ];
 
 const SAMPLES = [
@@ -29,8 +29,8 @@ const SAMPLES = [
 
 const COMPARISONS = [
   ["PulseRN vs UWorld", "Compare AI study help, question-bank scale, lab access, media depth, RN accountability, and current public pricing.", "/compare/pulsern-vs-uworld/"],
-  ["PulseRN vs Archer Review", "Compare an app built by a working hospital RN with high-volume readiness, CAT, video, and live-support packages.", "/compare/pulsern-vs-archer/"],
-  ["PulseRN vs Kaplan", "Compare a focused self-directed app with Kaplan’s strategy instruction, CAT practice, classes, and tutoring tiers.", "/compare/pulsern-vs-kaplan/"],
+  ["PulseRN vs Archer Review", "Compare an app built by a working hospital RN with Archer's high-volume readiness, CAT, video, and live-support packages.", "/compare/pulsern-vs-archer/"],
+  ["PulseRN vs Kaplan", "Compare a focused, self-directed app with Kaplan's strategy instruction, CAT practice, classes, and tutoring tiers.", "/compare/pulsern-vs-kaplan/"],
 ];
 
 export default function LandingPage({ onSignIn, onStart }) {
@@ -163,7 +163,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div>
             <div className="land-eyebrow">Built by a working hospital RN</div>
             <h1>NCLEX-RN prep engineered around <span>how you learn.</span></h1>
-            <p className="land-lead">Every session starts with a question, not a lecture. What you miss comes back right before you would forget it. Built to get you ready to walk into the NCLEX confident.</p>
+            <p className="land-lead">Every session starts with a question, not a lecture. What you miss comes back right before you'd forget it. Built to get you ready to walk into the NCLEX confident.</p>
             <div className="land-actions">
               <button className="land-button" type="button" onClick={onStart}>Start the {freePassLabel}</button>
               <a className="land-button secondary" href="/how-it-works/">See how it works</a>
@@ -179,7 +179,7 @@ export default function LandingPage({ onSignIn, onStart }) {
 
         <section className="land-proof" aria-label="PulseRN facts">
           <div className="land-container land-proof-grid">
-            <div className="land-proof-cell"><b>Built for how you remember</b><span>Retrieval, spacing, and adaptive practice.</span></div>
+            <div className="land-proof-cell"><b>Built for how you remember</b><span>Retrieval, spacing, and adaptive practice</span></div>
             <div className="land-proof-cell"><b>10,000+ questions</b><span>The same library on every paid plan</span></div>
             <div className="land-proof-cell"><b>500+ case studies</b><span>Unfolding clinical judgment</span></div>
             <div className="land-proof-cell"><b>1,100+ flashcards</b><span>Spaced on real calendar dates</span></div>
@@ -191,7 +191,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">Inside the app</div>
               <h2>A Today round, then the question that fits you.</h2>
-              <p>The day starts with what is due. Adaptive practice follows. The lab reference opens over the question, so the lookup stays on the item.</p>
+              <p>The day starts with what's due. Adaptive practice follows. The lab reference opens over the question, so you can check a value without leaving it.</p>
             </div>
             <div className="land-screen-grid">
               <figure className="land-screen">
@@ -203,7 +203,7 @@ export default function LandingPage({ onSignIn, onStart }) {
                 <figcaption><strong>Lab reference at your fingertips</strong> Open searchable educational reference ranges while you study, then return to the question where you left off.</figcaption>
               </figure>
             </div>
-            <p className="land-screen-note">Screens captured from PulseRN’s real interface using built-in demonstration content. Reference ranges vary by source and clinical context; this study tool is not medical advice.</p>
+            <p className="land-screen-note">Screens captured from PulseRN's real interface using built-in demonstration content. Reference ranges vary by source and clinical context; this study tool is not medical advice.</p>
           </div>
         </section>
 
@@ -267,7 +267,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">How it works</div>
               <h2>A study loop you can explain.</h2>
-              <p>You answer first. Missed items come back. Weak spots get the work. A Today round and a weekly plan are built around your exam date. Readiness is an estimate of your work in PulseRN.</p>
+              <p>You answer first. Missed items come back. Weak spots get the work. A Today round and a weekly plan are built around your exam date. Readiness is an estimate built from your work in PulseRN.</p>
               <div className="land-author" id="author">
                 <div className="land-avatar" aria-hidden="true">RN</div>
                 <div><strong>Sheldon Bennett, RN</strong><p>A working hospital RN who built PulseRN around how people learn and remember under pressure. <a href="/about/#sheldon-bennett-rn">Read how the content is built.</a></p></div>
@@ -275,10 +275,10 @@ export default function LandingPage({ onSignIn, onStart }) {
             </div>
             <div className="land-steps">
               {[
-                ["01", "Answer before you review", "Every session starts with a question, not a lecture. Then read the rationale."],
-                ["02", "Miss it, and it returns", "Spaced repetition brings the item back on a calendar date, right before it would fade."],
-                ["03", "Work the weak spot", "Adaptive practice stays with a category until it is no longer the weak one."],
-                ["04", "Know what today is for", "A Today round, and a weekly plan once your exam date is set. Readiness is an estimate built from your work in PulseRN."],
+                ["01", "Answer before you review", "Every session starts with a question, not a lecture. Then you read the rationale."],
+                ["02", "Miss it, and it returns", "Spaced repetition brings the item back on a calendar date, right before you'd forget it."],
+                ["03", "Work the weak spot", "Adaptive practice stays with a category until it's no longer the weak one."],
+                ["04", "Know what today is for", "A Today round and a weekly plan once your exam date is set. Readiness is an estimate built from your work in PulseRN."],
               ].map(([n, title, text]) => <article className="land-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></article>)}
             </div>
           </div>
@@ -304,8 +304,8 @@ export default function LandingPage({ onSignIn, onStart }) {
 
       <footer className="land-footer">
         <div className="land-container">
-          <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms · Privacy · Disclaimer</a></div></div>
-          <p className="land-disclaimer">Educational exam preparation only — not medical advice or a clinical reference. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse PulseRN.</p>
+          <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div></div>
+          <p className="land-disclaimer">Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse PulseRN.</p>
         </div>
       </footer>
     </div>

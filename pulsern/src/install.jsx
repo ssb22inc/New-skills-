@@ -53,7 +53,7 @@ const dismissKey = (scope) => `pulsern.install.dismissed.${scope}`;
 export default function InstallCard({
   scope = "paid",
   headline = "Put PulseRN on your home screen",
-  message = "You've got full access — keep it one tap away. Opens full screen with no address bar.",
+  message = "You've got full access, so keep it one tap away. It opens full screen with no address bar.",
 }) {
   const [canPrompt, setCanPrompt] = useState(Boolean(deferred));
   const [dismissed, setDismissed] = useState(() => {
@@ -138,7 +138,7 @@ export default function InstallCard({
         </p>
       ) : plat === "ios-other" ? (
         <p className="small install-steps">
-          On iPhone and iPad only Safari can add apps to the home screen. Open{" "}
+          On iPhone and iPad, only Safari can add apps to the home screen. Open{" "}
           <strong>www.pulsern.app/app/</strong> in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
         </p>
       ) : (
