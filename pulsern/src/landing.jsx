@@ -5,10 +5,9 @@ const freePassLabel = planById("pass1").name.toLowerCase();
 
 const FEATURES = [
   ["Retrieval practice", "You learn by pulling the answer out of memory. Every session starts with a question, not a lecture."],
-  ["Spaced repetition", "What you miss comes back on a real calendar date, right before you'd forget it, so it's there on exam day."],
-  ["Adaptive practice", "PulseRN finds your weak spots across the eight NCSBN client-needs categories and works them until they're strengths."],
-  ["A plan for each day", "A focused Today round and a weekly plan built around your exam date, so you always know what to do next."],
-  ["Visual study cards", "ABGs, potassium and ECG changes, IV fluids, insulin, isolation, and pressure injuries, drawn so each concept clicks."],
+  ["Spaced repetition", "Flashcards come back on real calendar dates. Cards you miss come back soon, and cards you know come back less often."],
+  ["Adaptive practice", "Each answer updates your level in that NCSBN client-needs category, and PulseRN picks the next question to match your level."],
+  ["A plan for each day", "A focused Today round every day, plus a weekly plan built around your exam date, so you always know what to do next."],
   ["The study library", "10,000+ practice questions, 500+ case studies, 1,100+ flashcards, dosage calculation, and an AI tutor when you want another explanation."],
 ];
 
@@ -163,7 +162,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div>
             <div className="land-eyebrow">Built by a working hospital RN</div>
             <h1>NCLEX-RN prep engineered around <span>how you learn.</span></h1>
-            <p className="land-lead">Every session starts with a question, not a lecture. What you miss comes back right before you'd forget it. Built to get you ready to walk into the NCLEX confident.</p>
+            <p className="land-lead">Every session starts with a question, not a lecture. Questions you miss stay in your review set until you get them right. Built to get you ready to walk into the NCLEX confident.</p>
             <div className="land-actions">
               <button className="land-button" type="button" onClick={onStart}>Start the {freePassLabel}</button>
               <a className="land-button secondary" href="/how-it-works/">See how it works</a>
@@ -190,8 +189,8 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-container">
             <div className="land-section-head">
               <div className="land-eyebrow">Inside the app</div>
-              <h2>A Today round, then the question that fits you.</h2>
-              <p>The day starts with what's due. Adaptive practice follows. The lab reference opens over the question, so you can check a value without leaving it.</p>
+              <h2>Start each day with a short review, then practice at your level.</h2>
+              <p>Your Today round starts with the flashcards due that day, then gives you 8 practice questions matched to your level. Need a lab value? The lab reference opens right over the question.</p>
             </div>
             <div className="land-screen-grid">
               <figure className="land-screen">
@@ -267,7 +266,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">How it works</div>
               <h2>A study loop you can explain.</h2>
-              <p>You answer first. Missed items come back. Weak spots get the work. A Today round and a weekly plan are built around your exam date. Readiness is an estimate built from your work in PulseRN.</p>
+              <p>You answer each question before you see the explanation. Questions you miss stay in your review set until you get them right, and each new question is matched to your level. Every day starts with a short Today round, and once you set your exam date, PulseRN writes a weekly plan around it. Your readiness estimate is based on your work in PulseRN.</p>
               <div className="land-author" id="author">
                 <div className="land-avatar" aria-hidden="true">RN</div>
                 <div><strong>Sheldon Bennett, RN</strong><p>A working hospital RN who built PulseRN around how people learn and remember under pressure. <a href="/about/#sheldon-bennett-rn">Read how the content is built.</a></p></div>
@@ -276,9 +275,9 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-steps">
               {[
                 ["01", "Answer before you review", "Every session starts with a question, not a lecture. Then you read the rationale."],
-                ["02", "Miss it, and it returns", "Spaced repetition brings the item back on a calendar date, right before you'd forget it."],
-                ["03", "Work the weak spot", "Adaptive practice stays with a category until it's no longer the weak one."],
-                ["04", "Know what today is for", "A Today round and a weekly plan once your exam date is set. Readiness is an estimate built from your work in PulseRN."],
+                ["02", "Miss one, and it stays in your review set", "Missed questions wait in Review misses until you get them right. Flashcards you miss are scheduled to come back soon."],
+                ["03", "See where to focus", "Your category bars show where you're weakest, and you can focus your practice on that category."],
+                ["04", "Know what to do today", "Every day starts with a Today round, and once you set your exam date, you also get a weekly plan."],
               ].map(([n, title, text]) => <article className="land-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></article>)}
             </div>
           </div>

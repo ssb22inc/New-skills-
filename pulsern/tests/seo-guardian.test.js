@@ -48,6 +48,7 @@ describe("SEO guardian", () => {
       expect(page.sources.some((source) => new URL(source.url).hostname !== "www.pulsern.app")).toBe(true);
       expect(page.claims.length).toBeGreaterThan(0);
       expect(page.claims.every((claim) => claim.sourceIds.every((id) => sourceIds.has(id)))).toBe(true);
+      expect(page.updated).toBe([...page.sources.map((source) => source.accessedAt)].sort().at(-1));
     }
     const pages = evidence.pages.map((page) => ({ route: page.route, identifiers: [`sha256:${page.contentSha256}`] }));
     const intents = { intents: Object.fromEntries(evidence.pages.map((page) => [page.route, page.intent])) };
