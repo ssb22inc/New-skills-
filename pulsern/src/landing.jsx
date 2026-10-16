@@ -190,7 +190,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">Inside the app</div>
               <h2>Start each day with a short review, then practice at your level.</h2>
-              <p>Your Today round is a few due flashcards, then 8 practice questions matched to your level.</p>
+              <p>Your Today round starts with the flashcards due that day, then gives you 8 practice questions matched to your level. Need a lab value? The lab reference opens right over the question.</p>
             </div>
             <div className="land-screen-grid">
               <figure className="land-screen">
