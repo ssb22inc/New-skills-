@@ -8,7 +8,6 @@ const FEATURES = [
   ["Spaced repetition", "What you miss comes back on a real calendar date, right before you'd forget it, so it's there on exam day."],
   ["Adaptive practice", "PulseRN finds your weak spots across the eight NCSBN client-needs categories and works them until they're strengths."],
   ["A plan for each day", "A focused Today round and a weekly plan built around your exam date, so you always know what to do next."],
-  ["Visual study cards", "ABGs, potassium and ECG changes, IV fluids, insulin, isolation, and pressure injuries, drawn so each concept clicks."],
   ["The study library", "10,000+ practice questions, 500+ case studies, 1,100+ flashcards, dosage calculation, and an AI tutor when you want another explanation."],
 ];
 
