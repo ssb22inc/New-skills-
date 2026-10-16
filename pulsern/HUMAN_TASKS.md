@@ -49,6 +49,9 @@ Claude Code executes everything else. These run in parallel with the build.
   credential, jurisdiction, official verification URL, and verification date;
   it does not publish the address or treat license verification as guide
   approval.
+  Updated 2026-10-16: the Florida MQA lookup page shows the licensee's
+  address, so the published verification link is now Nursys
+  (https://www.nursys.com), which shows license status without it.
 
 - H16 · Guide-by-guide clinical attestation — **completed 2026-09-03.**
   All 37 public guides have digest-bound approval records: 20 exam guides,
