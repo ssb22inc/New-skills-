@@ -620,9 +620,14 @@ export default function App() {
   }, [isOwner]);
 
   /* ---- shared bank + item calibration (one query feeds both) ----
-     RLS serves only approved, non-rejected rows. On any failure the
-     built-in local array stays in place as the offline fallback. */
+     RLS serves only approved, non-rejected rows, and since migration 018
+     only to a signed-in account with unexpired access, so the load waits
+     for the entitlement (a brand-new account's free pass is granted first)
+     and re-runs when access opens. On any failure the built-in local array
+     stays in place as the offline fallback. */
+  const bankOpen = (isOwner || !!ent) && !locked;
   useEffect(() => {
+    if (!bankOpen) return;
     (async () => {
       // paginate: the practice bank is way past Supabase's 1,000-row cap
       const data = [];
@@ -666,7 +671,7 @@ export default function App() {
         setBankCases(data.map((r) => ({ ...r, dbId: r.id, ai: true })));
       }
     })();
-  }, []);
+  }, [bankOpen]);
 
   const answeredIds = log.map((l) => l.id);
   const acc = log.length ? log.filter((l) => l.correct).length / log.length : 0;

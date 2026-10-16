@@ -3,40 +3,35 @@
    official category weighting, one question at a time, no going back, no
    feedback until the end, and a proportional time limit. Scoring and the
    readiness verdict are deterministic plain code (rule 6). */
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase.js";
-import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight } from "./ngn.js";
+import { ngnExt } from "./ngn.js";
+import { EXAM_FORMS, EXAM_MINUTES, FULL_STANDALONE, FULL_CASES, verdictFor } from "./exam-core.js";
 import Calculator from "./calculator.jsx";
 import { ExhibitVisual } from "./exhibits.jsx";
 
-export const EXAM_FORMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-export const EXAM_MINUTES = 170; // 5h/150 items on the real exam → 85 items ≈ 2h50m
-/* Owner order: >=30 case-study questions per exam. 5 cases x 6 steps = 30,
-   plus 55 standalone = the same 85-question NCLEX-minimum length. The DB
-   holds 67 standalone per form; the runner draws 55 of them. */
-export const FULL_STANDALONE = 55, FULL_CASES = 5;
+/* The exam rules live in exam-core.js so api/exam.js (which builds, serves
+   and grades every exam) and this screen share one definition. */
+export { EXAM_FORMS, EXAM_MINUTES, FULL_STANDALONE, FULL_CASES, verdictFor, scoreItem } from "./exam-core.js";
 
-/* ---- deterministic verdict tiers (self-assessment estimate) ---- */
-export function verdictFor(pct) {
-  if (pct >= 68) return { tier: "HIGH", label: "High readiness (estimate): performing above the passing standard", cls: "ok" };
-  if (pct >= 55) return { tier: "BORDERLINE", label: "Borderline (estimate): near the passing standard, so focus on your weak categories", cls: "warn" };
-  return { tier: "BELOW", label: "Below the passing standard (estimate): build fundamentals before test day", cls: "no" };
-}
-
-/* score one item, all-or-nothing, same scorers as Practice */
-export function scoreItem(q, sel, order) {
-  const ext = ngnExt(q);
-  switch (q.type) {
-    case "mc": return sel[0] === q.answer;
-    case "sata": return Array.isArray(sel) && sel.length === q.answer.length && [...sel].sort((a, b) => a - b).every((v, i) => v === [...q.answer].sort((a, b) => a - b)[i]);
-    case "order": return Array.isArray(order) && order.length === q.answer.length && order.every((v, i) => v === q.answer[i]);
-    case "matrix": return scoreMatrix(sel, q.answer);
-    case "bowtie": return scoreBowtie(sel, q.answer);
-    case "cloze": return scoreCloze(sel, q.answer);
-    case "calc": return scoreCalc(sel, q.answer, ext.tolerance ?? 0);
-    case "highlight": return scoreHighlight(sel, q.answer);
-    default: return false;
+/* Every exam read and write goes through /api/exam with the student's
+   session token. Exam items are not readable from the browser (migration
+   018): the server sends them without answers and grades the responses. */
+async function examApi(action, extra = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) { const e = new Error("Sign in first"); e.status = 401; throw e; }
+  const r = await fetch("/api/exam", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ action, ...extra }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const e = new Error(data.error || "The exam service is unavailable. Please try again.");
+    e.status = r.status; e.code = data.code;
+    throw e;
   }
+  return data;
 }
 
 function answerText(q) {
@@ -62,85 +57,94 @@ const fmtClock = (secs) => {
 };
 
 export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, isOwner = false, onRunning, onAttempt, onUpgrade }) {
-  const [stage, setStage] = useState("picker"); // picker | intro | running | results | review
+  const [stage, setStage] = useState("picker"); // picker | intro | running | submitting | results | review
   const [availability, setAvailability] = useState(null); // {form: {items, cases}}
   const [form, setForm] = useState(null);
-  const [sequence, setSequence] = useState([]); // [{q, caseInfo?}]
+  const [sequence, setSequence] = useState([]); // [{key, q (no answer), caseInfo?}]
   const [idx, setIdx] = useState(0);
   const [sel, setSel] = useState([]);
   const [order, setOrder] = useState([]);
   const [calcOpen, setCalcOpen] = useState(false);
-  const [outcomes, setOutcomes] = useState([]); // {q, ok, caseInfo}
+  const [responses, setResponses] = useState([]); // {key, sel, order}, graded on the server
+  const [outcomes, setOutcomes] = useState([]); // {q, ok, caseInfo} after grading
+  const [pendingRecords, setPendingRecords] = useState([]);
   const [secondsLeft, setSecondsLeft] = useState(EXAM_MINUTES * 60);
   const [result, setResult] = useState(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [submitErr, setSubmitErr] = useState(null); // {message, final}
   const timerRef = useRef(null);
-  const outcomesRef = useRef(outcomes);
-  outcomesRef.current = outcomes;
+  const responsesRef = useRef(responses);
+  responsesRef.current = responses;
+  const secondsLeftRef = useRef(secondsLeft);
+  secondsLeftRef.current = secondsLeft;
+  const attemptRef = useRef({ attemptId: null, form: null, sequence: [] });
+  const pendingSubmitRef = useRef(null);
 
   /* lockdown: tell the app shell when the exam is live so it hides every
      menu, tab, and reference — the calculator on calc items is the only
-     tool, exactly like the real testing center */
+     tool, exactly like the real testing center. It holds while the final
+     answers are being scored. */
   useEffect(() => {
-    onRunning?.(stage === "running");
+    onRunning?.(stage === "running" || (stage === "submitting" && !submitErr));
     return () => onRunning?.(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage]);
+  }, [stage, submitErr]);
 
-  /* availability: how complete is each form's bank */
+  /* availability: how complete is each form's bank (counts only) */
   useEffect(() => {
+    if (stage !== "picker") return;
+    let live = true;
     (async () => {
-      const [{ data: qs }, { data: cs }] = await Promise.all([
-        supabase.from("questions").select("exam_form").not("exam_form", "is", null).eq("approved", true),
-        supabase.from("case_studies").select("exam_form").not("exam_form", "is", null).eq("approved", true),
-      ]);
       const a = {};
       for (const f of EXAM_FORMS) a[f] = { items: 0, cases: 0 };
-      for (const r of qs ?? []) if (a[r.exam_form]) a[r.exam_form].items++;
-      for (const r of cs ?? []) if (a[r.exam_form]) a[r.exam_form].cases++;
-      setAvailability(a);
+      try {
+        const data = await examApi("status");
+        for (const f of EXAM_FORMS) if (data.availability?.[f]) a[f] = data.availability[f];
+      } catch { /* shown as "not built yet", as before */ }
+      if (live) setAvailability(a);
     })();
+    return () => { live = false; };
   }, [stage === "picker"]);
+
+  /* Ability/streak/XP updates, one per scored item. One per render, so each
+     update starts from the ability the previous one produced. */
+  useEffect(() => {
+    if (!pendingRecords.length) return;
+    const [first, ...rest] = pendingRecords;
+    record(first.item, first.ok);
+    setPendingRecords(rest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRecords]);
 
   const begin = async () => {
     setLoading(true);
-    // Consume the attempt FIRST. The primary key on (user, form) plus the
-    // no-update/no-delete policies make this permanent: no account is ever
-    // shown the same exam twice, even across devices or resets.
-    // Owner exception: development runs don't write attempts at all.
-    if (!isOwner) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) { setLoading(false); return; }
-      const { error: attemptErr } = await supabase.from("exam_attempts").insert({ user_id: session.user.id, form });
-      if (attemptErr) { setLoading(false); setStage("picker"); return; }
-      onAttempt?.(form);
+    setErr("");
+    // The server checks the plan and remaining credits, refuses a form this
+    // account has already started, and writes the permanent attempt BEFORE
+    // sending a single item: no account is ever shown the same exam twice,
+    // even across devices or resets. Owner exception: development runs
+    // don't write attempts at all.
+    let data;
+    try {
+      data = await examApi("start", { form });
+    } catch (e) {
+      setLoading(false);
+      setErr(e.message);
+      setStage("picker");
+      return;
     }
-    const [{ data: items }, { data: cases }] = await Promise.all([
-      supabase.from("questions")
-        .select("id, cat, diff, type, stem, options, extra, answer, rationale")
-        .eq("approved", true).eq("exam_form", form),
-      supabase.from("case_studies")
-        .select("id, cat, title, intro, vitals, labs, note, steps")
-        .eq("approved", true).eq("exam_form", form),
-    ]);
     setLoading(false);
-    if (!items?.length) return;
-    // deterministic-enough shuffle for a fresh order each attempt
-    const standalone = [...items].sort(() => Math.random() - 0.5).slice(0, FULL_STANDALONE).map((q) => ({ q }));
-    const seq = [...standalone];
-    // insert case blocks at roughly 1/4, 1/2, 3/4 of the exam, like the real thing
-    const nCases = Math.min((cases ?? []).length, FULL_CASES);
-    (cases ?? []).slice(0, FULL_CASES).forEach((c, ci) => {
-      const at = Math.min(seq.length, Math.floor(((ci + 1) / (nCases + 1)) * seq.length) + ci * c.steps.length);
-      const steps = c.steps.map((s, si) => ({
-        q: { ...s, id: `x${c.id}-${si}`, cat: c.cat, diff: 3 },
-        caseInfo: { title: c.title, intro: c.intro, vitals: c.vitals, labs: c.labs, note: c.note, step: si + 1, of: c.steps.length },
-      }));
-      seq.splice(at, 0, ...steps);
-    });
+    if (!isOwner && data.attemptId) onAttempt?.(form);
+    const seq = Array.isArray(data.sequence) ? data.sequence : [];
+    if (!seq.length) return;
+    attemptRef.current = { attemptId: data.attemptId ?? null, form, sequence: seq };
     setSequence(seq);
+    setResponses([]);
     setOutcomes([]);
+    setResult(null);
+    setSubmitErr(null);
     setIdx(0);
     setSel(initialSel(seq[0].q));
     setOrder([]);
@@ -153,7 +157,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     if (stage !== "running") { clearInterval(timerRef.current); return; }
     timerRef.current = setInterval(() => {
       setSecondsLeft((s) => {
-        if (s <= 1) { clearInterval(timerRef.current); finish(outcomesRef.current, true); return 0; }
+        if (s <= 1) { clearInterval(timerRef.current); setTimeout(() => finish(responsesRef.current, true), 0); return 0; }
         return s - 1;
       });
     }, 1000);
@@ -161,22 +165,54 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage]);
 
-  const finish = (finalOutcomes, timedOut = false) => {
-    const total = finalOutcomes.length;
-    const correct = finalOutcomes.filter((o) => o.ok).length;
-    const pct = total ? Math.round((correct / total) * 100) : 0;
+  /* Send the answers for scoring. The server grades with the same
+     deterministic scorers and only then returns each item's answer and
+     rationale for the review screen. Retryable on a network failure. */
+  const sendSubmit = async () => {
+    const p = pendingSubmitRef.current;
+    if (!p) return;
+    setSubmitErr(null);
+    const { attemptId, form: f, sequence: seq } = attemptRef.current;
+    let data;
+    try {
+      data = await examApi("submit", {
+        attemptId, form: f, keys: seq.map((e) => e.key),
+        responses: p.responses, timedOut: p.timedOut,
+      });
+    } catch (e) {
+      setSubmitErr({ message: e.message, final: e.code === "already-submitted" || e.status === 403 || e.status === 404 });
+      return;
+    }
+    pendingSubmitRef.current = null;
+    const position = new Map(seq.map((e, i) => [e.key, i]));
+    const selByKey = new Map(p.responses.map((r) => [r.key, r.sel]));
+    const graded = Array.isArray(data.graded) ? data.graded : [];
+    const finalOutcomes = graded.map((g) => ({ q: g.q, ok: g.ok, sel: selByKey.get(g.key), caseInfo: g.caseInfo ?? null }));
     const byCat = {};
     for (const c of cats) byCat[c] = { n: 0, ok: 0 };
     for (const o of finalOutcomes) {
       if (!byCat[o.q.cat]) byCat[o.q.cat] = { n: 0, ok: 0 };
       byCat[o.q.cat].n++; if (o.ok) byCat[o.q.cat].ok++;
     }
-    const minutes = Math.round((EXAM_MINUTES * 60 - secondsLeft) / 60);
-    const v = verdictFor(pct);
-    const res = { pct, correct, total, byCat, minutes, timedOut, incomplete: total < sequence.length, verdict: v.tier, date: new Date().toISOString().slice(0, 10) };
+    const res = { pct: data.pct, correct: data.correct, total: data.total, byCat, minutes: p.minutes, timedOut: p.timedOut, incomplete: !!data.incomplete, verdict: data.verdict ?? verdictFor(data.pct).tier, date: new Date().toISOString().slice(0, 10) };
+    setOutcomes(finalOutcomes);
+    // ability/streak/XP update; numeric bank ids only (case steps use x-ids)
+    setPendingRecords(graded.map((g) => ({
+      item: { id: typeof g.q.id === "number" ? g.q.id : 90000 + (position.get(g.key) ?? 0), cat: g.q.cat, diff: g.q.diff },
+      ok: g.ok,
+    })));
     setResult(res);
-    setExamResults((m) => ({ ...m, [form]: { ...res, attempts: (m[form]?.attempts ?? 0) + 1 } }));
+    setExamResults((m) => ({ ...m, [f]: { ...res, attempts: (m[f]?.attempts ?? 0) + 1 } }));
     setStage("results");
+  };
+
+  const finish = (finalResponses, timedOut = false) => {
+    clearInterval(timerRef.current);
+    const minutes = Math.round((EXAM_MINUTES * 60 - secondsLeftRef.current) / 60);
+    pendingSubmitRef.current = { responses: finalResponses, timedOut, minutes };
+    setCalcOpen(false); setConfirmEnd(false);
+    setStage("submitting");
+    sendSubmit();
   };
 
   const cur = sequence[idx];
@@ -192,13 +228,12 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     sel.length > 0;
 
   const submit = () => {
-    const ok = scoreItem(q, sel, order);
-    // ability/streak/XP update; numeric bank ids only (case steps use x-ids)
-    record({ id: typeof q.id === "number" ? q.id : 90000 + idx, cat: q.cat, diff: q.diff }, ok);
-    const nextOutcomes = [...outcomes, { q, ok, sel: JSON.parse(JSON.stringify(sel)), caseInfo: cur.caseInfo ?? null }];
-    setOutcomes(nextOutcomes);
+    // No scoring in the browser: the answer key never reaches it. The
+    // response is kept and graded on the server when the exam ends.
+    const nextResponses = [...responses, { key: cur.key, sel: JSON.parse(JSON.stringify(sel)), order: [...order] }];
+    setResponses(nextResponses);
     setCalcOpen(false); setConfirmEnd(false);
-    if (idx + 1 >= sequence.length) { finish(nextOutcomes); return; }
+    if (idx + 1 >= sequence.length) { finish(nextResponses); return; }
     setIdx(idx + 1);
     setSel(initialSel(sequence[idx + 1].q));
     setOrder([]);
@@ -221,6 +256,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
           <h2 className="h2">NCLEX-style exams</h2>
           <p className="small">Ten standardized exams of <strong>85 questions each</strong>, the real NCLEX-RN's minimum length. Every form is 55 standalone questions plus 5 full case studies (6 questions each, 30 case-study questions in all), weighted to the official test plan, with a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal, and no account is ever shown the same exam twice.</p>
           {isOwner && <p className="small tip">🔧 Owner dev access: every exam is open, retakes allowed, nothing is burned.</p>}
+          {err && <p className="small tip" role="alert">{err}</p>}
           {ent && !isOwner && !trial && <p className="small tip">You have <strong>{examsLeft}</strong> self-assessment{examsLeft === 1 ? "" : "s"} remaining.{examsLeft === 0 && onUpgrade ? <> Add one for $45 from <button className="auth-switch" onClick={onUpgrade}>Plans & upgrades</button>.</> : null}</p>}
         </section>
         {trial && !isOwner && (
@@ -283,6 +319,24 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
           <button className="btn" onClick={begin} disabled={loading}>{loading ? "Preparing exam…" : "Begin exam"}</button>
           <button className="btn ghost" onClick={() => setStage("picker")}>Back</button>
         </div>
+      </section>
+    </div>
+  );
+
+  /* ================= SCORING ================= */
+  if (stage === "submitting") return (
+    <div className="stack">
+      <section className="card">
+        <p className="eyebrow">Readiness Exam {form}</p>
+        {!submitErr
+          ? <p className="small" role="status">Scoring your exam…</p>
+          : <>
+              <p className="small" role="alert">{submitErr.message}</p>
+              <div className="row">
+                {!submitErr.final && <button className="btn" onClick={sendSubmit}>Try again</button>}
+                <button className="btn ghost" onClick={() => { pendingSubmitRef.current = null; setStage("picker"); }}>Back to exams</button>
+              </div>
+            </>}
       </section>
     </div>
   );
@@ -483,7 +537,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
         <p className="small tip">
           {!confirmEnd
             ? <button className="auth-switch" style={{ color: "var(--muted)" }} onClick={() => setConfirmEnd(true)}>End exam early…</button>
-            : <>Score only what you've answered so far? <button className="auth-switch" onClick={() => finish(outcomes)}>Yes, end & score</button> · <button className="auth-switch" onClick={() => setConfirmEnd(false)}>Keep going</button></>}
+            : <>Score only what you've answered so far? <button className="auth-switch" onClick={() => finish(responses)}>Yes, end & score</button> · <button className="auth-switch" onClick={() => setConfirmEnd(false)}>Keep going</button></>}
         </p>
       </section>
     </div>
