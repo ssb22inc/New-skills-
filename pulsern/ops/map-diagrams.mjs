@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* Pairs concept diagrams with practice questions — confirmed by Astra.
    ------------------------------------------------------------------
-   1. Read the approved practice bank (public read; no secret needed).
+   1. Read the approved practice bank. (It was a public read; since
+      migration 018 the public key returns no rows — see HUMAN_TASKS H21.)
    2. Propose candidate pairings with tight keyword matchers, reading any
       patient values from the stem (src/diagrams/match.js).
    3. Ask GPT Astra to confirm each pairing for that exact question, in
@@ -143,6 +144,12 @@ try {
   const rows = await readAll(() => sb.from("questions").select("id, stem, options, answer, rationale")
     .eq("approved", true).is("exam_form", null).order("id"), { ordered: true });
   const items = new Map(rows.map((r) => [r.id, r]));
+  /* Since migration 018 the bank is no longer readable with the public key
+     alone (anon gets no rows). An empty read must stop the run, never be
+     taken as "the bank is empty" and turned into an empty pairing map. */
+  if (!rows.length) {
+    throw new Error("Read 0 practice questions. Since migration 018 the practice bank is readable only by entitled accounts, so the public key returns nothing: give this job a key that can read the bank (HUMAN_TASKS.md H21).");
+  }
   console.log(`Read ${rows.length} practice questions.`);
   if (PREPARE) {
     /* This script reads the source's diagrams and runs its matcher inside

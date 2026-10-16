@@ -49,6 +49,9 @@ Claude Code executes everything else. These run in parallel with the build.
   credential, jurisdiction, official verification URL, and verification date;
   it does not publish the address or treat license verification as guide
   approval.
+  Updated 2026-10-16: the Florida MQA lookup page shows the licensee's
+  address, so the published verification link is now Nursys
+  (https://www.nursys.com), which shows license status without it.
 
 - H16 · Guide-by-guide clinical attestation — **completed 2026-09-03.**
   All 37 public guides have digest-bound approval records: 20 exam guides,
@@ -122,3 +125,45 @@ Claude Code executes everything else. These run in parallel with the build.
   with write access can push a workflow that reads repository-level
   secrets. Keep write access to people you trust; moving the remaining
   workflows into environments is a later change.
+
+## Paid content and exams locked to the server (added 2026-10-16)
+
+- H21 · Apply migration 018 in production — until it is applied, anyone
+  with the public app key can read the whole question bank, flashcards,
+  case studies and all ten readiness exams WITH their answers, and exam
+  limits are checked only in the browser.
+
+  Order matters. Do these two steps back to back:
+
+  1. Merge, and let Vercel deploy the app release that contains
+     `api/exam.js` (readiness exams are now started, served and graded by
+     the server). Until step 2 is done, starting an exam shows "The exam
+     service is unavailable", because the new `exam_attempts` columns do
+     not exist yet. That fails closed: no attempt is written and no credit
+     is spent. Practice, flashcards and cases keep working.
+  2. Straight after, open the Supabase SQL editor
+     (https://supabase.com/dashboard/project/xlfdywudgamrnzjwtrtd/sql/new),
+     paste the whole of
+     https://github.com/ssb22inc/New-skills-/blob/main/pulsern/supabase/migrations/018_paid_content_rls.sql
+     and press Run. Running it twice is safe.
+
+  Why not the other way round: if the migration goes first, the old app
+  still open in browsers inserts `exam_attempts` itself and reads exam
+  items directly. The database refuses both, so every exam start fails and
+  the exam picker shows every form as "not built yet" until the new app
+  ships. Deploying the app first limits the gap to exam starts, and nothing
+  is spent during it.
+
+  Check it is applied (returns `true`):
+
+      select exists (select 1 from pg_policies where policyname = 'questions_read_practice_entitled') and not exists (select 1 from pg_policies where policyname in ('questions_read_approved', 'flashcards_read_approved', 'cases_read_approved', 'insert own attempts')) as migration_018_applied;
+
+  One thing this cannot keep working, for you to decide: the
+  diagram-pairing workflow (`pulsern-diagram-map.yml`,
+  `ops/map-diagrams.mjs`) reads the practice bank with the public key, in a
+  job that deliberately holds no secrets. After 018 that read returns no
+  rows. The script now stops with an error instead of building an empty
+  pairing map. To run it again, give the trusted script a key that can read
+  the bank in both jobs (for example the service-role key from the
+  `pulsern-paid` environment, passed as `PULSERN_SUPABASE_ANON_KEY`). That
+  changes the workflow's no-secrets design, so the choice is left to you.
