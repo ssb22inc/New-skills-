@@ -1424,7 +1424,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
         <p className="small">Adaptive practice: difficulty adjusts to you.</p>
-        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real NCLEX-RN (a computer-adaptive test).</Why>
+        <Why>Built on proven study techniques: retrieval practice (every item tests recall), interleaving (categories are mixed so back-to-back questions never share a topic), and short blocks of 8 questions with checkpoints. Difficulty adapts to your answers.</Why>
 
         <p className="eyebrow" style={{ marginTop: 10 }}>Focus: leave everything off for the full adaptive mix</p>
         <div className="fchips" role="group" aria-label="Filter by category">
@@ -1948,7 +1948,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
         <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
         <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
         <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
-        <Why>Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards come in {NEW_PER_DAY} at a time so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
+        <Why>A card graded "Hard" comes back tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards come in {NEW_PER_DAY} at a time, so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
         {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
       </section>
     </div>
@@ -2000,7 +2000,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
         )}
         {fcFlips < 3 && <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory. The flip is just the check.</p>}
         <p className="small tip">Enter flips the card · grades set real calendar dates.{cur.ai ? " ✨ AI-assisted card that passed automated quality checks." : ""}</p>
-        <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. That's the spacing effect doing the work.</Why>
+        <Why label="how grading works">A card graded "Hard" comes back tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" puts it back in this session. That's the spacing effect at work.</Why>
       </section>
     </div>
   );
