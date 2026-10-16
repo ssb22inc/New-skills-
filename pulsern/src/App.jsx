@@ -1293,7 +1293,7 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
           <button className="btn ghost" onClick={() => go("cards")}>Flashcards{dueCount ? ` (${dueCount} due)` : ""} →</button>
         </div>
         {weakest && weakest.pct < 100 && (
-          <p className="small tip">Weakest area so far: <strong>{weakest.cat}</strong> ({weakest.pct}%). The QBank is already steering questions there.</p>
+          <p className="small tip">Weakest area so far: <strong>{weakest.cat}</strong> ({weakest.pct}%). To drill it, pick it under Focus on the Practice tab.</p>
         )}
       </section>
     </div>
@@ -1424,7 +1424,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
         <p className="small">Adaptive practice: difficulty adjusts to you.</p>
-        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real NCLEX-RN (a computer-adaptive test), steering toward your weakest categories.</Why>
+        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real NCLEX-RN (a computer-adaptive test).</Why>
 
         <p className="eyebrow" style={{ marginTop: 10 }}>Focus: leave everything off for the full adaptive mix</p>
         <div className="fchips" role="group" aria-label="Filter by category">
@@ -1761,7 +1761,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
         <section className="card">
           <p className="eyebrow">Next Generation NCLEX</p>
           <h2 className="h2">Case studies · {cases.length} in the library</h2>
-          <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps (recognize cues, analyze cues, prioritize hypotheses, generate solutions, take action, evaluate outcomes). Each step scores like the real exam.</p>
+          <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps (recognize cues, analyze cues, prioritize hypotheses, generate solutions, take action, evaluate outcomes). Each step is scored as soon as you check your answer, and the rationale follows.</p>
           <p className="small tip">Pick a sub-category to see its cases.</p>
           <div className="fchips" role="group" aria-label="Case sub-categories">
             {groups.map((g) => (
@@ -1948,7 +1948,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
         <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
         <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
         <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
-        <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
+        <Why>Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards come in {NEW_PER_DAY} at a time so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
         {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
       </section>
     </div>
@@ -2000,7 +2000,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
         )}
         {fcFlips < 3 && <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory. The flip is just the check.</p>}
         <p className="small tip">Enter flips the card · grades set real calendar dates.{cur.ai ? " ✨ AI-assisted card that passed automated quality checks." : ""}</p>
-        <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. Reviews land right before you'd forget. That's the spacing effect doing the work.</Why>
+        <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. That's the spacing effect doing the work.</Why>
       </section>
     </div>
   );
@@ -2038,7 +2038,7 @@ function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvi
             <div className="bar"><div className={"bar-fill" + (c.n < 5 ? " na" : c.pct < 60 ? " low" : "")} style={{ width: c.n < 5 ? "100%" : `${c.pct}%` }} /></div>
           </div>
         ))}
-        <p className="small tip">Aim for ≥ 75% in every category before test day. The QBank automatically feeds you more questions in your red-bar categories.</p>
+        <p className="small tip">Aim for ≥ 75% in every category before test day. To drill a red-bar category, pick it under Focus on the Practice tab.</p>
       </section>
       <section className="card">
         <p className="eyebrow">By special population</p>

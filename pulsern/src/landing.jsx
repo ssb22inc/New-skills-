@@ -5,8 +5,8 @@ const freePassLabel = planById("pass1").name.toLowerCase();
 
 const FEATURES = [
   ["Retrieval practice", "You learn by pulling the answer out of memory. Every session starts with a question, not a lecture."],
-  ["Spaced repetition", "What you miss comes back on a real calendar date, right before you'd forget it, so it's there on exam day."],
-  ["Adaptive practice", "PulseRN finds your weak spots across the eight NCSBN client-needs categories and works them until they're strengths."],
+  ["Spaced repetition", "Flashcards are scheduled on real calendar dates. Cards you miss stay close, and cards you know move further out."],
+  ["Adaptive practice", "Every answer updates your level in each of the eight NCSBN client-needs categories, and the next question is matched to it."],
   ["A plan for each day", "A focused Today round and a weekly plan built around your exam date, so you always know what to do next."],
   ["The study library", "10,000+ practice questions, 500+ case studies, 1,100+ flashcards, dosage calculation, and an AI tutor when you want another explanation."],
 ];
@@ -162,7 +162,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div>
             <div className="land-eyebrow">Built by a working hospital RN</div>
             <h1>NCLEX-RN prep engineered around <span>how you learn.</span></h1>
-            <p className="land-lead">Every session starts with a question, not a lecture. What you miss comes back right before you'd forget it. Built to get you ready to walk into the NCLEX confident.</p>
+            <p className="land-lead">Every session starts with a question, not a lecture. What you miss stays in review until you get it right. Built to get you ready to walk into the NCLEX confident.</p>
             <div className="land-actions">
               <button className="land-button" type="button" onClick={onStart}>Start the {freePassLabel}</button>
               <a className="land-button secondary" href="/how-it-works/">See how it works</a>
@@ -266,7 +266,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-section-head">
               <div className="land-eyebrow">How it works</div>
               <h2>A study loop you can explain.</h2>
-              <p>You answer first. Missed items come back. Weak spots get the work. A Today round and a weekly plan are built around your exam date. Readiness is an estimate built from your work in PulseRN.</p>
+              <p>You answer first. What you miss stays in review until you get it right. Each question is matched to your level. A Today round and a weekly plan are built around your exam date. Readiness is an estimate built from your work in PulseRN.</p>
               <div className="land-author" id="author">
                 <div className="land-avatar" aria-hidden="true">RN</div>
                 <div><strong>Sheldon Bennett, RN</strong><p>A working hospital RN who built PulseRN around how people learn and remember under pressure. <a href="/about/#sheldon-bennett-rn">Read how the content is built.</a></p></div>
@@ -275,8 +275,8 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-steps">
               {[
                 ["01", "Answer before you review", "Every session starts with a question, not a lecture. Then you read the rationale."],
-                ["02", "Miss it, and it returns", "Spaced repetition brings the item back on a calendar date, right before you'd forget it."],
-                ["03", "Work the weak spot", "Adaptive practice stays with a category until it's no longer the weak one."],
+                ["02", "Miss it, and it stays in review", "Missed questions wait in Review misses until you get them right. Flashcards you miss stay close on the calendar."],
+                ["03", "See where to focus", "Your category bars show where you're weakest, and you can focus Practice on that category."],
                 ["04", "Know what today is for", "A Today round and a weekly plan once your exam date is set. Readiness is an estimate built from your work in PulseRN."],
               ].map(([n, title, text]) => <article className="land-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></article>)}
             </div>
