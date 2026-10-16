@@ -83,6 +83,13 @@ const sourceList = (ids) => `<section aria-labelledby="sources"><h2 id="sources"
   return `<li id="source-${source.id}"><a href="${source.url}" rel="external noopener">${source.title}</a> (${source.publisher}). ${source.locator}; accessed <time datetime="${source.accessedAt}">${source.accessedAt}</time>.</li>`;
 }).join("")}</ul></section>`;
 
+/* Visible "last verified" must match the newest source check on that page.
+   A copy rewrite is not a re-check of prices or features, so do not set
+   this by hand to today's date. ISO dates compare lexicographically. */
+function latestAccessedAt(sourceIds) {
+  return sourceIds.map((id) => COMMERCIAL_SOURCES[id].accessedAt).reduce((latest, date) => (date > latest ? date : latest));
+}
+
 const table = (caption, rows) => `<div class="table-wrap" role="region" aria-label="${caption}" tabindex="0"><table><caption>${caption}</caption><thead><tr><th scope="col">Decision point</th><th scope="col">PulseRN</th><th scope="col">Competitor</th><th scope="col">How to interpret it</th></tr></thead><tbody>${rows.map(([label, pulse, competitor, meaning]) => `<tr><th scope="row">${label}</th><td>${pulse}</td><td>${competitor}</td><td>${meaning}</td></tr>`).join("")}</tbody></table></div>`;
 
 const disclosure = `<div class="callout"><strong>Disclosure:</strong> PulseRN publishes this comparison and has a commercial interest. Every product fact is tied to a dated provider-owned source; there are no affiliate links, paid placements, star ratings, or pass guarantees. Read the <a href="/compare/methodology/">comparison methodology</a>.</div>`;
@@ -132,7 +139,7 @@ const pages = [
     faq: [{ q: "Does a missing feature mean a competitor does not offer it?", a: "No. Unless a provider explicitly states that a feature is unavailable, the comparison says only that it was not confirmed in the cited public evidence." }],
   },
   {
-    slug: "compare/pulsern-vs-uworld", updated: "2026-10-10", title: "PulseRN vs UWorld for NCLEX-RN prep", eyebrow: "PulseRN advantage", h1: "PulseRN vs UWorld: why start with PulseRN?",
+    slug: "compare/pulsern-vs-uworld", title: "PulseRN vs UWorld for NCLEX-RN prep", eyebrow: "PulseRN advantage", h1: "PulseRN vs UWorld: why start with PulseRN?",
     description: "See why PulseRN is our recommended UWorld alternative for integrated NCLEX practice, nursing AI Q&A, lab access, transparent pricing, and direct RN accountability.",
     intent: { primary: "PulseRN vs UWorld", secondary: ["UWorld alternative for NCLEX", "PulseRN or UWorld"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "uworldCourse", "uworldAi"],
@@ -164,7 +171,7 @@ const pages = [
     ],
   },
   {
-    slug: "compare/pulsern-vs-archer", updated: "2026-10-10", title: "PulseRN vs Archer Review for NCLEX-RN", eyebrow: "PulseRN advantage", h1: "PulseRN vs Archer Review: why start with PulseRN?",
+    slug: "compare/pulsern-vs-archer", title: "PulseRN vs Archer Review for NCLEX-RN", eyebrow: "PulseRN advantage", h1: "PulseRN vs Archer Review: why start with PulseRN?",
     description: "See why PulseRN is our recommended Archer alternative for connected NCLEX practice, nursing AI Q&A, lab access, missed-question repair, and direct RN accountability.",
     intent: { primary: "PulseRN vs Archer Review", secondary: ["Archer Review alternative", "PulseRN or Archer NCLEX"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "archerPackages", "archerReadiness"],
@@ -195,7 +202,7 @@ const pages = [
     ],
   },
   {
-    slug: "compare/pulsern-vs-kaplan", updated: "2026-10-10", title: "PulseRN vs Kaplan for NCLEX-RN prep", eyebrow: "Head-to-head fit", h1: "PulseRN vs Kaplan: focused app or structured course system?",
+    slug: "compare/pulsern-vs-kaplan", title: "PulseRN vs Kaplan for NCLEX-RN prep", eyebrow: "Head-to-head fit", h1: "PulseRN vs Kaplan: focused app or structured course system?",
     description: "Compare PulseRN and Kaplan NCLEX-RN prep by price, QBank scale, AI tutoring, lab access, CAT practice, strategy classes, RN accountability, and support.",
     intent: { primary: "PulseRN vs Kaplan NCLEX", secondary: ["Kaplan NCLEX alternative", "PulseRN or Kaplan"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "kaplanCourse", "kaplanPractice"],
@@ -246,7 +253,7 @@ const pages = [
     ],
   },
   {
-    slug: "compare/best-affordable-nclex-prep", updated: "2026-10-10", title: "Best affordable NCLEX preparation compared", eyebrow: "Value without hype", h1: "Affordable NCLEX preparation starts with the features you will use.",
+    slug: "compare/best-affordable-nclex-prep", title: "Best affordable NCLEX preparation compared", eyebrow: "Value without hype", h1: "Affordable NCLEX preparation starts with the features you will use.",
     description: "Compare current public entry prices and value from PulseRN, UWorld, Archer Review, and Kaplan without affiliate rankings, hidden pass promises, or false cheapest claims.",
     intent: { primary: "best affordable NCLEX preparation", secondary: ["affordable NCLEX prep", "cheap NCLEX question bank"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "uworldCourse", "archerPackages", "kaplanCourse"],
@@ -293,7 +300,7 @@ const pages = [
   },
 ];
 
-export const COMMERCIAL_PAGES = pages.map((page) => ({ ...page, updated: page.updated || COMMERCIAL_VERIFIED_AT, published: COMMERCIAL_PUBLISHED_AT }));
+export const COMMERCIAL_PAGES = pages.map((page) => ({ ...page, updated: latestAccessedAt(page.sources), published: COMMERCIAL_PUBLISHED_AT }));
 
 export function relatedCommercial(slug, all = COMMERCIAL_PAGES) {
   const index = all.findIndex((page) => page.slug === slug);
