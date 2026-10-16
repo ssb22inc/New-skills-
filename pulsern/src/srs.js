@@ -6,9 +6,11 @@ import { todayStr, addDays } from "./dates.js";
 
 export const NEW_PER_DAY = 20; // Anki-style cap so a 1,000-card bank isn't due on day one
 
-/* Queue = every review that has come due, plus up to NEW_PER_DAY unseen
-   cards. Returns card ids in study order (reviews first). */
-export function dueQueue(cards, srsMap) {
+/* Queue = every review that has come due, plus up to `newLimit` unseen
+   cards. Returns card ids in study order (reviews first). The app passes
+   newCardAllowance(fcNew) as `newLimit`, so the NEW_PER_DAY cap holds for
+   the whole LOCAL day across queue rebuilds and reloads, not per build. */
+export function dueQueue(cards, srsMap, newLimit = NEW_PER_DAY) {
   const reviews = [], fresh = [];
   const today = todayStr();
   for (const c of cards) {
@@ -27,7 +29,22 @@ export function dueQueue(cards, srsMap) {
     const sa = ea.seen ?? "", sb = eb.seen ?? "";
     return sa < sb ? -1 : sa > sb ? 1 : 0;
   });
-  return [...reviews, ...fresh.slice(0, NEW_PER_DAY)];
+  return [...reviews, ...fresh.slice(0, Math.max(0, Math.min(NEW_PER_DAY, newLimit)))];
+}
+
+/* Daily new-card ledger, persisted as fcNew: { day: "YYYY-MM-DD", count }.
+   `count` is how many never-seen cards were graded for the first time on
+   `day` (LOCAL). A ledger from an earlier day — or a legacy save with none —
+   means nothing has been introduced today. */
+export function newCardAllowance(fcNew, today = todayStr()) {
+  const used = fcNew && fcNew.day === today ? Math.max(0, fcNew.count ?? 0) : 0;
+  return Math.max(0, NEW_PER_DAY - used);
+}
+
+/* Record one new card introduced today. Returns a NEW ledger. */
+export function noteNewCard(fcNew, today = todayStr()) {
+  const used = fcNew && fcNew.day === today ? Math.max(0, fcNew.count ?? 0) : 0;
+  return { day: today, count: used + 1 };
 }
 
 /* Grade → next {interval, due}. Same ladder the app has always used:

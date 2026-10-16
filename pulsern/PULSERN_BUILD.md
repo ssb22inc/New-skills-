@@ -131,10 +131,17 @@ One blob per user under key pulsern-v1:
   "customQs": [],
   "provider": "claude",
   "ability": { "<cat>": { "theta": 1200, "n": 0 } },   // NEW — Gate 1
-  "plan": { "week": "YYYY-MM-DD", "days": [...] }      // NEW — planner cache
+  "plan": { "week": "YYYY-MM-DD", "days": [...] },     // NEW — planner cache
+  "missSchedule": { "<questionId>": { "interval", "due": "YYYY-MM-DD", "seen" } }, // NEW, optional — spaced review of missed questions
+  "fcNew": { "day": "YYYY-MM-DD" | null, "count": 0 }   // NEW, optional — new flashcards introduced that LOCAL day
 }
 
 Legacy saves lack ability/plan: initialize with emptyAbility(CATS) / null. All dates LOCAL.
+
+The blob also carries additive keys added after this contract was written (flaggedCases, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips); src/state.js migrateBlob is the authoritative list of defaults. The two newest optional keys:
+
+- missSchedule — missed QBank questions on the flashcard ladder (src/question-review.js, built on srs.js nextSchedule): a miss schedules a review for the next LOCAL day and resets the ladder; each correct review pushes it out (3 → 7 → 15 → 31 → 60 days). Due reviews lead the Today round and Review Misses; Review Misses still serves every current miss on demand. Legacy saves without the key derive it from the answer log: every question whose latest answer is wrong is due today (the log carries no dates).
+- fcNew — the daily new-card ledger. dueQueue receives NEW_PER_DAY minus the count for today, so the 20-a-day cap holds across queue rebuilds and reloads. Missing or from an earlier day = nothing introduced today.
 
 ## 5 · App integration work (src/App.jsx)
 
@@ -154,7 +161,7 @@ Start from assets/App.portable.jsx (v5.1 — already carries local-date, SRS-mer
 
 - calibration: on load, select id, elo_rating from questions where approved → { [id]: { rating } } state passed to itemRating/pickFrom.
 
-- pickFrom: after the interleave filter, sort pool by Math.abs(itemRating(x, calibration) - pickTargetRating(ability, x.cat)) ascending and pick randomly from the top 3 (replaces the diff-ladder sort; keep diffTarget state removed or repurposed for display only).
+- pickFrom: choose the category first with src/weak-spots.js pickCategory (weaker categories by θ weighted up, with a floor weight and a starvation guard; never the previous category when another is available; seeded PRNG), then, within that category, sort pool by Math.abs(itemRating(x, calibration) - pickTargetRating(ability, x.cat)) ascending and pick randomly from the top 3 (replaces the diff-ladder sort; keep diffTarget state removed or repurposed for display only).
 
 5.4 NGN renderers (Gate 2). Three new types in QBank, payloads from q.extra:
 
@@ -164,7 +171,7 @@ Start from assets/App.portable.jsx (v5.1 — already carries local-date, SRS-mer
 
 - cloze: split stem on {n}, render <select> per dropdown. Correct = every index matches. Feedback shows correct choices inline.
 
-Scoring all-or-nothing; XP 10 * diff as elsewhere. validQ and the bank merge must accept the new shapes (mirror validItem in the factory).
+Scoring is NCSBN-style partial credit (src/ngn.js scoreItem → { points, max }): mc and calc 0/1; select-all and highlight +/- (each keyed selection +1, each unkeyed selection −1, floor 0); select-N 0/1 per keyed option; matrix 0/1 per row; cloze, ordered drag-and-drop and bow-tie 0/1 per component. Case-study steps use the same rules (scoreCaseStep), shown per step and as a case total. The ability engine, readiness, XP and the review schedule receive the full-credit outcome (points === max) as correct/incorrect, so Elo calibration is unchanged. XP 10 * diff as elsewhere, on full credit. validQ and the bank merge must accept the new shapes (mirror validItem in the factory).
 
 5.5 Bank loading. On app load (signed in), fetch approved questions from Supabase and merge with customQs as allQuestions. Keep the built-in local array as offline fallback when the fetch fails.
 
