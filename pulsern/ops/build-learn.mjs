@@ -263,7 +263,7 @@ ${faq}
 </div>
 <div class="cta">
   <p><b>Practice this for real.</b> ${esc(a.cta ?? "PulseRN drills this with adaptive questions that adjust to your level, every Next Gen item type, and 85-question readiness exams.")}</p>
-  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+  <p><a href="/app/sign-up">Start studying on PulseRN &rarr;</a></p>
 </div>
 
 <div class="card">

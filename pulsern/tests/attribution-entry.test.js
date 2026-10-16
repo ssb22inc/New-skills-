@@ -174,10 +174,10 @@ describe("public pages load the existing capture", () => {
 });
 
 describe("a tagged landing is what signup records", () => {
-  it("keeps a learn-page campaign through the bare homepage button and into bySource", async () => {
+  it("keeps a learn-page campaign through the sign-up button and into bySource", async () => {
     const learn = read("public/learn/abg-interpretation/index.html");
     expect(learn).toContain(ATTRIBUTION_BOOT_TAG);
-    expect(learn).toContain('<a href="/">Start studying on PulseRN');
+    expect(learn).toContain('<a href="/app/sign-up">Start studying on PulseRN');
 
     const storage = memoryStorage();
     land(
@@ -185,7 +185,7 @@ describe("a tagged landing is what signup records", () => {
       `${SITE}/learn/abg-interpretation/?utm_source=linkedin&utm_medium=social&utm_campaign=day3&utm_content=ad1&utm_term=abg`,
       "https://www.linkedin.com/feed/",
     );
-    const inserted = await continueToSignup(storage, "learn-student");
+    const inserted = await signupFrom(storage, `${SITE}/learn/abg-interpretation/`, "learn-student");
     expect(inserted).toHaveLength(1);
     expect(inserted[0]).toMatchObject({
       user_id: "learn-student",
