@@ -5,7 +5,7 @@ Claude Code executes everything else. Spec references in parentheses. Nothing he
 ## Phase 0 (blocking — the rails)
 
 - H1 · **fullburn.ai** — complete the domain registration and the formal trademark check (§11 Phase 0, §14). The name decision is made; only the paperwork remains.
-- H2 · **Cloudflare account** — Workers Paid plan; enable AI Gateway, R2, Vectorize, Durable Objects, Workflows, Browser Rendering (§2.2). Create the API token for CI/deploy.
+- H2 · **Cloudflare account** — Workers Paid plan; enable AI Gateway, R2, Vectorize, Durable Objects, Workflows, Browser Rendering (§2.2). Create the API token for CI/deploy. **No model-vendor key is needed (human instruction 2026-10-21: no provider lock-in).** Fullburn sends only the gateway token; the gateway serves any model from any vendor through **Unified Billing** — load credits on the AI Gateway page (Credits Available → Manage → Top-up; Cloudflare adds a 5% fee) and set the gateway's Workers AI billing to Unified billing. Storing your own vendor keys (BYOK) is optional and per vendor you choose.
 - H3 · **ClickHouse Cloud** — create the service (this is the warehouse, §2.1). Copy the HTTPS endpoint + credentials into the secrets vault, never into the repo.
 - H4 · **Airbyte** — Airbyte Cloud account or a small VPS for OSS (§2.2, explicitly not Cloudflare). Claude Code automates connector provisioning after this exists.
 - H5 · **Langfuse** — create the project (§2.3). Every LLM call and agent decision must trace here from the first hello-world (Law 11).

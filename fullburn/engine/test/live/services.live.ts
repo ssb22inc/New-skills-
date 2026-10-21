@@ -94,8 +94,8 @@ describe("live services (fullburn environment)", () => {
     observations.push(
       await check("langfuse-trace", async () => {
         if (!remoteTraceId) return { pass: false, observed: "no call was made, so there is no trace to read" };
-        // Ingestion is asynchronous: poll for up to 90 s.
-        for (let i = 0; i < 18; i++) {
+        // Ingestion is asynchronous: poll for up to 180 s.
+        for (let i = 0; i < 36; i++) {
           const r = await fetch(`${lfHost}/api/public/traces/${encodeURIComponent(remoteTraceId)}`, { headers: { authorization: lfAuth } });
           if (r.status === 200) {
             const body = (await r.json().catch(() => ({}))) as { id?: string; observations?: unknown[] };
@@ -103,9 +103,13 @@ describe("live services (fullburn environment)", () => {
           }
           await new Promise((res) => setTimeout(res, 5_000));
         }
-        // Say whether the keys themselves work, so a miss can be told from a bad key.
+        // Say whether the keys work, and what the project DOES hold for this
+        // client, so slow ingestion can be told from an id mismatch.
         const auth = await fetch(`${lfHost}/api/public/projects`, { headers: { authorization: lfAuth } });
-        return { pass: false, observed: `trace ${remoteTraceId} was not readable after 90 s; the Langfuse keys at this host answer HTTP ${auth.status} on /api/public/projects` };
+        const listed = await fetch(`${lfHost}/api/public/traces?userId=${encodeURIComponent(CLIENT)}&limit=5`, { headers: { authorization: lfAuth } });
+        const list = (await listed.json().catch(() => ({}))) as { data?: { id?: unknown; timestamp?: unknown }[] };
+        const ids = (list.data ?? []).map((t) => `${String(t.id)} @ ${String(t.timestamp)}`).join("; ") || "none";
+        return { pass: false, observed: `trace ${remoteTraceId} was not readable after 180 s; keys answer HTTP ${auth.status} on /projects; latest traces for ${CLIENT} (HTTP ${listed.status}): ${ids}` };
       }),
     );
 
@@ -146,5 +150,5 @@ describe("live services (fullburn environment)", () => {
     console.log(report);
     const v = liveVerdict(observations);
     expect(v.failing, "live checks failed — see the report").toEqual([]);
-  }, 300_000);
+  }, 420_000);
 });

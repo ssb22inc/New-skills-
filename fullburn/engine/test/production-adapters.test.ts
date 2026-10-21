@@ -255,3 +255,27 @@ describe("a non-2xx reply names its machine error codes and nothing else", () =>
     expect((await sneaky.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" }).then(() => null, (e: unknown) => e as Error))?.message, "a non-identifier crossed").toBe("AI Gateway returned HTTP 400");
   });
 });
+
+/** NO PROVIDER LOCK-IN (human instruction 2026-10-21). The adapter sends the
+ * gateway credential and nothing provider-specific, so the gateway — not this
+ * code — decides the provider credential (BYOK, else Unified Billing). A
+ * provider `Authorization` or `x-api-key` header would make the gateway forward
+ * it and skip both. MUTATION: NL-01. */
+describe("no request names a provider credential — any model runs on the gateway token alone", () => {
+  it("sends only content-type, cf-aig-authorization and cf-aig-metadata, for every registered model", async () => {
+    const { MODELS } = await import("@fullburn/config/models");
+    for (const m of Object.values(MODELS)) {
+      const seen: Record<string, string>[] = [];
+      const t = new AiGatewayHttpTransport({
+        gatewayBaseUrl: BASE,
+        fetchImpl: async (_u, init) => {
+          seen.push(init.headers);
+          return { status: 200, text: async () => chat('{"greeting":"hi"}') };
+        },
+      });
+      await t.post(new URL(m.gatewayRoute, BASE).toString(), { role: "r", input: {} }, { authorization: "Bearer gw-token", "x-fullburn-client": "c" });
+      expect(Object.keys(seen[0]!).sort(), `${m.id} sent a header beyond the gateway's`).toEqual(["cf-aig-authorization", "cf-aig-metadata", "content-type"]);
+      expect(seen[0]!["cf-aig-authorization"]).toBe("Bearer gw-token");
+    }
+  });
+});
