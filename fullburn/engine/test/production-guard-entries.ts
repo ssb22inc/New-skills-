@@ -90,9 +90,10 @@ export function productionGuardEntries(): ProductionGuard[] {
     { name: "langfuse: no fetch on the runtime", file: LF, type: LangfuseSinkError, expect: /no fetch implementation/, fire: () => withoutFetch(() => new LangfuseTraceSink({ host: "https://x.invalid", publicKey: "a", secretKey: "b" })) },
     { name: "langfuse: a network failure", file: LF, type: LangfuseSinkError, expect: /request failed \(network\)/, fire: () => lf(async () => { throw new Error("down"); }).emit(event) },
     { name: "langfuse: a non-2xx reply", file: LF, type: LangfuseSinkError, expect: /ingestion returned HTTP/, fire: () => lf(reply(401, "")).emit(event) },
-    { name: "langfuse: an unreadable 207", file: LF, type: LangfuseSinkError, expect: /unreadable multi-status/, fire: () => lf(reply(207, "x")).emit(event) },
-    { name: "langfuse: a rejected event", file: LF, type: LangfuseSinkError, expect: /rejected the trace event/, fire: () => lf(reply(207, JSON.stringify({ errors: [{ id: "e" }] }))).emit(event) },
-    { name: "langfuse: an acknowledgement of nothing", file: LF, type: LangfuseSinkError, expect: /did not acknowledge exactly the events sent/, fire: () => lf(reply(207, JSON.stringify({ successes: [], errors: [] }))).emit(event) },
+    { name: "langfuse: an unreadable body", file: LF, type: LangfuseSinkError, expect: /returned an unreadable body/, fire: () => lf(reply(200, "x")).emit(event) },
+    { name: "langfuse: a body that is not an object", file: LF, type: LangfuseSinkError, expect: /not a JSON object/, fire: () => lf(reply(200, "[]")).emit(event) },
+    { name: "langfuse: a rejected span", file: LF, type: LangfuseSinkError, expect: /rejected the trace span/, fire: () => lf(reply(200, JSON.stringify({ partialSuccess: { rejectedSpans: 1 } }))).emit(event) },
+    { name: "langfuse: a span id that is not 16 hex", file: LF, type: LangfuseSinkError, expect: /16 lowercase hex/, fire: () => new LangfuseTraceSink({ host: "https://lf.example.invalid", publicKey: "pk", secretKey: "sk", fetchImpl: reply(200, ""), newId: () => "x" }).emit(event) },
     // ---- engine/src/vault-crypto.ts ----
     { name: "vault: a KEK needs an id", file: VC, type: VaultError, expect: /KEK requires an id/, fire: () => importKek("", RAW) },
     { name: "vault: a KEK is 256 bits", file: VC, type: VaultError, expect: /exactly 32 bytes/, fire: () => importKek("k", new Uint8Array(16)) },

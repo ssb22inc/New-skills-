@@ -3,7 +3,7 @@ import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { llm, PreDispatchError, servingTransportAllowed } from "../src/gateway.ts";
 import { RecordedTransport } from "../src/transport-brand.ts";
 import { AiGatewayHttpTransport, GatewayHttpError, type FetchLike } from "../src/gateway-http.ts";
-import { LangfuseTraceSink, LangfuseSinkError } from "../src/langfuse-sink.ts";
+import { LangfuseTraceSink, LangfuseSinkError, otelTraceId } from "../src/langfuse-sink.ts";
 import { TraceContext, TraceEmitError } from "../src/tracing.ts";
 import { CANARY_SECRET, TEST_CLIENT, makeDeps } from "./helpers.ts";
 
@@ -95,37 +95,45 @@ describe("AI Gateway HTTP transport (X5-12)", () => {
   });
 });
 
-/** Acknowledges every event of the posted batch, as Langfuse's ingestion
- * endpoint does on success. */
-const ackAll = (call: Call) => ({
-  status: 207,
-  body: JSON.stringify({ successes: (JSON.parse(call.body) as { batch: { id: string }[] }).batch.map((e) => ({ id: e.id, status: 201 })), errors: [] }),
-});
+/** Langfuse's OTLP endpoint answers a 2xx with an empty body or a JSON object. */
+const otlpOk = () => ({ status: 200, body: "{}" });
 const lfEvent = (clientId = TEST_CLIENT, traceId = "t") => ({ traceId, clientId, role: "r", model: "m", startedAtMs: 0, input: {}, output: {}, costUsd: 0, outcome: "ok" as const });
+type Span = { traceId: string; spanId: string; name: string; startTimeUnixNano: string; endTimeUnixNano: string; attributes: { key: string; value: { stringValue: string } }[]; status: { code: number } };
+const spanOf = (call: Call): Span => (JSON.parse(call.body) as { resourceSpans: { scopeSpans: { spans: Span[] }[] }[] }).resourceSpans[0]!.scopeSpans[0]!.spans[0]!;
+const attr = (sp: Span, k: string) => sp.attributes.find((a) => a.key === k)?.value.stringValue;
 
-describe("Langfuse trace sink (X5-12)", () => {
-  const counter = () => { let n = 0; return () => `evt-${++n}`; };
+describe("Langfuse trace sink (X5-12) — OpenTelemetry since 2026-10-21", () => {
+  const counter = () => { let n = 0; return () => (++n).toString(16).padStart(16, "0"); };
   const opts = (fetchImpl: FetchLike) => ({ host: "https://langfuse.example.invalid", publicKey: "pk-lf-test", secretKey: "sk-lf-test", fetchImpl, newId: counter(), now: () => 0 });
 
-  it("delivers every llm() decision as a namespaced trace plus a generation, with basic auth", async () => {
-    const lf = stubFetch(ackAll);
+  /** MUTATION: LF-OT-01 (endpoint), LF-OT-02 (real-time header). */
+  it("delivers every llm() decision as one root generation span on the OTLP endpoint, with basic auth and the v4 header", async () => {
+    const lf = stubFetch(otlpOk);
     const gw = stubFetch(() => ({ status: 200, body: chat('{"greeting":"hi"}') }));
     const { deps } = makeDeps({ transport: new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: gw.fetch }) });
     await llm({ ...deps, sink: new LangfuseTraceSink(opts(lf.fetch)), bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("t-lf") });
     expect(lf.calls).toHaveLength(1);
-    expect(lf.calls[0]!.url).toBe("https://langfuse.example.invalid/api/public/ingestion");
+    expect(lf.calls[0]!.url).toBe("https://langfuse.example.invalid/api/public/otel/v1/traces");
     expect(lf.calls[0]!.headers["authorization"]).toBe(`Basic ${btoa("pk-lf-test:sk-lf-test")}`);
-    const batch = JSON.parse(lf.calls[0]!.body).batch;
-    expect(batch[0]).toMatchObject({ type: "trace-create", body: { id: `${TEST_CLIENT}:t-lf`, name: "hello-world", userId: TEST_CLIENT } });
-    expect(batch[1]).toMatchObject({ type: "generation-create", body: { traceId: `${TEST_CLIENT}:t-lf`, name: "hello-world", output: { greeting: "hi" } } });
-    expect(JSON.stringify(batch)).not.toContain(CANARY_SECRET);
+    expect(lf.calls[0]!.headers["x-langfuse-ingestion-version"]).toBe("4");
+    const sp = spanOf(lf.calls[0]!);
+    expect(sp.traceId).toBe(await otelTraceId(TEST_CLIENT, "t-lf"));
+    expect(sp.traceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(sp.spanId).toMatch(/^[0-9a-f]{16}$/);
+    expect(attr(sp, "langfuse.observation.type")).toBe("generation");
+    expect(attr(sp, "langfuse.trace.name")).toBe("hello-world");
+    expect(attr(sp, "langfuse.user.id")).toBe(TEST_CLIENT);
+    expect(JSON.parse(attr(sp, "langfuse.observation.output")!)).toEqual({ greeting: "hi" });
+    expect(lf.calls[0]!.body).not.toContain(CANARY_SECRET);
   });
 
-  /** MUTATION: X5-12d — ignore per-event errors in a 207. */
-  it("a delivery failure fails the call: non-2xx, a rejected event, or the network", async () => {
+  /** MUTATION: X5-12d, X5-12e. */
+  it("a delivery failure fails the call: non-2xx, a rejected span, an unreadable body, or the network", async () => {
     for (const reply of [
       () => ({ status: 401, body: "" }),
-      () => ({ status: 207, body: JSON.stringify({ successes: [], errors: [{ id: "evt-1", status: 400 }] }) }),
+      () => ({ status: 200, body: JSON.stringify({ partialSuccess: { rejectedSpans: 1, errorMessage: "bad span" } }) }),
+      () => ({ status: 200, body: "<html>not json</html>" }),
+      () => ({ status: 200, body: "[]" }),
       () => Promise.reject(new Error("offline")) as Promise<never>,
     ]) {
       const lf = stubFetch(reply);
@@ -135,55 +143,39 @@ describe("Langfuse trace sink (X5-12)", () => {
       const { deps } = makeDeps({ transport: new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: gw.fetch }) });
       await expect(llm({ ...deps, sink, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("t-lf-fail") }), "an untraced call succeeded").rejects.toBeInstanceOf(TraceEmitError);
     }
+    // OTLP successes: an empty body and a JSON object with no rejected spans.
+    for (const body of ["", "{}", JSON.stringify({ partialSuccess: {} }), JSON.stringify({ partialSuccess: { rejectedSpans: 0 } })]) {
+      await expect(new LangfuseTraceSink(opts(stubFetch(() => ({ status: 200, body })).fetch)).emit(lfEvent()), `${JSON.stringify(body)} was refused`).resolves.toBeUndefined();
+    }
     expect(() => new LangfuseTraceSink({ host: "http://x.invalid", publicKey: "a", secretKey: "b" })).toThrow(LangfuseSinkError);
     expect(() => new LangfuseTraceSink({ host: "https://x.invalid", publicKey: "", secretKey: "b" })).toThrow(LangfuseSinkError);
   });
 
-  /** X7-10 (GPT-6 Astra, 2026-10-09): a reply acknowledging nothing — or the
-   * wrong event, or one event twice — passed as delivered.
-   * MUTATION: X7-10a, X7-10b, LF-24. */
-  it("only a positive acknowledgement of exactly the events sent counts as delivered", async () => {
-    const ids = (call: Call) => (JSON.parse(call.body) as { batch: { id: string }[] }).batch.map((e) => e.id);
-    for (const [name, reply] of [
-      ["no acknowledgement at all", () => ({ status: 207, body: JSON.stringify({ successes: [], errors: [] }) })],
-      ["a 200 with an empty body", () => ({ status: 200, body: "" })],
-      ["a 200 with no successes field", () => ({ status: 200, body: JSON.stringify({ errors: [] }) })],
-      ["an unrelated event id", (c: Call) => ({ status: 207, body: JSON.stringify({ successes: ids(c).map(() => ({ id: "someone-else" })), errors: [] }) })],
-      ["one event acknowledged twice, the other not", (c: Call) => ({ status: 207, body: JSON.stringify({ successes: [{ id: ids(c)[0] }, { id: ids(c)[0] }], errors: [] }) })],
-      ["every event plus an extra", (c: Call) => ({ status: 207, body: JSON.stringify({ successes: [...ids(c), "extra"].map((id) => ({ id })), errors: [] }) })],
-    ] as const) {
-      const sink = new LangfuseTraceSink(opts(stubFetch(reply as (c: Call) => { status: number; body: string }).fetch));
-      await expect(sink.emit(lfEvent()), `${name} counted as delivered`).rejects.toBeInstanceOf(LangfuseSinkError);
-    }
-    await expect(new LangfuseTraceSink(opts(stubFetch(ackAll).fetch)).emit(lfEvent())).resolves.toBeUndefined();
-  });
-
-  /** X7-11 (GPT-6 Astra, 2026-10-09): two clients' contexts with the same
-   * caller-chosen trace id targeted one remote trace. MUTATION: X7-11a, X7-11b. */
+  /** X7-11 (GPT-6 Luna, 2026-10-09): two clients with one caller-chosen trace
+   * id must not share a remote trace; two decisions must not share a span.
+   * MUTATION: X7-11a, X7-11b. */
   it("two clients with the same trace id, and two decisions under one trace, never share a remote id", async () => {
-    const lf = stubFetch(ackAll);
+    const lf = stubFetch(otlpOk);
     const sink = new LangfuseTraceSink(opts(lf.fetch));
     await sink.emit(lfEvent("client-a", "shared-id"));
     await sink.emit(lfEvent("client-b", "shared-id"));
     await sink.emit(lfEvent("client-a", "shared-id"));
-    const batches = lf.calls.map((c) => (JSON.parse(c.body) as { batch: { type: string; body: { id: string; traceId?: string } }[] }).batch);
-    const traceIds = batches.map((b) => b[0]!.body.id);
-    expect(traceIds[0], "two clients shared one remote trace").not.toBe(traceIds[1]);
-    expect(traceIds[0], "one client's trace id was not stable").toBe(traceIds[2]);
-    const decisionIds = batches.map((b) => b[1]!.body.id);
-    expect(new Set(decisionIds).size, "two decisions shared one remote id").toBe(3);
+    const spans = lf.calls.map(spanOf);
+    expect(spans[0]!.traceId, "two clients shared one remote trace").not.toBe(spans[1]!.traceId);
+    expect(spans[0]!.traceId, "one client's trace id was not stable").toBe(spans[2]!.traceId);
+    expect(new Set(spans.map((sp) => sp.spanId)).size, "two decisions shared one span").toBe(3);
     // The separator cannot be forged: a client id that embeds it maps elsewhere.
-    await sink.emit(lfEvent("a/b", "c"));
-    await sink.emit(lfEvent("a", "b/c"));
-    const forged = lf.calls.slice(-2).map((c) => (JSON.parse(c.body) as { batch: { body: { id: string } }[] }).batch[0]!.body.id);
-    expect(forged[0]).not.toBe(forged[1]);
+    expect(await otelTraceId("a:b", "c")).not.toBe(await otelTraceId("a", "b:c"));
+  });
+
+  it("a span id that is not 16 hex characters is refused before anything is sent", async () => {
+    const lf = stubFetch(otlpOk);
+    const sink = new LangfuseTraceSink({ ...opts(lf.fetch), newId: () => "evt-1" });
+    await expect(sink.emit(lfEvent())).rejects.toThrow(/16 lowercase hex/);
+    expect(lf.calls).toEqual([]);
   });
 });
 
-/** X6-14 (GPT-6 Astra, 2026-10-06): llm() read req.input again for the trace
- * after awaiting the transport, so a caller could swap the input mid-flight
- * and the trace described a prompt the provider never received.
- * MUTATION: X6-14. */
 describe("the traced input is the dispatched input", () => {
   it("an input changed while the request is in flight does not change the trace", async () => {
     let release!: () => void;

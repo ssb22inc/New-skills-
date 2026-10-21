@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { llm } from "../../src/gateway.ts";
 import { AiGatewayHttpTransport, errorCodes } from "../../src/gateway-http.ts";
-import { LangfuseTraceSink, langfuseTraceId } from "../../src/langfuse-sink.ts";
+import { LangfuseTraceSink, otelTraceId } from "../../src/langfuse-sink.ts";
 import { FrozenCapsSpendMeter } from "../../src/spend-meter.ts";
 import { TraceContext } from "../../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../../src/vault.ts";
@@ -72,7 +72,7 @@ describe("live services (fullburn environment)", () => {
         const backend = new MemoryVaultBackend();
         backend.set(CLIENT, "ai-gateway-key", env("AI_GATEWAY_TOKEN"));
         const traceId = `live-${Date.now()}`;
-        remoteTraceId = langfuseTraceId(CLIENT, traceId);
+        remoteTraceId = await otelTraceId(CLIENT, traceId);
         const out = (await llm(
           {
             bindings: ROLE_BINDINGS,
