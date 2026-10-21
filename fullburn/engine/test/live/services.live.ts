@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { llm } from "../../src/gateway.ts";
-import { AiGatewayHttpTransport } from "../../src/gateway-http.ts";
+import { AiGatewayHttpTransport, errorCodes } from "../../src/gateway-http.ts";
 import { LangfuseTraceSink, langfuseTraceId } from "../../src/langfuse-sink.ts";
 import { FrozenCapsSpendMeter } from "../../src/spend-meter.ts";
 import { TraceContext } from "../../src/tracing.ts";
@@ -91,25 +91,32 @@ describe("live services (fullburn environment)", () => {
       }),
     );
 
+    const callStart = Date.now();
     observations.push(
       await check("langfuse-trace", async () => {
         if (!remoteTraceId) return { pass: false, observed: "no call was made, so there is no trace to read" };
-        // Ingestion is asynchronous: poll for up to 180 s.
+        // The v1 trace read API answers 410 on Langfuse Cloud; v2 reads
+        // OBSERVATION rows, filtered by traceId, inside a bounded time window.
+        const window = `fromStartTime=${encodeURIComponent(new Date(callStart - 15 * 60_000).toISOString())}&toStartTime=${encodeURIComponent(new Date(Date.now() + 15 * 60_000).toISOString())}`;
+        const rows = (body: unknown): { traceId?: unknown }[] => {
+          const o = (body ?? {}) as Record<string, unknown>;
+          const arr = Array.isArray(o["data"]) ? o["data"] : Object.values(o).find((v) => Array.isArray(v));
+          return Array.isArray(arr) ? (arr as { traceId?: unknown }[]) : [];
+        };
+        let lastStatus = 0;
         for (let i = 0; i < 36; i++) {
-          const r = await fetch(`${lfHost}/api/public/traces/${encodeURIComponent(remoteTraceId)}`, { headers: { authorization: lfAuth } });
+          const r = await fetch(`${lfHost}/api/public/v2/observations?traceId=${encodeURIComponent(remoteTraceId)}&${window}&fields=core,basic`, { headers: { authorization: lfAuth } });
+          lastStatus = r.status;
           if (r.status === 200) {
-            const body = (await r.json().catch(() => ({}))) as { id?: string; observations?: unknown[] };
-            if (body.id === remoteTraceId) return { pass: true, observed: `trace ${remoteTraceId} read back with ${Array.isArray(body.observations) ? body.observations.length : 0} observation(s)` };
+            const found = rows(await r.json().catch(() => ({}))).filter((x) => x.traceId === remoteTraceId);
+            if (found.length > 0) return { pass: true, observed: `trace ${remoteTraceId} read back: ${found.length} observation row(s) (v2 observations API)` };
           }
           await new Promise((res) => setTimeout(res, 5_000));
         }
-        // Say whether the keys work, and what the project DOES hold for this
-        // client, so slow ingestion can be told from an id mismatch.
         const auth = await fetch(`${lfHost}/api/public/projects`, { headers: { authorization: lfAuth } });
-        const listed = await fetch(`${lfHost}/api/public/traces?userId=${encodeURIComponent(CLIENT)}&limit=5`, { headers: { authorization: lfAuth } });
-        const list = (await listed.json().catch(() => ({}))) as { data?: { id?: unknown; timestamp?: unknown }[] };
-        const ids = (list.data ?? []).map((t) => `${String(t.id)} @ ${String(t.timestamp)}`).join("; ") || "none";
-        return { pass: false, observed: `trace ${remoteTraceId} was not readable after 180 s; keys answer HTTP ${auth.status} on /projects; latest traces for ${CLIENT} (HTTP ${listed.status}): ${ids}` };
+        const listed = await fetch(`${lfHost}/api/public/v2/observations?userId=${encodeURIComponent(CLIENT)}&${window}&limit=5`, { headers: { authorization: lfAuth } });
+        const ids = rows(await listed.json().catch(() => ({}))).map((t) => String(t.traceId)).join("; ") || "none";
+        return { pass: false, observed: `trace ${remoteTraceId} not found after 180 s (last HTTP ${lastStatus}); keys answer HTTP ${auth.status} on /projects; recent observations for ${CLIENT} (HTTP ${listed.status}): ${ids}` };
       }),
     );
 
@@ -142,9 +149,36 @@ describe("live services (fullburn environment)", () => {
       }),
     );
 
+    // DIAGNOSTICS (informational): which gateway route do the account's
+    // Unified Billing credits accept? Each is a 5-token call.
+    const diagnostics: { name: string; observed: string }[] = [];
+    const probe = async (name: string, url: string, headers: Record<string, string>, model: string) => {
+      try {
+        const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ model, max_tokens: 5, messages: [{ role: "user", content: "Reply with OK." }] }) });
+        const text = await r.text();
+        const payHeaders = [...r.headers.keys()].filter((h) => /payment|x402|aig/i.test(h)).join(",") || "none";
+        let answered = false;
+        try {
+          answered = Array.isArray((JSON.parse(text) as { choices?: unknown }).choices);
+        } catch {
+          answered = false;
+        }
+        diagnostics.push({ name, observed: `HTTP ${r.status}${errorCodes(text)}; answered=${answered}; response headers ${payHeaders}` });
+      } catch (e) {
+        diagnostics.push({ name, observed: `threw ${e instanceof Error ? e.name : "error"}` });
+      }
+    };
+    if (account) {
+      const rest = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/ai/v1/chat/completions`;
+      const restAuth = { authorization: `Bearer ${env("CLOUDFLARE_API_TOKEN")}`, "cf-aig-gateway-id": "fullburn" };
+      await probe("rest-api third-party (anthropic/claude-sonnet-4-5, Cloudflare API token)", rest, restAuth, "anthropic/claude-sonnet-4-5");
+      await probe("rest-api workers-ai (@cf/meta/llama-3.3-70b-instruct-fp8-fast, Cloudflare API token)", rest, restAuth, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+      await probe("compat (anthropic/claude-sonnet-4-5, gateway token)", `https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(account)}/fullburn/compat/chat/completions`, { "cf-aig-authorization": `Bearer ${env("AI_GATEWAY_TOKEN")}` }, "anthropic/claude-sonnet-4-5");
+    }
+
     const tree = git(["hash-object", "--stdin"], git(["ls-files", "-s", "--", ...VERIFIED_TREE_SCOPE]) + "\n");
     const secrets = SECRET_NAMES.map(env);
-    const report = renderLiveReport({ phase: "0", tree, commit: git(["rev-parse", "--short", "HEAD"]), startedAt, observations, secrets });
+    const report = renderLiveReport({ phase: "0", tree, commit: git(["rev-parse", "--short", "HEAD"]), startedAt, observations, secrets, diagnostics });
     mkdirSync(`${repo}fullburn/reports`, { recursive: true });
     writeFileSync(`${repo}fullburn/reports/${liveReportName("0", tree)}`, report);
     console.log(report);

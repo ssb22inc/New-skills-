@@ -43,3 +43,14 @@ describe("live check decisions", () => {
     expect(() => liveReportName("0", "short")).toThrow();
   });
 });
+
+describe("diagnostics are reported, redacted, and never change the verdict", () => {
+  it("renders diagnostics under their own heading with secrets removed", () => {
+    const secret = "cf-api-token-value-123";
+    const r = renderLiveReport({ phase: "0", tree: "e".repeat(40), commit: "c", startedAt: "t", observations: all(), secrets: [secret], diagnostics: [{ name: "rest-route", observed: `HTTP 200 with ${secret}` }] });
+    expect(r.split("\n")[1], "a diagnostic changed the verdict").toBe("Verdict: PASS");
+    expect(r).toContain("Diagnostics (informational, not checks):");
+    expect(r).toContain("- rest-route: HTTP 200 with [REDACTED]");
+    expect(r).not.toContain(secret);
+  });
+});
