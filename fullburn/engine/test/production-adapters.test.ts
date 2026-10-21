@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { llm, PreDispatchError, servingTransportAllowed } from "../src/gateway.ts";
 import { RecordedTransport } from "../src/transport-brand.ts";
-import { AiGatewayHttpTransport, GatewayHttpError, type FetchLike } from "../src/gateway-http.ts";
+import { AiGatewayHttpTransport, GatewayHttpError, unfenceJson, type FetchLike } from "../src/gateway-http.ts";
 import { LangfuseTraceSink, LangfuseSinkError, otelTraceId } from "../src/langfuse-sink.ts";
 import { TraceContext, TraceEmitError } from "../src/tracing.ts";
 import { CANARY_SECRET, OPENROUTER_CANARY, TEST_CLIENT, makeDeps } from "./helpers.ts";
@@ -294,5 +294,23 @@ describe("no request names a vendor credential — any model runs on the gateway
     const t = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async (u) => { calls.push(u); return { status: 200, text: async () => "{}" }; } });
     await expect(t.post(`${BASE}openrouter/openai/gpt-5`, { role: "r" }, { authorization: "Bearer gw" })).rejects.toBeInstanceOf(PreDispatchError);
     expect(calls).toEqual([]);
+  });
+});
+
+/** The first live OpenRouter call (2026-10-21) answered with its JSON inside a
+ * Markdown fence. One fence around the whole reply is unwrapped; nothing else
+ * is forgiven. MUTATION: OR-05. */
+describe("a fenced JSON reply is unwrapped; prose is not", () => {
+  it("unwraps exactly one whole-reply fence, with or without the json tag", async () => {
+    expect(unfenceJson('```json\n{"greeting":"hi"}\n```')).toBe('{"greeting":"hi"}');
+    expect(unfenceJson('```\n{"a":1}\n```\n')).toBe('{"a":1}');
+    expect(unfenceJson('{"a":1}')).toBe('{"a":1}');
+    expect(unfenceJson('Sure! ```json\n{"a":1}\n```'), "prose before a fence was forgiven").toBe('Sure! ```json\n{"a":1}\n```');
+    expect(unfenceJson('```json\n{"a":1}\n```\nHope this helps'), "prose after a fence was forgiven").toBe('```json\n{"a":1}\n```\nHope this helps');
+    expect(unfenceJson('```json\n{"a":1}\n```\n```json\n{"b":2}\n```'), "two blocks were forgiven").toContain("```");
+    const t = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 200, text: async () => chat('```json\n{"greeting":"hi"}\n```') }) });
+    await expect(t.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" })).resolves.toEqual({ greeting: "hi" });
+    const prose = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 200, text: async () => chat('Here you go: {"greeting":"hi"}') }) });
+    await expect(prose.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" })).rejects.toThrow(/not JSON/);
   });
 });
