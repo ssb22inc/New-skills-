@@ -45,7 +45,7 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
       input: { ad: "some ad" },
       trace: new TraceContext("t-frontier", TEST_CLIENT),
     });
-    expect(gw.calls.at(-1)).toContain("openai/gpt-5");
+    expect(gw.calls.at(-1)).toContain("model=openai/gpt-5");
 
     gw.queue.push(...GOLDEN.map((c) => RECORDED_QWEN_72B[c.id]));
     const res = await runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN, gw.transport, TEST_CLIENT);
@@ -59,7 +59,7 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
       input: { ad: "some ad" },
       trace: new TraceContext("t-oss", TEST_CLIENT),
     });
-    expect(gw.calls.at(-1)).toContain("workers-ai/qwen-72b");
+    expect(gw.calls.at(-1)).toContain("model=qwen/qwen-2.5-72b-instruct");
   });
 
   it("a bad candidate fails the harness and bindRole refuses it", async () => {

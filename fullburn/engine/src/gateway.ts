@@ -1,5 +1,5 @@
 import { CapError } from "@fullburn/config/caps";
-import { MODELS, ROLE_CARDS, bindingsProvenance, ownEntry, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
+import { MODELS, ROLE_CARDS, bindingsProvenance, ownEntry, providerKeyFor, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
 import { deepFreeze } from "@fullburn/config/freeze";
 import { isRecordedTransport } from "./transport-brand.ts";
 import { isLiveEvalTransport, productionServable } from "./live-eval.ts";
@@ -319,6 +319,9 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     try {
       secrets = [deps.vault.get("ai-gateway-key").value];
       redactionLoaded = true;
+      // A route's provider key (OpenRouter) is redacted from the start too.
+      const pkName = providerKeyFor(model.gatewayRoute);
+      if (pkName !== null) secrets.push(deps.vault.get(pkName).value);
     } catch {
       // Surfaced in order by the authoritative read below.
     }
@@ -371,6 +374,13 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     const key = deps.vault.get("ai-gateway-key");
     secrets = [key.value];
     redactionLoaded = true;
+    /** THE ROUTE'S PROVIDER KEY, WHEN IT HAS ONE (OpenRouter, 2026-10-21):
+     * read from this client's vault after every money check, redacted like
+     * the gateway key, and handed to the transport under its own header. A
+     * route the gateway credentials itself gets no provider key at all. */
+    const providerKeyName = providerKeyFor(model.gatewayRoute);
+    const providerKey = providerKeyName === null ? null : deps.vault.get(providerKeyName);
+    if (providerKey !== null) secrets.push(providerKey.value);
     const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
 
     let output: unknown;
@@ -412,7 +422,11 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       output = await deps.transport.post(
         url,
         { role, input, contextBudgetTokens: card.contextBudgetTokens },
-        { authorization: `Bearer ${key.value}`, "x-fullburn-client": clientId },
+        {
+          authorization: `Bearer ${key.value}`,
+          "x-fullburn-client": clientId,
+          ...(providerKey !== null ? { "x-provider-authorization": `Bearer ${providerKey.value}` } : {}),
+        },
       );
     } catch (err) {
       if (err instanceof PreDispatchError) {

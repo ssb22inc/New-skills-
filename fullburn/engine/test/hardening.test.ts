@@ -8,7 +8,7 @@ import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { parseNameStatus } from "../scripts/diff-lib.mjs";
-import { CANARY_SECRET, LOW_CAP_NARROWING, TEST_CLIENT, capsOf, makeDeps, memoryMeter, testClock } from "./helpers.ts";
+import { CANARY_SECRET, OPENROUTER_CANARY, LOW_CAP_NARROWING, TEST_CLIENT, capsOf, makeDeps, memoryMeter, testClock } from "./helpers.ts";
 import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 
 /** ONE LEDGER PER PROCESS (R11-07): a meter is a handle onto shared state, so
@@ -71,6 +71,7 @@ describe("money path — the transport-throw branch (R2-07)", () => {
     expect(meter.todayUsd(TEST_CLIENT)).toBe(0);
     // With the vault repaired the client can still spend its full day.
     backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+    backend.set(TEST_CLIENT, "openrouter-key", "or-test-key-not-a-secret");
     await expect(
       llm({ ...deps, vault: vaultForClient(backend, TEST_CLIENT), meter, bindings: ROLE_BINDINGS }, {
         role: "hello-world",
@@ -423,5 +424,18 @@ describe("x7 an early refusal copies no uncleared input into telemetry", () => {
     const text = JSON.stringify(d.sink.events);
     expect(text).not.toContain(CANARY_SECRET);
     expect(text, "a loaded redaction set still withheld the input").toContain("visible-note");
+  });
+});
+
+/** The OpenRouter key (2026-10-21) is redacted exactly like the gateway key:
+ * a transport that echoes it in an error or an output leaks it nowhere.
+ * MUTATION: OR-03. */
+describe("the OpenRouter key never leaves in an error or a trace", () => {
+  it("an error carrying the OpenRouter key reaches neither the caller nor the sink", async () => {
+    const { deps, sink } = makeDeps();
+    const transport = { async post() { throw new Error(`upstream said ${OPENROUTER_CANARY}`); } };
+    const err = await llm({ ...deps, transport, bindings: ROLE_BINDINGS }, { role: "hello-world", clientId: TEST_CLIENT, input: {}, trace: trace("h-or") }).then(() => null, (e: unknown) => e as Error);
+    expect(String(err?.message), "the OpenRouter key reached the caller").not.toContain(OPENROUTER_CANARY);
+    expect(JSON.stringify(sink.events), "the OpenRouter key reached the trace").not.toContain(OPENROUTER_CANARY);
   });
 });

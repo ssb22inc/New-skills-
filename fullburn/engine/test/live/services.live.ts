@@ -27,7 +27,7 @@ import { VERIFIED_TREE_SCOPE } from "../../scripts/gate-lib.mjs";
 type Obs = { id: string; pass: boolean; observed: string };
 const CLIENT = "fixture-testco";
 const env = (k: string) => process.env[k] ?? "";
-const SECRET_NAMES = ["AI_GATEWAY_TOKEN", "CLOUDFLARE_API_TOKEN", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_USER", "AIRBYTE_CLIENT_ID", "AIRBYTE_CLIENT_SECRET"];
+const SECRET_NAMES = ["OPENROUTER_API_KEY", "AI_GATEWAY_TOKEN", "CLOUDFLARE_API_TOKEN", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_USER", "AIRBYTE_CLIENT_ID", "AIRBYTE_CLIENT_SECRET"];
 
 const repo = new URL("../../../../", import.meta.url).pathname;
 const git = (args: string[], input?: string) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8", input }).trim();
@@ -71,6 +71,8 @@ describe("live services (fullburn environment)", () => {
         const gatewayBaseUrl = `https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(account)}/fullburn/`;
         const backend = new MemoryVaultBackend();
         backend.set(CLIENT, "ai-gateway-key", env("AI_GATEWAY_TOKEN"));
+        // Every registered model routes through OpenRouter (2026-10-21).
+        if (env("OPENROUTER_API_KEY")) backend.set(CLIENT, "openrouter-key", env("OPENROUTER_API_KEY"));
         const traceId = `live-${Date.now()}`;
         remoteTraceId = await otelTraceId(CLIENT, traceId);
         const out = (await llm(
@@ -185,6 +187,10 @@ describe("live services (fullburn environment)", () => {
         diagnostics.push({ name: "token Workers AI read (models/search)", observed: `HTTP ${models.status}${errorCodes(await models.text())}` });
       } catch (e) {
         diagnostics.push({ name: "token probes", observed: `threw ${e instanceof Error ? e.name : "error"}` });
+      }
+      // OpenRouter through the gateway: Cloudflare's page shows two path forms.
+      for (const path of ["openrouter/chat/completions", "openrouter/v1/chat/completions"]) {
+        await probe(`gateway ${path} (anthropic/claude-sonnet-4.5, gateway token + OpenRouter key)`, `https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(account)}/fullburn/${path}`, { "cf-aig-authorization": `Bearer ${env("AI_GATEWAY_TOKEN")}`, authorization: `Bearer ${env("OPENROUTER_API_KEY")}` }, "anthropic/claude-sonnet-4.5");
       }
       await probe("compat (anthropic/claude-sonnet-4-5, gateway token)", `https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(account)}/fullburn/compat/chat/completions`, { "cf-aig-authorization": `Bearer ${env("AI_GATEWAY_TOKEN")}` }, "anthropic/claude-sonnet-4-5");
     }

@@ -93,6 +93,7 @@ describe("money — `departed` stops a non-conforming meter double-refunding (R7
     const nc = nonConformingMeter();
     const backend = new MemoryVaultBackend();
     backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+    backend.set(TEST_CLIENT, "openrouter-key", "or-test-key-not-a-secret");
     const deps = {
       transport: {
         // Dispatches successfully, then the response fails validation — the one
@@ -130,6 +131,7 @@ describe("money — `departed` stops a non-conforming meter double-refunding (R7
     const { PreDispatchError } = await import("../src/gateway.ts");
     const backend = new MemoryVaultBackend();
     backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+    backend.set(TEST_CLIENT, "openrouter-key", "or-test-key-not-a-secret");
     await llm(
       {
         transport: {
