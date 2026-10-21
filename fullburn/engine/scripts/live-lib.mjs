@@ -58,7 +58,7 @@ export function liveReportName(phase, tree) {
 
 /** The report. Line 2 is the verdict and line 3 binds the verified tree, the
  * same shape the adversary reports use. */
-export function renderLiveReport({ phase, tree, commit, startedAt, observations, secrets }) {
+export function renderLiveReport({ phase, tree, commit, startedAt, observations, secrets, diagnostics = [] }) {
   const v = liveVerdict(observations);
   const lines = [
     `# LIVE CHECK phase${phase}`,
@@ -76,5 +76,9 @@ export function renderLiveReport({ phase, tree, commit, startedAt, observations,
     lines.push(`| ${c.id} | ${c.what} | ${o?.pass === true ? "PASS" : "FAIL"} | ${observed} |`);
   }
   if (!v.ok) lines.push("", "Failing:", ...v.failing.map((f) => `- ${redactObserved(f, secrets)}`));
+  // Diagnostics never decide the verdict: they say WHY a check failed
+  // (e.g. which gateway route the account's credits accept).
+  const diag = Array.isArray(diagnostics) ? diagnostics : [];
+  if (diag.length > 0) lines.push("", "Diagnostics (informational, not checks):", ...diag.map((d) => `- ${redactObserved(`${d?.name}: ${d?.observed}`, secrets).replace(/\n/g, " ")}`));
   return `${lines.join("\n")}\n`;
 }

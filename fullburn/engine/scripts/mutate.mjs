@@ -1362,6 +1362,9 @@ const MUTATIONS = [
   ["X9-03b the market test resolver is fenced to the test runner", "config/src/markets.ts",
     "    throw new SwitchboardError(\"resolveActiveMarketForTests ran outside a test runner",
     "    void new SwitchboardError(\"resolveActiveMarketForTests ran outside a test runner"],
+  ["LV-06 diagnostics are redacted like observations", "engine/scripts/live-lib.mjs",
+    "...diag.map((d) => `- ${redactObserved(`${d?.name}: ${d?.observed}`, secrets).replace(",
+    "...diag.map((d) => `- ${String(`${d?.name}: ${d?.observed}`).replace("],
   // ---- no provider lock-in (human instruction 2026-10-21) ----
   ["NL-01 no provider credential header is ever sent", "engine/src/gateway-http.ts",
     "    const forward: Record<string, string> = { \"content-type\": \"application/json\", \"cf-aig-authorization\": auth };",
