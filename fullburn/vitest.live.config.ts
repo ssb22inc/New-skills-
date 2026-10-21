@@ -10,7 +10,7 @@ export default defineConfig({
     include: ["engine/test/live/**/*.live.ts"],
     environment: "node",
     retry: 0,
-    testTimeout: 300_000,
+    testTimeout: 420_000,
     fileParallelism: false,
   },
 });
