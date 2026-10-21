@@ -1,3 +1,4 @@
+import "./live-fetch-stub.ts"; // FIRST: the adapter captures the runtime fetch at load (x8 X-04)
 import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS, ROLE_CARDS, bindRole } from "@fullburn/config/models";
 import { GOLDEN } from "../evals/genome-tagger/golden.ts";
@@ -9,7 +10,7 @@ import * as transportBrand from "../src/transport-brand.ts";
 const { isRecordedTransport } = transportBrand;
 import { llm } from "../src/gateway.ts";
 import { TraceContext } from "../src/tracing.ts";
-import { TEST_CLIENT, makeDeps, queuedGateway } from "./helpers.ts";
+import { TEST_CLIENT, makeDeps, queuedGateway, runtimeGateway } from "./helpers.ts";
 import { bindRoleLive, runLiveEval } from "../src/live-eval.ts";
 import { AiGatewayHttpTransport } from "../src/gateway-http.ts";
 import { GOLDEN_SETS, attestEvalRun } from "@fullburn/config/models";
@@ -33,7 +34,7 @@ describe("eval harness + rebind (AC 2, §2.4, R6)", () => {
     // served through the production AI Gateway adapter (here over a stubbed
     // fetch answering with the recorded outputs) — and bound by bindRoleLive.
     const { deps } = makeDeps();
-    const gw = queuedGateway();
+    const gw = await runtimeGateway();
     gw.queue.push(...GOLDEN.map((c) => RECORDED_GPT_5[c.id]));
     const frontierEval = await runLiveEval(deps, "genome-tagger", "gpt-5", GOLDEN, gw.transport, TEST_CLIENT);
     const frontier = bindRoleLive(ROLE_BINDINGS, "genome-tagger", "gpt-5", frontierEval.attestation);
@@ -240,7 +241,7 @@ describe("x7 recorded evidence never reaches production serving", () => {
     const { deps } = makeDeps();
     const recordedRun = await runEval(deps, "genome-tagger", "qwen-72b", GOLDEN, new RecordedTransport(RECORDED_QWEN_72B), TEST_CLIENT);
     expect(() => bindRoleLive(ROLE_BINDINGS, "genome-tagger", "qwen-72b", recordedRun.attestation), "recorded evidence bound for production").toThrow(/needs a live eval run/);
-    const gw = queuedGateway();
+    const gw = await runtimeGateway();
     gw.queue.push(...GOLDEN.map((c) => RECORDED_QWEN_72B[c.id]));
     const live = await runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN, gw.transport, TEST_CLIENT);
     const recordedBase = bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", recordedRun.attestation);
@@ -259,10 +260,36 @@ describe("x7 recorded evidence never reaches production serving", () => {
 
   it("a live eval's candidate map is served live during the run only, and a failing candidate does not bind", async () => {
     const { deps } = makeDeps();
-    const gw = queuedGateway();
+    const gw = await runtimeGateway();
     gw.queue.push(...GOLDEN.map((c) => RECORDED_LLAMA_70B[c.id]));
     const live = await runLiveEval(deps, "genome-tagger", "llama-70b", GOLDEN, gw.transport, TEST_CLIENT);
     expect(gw.calls.length, "the live eval did not reach the gateway per case").toBe(GOLDEN.length);
     expect(() => bindRoleLive(ROLE_BINDINGS, "genome-tagger", "llama-70b", live.attestation)).toThrow(/no pass, no bind/);
+  });
+});
+
+/** x8 X-04 (GPT-6 Luna, 2026-10-10): a fake fetch handed to the production
+ * adapter minted "live" evidence. MUTATION: X8-04a, X8-04b. */
+describe("x8 a live eval talks only to the runtime's own fetch", () => {
+  it("an injected fetchImpl is refused before any case runs", async () => {
+    const { deps } = makeDeps();
+    const fake = queuedGateway();
+    fake.queue.push(...GOLDEN.map((c) => c.expected));
+    await expect(runLiveEval(deps, "genome-tagger", "llama-70b", GOLDEN, fake.transport, TEST_CLIENT), "a fake fetch minted live evidence").rejects.toThrow(/runtime's own fetch/);
+    expect(fake.calls, "the fake network was consulted").toEqual([]);
+  });
+
+  it("a global fetch replaced after the adapter loaded is refused too", async () => {
+    const { deps } = makeDeps();
+    const saved = globalThis.fetch;
+    globalThis.fetch = (async () => new Response("{}")) as unknown as typeof fetch;
+    try {
+      const t = new AiGatewayHttpTransport({ gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/test-account/fullburn/" });
+      expect(t.usesRuntimeFetch()).toBe(false);
+      await expect(runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN, t, TEST_CLIENT)).rejects.toThrow(/runtime's own fetch/);
+    } finally {
+      globalThis.fetch = saved;
+    }
+    expect((await runtimeGateway()).transport.usesRuntimeFetch()).toBe(true);
   });
 });

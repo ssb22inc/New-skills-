@@ -40,10 +40,14 @@ export interface GatewayHttpOptions {
   readonly timeoutMs?: number;
 }
 
+/** The runtime's own fetch, as it stood when this module loaded (x8 X-04). */
+const RUNTIME_FETCH: unknown = globalThis.fetch;
+
 export class AiGatewayHttpTransport implements GatewayTransport {
   readonly #base: URL;
   readonly #fetch: FetchLike;
   readonly #timeoutMs: number;
+  readonly #runtimeFetch: boolean;
 
   constructor(opts: GatewayHttpOptions) {
     let base: URL;
@@ -59,7 +63,15 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     this.#base = base;
     this.#fetch = f;
     this.#timeoutMs = opts.timeoutMs ?? 30_000;
+    this.#runtimeFetch = opts.fetchImpl === undefined && (f as unknown) === RUNTIME_FETCH;
     Object.freeze(this);
+  }
+
+  /** True only when this transport sends through the runtime's own fetch —
+   * no injected `fetchImpl`, and the global not replaced since this module
+   * loaded. A live eval requires it (x8 X-04). */
+  usesRuntimeFetch(): boolean {
+    return this.#runtimeFetch;
   }
 
   async post(url: string, body: unknown, headers: Readonly<Record<string, string>>): Promise<unknown> {

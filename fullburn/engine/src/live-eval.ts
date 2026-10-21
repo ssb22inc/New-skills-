@@ -75,6 +75,17 @@ export async function runLiveEval(
   if (typeof transport !== "object" || transport === null || Object.getPrototypeOf(transport) !== AiGatewayHttpTransport.prototype) {
     throw new BindingError("a live eval runs through the production AiGatewayHttpTransport itself — not a subclass or a look-alike (X7-09)");
   }
+  /** NO CALLER-SUPPLIED NETWORK (cross-family finding x8 X-04, GPT-6 Luna,
+   * 2026-10-10). The adapter's public constructor takes a `fetchImpl`, so a
+   * fake fetch answering with the golden set minted "live" evidence. The
+   * capability removed: choosing the network a live eval talks to by
+   * argument, or by replacing the global after the adapter loaded.
+   * NARROWING, stated (L12): code that replaces the runtime's fetch BEFORE
+   * the adapter module first loads can still fabricate a live run — an
+   * in-process boundary cannot prove where a reply came from. */
+  if (!transport.usesRuntimeFetch()) {
+    throw new BindingError("a live eval must reach the network through the runtime's own fetch — an injected or replaced fetch is not a model (x8 X-04)");
+  }
   const result = await runEvalWith(baseDeps, role, modelId, goldenSet, new LiveEvalTransport(transport), clientId);
   LIVE_ATTESTED.add(result.attestation);
   return result;
@@ -83,11 +94,11 @@ export async function runLiveEval(
 /** `bindRole`, for production: the evidence must come from `runLiveEval` and
  * the base map must itself be production-servable. */
 export function bindRoleLive(bindings: RoleBindings, role: string, modelId: string, evalResult: EvalAttestation): RoleBindings {
-  if (!LIVE_ATTESTED.has(evalResult)) {
-    throw new BindingError(`production binding of "${role}" needs a live eval run — recorded or caller-supplied answers are not evidence a model gave them (X7-09)`);
-  }
   if (!productionServable(bindings)) {
     throw new BindingError("bindRoleLive: the base map is not production-servable — a map earned on recorded evidence cannot be promoted through one live role (X7-09)");
+  }
+  if (!LIVE_ATTESTED.has(evalResult)) {
+    throw new BindingError(`production binding of "${role}" needs a live eval run — recorded or caller-supplied answers are not evidence a model gave them (X7-09)`);
   }
   const next = bindRole(bindings, role, modelId, evalResult);
   PRODUCTION.add(next);
