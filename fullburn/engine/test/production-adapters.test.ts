@@ -116,8 +116,8 @@ describe("Langfuse trace sink (X5-12)", () => {
     expect(lf.calls[0]!.url).toBe("https://langfuse.example.invalid/api/public/ingestion");
     expect(lf.calls[0]!.headers["authorization"]).toBe(`Basic ${btoa("pk-lf-test:sk-lf-test")}`);
     const batch = JSON.parse(lf.calls[0]!.body).batch;
-    expect(batch[0]).toMatchObject({ type: "trace-create", body: { id: `${TEST_CLIENT}/t-lf`, name: "hello-world", userId: TEST_CLIENT } });
-    expect(batch[1]).toMatchObject({ type: "generation-create", body: { traceId: `${TEST_CLIENT}/t-lf`, name: "hello-world", output: { greeting: "hi" } } });
+    expect(batch[0]).toMatchObject({ type: "trace-create", body: { id: `${TEST_CLIENT}:t-lf`, name: "hello-world", userId: TEST_CLIENT } });
+    expect(batch[1]).toMatchObject({ type: "generation-create", body: { traceId: `${TEST_CLIENT}:t-lf`, name: "hello-world", output: { greeting: "hi" } } });
     expect(JSON.stringify(batch)).not.toContain(CANARY_SECRET);
   });
 
@@ -234,5 +234,24 @@ describe("x9 outside the test runner, only the Gateway adapter on the runtime's 
       expect(servingTransportAllowed(null)).toBe(false);
     });
     expect(servingTransportAllowed({ async post() { return {}; } }), "the test runner lost its mock transports").toBe(true);
+  });
+});
+
+/** The first live check (2026-10-21) got a bare "HTTP 401" — a bad gateway
+ * token and a missing provider key look the same. Codes cross; text never.
+ * MUTATION: GH-12c. */
+describe("a non-2xx reply names its machine error codes and nothing else", () => {
+  it("reports Cloudflare and provider codes, drops free-text messages", async () => {
+    const cf = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 401, text: async () => JSON.stringify({ success: false, errors: [{ code: 2009, message: "Unauthorized: leaked-detail" }] }) }) });
+    const err = await cf.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" }).then(() => null, (e: unknown) => e as Error);
+    expect(err?.message).toBe("AI Gateway returned HTTP 401 (cloudflare 2009)");
+    const provider = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 401, text: async () => JSON.stringify({ type: "error", error: { type: "authentication_error", message: "x-api-key header is required: echo-of-prompt" } }) }) });
+    const perr = await provider.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" }).then(() => null, (e: unknown) => e as Error);
+    expect(perr?.message).toBe("AI Gateway returned HTTP 401 (authentication_error)");
+    expect(perr?.message, "free text crossed").not.toMatch(/echo-of-prompt|x-api-key/);
+    const plain = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 502, text: async () => "<html>bad gateway with secret-ish text</html>" }) });
+    expect((await plain.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" }).then(() => null, (e: unknown) => e as Error))?.message).toBe("AI Gateway returned HTTP 502");
+    const sneaky = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 400, text: async () => JSON.stringify({ error: { type: "Has Spaces And A Sentence", code: "this-identifier-is-far-too-long-to-be-an-error-code" } }) }) });
+    expect((await sneaky.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" }).then(() => null, (e: unknown) => e as Error))?.message, "a non-identifier crossed").toBe("AI Gateway returned HTTP 400");
   });
 });
