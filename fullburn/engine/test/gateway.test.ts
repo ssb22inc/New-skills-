@@ -4,7 +4,7 @@ import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { llm } from "../src/gateway.ts";
 import { TraceContext, TraceEmitError } from "../src/tracing.ts";
 import { vaultForClient } from "../src/vault.ts";
-import { CANARY_SECRET, LOW_CAP_NARROWING, TEST_CLIENT, makeDeps } from "./helpers.ts";
+import { CANARY_SECRET, OPENROUTER_CANARY, LOW_CAP_NARROWING, TEST_CLIENT, makeDeps } from "./helpers.ts";
 
 const trace = () => new TraceContext("t-1", TEST_CLIENT);
 
@@ -17,8 +17,10 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
     );
     expect(out).toEqual({ greeting: "hello from the mock gateway" });
     const req = transport.requests[0]!;
-    expect(req.url).toBe("https://gateway.ai.cloudflare.com/v1/test-account/fullburn/anthropic/claude-sonnet-4-5");
+    expect(req.url).toBe("https://gateway.ai.cloudflare.com/v1/test-account/fullburn/openrouter/anthropic/claude-sonnet-4.5");
     expect(req.headers["authorization"]).toBe(`Bearer ${CANARY_SECRET}`);
+    // The route's provider key (OpenRouter) travels under its own header.
+    expect(req.headers["x-provider-authorization"]).toBe(`Bearer ${OPENROUTER_CANARY}`);
     expect(sink.events).toHaveLength(1);
     expect(sink.events[0]!.role).toBe("hello-world");
   });
@@ -64,6 +66,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
     // sign-off check ever running.
     const { deps, backend } = makeDeps();
     backend.set("fixture-unsigned", "ai-gateway-key", "unused-by-this-path");
+    backend.set("fixture-unsigned", "openrouter-key", "unused-by-this-path-too");
     await expect(
       llm({ ...deps, vault: vaultForClient(backend, "fixture-unsigned"), bindings: ROLE_BINDINGS }, {
         role: "hello-world",

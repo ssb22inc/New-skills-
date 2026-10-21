@@ -5,7 +5,7 @@ import { RecordedTransport } from "../src/transport-brand.ts";
 import { AiGatewayHttpTransport, GatewayHttpError, type FetchLike } from "../src/gateway-http.ts";
 import { LangfuseTraceSink, LangfuseSinkError, otelTraceId } from "../src/langfuse-sink.ts";
 import { TraceContext, TraceEmitError } from "../src/tracing.ts";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps } from "./helpers.ts";
+import { CANARY_SECRET, OPENROUTER_CANARY, TEST_CLIENT, makeDeps } from "./helpers.ts";
 
 /** X5-12 (GPT-6 Astra, 2026-10-06): Phase 0's hello-world AC had no production
  * transport and no Langfuse sink — only mocks. These drive the shipped
@@ -39,11 +39,14 @@ describe("AI Gateway HTTP transport (X5-12)", () => {
     expect(out).toEqual({ greeting: "hello from the gateway" });
     expect(gw.calls).toHaveLength(1);
     const [call] = gw.calls;
-    expect(call!.url).toBe(`${BASE}compat/chat/completions`);
+    // hello-world routes through OpenRouter (2026-10-21): the gateway's
+    // OpenRouter endpoint, the gateway key as the gateway credential, the
+    // OpenRouter key as the provider credential, and OpenRouter's model name.
+    expect(call!.url).toBe(`${BASE}openrouter/chat/completions`);
     expect(call!.headers["cf-aig-authorization"]).toBe(`Bearer ${CANARY_SECRET}`);
-    expect(call!.headers["authorization"], "the gateway key was sent as a provider credential").toBeUndefined();
+    expect(call!.headers["authorization"], "the gateway key was sent as a provider credential").toBe(`Bearer ${OPENROUTER_CANARY}`);
     const sent = JSON.parse(call!.body);
-    expect(sent.model).toMatch(/^[a-z-]+\/[\w.-]+$/);
+    expect(sent.model).toBe("anthropic/claude-sonnet-4.5");
     expect(sent.messages[1].content).toBe(JSON.stringify({ name: "x" }));
     expect(sink.events.map((e) => e.outcome)).toEqual(["ok"]);
   });
@@ -248,26 +251,48 @@ describe("a non-2xx reply names its machine error codes and nothing else", () =>
   });
 });
 
-/** NO PROVIDER LOCK-IN (human instruction 2026-10-21). The adapter sends the
- * gateway credential and nothing provider-specific, so the gateway — not this
- * code — decides the provider credential (BYOK, else Unified Billing). A
- * provider `Authorization` or `x-api-key` header would make the gateway forward
- * it and skip both. MUTATION: NL-01. */
-describe("no request names a provider credential — any model runs on the gateway token alone", () => {
-  it("sends only content-type, cf-aig-authorization and cf-aig-metadata, for every registered model", async () => {
+/** NO PROVIDER LOCK-IN (human instructions 2026-10-21). A route the gateway
+ * credentials itself (BYOK / Unified Billing) carries NO provider credential
+ * from Fullburn; an OpenRouter route carries exactly the OpenRouter key from
+ * the client's vault — one aggregator key for every vendor's model. A route
+ * with no OpenRouter key is refused before dispatch. MUTATION: NL-01, OR-01..03. */
+describe("no request names a vendor credential — any model runs on the gateway token, or the one OpenRouter key", () => {
+  const send = async (route: string, headers: Record<string, string>) => {
+    const seen: Record<string, string>[] = [];
+    const bodies: string[] = [];
+    const urls: string[] = [];
+    const t = new AiGatewayHttpTransport({
+      gatewayBaseUrl: BASE,
+      fetchImpl: async (u, init) => {
+        urls.push(u);
+        seen.push(init.headers);
+        bodies.push(init.body);
+        return { status: 200, text: async () => chat('{"greeting":"hi"}') };
+      },
+    });
+    await t.post(new URL(route, BASE).toString(), { role: "r", input: {} }, headers);
+    return { headers: seen[0]!, body: JSON.parse(bodies[0]!) as { model: string }, url: urls[0]! };
+  };
+  it("a gateway-credentialed route sends only the gateway's headers, even when a provider key is offered", async () => {
+    const r = await send("workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast", { authorization: "Bearer gw-token", "x-fullburn-client": "c", "x-provider-authorization": "Bearer should-not-cross" });
+    expect(Object.keys(r.headers).sort()).toEqual(["cf-aig-authorization", "cf-aig-metadata", "content-type"]);
+    expect(r.url).toBe(`${BASE}compat/chat/completions`);
+  });
+  it("every registered model reaches its vendor through OpenRouter with the one OpenRouter key", async () => {
     const { MODELS } = await import("@fullburn/config/models");
     for (const m of Object.values(MODELS)) {
-      const seen: Record<string, string>[] = [];
-      const t = new AiGatewayHttpTransport({
-        gatewayBaseUrl: BASE,
-        fetchImpl: async (_u, init) => {
-          seen.push(init.headers);
-          return { status: 200, text: async () => chat('{"greeting":"hi"}') };
-        },
-      });
-      await t.post(new URL(m.gatewayRoute, BASE).toString(), { role: "r", input: {} }, { authorization: "Bearer gw-token", "x-fullburn-client": "c" });
-      expect(Object.keys(seen[0]!).sort(), `${m.id} sent a header beyond the gateway's`).toEqual(["cf-aig-authorization", "cf-aig-metadata", "content-type"]);
-      expect(seen[0]!["cf-aig-authorization"]).toBe("Bearer gw-token");
+      expect(m.gatewayRoute, `${m.id} is not on the OpenRouter route`).toMatch(/^openrouter\//);
+      const r = await send(m.gatewayRoute, { authorization: "Bearer gw-token", "x-fullburn-client": "c", "x-provider-authorization": "Bearer or-key" });
+      expect(Object.keys(r.headers).sort(), `${m.id} sent an unexpected header`).toEqual(["authorization", "cf-aig-authorization", "cf-aig-metadata", "content-type"]);
+      expect(r.headers["authorization"]).toBe("Bearer or-key");
+      expect(r.url).toBe(`${BASE}openrouter/chat/completions`);
+      expect(r.body.model, `${m.id}'s OpenRouter model name`).toBe(m.gatewayRoute.slice("openrouter/".length));
     }
+  });
+  it("an OpenRouter route without the OpenRouter key is refused before anything is sent", async () => {
+    const calls: string[] = [];
+    const t = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async (u) => { calls.push(u); return { status: 200, text: async () => "{}" }; } });
+    await expect(t.post(`${BASE}openrouter/openai/gpt-5`, { role: "r" }, { authorization: "Bearer gw" })).rejects.toBeInstanceOf(PreDispatchError);
+    expect(calls).toEqual([]);
   });
 });

@@ -92,7 +92,7 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     const b = body as { role?: unknown; input?: unknown; contextBudgetTokens?: unknown };
     if (typeof b?.role !== "string") throw new PreDispatchError("transport body has no role — nothing was sent");
     const payload = JSON.stringify({
-      model: route,
+      model: route.startsWith("openrouter/") ? route.slice("openrouter/".length) : route,
       max_tokens: typeof b.contextBudgetTokens === "number" && b.contextBudgetTokens > 0 ? Math.floor(b.contextBudgetTokens) : undefined,
       response_format: { type: "json_object" },
       messages: [
@@ -100,8 +100,19 @@ export class AiGatewayHttpTransport implements GatewayTransport {
         { role: "user", content: JSON.stringify(b.input ?? null) },
       ],
     });
-    const endpoint = new URL("compat/chat/completions", this.#base).toString();
+    /** OPENROUTER ROUTES (2026-10-21) go to the gateway's OpenRouter endpoint
+     * with the model named as OpenRouter names it, and carry the OpenRouter
+     * key `llm()` read from the vault. Every other route goes to the unified
+     * endpoint and carries NO provider credential (NL-01): the gateway
+     * supplies it. */
+    const viaOpenRouter = route.startsWith("openrouter/");
+    const providerAuth = headers["x-provider-authorization"];
+    if (viaOpenRouter && (typeof providerAuth !== "string" || !/^Bearer \S+$/.test(providerAuth))) {
+      throw new PreDispatchError("transport has no OpenRouter credential for an OpenRouter route — nothing was sent");
+    }
+    const endpoint = new URL(viaOpenRouter ? "openrouter/chat/completions" : "compat/chat/completions", this.#base).toString();
     const forward: Record<string, string> = { "content-type": "application/json", "cf-aig-authorization": auth };
+    if (viaOpenRouter) forward["authorization"] = providerAuth!;
     const client = headers["x-fullburn-client"];
     if (typeof client === "string") forward["cf-aig-metadata"] = JSON.stringify({ client });
 

@@ -43,6 +43,7 @@ export default {
     try {
       const backend = new MemoryVaultBackend();
       backend.set("fixture-testco", "ai-gateway-key", "workerd-test-key");
+      backend.set("fixture-testco", "openrouter-key", "workerd-openrouter-key");
       const sink = new MemoryTraceSink();
       // x9 X-02: outside the test runner a hand-built transport is refused
       // before the credential is read; a recorded transport is served.

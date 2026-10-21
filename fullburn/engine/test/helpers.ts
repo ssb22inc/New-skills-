@@ -29,6 +29,7 @@ import { AiGatewayHttpTransport } from "../src/gateway-http.ts";
  * $5.00/day AI spend. */
 export const TEST_CLIENT = "fixture-testco";
 export const CANARY_SECRET = "canary-vault-value-do-not-leak-8891";
+export const OPENROUTER_CANARY = "canary-openrouter-value-do-not-leak-5521";
 
 /** Narrowing override used by breach tests: lowers testco's ceiling to $0.05.
  * It cannot raise a cap, invent a client, or supply a sign-off. */
@@ -117,6 +118,9 @@ export function makeDeps(overrides: { now?: () => number; transport?: unknown; c
   const ledger = processLedger();
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+  // Every registered model routes through OpenRouter (2026-10-21), so the
+  // client's vault also holds its OpenRouter key — a canary of its own.
+  backend.set(TEST_CLIENT, "openrouter-key", OPENROUTER_CANARY);
   // THE PRODUCTION METER, not a test double with an injected resolver. `llm()`
   // refuses any other kind, so a test that built a wide meter would fail
   // closed here rather than quietly proving the cap works against a ceiling

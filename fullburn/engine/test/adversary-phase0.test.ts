@@ -54,6 +54,7 @@ class YieldingTransport implements GatewayTransport {
 function depsWith(meter: SpendMeter, transport: GatewayTransport, sink = new MemoryTraceSink()) {
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+  backend.set(TEST_CLIENT, "openrouter-key", "or-test-key-not-a-secret");
   return {
     deps: {
       transport,
@@ -271,7 +272,7 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
       input: { ad: "x" },
       trace: new TraceContext("ac2-frontier", TEST_CLIENT),
     });
-    expect(gw.calls.at(-1)).toContain("openai/gpt-5");
+    expect(gw.calls.at(-1)).toContain("model=openai/gpt-5");
 
     const openSource = bindRoleLive(frontier, "genome-tagger", "qwen-72b", qwen.attestation);
     gw.queue.push({ hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" });
@@ -281,7 +282,7 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
       input: { ad: "x" },
       trace: new TraceContext("ac2-oss", TEST_CLIENT),
     });
-    expect(gw.calls.at(-1)).toContain("workers-ai/qwen-72b");
+    expect(gw.calls.at(-1)).toContain("model=qwen/qwen-2.5-72b-instruct");
   });
 });
 

@@ -78,6 +78,7 @@ export function productionGuardEntries(): ProductionGuard[] {
     { name: "http: no gateway credential", file: GH, type: PreDispatchError, expect: /has no gateway credential/, fire: () => transport(reply(200, "")).post(`${BASE}openai/gpt-5`, { role: "r" }, {}) },
     { name: "http: no role in the body", file: GH, type: PreDispatchError, expect: /body has no role/, fire: () => transport(reply(200, "")).post(`${BASE}openai/gpt-5`, {}, ok) },
     { name: "http: a network failure after dispatch", file: GH, type: GatewayHttpError, expect: /failed after dispatch/, fire: () => transport(async () => { throw new Error("down"); }).post(`${BASE}openai/gpt-5`, { role: "r" }, ok) },
+    { name: "http: an OpenRouter route without the OpenRouter key", file: GH, type: PreDispatchError, expect: /no OpenRouter credential/, fire: () => transport(reply(200, "{}")).post(`${BASE}openrouter/openai/gpt-5`, { role: "r" }, ok) },
     { name: "http: a non-2xx reply", file: GH, type: GatewayHttpError, expect: /AI Gateway returned HTTP/, fire: () => transport(reply(500, "")).post(`${BASE}openai/gpt-5`, { role: "r" }, ok) },
     { name: "http: a reply that is not JSON", file: GH, type: GatewayHttpError, expect: /AI Gateway reply is not JSON/, fire: () => transport(reply(200, "x")).post(`${BASE}openai/gpt-5`, { role: "r" }, ok) },
     { name: "http: a reply with no message content", file: GH, type: GatewayHttpError, expect: /has no message content/, fire: () => transport(reply(200, "{}")).post(`${BASE}openai/gpt-5`, { role: "r" }, ok) },

@@ -27,6 +27,7 @@ const FROZEN_DAY = getCaps(TEST_CLIENT).dailyAiSpendUsd;
 function deps(transport: { post(): Promise<unknown> }) {
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+  backend.set(TEST_CLIENT, "openrouter-key", "or-test-key-not-a-secret");
   return {
     transport,
     vault: vaultForClient(backend, TEST_CLIENT),
