@@ -1,8 +1,8 @@
 {
   "id": "/app/",
-  "name": "PulseRN — Adaptive NCLEX-RN Prep",
+  "name": "PulseRN: Adaptive NCLEX-RN Prep",
   "short_name": "PulseRN",
-  "description": "Created by a licensed RN, for future RNs. Adaptive NCLEX-RN practice with Next Gen items, spaced repetition, case studies, and an AI tutor.",
+  "description": "Built by a working hospital RN, for future RNs. Adaptive NCLEX-RN practice with Next Gen items, spaced repetition, case studies, and an AI tutor.",
   "start_url": "/app/",
   "scope": "/app/",
   "display": "standalone",

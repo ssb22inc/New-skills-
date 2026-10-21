@@ -60,7 +60,7 @@ describe("SEO guardian", () => {
       expect(page.h1).toContain("why start with PulseRN?");
       expect(page.body).toContain("Our recommendation: start with PulseRN.");
       expect(page.body).toContain("PulseRN recommendation");
-      expect(page.body).toContain("Try PulseRN free");
+      expect(page.body).toContain("Start the 7-day free pass");
       expect(page.body).not.toMatch(/Where (?:UWorld|Archer) is the clearer fit/i);
       expect(page.body).not.toMatch(/(?:guaranteed to pass|will pass the NCLEX|raises? your chance of passing)/i);
     }

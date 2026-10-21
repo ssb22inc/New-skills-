@@ -168,17 +168,17 @@ export function buildMarketingPayload({ funnel, counts, byCategory, windowDays }
       methodology: `${SITE}/methodology`,
       editorialPolicy: `${SITE}/editorial-policy`,
       llmsTxt: `${SITE}/llms.txt`,
-      note: "Public pages — fetch them directly, no credential needed. Read them to audit claims against the catalogue figures above.",
+      note: "Public pages: fetch them directly, no credential needed. Read them to audit claims against the catalogue figures above.",
     },
     /* The rules live in CLAUDE.md, which an external agent cannot read. An
        agent that does not know them will break them politely and confidently,
        so they travel with the data. */
     guardrails: [
       "Compare, never equate: 'like the real exam', never 'the same as the real exam'.",
-      "Readiness is an estimate and is labelled as one. Never promise a pass, a score, or an outcome.",
-      "NCLEX is a registered trademark of NCSBN. PulseRN is not affiliated with, and is not endorsed by, NCSBN. The disclaimer stays visible.",
+      "Readiness is an estimate and is labeled as one. Never promise a pass, a score, or an outcome.",
+      "Trademark disclaimer, short form: \"NCLEX® is a registered trademark of NCSBN; PulseRN is not affiliated.\" Full form: \"NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse PulseRN.\" The disclaimer stays visible.",
       "Quote content figures from `catalogue` above, never from an older page. If `claims` is non-empty, the shipped copy is already wrong.",
-      "Do not name a competitor's price without checking it is current — a stale rival price is both a legal risk and free advertising for them.",
+      "Do not name a competitor's price without checking that it is current. A stale rival price is both a legal risk and free advertising for them.",
       "Educational exam preparation only. Never real-world dosing or treatment instructions.",
     ],
   };
@@ -197,7 +197,7 @@ export default async function handler(req, res) {
   if (!secret)
     return res.status(503).json({ error: "Marketing access is not configured. Set MARKETING_API_KEY in Vercel." });
   if (secret.length < MIN_KEY_LENGTH)
-    return res.status(503).json({ error: `MARKETING_API_KEY is too short to be safe — use at least ${MIN_KEY_LENGTH} characters.` });
+    return res.status(503).json({ error: `MARKETING_API_KEY is too short to be safe. Use at least ${MIN_KEY_LENGTH} characters.` });
 
   if (!keyMatches(presentedKey(req.headers || {}), secret))
     return res.status(401).json({ error: "Send Authorization: Bearer <MARKETING_API_KEY>" });

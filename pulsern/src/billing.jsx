@@ -3,7 +3,8 @@
    through api/billing.js — the client never computes a price it can act on. */
 import React, { useState } from "react";
 import { supabase } from "./supabase.js";
-import { PLANS, computeEntitlement, fmtUsd } from "./pricing.js";
+import { PLANS, computeEntitlement, fmtUsd, planById } from "./pricing.js";
+import { freePassExpiresAt } from "./free-pass.js";
 
 async function billing(action, extra = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -35,7 +36,7 @@ export async function fetchEntitlement() {
    with no subscription row at all, which means the grant failed and nothing
    anywhere recorded that it had: not the student, not the owner, not the
    funnel. A duplicate is the expected, harmless case — the index doing its
-   job for someone who already had their day — so that one stays quiet.
+   job for someone who already had their free pass — so that one stays quiet.
    Anything else is a real failure and is raised, because access silently not
    being granted is exactly the kind of fault that hides for months. */
 export async function grantFreePass() {
@@ -43,7 +44,7 @@ export async function grantFreePass() {
   if (!session?.user) throw new Error("Sign in first");
   const { error } = await supabase.from("subscriptions").insert({
     user_id: session.user.id, plan: "pass1",
-    expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+    expires_at: freePassExpiresAt(),
     exams_granted: 0, price_cents: 0,
   });
   if (error && !/duplicate|unique|23505/i.test(error.message)) {
@@ -94,14 +95,14 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
       {trialBanner && (
         <section className="card" style={{ borderColor: "var(--accent)" }}>
           <p className="eyebrow">Free pass active</p>
-          <p className="small">You're on the 1-day free pass — every study tool is open. Readiness exams unlock with any subscription below.</p>
+          <p className="small">You're on the {planById("pass1").name.toLowerCase()}, and every study tool is open. Readiness exams unlock with any subscription below.</p>
         </section>
       )}
       {!trialBanner && (
         <section className="card">
           <p className="eyebrow">PulseRN access</p>
           <h2 className="h2">{ent?.status === "expired" ? "Your access has ended" : "Choose your runway"}</h2>
-          <p className="small">Created by a licensed RN — for future RNs. Every plan opens the full adaptive QBank, 1,000+ flashcards, case-study library, AI tutor, and labs reference. Self-assessments are full 85-item NCLEX-style readiness exams — and no account is ever shown the same exam twice.</p>
+          <p className="small">Built by a working hospital RN, for future RNs. Every plan opens the full adaptive QBank, 1,100+ flashcards, the case-study library, the AI tutor, and the lab reference. Self-assessments are 85-question NCLEX-style readiness exams, and no account is ever shown the same exam twice.</p>
         </section>
       )}
       <section className="card">
@@ -112,7 +113,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
             onKeyDown={(e) => { if (e.key === "Enter") apply(); }} />
           <button className="btn ghost" onClick={apply}>Apply</button>
         </div>
-        {applied && <p className="small tip">✅ Code <strong>{applied.code}</strong> applied — partner pricing shown below.</p>}
+        {applied && <p className="small tip">✅ Code <strong>{applied.code}</strong> applied. Partner pricing is shown below.</p>}
         {err && <p className="small" style={{ color: "var(--coral)" }}>{err}</p>}
       </section>
       {mains.map((p) => (
@@ -123,7 +124,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
           </div>
           <p className="small">{p.blurb}</p>
           <button className="btn" disabled={busy === p.id} onClick={() => buy(p.id)}>
-            {busy === p.id ? "Opening checkout…" : `Get ${p.name} →`}
+            {busy === p.id ? "Opening checkout…" : `Get the ${p.name.toLowerCase()} plan →`}
           </button>
         </section>
       ))}
@@ -159,13 +160,13 @@ export function PlanCard({ ent, onManage, isOwner = false }) {
   if (isOwner) return (
     <section className="card">
       <p className="eyebrow">Your plan · owner</p>
-      <p className="small"><strong>Owner — full development access.</strong> Paywall, exam locks, and content protection don't apply to this account. Exam runs from here never burn attempts.</p>
+      <p className="small"><strong>Owner: full development access.</strong> Paywall, exam locks, and content protection don't apply to this account. Exam runs from here never burn attempts.</p>
     </section>
   );
   if (!ent) return null;
   const label =
     ent.status === "active" ? `Active until ${ent.expiresAt ? new Date(ent.expiresAt).toLocaleDateString() : "—"}` :
-    ent.status === "trial" ? "1-day free pass" :
+    ent.status === "trial" ? planById("pass1").name.toLowerCase() :
     ent.status === "expired" ? "Expired" : "No plan yet";
   return (
     <section className="card">

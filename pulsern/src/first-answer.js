@@ -1,7 +1,7 @@
 /* First-answer activation. Pure decisions so the free-pass path can be
    tested without rendering the app.
    A brand-new account is granted pass1 automatically, but nothing used to
-   require a practice answer before that 24h window closed. After expiry the
+   require a practice answer before that 7-day window closed. After expiry the
    paywall hides study, so the miss is permanent. These helpers keep the
    first session on one question and keep the tour off the paywall. */
 
@@ -42,8 +42,13 @@ export function trialTimeLeftLabel(expiresAt, now = Date.now()) {
   const ms = new Date(expiresAt).getTime() - now;
   if (!Number.isFinite(ms)) return "full study access";
   if (ms <= 0) return "ending now";
-  if (ms < 60 * 60 * 1000) return "less than 1 hour left";
-  const hours = Math.ceil(ms / (60 * 60 * 1000));
+  const hour = 60 * 60 * 1000;
+  if (ms < hour) return "less than 1 hour left";
+  if (ms >= 48 * hour) {
+    const days = Math.round(ms / (24 * hour));
+    return days === 1 ? "1 day left" : `${days} days left`;
+  }
+  const hours = Math.ceil(ms / hour);
   if (hours <= 1) return "1 hour left";
   return `${hours} hours left`;
 }

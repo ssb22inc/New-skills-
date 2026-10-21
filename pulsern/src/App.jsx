@@ -324,11 +324,11 @@ const store = {
    routes the others through a server-side proxy (e.g. LiteLLM/OpenRouter).
 ------------------------------------------------------------------------ */
 const AI_PROVIDERS = [
-  { id: "claude", name: "Claude Sonnet — Anthropic (US)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
-  { id: "gpt", name: "GPT series — OpenAI (US)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
+  { id: "claude", name: "Claude Sonnet (Anthropic, US)", builtin: true, note: "Routed through the PulseRN server. No API key on your device." },
+  { id: "gpt", name: "GPT series (OpenAI, US)", builtin: true, note: "Routed through the PulseRN server. No API key on your device." },
   { id: "deepseek", name: "DeepSeek V3/R1 (China)", builtin: true, note: "Lowest cost tier. Routed through the PulseRN server." },
-  { id: "qwen", name: "Qwen — Alibaba (China)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
-  { id: "kimi", name: "Kimi — Moonshot (China)", builtin: true, note: "Routed through the PulseRN server — no key on your device." },
+  { id: "qwen", name: "Qwen (Alibaba, China)", builtin: true, note: "Routed through the PulseRN server. No API key on your device." },
+  { id: "kimi", name: "Kimi (Moonshot, China)", builtin: true, note: "Routed through the PulseRN server. No API key on your device." },
 ];
 
 async function currentAccessToken() {
@@ -492,7 +492,7 @@ export default function App() {
   }, [activating]);
 
   /* ---- entitlement: who gets in, and how many exams they have left ----
-     Brand-new accounts self-grant the 1-day free pass (capped at one per
+     Brand-new accounts self-grant the 7-day free pass (capped at one per
      account for life by a DB unique index). If the reads fail we fail open
      on content — a network blip should never lock a paying student out. */
   const refreshEnt = async () => {
@@ -672,10 +672,10 @@ export default function App() {
   const readiness = useMemo(() => readinessFrom(ability, log), [ability, log]);
 
   const readyLabel = readiness == null
-    ? (log.length ? `Estimating — ${12 - log.length} more answers needed` : "No data yet")
-    : readiness.pct >= 75 ? "High (estimate) — trending above passing standard"
-    : readiness.pct >= 55 ? "Borderline (estimate) — keep drilling weak areas"
-    : "Below passing standard (estimate) — focus review";
+    ? (log.length ? `Estimating: ${12 - log.length} more answer${12 - log.length === 1 ? "" : "s"} needed` : "No data yet")
+    : readiness.pct >= 75 ? "High (estimate): trending above the passing standard"
+    : readiness.pct >= 55 ? "Borderline (estimate): keep drilling weak areas"
+    : "Below the passing standard (estimate): focus your review";
 
   const touchDay = () => {
     setDaily((d) => d.day === todayStr() ? { ...d, answered: d.answered + 1 } : { day: todayStr(), answered: 1 });
@@ -853,19 +853,19 @@ export default function App() {
             <div className="menu-overlay" onClick={() => setMenuOpen(false)} />
             <nav className="menu-panel" aria-label="Main menu">
               {!locked && <>
-                <button className="menu-item" onClick={() => { setTab("today"); setMenuOpen(false); }}>🏠 Home — Today</button>
+                <button className="menu-item" onClick={() => { setTab("today"); setMenuOpen(false); }}>🏠 Home (Today)</button>
                 <button className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
                 <button className="menu-item" onClick={() => { setTab("exams"); setMenuOpen(false); }}>📝 Readiness exams</button>
                 <button className="menu-item" onClick={() => { setTab("plans"); setMenuOpen(false); }}>💳 Plans & upgrades</button>
-                <button className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & Contact</button>
-                <button className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 About — your RN reviewer</button>
+                <button className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & contact</button>
+                <button className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 Meet the RN behind PulseRN</button>
                 <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
                 <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
               </>}
               {/* Owner only — students never see this entry, and the page and
                   its API refuse anyone who is not in the reviewers table. */}
               {isOwner && (
-                <button className="menu-item" onClick={() => { window.location.assign("/owner/"); }}>🛠 Owner tools — system &amp; accounts</button>
+                <button className="menu-item" onClick={() => { window.location.assign("/owner/"); }}>🛠 Owner tools: system &amp; accounts</button>
               )}
               <button className="menu-item" onClick={() => supabase.auth.signOut()}>↪ Sign out</button>
             </nav>
@@ -881,13 +881,13 @@ export default function App() {
         {justPaid && (
           <section className="card" style={{ borderColor: "var(--ok-line)" }}>
             <p className="eyebrow">Payment received</p>
-            <h2 className="h2">You're in — full access is live.</h2>
+            <h2 className="h2">You're in. Full access is live.</h2>
             <p className="small">
               {ent?.status === "active"
                 ? "Your plan is active. Everything is unlocked: the full QBank, case studies, flashcards, and readiness exams."
                 : confirming
-                ? "Confirming your plan — this usually takes a few seconds. Everything unlocks the moment it lands."
-                : "Your payment went through, but the plan hasn't appeared yet. Try Refresh my access below; if it still doesn't show, email sheldon@pulsern.app and it'll be sorted straight away."}
+                ? "Confirming your plan. This usually takes a few seconds, and everything unlocks the moment it lands."
+                : "Your payment went through, but the plan hasn't appeared yet. Tap \"Refresh my access\" below. If it still doesn't show, email sheldon@pulsern.app and we'll fix it right away."}
             </p>
             <InstallCard />
           </section>
@@ -895,7 +895,7 @@ export default function App() {
         {locked && !confirming && <Paywall ent={ent} onRefresh={refreshEnt} />}
         {!locked && !isOwner && ent?.status === "trial" && tab !== "plans" && (
           <section className="card trial-banner">
-            <p className="small"><strong>Free pass</strong> — {trialBannerMessage({ expiresAt: ent.expiresAt, answered: log.length >= 1 })} <button className="auth-switch" onClick={() => setTab("plans")}>See plans →</button></p>
+            <p className="small"><strong>Free pass:</strong> {trialBannerMessage({ expiresAt: ent.expiresAt, answered: log.length >= 1 })} <button className="auth-switch" onClick={() => setTab("plans")}>See plans →</button></p>
           </section>
         )}
         {!locked && <>
@@ -943,9 +943,9 @@ function Tour({ trial, onAnswer, onSkip }) {
     <div className="tour-overlay" role="dialog" aria-label="Start your first question">
       <div className="tour-card">
         <p className="tour-icon" aria-hidden="true">▶</p>
-        <h2 className="h2">{trial ? "Your free pass is on — answer this question" : "One question starts Today"}</h2>
+        <h2 className="h2">{trial ? "Your free pass is on. Answer this question." : "One question starts Today"}</h2>
         <p className="small">{trial
-          ? "Answer this one item to unlock Today. You don't have to find Start. Skip opens the same question — do it before the pass ends."
+          ? "Answer this one question to unlock Today. No need to look for a Start button. Skip opens the same question, so answer it before your pass ends."
           : "Today is one round when you're ready. This button opens a single practice question first. Skip returns to Today."}</p>
         <div className="row">
           <button className="btn" onClick={onAnswer}>Answer this question</button>
@@ -962,9 +962,9 @@ function Tour({ trial, onAnswer, onSkip }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (sepsis, DKA, preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-item NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness verdict — each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & Contact, Quick tour, Settings, Sign out.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Quick tour, Settings, Sign out.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
-Plans: every new account gets a free 1-day pass with full study access (no exams). Subscriptions: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). After a subscription: 7-day renewal $45 (content only) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ report button for flagging bad questions.
+Plans: every new account gets a free 7-day pass with full study access (no exams). Subscriptions: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). After a subscription: 7-day renewal $45 (content only) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
@@ -992,7 +992,7 @@ function HelpCenter({ open, setOpen, provider }) {
         answered = true;
       } catch (e) { /* retry once */ }
     }
-    if (!answered) setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now — try sending that once more in a few seconds. For anything urgent, email sheldon@pulsern.app or call 786-408-4357." }]);
+    if (!answered) setMsgs((m) => [...m, { role: "ai", text: "I couldn't reach the helper service just now. Try sending that again in a few seconds. For anything urgent, email sheldon@pulsern.app or call 786-408-4357." }]);
     setBusy(false);
   };
 
@@ -1009,7 +1009,7 @@ function HelpCenter({ open, setOpen, provider }) {
           <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
         </div>
         <div className="lab-body help-chat" aria-live="polite">
-          {!msgs.length && <p className="small">Ask me anything — “how does readiness work?”, “where do I set my exam date?”, “explain preload vs afterload”. Account or billing questions go to the email above.</p>}
+          {!msgs.length && <p className="small">Ask me anything. For example: How does readiness work? Where do I set my exam date? What's the difference between preload and afterload? Account or billing questions go to the email above.</p>}
           {msgs.map((m, i) => (
             <p key={i} className={m.role === "you" ? "chat-msg you" : "chat-msg ai"}>{m.text}</p>
           ))}
@@ -1077,7 +1077,7 @@ Otherwise, treat it as an NCLEX study question and answer it: plain, clear langu
 Both cases: plain text only (no markdown), educational exam-prep register only — never real-world dosing or treatment instructions.`, 400);
       setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: t }));
     } catch (e) {
-      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: "The AI lookup is unavailable right now — try again in a moment." }));
+      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: "The AI lookup is unavailable right now. Try again in a moment." }));
     } finally {
       setAiBusy(false);
     }
@@ -1091,7 +1091,7 @@ Both cases: plain text only (no markdown), educational exam-prep register only �
           <p className="eyebrow">Normal reference ranges</p>
           <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
         </div>
-        <input className="select lab-search" placeholder="Search a lab value — or ask any NCLEX question…" value={q}
+        <input className="select lab-search" placeholder="Search a lab value or ask any NCLEX question…" value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !groups.length && !aiHit) askAi(); }} />
         <div className="lab-body">
@@ -1105,7 +1105,7 @@ Both cases: plain text only (no markdown), educational exam-prep register only �
           ))}
           {!groups.length && !aiHit && (
             <div className="lab-ai">
-              <p className="small">“{q}” isn't in the built-in list — ask the AI: lab values come back as ranges, study questions get a short explanation.</p>
+              <p className="small">“{q}” isn't in the built-in list. Ask the AI: lab values come back as ranges, and study questions get a short explanation.</p>
               <button className="btn" onClick={askAi} disabled={aiBusy}>{aiBusy ? "Thinking…" : "🧠 Ask AI"}</button>
             </div>
           )}
@@ -1113,10 +1113,10 @@ Both cases: plain text only (no markdown), educational exam-prep register only �
             <div className="lab-ai">
               <p className="lab-group-name mono">AI LOOKUP</p>
               <p className="small" style={{ whiteSpace: "pre-wrap" }}>{aiHit}</p>
-              <p className="small">✨ AI answer — verify against your course materials before relying on it.</p>
+              <p className="small">✨ AI answer. Verify it against your course materials before relying on it.</p>
             </div>
           )}
-          <p className="small tip">Study reference only — ranges vary slightly by lab and textbook. Verify against your course materials.</p>
+          <p className="small tip">Study reference only. Ranges vary slightly by lab and textbook, so verify against your course materials.</p>
         </div>
       </aside>
     </>
@@ -1162,7 +1162,7 @@ function Today(props) {
   if (showingFirst) return (
     <div className="stack">
       <p className="eyebrow stage-label">Answer this to unlock Today</p>
-      <p className="small">One question opens your daily plan. You don't have to find Start.</p>
+      <p className="small">One question opens your daily plan. No need to look for a Start button.</p>
       <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} auto autoLimit={1} preferMc onDone={finishFirst} />
     </div>
   );
@@ -1186,7 +1186,7 @@ function Today(props) {
       <section className="card">
         <p className="eyebrow">Round complete</p>
         <h2 className="h2">That's the whole job for today 🎉</h2>
-        <p className="small">Day {streak.count} locked in. The science says stop here — spacing does its work between sessions, not during them. Tomorrow, tap the same button.</p>
+        <p className="small">Day {streak.count} locked in. The science says stop here: spacing does its work between sessions, not during them. Tomorrow, tap the same button.</p>
         <button className="btn ghost" onClick={() => setStage("home")}>Back to Today</button>
       </section>
       {props.showProfile && (
@@ -1264,13 +1264,13 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
 
       <section className="card">
         <p className="eyebrow">Today's goal · little and often</p>
-        <h2 className="h2">{daily.answered >= DAILY_GOAL ? "Goal met — spacing secured" : `${daily.answered} / ${DAILY_GOAL} questions today`}</h2>
+        <h2 className="h2">{daily.answered >= DAILY_GOAL ? "Goal met: spacing secured" : `${daily.answered} / ${DAILY_GOAL} questions today`}</h2>
         <div className="bar"><div className="bar-fill" style={{ width: `${goalPct}%` }} /></div>
         <Why>{daily.answered >= DAILY_GOAL
-          ? "One block a day beats a weekend marathon. Clear your flashcard queue, then rest — the forgetting curve is doing the work now."
+          ? "One block a day beats a weekend marathon. Clear your flashcard queue, then rest. The forgetting curve is doing the work now."
           : "Distributed practice: a short block today is worth more than a long one someday. Your streak counts days, not hours."}</Why>
-        {dueCount > 0 && <p className="small tip"><strong>{dueCount} flashcard{dueCount === 1 ? "" : "s"} due today</strong> — spaced reviews only count if they happen on schedule.</p>}
-        <p className="small tip">{streak.shield ? "🛡 Streak shield ready — one missed day won't break your streak." : "🛡 Shield used. A 7-day run restores it."}</p>
+        {dueCount > 0 && <p className="small tip"><strong>{dueCount} flashcard{dueCount === 1 ? "" : "s"} due today.</strong> Spaced reviews only count if they happen on schedule.</p>}
+        <p className="small tip">{streak.shield ? "🛡 Streak shield ready: one missed day won't break your streak." : "🛡 Shield used. A 7-day run restores it."}</p>
       </section>
 
       <section className="card">
@@ -1423,10 +1423,10 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
       <section className="card">
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
-        <p className="small">Adaptive practice — difficulty adjusts to you.</p>
-        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real NCLEX-RN — a computer-adaptive test — steering toward your weakest categories.</Why>
+        <p className="small">Adaptive practice: difficulty adjusts to you.</p>
+        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real NCLEX-RN (a computer-adaptive test), steering toward your weakest categories.</Why>
 
-        <p className="eyebrow" style={{ marginTop: 10 }}>Focus — leave everything off for the full adaptive mix</p>
+        <p className="eyebrow" style={{ marginTop: 10 }}>Focus: leave everything off for the full adaptive mix</p>
         <div className="fchips" role="group" aria-label="Filter by category">
           {CATS.map((c) => (
             <button key={c} className={catFilter.includes(c) ? "fchip on" : "fchip"}
@@ -1446,7 +1446,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
           ))}
         </div>
         {(catFilter.length > 0 || typeFilter.length > 0 || popFilter.length > 0) && (
-          <p className="small tip">Focused session: {catFilter.length ? catFilter.join(", ") : "all categories"} · {typeFilter.length ? typeFilter.map((t) => TYPE_CHIPS.find(([k]) => k === t)[1]).join(", ") : "all types"} — <button className="auth-switch" style={{ color: "var(--accent-ink)" }} onClick={() => { setCatFilter([]); setTypeFilter([]); setPopFilter([]); }}>clear</button></p>
+          <p className="small tip">Focused session: {catFilter.length ? catFilter.join(", ") : "all categories"} · {typeFilter.length ? typeFilter.map((t) => TYPE_CHIPS.find(([k]) => k === t)[1]).join(", ") : "all types"} · <button className="auth-switch" style={{ color: "var(--accent-ink)" }} onClick={() => { setCatFilter([]); setTypeFilter([]); setPopFilter([]); }}>clear</button></p>
         )}
 
         <p className="small mono">{freshPool.length} new · {reviewPool.length} missed · difficulty target {diffTarget}/3</p>
@@ -1456,7 +1456,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
         </div>
         {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
 
-        {!freshPool.length && !reviewPool.length && <p className="small tip">Bank cleared with every miss corrected — that's mastery. Check Stats, then keep the flashcard schedule alive.</p>}
+        {!freshPool.length && !reviewPool.length && <p className="small tip">Bank cleared with every miss corrected. That's mastery. Check Stats, then keep the flashcard schedule alive.</p>}
       </section>
     </div>
   );
@@ -1464,8 +1464,8 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
   if (phase === "break") return (
     <section className="card">
       <p className="eyebrow">Spacing checkpoint</p>
-      <h2 className="h2">Block complete — 8 questions</h2>
-      <p className="small">Distributed practice beats marathons: the same study minutes spread across days retain dramatically more than one long push. If you stop here, review again within 24 hours, then at 3 and 7 days — your flashcard queue and day streak now track that schedule for real.</p>
+      <h2 className="h2">Block complete: 8 questions</h2>
+      <p className="small">Distributed practice beats marathons: the same study minutes spread across days retain dramatically more than one long push. If you stop here, review again within 24 hours, then at 3 and 7 days. Your flashcard queue and day streak now track that schedule for real.</p>
       <div className="row">
         <button className="btn ghost" onClick={nextQuestion}>One more block →</button>
         <button className="btn" onClick={() => setPhase("pick")}>End session</button>
@@ -1679,7 +1679,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
 
         {phase === "feedback" && (
           <div className={wasCorrect ? "feedback ok" : "feedback no"}>
-            <p className="fb-head mono">{wasCorrect ? `CORRECT · +${10 * q.diff} XP` : "INCORRECT — IT RETURNS IN REVIEW MISSES"}</p>
+            <p className="fb-head mono">{wasCorrect ? `CORRECT · +${10 * q.diff} XP` : "INCORRECT · IT RETURNS IN REVIEW MISSES"}</p>
             {q.type === "order" && !wasCorrect && (
               <p className="small"><strong>Correct order:</strong> {q.answer.map((i) => q.options[i]).join(" → ")}</p>
             )}
@@ -1687,7 +1687,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
               <p className="small"><strong>Correct choices:</strong> {q.answer.map((a, i) => ext.dropdowns[i][a]).join(" · ")}</p>
             )}
             {q.type === "calc" && (
-              <p className="small"><strong>{wasCorrect ? "Answer:" : "Correct answer:"}</strong> {q.answer} {ext.unit}{!wasCorrect && ` — you entered ${String(sel).trim() || "nothing"}`}</p>
+              <p className="small"><strong>{wasCorrect ? "Answer:" : "Correct answer:"}</strong> {q.answer} {ext.unit}{!wasCorrect && ` (you entered ${String(sel).trim() || "nothing"})`}</p>
             )}
             {q.type === "calc" && Array.isArray(ext.work) && ext.work.length > 0 && (
               <div className="calc-work">
@@ -1699,7 +1699,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
               <p className="small"><strong>Should be highlighted:</strong> {q.answer.map((i) => ext.tokens[i]).join(" · ")}</p>
             )}
             <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
-            {q.ai && <p className="small">Reviewed for clinical accuracy — verify anything surprising against your course materials.</p>}
+            {q.ai && <p className="small">{calibration[q.id] !== undefined ? "✨ AI-assisted practice item that passed automated quality checks." : "✨ AI-assisted practice item."}</p>}
             {/* Astra-confirmed concept diagrams for this exact question (if any) */}
             <ConceptExplainers key={`dx${q.id}`} q={q} />
             <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
@@ -1761,7 +1761,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
         <section className="card">
           <p className="eyebrow">Next Generation NCLEX</p>
           <h2 className="h2">Case studies · {cases.length} in the library</h2>
-          <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps — recognize cues, analyze, prioritize, plan, act, evaluate. Each step scores like the real exam.</p>
+          <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps (recognize cues, analyze cues, prioritize hypotheses, generate solutions, take action, evaluate outcomes). Each step scores like the real exam.</p>
           <p className="small tip">Pick a sub-category to see its cases.</p>
           <div className="fchips" role="group" aria-label="Case sub-categories">
             {groups.map((g) => (
@@ -1798,7 +1798,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
           {cs.labs.map(([k, v]) => <span key={k} className="chip lab">{k} {v}</span>)}
         </div>
         <p className="small note">Nurse's note: {cs.note}</p>
-        {cs.ai && <p className="small">Reviewed for clinical accuracy — verify anything surprising against your course materials.</p>}
+        {cs.ai && <p className="small">✨ AI-assisted case that passed automated quality checks.</p>}
         <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
       </section>
@@ -1838,8 +1838,8 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
 
       {phase === "done" && (
         <section className="card">
-          <h2 className="h2">Case complete — {score}/{cs.steps.length}</h2>
-          <p className="small">{score === cs.steps.length ? "Flawless clinical judgment. You recognized cues, prioritized the hypothesis, and took the right actions." : "Review the rationales above — NGN cases reward recognizing the pattern across findings, not any single number."}</p>
+          <h2 className="h2">Case complete: {score}/{cs.steps.length}</h2>
+          <p className="small">{score === cs.steps.length ? "Flawless clinical judgment. You recognized cues, prioritized the hypothesis, and took the right actions." : "Review the rationales above. NGN cases reward recognizing the pattern across findings, not any single number."}</p>
           <button className="btn" onClick={() => setCaseIdx(null)}>Back to all cases</button>
         </section>
       )}
@@ -1947,8 +1947,8 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
       <section className="card">
         <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
         <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
-        <p className="small">Your queue is clear — and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
-        <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow, "Good" stretches to 3, 7, then 15 days, "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day so the deck never buries you. Your schedule syncs to your account — come back on the due date and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
+        <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
+        <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
         {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
       </section>
     </div>
@@ -1961,7 +1961,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
         <p className="eyebrow">Spaced repetition · {sessionQueue.length} in today's queue · deck of {filtered.length}</p>
         <p className="small mono" style={{ marginBottom: 6 }}>{cur.cat.toUpperCase()} · {cur.topic.toUpperCase()}{cur.ai ? " · ✨ AI" : ""}</p>
         <button className="flashcard" onClick={() => { if (!show) onFlip?.(); setShow((s) => !s); }}>
-          <p className="fc-side mono">{show ? "ANSWER" : "PROMPT — TAP TO FLIP"}</p>
+          <p className="fc-side mono">{show ? "ANSWER" : "PROMPT · TAP TO FLIP"}</p>
           <p className="fc-text">{show ? cur.back : cur.front}</p>
         </button>
         {!show && (
@@ -1976,7 +1976,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
           />
         )}
         {show && typed.trim() && (
-          <p className="small fc-compare"><strong>You typed:</strong> {typed} — grade yourself honestly against the answer above.</p>
+          <p className="small fc-compare">Grade yourself honestly against the answer above. <strong>You typed:</strong> {typed}</p>
         )}
         {show && parseRangeBack(cur.back) && (() => { const r = parseRangeBack(cur.back); return <RangeScale lo={r.lo} hi={r.hi} unit={r.unit} />; })()}
         {show && parseAntidote(cur) && (
@@ -1998,9 +1998,9 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
             <button className="btn grade easy" onClick={() => grade("easy")}>Easy<span className="grade-sub">{interval < 1 ? "7d" : `${Math.min(interval * 3 + 1, 90)}d`}</span></button>
           </div>
         )}
-        {fcFlips < 3 && <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory — the flip is just the check.</p>}
-        <p className="small tip">Enter flips the card · grades set real calendar dates.{cur.ai ? " ✨ AI card — verify anything surprising against your course materials." : ""}</p>
-        <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. Reviews land right before you'd forget — that's the spacing effect doing the work.</Why>
+        {fcFlips < 3 && <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory. The flip is just the check.</p>}
+        <p className="small tip">Enter flips the card · grades set real calendar dates.{cur.ai ? " ✨ AI-assisted card that passed automated quality checks." : ""}</p>
+        <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. Reviews land right before you'd forget. That's the spacing effect doing the work.</Why>
       </section>
     </div>
   );
@@ -2034,30 +2034,30 @@ function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvi
         {catStats.map((c) => (
           <div key={c.cat} className="cat-row">
             {/* under n=5 a percentage is noise, not signal — no red, no green */}
-            <div className="cat-top"><span className="small">{c.cat}</span><span className="small mono">{c.n < 5 ? `needs more data — ${c.n}q so far` : `${c.pct}% · ${c.n}q`}</span></div>
+            <div className="cat-top"><span className="small">{c.cat}</span><span className="small mono">{c.n < 5 ? `needs more data (${c.n}q so far)` : `${c.pct}% · ${c.n}q`}</span></div>
             <div className="bar"><div className={"bar-fill" + (c.n < 5 ? " na" : c.pct < 60 ? " low" : "")} style={{ width: c.n < 5 ? "100%" : `${c.pct}%` }} /></div>
           </div>
         ))}
-        <p className="small tip">Aim for ≥ 75% in every category before test day. The QBank automatically feeds you more questions from red bars.</p>
+        <p className="small tip">Aim for ≥ 75% in every category before test day. The QBank automatically feeds you more questions in your red-bar categories.</p>
       </section>
       <section className="card">
         <p className="eyebrow">By special population</p>
         {popStats.map((c) => (
           <div key={c.cat} className="cat-row">
-            <div className="cat-top"><span className="small">{c.cat}</span><span className="small mono">{c.n < 5 ? `needs more data — ${c.n}q so far` : `${c.pct}% · ${c.n}q`}</span></div>
+            <div className="cat-top"><span className="small">{c.cat}</span><span className="small mono">{c.n < 5 ? `needs more data (${c.n}q so far)` : `${c.pct}% · ${c.n}q`}</span></div>
             <div className="bar"><div className={"bar-fill" + (c.n < 5 ? " na" : c.pct < 60 ? " low" : "")} style={{ width: c.n < 5 ? "100%" : `${c.pct}%` }} /></div>
           </div>
         ))}
-        <p className="small tip">Pediatric, geriatric, and maternal/newborn clients appear across every category — use the 🧒 👵 🤰 focus chips in Practice to drill them, and track your accuracy here.</p>
+        <p className="small tip">Pediatric, geriatric, and maternal/newborn clients appear across every category. Use the 🧒 👵 🤰 focus chips in Practice to drill them, and track your accuracy here.</p>
       </section>
       {isOwner && (
         <section className="card">
           <p className="eyebrow">AI engine · owner tools</p>
-          <Why label="how this works">Developer control — students never see this. The tutor and question generator run through a provider adapter: one neutral prompt format in, plain text out, so swapping engines loses nothing.</Why>
+          <Why label="how this works">Developer control: students never see this. The tutor and question generator run through a provider adapter: one neutral prompt format in, plain text out, so swapping engines loses nothing.</Why>
           <select className="select" value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="AI engine">
             {AI_PROVIDERS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
-          <p className="small tip">{p.note}{customCount ? ` · ${customCount} AI-generated questions in your bank.` : ""}</p>
+          <p className="small tip">{p.note}{customCount ? ` · ${customCount} AI-generated question${customCount === 1 ? "" : "s"} in your bank.` : ""}</p>
         </section>
       )}
       <section className="card">
@@ -2072,11 +2072,11 @@ function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvi
       </section>
       <section className="card">
         <p className="eyebrow">Account</p>
-        <p className="small">Signing out keeps your synced progress safe — sign back in anywhere to continue.</p>
+        <p className="small">Signing out keeps your synced progress safe. Sign back in anywhere to continue.</p>
         <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
         <p className="small tip">All questions, case studies, flashcards, exams, and materials are the property of the owner of PulseRN and may not be copied, captured, or used outside this app without the owner's explicit consent.</p>
         <p className="small tip">NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. Educational exam preparation only.</p>
-        <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms · Privacy · Educational-use disclaimer</a></p>
+        <p className="small tip"><a href="/legal/" style={{ color: "inherit" }}>Terms, Privacy, and Disclaimer</a></p>
       </section>
     </div>
   );
@@ -2103,19 +2103,19 @@ function ReportIssue({ itemId = null, caseId = null, label = "question" }) {
     setState(error ? "error" : "sent");
   };
 
-  if (state === "sent") return <p className="small tip">✅ Thanks — your report goes straight to our nurse reviewer.</p>;
+  if (state === "sent") return <p className="small tip">✅ Thanks. Your report goes straight to the RN behind PulseRN.</p>;
   if (state === "idle") return (
     <button className="btn ghost tutor-btn" onClick={() => setState("open")}>⚠ Report a problem with this {label}</button>
   );
   return (
     <div className="report-box">
-      <textarea className="select" rows={3} placeholder="What's wrong? (e.g. 'the keyed answer conflicts with current guidelines because…')"
+      <textarea className="select" rows={3} placeholder="What's wrong? (e.g., “the keyed answer conflicts with current guidelines because…”)"
         value={msg} onChange={(e) => setMsg(e.target.value)} maxLength={1000} />
       <div className="row">
         <button className="btn" disabled={state === "busy" || msg.trim().length < 3} onClick={send}>{state === "busy" ? "Sending…" : "Send report"}</button>
         <button className="btn ghost" onClick={() => setState("idle")}>Cancel</button>
       </div>
-      {state === "error" && <p className="small" style={{ color: "var(--coral)" }}>Couldn't send — check your connection and try again.</p>}
+      {state === "error" && <p className="small" style={{ color: "var(--coral)" }}>Couldn't send. Check your connection and try again.</p>}
     </div>
   );
 }
@@ -2162,13 +2162,13 @@ Respond ONLY with a raw JSON array (no markdown fences, no commentary) of 5 obje
 
   return (
     <div>
-      {lowOnNew && state === "idle" && <p className="small tip">Running low on fresh questions — generate more below.</p>}
+      {lowOnNew && state === "idle" && <p className="small tip">Running low on fresh questions. Generate more below.</p>}
       <button className="btn ghost" onClick={go} disabled={state === "loading"}>
         {state === "loading" ? "Writing questions…" : "✨ Generate 5 new questions (AI)"}
       </button>
       {state === "done" && <p className="small">{msg}</p>}
       {state === "key" && <p className="small">This engine needs an API key. Switch engines in Stats → AI engine, or use Claude (included).</p>}
-      {state === "error" && <p className="small">Generation hiccup — tap to try again. Nothing invalid ever enters your bank: every item is schema-checked first.</p>}
+      {state === "error" && <p className="small">Generation hiccup. Tap to try again. Nothing invalid ever enters your bank: every item is schema-checked first.</p>}
     </div>
   );
 }
@@ -2246,8 +2246,8 @@ Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a t
     <button className="btn ghost tutor-btn" onClick={ask} disabled={state === "loading"}>
 
       {state === "loading" ? "Tutor is thinking…"
-        : state === "key" ? "This engine needs a key — switch in Stats → AI engine"
-        : state === "error" ? "Tutor unavailable — tap to retry"
+        : state === "key" ? "This engine needs an API key. Switch engines in Stats → AI engine."
+        : state === "error" ? "Tutor unavailable. Tap to retry."
         : "🧠 Explain it differently"}
     </button>
   );

@@ -118,7 +118,7 @@ const CSS = `
 `;
 
 const DISCLAIMER =
-  'Educational exam preparation only — not medical advice and not a clinical reference. ' +
+  'Educational exam preparation only, not medical advice or a clinical reference. ' +
   'Always follow your own institution\'s policies and your instructors\' guidance. ' +
   'NCLEX&reg; is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), ' +
   'which is not affiliated with and does not endorse this product.';
@@ -259,10 +259,10 @@ function renderArticle(a, all, provenance) {
 ${faq}
 <div class="card">
   <h2 style="margin-top:0">Sources and further reading</h2>
-  <ul>${sources.map((source) => `<li id="source-${esc(source.id)}"><a href="${source.url}" rel="external noopener">${esc(source.title)}</a> — ${esc(source.publisher)}; evidence locator: ${esc(source.locator)}${source.sourceUpdated ? `; source updated <time datetime="${esc(source.sourceUpdated)}">${esc(source.sourceUpdated)}</time>` : ""}; accessed <time datetime="${esc(source.accessedAt)}">${esc(source.accessedAt)}</time></li>`).join("")}</ul>
+  <ul>${sources.map((source) => `<li id="source-${esc(source.id)}"><a href="${source.url}" rel="external noopener">${esc(source.title)}</a> (${esc(source.publisher)}); evidence locator: ${esc(source.locator)}${source.sourceUpdated ? `; source updated <time datetime="${esc(source.sourceUpdated)}">${esc(source.sourceUpdated)}</time>` : ""}; accessed <time datetime="${esc(source.accessedAt)}">${esc(source.accessedAt)}</time></li>`).join("")}</ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> ${esc(a.cta ?? "PulseRN drills this with adaptive questions that adjust to your level, every Next Gen item type, and full-length readiness exams.")}</p>
+  <p><b>Practice this for real.</b> ${esc(a.cta ?? "PulseRN drills this with adaptive questions that adjust to your level, every Next Gen item type, and 85-question readiness exams.")}</p>
   <p><a href="/">Start studying on PulseRN &rarr;</a></p>
 </div>
 
@@ -273,7 +273,7 @@ ${faq}
 </article>
 </main>
 
-<footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms &middot; Privacy &middot; Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+<footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>
 `);
@@ -313,16 +313,16 @@ function renderIndex(all) {
   </div>`).join("");
 
   return usEnglish(`${head({
-    title: "NCLEX-RN guides — how the exam works and how to study | PulseRN",
-    description: REVIEW_LEDGER.reviewer.verificationStatus === "verified" ? "Straight answers on NCLEX scoring, Next Gen item types, dosage calculation, lab values, prioritization and delegation by a verified RN." : "Straight answers on NCLEX scoring, Next Gen item types and study topics, with transparent sources and clinical-review status.",
+    title: "NCLEX-RN guides: how the exam works and how to study | PulseRN",
+    description: REVIEW_LEDGER.reviewer.verificationStatus === "verified" ? "Straight answers on NCLEX scoring, Next Gen item types, dosage calculation, lab values, prioritization, and delegation from a working hospital RN." : "Straight answers on NCLEX scoring, Next Gen item types, and study topics, with transparent sources and clinical-review status.",
     url, jsonld,
   })}
 <main><a class="back" href="/">&larr; Back to PulseRN</a>
 <h1>NCLEX-RN <b>guides</b></h1>
-<p class="sub">Straight answers owned by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}</a>, with explicit source and clinical-review status. No fluff, no false promises.</p>
-<div class="cta"><p><b>Start with questions.</b> <a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN practice questions</a> with visible answers, rationales, sources, and RN-review status—no sign-in required.</p></div>
+<p class="sub">Guides written by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}</a>, a working hospital RN. Each approved guide is tied to its sources and a review record.</p>
+<div class="cta"><p><b>Start with a question.</b> <a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN practice questions</a> with the answer, the rationale, and the sources on the page. No sign-in required.</p></div>
 ${sections}
-</main><footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms &middot; Privacy &middot; Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+</main><footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>
 `);

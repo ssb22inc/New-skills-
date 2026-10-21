@@ -18,9 +18,9 @@ export const FULL_STANDALONE = 55, FULL_CASES = 5;
 
 /* ---- deterministic verdict tiers (self-assessment estimate) ---- */
 export function verdictFor(pct) {
-  if (pct >= 68) return { tier: "HIGH", label: "High readiness — performing above the passing standard", cls: "ok" };
-  if (pct >= 55) return { tier: "BORDERLINE", label: "Borderline — near the passing standard; focus your weak categories", cls: "warn" };
-  return { tier: "BELOW", label: "Below the passing standard — build fundamentals before test day", cls: "no" };
+  if (pct >= 68) return { tier: "HIGH", label: "High readiness (estimate): performing above the passing standard", cls: "ok" };
+  if (pct >= 55) return { tier: "BORDERLINE", label: "Borderline (estimate): near the passing standard, so focus on your weak categories", cls: "warn" };
+  return { tier: "BELOW", label: "Below the passing standard (estimate): build fundamentals before test day", cls: "no" };
 }
 
 /* score one item, all-or-nothing, same scorers as Practice */
@@ -46,7 +46,7 @@ function answerText(q) {
     case "sata": return q.answer.map((i) => q.options[i]).join(" · ");
     case "order": return q.answer.map((i) => q.options[i]).join(" → ");
     case "matrix": return ext.rows.map((r, i) => `${r} → ${ext.columns[q.answer[i]]}`).join("; ");
-    case "bowtie": return `Actions: ${q.answer.actions.map((i) => ext.actions[i]).join("; ")} — Condition: ${ext.conditions[q.answer.condition]} — Parameters: ${q.answer.parameters.map((i) => ext.parameters[i]).join("; ")}`;
+    case "bowtie": return `Actions: ${q.answer.actions.map((i) => ext.actions[i]).join("; ")} · Condition: ${ext.conditions[q.answer.condition]} · Parameters: ${q.answer.parameters.map((i) => ext.parameters[i]).join("; ")}`;
     case "cloze": return q.answer.map((a, i) => ext.dropdowns[i][a]).join(" · ");
     case "calc": return `${q.answer} ${ext.unit ?? ""}`;
     case "highlight": return q.answer.map((i) => ext.tokens[i]).join(" · ");
@@ -219,7 +219,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
         <section className="card">
           <p className="eyebrow">Readiness self-assessment</p>
           <h2 className="h2">NCLEX-style exams</h2>
-          <p className="small">Ten standardized exams of <strong>85 questions each</strong> — the real NCLEX-RN's minimum length. Every form is 55 standalone questions plus 5 full case studies (6 questions each — 30 case-study questions) weighted to the official test plan, with a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal — and no account is ever shown the same exam twice.</p>
+          <p className="small">Ten standardized exams of <strong>85 questions each</strong>, the real NCLEX-RN's minimum length. Every form is 55 standalone questions plus 5 full case studies (6 questions each, 30 case-study questions in all), weighted to the official test plan, with a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal, and no account is ever shown the same exam twice.</p>
           {isOwner && <p className="small tip">🔧 Owner dev access: every exam is open, retakes allowed, nothing is burned.</p>}
           {ent && !isOwner && !trial && <p className="small tip">You have <strong>{examsLeft}</strong> self-assessment{examsLeft === 1 ? "" : "s"} remaining.{examsLeft === 0 && onUpgrade ? <> Add one for $45 from <button className="auth-switch" onClick={onUpgrade}>Plans & upgrades</button>.</> : null}</p>}
         </section>
@@ -243,12 +243,12 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
                 <span className="small"><strong>Readiness Exam {f}</strong></span>
                 <span className="small mono">{a ? `${qReady}/85 questions` : "…"}</span>
               </div>
-              {ready && <p className="small">Full-length 85-question exam · includes 5 case studies (30 questions)</p>}
+              {ready && <p className="small">85-question readiness exam · includes 5 case studies (30 questions)</p>}
               {past && <p className="small">Your result: <strong>{past.pct}%</strong> · {past.verdict} · {past.date}</p>}
               {done
-                ? <p className="small tip">Completed — exams are never repeated, so this score stays an honest signal.</p>
+                ? <p className="small tip">Completed. Exams are never repeated, so this score stays an honest signal.</p>
                 : !ready
-                  ? <p className="small tip">{!a ? "Checking availability…" : partial ? "Still being built by the exam factory — check back soon." : "Not built yet — the factory generates one form at a time."}</p>
+                  ? <p className="small tip">{!a ? "Checking availability…" : partial ? "Still being built. Check back soon." : "Not built yet. Forms are built one at a time."}</p>
                   : isOwner
                     ? <button className="btn" onClick={() => { setForm(f); setStage("intro"); }}>Start exam (owner) →</button>
                     : !ent
@@ -270,14 +270,14 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     <div className="stack">
       <section className="card">
         <p className="eyebrow">Readiness Exam {form}</p>
-        <h2 className="h2">Exam conditions — just like test day</h2>
+        <h2 className="h2">Exam conditions, just like test day</h2>
         <ul className="checklist" style={{ fontSize: 14, color: "var(--ink)" }}>
-          <li>85 questions: 55 standalone + 5 full case studies (6 questions each — 30 case-study questions)</li>
-          <li>{Math.floor(EXAM_MINUTES / 60)} hours {EXAM_MINUTES % 60} minutes on the clock — it auto-submits at zero</li>
+          <li>85 questions: 55 standalone + 5 full case studies (6 questions each, 30 case-study questions in all).</li>
+          <li>{Math.floor(EXAM_MINUTES / 60)} hours {EXAM_MINUTES % 60} minutes on the clock. It auto-submits at zero.</li>
           <li>One question at a time. You must answer to move on. <strong>No going back.</strong></li>
-          <li>No rationales, no tutor, no lab reference until you finish</li>
-          <li>The on-screen calculator is available on calculation items — it's the ONLY tool: menus, lab references, and the rest of the app lock until you finish, just like the real testing center</li>
-          <li>Plan to finish in one sitting — leaving the exam loses your progress</li>
+          <li>No rationales, no tutor, and no lab reference until you finish.</li>
+          <li>The on-screen calculator is available on calculation items, and it's the ONLY tool. Menus, lab references, and the rest of the app lock until you finish, just like the real testing center.</li>
+          <li>Plan to finish in one sitting. Leaving the exam loses your progress.</li>
         </ul>
         <div className="row">
           <button className="btn" onClick={begin} disabled={loading}>{loading ? "Preparing exam…" : "Begin exam"}</button>
@@ -293,8 +293,8 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     return (
       <div className="stack">
         <section className="card">
-          <p className="eyebrow">Readiness Exam {form} · complete{result.timedOut ? " (time expired)" : ""}{result.incomplete ? " (ended early)" : ""}</p>
-          <h2 className="h2">{result.pct}% — {result.correct}/{result.total} correct</h2>
+          <p className="eyebrow">Readiness Exam {form} · complete{result.timedOut ? " (time expired)" : result.incomplete ? " (ended early)" : ""}</p>
+          <h2 className="h2">{result.pct}% · {result.correct}/{result.total} correct</h2>
           <p className={"small"} style={{ fontWeight: 700, color: v.cls === "ok" ? "var(--accent-ink)" : v.cls === "warn" ? "#9a6a12" : "var(--coral)" }}>{v.label}</p>
           <p className="small">Time used: {Math.floor(result.minutes / 60)}h{String(result.minutes % 60).padStart(2, "0")}m · Self-assessment estimate, not a guarantee of NCLEX results.</p>
         </section>
