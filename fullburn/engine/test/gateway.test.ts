@@ -17,7 +17,7 @@ describe("llm() — the only call path (Law 11, AC 1 contract half)", () => {
     );
     expect(out).toEqual({ greeting: "hello from the mock gateway" });
     const req = transport.requests[0]!;
-    expect(req.url).toBe("https://gateway.ai.cloudflare.com/v1/test-account/fullburn/anthropic/claude-sonnet");
+    expect(req.url).toBe("https://gateway.ai.cloudflare.com/v1/test-account/fullburn/anthropic/claude-sonnet-4-5");
     expect(req.headers["authorization"]).toBe(`Bearer ${CANARY_SECRET}`);
     expect(sink.events).toHaveLength(1);
     expect(sink.events[0]!.role).toBe("hello-world");

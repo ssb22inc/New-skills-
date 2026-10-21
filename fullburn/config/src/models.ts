@@ -45,10 +45,18 @@ export interface RoleCard {
 }
 
 export const MODELS: Readonly<Record<string, ModelSpec>> = deepFreeze({
-  "claude-sonnet": { id: "claude-sonnet", family: "claude", gatewayRoute: "anthropic/claude-sonnet" },
+  // ROUTES ARE CLOUDFLARE AI GATEWAY MODEL IDS ({provider}/{model}), never a
+  // provider key (human instruction 2026-10-21: no lock-in to any provider).
+  // The gateway resolves the credential — a stored BYOK key, else Cloudflare
+  // Unified Billing against the account's credits — so ANY model here, from
+  // any vendor, runs on the one gateway token. Rebinding a role is a change to
+  // ROLE_BINDINGS through bindRole (eval-gated), never a new key.
+  // claude-sonnet and llama-70b carry ids confirmed in Cloudflare's docs
+  // (2026-10-21); gpt-5 and qwen-72b are unverified until a live call or eval.
+  "claude-sonnet": { id: "claude-sonnet", family: "claude", gatewayRoute: "anthropic/claude-sonnet-4-5" },
   "gpt-5": { id: "gpt-5", family: "gpt", gatewayRoute: "openai/gpt-5" },
   "qwen-72b": { id: "qwen-72b", family: "qwen", gatewayRoute: "workers-ai/qwen-72b" },
-  "llama-70b": { id: "llama-70b", family: "llama", gatewayRoute: "workers-ai/llama-70b" },
+  "llama-70b": { id: "llama-70b", family: "llama", gatewayRoute: "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast" },
 });
 
 export const ROLE_CARDS: Readonly<Record<string, RoleCard>> = deepFreeze({
