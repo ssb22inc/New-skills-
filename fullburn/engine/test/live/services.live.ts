@@ -173,6 +173,19 @@ describe("live services (fullburn environment)", () => {
       const restAuth = { authorization: `Bearer ${env("CLOUDFLARE_API_TOKEN")}`, "cf-aig-gateway-id": "fullburn" };
       await probe("rest-api third-party (anthropic/claude-sonnet-4-5, Cloudflare API token)", rest, restAuth, "anthropic/claude-sonnet-4-5");
       await probe("rest-api workers-ai (@cf/meta/llama-3.3-70b-instruct-fp8-fast, Cloudflare API token)", rest, restAuth, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+      // Read-only token probes: does the token reach THIS account, and does it
+      // hold Workers AI? (code 10000 is Cloudflare's generic auth error.)
+      try {
+        const cf = { authorization: `Bearer ${env("CLOUDFLARE_API_TOKEN")}` };
+        const acc = await fetch("https://api.cloudflare.com/client/v4/accounts?per_page=50", { headers: cf });
+        const accBody = (await acc.json().catch(() => ({}))) as { result?: { id?: unknown }[] };
+        const ids = (accBody.result ?? []).map((a) => String(a.id));
+        diagnostics.push({ name: "token accounts", observed: `HTTP ${acc.status}; the token sees ${ids.length} account(s); CLOUDFLARE_ACCOUNT_ID is ${ids.includes(account) ? "AMONG them" : "NOT among them"}` });
+        const models = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(account)}/ai/models/search?per_page=1`, { headers: cf });
+        diagnostics.push({ name: "token Workers AI read (models/search)", observed: `HTTP ${models.status}${errorCodes(await models.text())}` });
+      } catch (e) {
+        diagnostics.push({ name: "token probes", observed: `threw ${e instanceof Error ? e.name : "error"}` });
+      }
       await probe("compat (anthropic/claude-sonnet-4-5, gateway token)", `https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(account)}/fullburn/compat/chat/completions`, { "cf-aig-authorization": `Bearer ${env("AI_GATEWAY_TOKEN")}` }, "anthropic/claude-sonnet-4-5");
     }
 
