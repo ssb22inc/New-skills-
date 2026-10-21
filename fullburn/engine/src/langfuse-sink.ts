@@ -67,8 +67,10 @@ export class LangfuseTraceSink implements TraceSink {
      * tenant's trace. The trace id is the client and the trace id, each
      * percent-encoded so the separator cannot be forged; the decision itself
      * is its own `generation-create` with a fresh id, so two decisions under
-     * one trace never overwrite each other's input or output. */
-    const remoteTraceId = `${encodeURIComponent(event.clientId)}/${encodeURIComponent(event.traceId)}`;
+     * one trace never overwrite each other's input or output.
+     * The separator is ":" (2026-10-21): the first live check used "/", which a
+     * REST path must carry as %2F, and the trace could not be read back. */
+    const remoteTraceId = langfuseTraceId(event.clientId, event.traceId);
     const batch = [
       {
         id: this.#newId(),
@@ -128,4 +130,11 @@ export class LangfuseTraceSink implements TraceSink {
       throw new LangfuseSinkError("Langfuse ingestion did not acknowledge exactly the events sent");
     }
   }
+}
+
+/** The remote trace id: client and trace, each percent-encoded, joined by ":".
+ * encodeURIComponent always encodes ":", so the join is injective, and the id
+ * travels in a URL path with no encoded slash. */
+export function langfuseTraceId(clientId: string, traceId: string): string {
+  return `${encodeURIComponent(clientId)}:${encodeURIComponent(traceId)}`;
 }

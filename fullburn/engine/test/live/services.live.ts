@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { llm } from "../../src/gateway.ts";
 import { AiGatewayHttpTransport } from "../../src/gateway-http.ts";
-import { LangfuseTraceSink } from "../../src/langfuse-sink.ts";
+import { LangfuseTraceSink, langfuseTraceId } from "../../src/langfuse-sink.ts";
 import { FrozenCapsSpendMeter } from "../../src/spend-meter.ts";
 import { TraceContext } from "../../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../../src/vault.ts";
@@ -72,7 +72,7 @@ describe("live services (fullburn environment)", () => {
         const backend = new MemoryVaultBackend();
         backend.set(CLIENT, "ai-gateway-key", env("AI_GATEWAY_TOKEN"));
         const traceId = `live-${Date.now()}`;
-        remoteTraceId = `${encodeURIComponent(CLIENT)}/${encodeURIComponent(traceId)}`;
+        remoteTraceId = langfuseTraceId(CLIENT, traceId);
         const out = (await llm(
           {
             bindings: ROLE_BINDINGS,
@@ -103,7 +103,9 @@ describe("live services (fullburn environment)", () => {
           }
           await new Promise((res) => setTimeout(res, 5_000));
         }
-        return { pass: false, observed: `trace ${remoteTraceId} was not readable after 90 s` };
+        // Say whether the keys themselves work, so a miss can be told from a bad key.
+        const auth = await fetch(`${lfHost}/api/public/projects`, { headers: { authorization: lfAuth } });
+        return { pass: false, observed: `trace ${remoteTraceId} was not readable after 90 s; the Langfuse keys at this host answer HTTP ${auth.status} on /api/public/projects` };
       }),
     );
 

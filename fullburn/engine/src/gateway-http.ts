@@ -120,8 +120,11 @@ export class AiGatewayHttpTransport implements GatewayTransport {
       if (timer) clearTimeout(timer);
     }
     if (status < 200 || status > 299) {
-      // The body may echo request material; only the status crosses.
-      throw new GatewayHttpError(`AI Gateway returned HTTP ${status}`);
+      // The body may echo request material, so no free text crosses — only
+      // machine error CODES, which say whose credential failed (the first live
+      // check's bare 401 could not tell the gateway token from a missing
+      // provider key, 2026-10-21).
+      throw new GatewayHttpError(`AI Gateway returned HTTP ${status}${errorCodes(text)}`);
     }
     let parsed: unknown;
     try {
@@ -142,4 +145,31 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     }
     return output;
   }
+}
+
+/** The machine-readable error codes in a non-2xx body, and nothing else:
+ * Cloudflare's numeric `errors[].code` / `error[].code`, and a provider's
+ * `error.type` / `error.code` when it is a short identifier. Free-text
+ * messages never cross (they can echo request material). */
+export function errorCodes(body: string): string {
+  let j: unknown;
+  try {
+    j = JSON.parse(body);
+  } catch {
+    return "";
+  }
+  const out: string[] = [];
+  const o = (j ?? {}) as Record<string, unknown>;
+  for (const k of ["errors", "error"]) {
+    const v = o[k];
+    for (const e of Array.isArray(v) ? v : v && typeof v === "object" ? [v] : []) {
+      const r = e as Record<string, unknown>;
+      if (Number.isInteger(r["code"])) out.push(`cloudflare ${String(r["code"])}`);
+      for (const f of ["type", "code"]) {
+        const t = r[f];
+        if (typeof t === "string" && /^[a-z][a-z0-9_.-]{0,39}$/.test(t)) out.push(t);
+      }
+    }
+  }
+  return out.length ? ` (${[...new Set(out)].slice(0, 4).join(", ")})` : "";
 }
