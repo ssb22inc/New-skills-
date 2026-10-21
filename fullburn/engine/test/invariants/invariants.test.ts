@@ -2441,6 +2441,16 @@ const RUNNER_BINDINGS: readonly RunnerBinding[] = [
     ],
   },
   {
+    // The live check against the provisioned services (fullburn-live.yml).
+    runner: "engine/test/live/services.live.ts",
+    decisions: ["../../scripts/live-lib.mjs"],
+    provenBy: ["engine/test/live-lib.test.ts"],
+    literalsDisclosed: [
+      { name: "CLIENT", why: "the caps-table client the one billed call is metered against; data" },
+      { name: "SECRET_NAMES", why: "the environment variables whose values are redacted; data — the redaction is live-lib's" },
+    ],
+  },
+  {
     runner: "engine/test/drill/harness-interrupt.drill.ts",
     decisions: ["../post-signal-writes.ts"],
     provenBy: ["engine/test/post-signal-writes.test.ts"],
@@ -2476,7 +2486,11 @@ describe("runner-decision sweep — no verdict is reached where the default suit
     const drills = readdirSync(new URL("engine/test/drill/", wsRoot))
       .filter((f) => f.endsWith(".drill.ts"))
       .map((f) => `engine/test/drill/${f}`);
-    return [...scripts, ...drills].sort();
+    // The live check (2026-10-21) has its own vitest config, like a drill.
+    const lives = readdirSync(new URL("engine/test/live/", wsRoot))
+      .filter((f) => f.endsWith(".live.ts"))
+      .map((f) => `engine/test/live/${f}`);
+    return [...scripts, ...drills, ...lives].sort();
   };
 
   it("every runner in the tree is bound to a decision module and a prover", () => {
@@ -2532,6 +2546,7 @@ describe("runner-decision sweep — no verdict is reached where the default suit
     for (const outside of [
       "engine/test/drill/harness-interrupt.drill.ts",
       "engine/test/drill/clock-rebind.drill.ts",
+      "engine/test/live/services.live.ts",
       "engine/scripts/gate-lib.mjs",
       "engine/src/spend-ledger.ts",
       "engine/test/helpers.ts",

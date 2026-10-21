@@ -593,8 +593,12 @@ const MUTATIONS = [
     "const approvalDocs = changedFiles"],
   // The sweep itself must be able to go red, or it is decoration.
   ["RA-15 the runner sweep enumerates from the filesystem", "engine/test/invariants/invariants.test.ts",
-    "    return [...scripts, ...drills].sort();",
-    "    return [...drills].sort();"],
+    // Re-targeted 2026-10-21: the enumeration now includes the live runners too.
+    "    return [...scripts, ...drills, ...lives].sort();",
+    "    return [...drills, ...lives].sort();"],
+  ["RA-15b the runner sweep enumerates the live runners", "engine/test/invariants/invariants.test.ts",
+    "    return [...scripts, ...drills, ...lives].sort();",
+    "    return [...scripts, ...drills].sort();"],
   // REPLACED, NOT DELETED. The first spelling of this entry mutated the
   // assertion to `.toBe(matches !== undefined)` — which is `true`, a semantic
   // no-op — and SURVIVED for a harness reason rather than an unprotected one.
@@ -1357,6 +1361,22 @@ const MUTATIONS = [
   ["X9-03b the market test resolver is fenced to the test runner", "config/src/markets.ts",
     "    throw new SwitchboardError(\"resolveActiveMarketForTests ran outside a test runner",
     "    void new SwitchboardError(\"resolveActiveMarketForTests ran outside a test runner"],
+  // ---- the live check's decisions (2026-10-21) ----
+  ["LV-01 every live check must be observed exactly once", "engine/scripts/live-lib.mjs",
+    "    if (seen.length !== 1) failing.push(",
+    "    if (seen.length === 0) failing.push("],
+  ["LV-02 an observed check must pass", "engine/scripts/live-lib.mjs",
+    "    else if (seen[0].pass !== true) failing.push(",
+    "    else if (false) failing.push("],
+  ["LV-03 an unknown check fails the run", "engine/scripts/live-lib.mjs",
+    "    if (!LIVE_CHECKS.some((c) => c.id === o?.id)) failing.push(",
+    "    if (false) failing.push("],
+  ["LV-04 the report redacts base64 forms of a secret", "engine/scripts/live-lib.mjs",
+    "    for (const form of [s, encodeURIComponent(s), Buffer.from(s).toString(\"base64\")]) {",
+    "    for (const form of [s, encodeURIComponent(s)]) {"],
+  ["LV-05 the report's verdict line follows the verdict", "engine/scripts/live-lib.mjs",
+    "    `Verdict: ${v.ok ? \"PASS\" : \"FAIL\"}`,",
+    "    `Verdict: PASS`,"],
   // ---- the reviewer is GPT-6 Luna (human instruction 2026-10-09, L63) ----
   ["XF-LUNA the reviewer pin is GPT-6 Luna", "engine/scripts/cross-family-lib.mjs",
     "export const REVIEWER_MODEL = \"openai/gpt-6-luna\";",
