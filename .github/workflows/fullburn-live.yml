@@ -82,7 +82,11 @@ jobs:
           [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "branch name refused"; exit 1; }
           git fetch --no-tags origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
           cp -- "$REL" "$RUNNER_TEMP/report.md"
+          # The new report is untracked here; removed before switching so the
+          # checkout cannot refuse over it (the 2026-10-22 run's commit failed so).
+          rm -- "$REL"
           git checkout -q -B report-target "origin/${BRANCH}"
+          [ -e "$REL" ] && { echo "a report named ${REL##*/} already exists on ${BRANCH} — reports are append-only"; exit 1; }
           cp -- "$RUNNER_TEMP/report.md" "$REL"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

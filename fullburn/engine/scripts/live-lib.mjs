@@ -51,9 +51,15 @@ export function redactObserved(text, secrets) {
   return out.length > 300 ? `${out.slice(0, 300)}…` : out;
 }
 
-export function liveReportName(phase, tree) {
+/** The report's file name binds the tree AND the run's start time: two runs at
+ * one tree must never share a name, because reports are append-only evidence
+ * and the 2026-10-22 run's PASS collided with an earlier FAIL at that tree. */
+export function liveReportName(phase, tree, startedAt) {
   if (!/^[0-9a-f]{40}$/.test(String(tree))) throw new Error("live report needs the full verified-tree hash");
-  return `LIVE_CHECK_phase${phase}_${tree.slice(0, 12)}.md`;
+  const t = new Date(String(startedAt));
+  if (Number.isNaN(t.getTime())) throw new Error("live report needs the run's start time");
+  const stamp = t.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return `LIVE_CHECK_phase${phase}_${tree.slice(0, 12)}_${stamp}.md`;
 }
 
 /** The report. Line 2 is the verdict and line 3 binds the verified tree, the
