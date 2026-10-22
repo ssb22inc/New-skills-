@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ROLE_BINDINGS } from "@fullburn/config/models";
 import { llm } from "../../src/gateway.ts";
-import { AiGatewayHttpTransport, errorCodes } from "../../src/gateway-http.ts";
+import { AiGatewayHttpTransport, errorCodes, unfenceJson } from "../../src/gateway-http.ts";
 import { LangfuseTraceSink, otelTraceId } from "../../src/langfuse-sink.ts";
 import { FrozenCapsSpendMeter } from "../../src/spend-meter.ts";
 import { TraceContext } from "../../src/tracing.ts";
@@ -160,12 +160,19 @@ describe("live services (fullburn environment)", () => {
         const text = await r.text();
         const payHeaders = [...r.headers.keys()].filter((h) => /payment|x402|aig/i.test(h)).join(",") || "none";
         let answered = false;
+        let shape = "none";
         try {
-          answered = Array.isArray((JSON.parse(text) as { choices?: unknown }).choices);
+          const j = JSON.parse(text) as { choices?: { message?: { content?: unknown } }[] };
+          answered = Array.isArray(j.choices);
+          const c = j.choices?.[0]?.message?.content;
+          if (typeof c === "string") {
+            const isJson = (x: string) => { try { JSON.parse(x); return true; } catch { return false; } };
+            shape = isJson(c) ? "bare-json" : unfenceJson(c) !== c ? "fenced-json" : `other (${c.length} chars)`;
+          }
         } catch {
           answered = false;
         }
-        diagnostics.push({ name, observed: `HTTP ${r.status}${errorCodes(text)}; answered=${answered}; response headers ${payHeaders}` });
+        diagnostics.push({ name, observed: `HTTP ${r.status}${errorCodes(text)}; answered=${answered}; content=${shape}; response headers ${payHeaders}` });
       } catch (e) {
         diagnostics.push({ name, observed: `threw ${e instanceof Error ? e.name : "error"}` });
       }

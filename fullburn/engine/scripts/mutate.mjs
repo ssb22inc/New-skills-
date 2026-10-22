@@ -1400,6 +1400,9 @@ const MUTATIONS = [
   ["OR-04 OpenRouter's own model name is sent", "engine/src/gateway-http.ts",
     "      model: route.startsWith(\"openrouter/\") ? route.slice(\"openrouter/\".length) : route,",
     "      model: route,"],
+  ["OR-05 a whole-reply JSON fence is unwrapped, nothing else", "engine/src/gateway-http.ts",
+    "  return m && !m[1]!.includes(\"```\") ? m[1]! : content;",
+    "  return m ? m[1]! : content.replace(/```(?:json)?/g, \"\");"],
   // ---- the live check's decisions (2026-10-21) ----
   ["LV-01 every live check must be observed exactly once", "engine/scripts/live-lib.mjs",
     "    if (seen.length !== 1) failing.push(",

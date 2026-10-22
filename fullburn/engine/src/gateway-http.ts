@@ -147,7 +147,7 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     if (typeof content !== "string") throw new GatewayHttpError("AI Gateway reply has no message content");
     let output: unknown;
     try {
-      output = JSON.parse(content);
+      output = JSON.parse(unfenceJson(content));
     } catch {
       throw new GatewayHttpError("model reply is not JSON");
     }
@@ -183,4 +183,15 @@ export function errorCodes(body: string): string {
     }
   }
   return out.length ? ` (${[...new Set(out)].slice(0, 4).join(", ")})` : "";
+}
+
+/** A model's JSON answer, with ONE allowance: the whole reply may be a single
+ * Markdown code fence around it (```json … ```), which several models emit
+ * even when asked for bare JSON — the first live OpenRouter call did
+ * (2026-10-21). Anything else — prose before or after, two blocks — is
+ * returned unchanged, so it still fails to parse: the output contract stays
+ * strict, only the wrapper is forgiven. */
+export function unfenceJson(content: string): string {
+  const m = /^\s*```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n?```\s*$/.exec(content);
+  return m && !m[1]!.includes("```") ? m[1]! : content;
 }
