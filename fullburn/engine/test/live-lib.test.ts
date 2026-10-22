@@ -39,8 +39,10 @@ describe("live check decisions", () => {
     expect(pass[2]).toBe(`verified-tree: ${"b".repeat(40)}`);
     const fail = renderLiveReport({ phase: "0", tree: "b".repeat(40), commit: "c", startedAt: "t", observations: all(false), secrets: [] });
     expect(fail.split("\n")[1]).toBe("Verdict: FAIL");
-    expect(liveReportName("0", "d".repeat(40))).toBe(`LIVE_CHECK_phase0_${"d".repeat(12)}.md`);
-    expect(() => liveReportName("0", "short")).toThrow();
+    expect(liveReportName("0", "d".repeat(40), "2026-10-22T07:39:59.567Z")).toBe(`LIVE_CHECK_phase0_${"d".repeat(12)}_20261022T073959Z.md`);
+    expect(liveReportName("0", "d".repeat(40), "2026-10-22T07:40:00.000Z"), "two runs at one tree shared a report name").not.toBe(liveReportName("0", "d".repeat(40), "2026-10-22T07:39:59.567Z"));
+    expect(() => liveReportName("0", "short", "2026-10-22T07:39:59.567Z")).toThrow();
+    expect(() => liveReportName("0", "d".repeat(40), "not a time")).toThrow();
   });
 });
 

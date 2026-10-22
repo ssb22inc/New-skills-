@@ -206,7 +206,7 @@ describe("live services (fullburn environment)", () => {
     const secrets = SECRET_NAMES.map(env);
     const report = renderLiveReport({ phase: "0", tree, commit: git(["rev-parse", "--short", "HEAD"]), startedAt, observations, secrets, diagnostics });
     mkdirSync(`${repo}fullburn/reports`, { recursive: true });
-    writeFileSync(`${repo}fullburn/reports/${liveReportName("0", tree)}`, report);
+    writeFileSync(`${repo}fullburn/reports/${liveReportName("0", tree, startedAt)}`, report);
     console.log(report);
     const v = liveVerdict(observations);
     expect(v.failing, "live checks failed — see the report").toEqual([]);

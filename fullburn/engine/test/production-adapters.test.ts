@@ -239,7 +239,7 @@ describe("a non-2xx reply names its machine error codes and nothing else", () =>
   it("reports Cloudflare and provider codes, drops free-text messages", async () => {
     const cf = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 401, text: async () => JSON.stringify({ success: false, errors: [{ code: 2009, message: "Unauthorized: leaked-detail" }] }) }) });
     const err = await cf.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" }).then(() => null, (e: unknown) => e as Error);
-    expect(err?.message).toBe("AI Gateway returned HTTP 401 (cloudflare 2009)");
+    expect(err?.message).toBe("AI Gateway returned HTTP 401 (code 2009)");
     const provider = new AiGatewayHttpTransport({ gatewayBaseUrl: BASE, fetchImpl: async () => ({ status: 401, text: async () => JSON.stringify({ type: "error", error: { type: "authentication_error", message: "x-api-key header is required: echo-of-prompt" } }) }) });
     const perr = await provider.post(`${BASE}openai/gpt-5`, { role: "r" }, { authorization: "Bearer k" }).then(() => null, (e: unknown) => e as Error);
     expect(perr?.message).toBe("AI Gateway returned HTTP 401 (authentication_error)");

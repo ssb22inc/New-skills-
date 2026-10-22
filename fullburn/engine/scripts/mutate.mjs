@@ -1383,6 +1383,9 @@ const MUTATIONS = [
   ["LF-OT-08 the OTel trace id is derived from client and trace", "engine/src/langfuse-sink.ts",
     "    const traceIdHex = await otelTraceId(event.clientId, event.traceId);",
     "    const traceIdHex = await otelTraceId(\"\", event.traceId);"],
+  ["LV-07 a live report's name carries the run's start time", "engine/scripts/live-lib.mjs",
+    "  return `LIVE_CHECK_phase${phase}_${tree.slice(0, 12)}_${stamp}.md`;",
+    "  return `LIVE_CHECK_phase${phase}_${tree.slice(0, 12)}.md`;"],
   // ---- no provider lock-in (human instruction 2026-10-21) ----
   ["NL-01 no provider credential header is ever sent", "engine/src/gateway-http.ts",
     "    const forward: Record<string, string> = { \"content-type\": \"application/json\", \"cf-aig-authorization\": auth };",
