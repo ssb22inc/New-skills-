@@ -1525,6 +1525,7 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const recordedMod = await import("../../src/transport-brand.ts");
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const previewLib = await import("../../scripts/preview-lib.mjs");
+    const demo = await import("../../src/preview/demo-engine.ts");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1949,6 +1950,21 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           utcMeter.settle(utcMeter.reserve("pulsern", 1));
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
+        },
+      },
+      {
+        row: "L80",
+        claim: "the demo refuses to launch before the steps are done, never scales an ad without a verified sale, and never plans spend above the cap",
+        holds: () => {
+          let st = demo.initialState();
+          const early = demo.reduce(st, { type: "launch" }).state.launched === false;
+          for (const a of [{ type: "intake", url: "a-shop.com", facts: null }, { type: "confirmBrief" }, { type: "connect", service: "meta" }, { type: "connect", service: "shop" }, { type: "testPurchase" }, { type: "launch" }, { type: "approve" }] as const) st = demo.reduce(st, a as never).state;
+          let ok = early && st.ads.length === 10;
+          for (let i = 0; i < 30; i++) {
+            st = demo.reduce(demo.reduce(st, { type: "advance", days: 1 }).state, { type: "approve" }).state;
+            ok &&= demo.dailyBudget(st) <= demo.SAMPLE_CAP_USD && st.ads.every((a) => a.sales > 0 || a.budget <= demo.TEST_BUDGET_USD);
+          }
+          return ok;
         },
       },
       {

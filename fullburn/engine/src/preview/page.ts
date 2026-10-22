@@ -116,7 +116,7 @@ main{max-width:960px;margin:0 auto;padding:24px 16px 64px}h1{font-size:2rem;marg
 .approve{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--neutralbg);border-radius:8px;padding:10px 12px}
 button{font:inherit;font-weight:700;border:0;border-radius:8px;padding:8px 18px;background:var(--pass);color:#fff;opacity:.9}button.red{background:var(--fail)}
 .mock-foot{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}.chat{flex:1;min-width:200px;border:1px solid var(--line);border-radius:999px;padding:6px 14px}
-footer{margin-top:3em}
+footer{margin-top:3em}.try a{display:inline-block;background:var(--accent);color:#fff;font-weight:700;padding:8px 16px;border-radius:8px;text-decoration:none;margin-right:8px}
 </style>
 </head>
 <body>
@@ -140,6 +140,7 @@ ${doneSection(d)}
 <ul class="left">${left}</ul>
 
 <h2>What a client will see</h2>
+<p class="try"><a href="/demo">Open the working demo →</a> <span class="muted small">Every client screen and button, running Fullburn's real rules on a simulated engine with sample data.</span></p>
 ${mockup()}
 
 <footer class="muted small">Built ${escapeHtml(d.builtAt.slice(0, 16).replace("T", " "))} UTC from commit <code>${escapeHtml(d.commit.slice(0, 12))}</code>. This page is static: it makes no AI calls and reads no live service when you open it.</footer>
