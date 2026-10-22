@@ -262,8 +262,8 @@ ${faq}
   <ul>${sources.map((source) => `<li id="source-${esc(source.id)}"><a href="${source.url}" rel="external noopener">${esc(source.title)}</a> (${esc(source.publisher)}); evidence locator: ${esc(source.locator)}${source.sourceUpdated ? `; source updated <time datetime="${esc(source.sourceUpdated)}">${esc(source.sourceUpdated)}</time>` : ""}; accessed <time datetime="${esc(source.accessedAt)}">${esc(source.accessedAt)}</time></li>`).join("")}</ul>
 </div>
 <div class="cta">
-  <p><b>Practice this for real.</b> ${esc(a.cta ?? "PulseRN drills this with adaptive questions that adjust to your level, every Next Gen item type, and 85-question readiness exams.")}</p>
-  <p><a href="/">Start studying on PulseRN &rarr;</a></p>
+  <p><b>Practice this for real.</b> ${esc(a.cta ?? "PulseRN drills this with adaptive questions matched to your level, Next Generation formats like bow-tie, matrix, and cloze, and 85-question readiness exams.")}</p>
+  <p><a href="/app/sign-up">Start studying on PulseRN &rarr;</a></p>
 </div>
 
 <div class="card">

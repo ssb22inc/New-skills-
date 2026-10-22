@@ -72,6 +72,22 @@ async function withBrowser(storage, href, referrer, fn) {
   }
 }
 
+/* A public page's button straight to the app signup screen, then the write
+   signup already performs. The signup page carries no campaign query. */
+async function signupFrom(storage, page, userId) {
+  await withBrowser(storage, `${SITE}/app/sign-up`, page, () => {
+    captureAttribution();
+  });
+  const inserted = [];
+  await withBrowser(storage, `${SITE}/app/sign-up`, page, () => flushAttribution({
+    from(table) {
+      if (table !== "user_attribution") throw new Error(`unexpected table ${table}`);
+      return { insert(row) { inserted.push(row); return Promise.resolve({ error: null }); } };
+    },
+  }, userId));
+  return inserted;
+}
+
 /* Homepage CTA, then the app signup screen, then the write signup already
    performs. Neither later page carries the campaign query. */
 async function continueToSignup(storage, userId) {
@@ -158,10 +174,10 @@ describe("public pages load the existing capture", () => {
 });
 
 describe("a tagged landing is what signup records", () => {
-  it("keeps a learn-page campaign through the bare homepage button and into bySource", async () => {
+  it("keeps a learn-page campaign through the sign-up button and into bySource", async () => {
     const learn = read("public/learn/abg-interpretation/index.html");
     expect(learn).toContain(ATTRIBUTION_BOOT_TAG);
-    expect(learn).toContain('<a href="/">Start studying on PulseRN');
+    expect(learn).toContain('<a href="/app/sign-up">Start studying on PulseRN');
 
     const storage = memoryStorage();
     land(
@@ -169,7 +185,7 @@ describe("a tagged landing is what signup records", () => {
       `${SITE}/learn/abg-interpretation/?utm_source=linkedin&utm_medium=social&utm_campaign=day3&utm_content=ad1&utm_term=abg`,
       "https://www.linkedin.com/feed/",
     );
-    const inserted = await continueToSignup(storage, "learn-student");
+    const inserted = await signupFrom(storage, `${SITE}/learn/abg-interpretation/`, "learn-student");
     expect(inserted).toHaveLength(1);
     expect(inserted[0]).toMatchObject({
       user_id: "learn-student",
@@ -190,11 +206,14 @@ describe("a tagged landing is what signup records", () => {
   it("keeps a free-quiz click id through the bare free-pass button", async () => {
     const quiz = read("public/free-nclex-practice-test/index.html");
     expect(quiz).toContain(ATTRIBUTION_BOOT_TAG);
-    expect(quiz).toContain('href="/?start=1"');
+    /* The button opens sign-up directly — it once pointed at the homepage,
+       which made the visitor click a second time. */
+    expect(quiz).toContain('href="/app/sign-up"');
+    expect(quiz).not.toMatch(/href="\/\?(?:start|signin)=1"/);
 
     const storage = memoryStorage();
     land(storage, `${SITE}/free-nclex-practice-test/?gclid=abc123`, "https://www.google.com/");
-    const inserted = await continueToSignup(storage, "quiz-student");
+    const inserted = await signupFrom(storage, `${SITE}/free-nclex-practice-test/`, "quiz-student");
     expect(inserted[0]).toMatchObject({
       utm_source: "google",
       utm_medium: "cpc",
