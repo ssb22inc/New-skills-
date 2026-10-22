@@ -1523,6 +1523,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const gatewayMod = await import("../../src/gateway.ts");
     const channelsMod = await import("@fullburn/config/channels");
     const recordedMod = await import("../../src/transport-brand.ts");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const previewLib = await import("../../scripts/preview-lib.mjs");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1948,6 +1950,16 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
         },
+      },
+      {
+        row: "L79",
+        claim: "an unconfigured or half-configured preview is refused; a bundle reaching outside src/preview/ is refused; a foreign Worker binding blocks the upload; a 200 to an anonymous visitor is not private",
+        holds: () =>
+          previewLib.deployRefusal({ password: "", accessTeam: "", accessAud: "" }) !== null &&
+          previewLib.deployRefusal({ password: "", accessTeam: "t", accessAud: "" }) !== null &&
+          previewLib.bundleRefusal(["engine/src/preview/auth.ts", "engine/src/gateway.ts"], "") !== null &&
+          previewLib.existingBindingsRefusal([{ name: "VAULT", type: "durable_object_namespace" }]) !== null &&
+          previewLib.servedPrivately(200).ok === false,
       },
       {
         row: "L66",
@@ -2449,6 +2461,13 @@ const RUNNER_BINDINGS: readonly RunnerBinding[] = [
       { name: "CLIENT", why: "the caps-table client the one billed call is metered against; data" },
       { name: "SECRET_NAMES", why: "the environment variables whose values are redacted; data — the redaction is live-lib's" },
     ],
+  },
+  {
+    // The private preview's publisher (fullburn-preview.yml, 2026-10-22).
+    runner: "engine/scripts/preview-deploy.mjs",
+    decisions: ["./preview-lib.mjs"],
+    provenBy: ["engine/test/preview.test.ts"],
+    literalsDisclosed: [{ name: "SCRIPT", why: "the name of the existing Worker the user named; data" }],
   },
   {
     runner: "engine/test/drill/harness-interrupt.drill.ts",
