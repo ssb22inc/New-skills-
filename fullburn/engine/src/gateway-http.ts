@@ -159,7 +159,7 @@ export class AiGatewayHttpTransport implements GatewayTransport {
 }
 
 /** The machine-readable error codes in a non-2xx body, and nothing else:
- * Cloudflare's numeric `errors[].code` / `error[].code`, and a provider's
+ * a numeric `errors[].code` / `error[].code` (Cloudflare's or a provider's), and a provider's
  * `error.type` / `error.code` when it is a short identifier. Free-text
  * messages never cross (they can echo request material). */
 export function errorCodes(body: string): string {
@@ -175,7 +175,9 @@ export function errorCodes(body: string): string {
     const v = o[k];
     for (const e of Array.isArray(v) ? v : v && typeof v === "object" ? [v] : []) {
       const r = e as Record<string, unknown>;
-      if (Number.isInteger(r["code"])) out.push(`cloudflare ${String(r["code"])}`);
+      // Numeric codes come from Cloudflare AND from providers (OpenRouter's
+      // 402 is numeric too), so they are labelled "code", not "cloudflare".
+      if (Number.isInteger(r["code"])) out.push(`code ${String(r["code"])}`);
       for (const f of ["type", "code"]) {
         const t = r[f];
         if (typeof t === "string" && /^[a-z][a-z0-9_.-]{0,39}$/.test(t)) out.push(t);
