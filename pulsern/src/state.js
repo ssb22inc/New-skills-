@@ -4,6 +4,7 @@
    renamed or repurposed; missing keys get defaults. Derived values
    (readiness, weak areas) are recomputed elsewhere, never stored. */
 import { emptyAbility } from "./ability-engine.js";
+import { deriveMissSchedule } from "./question-review.js";
 
 /* Category renames from the test-plan alignment: ability history recorded
    under an old name moves to its closest official category. */
@@ -11,12 +12,13 @@ const CAT_RENAMES = { "Psychosocial & Health Promotion": "Psychosocial Integrity
 
 export function migrateBlob(s, cats) {
   const ability = {};
+  const log = Array.isArray(s.log) ? s.log : [];
   for (const [k, v] of Object.entries(s.ability ?? {})) ability[CAT_RENAMES[k] ?? k] = v;
   return {
     theme: s.theme ?? "light",
     xp: s.xp ?? 0,
     bestRun: s.bestRun ?? 0,
-    log: Array.isArray(s.log) ? s.log : [],
+    log,
     flagged: Array.isArray(s.flagged) ? s.flagged : [],
     // New key, not a repurposing of `flagged`: that list holds question ids and
     // must keep meaning exactly that. Legacy saves default to empty.
@@ -34,5 +36,14 @@ export function migrateBlob(s, cats) {
     examResults: s.examResults ?? {},
     profileCardDismissed: s.profileCardDismissed ?? false,
     fcFlips: s.fcFlips ?? 0,
+    // Optional, additive: spaced-review dates for missed questions. Saves that
+    // predate it get one derived from the answer log (every current miss due
+    // today); a current miss missing from a saved schedule is added the same way.
+    missSchedule: deriveMissSchedule(log, s.missSchedule),
+    // Optional, additive: new flashcards introduced on `day` (LOCAL), so the
+    // daily new-card cap survives queue rebuilds and reloads.
+    fcNew: s.fcNew && typeof s.fcNew.day === "string" && Number.isFinite(s.fcNew.count)
+      ? { day: s.fcNew.day, count: s.fcNew.count }
+      : { day: null, count: 0 },
   };
 }

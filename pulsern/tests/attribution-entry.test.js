@@ -72,6 +72,22 @@ async function withBrowser(storage, href, referrer, fn) {
   }
 }
 
+/* A public page's button straight to the app signup screen, then the write
+   signup already performs. The signup page carries no campaign query. */
+async function signupFrom(storage, page, userId) {
+  await withBrowser(storage, `${SITE}/app/sign-up`, page, () => {
+    captureAttribution();
+  });
+  const inserted = [];
+  await withBrowser(storage, `${SITE}/app/sign-up`, page, () => flushAttribution({
+    from(table) {
+      if (table !== "user_attribution") throw new Error(`unexpected table ${table}`);
+      return { insert(row) { inserted.push(row); return Promise.resolve({ error: null }); } };
+    },
+  }, userId));
+  return inserted;
+}
+
 /* Homepage CTA, then the app signup screen, then the write signup already
    performs. Neither later page carries the campaign query. */
 async function continueToSignup(storage, userId) {
@@ -190,11 +206,14 @@ describe("a tagged landing is what signup records", () => {
   it("keeps a free-quiz click id through the bare free-pass button", async () => {
     const quiz = read("public/free-nclex-practice-test/index.html");
     expect(quiz).toContain(ATTRIBUTION_BOOT_TAG);
-    expect(quiz).toContain('href="/?start=1"');
+    /* The button opens sign-up directly — it once pointed at the homepage,
+       which made the visitor click a second time. */
+    expect(quiz).toContain('href="/app/sign-up"');
+    expect(quiz).not.toMatch(/href="\/\?(?:start|signin)=1"/);
 
     const storage = memoryStorage();
     land(storage, `${SITE}/free-nclex-practice-test/?gclid=abc123`, "https://www.google.com/");
-    const inserted = await continueToSignup(storage, "quiz-student");
+    const inserted = await signupFrom(storage, `${SITE}/free-nclex-practice-test/`, "quiz-student");
     expect(inserted[0]).toMatchObject({
       utm_source: "google",
       utm_medium: "cpc",
