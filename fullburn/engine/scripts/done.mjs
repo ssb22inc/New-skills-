@@ -24,7 +24,9 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import {
   ENGINE_REQUIREMENTS,
+  LIVE_BACKED,
   PHASE0_REQUIREMENTS,
+  liveRequirementCondition,
   automatedGateAck,
   reviewerRoundCondition,
   canaryIsStale,
@@ -44,10 +46,11 @@ import {
   splitReportsByFamily,
   verdict,
 } from "./done-lib.mjs";
-import { REGULAR_FILES_SCOPE, REVIEW_SIGNER_WORKFLOW, TRUSTED_REVIEW_REF, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkRegularFilesOnly, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
+import { LIVE_SIGNER_WORKFLOW, REGULAR_FILES_SCOPE, REVIEW_SIGNER_WORKFLOW, TRUSTED_REVIEW_REF, VERIFIED_TREE_SCOPE, checkAdversaryReport, checkRegularFilesOnly, checkMoneyCapGate, checkReportProvenance, codeownersCovers, isClass2, selectApprovalDocs, selectPhaseReports } from "./gate-lib.mjs";
 import { commitAuthFromApi, fetchCommitAuth, repoFromRemote } from "./github-auth.mjs";
 import { attestationsFromApi, attestationsFromGhVerify } from "./attestation.mjs";
 import { parseNameStatusZ } from "./diff-lib.mjs";
+import { parseLiveReport, pickLiveReportForTree } from "./live-lib.mjs";
 import { createHash } from "node:crypto";
 import { MARKER, processAlive } from "./mutate-lib.mjs";
 
@@ -197,7 +200,26 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     } else {
       // 1 — requirements exercised by execution
       const sub = [];
+      // The live check's evidence for this tree: its newest report, parsed,
+      // and the provenance of its exact bytes (fullburn-live.yml on main).
+      const liveDir = `${ROOT}/reports`;
+      const liveFile = existsSync(liveDir) ? pickLiveReportForTree(readdirSync(liveDir), tree) : null;
+      let liveEvidence = { file: liveFile ? `reports/${liveFile}` : null, live: null, tree, provenance: null };
+      if (liveFile) {
+        const bytes = readFileSync(`${liveDir}/${liveFile}`);
+        const repoName = process.env.GITHUB_REPOSITORY || repoFromRemote((await git(["remote", "get-url", "origin"])).out) || "";
+        const digest = createHash("sha256").update(bytes).digest("hex");
+        const verify = await run("gh", ["attestation", "verify", `${liveDir}/${liveFile}`, "--repo", repoName, "--signer-workflow", `${repoName}/${LIVE_SIGNER_WORKFLOW}`, "--source-ref", TRUSTED_REVIEW_REF, "--format", "json"]);
+        const attestations = verify.code === 0 ? attestationsFromGhVerify(verify.out) : [];
+        const provenance = checkReportProvenance({ fileSha256: digest, attestations, repo: repoName, signerWorkflow: LIVE_SIGNER_WORKFLOW });
+        liveEvidence = { ...liveEvidence, live: parseLiveReport(bytes.toString("utf8")), provenance: verify.code === 0 ? provenance : { ok: false, reason: `the attestation could not be verified here (gh attestation verify exited ${verify.code})` } };
+      }
       for (const req of PHASE0_REQUIREMENTS) {
+        if (Object.hasOwn(LIVE_BACKED, req.id)) {
+          const r = liveRequirementCondition(req.id, liveEvidence);
+          sub.push({ id: req.id, title: req.what, status: r.status, command: `liveRequirementCondition(${req.id})`, observed: r.observed });
+          continue;
+        }
         if (req.command === null) {
           sub.push({ id: req.id, title: req.what, status: "FAIL", command: null, observed: `NOT MEASURABLE IN THIS ENVIRONMENT: ${req.why}` });
           continue;

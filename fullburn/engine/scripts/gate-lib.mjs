@@ -649,11 +649,15 @@ export const REVIEW_SIGNER_WORKFLOW = ".github/workflows/cross-family-read.yml";
  * merged, not the one under review. */
 export const TRUSTED_REVIEW_REF = "refs/heads/main";
 
-export function checkReportProvenance({ fileSha256, attestations, repo, trustedRef = TRUSTED_REVIEW_REF }) {
+/** The live check's signer (fullburn-live.yml): its reports are attested the
+ * same way, by that workflow as it stands on main. */
+export const LIVE_SIGNER_WORKFLOW = ".github/workflows/fullburn-live.yml";
+
+export function checkReportProvenance({ fileSha256, attestations, repo, trustedRef = TRUSTED_REVIEW_REF, signerWorkflow = REVIEW_SIGNER_WORKFLOW }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(String(repo))) return { ok: false, reason: "no repository to bind the signer to — refusing (fail closed)" };
   if (!/^[0-9a-f]{64}$/.test(String(fileSha256))) return { ok: false, reason: "the report's digest could not be computed — refusing" };
   if (!/^refs\/heads\/[\w./-]+$/.test(String(trustedRef))) return { ok: false, reason: "no trusted branch to bind the reviewer to — refusing (fail closed)" };
-  const signer = `https://github.com/${repo}/${REVIEW_SIGNER_WORKFLOW}@${trustedRef}`;
+  const signer = `https://github.com/${repo}/${signerWorkflow}@${trustedRef}`;
   const list = Array.isArray(attestations) ? attestations : [];
   const good = list.find(
     (a) =>
@@ -669,8 +673,8 @@ export function checkReportProvenance({ fileSha256, attestations, repo, trustedR
   return {
     ok: false,
     reason: list.length === 0
-      ? "the PASS report carries no attestation — only the cross-family-read workflow can produce a PASS"
-      : `no verified attestation of these exact bytes by ${REVIEW_SIGNER_WORKFLOW} at ${trustedRef} (${list.length} attestation(s) examined)`,
+      ? `the report carries no attestation — only ${signerWorkflow} can produce one that counts`
+      : `no verified attestation of these exact bytes by ${signerWorkflow} at ${trustedRef} (${list.length} attestation(s) examined)`,
   };
 }
 

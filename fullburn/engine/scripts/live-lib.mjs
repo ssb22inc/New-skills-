@@ -88,3 +88,32 @@ export function renderLiveReport({ phase, tree, commit, startedAt, observations,
   if (diag.length > 0) lines.push("", "Diagnostics (informational, not checks):", ...diag.map((d) => `- ${redactObserved(`${d?.name}: ${d?.observed}`, secrets).replace(/\n/g, " ")}`));
   return `${lines.join("\n")}\n`;
 }
+
+/** A live report → its verdict, tree, start time and rows, the inverse of
+ * `renderLiveReport`. Only rows whose id is a known check are kept, so a
+ * hand-edited report cannot add one. Null for anything that is not a live
+ * report. Read by the completion checker (AC1-live, D-warehouse) and the
+ * preview. */
+export function parseLiveReport(md) {
+  const text = String(md ?? "");
+  if (!/^# LIVE CHECK phase\d+$/m.test(text)) return null;
+  const verdict = /^Verdict: (PASS|FAIL)$/m.exec(text)?.[1] ?? null;
+  const tree = /^verified-tree: ([0-9a-f]{40})$/m.exec(text)?.[1] ?? null;
+  const started = /Started (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/.exec(text)?.[1] ?? null;
+  if (!verdict || !tree) return null;
+  const rows = [];
+  for (const line of text.split("\n")) {
+    const m = /^\| ([a-z-]+) \| .*? \| (PASS|FAIL) \| (.*) \|$/.exec(line);
+    if (m && LIVE_CHECKS.some((c) => c.id === m[1])) rows.push({ id: m[1], status: m[2], observed: m[3].replace(/\\\|/g, "|") });
+  }
+  return { verdict, tree, started, rows };
+}
+
+/** The newest live report run at exactly `tree`: its name carries the first
+ * twelve hex of the tree and the run's start stamp. */
+export function pickLiveReportForTree(names, tree) {
+  if (!/^[0-9a-f]{40}$/.test(String(tree))) return null;
+  const re = new RegExp(`^LIVE_CHECK_phase\\d+_${String(tree).slice(0, 12)}_(\\d{8}T\\d{6}Z)\\.md$`);
+  const hits = (names ?? []).filter((n) => re.test(n)).sort((a, b) => a.slice(-19).localeCompare(b.slice(-19)));
+  return hits.length > 0 ? hits[hits.length - 1] : null;
+}
