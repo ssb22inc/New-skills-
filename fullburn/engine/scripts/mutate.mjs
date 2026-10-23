@@ -1541,10 +1541,11 @@ const MUTATIONS = [
   ["LV-05 the report's verdict line follows the verdict", "engine/scripts/live-lib.mjs",
     "    `Verdict: ${v.ok ? \"PASS\" : \"FAIL\"}`,",
     "    `Verdict: PASS`,"],
-  // ---- the reviewer is GPT-6 Luna (human instruction 2026-10-09, L63) ----
-  ["XF-LUNA the reviewer pin is GPT-6 Luna", "engine/scripts/cross-family-lib.mjs",
-    "export const REVIEWER_MODEL = \"openai/gpt-6-luna\";",
-    "export const REVIEWER_MODEL = \"openai/gpt-6-astra\";"],
+  // ---- the reviewer is GPT-6.1 Sol (human instruction 2026-10-23, L81).
+  // XF-LUNA re-targeted, not deleted: the pin it locked moved to Sol. ----
+  ["XF-SOL the reviewer pin is GPT-6.1 Sol", "engine/scripts/cross-family-lib.mjs",
+    "export const REVIEWER_MODEL = \"openai/gpt-6.1-sol\";",
+    "export const REVIEWER_MODEL = \"openai/gpt-6-luna\";"],
   // ---- sharded harness runs (2026-10-09) ----
   ["MS-01 a shard's entries are its residue class", "engine/scripts/mutate-lib.mjs",
     "  return entries.filter((_, k) => k % n === i);",

@@ -78,7 +78,7 @@ export const LEFT_BEFORE_LAUNCH = Object.freeze([
   Object.freeze({ who: "you", what: "Register fullburn.ai and complete the formal trademark check." }),
   Object.freeze({ who: "Claude", what: "Deploy the encrypted vault (keys stored in a Cloudflare Durable Object, rotated on a schedule)." }),
   Object.freeze({ who: "Claude", what: "Teach the completion check to read the signed live-check report, so live results count toward 'done'." }),
-  Object.freeze({ who: "the reviewer", what: "A clean pass from the independent AI reviewer (GPT-6 Luna) on the finished Phase 0 code." }),
+  Object.freeze({ who: "the reviewer", what: "A clean pass from the independent AI reviewer (GPT-6.1 Sol) on the finished Phase 0 code." }),
 ]);
 
 export const PHASES = Object.freeze([

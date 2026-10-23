@@ -9,11 +9,12 @@ import { existsSync } from "node:fs";
  * PASS is only a PASS with a cross-family read against the SAME tree. Every
  * adversary round to date (r1–r14) was Claude reviewing Claude (ledger L8).
  * Human ruling 2026-09-22: the read runs in CI, router-bound, on GPT Astra.
- * Human instruction 2026-10-09: the reviewer is now GPT-6 Luna (rounds x1–x7
- * were Astra's; their reports stand as written).
+ * Human instruction 2026-10-09: the reviewer became GPT-6 Luna (rounds x1–x7
+ * were Astra's, x8–x11 Luna's; their reports stand as written).
+ * Human instruction 2026-10-23: the reviewer is now GPT-6.1 Sol.
  *
  * WHAT IS PINNED AND WHY. The model id is the exact OpenRouter id, never the
- * floating `gpt-luna-latest` alias — an alias is a mutable tag, the thing the
+ * floating `gpt-sol-latest` alias — an alias is a mutable tag, the thing the
  * workflow-hygiene rule forbids for actions, for the same reason: what
  * reviewed the tree must be what the report says reviewed it. The served model
  * is read back from the response and must equal the request, or no report is
@@ -26,10 +27,11 @@ import { existsSync } from "node:fs";
  * construction, here — the fixture can prove the pipeline and cannot forge the
  * verdict. */
 
-/** The reviewer: exact id on OpenRouter (listed 2026-10-09, 1.05M context;
- * $0.10/$0.50 per million tokens — a full read is cents, not ~$11). */
-export const REVIEWER_MODEL = "openai/gpt-6-luna";
-export const REVIEWER_FAMILY_LINE = "OpenAI (gpt-6-luna via OpenRouter)";
+/** The reviewer: exact id on OpenRouter (listed 2026-10-23, 1.05M context;
+ * $2/$10 per million tokens — a full read of the ~465k-token bundle is about
+ * $1, against about $0.12 on Luna). */
+export const REVIEWER_MODEL = "openai/gpt-6.1-sol";
+export const REVIEWER_FAMILY_LINE = "OpenAI (gpt-6.1-sol via OpenRouter)";
 export const PRODUCTION_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 /** The builder-authored addendum to the human-owned adversary definition. It
