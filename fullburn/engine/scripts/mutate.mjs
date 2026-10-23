@@ -691,8 +691,8 @@ const MUTATIONS = [
     "  adversary-gate:\n    runs-on: ubuntu-latest",
     "  adversary-gate:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest"],
   ["CS-07 the isolation exclusions cannot grow quietly", "package.json",
-    "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts'",
-    "vitest run --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts' --exclude '**/locks-r12.test.ts'"],
+    "vitest run --config vitest.shared.config.mjs --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts'",
+    "vitest run --config vitest.shared.config.mjs --no-isolate --exclude '**/departed-contract.test.ts' --exclude '**/ledger-slot.test.ts' --exclude '**/locks-r12.test.ts'"],
   // ---- the adversary's discovery mirror (L39, 2026-09-20) ----
   //
   // The mirror at the repo root is discovered; the source in fullburn/ is
