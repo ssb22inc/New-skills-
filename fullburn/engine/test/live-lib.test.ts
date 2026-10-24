@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { LIVE_CHECKS, liveReportName, liveVerdict, redactObserved, renderLiveReport } from "../scripts/live-lib.mjs";
+import { LIVE_CHECKS, liveReportName, liveVerdict, parseLiveReport, pickLiveReportForTree, redactObserved, renderLiveReport } from "../scripts/live-lib.mjs";
 
 /** The live check's decisions, in the default suite (R14-06). The runner is
  * engine/test/live/services.live.ts, run only by fullburn-live.yml.
@@ -54,5 +54,30 @@ describe("diagnostics are reported, redacted, and never change the verdict", () 
     expect(r).toContain("Diagnostics (informational, not checks):");
     expect(r).toContain("- rest-route: HTTP 200 with [REDACTED]");
     expect(r).not.toContain(secret);
+  });
+});
+
+describe("the live report reads back (2026-10-23: the completion checker consumes it)", () => {
+  const tree = "a".repeat(40);
+  const obs = LIVE_CHECKS.map((c: { id: string }) => ({ id: c.id, pass: true, observed: "ok | fine" }));
+  const md = renderLiveReport({ phase: "0", tree, commit: "abc", startedAt: "2026-10-23T01:02:03.000Z", observations: obs, secrets: [] });
+
+  it("parses what renderLiveReport writes, unknown rows dropped", () => {
+    const p = parseLiveReport(`${md}| injected-row | x | PASS | y |\n`);
+    expect(p.verdict).toBe("PASS");
+    expect(p.tree).toBe(tree);
+    expect(p.started).toBe("2026-10-23T01:02:03.000Z");
+    expect(p.rows.map((r: { id: string }) => r.id)).toEqual(LIVE_CHECKS.map((c: { id: string }) => c.id));
+    expect(p.rows[0].observed).toBe("ok | fine");
+    expect(parseLiveReport("# not a report\nVerdict: PASS")).toBeNull();
+  });
+
+  it("picks the newest report at exactly this tree, never another tree's", () => {
+    const at = (t: string, stamp: string) => `LIVE_CHECK_phase0_${t.slice(0, 12)}_${stamp}.md`;
+    const other = "b".repeat(40);
+    const names = [at(tree, "20261022T000000Z"), at(tree, "20261023T000000Z"), at(other, "20261024T000000Z"), `LIVE_CHECK_phase0_${tree.slice(0, 12)}.md`];
+    expect(pickLiveReportForTree(names, tree)).toBe(at(tree, "20261023T000000Z"));
+    expect(pickLiveReportForTree([at(other, "20261024T000000Z")], tree)).toBeNull();
+    expect(pickLiveReportForTree(names, "short")).toBeNull();
   });
 });
