@@ -238,9 +238,6 @@ const LEVELS = [
 
 /* ================= HELPERS ================= */
 
-const same = (a, b) => a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
-const sameOrder = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
-
 function levelFor(xp) {
   let cur = LEVELS[0], next = null;
   for (let i = 0; i < LEVELS.length; i++) {
@@ -258,11 +255,13 @@ import { fmtLocal, todayStr, yesterdayStr, twoDaysAgoStr, addDays, weekStart } f
 import { supabase } from "./supabase.js";
 import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRating } from "./ability-engine.js";
 import { migrateBlob } from "./state.js";
-import { ngnExt, scoreMatrix, scoreBowtie, scoreCloze, scoreCalc, scoreHighlight, fourFn, validQ } from "./ngn.js";
+import { ngnExt, fourFn, validQ, scoreItem, scoreCaseStep, isFullCredit, sumScores } from "./ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
-import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY } from "./srs.js";
+import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard } from "./srs.js";
+import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
+import { updateMissSchedule, reviewPools, todayPool } from "./question-review.js";
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
 import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
@@ -402,6 +401,8 @@ export default function App() {
 
   const [srs, setSrs] = useState(freshCards); // legacy fixed-position schedule (kept for the blob contract)
   const [srsMap, setSrsMap] = useState({});   // scalable per-card-id schedule {id: {interval, due}}
+  const [fcNew, setFcNew] = useState({ day: null, count: 0 }); // blob (additive): new cards introduced per LOCAL day
+  const [missSchedule, setMissSchedule] = useState({}); // blob (additive): spaced-review dates for missed questions {id: {interval, due}}
   const [examResults, setExamResults] = useState({}); // {form: {pct, verdict, ...}}
   const [bankCards, setBankCards] = useState(null); // AI card bank; null → built-ins only
   const [bankCases, setBankCases] = useState(null); // AI case bank; null → built-ins only
@@ -456,6 +457,8 @@ export default function App() {
           setTourSeen(s.tourSeen);
           setProfileCardDismissed(s.profileCardDismissed);
           setFcFlips(s.fcFlips);
+          setMissSchedule(s.missSchedule);
+          setFcNew(s.fcNew);
         }
       } catch (e) {
         /* first visit — nothing saved yet */
@@ -469,12 +472,12 @@ export default function App() {
     if (!loaded) return;
     (async () => {
       try {
-        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips }));
+        await store.set(STORE_KEY, JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew }));
       } catch (e) {
         console.error("Save failed", e);
       }
     })();
-  }, [loaded, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips]);
+  }, [loaded, theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew]);
 
   /* One screen, and only once study is actually reachable. Waiting for
      entitlement is what keeps the tour off the expired paywall. */
@@ -617,9 +620,14 @@ export default function App() {
   }, [isOwner]);
 
   /* ---- shared bank + item calibration (one query feeds both) ----
-     RLS serves only approved, non-rejected rows. On any failure the
-     built-in local array stays in place as the offline fallback. */
+     RLS serves only approved, non-rejected rows, and since migration 018
+     only to a signed-in account with unexpired access, so the load waits
+     for the entitlement (a brand-new account's free pass is granted first)
+     and re-runs when access opens. On any failure the built-in local array
+     stays in place as the offline fallback. */
+  const bankOpen = (isOwner || !!ent) && !locked;
   useEffect(() => {
+    if (!bankOpen) return;
     (async () => {
       // paginate: the practice bank is way past Supabase's 1,000-row cap
       const data = [];
@@ -663,7 +671,7 @@ export default function App() {
         setBankCases(data.map((r) => ({ ...r, dbId: r.id, ai: true })));
       }
     })();
-  }, []);
+  }, [bankOpen]);
 
   const answeredIds = log.map((l) => l.id);
   const acc = log.length ? log.filter((l) => l.correct).length / log.length : 0;
@@ -694,9 +702,15 @@ export default function App() {
     });
   };
 
-  const record = (q, correct) => {
+  /* `correct` is the FULL-CREDIT outcome (every NCSBN partial-credit point
+     earned). The ability engine, readiness, XP and the review schedule all
+     receive this same binary outcome, so Elo calibration is unchanged by
+     partial-credit scoring. Case-study steps pass { schedule: false }: their
+     pseudo-ids are not QBank questions and cannot be re-served. */
+  const record = (q, correct, opts = {}) => {
     // population is additive on the log entry — old entries simply lack it
     setLog((l) => [...l, { id: q.id, cat: q.cat, diff: q.diff, correct, ...(q.population ? { pop: q.population } : {}) }]);
+    if (opts.schedule !== false) setMissSchedule((m) => updateMissSchedule(m, q.id, correct));
     touchDay();
     const { ability: nextAbility, itemDelta } = updateAbility(ability, q, correct, calibration);
     setAbility(nextAbility);
@@ -736,7 +750,9 @@ export default function App() {
     ...CASE_STUDIES.map((c) => ({ ...c, ai: false })),
     ...(bankCases ?? []),
   ], [bankCases]);
-  const dueCount = useMemo(() => dueQueue(allCards, srsMap).length, [allCards, srsMap]);
+  const newAllowance = newCardAllowance(fcNew, todayStr());
+  const dueCount = useMemo(() => dueQueue(allCards, srsMap, newAllowance).length, [allCards, srsMap, newAllowance]);
+  const onNewCard = () => setFcNew((f) => noteNewCard(f, todayStr()));
   const allQuestions = useMemo(
     () => [...(bankQs ?? [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES]), ...customQs],
     [bankQs, customQs]
@@ -747,7 +763,7 @@ export default function App() {
     try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
-    setSrs(freshCards()); setSrsMap({}); setExamResults({}); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
+    setSrs(freshCards()); setSrsMap({}); setFcNew({ day: null, count: 0 }); setMissSchedule({}); setExamResults({}); setAbility(emptyAbility(CATS)); setPlan(null); setExamDate(null); setTab("today");
   };
 
   /* ---- weekly planner (§5.7): one LLM call per ISO week, cached in the blob ---- */
@@ -901,14 +917,15 @@ export default function App() {
         {!locked && <>
           {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
             record={record} questions={allQuestions} provider={provider}
-            ability={ability} calibration={calibration} plan={plan}
+            ability={ability} calibration={calibration} plan={plan} missSchedule={missSchedule}
+            newAllowance={newAllowance} onNewCard={onNewCard}
             profile={profile} setProfile={setProfile} showProfile={profilePrompt} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
             needsFirstAnswer={activating} quizKick={quizKick} accessPending={accessPending} />}
-          {tab === "qbank" && <QBank record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} isOwner={isOwner} />}
+          {tab === "qbank" && <QBank record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
-          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} />}
+          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
           {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
@@ -962,9 +979,9 @@ function Tour({ trial, onAnswer, onSkip }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions return in "Review misses". Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Quick tour, Settings, Sign out.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Quick tour, Settings, Sign out.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
-Plans: every new account gets a free 7-day pass with full study access (no exams). Subscriptions: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). After a subscription: 7-day renewal $45 (content only) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
+Plans: every new account gets a free 7-day pass with full study access (no exams). Access passes are one-time payments that do not auto-renew: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). Add-ons, also one-time: 7-day renewal pass $45 (content only, never charged automatically) or an extra self-assessment $45. Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
 function HelpCenter({ open, setOpen, provider }) {
@@ -1163,21 +1180,21 @@ function Today(props) {
     <div className="stack">
       <p className="eyebrow stage-label">Answer this to unlock Today</p>
       <p className="small">One question opens your daily plan. No need to look for a Start button.</p>
-      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} auto autoLimit={1} preferMc onDone={finishFirst} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto autoLimit={1} preferMc onDone={finishFirst} />
     </div>
   );
 
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} embedded onDone={() => setStage("quiz")} />
+      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} embedded onDone={() => setStage("quiz")} />
     </div>
   );
 
   if (stage === "quiz") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 2 OF 2 · QUESTIONS</p>
-      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} auto onDone={() => setStage("done")} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto onDone={() => setStage("done")} />
     </div>
   );
 
@@ -1293,7 +1310,7 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
           <button className="btn ghost" onClick={() => go("cards")}>Flashcards{dueCount ? ` (${dueCount} due)` : ""} →</button>
         </div>
         {weakest && weakest.pct < 100 && (
-          <p className="small tip">Weakest area so far: <strong>{weakest.cat}</strong> ({weakest.pct}%). The QBank is already steering questions there.</p>
+          <p className="small tip">Weakest area so far: <strong>{weakest.cat}</strong> ({weakest.pct}%). The QBank and Today round already serve your weaker categories more often.</p>
         )}
       </section>
     </div>
@@ -1311,7 +1328,7 @@ function Ecg() {
 
 /* ================= QBANK ================= */
 
-function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, isOwner = false }) {
+function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
@@ -1319,15 +1336,13 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
   const [order, setOrder] = useState([]);
   const [phase, setPhase] = useState("pick"); // pick | answering | feedback | break | done
   const [wasCorrect, setWasCorrect] = useState(false);
+  const [credit, setCredit] = useState({ points: 0, max: 1 }); // NCSBN partial credit for the last answer
+  const [nextReview, setNextReview] = useState(null); // review date the last answer scheduled, if any
   const [lastCat, setLastCat] = useState(null);
   const [sessionN, setSessionN] = useState(0);
   const [mode, setMode] = useState("new"); // new | review
 
   const answeredIds = [...new Set(log.map((l) => l.id))];
-  // latest result per question — misses stay in the review pool until re-answered correctly
-  const latest = {};
-  log.forEach((l) => { latest[l.id] = l.correct; });
-  const missedIds = Object.keys(latest).filter((id) => !latest[id]).map(Number);
 
   // focused practice: empty filter = everything (the adaptive default)
   const [catFilter, setCatFilter] = useState([]);
@@ -1340,12 +1355,18 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
   const toggleIn = (arr, set) => (v) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const freshPool = questions.filter((x) => !answeredIds.includes(x.id) && inFocus(x));
-  const reviewPool = questions.filter((x) => missedIds.includes(x.id) && inFocus(x));
-
-  const catAccuracy = (cat) => {
-    const rows = log.filter((l) => l.cat === cat);
-    return rows.length ? rows.filter((r) => r.correct).length / rows.length : 0.5;
+  /* Missed questions run on a spaced-review schedule (question-review.js):
+     duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =
+     those plus every current miss, so Review Misses still serves all misses
+     on demand, due ones first. */
+  const focused = questions.filter(inFocus);
+  const { due: duePool, review: reviewPool } = reviewPools(focused, log, missSchedule, todayStr());
+  const reviewNext = (exclude) => {
+    const due = duePool.filter((x) => x.id !== exclude);
+    return due.length ? due : reviewPool.filter((x) => x.id !== exclude);
   };
+  // Today round: due reviews first, then new questions and unscheduled misses.
+  const autoPool = (exclude) => todayPool(focused, log, missSchedule, freshPool, todayStr()).filter((x) => x.id !== exclude);
 
   const pickFrom = (basePool) => {
     if (!basePool.length) { setPhase("done"); return; }
@@ -1354,15 +1375,25 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
       const mc = pool.filter((x) => x.type === "mc");
       if (mc.length) pool = mc;
     }
-    // interleave: avoid repeating the last category so related concepts stay mixed
-    const interleaved = pool.filter((x) => x.cat !== lastCat);
-    if (interleaved.length) pool = interleaved;
-    // Elo targeting: prefer items rated nearest the ~70%-success sweet spot
-    // for their category (replaces the old diff-ladder sort).
+    /* Weak-spot targeting (weak-spots.js): choose the category first.
+       Weaker categories by the ability engine's theta are chosen more often,
+       never the previous category when another is available (interleaving),
+       and no category is starved. Seeded, so the same state gives the same pick. */
+    const rand = seededRandom(seedFrom(`${todayStr()}|${log.length}|${sessionN}|${pool.length}|${lastCat ?? ""}`));
+    const cat = pickCategory({
+      available: pool.map((x) => x.cat),
+      ability,
+      lastCat,
+      recent: log.slice(-STARVE_WINDOW * 2).map((l) => l.cat),
+      rand: rand(),
+    });
+    pool = pool.filter((x) => x.cat === cat);
+    // Elo targeting within the category: prefer items rated nearest the
+    // ~70%-success sweet spot (replaces the old diff-ladder sort).
     pool = [...pool].sort((a, b) =>
       Math.abs(itemRating(a, calibration) - pickTargetRating(ability, a.cat)) -
       Math.abs(itemRating(b, calibration) - pickTargetRating(ability, b.cat)));
-    const pick = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
+    const pick = pool[Math.floor(rand() * Math.min(3, pool.length))];
     setLastCat(pick.cat);
     setQ(pick);
     setSel(pick.type === "bowtie" ? { actions: [], condition: null, parameters: [] } : pick.type === "calc" ? "" : []);
@@ -1370,21 +1401,17 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
   };
 
   const nextQuestion = () => {
-    if (auto) return pickFrom([...reviewPool, ...freshPool].filter((x) => x.id !== q?.id));
-    return pickFrom(mode === "review" ? reviewPool.filter((x) => x.id !== q?.id) : freshPool);
+    if (auto) return pickFrom(autoPool(q?.id));
+    return pickFrom(mode === "review" ? reviewNext(q?.id) : freshPool);
   };
 
   const submit = () => {
-    let ok = false;
-    if (q.type === "mc") ok = sel[0] === q.answer;
-    if (q.type === "sata") ok = same(sel, q.answer);
-    if (q.type === "order") ok = sameOrder(order, q.answer);
-    if (q.type === "matrix") ok = scoreMatrix(sel, q.answer);
-    if (q.type === "bowtie") ok = scoreBowtie(sel, q.answer);
-    if (q.type === "cloze") ok = scoreCloze(sel, q.answer);
-    if (q.type === "calc") ok = scoreCalc(sel, q.answer, ngnExt(q).tolerance ?? 0);
-    if (q.type === "highlight") ok = scoreHighlight(sel, q.answer);
+    // NCSBN-style partial credit (ngn.js); the engine gets full credit as "correct".
+    const c = scoreItem(q, q.type === "order" ? order : sel);
+    const ok = isFullCredit(c);
+    setCredit(c);
     setWasCorrect(ok);
+    setNextReview(updateMissSchedule(missSchedule, q.id, ok)[q.id]?.due ?? null);
     record(q, ok);
     setSessionN((n) => n + 1);
     setDiffTarget((d) => Math.max(1, Math.min(3, d + (ok ? 1 : -1))));
@@ -1398,10 +1425,10 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
     else nextQuestion();
   };
 
-  // autopilot: start immediately, mixing missed questions first, then new ones
+  // autopilot: start immediately: due reviews first, then new questions
   useEffect(() => {
     if (auto && phase === "pick") {
-      const pool = [...reviewPool, ...freshPool];
+      const pool = autoPool(null);
       if (pool.length) pickFrom(pool); else onDone?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1424,7 +1451,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
         <p className="small">Adaptive practice: difficulty adjusts to you.</p>
-        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints). Difficulty adapts like the real NCLEX-RN (a computer-adaptive test), steering toward your weakest categories.</Why>
+        <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints, and every miss comes back on a scheduled review date: tomorrow, then 3, 7, and 15 days out as you keep getting it right). Difficulty adapts like the real NCLEX-RN (a computer-adaptive test), steering toward your weakest categories: categories where your ability estimate is lower come up more often, while every category stays in the mix. NGN items earn NCSBN-style partial credit.</Why>
 
         <p className="eyebrow" style={{ marginTop: 10 }}>Focus: leave everything off for the full adaptive mix</p>
         <div className="fchips" role="group" aria-label="Filter by category">
@@ -1449,10 +1476,10 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
           <p className="small tip">Focused session: {catFilter.length ? catFilter.join(", ") : "all categories"} · {typeFilter.length ? typeFilter.map((t) => TYPE_CHIPS.find(([k]) => k === t)[1]).join(", ") : "all types"} · <button className="auth-switch" style={{ color: "var(--accent-ink)" }} onClick={() => { setCatFilter([]); setTypeFilter([]); setPopFilter([]); }}>clear</button></p>
         )}
 
-        <p className="small mono">{freshPool.length} new · {reviewPool.length} missed · difficulty target {diffTarget}/3</p>
+        <p className="small mono">{freshPool.length} new · {reviewPool.length} to review ({duePool.length} due today) · difficulty target {diffTarget}/3</p>
         <div className="row">
           <button className="btn" onClick={() => { setMode("new"); pickFrom(freshPool); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
-          <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(reviewPool); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
+          <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(reviewNext(null)); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
         {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
 
@@ -1465,7 +1492,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
     <section className="card">
       <p className="eyebrow">Spacing checkpoint</p>
       <h2 className="h2">Block complete: 8 questions</h2>
-      <p className="small">Distributed practice beats marathons: the same study minutes spread across days retain dramatically more than one long push. If you stop here, review again within 24 hours, then at 3 and 7 days. Your flashcard queue and day streak now track that schedule for real.</p>
+      <p className="small">Distributed practice beats marathons: the same study minutes spread across days retain dramatically more than one long push. If you stop here, review again within 24 hours, then at 3 and 7 days. Your flashcard queue, your missed-question reviews, and your day streak track that schedule for real.</p>
       <div className="row">
         <button className="btn ghost" onClick={nextQuestion}>One more block →</button>
         <button className="btn" onClick={() => setPhase("pick")}>End session</button>
@@ -1474,7 +1501,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
   );
 
   if (phase === "done" || !q) return (
-    <section className="card"><h2 className="h2">{mode === "review" ? "Review pool cleared" : "No new questions left"}</h2><p className="small">{mode === "review" ? "Every previously missed question has been re-answered correctly. Corrected errors are some of the strongest memories you'll form." : "You've seen the whole bank. Switch to Review misses to close remaining gaps."}</p>
+    <section className="card"><h2 className="h2">{mode === "review" ? "Review pool cleared" : "No new questions left"}</h2><p className="small">{mode === "review" ? "Every missed question has been re-answered correctly, and nothing else is due. Each one returns on its next review date. Corrected errors are some of the strongest memories you'll form." : "You've seen the whole bank. Switch to Review misses to close remaining gaps."}</p>
       <button className="btn" onClick={() => setPhase("pick")}>Back to session menu</button></section>
   );
 
@@ -1679,7 +1706,14 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
 
         {phase === "feedback" && (
           <div className={wasCorrect ? "feedback ok" : "feedback no"}>
-            <p className="fb-head mono">{wasCorrect ? `CORRECT · +${10 * q.diff} XP` : "INCORRECT · IT RETURNS IN REVIEW MISSES"}</p>
+            <p className="fb-head mono">
+              {wasCorrect ? `CORRECT${credit.max > 1 ? ` · ${credit.points}/${credit.max} POINTS` : ""} · +${10 * q.diff} XP`
+                : credit.points > 0 ? `PARTIAL CREDIT · ${credit.points}/${credit.max} POINTS · IT RETURNS IN REVIEW MISSES`
+                : `INCORRECT${credit.max > 1 ? ` · 0/${credit.max} POINTS` : ""} · IT RETURNS IN REVIEW MISSES`}
+            </p>
+            {nextReview && (
+              <p className="small mono">Next review: {nextReview === addDays(1) ? "tomorrow" : nextReview}</p>
+            )}
             {q.type === "order" && !wasCorrect && (
               <p className="small"><strong>Correct order:</strong> {q.answer.map((i) => q.options[i]).join(" → ")}</p>
             )}
@@ -1719,24 +1753,29 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
   const [step, setStep] = useState(-1);
   const [sel, setSel] = useState([]);
   const [phase, setPhase] = useState("read");
-  const [score, setScore] = useState(0);
+  const [stepScores, setStepScores] = useState([]); // NCSBN partial credit per step: [{ points, max }]
+  const [credit, setCredit] = useState({ points: 0, max: 1 });
   const [ok, setOk] = useState(false);
   const cs = caseIdx == null ? null : cases[caseIdx];
   /* Bank cases carry a dbId; locally-bundled ones don't, so fall back to the
      title, which carries a unique index in migration 005. */
   const caseKey = cs ? (cs.dbId ?? cs.title) : null;
 
-  const openCase = (i) => { setCaseIdx(i); setStep(-1); setPhase("read"); setScore(0); setSel([]); };
+  const openCase = (i) => { setCaseIdx(i); setStep(-1); setPhase("read"); setStepScores([]); setSel([]); };
+  const total = sumScores(stepScores);
   const start = () => { setStep(0); setPhase("answering"); setSel([]); };
   const s = cs?.steps[step];
   // pseudo-ids stay outside the shared question-bank id space
   const stepId = cs ? (cs.dbId ? 50000 + cs.dbId * 10 + step : 100 + caseIdx * 10 + step) : 0;
 
   const submit = () => {
-    const correct = s.type === "mc" ? sel[0] === s.answer : same(sel, s.answer);
+    // NCSBN-style partial credit: mc 0/1, select-all +/- with a floor of 0.
+    const c = scoreCaseStep(s, sel);
+    const correct = isFullCredit(c); // engine/XP outcome = full credit, so calibration is unchanged
     setOk(correct);
-    if (correct) setScore((x) => x + 1);
-    record({ id: stepId, cat: cs.cat, diff: 3 }, correct);
+    setCredit(c);
+    setStepScores((a) => [...a, c]);
+    record({ id: stepId, cat: cs.cat, diff: 3 }, correct, { schedule: false });
     setPhase("feedback");
   };
 
@@ -1761,7 +1800,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
         <section className="card">
           <p className="eyebrow">Next Generation NCLEX</p>
           <h2 className="h2">Case studies · {cases.length} in the library</h2>
-          <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps (recognize cues, analyze cues, prioritize hypotheses, generate solutions, take action, evaluate outcomes). Each step scores like the real exam.</p>
+          <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps (recognize cues, analyze cues, prioritize hypotheses, generate solutions, take action, evaluate outcomes). Each step is scored with NCSBN-style partial credit: select-all steps earn a point for each correct choice and lose one for each incorrect choice, never below zero.</p>
           <p className="small tip">Pick a sub-category to see its cases.</p>
           <div className="fchips" role="group" aria-label="Case sub-categories">
             {groups.map((g) => (
@@ -1827,7 +1866,10 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
           {phase === "answering" && <button className="btn" disabled={!sel.length} onClick={submit}>Check answer</button>}
           {phase === "feedback" && (
             <div className={ok ? "feedback ok" : "feedback no"}>
-              <p className="fb-head mono">{ok ? "CORRECT · +30 XP" : "INCORRECT"}</p>
+              <p className="fb-head mono">
+                {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok ? " · +30 XP" : ""}
+              </p>
+              <p className="small mono">Case score so far: {total.points}/{total.max} points</p>
               <p className="rationale"><strong>Rationale.</strong> {s.rationale}</p>
               <TutorExplain key={`${caseIdx}-${step}`} q={{ ...s, id: 100 + caseIdx * 10 + step }} wasCorrect={ok} provider={provider} isBank={false} />
               <button className="btn" onClick={next}>{step + 1 < cs.steps.length ? "Next step →" : "Finish case"}</button>
@@ -1838,8 +1880,9 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
 
       {phase === "done" && (
         <section className="card">
-          <h2 className="h2">Case complete: {score}/{cs.steps.length}</h2>
-          <p className="small">{score === cs.steps.length ? "Flawless clinical judgment. You recognized cues, prioritized the hypothesis, and took the right actions." : "Review the rationales above. NGN cases reward recognizing the pattern across findings, not any single number."}</p>
+          <h2 className="h2">Case complete: {total.points}/{total.max} points</h2>
+          <p className="small mono">{stepScores.map((c, i) => `Step ${i + 1}: ${c.points}/${c.max}`).join(" · ")}</p>
+          <p className="small">{isFullCredit(total) ? "Flawless clinical judgment. You recognized cues, prioritized the hypothesis, and took the right actions." : "Review the rationales above. NGN cases reward recognizing the pattern across findings, not any single number."}</p>
           <button className="btn" onClick={() => setCaseIdx(null)}>Back to all cases</button>
         </section>
       )}
@@ -1883,7 +1926,7 @@ const parseAntidote = (c) => {
 
 const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i.test(c.topic);
 
-function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip }) {
+function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
   const [show, setShow] = useState(false);
@@ -1904,9 +1947,12 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
      Building the queue before it lands makes every card look unseen, so the
      first cards of the bank get served again to someone who has already
      scheduled them days out. Rebuilding once the blob is in fixes that; it
-     does not fire again on grading, because `ready` only flips once. */
+     does not fire again on grading, because `ready` only flips once.
+
+     `newAllowance` is what is left of today's NEW_PER_DAY budget (persisted
+     as fcNew), so remounting or changing focus cannot serve 20 more. */
   useEffect(() => {
-    setSessionQueue(dueQueue(filtered, srsMap));
+    setSessionQueue(dueQueue(filtered, srsMap, newAllowance));
     setShow(false); setTyped("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, filtered.length, catFilter.join("|")]);
@@ -1919,6 +1965,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
     setTyped("");
     setCalcOpen(false);
     touchDay();
+    if (!srsMap[curId]) onNewCard?.(); // first grade of a never-seen card counts against today's new-card cap
     setSrsMap((m) => ({ ...m, [curId]: nextSchedule(m[curId], g) }));
     if (g === "good") addXp(5);
     else if (g === "easy") addXp(8);
@@ -1948,7 +1995,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
         <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
         <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
         <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
-        <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
+        <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day (a cap that holds for the whole day, even if you reopen the deck) so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
         {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
       </section>
     </div>

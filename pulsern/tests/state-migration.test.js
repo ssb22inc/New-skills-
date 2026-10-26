@@ -45,6 +45,8 @@ describe("state migration", () => {
       examResults: { 1: { pct: 71, verdict: "HIGH", date: "2026-07-14", attempts: 1 } },
       profileCardDismissed: true,
       fcFlips: 7,
+      missSchedule: { 2: { interval: 1, due: "2026-07-09", seen: "2026-07-08" } },
+      fcNew: { day: "2026-07-08", count: 12 },
     };
     expect(migrateBlob(full, CATS)).toEqual(full);
   });
@@ -56,6 +58,7 @@ describe("state migration", () => {
       streak: { count: 0, lastDay: null, shield: true },
       daily: null, srs: [], customQs: [], provider: "claude",
       ability: emptyAbility(CATS), plan: null, examDate: null, tourSeen: false, srsMap: {}, examResults: {}, profileCardDismissed: false, fcFlips: 0,
+      missSchedule: {}, fcNew: { day: null, count: 0 },
     });
   });
 
