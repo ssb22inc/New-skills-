@@ -1,3 +1,4 @@
+import "./live-fetch-stub.ts"; // FIRST: the adapter captures the runtime fetch at load (x8 X-04)
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -15,7 +16,7 @@ import { computeGrades, type MetricSnapshot } from "../src/grade-registry.ts";
 import { FrozenCapsSpendMeter, type SpendMeter } from "../src/spend-meter.ts";
 import { MemoryTraceSink, TraceContext } from "../src/tracing.ts";
 import { MemoryVaultBackend, vaultForClient } from "../src/vault.ts";
-import { CANARY_SECRET, TEST_CLIENT, makeDeps, queuedGateway, testClock, capsOf, fixedCaps } from "./helpers.ts";
+import { CANARY_SECRET, TEST_CLIENT, makeDeps, queuedGateway, runtimeGateway, testClock, capsOf, fixedCaps } from "./helpers.ts";
 import { bindRoleLive, runLiveEval } from "../src/live-eval.ts";
 import { resetProcessLedgerForTests } from "../src/spend-ledger.ts";
 
@@ -53,6 +54,7 @@ class YieldingTransport implements GatewayTransport {
 function depsWith(meter: SpendMeter, transport: GatewayTransport, sink = new MemoryTraceSink()) {
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+  backend.set(TEST_CLIENT, "openrouter-key", "or-test-key-not-a-secret");
   return {
     deps: {
       transport,
@@ -255,7 +257,7 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
     const evalDeps = makeDeps().deps;
     // X7-09: production bindings are earned by LIVE evals through the
     // production adapter (stubbed fetch, recorded answers) and bindRoleLive.
-    const gw = queuedGateway();
+    const gw = await runtimeGateway();
     gw.queue.push(...TAGGER_GOLDEN.map((c) => RECORDED_GPT_5[c.id]));
     const gpt5 = await runLiveEval(evalDeps, "genome-tagger", "gpt-5", TAGGER_GOLDEN, gw.transport, TEST_CLIENT);
     gw.queue.push(...TAGGER_GOLDEN.map((c) => RECORDED_QWEN_72B[c.id]));
@@ -270,7 +272,7 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
       input: { ad: "x" },
       trace: new TraceContext("ac2-frontier", TEST_CLIENT),
     });
-    expect(gw.calls.at(-1)).toContain("openai/gpt-5");
+    expect(gw.calls.at(-1)).toContain("model=openai/gpt-5");
 
     const openSource = bindRoleLive(frontier, "genome-tagger", "qwen-72b", qwen.attestation);
     gw.queue.push({ hook: "h", angle: "a", emotion: "e", format: "f", offer: "o" });
@@ -280,7 +282,7 @@ describe("AC 2 (lock) — a real frontier → open-source rebind serves with zer
       input: { ad: "x" },
       trace: new TraceContext("ac2-oss", TEST_CLIENT),
     });
-    expect(gw.calls.at(-1)).toContain("workers-ai/qwen-72b");
+    expect(gw.calls.at(-1)).toContain("model=qwen/qwen-2.5-72b-instruct");
   });
 });
 

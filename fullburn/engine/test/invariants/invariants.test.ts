@@ -878,6 +878,22 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           const { evalCandidateBindings } = await import("@fullburn/config/models");
           return viaLlm({ bindings: evalCandidateBindings("genome-tagger", "gpt-5") });
         } },
+      // x9 X-02 (cross-family, 2026-10-10): outside the test runner, only the Gateway gets the credential.
+      { name: "an unbranded transport is refused outside the test runner", file: "engine/src/gateway.ts", type: GatewayError,
+        expect: /not the production AI Gateway adapter/, fire: async () => {
+          // Deps first: building them resets the ledger, which is fenced too.
+          const { deps } = mkDeps();
+          const g = globalThis as Record<string, unknown>;
+          const saved = g["__vitest_worker__"];
+          delete g["__vitest_worker__"];
+          try {
+            return await llm({ ...deps, bindings: ROLE_BINDINGS, transport: { async post() { return { greeting: "x" }; } } } as never, {
+              role: "hello-world", clientId: SWEEP_CLIENT, input: {}, trace: new TraceContext("sweep-x9", SWEEP_CLIENT),
+            } as never);
+          } finally {
+            g["__vitest_worker__"] = saved;
+          }
+        } },
       // X7-09 (cross-family, 2026-10-09): recorded evidence never serves live.
       { name: "a map earned on recorded evidence is refused through a live transport", file: "engine/src/gateway.ts", type: BindingError,
         expect: /earned on recorded eval evidence/, fire: () =>
@@ -895,13 +911,14 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
         } },
       { name: "a production binding over a recorded-evidence base is refused", file: "engine/src/live-eval.ts", type: BindingError,
         expect: /base map is not production-servable/, fire: async () => {
-          const { bindRoleLive, runLiveEval } = await import("../../src/live-eval.ts");
+          const { bindRoleLive } = await import("../../src/live-eval.ts");
+          return bindRoleLive(bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", genuineAttestation()), "genome-tagger", "qwen-72b", genuineAttestation());
+        } },
+      { name: "a live eval over an injected fetch is refused", file: "engine/src/live-eval.ts", type: BindingError,
+        expect: /runtime's own fetch/, fire: async () => {
+          const { runLiveEval } = await import("../../src/live-eval.ts");
           const { queuedGateway } = await import("../helpers.ts");
-          const { deps } = mkDeps();
-          const gw = queuedGateway();
-          gw.queue.push(...GOLDEN_SETS["genome-tagger"]!.map((c) => c.expected));
-          const live = await runLiveEval(deps, "genome-tagger", "qwen-72b", GOLDEN_SETS["genome-tagger"]!, gw.transport, SWEEP_CLIENT);
-          return bindRoleLive(bindRole(ROLE_BINDINGS, "genome-tagger", "qwen-72b", genuineAttestation()), "genome-tagger", "qwen-72b", live.attestation);
+          return runLiveEval(mkDeps().deps, "genome-tagger", "qwen-72b", GOLDEN_SETS["genome-tagger"]!, queuedGateway().transport, SWEEP_CLIENT);
         } },
       // ---- engine/src/eval-harness.ts (in the graph since live-eval, X7-09) ----
       { name: "runEval through a live transport is refused", file: "engine/src/eval-harness.ts", type: Error,
@@ -1501,6 +1518,14 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     const { execFileSync } = await import("node:child_process");
     const { relative: relPath } = await import("node:path");
     const liveEval = await import("../../src/live-eval.ts");
+    const marketsMod = await import("@fullburn/config/markets");
+    const gatewayHttp = await import("../../src/gateway-http.ts");
+    const gatewayMod = await import("../../src/gateway.ts");
+    const channelsMod = await import("@fullburn/config/channels");
+    const recordedMod = await import("../../src/transport-brand.ts");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const previewLib = await import("../../scripts/preview-lib.mjs");
+    const demo = await import("../../src/preview/demo-engine.ts");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1925,6 +1950,94 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           utcMeter.settle(utcMeter.reserve("pulsern", 1));
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
+        },
+      },
+      {
+        row: "L80",
+        claim: "the demo refuses to launch before the steps are done, never scales an ad without a verified sale, and never plans spend above the cap",
+        holds: () => {
+          let st = demo.initialState();
+          const early = demo.reduce(st, { type: "launch" }).state.launched === false;
+          for (const a of [{ type: "intake", url: "a-shop.com", facts: null }, { type: "confirmBrief" }, { type: "connect", service: "meta" }, { type: "connect", service: "shop" }, { type: "testPurchase" }, { type: "launch" }, { type: "approve" }] as const) st = demo.reduce(st, a as never).state;
+          let ok = early && st.ads.length === 10;
+          for (let i = 0; i < 30; i++) {
+            st = demo.reduce(demo.reduce(st, { type: "advance", days: 1 }).state, { type: "approve" }).state;
+            ok &&= demo.dailyBudget(st) <= demo.SAMPLE_CAP_USD && st.ads.every((a) => a.sales > 0 || a.budget <= demo.TEST_BUDGET_USD);
+          }
+          return ok;
+        },
+      },
+      {
+        row: "L79",
+        claim: "an unconfigured or half-configured preview is refused; a bundle reaching outside src/preview/ is refused; a foreign Worker binding blocks the upload; a 200 to an anonymous visitor is not private",
+        holds: () =>
+          previewLib.deployRefusal({ password: "", accessTeam: "", accessAud: "" }) !== null &&
+          previewLib.deployRefusal({ password: "", accessTeam: "t", accessAud: "" }) !== null &&
+          previewLib.bundleRefusal(["engine/src/preview/auth.ts", "engine/src/gateway.ts"], "") !== null &&
+          previewLib.existingBindingsRefusal([{ name: "VAULT", type: "durable_object_namespace" }]) !== null &&
+          previewLib.servedPrivately(200).ok === false,
+      },
+      {
+        row: "L66",
+        claim: "no flag outside the launch set can be on whatever report it names, and a recorded transport never serves the launch map outside the test runner",
+        holds: () => {
+          let claimedRefused = false;
+          try {
+            marketsMod.assertActivationEarned("channel", "tiktok", { basis: "bundle", adversaryReport: "ADVERSARY_REPORT_x.md", liveData: true } as never, []);
+          } catch {
+            claimedRefused = true;
+          }
+          const g = globalThis as Record<string, unknown>;
+          const saved = g["__vitest_worker__"];
+          delete g["__vitest_worker__"];
+          try {
+            const rec = new recordedMod.RecordedTransport({});
+            return claimedRefused && gatewayMod.servingTransportAllowed(rec, "servable") === false && gatewayMod.servingTransportAllowed(rec, "candidate") === true;
+          } finally {
+            g["__vitest_worker__"] = saved;
+          }
+        },
+      },
+      {
+        row: "L65",
+        claim: "outside the test runner a hand-built transport cannot receive the Gateway credential, and no forged switchboard table resolves",
+        holds: () => {
+          const g = globalThis as Record<string, unknown>;
+          const saved = g["__vitest_worker__"];
+          delete g["__vitest_worker__"];
+          try {
+            const transportRefused = gatewayMod.servingTransportAllowed({ async post() { return {}; } }) === false;
+            let forgedRefused = false;
+            try {
+              channelsMod.resolveActiveChannelForTests({}, "tiktok");
+            } catch (e) {
+              forgedRefused = /outside a test runner/.test(String((e as Error).message));
+            }
+            return transportRefused && forgedRefused && !("resolveActiveChannel" in channelsMod);
+          } finally {
+            g["__vitest_worker__"] = saved;
+          }
+        },
+      },
+      {
+        row: "L64",
+        claim: "only the launch set can be on, with a complete bundle (x10 X-04 removed the bundle basis); a live eval refuses an injected fetch",
+        holds: () => {
+          const refuses = (f: () => void) => {
+            try {
+              f();
+              return false;
+            } catch {
+              return true;
+            }
+          };
+          const statusOnly = refuses(() => marketsMod.assertActivationEarned("channel", "tiktok", undefined, []));
+          const notLaunch = refuses(() => marketsMod.assertActivationEarned("market", "EU", { basis: "launch" }, []));
+          const noPack = refuses(() => marketsMod.assertActivationEarned("market", "US", { basis: "launch" }, ["jurisdictionPack"]));
+          const claimedReport = refuses(() => marketsMod.assertActivationEarned("channel", "tiktok", { basis: "bundle", adversaryReport: "ADVERSARY_REPORT_x.md", liveData: true } as never, []));
+          const launchOk = !refuses(() => marketsMod.assertActivationEarned("market", "US", { basis: "launch" }, []));
+          const injected = new gatewayHttp.AiGatewayHttpTransport({ gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/a/g/", fetchImpl: async () => ({ status: 200, text: async () => "{}" }) });
+          return statusOnly && notLaunch && noPack && claimedReport && launchOk && injected.usesRuntimeFetch() === false;
         },
       },
       {
@@ -2356,6 +2469,23 @@ const RUNNER_BINDINGS: readonly RunnerBinding[] = [
     ],
   },
   {
+    // The live check against the provisioned services (fullburn-live.yml).
+    runner: "engine/test/live/services.live.ts",
+    decisions: ["../../scripts/live-lib.mjs"],
+    provenBy: ["engine/test/live-lib.test.ts"],
+    literalsDisclosed: [
+      { name: "CLIENT", why: "the caps-table client the one billed call is metered against; data" },
+      { name: "SECRET_NAMES", why: "the environment variables whose values are redacted; data — the redaction is live-lib's" },
+    ],
+  },
+  {
+    // The private preview's publisher (fullburn-preview.yml, 2026-10-22).
+    runner: "engine/scripts/preview-deploy.mjs",
+    decisions: ["./preview-lib.mjs"],
+    provenBy: ["engine/test/preview.test.ts"],
+    literalsDisclosed: [{ name: "SCRIPT", why: "the name of the existing Worker the user named; data" }],
+  },
+  {
     runner: "engine/test/drill/harness-interrupt.drill.ts",
     decisions: ["../post-signal-writes.ts"],
     provenBy: ["engine/test/post-signal-writes.test.ts"],
@@ -2391,7 +2521,11 @@ describe("runner-decision sweep — no verdict is reached where the default suit
     const drills = readdirSync(new URL("engine/test/drill/", wsRoot))
       .filter((f) => f.endsWith(".drill.ts"))
       .map((f) => `engine/test/drill/${f}`);
-    return [...scripts, ...drills].sort();
+    // The live check (2026-10-21) has its own vitest config, like a drill.
+    const lives = readdirSync(new URL("engine/test/live/", wsRoot))
+      .filter((f) => f.endsWith(".live.ts"))
+      .map((f) => `engine/test/live/${f}`);
+    return [...scripts, ...drills, ...lives].sort();
   };
 
   it("every runner in the tree is bound to a decision module and a prover", () => {
@@ -2447,6 +2581,7 @@ describe("runner-decision sweep — no verdict is reached where the default suit
     for (const outside of [
       "engine/test/drill/harness-interrupt.drill.ts",
       "engine/test/drill/clock-rebind.drill.ts",
+      "engine/test/live/services.live.ts",
       "engine/scripts/gate-lib.mjs",
       "engine/src/spend-ledger.ts",
       "engine/test/helpers.ts",

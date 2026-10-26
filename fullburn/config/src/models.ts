@@ -45,10 +45,18 @@ export interface RoleCard {
 }
 
 export const MODELS: Readonly<Record<string, ModelSpec>> = deepFreeze({
-  "claude-sonnet": { id: "claude-sonnet", family: "claude", gatewayRoute: "anthropic/claude-sonnet" },
-  "gpt-5": { id: "gpt-5", family: "gpt", gatewayRoute: "openai/gpt-5" },
-  "qwen-72b": { id: "qwen-72b", family: "qwen", gatewayRoute: "workers-ai/qwen-72b" },
-  "llama-70b": { id: "llama-70b", family: "llama", gatewayRoute: "workers-ai/llama-70b" },
+  // ROUTES ARE AI GATEWAY ROUTES, AND EVERY ONE GOES THROUGH OPENROUTER
+  // (human instruction 2026-10-21: route through OpenRouter with the account's
+  // OpenRouter key, not Cloudflare's paid credits; and no lock-in to any model
+  // vendor). `openrouter/<vendor>/<model>` reaches any vendor's model through
+  // the gateway's OpenRouter endpoint on ONE aggregator key; rebinding a role
+  // to any other model is a change to ROLE_BINDINGS through bindRole
+  // (eval-gated), never a new key. Ids measured on OpenRouter's model list
+  // 2026-10-21.
+  "claude-sonnet": { id: "claude-sonnet", family: "claude", gatewayRoute: "openrouter/anthropic/claude-sonnet-4.5" },
+  "gpt-5": { id: "gpt-5", family: "gpt", gatewayRoute: "openrouter/openai/gpt-5" },
+  "qwen-72b": { id: "qwen-72b", family: "qwen", gatewayRoute: "openrouter/qwen/qwen-2.5-72b-instruct" },
+  "llama-70b": { id: "llama-70b", family: "llama", gatewayRoute: "openrouter/meta-llama/llama-3.3-70b-instruct" },
 });
 
 export const ROLE_CARDS: Readonly<Record<string, RoleCard>> = deepFreeze({
@@ -134,6 +142,19 @@ export function evalCandidateBindings(role: string, modelId: string): RoleBindin
   validateBindings(next);
   CANDIDATE.add(next);
   return next;
+}
+
+/** WHICH ROUTES CARRY A PROVIDER KEY, and the client-vault secret it lives in.
+ * Every other route is credentialed by the gateway itself (BYOK or Cloudflare
+ * Unified Billing) and Fullburn names no provider credential for it (NL-01).
+ * OpenRouter is an aggregator, not a model vendor: one key, any vendor. */
+export const PROVIDER_KEYS: Readonly<Record<string, string>> = Object.freeze({ openrouter: "openrouter-key" });
+
+/** The vault secret a route's provider credential lives in, or null when the
+ * gateway supplies the credential. */
+export function providerKeyFor(route: string): string | null {
+  const provider = String(route).split("/")[0] ?? "";
+  return Object.hasOwn(PROVIDER_KEYS, provider) ? PROVIDER_KEYS[provider]! : null;
 }
 
 export class BindingError extends Error {}

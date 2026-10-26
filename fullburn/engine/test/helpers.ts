@@ -29,6 +29,7 @@ import { AiGatewayHttpTransport } from "../src/gateway-http.ts";
  * $5.00/day AI spend. */
 export const TEST_CLIENT = "fixture-testco";
 export const CANARY_SECRET = "canary-vault-value-do-not-leak-8891";
+export const OPENROUTER_CANARY = "canary-openrouter-value-do-not-leak-5521";
 
 /** Narrowing override used by breach tests: lowers testco's ceiling to $0.05.
  * It cannot raise a cap, invent a client, or supply a sign-off. */
@@ -117,6 +118,9 @@ export function makeDeps(overrides: { now?: () => number; transport?: unknown; c
   const ledger = processLedger();
   const backend = new MemoryVaultBackend();
   backend.set(TEST_CLIENT, "ai-gateway-key", CANARY_SECRET);
+  // Every registered model routes through OpenRouter (2026-10-21), so the
+  // client's vault also holds its OpenRouter key — a canary of its own.
+  backend.set(TEST_CLIENT, "openrouter-key", OPENROUTER_CANARY);
   // THE PRODUCTION METER, not a test double with an injected resolver. `llm()`
   // refuses any other kind, so a test that built a wide meter would fail
   // closed here rather than quietly proving the cap works against a ceiling
@@ -159,4 +163,15 @@ export function queuedGateway() {
     },
   });
   return { transport, calls, queue };
+}
+
+/** The production adapter over the RUNTIME's fetch (no fetchImpl) — a live
+ * eval accepts only this. The fetch is test/live-fetch-stub.ts's queue, which
+ * the calling test file must import first. */
+export async function runtimeGateway() {
+  const { liveQueue, liveCalls } = await import("./live-fetch-stub.ts");
+  liveQueue.length = 0; // nothing queued by an earlier test leaks into this one
+  liveCalls.length = 0;
+  const transport = new AiGatewayHttpTransport({ gatewayBaseUrl: "https://gateway.ai.cloudflare.com/v1/test-account/fullburn/" });
+  return { transport, calls: liveCalls, queue: liveQueue };
 }

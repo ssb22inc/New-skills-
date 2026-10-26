@@ -1,0 +1,107 @@
+# The live check: Fullburn's provisioned services, measured with real keys.
+# CLASS 2.
+#
+# THE KEYS LIVE IN THE `fullburn` GITHUB ENVIRONMENT (human setup 2026-10-21),
+# separate from every other project's secrets; this job names that
+# environment, so it — and only it — can read them. It runs ONLY when
+# dispatched, ONLY from main, and runs MAIN's OWN CODE: no branch's copy of
+# anything executes with these keys. The report is written whatever the
+# verdict, attested by GitHub's artifact attestation (signer: this workflow at
+# refs/heads/main), committed to the branch named in the dispatch, and
+# uploaded as an artifact. It never prints a key: every observed string is
+# redacted with the run's secret values (engine/scripts/live-lib.mjs).
+#
+# One run makes one real, billed hello-world call through the AI Gateway,
+# metered against the fixture-testco caps.
+name: fullburn-live
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch the attested live report is committed to"
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  live-check:
+    runs-on: ubuntu-latest
+    environment: fullburn
+    steps:
+      - name: Refuse to run from anywhere but main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "the live check runs only from main; dispatched from ${GITHUB_REF}"
+          exit 1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Install
+        working-directory: fullburn
+        run: npm ci
+      - name: Live check (main's code, the fullburn environment's keys)
+        id: live
+        working-directory: fullburn
+        env:
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          CLICKHOUSE_URL: ${{ secrets.CLICKHOUSE_URL }}
+          CLICKHOUSE_USER: ${{ secrets.CLICKHOUSE_USER }}
+          CLICKHOUSE_PASSWORD: ${{ secrets.CLICKHOUSE_PASSWORD }}
+          AIRBYTE_CLIENT_ID: ${{ secrets.AIRBYTE_CLIENT_ID }}
+          AIRBYTE_CLIENT_SECRET: ${{ secrets.AIRBYTE_CLIENT_SECRET }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: npm run -s live || echo "rc=$?" >> "$GITHUB_OUTPUT"
+      - name: Name the new report
+        id: new
+        run: |
+          NEW=$(git ls-files --others --exclude-standard fullburn/reports/ | grep -E '^fullburn/reports/LIVE_CHECK_phase[^/]*\.md$' | head -1)
+          if [ -n "$NEW" ]; then echo "rel=$NEW" >> "$GITHUB_OUTPUT"; { echo "## ${NEW##*/}"; echo; cat "$NEW"; } >> "$GITHUB_STEP_SUMMARY"; else echo "no live report was written"; fi
+      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        if: steps.new.outputs.rel != ''
+        with:
+          subject-path: ${{ github.workspace }}/${{ steps.new.outputs.rel }}
+      - name: Commit the attested report to the named branch
+        if: steps.new.outputs.rel != ''
+        env:
+          REL: ${{ steps.new.outputs.rel }}
+          BRANCH: ${{ inputs.branch }}
+        run: |
+          [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "branch name refused"; exit 1; }
+          git fetch --no-tags origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+          cp -- "$REL" "$RUNNER_TEMP/report.md"
+          # The new report is untracked here; removed before switching so the
+          # checkout cannot refuse over it (the 2026-10-22 run's commit failed so).
+          rm -- "$REL"
+          git checkout -q -B report-target "origin/${BRANCH}"
+          [ -e "$REL" ] && { echo "a report named ${REL##*/} already exists on ${BRANCH} — reports are append-only"; exit 1; }
+          cp -- "$RUNNER_TEMP/report.md" "$REL"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$REL"
+          git commit -m "Record attested live check: ${REL##*/}"
+          git push origin "HEAD:refs/heads/${BRANCH}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: fullburn-live
+          path: fullburn/reports/LIVE_CHECK_phase*.md
+          if-no-files-found: ignore
+      - name: The live check's own verdict decides the job
+        if: always()
+        env:
+          RC: ${{ steps.live.outputs.rc }}
+        run: |
+          if [ -n "$RC" ]; then echo "live check exited $RC — see the report"; exit "$RC"; fi

@@ -1,8 +1,9 @@
 import { CapError } from "@fullburn/config/caps";
-import { MODELS, ROLE_CARDS, bindingsProvenance, ownEntry, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
+import { MODELS, ROLE_CARDS, bindingsProvenance, ownEntry, providerKeyFor, validateBindings, type RoleBindings, type OutputSchema, BindingError } from "@fullburn/config/models";
 import { deepFreeze } from "@fullburn/config/freeze";
 import { isRecordedTransport } from "./transport-brand.ts";
 import { isLiveEvalTransport, productionServable } from "./live-eval.ts";
+import { AiGatewayHttpTransport } from "./gateway-http.ts";
 
 /** THE ONLY ORIGIN A CREDENTIAL IS EVER SENT TO. `gatewayBaseUrl` was
  * caller-controlled and unchecked: any origin received the vault key and the
@@ -296,6 +297,19 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
      * had happened anyway. The check is here, before any credential is read,
      * and the test now counts reads. */
     assertGatewayBase(deps.gatewayBaseUrl);
+    /** THE CREDENTIAL GOES ONLY TO A TRANSPORT THAT IS THE GATEWAY (cross-family
+     * finding x9 X-02, GPT-6 Luna, 2026-10-10). Any object with a `post()` was
+     * handed the vault's AI Gateway bearer, so a caller-built transport could
+     * ignore the URL, send the credential and the request elsewhere, and skip
+     * the Gateway's out-of-process cap. Checked here, before the first vault
+     * read. The capability removed, in a deployed Worker: choosing where the
+     * credential and the request go. A test transport (a mock, a stub) is
+     * honoured only inside the test runner — the same fence the spend ledger's
+     * test-only reset uses. NARROWING, stated (L12): code that replaces the runtime's fetch
+     * before the adapter module loads is indistinguishable from it. */
+    if (!servingTransportAllowed(deps.transport, provenance)) {
+      throw new GatewayError("transport is not the production AI Gateway adapter on the runtime's own fetch, nor a recorded or live-eval transport — the Gateway credential is not handed to it (x9 X-02)");
+    }
 
     // Prime the redaction set before the money checks (adversary finding A1's
     // residue): a meter or caps error thrown while `secrets` was still empty
@@ -305,6 +319,9 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     try {
       secrets = [deps.vault.get("ai-gateway-key").value];
       redactionLoaded = true;
+      // A route's provider key (OpenRouter) is redacted from the start too.
+      const pkName = providerKeyFor(model.gatewayRoute);
+      if (pkName !== null) secrets.push(deps.vault.get(pkName).value);
     } catch {
       // Surfaced in order by the authoritative read below.
     }
@@ -357,6 +374,13 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
     const key = deps.vault.get("ai-gateway-key");
     secrets = [key.value];
     redactionLoaded = true;
+    /** THE ROUTE'S PROVIDER KEY, WHEN IT HAS ONE (OpenRouter, 2026-10-21):
+     * read from this client's vault after every money check, redacted like
+     * the gateway key, and handed to the transport under its own header. A
+     * route the gateway credentials itself gets no provider key at all. */
+    const providerKeyName = providerKeyFor(model.gatewayRoute);
+    const providerKey = providerKeyName === null ? null : deps.vault.get(providerKeyName);
+    if (providerKey !== null) secrets.push(providerKey.value);
     const url = new URL(model.gatewayRoute, deps.gatewayBaseUrl).toString();
 
     let output: unknown;
@@ -398,7 +422,11 @@ export async function llm(deps: LlmDeps, req: LlmRequest): Promise<unknown> {
       output = await deps.transport.post(
         url,
         { role, input, contextBudgetTokens: card.contextBudgetTokens },
-        { authorization: `Bearer ${key.value}`, "x-fullburn-client": clientId },
+        {
+          authorization: `Bearer ${key.value}`,
+          "x-fullburn-client": clientId,
+          ...(providerKey !== null ? { "x-provider-authorization": `Bearer ${providerKey.value}` } : {}),
+        },
       );
     } catch (err) {
       if (err instanceof PreDispatchError) {
@@ -563,3 +591,17 @@ function errorClassFor(err: unknown): new (m: string) => Error {
 }
 
 export type { TraceEvent };
+
+/** Which transports may receive the Gateway credential (x9 X-02): the genuine
+ * HTTP adapter on the runtime's own fetch — or a recorded transport or a live
+ * eval's wrapper, and those ONLY for an eval candidate's map (cross-family
+ * finding x10 X-03, 2026-10-10: a recorded transport served the launch map as
+ * a successful production call that never reached the Gateway). Inside the
+ * test runner only, any transport. */
+export function servingTransportAllowed(t: unknown, provenance: "servable" | "candidate" | null = null): boolean {
+  if (typeof t !== "object" || t === null) return false;
+  if ((isRecordedTransport(t) || isLiveEvalTransport(t)) && provenance === "candidate") return true;
+  if (Object.getPrototypeOf(t) === AiGatewayHttpTransport.prototype && (t as AiGatewayHttpTransport).usesRuntimeFetch()) return true;
+  const marker = (globalThis as Record<string, unknown>)["__vitest_worker__"];
+  return marker !== undefined && marker !== null;
+}

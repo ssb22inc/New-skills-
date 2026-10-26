@@ -40,10 +40,14 @@ export interface GatewayHttpOptions {
   readonly timeoutMs?: number;
 }
 
+/** The runtime's own fetch, as it stood when this module loaded (x8 X-04). */
+const RUNTIME_FETCH: unknown = globalThis.fetch;
+
 export class AiGatewayHttpTransport implements GatewayTransport {
   readonly #base: URL;
   readonly #fetch: FetchLike;
   readonly #timeoutMs: number;
+  readonly #runtimeFetch: boolean;
 
   constructor(opts: GatewayHttpOptions) {
     let base: URL;
@@ -59,7 +63,15 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     this.#base = base;
     this.#fetch = f;
     this.#timeoutMs = opts.timeoutMs ?? 30_000;
+    this.#runtimeFetch = opts.fetchImpl === undefined && (f as unknown) === RUNTIME_FETCH;
     Object.freeze(this);
+  }
+
+  /** True only when this transport sends through the runtime's own fetch —
+   * no injected `fetchImpl`, and the global not replaced since this module
+   * loaded. A live eval requires it (x8 X-04). */
+  usesRuntimeFetch(): boolean {
+    return this.#runtimeFetch;
   }
 
   async post(url: string, body: unknown, headers: Readonly<Record<string, string>>): Promise<unknown> {
@@ -80,7 +92,7 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     const b = body as { role?: unknown; input?: unknown; contextBudgetTokens?: unknown };
     if (typeof b?.role !== "string") throw new PreDispatchError("transport body has no role — nothing was sent");
     const payload = JSON.stringify({
-      model: route,
+      model: route.startsWith("openrouter/") ? route.slice("openrouter/".length) : route,
       max_tokens: typeof b.contextBudgetTokens === "number" && b.contextBudgetTokens > 0 ? Math.floor(b.contextBudgetTokens) : undefined,
       response_format: { type: "json_object" },
       messages: [
@@ -88,8 +100,19 @@ export class AiGatewayHttpTransport implements GatewayTransport {
         { role: "user", content: JSON.stringify(b.input ?? null) },
       ],
     });
-    const endpoint = new URL("compat/chat/completions", this.#base).toString();
+    /** OPENROUTER ROUTES (2026-10-21) go to the gateway's OpenRouter endpoint
+     * with the model named as OpenRouter names it, and carry the OpenRouter
+     * key `llm()` read from the vault. Every other route goes to the unified
+     * endpoint and carries NO provider credential (NL-01): the gateway
+     * supplies it. */
+    const viaOpenRouter = route.startsWith("openrouter/");
+    const providerAuth = headers["x-provider-authorization"];
+    if (viaOpenRouter && (typeof providerAuth !== "string" || !/^Bearer \S+$/.test(providerAuth))) {
+      throw new PreDispatchError("transport has no OpenRouter credential for an OpenRouter route — nothing was sent");
+    }
+    const endpoint = new URL(viaOpenRouter ? "openrouter/chat/completions" : "compat/chat/completions", this.#base).toString();
     const forward: Record<string, string> = { "content-type": "application/json", "cf-aig-authorization": auth };
+    if (viaOpenRouter) forward["authorization"] = providerAuth!;
     const client = headers["x-fullburn-client"];
     if (typeof client === "string") forward["cf-aig-metadata"] = JSON.stringify({ client });
 
@@ -108,8 +131,11 @@ export class AiGatewayHttpTransport implements GatewayTransport {
       if (timer) clearTimeout(timer);
     }
     if (status < 200 || status > 299) {
-      // The body may echo request material; only the status crosses.
-      throw new GatewayHttpError(`AI Gateway returned HTTP ${status}`);
+      // The body may echo request material, so no free text crosses — only
+      // machine error CODES, which say whose credential failed (the first live
+      // check's bare 401 could not tell the gateway token from a missing
+      // provider key, 2026-10-21).
+      throw new GatewayHttpError(`AI Gateway returned HTTP ${status}${errorCodes(text)}`);
     }
     let parsed: unknown;
     try {
@@ -121,7 +147,7 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     if (typeof content !== "string") throw new GatewayHttpError("AI Gateway reply has no message content");
     let output: unknown;
     try {
-      output = JSON.parse(content);
+      output = JSON.parse(unfenceJson(content));
     } catch {
       throw new GatewayHttpError("model reply is not JSON");
     }
@@ -130,4 +156,44 @@ export class AiGatewayHttpTransport implements GatewayTransport {
     }
     return output;
   }
+}
+
+/** The machine-readable error codes in a non-2xx body, and nothing else:
+ * a numeric `errors[].code` / `error[].code` (Cloudflare's or a provider's), and a provider's
+ * `error.type` / `error.code` when it is a short identifier. Free-text
+ * messages never cross (they can echo request material). */
+export function errorCodes(body: string): string {
+  let j: unknown;
+  try {
+    j = JSON.parse(body);
+  } catch {
+    return "";
+  }
+  const out: string[] = [];
+  const o = (j ?? {}) as Record<string, unknown>;
+  for (const k of ["errors", "error"]) {
+    const v = o[k];
+    for (const e of Array.isArray(v) ? v : v && typeof v === "object" ? [v] : []) {
+      const r = e as Record<string, unknown>;
+      // Numeric codes come from Cloudflare AND from providers (OpenRouter's
+      // 402 is numeric too), so they are labelled "code", not "cloudflare".
+      if (Number.isInteger(r["code"])) out.push(`code ${String(r["code"])}`);
+      for (const f of ["type", "code"]) {
+        const t = r[f];
+        if (typeof t === "string" && /^[a-z][a-z0-9_.-]{0,39}$/.test(t)) out.push(t);
+      }
+    }
+  }
+  return out.length ? ` (${[...new Set(out)].slice(0, 4).join(", ")})` : "";
+}
+
+/** A model's JSON answer, with ONE allowance: the whole reply may be a single
+ * Markdown code fence around it (```json … ```), which several models emit
+ * even when asked for bare JSON — the first live OpenRouter call did
+ * (2026-10-21). Anything else — prose before or after, two blocks — is
+ * returned unchanged, so it still fails to parse: the output contract stays
+ * strict, only the wrapper is forgiven. */
+export function unfenceJson(content: string): string {
+  const m = /^\s*```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n?```\s*$/.exec(content);
+  return m && !m[1]!.includes("```") ? m[1]! : content;
 }
