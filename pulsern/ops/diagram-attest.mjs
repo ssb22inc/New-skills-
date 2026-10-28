@@ -181,6 +181,16 @@ export function diagramSources(id, root = ".") {
    code, an identifier replaced at build time, a package "browser" or
    "imports" mapping — is refused rather than trusted (Astra, PR #134
    review, round 30). Read from the syntax tree; nothing is run. */
+/* And only the exact build files that were reviewed: the checks below can
+   be sidestepped by code they do not model (an alias built from a string
+   by JSON.parse and Object.assign, say), so the config, and the module it
+   loads, must also be byte-for-byte a reviewed version (Astra, PR #134
+   review, final round). Changing either is deliberate: review the change,
+   then add its SHA-256 here. */
+const APPROVED_BUILD_FILES = {
+  "vite.config.js": new Set(["027701b2f1cb65dd7cb87cc07daf72200191e8bc9bd94102877a6c2e2aec0ea8"]),
+  "ops/search-verification.mjs": new Set(["de8f521da9cbab54cfd9e23844960262bbf06937530612800e5b88dc1f504070"]),
+};
 const CONFIG_FILES = ["vite.config.js", "vite.config.mjs", "vite.config.cjs", "vite.config.ts", "vite.config.mts", "vite.config.cts"];
 const CONFIG_IMPORTS = new Set(["vite", "@vitejs/plugin-react", "node:url", "./ops/search-verification.mjs"]);
 const RESOLUTION_KEYS = new Set(["resolve", "alias", "resolveId", "load", "transform", "renderChunk", "generateBundle", "config", "configResolved", "esbuild", "oxc", "optimizeDeps", "ssr", "worker"]);
@@ -191,6 +201,12 @@ export function buildConfigProblems(root = ".") {
   const present = CONFIG_FILES.filter((f) => existsSync(join(root, f)));
   if (present.some((f) => f !== "vite.config.js")) out.push(`only vite.config.js is supported, found ${present.join(", ")}`);
   if (!present.includes("vite.config.js")) return out;
+  for (const [f, ok] of Object.entries(APPROVED_BUILD_FILES)) {
+    const p = join(root, f);
+    if (!existsSync(p)) { if (f !== "vite.config.js") continue; }
+    const digest = createHash("sha256").update(readFileSync(p)).digest("hex");
+    if (!ok.has(digest)) out.push(`${f} is not a reviewed version (sha256 ${digest.slice(0, 12)}…): review it, then add its hash to APPROVED_BUILD_FILES`);
+  }
   const text = readFileSync(join(root, "vite.config.js"), "utf8");
   let ast;
   try { ast = parseAst(text, { lang: "js" }); } catch (e) { return [...out, `vite.config.js could not be parsed (${String(e.message).split("\n")[0]})`]; }

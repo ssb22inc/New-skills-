@@ -548,3 +548,18 @@ describe("micrometres are a unit, not a filler", () => {
     expect(QA_VERSION).toBeGreaterThanOrEqual(14);
   });
 });
+
+/* Astra, PR #134 review, final round: the plural rule stripped the S from
+   "D10NS", so a clip that said "D10N" passed. */
+describe("alphanumeric clinical names keep every letter", () => {
+  it.each([["D10NS", "D10N"], ["D5NS", "D5N"], ["D5LRS", "D5LR"]])("fails when %s is heard as %s", (said, heard) => {
+    expect(audioCheck(`The solution is ${said}.`, `The solution is ${heard}.`).pass).toBe(false);
+    expect(audioCheck(`The solution is ${said}.`, `The solution is ${said}.`).pass).toBe(true);
+  });
+  it("still treats ordinary plurals as the same word", () => {
+    expect(audioCheck("Check the electrolytes and the platelets.", "Check the electrolyte and the platelet.").pass).toBe(true);
+  });
+  it("re-checks clips approved under the weaker rule", () => {
+    expect(QA_VERSION).toBeGreaterThanOrEqual(15);
+  });
+});

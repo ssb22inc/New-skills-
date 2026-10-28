@@ -42,7 +42,25 @@ const page = (body, tokens, css, WIDTH) => `<!doctype html><html><head><meta cha
    script, so nothing proved they showed the pinned source). */
 const ENTRY = "\0pulsern-render-entry";
 const HERE = fileURLToPath(new URL("..", import.meta.url));   // this script's own project, for its tools
+/* Each package the bundle loaded, compared by exact version and integrity
+   between the renderer's lockfile and the tree's. */
+export function packageMismatches(ourLock, theirLock, names) {
+  const read = (f) => { try { return JSON.parse(readFileSync(f, "utf8")).packages ?? {}; } catch { return null; } };
+  const ours = read(ourLock), theirs = read(theirLock);
+  if (!ours) return [`${ourLock} is missing or unreadable`];
+  if (!theirs) return [`${theirLock} is missing or unreadable`];
+  const out = [];
+  for (const name of [...names].sort()) {
+    const a = ours[`node_modules/${name}`], b = theirs[`node_modules/${name}`];
+    if (!a) out.push(`${name} is not in the renderer's lockfile`);
+    else if (!b) out.push(`${name} is not in the tree's lockfile`);
+    else if (a.version !== b.version || a.integrity !== b.integrity) out.push(`${name} ${b.version} in the tree, ${a.version} in the renderer`);
+  }
+  return out;
+}
+
 export async function bundleDiagrams(root) {
+  const used = new Set();
   const { build } = await import("vite");
   const { default: react } = await import("@vitejs/plugin-react");
   const req = createRequire(join(HERE, "package.json"));
@@ -54,7 +72,10 @@ export async function bundleDiagrams(root) {
       resolveId(id) {
         if (id === ENTRY) return id;
         /* A package comes from this script's own install, never the tree's. */
-        if (!id.startsWith(".") && !id.startsWith("/") && !id.startsWith("\0")) return req.resolve(id);
+        if (!id.startsWith(".") && !id.startsWith("/") && !id.startsWith("\0")) {
+          used.add(id.startsWith("@") ? id.split("/").slice(0, 2).join("/") : id.split("/")[0]);
+          return req.resolve(id);
+        }
         return null;
       },
       load(id) {
@@ -86,6 +107,12 @@ window.__pulsern = {
     }],
     build: { write: false, minify: false, modulePreload: false, rollupOptions: { input: ENTRY, output: { format: "iife" } } },
   });
+  /* The frames are drawn with this script's installed packages, so they
+     only show the tree's build if the tree installs exactly the same ones
+     (Astra, PR #134 review, final round: a branch that upgraded React was
+     still reviewed with the old one). */
+  const mismatch = packageMismatches(join(HERE, "package-lock.json"), join(resolve(root), "package-lock.json"), used);
+  if (mismatch.length) throw new Error(`renderDiagrams: the tree's packages differ from the ones this renderer draws with — refusing to render: ${mismatch.join("; ")}`);
   const chunks = (Array.isArray(out) ? out : [out]).flatMap((o) => o.output).filter((c) => c.type === "chunk");
   if (chunks.length !== 1) throw new Error(`renderDiagrams: expected one bundle, got ${chunks.length}`);
   return chunks[0].code;

@@ -211,6 +211,7 @@ describe("frames are rendered from the source tree by the trusted renderer", () 
     const root = mkdtempSync(join(tmpdir(), "render-src-"));
     cpSync("src", join(root, "src"), { recursive: true });
     cpSync("package.json", join(root, "package.json"));
+    cpSync("package-lock.json", join(root, "package-lock.json"));
     const abg = join(root, "src/diagrams/abg.jsx");
     // the title says where the diagram code actually ran
     writeFileSync(abg, readFileSync(abg, "utf8").replace('title: "Reading an ABG"', 'title: typeof process === "undefined" ? "ABG drawn in the browser" : "ABG drawn in Node"'));
@@ -257,6 +258,7 @@ describe("the pairing and narration jobs read the source through the sandbox", (
     const root = mkdtempSync(join(tmpdir(), "sandbox-src-"));
     cpSync("src", join(root, "src"), { recursive: true });
     cpSync("package.json", join(root, "package.json"));
+    cpSync("package-lock.json", join(root, "package-lock.json"));
     edit(root);
     git(root, "init", "-q"); git(root, "add", "-A");
     git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "source");
@@ -325,4 +327,39 @@ describe("a narration dry run changes nothing", () => {
     expect(readFileSync(join(into, "src/diagrams/narration.json"), "utf8")).toBe(populated);
     rmSync(d, { recursive: true, force: true });
   }, 180_000);
+});
+
+/* Astra, PR #134 review, final round: the renderer drew with its own
+   installed packages even when the tree pinned different ones. */
+describe("the renderer draws only with the tree's own packages", () => {
+  it("names every package whose version or integrity differs", async () => {
+    const { packageMismatches } = await import("../ops/render-diagrams.mjs");
+    const d = mkdtempSync(join(tmpdir(), "locks-"));
+    const lock = (react) => JSON.stringify({ packages: { "node_modules/react": react, "node_modules/react-dom": { version: "18.3.1", integrity: "sha512-x" } } });
+    writeFileSync(join(d, "ours.json"), lock({ version: "18.3.1", integrity: "sha512-a" }));
+    writeFileSync(join(d, "same.json"), lock({ version: "18.3.1", integrity: "sha512-a" }));
+    writeFileSync(join(d, "newer.json"), lock({ version: "19.0.0", integrity: "sha512-b" }));
+    writeFileSync(join(d, "tampered.json"), lock({ version: "18.3.1", integrity: "sha512-c" }));
+    const names = new Set(["react", "react-dom"]);
+    expect(packageMismatches(join(d, "ours.json"), join(d, "same.json"), names)).toEqual([]);
+    expect(packageMismatches(join(d, "ours.json"), join(d, "newer.json"), names)).toEqual(["react 19.0.0 in the tree, 18.3.1 in the renderer"]);
+    expect(packageMismatches(join(d, "ours.json"), join(d, "tampered.json"), names)).toHaveLength(1);
+    expect(packageMismatches(join(d, "ours.json"), join(d, "absent.json"), names)[0]).toMatch(/missing or unreadable/);
+    rmSync(d, { recursive: true, force: true });
+  });
+  it("refuses to render a tree that upgraded React", async () => {
+    const { bundleDiagrams } = await import("../ops/render-diagrams.mjs");
+    const { cpSync } = require("node:fs");
+    const root = mkdtempSync(join(tmpdir(), "render-deps-"));
+    try {
+      cpSync("src", join(root, "src"), { recursive: true });
+      cpSync("package.json", join(root, "package.json"));
+      const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+      lock.packages["node_modules/react"] = { ...lock.packages["node_modules/react"], version: "19.0.0", integrity: "sha512-other" };
+      writeFileSync(join(root, "package-lock.json"), JSON.stringify(lock));
+      await expect(bundleDiagrams(root)).rejects.toThrow(/react 19\.0\.0 in the tree/);
+      cpSync("package-lock.json", join(root, "package-lock.json"));
+      await expect(bundleDiagrams(root)).resolves.toMatch(/__pulsern/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }, 120_000);
 });
