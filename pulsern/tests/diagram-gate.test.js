@@ -10,6 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { approval, sourceKey, readReviewIndex, mapIsCurrent, stepInventory, diagramSteps, expectedFrames, frameIds, signApproval, verifyApproval } from "../ops/diagram-attest.mjs";
 import { publishable, sameProposal, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey, signDecision, verifyDecision, signMap, verifyMap, buildItemMap } from "../ops/map-diagrams-lib.mjs";
+
+/* Run reports from the CLI runs below go to a scratch folder, not the repo. */
+process.env.PULSERN_RUN_REPORT_DIR = mkdtempSync(join(tmpdir(), "pulsern-run-reports-"));
 import { verifierFrom, PUBLIC_ENV } from "../ops/attest.mjs";
 import { testKeys } from "./helpers/attest-keys.js";
 

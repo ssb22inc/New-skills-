@@ -261,8 +261,8 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
         </section>
         {trial && !isOwner && (
           <section className="card">
-            <p className="eyebrow">Included with any subscription</p>
-            <p className="small">The free pass opens every study tool; readiness exams come with a subscription so each one stays an honest, never-repeated measure.</p>
+            <p className="eyebrow">Included with any paid pass</p>
+            <p className="small">The free pass opens every study tool; readiness exams come with a paid pass so each one stays an honest, never-repeated measure.</p>
             {onUpgrade && <button className="btn" onClick={onUpgrade}>See plans →</button>}
           </section>
         )}
@@ -290,7 +290,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
                     : !ent
                       ? <p className="small tip">Checking your plan…</p>
                       : trial
-                        ? <p className="small tip">🔒 Unlocks with a subscription.</p>
+                        ? <p className="small tip">🔒 Unlocks with a paid pass.</p>
                         : examsLeft <= 0
                           ? <p className="small tip">🔒 No self-assessments remaining on your plan.</p>
                           : <button className="btn" onClick={() => { setForm(f); setStage("intro"); }}>Start exam →</button>}

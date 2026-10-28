@@ -65,7 +65,10 @@ const ANON = process.env.PULSERN_SUPABASE_ANON_KEY || "sb_publishable_wH9FG2HgmC
 const CACHE = "reports/diagram-map/decisions.json";
 const MAP = "src/diagrams/item-map.json";
 const startedAt = new Date().toISOString();
-const RUN = `reports/diagram-map/run-${startedAt.replace(/[:.]/g, "-")}`;
+/* Run reports go to the committed folder; tests point this elsewhere so a
+   local run never leaves a stray report to be committed by mistake. */
+const RUN_DIR = process.env.PULSERN_RUN_REPORT_DIR || "reports/diagram-map";
+const RUN = `${RUN_DIR}/run-${startedAt.replace(/[:.]/g, "-")}`;
 
 const decisions = existsSync(CACHE) ? JSON.parse(readFileSync(CACHE, "utf8")) : {};
 const run = { startedAt, model: REVIEW_MODEL, maxUsd: MAX_USD, limit: Number.isFinite(LIMIT) ? LIMIT : null, dryRun: DRY,
@@ -92,6 +95,7 @@ const PROPOSALS = new Map();
 
 function save(diagrams, items) {
   mkdirSync("reports/diagram-map", { recursive: true });
+  mkdirSync(RUN_DIR, { recursive: true });
   const fresh = publishable(decisions, items, diagrams, approvedNow, PROPOSALS, SIGNER);
   /* A dry run changes no record: only its own run report is written
      (Astra, PR #134 review, round 28). */

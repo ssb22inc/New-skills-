@@ -42,8 +42,8 @@ export default async function handler(req, res) {
     if (!plan || plan.cents <= 0) return res.status(400).json({ error: "Unknown package" });
     const { subs, attempts } = await loadRows(sb, user.id);
     const ent = computeEntitlement(subs, attempts);
-    if (plan.id === "renew7" && !ent.hadPaid) return res.status(403).json({ error: "Renewals are available after a subscription" });
-    if (plan.id === "exam1" && ent.status !== "active") return res.status(403).json({ error: "An active subscription is required to add an exam" });
+    if (plan.id === "renew7" && !ent.hadPaid) return res.status(403).json({ error: "Renewals are available after a paid pass" });
+    if (plan.id === "exam1" && ent.status !== "active") return res.status(403).json({ error: "An active paid pass is required to add an exam" });
     if (plan.id === "exam1" && ent.examsLeft + ent.attempted.length >= 10) return res.status(403).json({ error: "All ten exam forms are already covered by your account" });
     const code = await lookupCode(sb, codeRaw);
     if (codeRaw && !code) return res.status(404).json({ error: "Code not recognized" });
