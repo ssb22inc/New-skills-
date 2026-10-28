@@ -1,0 +1,148 @@
+{
+  "id": "potassium",
+  "title": "Potassium & the ECG",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-28T22:33:26.475Z",
+  "images": 14,
+  "key": "1f50ce762083447b",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "Steps hyper-ecg and worked; images 5, 7, 12, 14; potassium.dynamicCaption() hyperkalemia branch",
+      "title": "ECG changes are presented as a predictable progression and an urgency gate",
+      "problem": "Peaked T waves do not reliably appear first, and ECG findings do not track serum potassium predictably. Severe hyperkalemia can have a normal or minimally changed ECG. Every elevated value, including k=8.0, gets the same 'watch the monitor ... if the ECG changes' caption. This can teach students to wait for ECG changes before recognizing an emergency.",
+      "fix": "Describe these as possible classic findings, not a guaranteed sequence. State that a normal ECG does not exclude dangerous hyperkalemia. Add reference-backed urgency handling for severely elevated values rather than reusing the observation-oriented caption. Label the outlined strip as illustrative, not the client's established ECG.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "Images 1, 6, 8, 13; hyper-act Emergency order; hyper-care caption/narration; Frame description",
+      "title": "The emergency mnemonic becomes an unconditional serial protocol",
+      "problem": "Fact 9 supplies an ECG-change indication for calcium, but the panel, narration and accessible description omit it. 'The order matters ... Give calcium ... Then insulin ... Then remove it' also implies that potassium removal waits until earlier stages are completed. This is not a universal treatment sequence. The removal list further makes delayed-action binders, renal-dependent diuresis and dialysis look interchangeable.",
+      "fix": "Restore the indication for cardiac stabilization. Present stabilization, temporary intracellular shifting and definitive removal as treatment goals whose implementation can overlap under the applicable protocol. Clarify that removal depends on urgency and renal function; binders are not sole rescue therapy for life-threatening hyperkalemia, and diuretics require sufficient renal response.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "area": "consistency",
+      "where": "potassium.dynamicCaption(); PotassiumDiagram Gauge decimals={1}; classifyPotassium()",
+      "title": "Rounding produces clinically contradictory boundary examples",
+      "problem": "Classification uses the unrounded input, while the gauge and caption display one decimal. For k=3.49, the student sees '3.5 ... below 3.5, so hypokalemia.' For k=5.01, the student sees '5.0 ... above 5.0, so hyperkalemia.' The abnormal marker and strip reinforce a classification that contradicts the displayed value.",
+      "fix": "Preserve enough input precision to keep the displayed value consistent with classification. Do not silently round an abnormal result onto an inclusive normal boundary. Test 3.49, 3.5, 5.0 and 5.01 across classification, caption, marker and highlighting.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "Step hypo-care caption/narration; images 4 and 11",
+      "title": "The spoken cause list drops the diuretic class distinction",
+      "problem": "The facts and picture correctly specify loop/thiazide diuretics, but the caption and narration say only 'diuretics.' The same diagram identifies potassium-sparing diuretics as a cause of hyperkalemia. The unqualified spoken rule invites the opposite medication association.",
+      "fix": "Say 'loop and thiazide diuretics' in both caption and narration.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "visual",
+      "where": "Step worked focus; images 7 and 14; potassium.steps worked entry",
+      "title": "The matched ECG remains dimmed",
+      "problem": "The worked step focuses level and match, but match contains only the dashed rectangle. The actual matching waveform, heading and labels remain at 18% opacity. The step asks students to examine peaked T waves while making that waveform difficult to see.",
+      "fix": "Include the dynamically selected hypo or hyper group in the worked step's focus, or place the outline and selected strip under a shared focused group.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "All images; Bullets, Stepper, Callout and Gauge text",
+      "title": "Core diagram text renders at roughly 8–10 CSS pixels on a phone",
+      "problem": "The SVG uses 9.5–11.5-unit text and then scales the entire canvas into a padded mobile card. The emergency explanations are especially small. The larger reading-size setting affects captions, not SVG labels, so it does not fix the teaching content.",
+      "fix": "Reflow the care panels into responsive text or split the diagram into readable sections. Use phone-sized body text rather than shrinking the whole illustration; verify at actual CSS width, not enlarged screenshot resolution.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "Light images 1, 3–6: coral labels and Emergency order; stepped views in both themes; C.coral and G opacity",
+      "title": "Text contrast fails the project's minimum",
+      "problem": "Light-theme coral #D9503F has approximately 4.1:1 contrast on white and 3.9:1 on the care-panel surface, below 4.5:1 for these small labels. Separately, forcing unfocused text to 18% opacity makes retained reference content unreadable in both themes.",
+      "fix": "Use a contrast-compliant danger text token for small coral labels. De-emphasize panel backgrounds or borders instead of reducing retained text below the required contrast. Test composited colors, including focus states.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "src/explainer.jsx: onKey handler on the section",
+      "title": "Space overrides native navigation-button activation",
+      "problem": "When a previous, next or step-dot button has focus, its Space keydown bubbles to the section. The handler prevents the button's normal activation and toggles playback instead. Keyboard users cannot rely on standard button behavior.",
+      "fix": "Do not intercept Space from interactive descendants. Preserve native button activation and scope playback shortcuts to an appropriate noninteractive player target.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "Explainer step controls; DIAGRAM_CSS .dg-dot and .dg-dots",
+      "title": "Step buttons have undersized touch targets",
+      "problem": "Each step button is only 10×10 CSS pixels, with 6 pixels between buttons and no enlarged hit area. These are functional controls, not decorative dots, and are difficult to select reliably on a phone.",
+      "fix": "Provide at least 24×24-pixel nonoverlapping targets, preferably larger for touch, while keeping the visible dot small. Reflow the controls if necessary.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "rules",
+      "where": "src/explainer.jsx: verificationLabel(true) and dg-ai rendering",
+      "title": "RN verification removes mandatory AI provenance",
+      "problem": "Setting rnVerified=true replaces the AI label and verify-against-course-materials note with only 'RN-verified.' The project rule says all AI content retains both disclosures; RN approval does not erase AI authorship.",
+      "fix": "Keep the ✨ AI provenance and verification note in both states. Add RN verification as a separate status.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "rules",
+      "where": "Step hyper-care narration; all supplied views; Explainer disclosure rendering",
+      "title": "Treatment commands lack the required exam-prep framing",
+      "problem": "The narration directly instructs 'Give calcium gluconate first' and then gives subsequent treatment actions. Neither the supplied views nor the Explainer component shows an educational/not-treatment disclaimer. The AI verification note does not provide that distinction. This reads as a bedside protocol rather than an explanation of an exam scenario.",
+      "fix": "Frame the discussion as NCLEX priority reasoning and anticipated prescribed interventions, not instructions to treat a real client. Keep the required educational disclaimer visible alongside the existing AI note. App-wide disclaimer placement remains unverified.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "visual",
+      "where": "PotassiumDiagram Gauge min={2} max={7}; shared Gauge px()",
+      "title": "Off-scale values are silently pinned to the gauge endpoints",
+      "problem": "Values below 2 or above 7 are clamped without an overflow indication. For example, k=8.0 and k=10.0 occupy the position calculated for 7.0, while their pills display different numbers. The unlabeled endpoints conceal that saturation.",
+      "fix": "Extend the scale dynamically or show explicit off-scale arrows and endpoint labels so the marker is not presented as an exact plotted position.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "visual",
+      "where": "Images 1, 3, 4, 8, 10, 11; beat('hypo') and uX",
+      "title": "The U-wave callout uses the wrong beat spacing",
+      "problem": "The hypokalemia path advances 56 units per beat, not the assumed 60. Its U apex is 50 units into the beat, not 52. The second U apex is therefore at x=131, but the callout is centered at x=137, straddling the U-wave tail and the following P-wave region.",
+      "fix": "Derive callout coordinates from the actual waveform landmarks, or correct the waveform length and landmark definitions together.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "rules",
+      "where": "HeartIcon used by the level Gauge, including params=null and normal potassium values",
+      "title": "The generic heart icon uses the reserved critical color",
+      "problem": "HeartIcon is always coral, even in concept-only mode or with normal potassium. That uses the incorrect/critical color for a neutral anatomical symbol.",
+      "fix": "Use teal for the generic heart icon, reserving critical styling for an explicitly abnormal state.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.254221
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Do not publish as-is. The main risks are ECG-based false reassurance, an overgeneralized emergency sequence, and boundary values whose displayed numbers contradict their classification. Mobile readability and several shared-player behaviors also fail review. Actual narration recordings and the app-wide disclaimer/footer were not available to verify.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 3,
+    "major": 8,
+    "minor": 3
+  }
+}
