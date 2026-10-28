@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-10-28T16:31:15.572Z",
+  "model": "openai/gpt-6.1-sol",
+  "maxUsd": 15,
+  "limit": null,
+  "dryRun": true,
+  "candidates": {},
+  "asked": 0,
+  "attached": 0,
+  "attachedWithValues": 0,
+  "rejected": 0,
+  "failedBatches": [],
+  "stoppedFor": null,
+  "heldBack": {
+    "abg": "never reviewed",
+    "potassium": "never reviewed",
+    "tonicity": "never reviewed",
+    "insulin": "never reviewed",
+    "isolation": "never reviewed",
+    "pressure-injury": "never reviewed"
+  },
+  "spendUsd": 0,
+  "calls": 0,
+  "uncostedCalls": 0,
+  "shipped": 0
+}

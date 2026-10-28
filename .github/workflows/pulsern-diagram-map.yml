@@ -47,6 +47,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # The reader account only: an account with an active pass, which the
+    # database lets read practice questions and nothing else (no exams,
+    # nothing to write). In its own main-only environment, so no other ref's
+    # copy of this file can use it; nothing else here holds a secret.
+    environment: pulsern-bank-read
     # The exact commit prepared: the paid job works on this commit only
     # (Astra, PR #134 review, round 22: both jobs used the moving branch name).
     outputs:
@@ -131,7 +136,10 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
 
-      - name: Read the branch and run its matcher with the default branch's scripts (no secrets)
+      - name: Read the branch and run its matcher with the default branch's scripts
+        env:
+          PULSERN_BANK_READER_EMAIL: ${{ secrets.PULSERN_BANK_READER_EMAIL }}
+          PULSERN_BANK_READER_PASSWORD: ${{ secrets.PULSERN_BANK_READER_PASSWORD }}
         run: |
           mkdir -p "$RUNNER_TEMP/prepared"
           node ops/map-diagrams.mjs --prepare "$RUNNER_TEMP/prepared/map.json" --source "$GITHUB_WORKSPACE/branch/pulsern"
@@ -209,6 +217,8 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PULSERN_ATTEST_PRIVATE_KEY: ${{ secrets.PULSERN_ATTEST_PRIVATE_KEY }}
           PULSERN_ATTEST_PUBLIC_KEY: ${{ vars.PULSERN_ATTEST_PUBLIC_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set +e
           [[ "$MAX_USD" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "::error::max_usd must be a number"; exit 1; }

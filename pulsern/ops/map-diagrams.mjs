@@ -23,7 +23,12 @@
    diagrams and proposals as data (ops/prepared.mjs), reading the public
    bank itself, and writing into the branch checkout.
    Env:   OPENROUTER_API_KEY (not needed for --dry-run)
-          PULSERN_SUPABASE_URL / PULSERN_SUPABASE_ANON_KEY (default: the app's public values) */
+          PULSERN_SUPABASE_URL / PULSERN_SUPABASE_ANON_KEY (default: the app's public values)
+          Reading the bank (since migration 018 the public key alone reads nothing):
+            SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY — the paid job; or
+            PULSERN_BANK_READER_EMAIL + PULSERN_BANK_READER_PASSWORD — a reader
+            account with an active pass, which RLS lets see practice
+            questions only, never readiness exams (the prepare job). */
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -114,6 +119,21 @@ function save(diagrams, items) {
   ].join("\n"));
 }
 
+/* Who reads the bank. The query below always excludes readiness-exam
+   items, whatever the credential. */
+async function bankClient() {
+  const env = process.env;
+  if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
+    return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  }
+  const sb = createClient(URL_, ANON, { auth: { persistSession: false } });
+  if (env.PULSERN_BANK_READER_EMAIL && env.PULSERN_BANK_READER_PASSWORD) {
+    const { error } = await sb.auth.signInWithPassword({ email: env.PULSERN_BANK_READER_EMAIL, password: env.PULSERN_BANK_READER_PASSWORD });
+    if (error) throw new Error(`the bank reader account could not sign in: ${error.message}`);
+  }
+  return sb;
+}
+
 let vite = null;
 let code = 0;
 try {
@@ -139,7 +159,7 @@ try {
     if (!a.ok) run.heldBack[id] = a.why;
   }
   if (Object.keys(run.heldBack).length) console.log(`Held back, not reviewed for pairing: ${JSON.stringify(run.heldBack)}`);
-  const sb = createClient(URL_, ANON, { auth: { persistSession: false } });
+  const sb = await bankClient();
   console.log("Reading practice questions…");
   const rows = await readAll(() => sb.from("questions").select("id, stem, options, answer, rationale")
     .eq("approved", true).is("exam_form", null).order("id"), { ordered: true });
@@ -148,7 +168,7 @@ try {
      alone (anon gets no rows). An empty read must stop the run, never be
      taken as "the bank is empty" and turned into an empty pairing map. */
   if (!rows.length) {
-    throw new Error("Read 0 practice questions. Since migration 018 the practice bank is readable only by entitled accounts, so the public key returns nothing: give this job a key that can read the bank (HUMAN_TASKS.md H21).");
+    throw new Error("Read 0 practice questions. Since migration 018 the practice bank is readable only by entitled accounts, so the public key returns nothing: give this job the bank reader account or the service key (HUMAN_TASKS.md H22).");
   }
   console.log(`Read ${rows.length} practice questions.`);
   if (PREPARE) {
