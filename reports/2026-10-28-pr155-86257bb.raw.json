@@ -1,0 +1,16 @@
+{
+  "model": "openai/gpt-6-luna",
+  "mode": "trusted",
+  "meta": {
+    "base": "bfb5ca7b226557bbbc6c4fbc1c191f7962101b3c",
+    "head": "86257bbbcd9b29f6148906da6ea7551fab0290fc",
+    "pr": "155"
+  },
+  "reviewedAt": "2026-10-28T16:50:59.130Z",
+  "filesReviewed": [],
+  "skipped": [],
+  "findings": [],
+  "usage": null,
+  "error": "The review could not be completed: cannot put these changes in front of the reviewer, so the change cannot pass: pulsern/public/product/pulsern-adaptive-practice.png, pulsern/public/product/pulsern-lab-reference.png, pulsern/public/product/pulsern-today-dashboard.png (not valid UTF-8 text, and not a canonical PNG under 4 MB — run \"node pulsern/ops/png-canonical.mjs <file>\" on an 8-bit grey/RGB(A) PNG to make one)",
+  "verdict": "FAIL"
+}
