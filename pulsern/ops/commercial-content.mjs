@@ -6,10 +6,12 @@ export const COMMERCIAL_VERIFIED_AT = "2026-10-28";
    publication date of a live URL every time a price is re-checked is both
    dishonest and bad for the page. */
 export const COMMERCIAL_PUBLISHED_AT = "2026-09-03";
-/* Kaplan is pinned deliberately. Its pages refused automated retrieval
-   (HTTP 403) on the re-check, so its figures were NOT verified today and
-   must not inherit today's date. A source list is worthless the moment one
-   entry carries a date nobody actually checked. */
+/* Kaplan has its own date because its pages have refused automated
+   retrieval before (HTTP 403 on the 2026-09-29 re-check), and a refused
+   source must never inherit a date nobody checked. On 2026-10-28 both
+   Kaplan pages answered (HTTP 200) and `npm run seo:commercial` found every
+   recorded Kaplan figure, so the date moves. If a re-check is refused
+   again, leave this date where it is. */
 const KAPLAN_VERIFIED_AT = "2026-10-28";
 const SITE = "https://www.pulsern.app";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");

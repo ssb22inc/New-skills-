@@ -183,7 +183,9 @@ try {
       const ids = await call("ids");
       const diagrams = [];
       for (const id of ids) diagrams.push(await call("raw", id));
-      return { diagrams, proposed: await call("propose", rows) };
+      /* Only what the matcher reads, never the answer — and the sandbox
+         page has no network, so none of it can leave (Luna, PR #155). */
+      return { diagrams, proposed: await call("propose", rows.map(({ id, stem, options, rationale }) => ({ id, stem, options, rationale }))) };
     });
     checkInventory(diagrams, stepInventory(root));
     const proposals = Object.fromEntries(Object.entries(proposed).filter(([, p]) => p.length));

