@@ -1,0 +1,86 @@
+{
+  "model": "openai/gpt-6-luna",
+  "mode": "trusted",
+  "meta": {
+    "base": "bfb5ca7b226557bbbc6c4fbc1c191f7962101b3c",
+    "head": "fc7cdfd737288ffbd8ee2b0b6a4d71e69748c3e7",
+    "pr": "155"
+  },
+  "reviewedAt": "2026-10-28T16:44:13.265Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    ".github/workflows/pulsern-diagram-map.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_require-user.js",
+    "pulsern/api/ai.js",
+    "pulsern/api/exam.js",
+    "pulsern/api/plan.js",
+    "pulsern/api/require-user.js",
+    "pulsern/ops/commercial-content.mjs",
+    "pulsern/ops/diagram-attest.mjs",
+    "pulsern/ops/map-diagrams.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/ops/render-diagrams.mjs",
+    "pulsern/public/commercial-search-intents.json",
+    "pulsern/public/compare/best-affordable-nclex-prep/index.html",
+    "pulsern/public/compare/best-nclex-app-repeat-test-takers/index.html",
+    "pulsern/public/compare/best-nclex-question-banks/index.html",
+    "pulsern/public/compare/index.html",
+    "pulsern/public/compare/methodology/index.html",
+    "pulsern/public/compare/pulsern-vs-archer/index.html",
+    "pulsern/public/compare/pulsern-vs-kaplan/index.html",
+    "pulsern/public/compare/pulsern-vs-uworld/index.html",
+    "pulsern/public/comparison-evidence.json",
+    "pulsern/public/sitemap.xml",
+    "pulsern/reports/diagram-map/run-2026-10-28T16-31-15-572Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-28T16-31-15-572Z.md",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/diagram-gate.test.js",
+    "pulsern/tests/llm-client.test.js",
+    "pulsern/tests/narrate.test.js",
+    "pulsern/tests/prepared.test.js",
+    "pulsern/tests/review-diagrams.test.js",
+    "pulsern/tests/vercel-functions.test.js",
+    "pulsern/tests/workflows.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/map-diagrams.mjs",
+      "line": 181,
+      "title": "Branch matcher can leak paid-bank content through the prepared artifact",
+      "problem": "The trusted prepare script passes each bank row's stem, options, and rationale to branch-controlled matcher code. It then preserves each matcher's arbitrary `p` value in `proposed` and writes that object to the prepared JSON, which the workflow uploads as an artifact. The browser network sandbox does not restrict this return channel.",
+      "failure_scenario": "A branch changes `proposePairs` to return `{ d: \"abg\", p: q.rationale }` (or encodes other row fields in `p`). The prepare step writes those values into `map.json` and uploads them, making entitlement-protected question content available to anyone who can access the workflow artifact. The new sandbox test only checks outbound network requests, so this path passes it.",
+      "fix": "Do not pass real bank rows to branch-controlled code. Run matching against the bank only in trusted code, or redesign the prepare stage so its untrusted code receives no protected question content; do not rely on validating or scrubbing the matcher's output as the security boundary.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/render-diagrams.mjs",
+      "line": 99,
+      "title": "Renderer does not check the production build-tool versions",
+      "problem": "`used` is populated only by the bundle's `resolveId` hook, but Vite and `@vitejs/plugin-react` are loaded directly before that hook and are never added to the set. Consequently `packageMismatches` does not compare those build tools against the branch lockfile, despite their ability to change the production transform/rendering. Hashing the branch lockfile into the review key forces a review but does not make the renderer use the branch's toolchain.",
+      "failure_scenario": "A branch updates Vite or the React plugin in its lockfile. The trusted renderer still builds and reviews the diagram with its own versions, the mismatch check passes, and the production build uses the branch's changed toolchain. The approved frames can therefore differ from what students see, while the visual review appears current. The added dependency test changes React only and misses this case.",
+      "fix": "Compare the exact versions and integrity of Vite, `@vitejs/plugin-react`, and every other production transform/build dependency against the renderer's toolchain, or reject any build-tool lockfile change unless the renderer can reproduce it exactly.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 206021,
+    "completionTokens": 12237,
+    "reasoningTokens": 11659,
+    "costUsd": 0.03187105
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Two blockers undermine the new diagram workflow: branch-controlled matcher code can return protected bank content into an uploaded artifact, and the visual-review renderer does not verify that production uses the same build-tool versions it rendered with.",
+  "counts": {
+    "blocker": 2,
+    "major": 0,
+    "minor": 0
+  }
+}
