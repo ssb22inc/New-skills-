@@ -158,12 +158,14 @@ Claude Code executes everything else. These run in parallel with the build.
 
       select exists (select 1 from pg_policies where policyname = 'questions_read_practice_entitled') and not exists (select 1 from pg_policies where policyname in ('questions_read_approved', 'flashcards_read_approved', 'cases_read_approved', 'insert own attempts')) as migration_018_applied;
 
-  One thing this cannot keep working, for you to decide: the
-  diagram-pairing workflow (`pulsern-diagram-map.yml`,
-  `ops/map-diagrams.mjs`) reads the practice bank with the public key, in a
-  job that deliberately holds no secrets. After 018 that read returns no
-  rows. The script now stops with an error instead of building an empty
-  pairing map. To run it again, give the trusted script a key that can read
-  the bank in both jobs (for example the service-role key from the
-  `pulsern-paid` environment, passed as `PULSERN_SUPABASE_ANON_KEY`). That
-  changes the workflow's no-secrets design, so the choice is left to you.
+  Diagram pairing after 018: the paid job (in `pulsern-paid`, H20) reads
+  the bank with the service key it already holds; the prepare job, where
+  branch code runs, reads no bank and must never be given a key.
+
+- H22 · ~~A bank reader account for diagram pairing~~ — **no longer needed.**
+  The pairing job's prepare half no longer reads the bank at all: the
+  branch's code is never shown a question (Luna, PR #155), so it needs no
+  account. The paid half reads the bank with the service key it already
+  holds in `pulsern-paid` (H20) and proposes pairings with `main`'s
+  matcher. If you already created a `pulsern-bank-read` environment or a
+  reader account, you can delete them.

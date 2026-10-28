@@ -17,7 +17,7 @@ vi.mock("@supabase/supabase-js", () => ({ createClient }));
 
 import aiHandler from "../api/ai.js";
 import planHandler from "../api/plan.js";
-import { tokenFromRequest } from "../api/require-user.js";
+import { tokenFromRequest } from "../api/_require-user.js";
 
 const ENV_KEYS = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "OPENROUTER_API_KEY"];
 const SAVED = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));

@@ -409,7 +409,10 @@ describe("paid workflows never run branch code with secrets", () => {
   it.each(files)("%s: secrets appear only in the paid job, which is in the protected environment", (f) => {
     const j = jobs(f);
     expect(Object.keys(j).sort()).toEqual(["paid", "prepare"]);
+    /* No prepare job holds a secret or an environment: the branch's code runs
+       there, and the pairing job's no longer reads the bank (Luna, PR #155). */
     expect(j.prepare).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
+    expect(j.prepare).not.toMatch(/^    environment:/m);
     expect(j.prepare).toMatch(/^    permissions:\n      contents: read\n/m);
     expect(j.paid).toMatch(/^    environment: pulsern-paid$/m);
     expect(j.paid).toMatch(/^    needs: prepare$/m);

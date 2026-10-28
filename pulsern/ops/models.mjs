@@ -15,16 +15,17 @@
    has to remember. */
 
 export const GEN_MODEL = "anthropic/claude-sonnet-4.6";
-/* Owner decision 2026-10-09: the adversarial reviewer is GPT Luna (it was
-   GPT Astra until then). Every review, gate and audit reads it from here. */
-export const REVIEW_MODEL = "openai/gpt-6-luna";
-export const REVIEWER_NAME = "Luna";
+/* Owner decisions: GPT Astra until 2026-10-09, then GPT Luna, and from
+   2026-10-28 GPT 6.1 Sol. Earlier reviews stand as recorded; every review,
+   gate and audit from now on reads the reviewer from here. */
+export const REVIEW_MODEL = "openai/gpt-6.1-sol";
+export const REVIEWER_NAME = "Sol";
 
 /* Reasoning models reject or silently ignore sampling temperature. Sending
    0.7 to one is at best a no-op and at worst a 400 that would take a factory
    down the moment the reviewer switched — so the client asks this before
    sending it, rather than every caller having to know. */
-const NO_TEMPERATURE = new Set(["openai/gpt-6-astra", "openai/gpt-6-luna"]);
+const NO_TEMPERATURE = new Set(["openai/gpt-6-astra", "openai/gpt-6-luna", "openai/gpt-6.1-sol"]);
 export const acceptsTemperature = (model) => !NO_TEMPERATURE.has(model);
 
 /* The vendor prefix is the family. Good enough here because the question is

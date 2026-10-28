@@ -137,17 +137,9 @@ export function readFrame(dir, id, n, maxBytes = 8 * 1024 * 1024) {
 }
 
 /* Diagram pairing: the diagrams' words, exactly as the app fingerprints
-   them (absent fields stay absent), and the matcher's proposals per
-   question. Proposals are only candidates: every one is still confirmed by
-   the reviewer and re-checked against the question before it ships. */
-const plainValues = (v, what, depth = 0) => {
-  if (depth > 4) fail(`${what} is nested too deeply`);
-  if (v === null || typeof v === "number" || typeof v === "boolean") return v;
-  if (typeof v === "string") return text(v, what, 500);
-  if (Array.isArray(v)) return list(v, what, 50).map((x) => plainValues(x, what, depth + 1));
-  if (typeof v === "object") return Object.fromEntries(Object.entries(v).slice(0, 50).map(([k, x]) => [text(k, what, 60), plainValues(x, what, depth + 1)]));
-  fail(`${what} holds an unsupported value`);
-};
+   them (absent fields stay absent). Nothing else: the paid job reads the
+   bank and proposes pairings itself, with the default branch's matcher, so
+   a prepared file carrying anything more is refused (Luna, PR #155). */
 export function mapPlan(data) {
   const ids = new Set();
   const diagrams = list(data.diagrams, "diagrams", 200).map((d) => {
@@ -165,17 +157,8 @@ export function mapPlan(data) {
     });
     return out;
   });
-  if (!data.proposals || typeof data.proposals !== "object" || Array.isArray(data.proposals)) fail("proposals is not an object");
-  const proposals = new Map();
-  for (const [qid, ps] of Object.entries(data.proposals)) {
-    if (!/^\d{1,12}$/.test(qid)) fail(`question id ${JSON.stringify(qid)} is not a number`);
-    proposals.set(Number(qid), list(ps, `proposals for ${qid}`, 20).map((p) => {
-      const d = slug(p?.d, `proposal for ${qid}`);
-      if (!ids.has(d)) fail(`proposal for ${qid} names unknown diagram ${d}`);
-      return p.p == null ? { d } : { d, p: plainValues(p.p, `values for ${qid}/${d}`) };
-    }));
-  }
-  return { diagrams: Object.fromEntries(diagrams.map((d) => [d.id, d])), proposals };
+  if ("proposals" in data) fail("a prepared pairing file carries diagrams only, not proposals");
+  return { diagrams: Object.fromEntries(diagrams.map((d) => [d.id, d])) };
 }
 
 /* Local and prepared runs reach the reviewer through this one builder, so

@@ -42,7 +42,25 @@ const page = (body, tokens, css, WIDTH) => `<!doctype html><html><head><meta cha
    script, so nothing proved they showed the pinned source). */
 const ENTRY = "\0pulsern-render-entry";
 const HERE = fileURLToPath(new URL("..", import.meta.url));   // this script's own project, for its tools
+/* Each package the bundle loaded, compared by exact version and integrity
+   between the renderer's lockfile and the tree's. */
+export function packageMismatches(ourLock, theirLock, names) {
+  const read = (f) => { try { return JSON.parse(readFileSync(f, "utf8")).packages ?? {}; } catch { return null; } };
+  const ours = read(ourLock), theirs = read(theirLock);
+  if (!ours) return [`${ourLock} is missing or unreadable`];
+  if (!theirs) return [`${theirLock} is missing or unreadable`];
+  const out = [];
+  for (const name of [...names].sort()) {
+    const a = ours[`node_modules/${name}`], b = theirs[`node_modules/${name}`];
+    if (!a) out.push(`${name} is not in the renderer's lockfile`);
+    else if (!b) out.push(`${name} is not in the tree's lockfile`);
+    else if (a.version !== b.version || a.integrity !== b.integrity) out.push(`${name} ${b.version} in the tree, ${a.version} in the renderer`);
+  }
+  return out;
+}
+
 export async function bundleDiagrams(root) {
+  const used = new Set();
   const { build } = await import("vite");
   const { default: react } = await import("@vitejs/plugin-react");
   const req = createRequire(join(HERE, "package.json"));
@@ -54,7 +72,10 @@ export async function bundleDiagrams(root) {
       resolveId(id) {
         if (id === ENTRY) return id;
         /* A package comes from this script's own install, never the tree's. */
-        if (!id.startsWith(".") && !id.startsWith("/") && !id.startsWith("\0")) return req.resolve(id);
+        if (!id.startsWith(".") && !id.startsWith("/") && !id.startsWith("\0")) {
+          used.add(id.startsWith("@") ? id.split("/").slice(0, 2).join("/") : id.split("/")[0]);
+          return req.resolve(id);
+        }
         return null;
       },
       load(id) {
@@ -64,7 +85,6 @@ import { renderToStaticMarkup } from "react-dom/server.browser";
 import { DIAGRAMS } from "/src/diagrams/index.js";
 import { DIAGRAM_CSS } from "/src/diagrams/kit.jsx";
 import { Explainer } from "/src/explainer.jsx";
-import { proposePairs } from "/src/diagrams/match.js";
 const plain = (v) => JSON.parse(JSON.stringify(v ?? null));
 window.__pulsern = {
   css: String(DIAGRAM_CSS),
@@ -76,8 +96,6 @@ window.__pulsern = {
      pairing and narration jobs. */
   raw: (id) => { const d = DIAGRAMS[id]; return plain({ id: d.id, title: d.title, facts: d.facts,
     steps: d.steps.map((s) => ({ key: s.key, dynamic: s.dynamic === true ? true : undefined, caption: s.caption, narration: s.narration })) }); },
-  /* What the source's own matcher proposes for each question. */
-  propose: (questions) => plain(Object.fromEntries(questions.map((q) => [q.id, proposePairs(q).map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p }))]))),
   markup: (id, step) => renderToStaticMarkup(step == null
     ? React.createElement(Explainer, { diagram: DIAGRAMS[id] })
     : React.createElement(Explainer, { diagram: DIAGRAMS[id], startInPlayer: true, initialStep: step })),
@@ -86,6 +104,12 @@ window.__pulsern = {
     }],
     build: { write: false, minify: false, modulePreload: false, rollupOptions: { input: ENTRY, output: { format: "iife" } } },
   });
+  /* The frames are drawn with this script's installed packages, so they
+     only show the tree's build if the tree installs exactly the same ones
+     (Astra, PR #134 review, final round: a branch that upgraded React was
+     still reviewed with the old one). */
+  const mismatch = packageMismatches(join(HERE, "package-lock.json"), join(resolve(root), "package-lock.json"), used);
+  if (mismatch.length) throw new Error(`renderDiagrams: the tree's packages differ from the ones this renderer draws with — refusing to render: ${mismatch.join("; ")}`);
   const chunks = (Array.isArray(out) ? out : [out]).flatMap((o) => o.output).filter((c) => c.type === "chunk");
   if (chunks.length !== 1) throw new Error(`renderDiagrams: expected one bundle, got ${chunks.length}`);
   return chunks[0].code;
@@ -95,11 +119,29 @@ window.__pulsern = {
    script, and a way to call into it. Used by the pairing and narration
    jobs to read the diagrams and run the matcher without running any of
    the tree's code in this process (Astra, PR #134 review, round 28). */
+/* A page the tree's code runs in, cut off from the network: the context is
+   offline, every request is aborted, the document's content security
+   policy allows no connection, image, frame or other fetch, and WebRTC is
+   removed — so code from a branch cannot send out what it is handed (the
+   pairing job hands it practice questions; Luna, PR #155 review). */
+export async function isolatedPage(browser) {
+  const ctx = await browser.newContext({ offline: true });
+  await ctx.route("**/*", (r) => r.abort("blockedbyclient"));
+  await ctx.addInitScript(() => {
+    for (const k of ["RTCPeerConnection", "webkitRTCPeerConnection", "RTCDataChannel", "RTCSessionDescription", "RTCIceCandidate"]) {
+      try { Object.defineProperty(window, k, { value: undefined, configurable: false, writable: false }); } catch {}
+    }
+  });
+  const page = await ctx.newPage();
+  await page.setContent(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; frame-src 'none'; worker-src 'none'; form-action 'none'"></head><body></body></html>`);
+  return page;
+}
+
 export async function withSandbox(root, fn) {
   const code = await bundleDiagrams(root);
   const browser = await launchBrowser();
   try {
-    const page = await (await browser.newContext()).newPage();
+    const page = await isolatedPage(browser);
     await page.addScriptTag({ content: code });
     const call = (name, ...args) => page.evaluate(([n, a]) => window.__pulsern[n](...a), [name, args]);
     return await fn(call);
@@ -117,7 +159,7 @@ export async function renderDiagrams({ outDir, only = null, width = 360, root = 
     /* Two contexts: the diagram code runs in the first and only returns
        strings; the frames are drawn in the second, with scripts off, from
        that static markup. */
-    const run = await (await browser.newContext()).newPage();
+    const run = await isolatedPage(browser);
     await run.addScriptTag({ content: code });
     const DIAGRAM_CSS = await run.evaluate(() => window.__pulsern.css);
     const ids = await run.evaluate(() => window.__pulsern.ids());

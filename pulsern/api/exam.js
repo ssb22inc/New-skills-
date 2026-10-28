@@ -18,7 +18,7 @@
 // is open, nothing is written to exam_attempts, retakes are allowed.
 // The service role key lives only in Vercel env vars (CLAUDE.md rule 2).
 import { createClient } from "@supabase/supabase-js";
-import { userFromRequest } from "./require-user.js";
+import { userFromRequest } from "./_require-user.js";
 import { computeEntitlement } from "../src/pricing.js";
 import { readAll } from "../src/read-all.js";
 import {
@@ -85,7 +85,7 @@ async function start(sb, res, user, owner, body) {
     rows = await loadEntitlementRows(sb, user.id);
     const ent = computeEntitlement(rows.subs, rows.attempts);
     if (ent.status !== "active") {
-      return res.status(403).json({ error: "Readiness exams come with a subscription", code: "no-subscription" });
+      return res.status(403).json({ error: "Readiness exams come with a paid pass", code: "no-subscription" });
     }
     if (ent.attempted.includes(form)) {
       return res.status(409).json({ error: "You have already taken this exam. Exams are never repeated.", code: "already-taken" });

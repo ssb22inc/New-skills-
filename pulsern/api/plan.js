@@ -2,7 +2,7 @@
 // strict JSON out, validated server-side. The client caches the plan in the
 // saved blob until the ISO week changes, so this runs at most once a week
 // per student. Same signed-in door as /api/ai: no user, no OpenRouter call.
-import { userFromRequest } from './require-user.js';
+import { userFromRequest } from './_require-user.js';
 
 const CATS = [
   'Management of Care', 'Safety & Infection Control', 'Health Promotion & Maintenance',

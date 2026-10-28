@@ -95,7 +95,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
       {trialBanner && (
         <section className="card" style={{ borderColor: "var(--accent)" }}>
           <p className="eyebrow">Free pass active</p>
-          <p className="small">You're on the {planById("pass1").name.toLowerCase()}, and every study tool is open. Readiness exams unlock with any subscription below.</p>
+          <p className="small">You're on the {planById("pass1").name.toLowerCase()}, and every study tool is open. Readiness exams unlock with any paid pass below.</p>
         </section>
       )}
       {!trialBanner && (
@@ -130,7 +130,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
       ))}
       {showAddons && (
         <section className="card">
-          <p className="eyebrow">After your subscription</p>
+          <p className="eyebrow">Add-ons</p>
           {addons.map((p) => (
             <div key={p.id} style={{ marginBottom: 10 }}>
               <div className="cat-top">

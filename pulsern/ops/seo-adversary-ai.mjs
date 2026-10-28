@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { createHash } from "node:crypto";
+import { REVIEW_MODEL, acceptsTemperature } from "./models.mjs";
 
 export const REVIEW_SCHEMA = {
   type: "object",
@@ -203,7 +204,8 @@ export async function runAdversary({
   outputFile = "reports/seo/adversary.md",
   jsonFile = "reports/seo/adversary.json",
   apiKey = process.env.OPENROUTER_API_KEY,
-  model = process.env.SEO_ADVERSARY_MODEL || "openai/gpt-4.1",
+  /* The owner's adversarial reviewer (ops/models.mjs), like every other review. */
+  model = process.env.SEO_ADVERSARY_MODEL || REVIEW_MODEL,
   distDirectory = "dist",
   fetchImpl = fetch,
   now = () => new Date().toISOString(),
@@ -225,8 +227,9 @@ export async function runAdversary({
     headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json", "HTTP-Referer": "https://www.pulsern.app", "X-Title": "PulseRN SEO Guardian" },
     body: JSON.stringify({
       model,
-      temperature: 0,
-      max_tokens: 4000,
+      /* A reasoning reviewer takes no temperature, and needs room to think
+         before it answers. */
+      ...(acceptsTemperature(model) ? { temperature: 0, max_tokens: 4000 } : { max_tokens: 32000, reasoning: { effort: "high" } }),
       response_format: { type: "json_schema", json_schema: { name: "pulsern_adversarial_review", strict: true, schema: REVIEW_SCHEMA } },
       messages: [
         {

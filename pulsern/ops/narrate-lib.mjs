@@ -249,8 +249,10 @@ export function speechTokens(text) {
     .replace(/['’]s\b/g, "s");
   return wordsToNumbers(expanded).replace(/§/g, "").replace(/(\d)\.(?!\d)/g, "$1 ").split(/[^a-z0-9.]+/)
     .map((w) => w.replace(/\.+$/g, "").replace(/^\.+(?!\d)/, "")).filter(Boolean)
-    /* plural -s dropped from longer words, but not -ss/-is/-us (acidosis) */
-    .map((w) => (w.length > 4 && /s$/.test(w) && !/(ss|is|us)$/.test(w) ? w.slice(0, -1) : w))
+    /* plural -s dropped from longer plain words, but not -ss/-is/-us
+       (acidosis), and never from a token with a digit in it: "D10NS" is a
+       fluid, not the plural of "D10N" (Astra, PR #134 review, final round). */
+    .map((w) => (w.length > 4 && /^[a-z]+$/.test(w) && /s$/.test(w) && !/(ss|is|us)$/.test(w) ? w.slice(0, -1) : w))
     .filter((w) => !FILLER.has(w))
     .map((w) => UNIT_ALIASES[w] ?? w);
 }
@@ -275,7 +277,7 @@ export function criticalMismatch(script, transcript) {
 /* A clip ships only if every word matches (above) and the overall
    similarity is high. Bump QA_VERSION whenever this rule gets stricter:
    clips approved by an older rule are re-checked, never grandfathered. */
-export const QA_VERSION = 14;
+export const QA_VERSION = 15;
 export function audioCheck(script, transcript) {
   const similarity = speechSimilarity(script, transcript);
   const mismatch = wordMismatch(script, transcript);

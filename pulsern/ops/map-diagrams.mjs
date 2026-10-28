@@ -16,17 +16,28 @@
    paid for (owner's instruction: every paid review is kept).
 
    Usage: node ops/map-diagrams.mjs [--dry-run] [--limit N] [--max-usd X] [--only diagramId]
-          node ops/map-diagrams.mjs --prepare map.json        (no secrets: diagrams + proposals)
+          node ops/map-diagrams.mjs --prepare map.json        (no secrets, no bank: diagrams only)
           node ops/map-diagrams.mjs --prepared map.json --into <branch>/pulsern [--max-usd X]
-   In CI the branch's code runs only in the secret-less --prepare job; the
-   paid half is the DEFAULT branch's copy of this script, reading the
-   diagrams and proposals as data (ops/prepared.mjs), reading the public
-   bank itself, and writing into the branch checkout.
+   In CI the branch's code runs only in the secret-less --prepare job, and
+   only to turn the branch's diagrams into data: it is never shown a
+   question, so it has nothing to leak (Luna, PR #155 — a matcher handed
+   the bank could hide questions in its "proposals", which the artifact
+   then carried out). The paid half is the DEFAULT branch's copy of this
+   script: it reads the diagrams as data (ops/prepared.mjs), reads the bank
+   itself, proposes pairings with the DEFAULT branch's matcher, and writes
+   into the branch checkout. A matcher change therefore takes effect once
+   it is merged.
    Env:   OPENROUTER_API_KEY (not needed for --dry-run)
-          PULSERN_SUPABASE_URL / PULSERN_SUPABASE_ANON_KEY (default: the app's public values) */
+          PULSERN_SUPABASE_URL / PULSERN_SUPABASE_ANON_KEY (default: the app's public values)
+          Reading the bank (since migration 018 the public key alone reads nothing):
+            SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY — the paid job; or, for
+            a local run, PULSERN_BANK_READER_EMAIL + PULSERN_BANK_READER_PASSWORD —
+            an account with an active pass, which RLS lets see practice
+            questions only, never readiness exams. */
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { readAll } from "../src/read-all.js";
 import { fingerprint } from "../src/diagrams/fingerprint.js";
 import { review, parseJson, reviewSpend } from "./review.mjs";
@@ -36,7 +47,7 @@ import {
   itemHash, diagramHash, decisionKey, isFresh, pairingPrompt, PAIRING_SCHEMA,
   buildItemMap, serializeDecisions, publishable, sameProposal, pairAll, exitCodeFor, verifyDecision, signMap,
 } from "./map-diagrams-lib.mjs";
-import { sourceKey, readReviewIndex, approval, stepInventory } from "./diagram-attest.mjs";
+import { sourceKey, readReviewIndex, approval, stepInventory, moduleClosure } from "./diagram-attest.mjs";
 import { signerFrom, verifierFrom, PUBLIC_ENV } from "./attest.mjs";
 import { readPrepared, mapPlan, headCommit, checkInventory, requireClean } from "./prepared.mjs";
 
@@ -50,6 +61,8 @@ const SOURCE = arg("--source");   // with --prepare: the tree to read, by this s
 const PREPARED = arg("--prepared");
 const INTO = arg("--into");
 if (PREPARED && !INTO) throw new Error("--prepared needs --into <branch checkout>/pulsern");
+/* This script's own tree: in the paid job, the default branch's reviewed code. */
+const OWN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLAN = PREPARED ? mapPlan(readPrepared(PREPARED, "diagram-map", { into: INTO })) : null;
 if (INTO) process.chdir(INTO);   // caches, map, reviews and reports: the branch checkout's
 
@@ -60,7 +73,10 @@ const ANON = process.env.PULSERN_SUPABASE_ANON_KEY || "sb_publishable_wH9FG2HgmC
 const CACHE = "reports/diagram-map/decisions.json";
 const MAP = "src/diagrams/item-map.json";
 const startedAt = new Date().toISOString();
-const RUN = `reports/diagram-map/run-${startedAt.replace(/[:.]/g, "-")}`;
+/* Run reports go to the committed folder; tests point this elsewhere so a
+   local run never leaves a stray report to be committed by mistake. */
+const RUN_DIR = process.env.PULSERN_RUN_REPORT_DIR || "reports/diagram-map";
+const RUN = `${RUN_DIR}/run-${startedAt.replace(/[:.]/g, "-")}`;
 
 const decisions = existsSync(CACHE) ? JSON.parse(readFileSync(CACHE, "utf8")) : {};
 const run = { startedAt, model: REVIEW_MODEL, maxUsd: MAX_USD, limit: Number.isFinite(LIMIT) ? LIMIT : null, dryRun: DRY,
@@ -87,6 +103,7 @@ const PROPOSALS = new Map();
 
 function save(diagrams, items) {
   mkdirSync("reports/diagram-map", { recursive: true });
+  mkdirSync(RUN_DIR, { recursive: true });
   const fresh = publishable(decisions, items, diagrams, approvedNow, PROPOSALS, SIGNER);
   /* A dry run changes no record: only its own run report is written
      (Astra, PR #134 review, round 28). */
@@ -114,6 +131,21 @@ function save(diagrams, items) {
   ].join("\n"));
 }
 
+/* Who reads the bank. The query below always excludes readiness-exam
+   items, whatever the credential. */
+async function bankClient() {
+  const env = process.env;
+  if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
+    return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  }
+  const sb = createClient(URL_, ANON, { auth: { persistSession: false } });
+  if (env.PULSERN_BANK_READER_EMAIL && env.PULSERN_BANK_READER_PASSWORD) {
+    const { error } = await sb.auth.signInWithPassword({ email: env.PULSERN_BANK_READER_EMAIL, password: env.PULSERN_BANK_READER_PASSWORD });
+    if (error) throw new Error(`the bank reader account could not sign in: ${error.message}`);
+  }
+  return sb;
+}
+
 let vite = null;
 let code = 0;
 try {
@@ -121,7 +153,17 @@ try {
   if (PLAN) {
     DIAGRAMS = PLAN.diagrams;
     checkInventory(Object.values(DIAGRAMS), STEPS);   // the prepared diagrams are the source's, step for step
-    proposePairs = (q) => PLAN.proposals.get(q.id) ?? [];
+    /* The default branch's matcher, from this script's own tree — never the
+       branch's code, which is not shown the bank (Luna, PR #155). Approvals
+       are keyed to the branch's matcher, so the two must be the same code:
+       a branch that changes the matcher is paired once the change is merged. */
+    const MATCHER = ["src/diagrams/match.js"];
+    if (moduleClosure(MATCHER, ".") !== moduleClosure(MATCHER, OWN_ROOT)) {
+      throw new Error("this branch changes the diagram matcher (src/diagrams/match.js or what it imports). Pairing uses the default branch's matcher, so merge the matcher change first, then run pairing.");
+    }
+    const { createServer } = await import("vite");
+    vite = await createServer({ root: OWN_ROOT, server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
+    ({ proposePairs } = await vite.ssrLoadModule("/src/diagrams/match.js"));
   } else if (PREPARE) {
     DIAGRAMS = {};   // read from the source below, in the browser sandbox
   } else {
@@ -139,7 +181,26 @@ try {
     if (!a.ok) run.heldBack[id] = a.why;
   }
   if (Object.keys(run.heldBack).length) console.log(`Held back, not reviewed for pairing: ${JSON.stringify(run.heldBack)}`);
-  const sb = createClient(URL_, ANON, { auth: { persistSession: false } });
+  if (PREPARE) {
+    /* This script reads the source's diagrams inside the browser, where the
+       source's code cannot reach this process or what it writes. Only the
+       diagrams are prepared: no question is read or shown to the source's
+       code (Luna, PR #155). */
+    const root = resolve(SOURCE ?? ".");
+    requireClean(root);
+    const { withSandbox } = await import("./render-diagrams.mjs");
+    const diagrams = await withSandbox(root, async (call) => {
+      const out = [];
+      for (const id of await call("ids")) out.push(await call("raw", id));
+      return out;
+    });
+    checkInventory(diagrams, stepInventory(root));
+    requireClean(root);
+    writeFileSync(PREPARE, JSON.stringify({ kind: "diagram-map", commit: headCommit(root), diagrams }) + "\n");
+    console.log(`Prepared ${diagrams.length} diagram(s) → ${PREPARE}`);
+    process.exit(0);
+  }
+  const sb = await bankClient();
   console.log("Reading practice questions…");
   const rows = await readAll(() => sb.from("questions").select("id, stem, options, answer, rationale")
     .eq("approved", true).is("exam_form", null).order("id"), { ordered: true });
@@ -148,30 +209,9 @@ try {
      alone (anon gets no rows). An empty read must stop the run, never be
      taken as "the bank is empty" and turned into an empty pairing map. */
   if (!rows.length) {
-    throw new Error("Read 0 practice questions. Since migration 018 the practice bank is readable only by entitled accounts, so the public key returns nothing: give this job a key that can read the bank (HUMAN_TASKS.md H21).");
+    throw new Error("Read 0 practice questions. Since migration 018 the practice bank is readable only by entitled accounts, so the public key returns nothing: give this job the bank reader account or the service key (HUMAN_TASKS.md H22).");
   }
   console.log(`Read ${rows.length} practice questions.`);
-  if (PREPARE) {
-    /* This script reads the source's diagrams and runs its matcher inside
-       the browser, where the source's code cannot reach this process or
-       what it writes — the proposals are the pinned matcher's, not a
-       branch script's (Astra, PR #134 review, round 28). */
-    const root = resolve(SOURCE ?? ".");
-    requireClean(root);
-    const { withSandbox } = await import("./render-diagrams.mjs");
-    const { diagrams, proposed } = await withSandbox(root, async (call) => {
-      const ids = await call("ids");
-      const diagrams = [];
-      for (const id of ids) diagrams.push(await call("raw", id));
-      return { diagrams, proposed: await call("propose", rows) };
-    });
-    checkInventory(diagrams, stepInventory(root));
-    const proposals = Object.fromEntries(Object.entries(proposed).filter(([, p]) => p.length));
-    requireClean(root);
-    writeFileSync(PREPARE, JSON.stringify({ kind: "diagram-map", commit: headCommit(root), diagrams, proposals }) + "\n");
-    console.log(`Prepared ${diagrams.length} diagram(s), proposals for ${Object.keys(proposals).length} question(s) → ${PREPARE}`);
-    process.exit(0);
-  }
 
   const queue = {};
   for (const q of rows) {

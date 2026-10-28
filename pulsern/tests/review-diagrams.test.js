@@ -510,16 +510,34 @@ describe("the build resolves modules the way the review does", () => {
       expect(buildConfigProblems(b).join()).toMatch(/only vite\.config\.js/);
     } finally { rmSync(a, { recursive: true, force: true }); rmSync(b, { recursive: true, force: true }); }
   });
-  it("a config or dependency change invalidates every approval", async () => {
+  /* Final round: an alias assembled at run time from a string passed every
+     syntax check. Only the reviewed config files themselves are accepted. */
+  it("refuses any config that is not byte-for-byte a reviewed version", async () => {
+    const { buildConfigProblems, sourceKey } = await import("../ops/diagram-attest.mjs");
+    const real = require("node:fs").readFileSync("vite.config.js", "utf8");
+    const sneaky = real.replace("export default defineConfig(", 'const extra = JSON.parse(\'{"resolve":{"alias":{"./kit.jsx":"/src/clinical/alternate-kit.jsx"}}}\');\nexport default defineConfig(') .replace("}));\n", "}));\nObject.assign(extra, {});\n");
+    for (const text of [sneaky, real + "\n// a harmless-looking comment\n"]) {
+      const root = withConfig(text);
+      try {
+        expect(buildConfigProblems(root).join()).toMatch(/vite\.config\.js is not a reviewed version/);
+        expect(() => sourceKey(root)).toThrow(/could make production load other modules/);
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    }
+    const searchHelper = require("node:fs").readFileSync("ops/search-verification.mjs", "utf8");
+    const root = withConfig(real);
+    try {
+      require("node:fs").mkdirSync(join(root, "ops"), { recursive: true });
+      writeFileSync(join(root, "ops/search-verification.mjs"), searchHelper + "\nglobalThis.x = 1;\n");
+      expect(buildConfigProblems(root).join()).toMatch(/ops\/search-verification\.mjs is not a reviewed version/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+  it("a dependency change invalidates every approval", async () => {
     const { sourceKey } = await import("../ops/diagram-attest.mjs");
     const root = withConfig(require("node:fs").readFileSync("vite.config.js", "utf8"));
     try {
       const k0 = sourceKey(root);
-      writeFileSync(join(root, "vite.config.js"), require("node:fs").readFileSync("vite.config.js", "utf8") + "\n// changed\n");
-      const k1 = sourceKey(root);
-      expect(k1).not.toBe(k0);
       writeFileSync(join(root, "package-lock.json"), "{}\n");
-      expect(sourceKey(root)).not.toBe(k1);
+      expect(sourceKey(root)).not.toBe(k0);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });

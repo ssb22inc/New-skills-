@@ -12,7 +12,7 @@ export const PLANS = [
   { id: "sub730", name: "730-Day",         days: 730, cents: 43900, exams: 6, blurb: "10,000+ practice questions · 500+ case studies · 1,100+ flashcards · 6 self-assessments" },
   /* Post-subscription add-ons */
   { id: "renew7", name: "7-Day Renewal",   days: 7,   cents: 4500,  exams: 0, addon: true, blurb: "Need a little more time? Full content access, with no new self-assessment." },
-  { id: "exam1",  name: "Extra Self-Assessment", days: 0, cents: 4500, exams: 1, addon: true, blurb: "One more never-seen readiness exam on your current subscription." },
+  { id: "exam1",  name: "Extra Self-Assessment", days: 0, cents: 4500, exams: 1, addon: true, blurb: "One more never-seen readiness exam on your current pass." },
 ];
 
 export const planById = (id) => PLANS.find((p) => p.id === id) ?? null;

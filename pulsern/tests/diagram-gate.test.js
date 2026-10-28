@@ -10,6 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { approval, sourceKey, readReviewIndex, mapIsCurrent, stepInventory, diagramSteps, expectedFrames, frameIds, signApproval, verifyApproval } from "../ops/diagram-attest.mjs";
 import { publishable, sameProposal, pairAll, exitCodeFor, itemHash, diagramHash, decisionKey, signDecision, verifyDecision, signMap, verifyMap, buildItemMap } from "../ops/map-diagrams-lib.mjs";
+
+/* Run reports from the CLI runs below go to a scratch folder, not the repo. */
+process.env.PULSERN_RUN_REPORT_DIR = mkdtempSync(join(tmpdir(), "pulsern-run-reports-"));
 import { verifierFrom, PUBLIC_ENV } from "../ops/attest.mjs";
 import { testKeys } from "./helpers/attest-keys.js";
 
@@ -291,7 +294,7 @@ describe("the pairing CLI under plain Node", () => {
       const git = (...x) => execFileSync("git", x, { cwd: into, encoding: "utf8" }).trim();
       git("init", "-q"); git("add", "-A"); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base");
       const plan = join(root, "plan.json");
-      writeFileSync(plan, JSON.stringify({ kind: "diagram-map", commit: git("rev-parse", "HEAD"), diagrams: raw, proposals: { "7": [{ d: "abg", p: extracted }] } }));
+      writeFileSync(plan, JSON.stringify({ kind: "diagram-map", commit: git("rev-parse", "HEAD"), diagrams: raw }));
       const records = ["src/diagrams/item-map.json", "reports/diagram-map/decisions.json"].map((f) => join(into, f));
       const before = records.map((f) => readFileSync(f, "utf8"));
       for (const keys of [{ PULSERN_ATTEST_PUBLIC_KEY: KEYS.env.PULSERN_ATTEST_PUBLIC_KEY }, {}]) {
@@ -309,6 +312,20 @@ describe("the pairing CLI under plain Node", () => {
         if (!keys.PULSERN_ATTEST_PUBLIC_KEY) expect(r.out).toMatch(/cannot be checked/);
         expect(records.map((f) => readFileSync(f, "utf8")), "a dry run leaves the map and decisions byte-identical").toEqual(before);
       }
+      /* Luna, PR #155: proposals come from this script's own (default-branch)
+         matcher, so a branch with a different matcher is refused. */
+      const m = join(into, "src/diagrams/match.js");
+      writeFileSync(m, readFileSync(m, "utf8") + "\n// changed in the branch\n");
+      git("add", "-A"); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "matcher");
+      writeFileSync(plan, JSON.stringify({ kind: "diagram-map", commit: git("rev-parse", "HEAD"), diagrams: raw }));
+      const changed = await new Promise((done) => {
+        const c = require("node:child_process").spawn(process.execPath, [join(process.cwd(), "ops/map-diagrams.mjs"), "--prepared", plan, "--into", into, "--dry-run"], { env: { ...process.env, PULSERN_SUPABASE_URL: url } });
+        let out = ""; c.stdout.on("data", (b) => (out += b)); c.stderr.on("data", (b) => (out += b));
+        c.on("close", (code) => done({ code, out }));
+      });
+      expect(changed.code).not.toBe(0);
+      expect(changed.out).toMatch(/changes the diagram matcher/);
+      expect(changed.out).not.toContain("Reading practice questions…");
     } finally {
       server.close();
       rmSync(root, { recursive: true, force: true });
@@ -322,4 +339,57 @@ describe("the pairing CLI under plain Node", () => {
     expect(`${r.stdout}\n${r.stderr}`).toMatch(/PULSERN_ATTEST_PRIVATE_KEY is not set/);
     expect(`${r.stdout}\n${r.stderr}`).not.toContain("Reading practice questions…");
   }, 120_000);
+});
+
+/* Since migration 018 the public key reads no questions. The pairing job's
+   prepare step signs in as a reader account with an active pass, which
+   the database lets read practice questions only. */
+describe("the pairing job reads the bank as an entitled reader", () => {
+  const run = async (env) => {
+    const { createServer } = await import("node:http");
+    const bankQ = { id: 7, stem: "pH 7.30, PaCO2 55, HCO3 24. Interpret the ABG.", options: ["a", "b"], answer: "a", rationale: "r" };
+    const seen = [];
+    const server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        seen.push(`${req.method} ${req.url.split("?")[0]}`);
+        if (req.url.startsWith("/auth/v1/token")) {
+          const ok = JSON.parse(body || "{}").password === "right";
+          res.writeHead(ok ? 200 : 400, { "content-type": "application/json" });
+          return res.end(JSON.stringify(ok ? { access_token: "reader-token", token_type: "bearer", expires_in: 3600, refresh_token: "r", user: { id: "reader", aud: "authenticated" } } : { error: "invalid_grant", error_description: "Invalid login credentials" }));
+        }
+        const u = new URL(req.url, "http://x");
+        const authed = req.headers.authorization === "Bearer reader-token";
+        const offset = Number(u.searchParams.get("offset") ?? 0);
+        const rows = authed && offset === 0 ? [bankQ] : [];
+        res.writeHead(200, { "content-type": "application/json", "content-range": `${offset}-${offset + rows.length - 1}/${rows.length}` });
+        res.end(JSON.stringify(rows));
+      });
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    try {
+      const e = { ...process.env, PULSERN_SUPABASE_URL: `http://127.0.0.1:${server.address().port}`, ...env };
+      for (const k of ["SUPABASE_SERVICE_ROLE_KEY", "PULSERN_ATTEST_PUBLIC_KEY", "PULSERN_ATTEST_PRIVATE_KEY"]) delete e[k];
+      const r = await new Promise((done) => {
+        const c = require("node:child_process").spawn(process.execPath, ["ops/map-diagrams.mjs", "--dry-run"], { env: e });
+        let out = ""; c.stdout.on("data", (b) => (out += b)); c.stderr.on("data", (b) => (out += b));
+        c.on("close", (code) => done({ code, out }));
+      });
+      return { ...r, seen };
+    } finally { server.close(); }
+  };
+  it("signs in, then reads practice questions", async () => {
+    const r = await run({ PULSERN_BANK_READER_EMAIL: "reader@example.com", PULSERN_BANK_READER_PASSWORD: "right" });
+    expect(r.out).toContain("Read 1 practice questions.");
+    expect(r.seen[0]).toBe("POST /auth/v1/token");
+  }, 120_000);
+  it("stops with a clear error when the reader cannot sign in, or reads nothing", async () => {
+    const bad = await run({ PULSERN_BANK_READER_EMAIL: "reader@example.com", PULSERN_BANK_READER_PASSWORD: "wrong" });
+    expect(bad.code).not.toBe(0);
+    expect(bad.out).toMatch(/bank reader account could not sign in/);
+    const anon = await run({});
+    expect(anon.code).not.toBe(0);
+    expect(anon.out).toMatch(/Read 0 practice questions/);
+  }, 240_000);
 });
