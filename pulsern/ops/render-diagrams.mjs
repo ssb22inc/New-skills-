@@ -85,7 +85,6 @@ import { renderToStaticMarkup } from "react-dom/server.browser";
 import { DIAGRAMS } from "/src/diagrams/index.js";
 import { DIAGRAM_CSS } from "/src/diagrams/kit.jsx";
 import { Explainer } from "/src/explainer.jsx";
-import { proposePairs } from "/src/diagrams/match.js";
 const plain = (v) => JSON.parse(JSON.stringify(v ?? null));
 window.__pulsern = {
   css: String(DIAGRAM_CSS),
@@ -97,8 +96,6 @@ window.__pulsern = {
      pairing and narration jobs. */
   raw: (id) => { const d = DIAGRAMS[id]; return plain({ id: d.id, title: d.title, facts: d.facts,
     steps: d.steps.map((s) => ({ key: s.key, dynamic: s.dynamic === true ? true : undefined, caption: s.caption, narration: s.narration })) }); },
-  /* What the source's own matcher proposes for each question. */
-  propose: (questions) => plain(Object.fromEntries(questions.map((q) => [q.id, proposePairs(q).map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p }))]))),
   markup: (id, step) => renderToStaticMarkup(step == null
     ? React.createElement(Explainer, { diagram: DIAGRAMS[id] })
     : React.createElement(Explainer, { diagram: DIAGRAMS[id], startInPlayer: true, initialStep: step })),

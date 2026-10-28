@@ -294,7 +294,7 @@ describe("the pairing CLI under plain Node", () => {
       const git = (...x) => execFileSync("git", x, { cwd: into, encoding: "utf8" }).trim();
       git("init", "-q"); git("add", "-A"); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base");
       const plan = join(root, "plan.json");
-      writeFileSync(plan, JSON.stringify({ kind: "diagram-map", commit: git("rev-parse", "HEAD"), diagrams: raw, proposals: { "7": [{ d: "abg", p: extracted }] } }));
+      writeFileSync(plan, JSON.stringify({ kind: "diagram-map", commit: git("rev-parse", "HEAD"), diagrams: raw }));
       const records = ["src/diagrams/item-map.json", "reports/diagram-map/decisions.json"].map((f) => join(into, f));
       const before = records.map((f) => readFileSync(f, "utf8"));
       for (const keys of [{ PULSERN_ATTEST_PUBLIC_KEY: KEYS.env.PULSERN_ATTEST_PUBLIC_KEY }, {}]) {
@@ -312,6 +312,20 @@ describe("the pairing CLI under plain Node", () => {
         if (!keys.PULSERN_ATTEST_PUBLIC_KEY) expect(r.out).toMatch(/cannot be checked/);
         expect(records.map((f) => readFileSync(f, "utf8")), "a dry run leaves the map and decisions byte-identical").toEqual(before);
       }
+      /* Luna, PR #155: proposals come from this script's own (default-branch)
+         matcher, so a branch with a different matcher is refused. */
+      const m = join(into, "src/diagrams/match.js");
+      writeFileSync(m, readFileSync(m, "utf8") + "\n// changed in the branch\n");
+      git("add", "-A"); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "matcher");
+      writeFileSync(plan, JSON.stringify({ kind: "diagram-map", commit: git("rev-parse", "HEAD"), diagrams: raw }));
+      const changed = await new Promise((done) => {
+        const c = require("node:child_process").spawn(process.execPath, [join(process.cwd(), "ops/map-diagrams.mjs"), "--prepared", plan, "--into", into, "--dry-run"], { env: { ...process.env, PULSERN_SUPABASE_URL: url } });
+        let out = ""; c.stdout.on("data", (b) => (out += b)); c.stderr.on("data", (b) => (out += b));
+        c.on("close", (code) => done({ code, out }));
+      });
+      expect(changed.code).not.toBe(0);
+      expect(changed.out).toMatch(/changes the diagram matcher/);
+      expect(changed.out).not.toContain("Reading practice questions…");
     } finally {
       server.close();
       rmSync(root, { recursive: true, force: true });

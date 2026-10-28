@@ -409,20 +409,10 @@ describe("paid workflows never run branch code with secrets", () => {
   it.each(files)("%s: secrets appear only in the paid job, which is in the protected environment", (f) => {
     const j = jobs(f);
     expect(Object.keys(j).sort()).toEqual(["paid", "prepare"]);
-    /* Only the pairing job's prepare step may hold a secret: the bank reader
-       account (practice questions only), in its own main-only environment,
-       passed to the one step that runs the trusted script (round 28 made that
-       job run no branch code outside the browser). */
-    const allowed = f === "pulsern-diagram-map.yml" ? /secrets\.(?!GITHUB_TOKEN|PULSERN_BANK_READER_(?:EMAIL|PASSWORD)\b)/ : /secrets\.(?!GITHUB_TOKEN)/;
-    expect(j.prepare).not.toMatch(allowed);
-    if (f === "pulsern-diagram-map.yml") {
-      expect(j.prepare).toMatch(/^    environment: pulsern-bank-read$/m);
-      const users = steps(j.prepare).filter((s) => /PULSERN_BANK_READER/.test(s.text));
-      expect(users).toHaveLength(1);
-      expect(users[0].run).toMatch(/node ops\/map-diagrams\.mjs --prepare /);
-    } else {
-      expect(j.prepare).not.toMatch(/^    environment:/m);
-    }
+    /* No prepare job holds a secret or an environment: the branch's code runs
+       there, and the pairing job's no longer reads the bank (Luna, PR #155). */
+    expect(j.prepare).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
+    expect(j.prepare).not.toMatch(/^    environment:/m);
     expect(j.prepare).toMatch(/^    permissions:\n      contents: read\n/m);
     expect(j.paid).toMatch(/^    environment: pulsern-paid$/m);
     expect(j.paid).toMatch(/^    needs: prepare$/m);

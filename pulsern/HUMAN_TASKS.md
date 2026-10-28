@@ -167,22 +167,13 @@ Claude Code executes everything else. These run in parallel with the build.
   the bank in both jobs (for example the service-role key from the
   `pulsern-paid` environment, passed as `PULSERN_SUPABASE_ANON_KEY`). That
   changes the workflow's no-secrets design, so the choice is left to you.
-  **Resolved by H22.**
+  **Resolved:** the paid job reads the bank with its service key (H20); the
+  secret-less prepare job no longer reads it.
 
-- H22 · A bank reader account for diagram pairing. The pairing job's paid
-  half now reads the bank with the service key it already has; its prepare
-  half signs in as a reader account with an active pass, which the database
-  lets read practice questions only (never readiness exams, never writes).
-  1. In a private browser window, sign up at https://www.pulsern.app/app/sign-up
-     with an address you control but never study from (for example
-     `youremail+bankreader@gmail.com`) and a long random password. Confirm the
-     email.
-  2. Give it a long pass: open
-     https://supabase.com/dashboard/project/xlfdywudgamrnzjwtrtd/sql/new, paste
-     (with your address), and Run:
-     `update subscriptions set expires_at = now() + interval '10 years' where user_id = (select id from auth.users where email = 'youremail+bankreader@gmail.com');`
-  3. Create the environment at
-     https://github.com/ssb22inc/New-skills-/settings/environments/new named
-     `pulsern-bank-read`, restricted to `main` (Selected branches → add rule
-     `main`), with two environment secrets: `PULSERN_BANK_READER_EMAIL` (the
-     address) and `PULSERN_BANK_READER_PASSWORD` (the password).
+- H22 · ~~A bank reader account for diagram pairing~~ — **no longer needed.**
+  The pairing job's prepare half no longer reads the bank at all: the
+  branch's code is never shown a question (Luna, PR #155), so it needs no
+  account. The paid half reads the bank with the service key it already
+  holds in `pulsern-paid` (H20) and proposes pairings with `main`'s
+  matcher. If you already created a `pulsern-bank-read` environment or a
+  reader account, you can delete them.
