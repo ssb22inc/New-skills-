@@ -2,7 +2,7 @@
 // The ONLY place AI vendor keys exist. The app sends { provider, prompt }
 // plus the signed-in user's Supabase access token, never a vendor secret.
 // Swap vendors by editing MODELS — nothing else changes.
-import { userFromRequest } from './require-user.js';
+import { userFromRequest } from './_require-user.js';
 
 const MODELS = {
   claude:   'anthropic/claude-sonnet-4.6',

@@ -18,7 +18,7 @@
 // is open, nothing is written to exam_attempts, retakes are allowed.
 // The service role key lives only in Vercel env vars (CLAUDE.md rule 2).
 import { createClient } from "@supabase/supabase-js";
-import { userFromRequest } from "./require-user.js";
+import { userFromRequest } from "./_require-user.js";
 import { computeEntitlement } from "../src/pricing.js";
 import { readAll } from "../src/read-all.js";
 import {
