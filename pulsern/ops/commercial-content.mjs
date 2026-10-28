@@ -134,7 +134,7 @@ const pages = [
     faq: [{ q: "Does a missing feature mean a competitor does not offer it?", a: "No. Unless a provider explicitly states that a feature is unavailable, the comparison says only that it was not confirmed in the cited public evidence." }],
   },
   {
-    slug: "compare/pulsern-vs-uworld", updated: "2026-10-10", title: "PulseRN vs UWorld for NCLEX-RN prep", eyebrow: "PulseRN advantage", h1: "PulseRN vs UWorld: why start with PulseRN?",
+    slug: "compare/pulsern-vs-uworld", updated: "2026-10-28", title: "PulseRN vs UWorld for NCLEX-RN prep", eyebrow: "PulseRN advantage", h1: "PulseRN vs UWorld: why start with PulseRN?",
     description: "See why PulseRN is our recommended UWorld alternative for integrated NCLEX practice, nursing AI Q&A, lab access, transparent pricing, and direct RN accountability.",
     intent: { primary: "PulseRN vs UWorld", secondary: ["UWorld alternative for NCLEX", "PulseRN or UWorld"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "uworldCourse", "uworldAi"],
@@ -166,7 +166,7 @@ const pages = [
     ],
   },
   {
-    slug: "compare/pulsern-vs-archer", updated: "2026-10-10", title: "PulseRN vs Archer Review for NCLEX-RN", eyebrow: "PulseRN advantage", h1: "PulseRN vs Archer Review: why start with PulseRN?",
+    slug: "compare/pulsern-vs-archer", updated: "2026-10-28", title: "PulseRN vs Archer Review for NCLEX-RN", eyebrow: "PulseRN advantage", h1: "PulseRN vs Archer Review: why start with PulseRN?",
     description: "See why PulseRN is our recommended Archer alternative for connected NCLEX practice, nursing AI Q&A, lab access, missed-question repair, and direct RN accountability.",
     intent: { primary: "PulseRN vs Archer Review", secondary: ["Archer Review alternative", "PulseRN or Archer NCLEX"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "archerPackages", "archerReadiness"],
@@ -197,7 +197,7 @@ const pages = [
     ],
   },
   {
-    slug: "compare/pulsern-vs-kaplan", updated: "2026-10-10", title: "PulseRN vs Kaplan for NCLEX-RN prep", eyebrow: "Head-to-head fit", h1: "PulseRN vs Kaplan: focused app or structured course system?",
+    slug: "compare/pulsern-vs-kaplan", updated: "2026-10-28", title: "PulseRN vs Kaplan for NCLEX-RN prep", eyebrow: "Head-to-head fit", h1: "PulseRN vs Kaplan: focused app or structured course system?",
     description: "Compare PulseRN and Kaplan NCLEX-RN prep by price, QBank scale, AI tutoring, lab access, CAT practice, strategy classes, RN accountability, and support.",
     intent: { primary: "PulseRN vs Kaplan NCLEX", secondary: ["Kaplan NCLEX alternative", "PulseRN or Kaplan"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "pulseHow", "pulseAbout", "pulseLegal", "kaplanCourse", "kaplanPractice"],
@@ -248,7 +248,7 @@ const pages = [
     ],
   },
   {
-    slug: "compare/best-affordable-nclex-prep", updated: "2026-10-10", title: "Best affordable NCLEX preparation compared", eyebrow: "Value without hype", h1: "Affordable NCLEX preparation starts with the features you will use.",
+    slug: "compare/best-affordable-nclex-prep", updated: "2026-10-28", title: "Best affordable NCLEX preparation compared", eyebrow: "Value without hype", h1: "Affordable NCLEX preparation starts with the features you will use.",
     description: "Compare current public entry prices and value from PulseRN, UWorld, Archer Review, and Kaplan without affiliate rankings, hidden pass promises, or false cheapest claims.",
     intent: { primary: "best affordable NCLEX preparation", secondary: ["affordable NCLEX prep", "cheap NCLEX question bank"], audience: "NCLEX-RN candidates", risk: "commercial" },
     sources: ["pulseHome", "pulsePricing", "uworldCourse", "archerPackages", "kaplanCourse"],
