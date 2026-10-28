@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      SEO_ADVERSARY_MODEL: openai/gpt-4.1
+      SEO_ADVERSARY_MODEL: openai/gpt-6.1-sol
       VITE_SUPABASE_URL: http://127.0.0.1:54321
       VITE_SUPABASE_ANON_KEY: public-ci-placeholder
     defaults:
@@ -114,7 +114,13 @@ jobs:
         id: adversary
         if: always()
         continue-on-error: true
-        run: npm run seo:adversary
+        # The review's findings go into the log too, so a FAIL can be read
+        # without downloading the evidence artifact.
+        run: |
+          set +e
+          npm run seo:adversary; rc=$?
+          [ -f reports/seo/adversary.md ] && cat reports/seo/adversary.md
+          exit $rc
       - name: Bind evidence to commit
         if: always()
         run: npm run seo:evidence
