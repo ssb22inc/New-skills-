@@ -15,7 +15,7 @@
    the route caps new passages per student and app-wide each day, and this
    job voices at most READ_ALOUD_MAX passages per run. */
 import { createClient } from "@supabase/supabase-js";
-import { BUCKET, TTS, LIMITS, makeChecked, saveChecked, readRecord, passagePaths, validRequest, reserveGlobal } from "../api/_speak.js";
+import { BUCKET, TTS, LIMITS, makeChecked, saveChecked, readRecord, passagePaths, validRequest, reserveGlobal, quotaDay } from "../api/_speak.js";
 
 export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log }) {
   const bucket = storage.from(BUCKET);
@@ -38,9 +38,9 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
     if (await readRecord(storage, job.text)) { await bucket.remove([path]); out.skipped++; continue; } // already checked
     // The first take was paid for when the passage was queued; a second
     // take claims its own app-wide slot.
-    const { best, spent, error: why } = await makeChecked({ text: job.text, apiKey, fetchImpl, beforeRetake: () => reserveGlobal(storage, { now: now(), limits }) });
+    const { best, spent, error: why, final } = await makeChecked({ text: job.text, apiKey, fetchImpl, beforeRetake: () => reserveGlobal(storage, { now: now(), limits }) });
     out.spent += spent;
-    if (!best) {
+    if (!final) {
       // Provider trouble: keep the entry for the next run, and stop this one.
       out.errors.push(`${f.name}: ${why ?? "no audio"}`);
       break;
@@ -53,6 +53,36 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
   return out;
 }
 
+/* Budget slots (usage/<day>/...) are only read for the current day. Older
+   days are deleted so the bucket does not grow without end; a week is kept
+   for looking back at usage. */
+async function listAll(bucket, dir) {
+  const out = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await bucket.list(dir, { limit: 1000, offset });
+    if (error) throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) return out;
+  }
+}
+export async function pruneUsage({ storage, now = Date.now(), keepDays = 7 }) {
+  const bucket = storage.from(BUCKET);
+  const oldest = quotaDay(now - keepDays * 86400000);
+  const days = (await listAll(bucket, "usage").catch(() => [])).map((e) => e.name).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < oldest);
+  let removed = 0;
+  for (const day of days) {
+    for (const sub of await listAll(bucket, `usage/${day}`)) {
+      const files = (await listAll(bucket, `usage/${day}/${sub.name}`)).map((f) => `usage/${day}/${sub.name}/${f.name}`);
+      for (let i = 0; i < files.length; i += 1000) {
+        const { error } = await bucket.remove(files.slice(i, i + 1000));
+        if (error) throw new Error(`Could not remove old usage: ${error.message ?? error}`);
+        removed += Math.min(1000, files.length - i);
+      }
+    }
+  }
+  return { days: days.length, removed };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !OPENAI_API_KEY) {
@@ -62,7 +92,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const storage = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }).storage;
   const max = Math.max(1, Math.min(2000, Number(process.env.READ_ALOUD_MAX) || 200));
   const r = await drainQueue({ storage, apiKey: OPENAI_API_KEY, max });
-  const line = `Read-aloud queue: ${r.queued} waiting · ${r.voiced} voiced and checked · ${r.failed} failed the check twice · ${r.skipped} skipped · ${r.spent} syntheses${r.errors.length ? ` · errors: ${r.errors.join("; ")}` : ""}`;
+  const pruned = await pruneUsage({ storage }).catch((e) => ({ error: String(e?.message ?? e) }));
+  if (pruned.error) r.errors.push(`pruning: ${pruned.error}`);
+  const line = `Read-aloud queue: ${r.queued} waiting · ${r.voiced} voiced and checked · ${r.failed} failed the check twice · ${r.skipped} skipped · ${r.spent} syntheses · ${pruned.removed ?? 0} old budget slots removed${r.errors.length ? ` · errors: ${r.errors.join("; ")}` : ""}`;
   console.log(line);
   if (process.env.GITHUB_STEP_SUMMARY) {
     const { appendFileSync } = await import("node:fs");

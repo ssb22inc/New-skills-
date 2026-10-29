@@ -14,7 +14,7 @@ import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments
 import { ReadAloudBar, pickDeviceVoice, ra, RATES, loadPrefs, sentences, speakLimitMs, makeVoiceClient, URL_TTL_MS, endsSession, shouldAutoRead } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
-import { drainQueue } from "../ops/read-aloud-worker.mjs";
+import { drainQueue, pruneUsage } from "../ops/read-aloud-worker.mjs";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -159,9 +159,12 @@ function fakeStorage({ missingBucket = false, failCounters = false } = {}) {
     createSignedUrl: async (path, secs) => (files.has(path) ? { data: { signedUrl: `https://signed.example/${path}?ttl=${secs}` }, error: null } : { data: null, error: { message: "Object not found" } }),
     list: async (dir, { limit = 100, offset = 0 } = {}) => {
       await Promise.resolve();
-      if (!bucketExists) return { data: null, error: { message: "Bucket not found" } };
+      // like Supabase: listing a bucket that does not exist comes back empty
+      if (!bucketExists) return { data: [], error: null };
       if (failCounters && dir.startsWith("usage/")) return { data: null, error: { message: "Internal error" } };
-      return { data: [...files.keys()].filter((k) => k.startsWith(`${dir}/`) && !k.slice(dir.length + 1).includes("/")).map((k) => ({ name: k.slice(dir.length + 1) })).slice(offset, offset + limit), error: null };
+      // like Supabase: the files directly in dir, and each sub-folder once (id null)
+      const names = [...new Set([...files.keys()].filter((k) => k.startsWith(`${dir}/`)).map((k) => k.slice(dir.length + 1).split("/")[0]))];
+      return { data: names.map((n) => ({ name: n, id: files.has(`${dir}/${n}`) ? n : null })).slice(offset, offset + limit), error: null };
     },
     remove: async (paths) => { for (const p of paths) files.delete(p); return { error: null }; },
   };
@@ -254,6 +257,35 @@ describe("server voice: the accuracy gate", () => {
     expect([...files.keys()].filter((k) => k.endsWith(".mp3"))).toEqual([]);
     const rec = [...files.keys()].find((k) => /^marin\/.*\.json$/.test(k));
     expect(JSON.parse(files.get(rec).toString())).toMatchObject({ pass: false, audioSha: null });
+  });
+
+  it("records nothing terminal when the second take hits a provider error", async () => {
+    // take 1 is heard wrong; then the provider fails on take 2
+    let n = 0;
+    const flaky = vi.fn(async (url, init) => {
+      if (url.endsWith("/audio/speech")) return ++n === 1 ? { ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer } : { ok: false, status: 500 };
+      return { ok: true, json: async () => ({ text: "Potassium 9.2 milliequivalents per liter." }) };
+    });
+    const { storage, files } = fakeStorage();
+    const out = await speak({ ...base(), storage, fetchImpl: flaky });
+    expect(out.status).toBe(502);
+    expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]); // no failed record, no audio
+    // the provider recovers: the passage is voiced and checked
+    expect((await speak({ ...base(), storage, fetchImpl: fakeOpenAI() })).status).toBe(200);
+  });
+
+  it("keeps a queued passage for the next run when the second take hits a provider error", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    let n = 0;
+    const flaky = vi.fn(async (url) => {
+      if (url.endsWith("/audio/speech")) return ++n === 1 ? { ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer } : { ok: false, status: 429 };
+      return { ok: true, json: async () => ({ text: "Potassium 9.2 milliequivalents per liter." }) };
+    });
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: flaky, log: () => {} });
+    expect(r.errors).toHaveLength(1);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
   });
 
   it("does not play saved audio without a passing record", async () => {
@@ -378,6 +410,18 @@ describe("server voice without a key: the queue and the voice job", () => {
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
     expect(r.skipped).toBe(1);
     expect(f).not.toHaveBeenCalled();
+  });
+
+  it("deletes budget slots older than a week, and keeps recent days", async () => {
+    const { storage, files } = fakeStorage();
+    const now = Date.UTC(2026, 9, 29, 16);
+    for (const day of ["2026-10-01", "2026-10-21", "2026-10-29"]) {
+      files.set(`usage/${day}/all/00000`, Buffer.from("1"));
+      files.set(`usage/${day}/u-abc/00000`, Buffer.from("1"));
+    }
+    const r = await pruneUsage({ storage, now });
+    expect(r).toEqual({ days: 2, removed: 4 });
+    expect([...files.keys()].sort()).toEqual(["usage/2026-10-29/all/00000", "usage/2026-10-29/u-abc/00000"]);
   });
 
   it("voices at most the run's limit", async () => {

@@ -161,7 +161,7 @@ async function countSlots(bucket, dir) {
   let n = 0;
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await bucket.list(dir, { limit: 1000, offset });
-    if (error) return null;
+    if (error) { console.error('[read-aloud] storage list', dir.split('/')[0], error.message ?? error); return null; }
     n += (data ?? []).length;
     if (!data || data.length < 1000) return n;
   }
@@ -175,10 +175,22 @@ async function claimSlot(storage, dir, limit) {
     n = await countSlots(bucket, dir);
     if (n == null) return false;
   }
+  let created = false;
   for (let tries = 0; tries < 25 && n < limit; tries++, n++) {
-    const { error } = await bucket.upload(`${dir}/${String(n).padStart(5, '0')}`, '1', { contentType: 'text/plain', upsert: false });
+    const slot = () => bucket.upload(`${dir}/${String(n).padStart(5, '0')}`, '1', { contentType: 'text/plain', upsert: false });
+    let { error } = await slot();
+    // First use: listing a bucket that does not exist yet can come back
+    // empty rather than as an error, so the write is where it shows.
+    if (error && !created && /bucket not found|not found/i.test(String(error.message ?? ''))) {
+      created = true;
+      await storage.createBucket(BUCKET, { public: false });
+      ({ error } = await slot());
+    }
     if (!error) return true;
-    if (!/exist|duplicate|409/i.test(String(error.message ?? error.statusCode ?? error))) return false;
+    if (!/exist|duplicate|409/i.test(`${error.message ?? ''} ${error.statusCode ?? ''} ${error.error ?? ''}`)) {
+      console.error('[read-aloud] budget slot', error.message ?? error, error.statusCode ?? '');
+      return false;
+    }
   }
   return false;
 }
@@ -206,6 +218,7 @@ async function put(storage, path, body, contentType) {
     await storage.createBucket(BUCKET, { public: false });
     ({ error } = await up());
   }
+  if (error) console.error('[read-aloud] storage write', path.split('/')[0], error.message ?? error);
   return !error;
 }
 async function signed(bucket, path) {
@@ -246,7 +259,12 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
       if (check.pass) break;
     }
   } catch (e) { error = String(e?.message ?? e); }
-  return { best, spent, error };
+  /* A verdict is final only if a take passed, or every take was completed
+     and checked. A provider error or a refused budget part-way through is
+     NOT a failed check: nothing terminal is recorded, so it is tried again. */
+  const final = !!best && (best.check.pass || (!error && best.take === TAKES));
+  if (error) console.error('[read-aloud] voice', error);
+  return { best, spent, error, final };
 }
 
 export const passagePaths = (text, tts = TTS) => {
@@ -315,8 +333,8 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
   }
 
   if (!(await take())) return overBudget;
-  const { best } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeRetake: take });
-  if (!best) return { status: 502, body: { error: 'Voice failed' } };
+  const { best, final, error } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeRetake: take });
+  if (!final) return error === 'budget' ? overBudget : { status: 502, body: { error: 'Voice failed' } };
   if (!(await saveChecked(storage, text, best, { now, tts }))) return { status: 502, body: { error: 'Voice could not be saved' } };
   if (!best.check.pass) return { status: 422, body: { error: 'Voice check failed', similarity: best.check.similarity } };
   const url = await signed(bucket, mp3);
