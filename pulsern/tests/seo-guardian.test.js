@@ -832,14 +832,20 @@ describe("SEO guardian", () => {
     await expect(enforceAdversary(failJson)).rejects.toThrow(/failed/i);
   });
 
-  it("keeps the required model gate and explicit outcome enforcement in workflow", async () => {
+  /* Owner decision 2026-10-29: the model review is advisory. It must still
+     run on every change and its verdict must still be reported, while every
+     other check stays an explicit, required outcome. */
+  it("runs the advisory model review and keeps explicit outcome enforcement in workflow", async () => {
     const workflow = await fs.readFile(new URL("../../.github/workflows/pulsern-seo-guardian.yml", import.meta.url), "utf8");
-    expect(workflow).toContain("Required adversarial model review");
+    expect(workflow).toContain("Adversarial model review (advisory");
+    expect(workflow).toContain("npm run seo:adversary");
     expect(workflow).not.toContain("env.OPENROUTER_API_KEY != ''");
-    expect(workflow).toContain('test "${{ steps.adversary.outcome }}" = "success"');
-    expect(workflow).toContain('test "${{ steps.app_boundary.outcome }}" = "success"');
-    expect(workflow).toContain('test "${{ steps.product_images.outcome }}" = "success"');
-    expect(workflow).toContain("npm run seo:enforce");
+    expect(workflow).not.toContain('test "${{ steps.adversary.outcome }}" = "success"');
+    expect(workflow).toContain('if [ "${{ steps.adversary.outcome }}" = "success" ] && npm run seo:enforce; then');
+    expect(workflow).toContain("::warning title=Adversarial model review (advisory)::");
+    for (const id of ["tests", "build", "deterministic", "product_images", "app_boundary", "crawl", "crawl_live", "live_release", "indexnow", "sources", "commercial", "exam_rules", "accessibility"]) {
+      expect(workflow).toContain(`test "\${{ steps.${id}.outcome }}" = "success"`);
+    }
   });
 
   it("fails closed when an authentic product image, privacy assertion, or homepage binding drifts", async () => {

@@ -110,7 +110,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:accessibility
-      - name: Required adversarial model review
+      - name: Adversarial model review (advisory, owner decision 2026-10-29)
         id: adversary
         if: always()
         continue-on-error: true
@@ -149,5 +149,14 @@ jobs:
           test "${{ steps.commercial.outcome }}" = "success"
           test "${{ steps.exam_rules.outcome }}" = "success"
           test "${{ steps.accessibility.outcome }}" = "success"
-          test "${{ steps.adversary.outcome }}" = "success"
-          npm run seo:enforce
+          # The model review is advisory by the owner's decision of
+          # 2026-10-29: it still runs on every change and its findings stay in
+          # the log and the evidence artifact, but a FAIL verdict is reported
+          # as a warning instead of failing the gate. Every check above stays
+          # required.
+          if [ "${{ steps.adversary.outcome }}" = "success" ] && npm run seo:enforce; then
+            echo "Adversarial model review: PASS"
+          else
+            echo "::warning title=Adversarial model review (advisory)::The model review did not pass. Its findings are in the review step's log and the pulsern-search-audit artifact; the owner accepts the public pages without it (2026-10-29)."
+            echo "Adversarial model review did not pass (advisory; see the review step's log)." >> "$GITHUB_STEP_SUMMARY"
+          fi
