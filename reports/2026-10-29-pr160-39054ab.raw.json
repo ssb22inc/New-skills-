@@ -1,0 +1,63 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "39054ab32ff6090eda73e3623e1cb2774c8cac2a",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T23:45:15.875Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 66,
+      "title": "Calculation operators are silently removed when there is no equals sign",
+      "problem": "operators() treats a middle dot as multiplication only when an equals sign follows it. A valid exam-prep prompt such as \"Calculate 0.1 mg/kg · 70 kg.\" becomes \"Calculate 0.1 milligrams per kilogram, 70 kg.\" The multiplication operator has disappeared. The audio gate cannot catch this because it compares the transcript against this already-altered script, not against the bank's original meaning.",
+      "failure_scenario": "An approved calculation question or flashcard contains an unevaluated multiplication expression using a middle dot. Students hear a different, ambiguous calculation prompt, and the audio is saved as passing QA. Conversely, a layout separator earlier in a comma-separated sentence can become multiplication merely because an unrelated equation appears later.",
+      "fix": "Distinguish mathematical expressions from layout separators using explicit content structure or a context-aware parser rather than the presence of a later equals sign. Add regression tests for multiplication without an equals sign and for layout-separated readings followed by an equation in the same sentence.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 263,
+      "title": "An active synthesis can outlive its lease and be synthesized again",
+      "problem": "The passage lease expires after 120 seconds, but makeChecked() has neither provider-call timeouts nor lease renewal. A slow but still-running request can therefore be taken over and paid for again. releasePassage() also deletes the claim unconditionally, so the original holder can delete its replacement's active claim.",
+      "failure_scenario": "With live synthesis enabled, a speech or transcription call takes longer than two minutes. Another student requests the same uncached passage and takes over the lease while the first request is still running. Both requests spend synthesis slots. If the original request subsequently fails, its finally block removes the replacement's claim, allowing another overlapping synthesis. The daily cap still holds, but the promised one-synthesis-per-passage coordination does not.",
+      "fix": "Bound provider operations so the entire checked synthesis cannot outlive its lease, or renew the lease while work is active. Give claims ownership tokens and use atomic, ownership-checked takeover and release. Add a test where the original holder remains active beyond lease expiry rather than only testing an abandoned claim.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 134854,
+    "completionTokens": 12942,
+    "reasoningTokens": 12333,
+    "costUsd": 0.4665535
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. Script normalization can remove a calculation operator before the accuracy check, allowing altered exam content to pass. Passage leases also allow duplicate paid synthesis during slow provider calls.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
