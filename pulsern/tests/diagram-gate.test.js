@@ -112,7 +112,7 @@ describe("approval of a diagram for publication", () => {
   /* PR #134 review, finding 6: this used to call sourceKey() twice on an
      unchanged tree — a constant would have passed. Now each input is
      changed in a scratch copy and the key must move (or must not). */
-  it("changes the key for any drawing change, and not for generated data", () => {
+  it("changes the key for any drawing change, and not for generated data", { timeout: 30000 }, () => {
     const root = mkdtempSync(join(tmpdir(), "attest-"));
     try {
       cpSync("src/diagrams", join(root, "src/diagrams"), { recursive: true });

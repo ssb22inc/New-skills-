@@ -3,26 +3,26 @@
    Extraction errs toward null. A diagram shown as a concept is a small
    loss; a diagram drawing the wrong patient's numbers is a wrong lesson. */
 import { describe, it, expect } from "vitest";
-import { extractAbg, extractPotassium, proposePairs, MATCHERS } from "../src/diagrams/match.js";
+import { extractAbg, extractPotassium, extractInsulin, proposePairs, MATCHERS } from "../src/diagrams/match.js";
 
 describe("ABG values", () => {
   it("reads the common formats", () => {
-    expect(extractAbg("ABG: pH 7.30, PaCO2 55 mmHg, HCO3 24 mEq/L")).toEqual({ ph: 7.3, paco2: 55, hco3: 24 });
-    expect(extractAbg("pH of 7.48, PaCO₂ 30, HCO₃⁻ 22")).toEqual({ ph: 7.48, paco2: 30, hco3: 22 });
-    expect(extractAbg("pH = 7.25; pCO2 = 40; bicarbonate 16")).toEqual({ ph: 7.25, paco2: 40, hco3: 16 });
+    expect(extractAbg("ABG: pH 7.26, PaCO2 55 mmHg, HCO3 24 mEq/L")).toEqual({ ph: 7.26, paco2: 55, hco3: 24, precision: { ph: 2, paco2: 0, hco3: 0 } });
+    expect(extractAbg("pH of 7.48, PaCO₂ 30, HCO₃⁻ 22")).toEqual({ ph: 7.48, paco2: 30, hco3: 22, precision: { ph: 2, paco2: 0, hco3: 0 } });
+    expect(extractAbg("pH = 7.23; pCO2 = 40; bicarbonate 16")).toEqual({ ph: 7.23, paco2: 40, hco3: 16, precision: { ph: 2, paco2: 0, hco3: 0 } });
   });
   it("returns null when any value is missing", () => {
-    expect(extractAbg("pH 7.30 and PaCO2 55")).toBeNull();
+    expect(extractAbg("pH 7.26 and PaCO2 55")).toBeNull();
   });
   /* Two clients, or a before-and-after: never pick one. */
   it("returns null when a value is ambiguous", () => {
-    expect(extractAbg("Client A: pH 7.30, PaCO2 55, HCO3 24. Client B: pH 7.50, PaCO2 30, HCO3 24.")).toBeNull();
+    expect(extractAbg("Client A: pH 7.26, PaCO2 55, HCO3 24. Client B: pH 7.50, PaCO2 30, HCO3 24.")).toBeNull();
   });
   it("rejects an impossible value as a misread", () => {
-    expect(extractAbg("pH 7.30, PaCO2 550, HCO3 24")).toBeNull();
+    expect(extractAbg("pH 7.26, PaCO2 550, HCO3 24")).toBeNull();
   });
   it("accepts a repeated identical value", () => {
-    expect(extractAbg("pH 7.30 ... the pH 7.30 shows, PaCO2 55, HCO3 24")).toEqual({ ph: 7.3, paco2: 55, hco3: 24 });
+    expect(extractAbg("pH 7.26 ... the pH 7.26 shows, PaCO2 55, HCO3 24")).toEqual({ ph: 7.26, paco2: 55, hco3: 24, precision: { ph: 2, paco2: 0, hco3: 0 } });
   });
 });
 
@@ -42,8 +42,8 @@ describe("potassium values", () => {
 
 describe("proposing pairs", () => {
   it("proposes ABG with values read only from the stem", () => {
-    const q = { stem: "ABG: pH 7.30, PaCO2 55, HCO3 24. What is the interpretation?", options: ["a", "b"], rationale: "Normal pH is 7.35-7.45; e.g. pH 7.50 would be alkalosis." };
-    expect(proposePairs(q)).toEqual([{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 } }]);
+    const q = { stem: "ABG: pH 7.26, PaCO2 55, HCO3 24. What is the interpretation?", options: ["a", "b"], rationale: "Normal pH is 7.35-7.45; e.g. pH 7.50 would be alkalosis." };
+    expect(proposePairs(q)).toEqual([{ d: "abg", p: { ph: 7.26, paco2: 55, hco3: 24, precision: { ph: 2, paco2: 0, hco3: 0 } } }]);
   });
   /* The rationale quoted a contrasting pH; that must not make the stem's
      values ambiguous or become the patient's value. */
@@ -143,5 +143,54 @@ describe("insulin concentration", () => {
     expect(extractInsulin("Insulin glargine 100 U/mL was given at 2100.")).toEqual({ type: "long", givenAt: "21:00" });
     expect(extractInsulin(`Insulin glargine U${ch(0x2011)}100 was given at 2100.`)).toEqual({ type: "long", givenAt: "21:00" });
     expect(extractInsulin("Insulin glargine was given at 2100.")).toEqual({ type: "long", givenAt: "21:00" });
+  });
+});
+
+/* PR #156 review: once the range reached 10, "10.0" was read as 1.0 and a
+   severe high potassium became a severe low one. */
+describe("two-digit potassium values", () => {
+  it.each([["Potassium 10.0 mEq/L", 10], ["potassium of 11.0", 11], ["K+ 12.0", 12], ["potassium 3.2 mEq/L", 3.2]])("%s reads %s", (text, k) => {
+    expect(extractPotassium(text)).toEqual({ k });
+  });
+  it.each(["potassium 12.5", "potassium 103", "potassium 0.9", "K+ 5.123"])("%s is not read", (text) => {
+    expect(extractPotassium(text)).toBeNull();
+  });
+  it("proposes the matching category, never the opposite one", () => {
+    expect(proposePairs({ stem: "A client's potassium is 10.0 mEq/L. Which action is first?", options: [], rationale: "" }))
+      .toEqual([{ d: "potassium", p: { k: 10 } }]);
+  });
+});
+
+/* PR #156 review: decimals were cut to their prefix, and IV insulin got a
+   subcutaneous peak window. */
+describe("whole ABG tokens and insulin route", () => {
+  it("reads every decimal and interprets the real gas", async () => {
+    const { interpretAbg } = await import("../src/diagrams/abg.jsx");
+    const gas = extractAbg("pH 7.34, PaCO2 45.4, HCO3 23.7");
+    expect(gas).toMatchObject({ ph: 7.34, paco2: 45.4, hco3: 23.7, precision: { ph: 2, paco2: 1, hco3: 1 } });
+    expect(interpretAbg(gas).disorder).not.toMatch(/unresolved/);
+    expect(extractAbg("ABG: pH 7.35, PaCO2 45, HCO3 23.75").hco3).toBe(23.75);
+  });
+  it("never reads a longer token by its prefix", () => {
+    expect(extractAbg("pH 7.34, PaCO2 45.456, HCO3 23.7")).toBeNull();
+    expect(extractAbg("pH 7.34, PaCO2 45.4, HCO3 23.789")).toBeNull();
+  });
+  it.each(["Regular U-100 insulin was given intravenously at 0700.", "Insulin drip of regular insulin started at 0700", "Regular insulin IV at 0700"])("leaves %s concept-only", (t) => {
+    expect(extractInsulin(t)).toBeNull();
+  });
+  it("still reads subcutaneous insulin", () => {
+    expect(extractInsulin("Regular insulin given subcutaneously at 0700")).toEqual({ type: "short", givenAt: "07:00" });
+  });
+});
+
+describe("doses are not levels; dotted routes", () => {
+  it.each(["A client with hypokalemia is prescribed potassium 10 mEq by mouth daily.", "potassium 20 mmol IV", "potassium 10 tablets"])("does not read a dose: %s", (t) => {
+    expect(extractPotassium(t)).toBeNull();
+  });
+  it.each(["Potassium 10.0 mEq/L", "potassium 6.8 mmol/L", "potassium 5.9", "serum K 6.8 mEq / L"])("still reads a level: %s", (t) => {
+    expect(extractPotassium(t)).not.toBeNull();
+  });
+  it.each(["Regular U-100 insulin was given I.V. at 0700.", "Regular insulin at 0700, given I.V.", "Regular insulin I.M. at 0700"])("leaves %s concept-only", (t) => {
+    expect(extractInsulin(t)).toBeNull();
   });
 });

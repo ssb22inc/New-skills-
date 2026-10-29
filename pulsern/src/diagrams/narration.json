@@ -1,8 +1,105 @@
 {
   "version": 1,
   "clips": {
-    "abg": {},
-    "potassium": {},
+    "abg": {
+      "ph": {
+        "id": "5bf4af8861d28c79",
+        "script": "a997ae8b4fc04f88c3e51e9ccddec88f56cfc05fb1f5acc6f9cc5443c472e25f",
+        "qa": 15,
+        "audio": "becb27847fb38712f80eae57e86d18a5",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "1aded928",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/abg/becb27847fb38712f80eae57e86d18a5.mp3",
+        "bytes": 370560,
+        "sig": "C5pWacSCWEiUoIW1Z75FfNGtjnQqriwgcYtTbVy60Wbw0C2llVsF7g0aL7OvRa53V1b8M0ga7lsbv0veXAO0AA=="
+      },
+      "lungs": {
+        "id": "e6f0cace6037f963",
+        "script": "7425d8f5d5d1e3320400c30ad714c639af66c18786432fc6b8e97903e3072fa0",
+        "qa": 15,
+        "audio": "f05fa1a8e5807df236f1f352a14a5849",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "b9e5786f",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/abg/f05fa1a8e5807df236f1f352a14a5849.mp3",
+        "bytes": 223488,
+        "sig": "O9fsINJs6xWeSxF2cgNqgpHIojb6LJv0aTXpcJQMlHSl5n5nvALZteeX9F5PSRUTAFh3pndSVK29jQH7aP0FAQ=="
+      },
+      "kidneys": {
+        "id": "9f77a09232f7774c",
+        "script": "6c6b63d9a51972f66c6d354b8002d9e9e6cb94c8d06d411d6278d213515457ba",
+        "qa": 15,
+        "audio": "8f62adbb13a8e2930637ec3a557f9e9c",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "e110741b",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/abg/8f62adbb13a8e2930637ec3a557f9e9c.mp3",
+        "bytes": 233856,
+        "sig": "jZ1DJJPJFsM1Qnop0Ai95sJd49k3PcSZ2/AKnJiMi7efc/NM7sqPpoSTCs3YG49dR/Zhth+J1hBAkzfuZzUJAw=="
+      },
+      "rome": {
+        "id": "73c97ec3b578b1c1",
+        "script": "20c94d731d1b917c5e46a794a5b01430c56948f0775548467ae2466cc1cda70c",
+        "qa": 15,
+        "audio": "3b8c9c84175966c57dd80196209cf47d",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "d4b895f2",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/abg/3b8c9c84175966c57dd80196209cf47d.mp3",
+        "bytes": 298368,
+        "sig": "2UbJ2bI4XZDwhouIka93kBbGhNvupsSaDrP0Fn0G+jWO6dhNaLNQJhodms01CFZJvchfkRwlvGSiaDTe8HQlCw=="
+      },
+      "compensation": {
+        "id": "6980f60d4caddf97",
+        "script": "047f1d64e4479cd03f85beebdbeffcc3796836d609cb5793c762675fc9f67b28",
+        "qa": 15,
+        "audio": "a696b771e99c9dcc674130949554c4ad",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "12daa3fa",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/abg/a696b771e99c9dcc674130949554c4ad.mp3",
+        "bytes": 880128,
+        "sig": "mIuSVTuDkdDWUCELD9Vk0soRf0W1VU+oLXLm1ZjDU1yHdRLuKwIbi/WS8KyDHzVgNQcSoLbxG4+99VNqx3BeDQ=="
+      }
+    },
+    "insulin": {},
+    "isolation": {
+      "standard": {
+        "id": "d46ae6627ac2bc38",
+        "script": "0a67b103ad7c01a2c09726be2befc8af4a66f2b010e9a797ab15f13f0b1ae2b2",
+        "qa": 15,
+        "audio": "545661c8d9adbb63eb0749c5bcbd1454",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "ead7f810",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/isolation/545661c8d9adbb63eb0749c5bcbd1454.mp3",
+        "bytes": 153600,
+        "sig": "LyQXqlssjzskGgXRvN2G5hPV9HYGhqkegPkqgLLncxtDkkNbNFs2qSzuyZlaS4DHLg4TAAK0fHaDjcXj5Xm1Cw=="
+      }
+    },
+    "potassium": {
+      "range": {
+        "id": "3eda64d8bc2f0a1f",
+        "script": "cae499a59427e8557be48b55fef2e702a5e8aba651a7de3cf7225de952eabffd",
+        "qa": 15,
+        "audio": "1c4a5894edba689b591e0b25b6911168",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "b24e11c2",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/potassium/1c4a5894edba689b591e0b25b6911168.mp3",
+        "bytes": 197760,
+        "sig": "iW1tKwL4C/e/oXbNODasDtNDgJwMseJubXoD4JSG3RXpmbfIBW3I43amuIzQYSBZcSheefn/gUUDOzMBmhMPDA=="
+      }
+    },
+    "pressure-injury": {},
     "tonicity": {}
   }
 }

@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Explainer, captionMs, stepCaption, stepsFor, clipFor, verificationLabel, afterClip, MIN_STEP_MS, WORDS_PER_SECOND } from "../src/explainer.jsx";
+import { Explainer, captionMs, stepCaption, stepsFor, clipFor, verificationLabel, playerKey, EDU_NOTE, afterClip, MIN_STEP_MS, WORDS_PER_SECOND } from "../src/explainer.jsx";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("caption timing", () => {
@@ -21,11 +21,16 @@ describe("caption timing", () => {
 });
 
 describe("labelling (CLAUDE.md: AI content stays labelled)", () => {
-  it("labels an unverified explainer as AI-drafted with the verify note", () => {
-    expect(verificationLabel(false)).toEqual({ text: "✨ AI-drafted · verify against your course materials", rn: false });
+  it("labels an unverified explainer as AI-drafted with the verify and educational notes", () => {
+    expect(verificationLabel(false)).toEqual({ text: "✨ AI-drafted · verify against your course materials", edu: EDU_NOTE, rn: false });
   });
-  it("shows RN-verified only when signed off", () => {
-    expect(verificationLabel(true)).toEqual({ text: "RN-verified", rn: true });
+  /* Sol, PR #155 diagram review: RN sign-off replaced the AI label. */
+  it("keeps the AI label and notes when RN-verified, adding the RN badge", () => {
+    expect(verificationLabel(true)).toEqual({ text: "✨ AI-drafted · verify against your course materials", edu: EDU_NOTE, rn: true });
+    const html = renderToStaticMarkup(<Explainer diagram={DIAGRAMS.abg} rnVerified />);
+    expect(html).toContain("RN-verified");
+    expect(html).toContain("✨ AI-drafted");
+    expect(html).toContain(EDU_NOTE);
   });
   it("renders the AI label by default — no RN claim without sign-off", () => {
     const html = renderToStaticMarkup(<Explainer diagram={DIAGRAMS.abg} />);
@@ -68,7 +73,11 @@ describe("concept-only mode (no confirmed patient values)", () => {
     expect(html).not.toContain("7.30");
     // the legend legitimately teaches the word "uncompensated"; what must be
     // absent is a verdict about a patient
-    expect(html).not.toMatch(/(Respiratory|Metabolic|Combined)[a-z ]* (acidosis|alkalosis)|Normal ABG/);
+    // absent is a verdict about a patient (the rules panel names disorders
+    // as teaching, so only the verdict area is checked)
+    const verdict = html.slice(html.indexOf('data-g="result"'), html.indexOf('data-g="comp"'));
+    expect(verdict.length).toBeGreaterThan(0);
+    expect(verdict).not.toMatch(/(Respiratory|Metabolic|Combined)[a-z ]* (acidosis|alkalosis)|Normal ABG|Check:/);
     expect(html).toContain("Read pH → PaCO₂ → HCO₃⁻ → match");
   });
   it("drops the worked-example step, which would need values", () => {
@@ -77,7 +86,7 @@ describe("concept-only mode (no confirmed patient values)", () => {
   });
   it("draws potassium without a marker or a matched strip", () => {
     const html = renderToStaticMarkup(<DIAGRAMS.potassium.Diagram params={null} />);
-    expect(html).not.toContain("6.2");
+    expect(html).not.toContain(">6.2<");
     expect(html).not.toContain('stroke-dasharray="5 4"');
   });
 });
@@ -160,5 +169,32 @@ describe("when a clip ends", () => {
     expect(afterClip({ reduce: false, step: 1, n: 5, go: (i) => { went = i; } })).toBe(true);
     expect(went).toBe(2);
     expect(afterClip({ reduce: false, step: 4, n: 5, go: () => { throw new Error("no step 5"); } })).toBe(false);
+  });
+});
+
+/* Sol, PR #155 diagram review: Space on a focused Next button toggled
+   playback instead of pressing the button. */
+describe("keyboard", () => {
+  it("leaves Space to a focused button, and plays/pauses only from the player itself", () => {
+    expect(playerKey(" ", { tagName: "BUTTON" })).toBe(null);
+    expect(playerKey(" ", { tagName: "SECTION" })).toBe("toggle");
+    expect(playerKey("ArrowRight", { tagName: "BUTTON" })).toBe("next");
+    expect(playerKey("ArrowLeft", { tagName: "SECTION" })).toBe("prev");
+    expect(playerKey("Enter", { tagName: "SECTION" })).toBe(null);
+  });
+});
+
+/* Sol, rounds 11–12: in the player the image is described by what the step
+   shows, never only by its spoken caption. */
+describe("every step describes what it shows", () => {
+  it.each(Object.keys(DIAGRAMS))("%s", async (id) => {
+    const { stepDesc } = await import("../src/explainer.jsx");
+    const d = DIAGRAMS[id];
+    for (const s of d.steps) {
+      const text = stepDesc(s, d.example, "CAPTION");
+      expect(typeof s.desc === "function" || typeof s.desc === "string").toBe(true);
+      expect(text).not.toBe("CAPTION");
+      expect(text.length).toBeGreaterThan(40);
+    }
   });
 });

@@ -59,9 +59,11 @@ describe("focus reaches nested groups", () => {
   const effective = (html) => {
     const out = {};
     const stack = [];
-    for (const m of html.matchAll(/<g data-g="([^"]+)"[^>]*style="opacity:([\d.]+)"|<\/g>|<g\b[^>]*>/g)) {
+    /* Dimming is a class now (shapes fade, text keeps its contrast); a
+       dimmed group counts as 0.28, the opacity its shapes get. */
+    for (const m of html.matchAll(/<g data-g="([^"]+)"[^>]*class="([^"]*)"|<\/g>|<g\b[^>]*>/g)) {
       if (m[0] === "</g>") { stack.pop(); continue; }
-      const own = m[1] ? Number(m[2]) : 1;
+      const own = m[1] && /\bdg-dim\b/.test(m[2]) ? 0.28 : 1;
       const eff = (stack.at(-1) ?? 1) * own;
       stack.push(eff);
       if (m[1]) out[m[1]] = eff;

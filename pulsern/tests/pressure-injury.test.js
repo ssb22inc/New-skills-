@@ -1,53 +1,13 @@
-/* Which pressure injury stage a question names — the mapping that outlines
-   a column of the staging diagram — and when the diagram is proposed. */
+/* When the staging diagram is proposed. It is a concept explainer: no
+   stage is read from question text, so no column is ever outlined as the
+   client's (Sol, rounds 1–5). */
 import { describe, it, expect } from "vitest";
-import { stageFrom } from "../src/diagrams/pressure-injury.jsx";
 import { MATCHERS, proposePairs } from "../src/diagrams/match.js";
-
-describe("stageFrom", () => {
-  it.each([
-    ["A stage 3 pressure injury on the sacrum", 3],
-    ["Stage 1: non-blanchable erythema over the heel", 1],
-    ["The client has a stage IV pressure injury", 4],
-    ["documented as a Stage II pressure ulcer", 2],
-    ["stage iii wound", 3],
-    ["a stage I area", 1],
-  ])("%s → %s", (text, stage) => {
-    expect(stageFrom(text)).toEqual({ stage });
-  });
-
-  it("reads unstageable and deep tissue injury", () => {
-    expect(stageFrom("The wound bed is covered with eschar and is unstageable")).toEqual({ stage: "unstageable" });
-    expect(stageFrom("A suspected deep tissue pressure injury on the heel")).toEqual({ stage: "dtpi" });
-    expect(stageFrom("purple area consistent with a deep tissue injury")).toEqual({ stage: "dtpi" });
-  });
-
-  /* Comparing stages is a common item; outlining one would steer the
-     learner towards an answer. */
-  it("lights no column when two stages are named", () => {
-    expect(stageFrom("Which finding distinguishes a stage 2 from a stage 3 pressure injury?")).toBeNull();
-    expect(stageFrom("Unstageable, later found to be stage 4 after debridement")).toBeNull();
-  });
-
-  it("repeating the same stage is still one stage", () => {
-    expect(stageFrom("Stage 2 pressure injury. A stage II injury involves the dermis.")).toEqual({ stage: 2 });
-  });
-
-  it("does not read ordinary words as a roman numeral", () => {
-    expect(stageFrom("At this stage it is important to reposition")).toBeNull();
-    expect(stageFrom("stage in the care plan")).toBeNull();
-  });
-
-  it("returns null with no stage", () => {
-    expect(stageFrom("Braden score of 12")).toBeNull();
-    expect(stageFrom(undefined)).toBeNull();
-  });
-});
 
 describe("pressure injury matching", () => {
   it("is proposed for pressure injury questions", () => {
     expect(proposePairs({ stem: "A client has a stage 3 pressure injury on the sacrum. Which finding is expected?", options: [], rationale: "" }))
-      .toEqual([{ d: "pressure-injury", p: { stage: 3 } }]);
+      .toEqual([{ d: "pressure-injury", p: null }]);
     expect(proposePairs({ stem: "The client's Braden scale score is 11. Which intervention is a priority?", options: [], rationale: "" }))
       .toEqual([{ d: "pressure-injury", p: null }]);
   });
@@ -58,7 +18,50 @@ describe("pressure injury matching", () => {
     expect(MATCHERS["pressure-injury"].candidate.test("Yellow slough in a surgical wound")).toBe(false);
   });
 
+  it.each([
+    "The client is at risk for a stage 4 pressure injury.",
+    "The client has stage 3 sacral sarcoma and a Braden score of 12.",
+    "The client has a stage 4 pressure injury. That diagnosis was ruled out on reassessment.",
+  ])("reads no stage from: %s", (stem) => {
+    expect(MATCHERS["pressure-injury"].extract(stem)).toBeNull();
+  });
+
   it("does not read a cancer or kidney-disease stage as a pressure injury", () => {
     expect(MATCHERS["pressure-injury"].candidate.test("A client with stage 4 chronic kidney disease")).toBe(false);
+  });
+});
+
+describe("the wound drawing", () => {
+  it("reaches its own floor, so slough and depth markers sit in the wound", async () => {
+    const { craterPath } = await import("../src/diagrams/pressure-injury.jsx");
+    const d = craterPath(0, 80, 100, 160, 0.2);
+    // M a,b Q c,d e,mid Q fx,c …: the floor curve's control y is the 8th number;
+    // a quadratic from (·, mid) to (·, mid) bottoms out at (mid + c) / 2
+    const nums = d.split(/[ ,QMZ]+/).filter(Boolean).map(Number);
+    const mid = (100 + 160) / 2;
+    expect((mid + Number(nums[7])) / 2).toBeCloseTo(160);
+  });
+  it("teaches the full Stage 4 definition and keeps the HOB qualification on the tile", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { pressureInjury } = await import("../src/diagrams/pressure-injury.jsx");
+    const html = renderToStaticMarkup(React.createElement(pressureInjury.Diagram, {}));
+    expect(html).toContain("if clinically appropriate");
+    expect(html).toMatch(/exposed or directly palpable fascia/);
+    const s4 = pressureInjury.steps.find((s) => s.key === "stage4");
+    expect(s4.caption).toMatch(/exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone/);
+    expect(pressureInjury.steps.filter((s) => /^stage\d$/.test(s.key)).every((s) => s.focus.includes("legend"))).toBe(true);
+  });
+});
+
+/* Patient-specific params must change nothing: no column is ever outlined
+   as the client's (PR #156 review, same check as isolation). */
+describe("concept-only drawing", () => {
+  it.each([1, 2, 3, 4, "unstageable", "dtpi"])("draws the same diagram with params { stage: %s } as with none", async (stage) => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { pressureInjury } = await import("../src/diagrams/pressure-injury.jsx");
+    const draw = (props) => renderToStaticMarkup(React.createElement(pressureInjury.Diagram, props));
+    expect(draw({ params: { stage } })).toBe(draw({}));
   });
 });

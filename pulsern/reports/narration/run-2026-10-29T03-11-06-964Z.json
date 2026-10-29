@@ -1,0 +1,610 @@
+{
+  "startedAt": "2026-10-29T03:11:06.964Z",
+  "voice": "marin",
+  "model": "gpt-4o-mini-tts",
+  "qaModel": "gpt-4o-transcribe",
+  "qaThreshold": 0.92,
+  "recorded": [
+    {
+      "diagram": "abg",
+      "step": "ph",
+      "similarity": 1,
+      "bytes": 207360
+    },
+    {
+      "diagram": "abg",
+      "step": "lungs",
+      "similarity": 1,
+      "bytes": 230400
+    },
+    {
+      "diagram": "abg",
+      "step": "kidneys",
+      "similarity": 1,
+      "bytes": 156288
+    },
+    {
+      "diagram": "abg",
+      "step": "rome",
+      "similarity": 1,
+      "bytes": 229632
+    },
+    {
+      "diagram": "abg",
+      "step": "compensation",
+      "similarity": 1,
+      "bytes": 436224
+    },
+    {
+      "diagram": "potassium",
+      "step": "range",
+      "similarity": 1,
+      "bytes": 197760
+    },
+    {
+      "diagram": "potassium",
+      "step": "hypo-ecg",
+      "similarity": 1,
+      "bytes": 151296
+    },
+    {
+      "diagram": "potassium",
+      "step": "hypo-care",
+      "similarity": 1,
+      "bytes": 288000
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-ecg",
+      "similarity": 1,
+      "bytes": 162432
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-care",
+      "similarity": 1,
+      "bytes": 311424
+    },
+    {
+      "diagram": "tonicity",
+      "step": "isotonic",
+      "similarity": 1,
+      "bytes": 211968
+    },
+    {
+      "diagram": "tonicity",
+      "step": "hypotonic",
+      "similarity": 1,
+      "bytes": 137856
+    },
+    {
+      "diagram": "tonicity",
+      "step": "hypertonic",
+      "similarity": 1,
+      "bytes": 115200
+    },
+    {
+      "diagram": "tonicity",
+      "step": "bags",
+      "similarity": 1,
+      "bytes": 132096
+    },
+    {
+      "diagram": "tonicity",
+      "step": "dextrose",
+      "similarity": 1,
+      "bytes": 323328
+    },
+    {
+      "diagram": "tonicity",
+      "step": "safety",
+      "similarity": 1,
+      "bytes": 269568
+    },
+    {
+      "diagram": "insulin",
+      "step": "idea",
+      "similarity": 1,
+      "bytes": 156288
+    },
+    {
+      "diagram": "insulin",
+      "step": "rapid",
+      "similarity": 1,
+      "bytes": 214656
+    },
+    {
+      "diagram": "insulin",
+      "step": "short",
+      "similarity": 1,
+      "bytes": 99456
+    },
+    {
+      "diagram": "insulin",
+      "step": "nph",
+      "similarity": 1,
+      "bytes": 126720
+    },
+    {
+      "diagram": "insulin",
+      "step": "long",
+      "similarity": 1,
+      "bytes": 266496
+    },
+    {
+      "diagram": "insulin",
+      "step": "risk",
+      "similarity": 1,
+      "bytes": 166656
+    },
+    {
+      "diagram": "isolation",
+      "step": "standard",
+      "similarity": 1,
+      "bytes": 153600
+    },
+    {
+      "diagram": "isolation",
+      "step": "contact",
+      "similarity": 1,
+      "bytes": 236928
+    },
+    {
+      "diagram": "isolation",
+      "step": "cdiff",
+      "similarity": 1,
+      "bytes": 124800
+    },
+    {
+      "diagram": "isolation",
+      "step": "droplet",
+      "similarity": 1,
+      "bytes": 181632
+    },
+    {
+      "diagram": "isolation",
+      "step": "airborne",
+      "similarity": 1,
+      "bytes": 332160
+    },
+    {
+      "diagram": "isolation",
+      "step": "transport",
+      "similarity": 1,
+      "bytes": 181632
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "layers",
+      "similarity": 1,
+      "bytes": 188160
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage1",
+      "similarity": 1,
+      "bytes": 126720
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage2",
+      "similarity": 1,
+      "bytes": 157056
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage3",
+      "similarity": 1,
+      "bytes": 158592
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage4",
+      "similarity": 1,
+      "bytes": 92160
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "other",
+      "similarity": 1,
+      "bytes": 207360
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "prevent",
+      "similarity": 1,
+      "bytes": 326400
+    }
+  ],
+  "skippedUnchanged": 0,
+  "failedQa": [],
+  "errors": [],
+  "characters": 6303,
+  "takes": [
+    {
+      "diagram": "abg",
+      "step": "ph",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Start with the pH. Anything below 7.35 is acidosis. Anything above 7.45 is alkalosis. The pH tells you what the problem is, not yet where it came from.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/abg--ph--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "lungs",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Now look at the lungs. Carbon dioxide behaves like an acid, so a PaCO2 above 45 pushes the blood toward acid. Notice that its acid end is on the right, the opposite way round from the pH line.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/abg--lungs--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "kidneys",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Then, the kidneys. Bicarbonate is a base. Below 22 leaves the blood acidic, and above 26 makes it alkaline.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/abg--kidneys--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "rome",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Now, find the value that matches the pH, using \"ROME\": Respiratory: the pH and PaCO2 move in opposite directions. Metabolic: the pH and bicarbonate move in the same direction.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/abg--rome--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "compensation",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Compensation is the other system pushing back. If it is still normal, the disorder is uncompensated. If it has moved but the pH is still out of range, it is partially compensated. And if the pH is back in range, it is fully compensated. Compensation never overshoots, and the lungs respond within minutes to hours. So a value outside the expected range, too far or not far enough, suggests a second, mixed disorder.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/abg--compensation--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "range",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Normal serum potassium is 3.5 to 5.0. Potassium sets the heart's resting electrical state, so a level that is either too low or too high can trigger a dangerous rhythm.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/potassium--range--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hypo-ecg",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Low potassium flattens the T wave, pushes the ST segment down, and adds a prominent U wave just after the T.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/potassium--hypo-ecg--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hypo-care",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "The common causes are diuretics, vomiting or NG suction, and diarrhea. Replace it safely. IV potassium is never pushed, it is diluted and run on a pump while the heart is monitored. And check urine output first, because the kidneys have to be able to clear it.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/potassium--hypo-care--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-ecg",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "High potassium makes tall, narrow peaked T waves first. As it climbs further, the QRS widens and the P wave flattens out.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/potassium--hyper-ecg--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-care",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "In an emergency, the order matters: Give calcium gluconate first to protect the heart (remember it does not lower the potassium), then insulin with dextrose to shift potassium into the cells, then remove it from the body with binders, diuretics, or dialysis.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/potassium--hyper-care--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "isotonic",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Isotonic fluid matches the blood, so water doesn't shift into or out of the cells. It expands the fluid outside the cells—in the blood vessels and in the tissues, which is why it is used to replace volume.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/tonicity--isotonic--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "hypotonic",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Hypotonic fluid has fewer particles than the inside of the cell, so water moves into the cell, and the cell swells.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/tonicity--hypotonic--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "hypertonic",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Hypertonic fluid has more particles, so water is pulled out of the cell and into the fluid around it, and the cell shrinks.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/tonicity--hypertonic--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "bags",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Know which bag is which. Each fluid is classified as it is in the bag, and every bag with dextrose in it carries a catch.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/tonicity--bags--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "dextrose",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "The body uses up dextrose quickly, and then the fluid acts like whatever is left: D5W and D10W become free water, which is hypotonic; D5 half-normal saline becomes half-normal saline; and D5 normal saline and D5 lactated ringers become isotonic.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/tonicity--dextrose--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "safety",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Never give a hypotonic fluid to a client with increased intracranial pressure, a stroke, or a head injury, because water moving into brain cells makes the swelling worse. And watch anyone on isotonic or hypertonic fluids for fluid overload.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/tonicity--safety--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "idea",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Every insulin has three times to know: the onset, when it starts working; the peak, when it works hardest; and the duration, how long it lasts.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/insulin--idea--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "rapid",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Rapid-acting insulin (lispro, aspart, or glulisine) starts working in 10 to 30 minutes and peaks in 1 to 2 hours. It is given with a meal so that the food arrives as the insulin starts to work.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/insulin--rapid--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "short",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Short-acting regular insulin starts in 30 to 60 minutes and peaks at 2 to 4 hours.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/insulin--short--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "nph",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Intermediate-acting NPH starts in 1 to 2 hours and has a long, broad peak from about 4 to 12 hours.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/insulin--nph--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "long",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Long-acting glargine (U-100) has no pronounced peak. It provides a steady background level for about 24 hours. Other basal insulins last differently, including glargine U-300, so always check the product.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/insulin--long--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "risk",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "The peak is when hypoglycemia is most likely. Know when each client's insulin peaks and make sure food and glucose checks line up with it.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/insulin--risk--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "standard",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Every client gets standard precautions, transmission-based precautions are added on top, and they are matched to how the organism spreads.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/isolation--standard--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "contact",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Contact precautions are for organisms spread by touch: skin, wounds, stool, and surfaces. Wear a gown and gloves, the client needs a private room or a cohort, and dedicated equipment like a stethoscope that stays in the room.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/isolation--contact--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "cdiff",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Here is the C. diff trap. Alcohol hand rub does not kill its spores, so wash your hands with soap and water.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/isolation--cdiff--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "droplet",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Droplet precautions are for large droplets that fall within about 3 feet: influenza, pertussis, mumps, rubella, and meningococcal meningitis. Put on a surgical mask as you enter the room.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/isolation--droplet--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "airborne",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Airborne precautions are for tiny particles that hang in the air: tuberculosis, measles, and chickenpox. Wear a fit-tested N95 respirator and keep the client in a negative-pressure room with the door closed. Chickenpox also needs contact precautions, so add a gown and gloves.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/isolation--airborne--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "transport",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "If a client on droplet or airborne precautions has to leave the room, the client wears a surgical mask. And remember, chickenpox needs airborne and contact precautions together.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/isolation--transport--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "layers",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Each column is the same skin, cut through: the epidermis, the dermis, fat, muscle and bone. A pressure injury stage is simply how deep the damage reaches.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/pressure-injury--layers--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage1",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Stage 1: The skin is still intact, but there is an area of redness that does not blanch when you press on it.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/pressure-injury--stage1--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage2",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Stage 2 is partial thickness loss into the dermis. It looks like a shallow, pink, moist wound, or a blister. No fat is visible.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/pressure-injury--stage2--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage3",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Stage 3 is full thickness loss, down into the fat. Slough may be present, but no muscle, tendon, or bone is exposed.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/pressure-injury--stage3--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage4",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Stage 4 is full-thickness tissue loss that exposes muscle, tendon, or bone.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/pressure-injury--stage4--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "other",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "If slough or eschar covers the base, the depth can't be seen, so the injury is unstageable. A deep tissue injury is a persistent area of deep red, maroon, or purple discoloration.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/pressure-injury--other--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "prevent",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Prevention starts with the Braden Scale, and remember, a lower score means a higher risk. Reposition the client at least every two hours. Keep the head of the bed at 30 degrees or lower, unless that's contraindicated. Use a pressure-redistributing surface. Keep the skin clean and dry, and make sure they get enough protein, calories, and fluids.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T03-11-06-964Z/pressure-injury--prevent--take1.mp3"
+    }
+  ]
+}

@@ -2,40 +2,15 @@
    ------------------------------------------------------------------
    Three rows — how it spreads, the classic examples, what to wear, what the
    room needs — on top of standard precautions for every client. The
-   examples are the standard NCLEX-RN teaching lists. precautionFor() maps a
-   named condition to its precautions (pure, tested), so when a question
-   names exactly one condition its row is outlined. */
+   examples are the standard NCLEX-RN teaching lists.
+
+   The diagram is a concept explainer only: it never outlines a row as
+   "needed for this client". Reading that from question text kept attaching
+   negation, treatment, test results or another person's status to the
+   wrong condition (Sol, rounds 1–5), and a wrong outline teaches the wrong
+   precaution with the authority of a picture. */
 import React from "react";
-import { Frame, G, T, Box, C, Anim, Loop, Flow, OnStep, useDefs, useMotion } from "./kit.jsx";
-
-/* Conditions → precautions. Some need two (varicella: airborne + contact). */
-export const CONDITIONS = [
-  { re: /\bMRSA\b|methicillin-resistant/i, name: "MRSA", types: ["contact"] },
-  { re: /\bVRE\b|vancomycin-resistant/i, name: "VRE", types: ["contact"] },
-  { re: /\bC\.?\s*diff(?:icile)?\b|clostridi(?:um|oides) difficile/i, name: "C. difficile", types: ["contact"] },
-  { re: /\bscabies\b/i, name: "scabies", types: ["contact"] },
-  { re: /\b(?:head )?lice\b|pediculosis/i, name: "lice", types: ["contact"] },
-  { re: /\bRSV\b|respiratory syncytial/i, name: "RSV", types: ["contact"] },
-  { re: /\binfluenza\b|\bflu\b/i, name: "influenza", types: ["droplet"] },
-  { re: /\bpertussis\b|whooping cough/i, name: "pertussis", types: ["droplet"] },
-  { re: /\bmumps\b/i, name: "mumps", types: ["droplet"] },
-  { re: /\brubella\b|german measles/i, name: "rubella", types: ["droplet"] },
-  /* Only meningococcal disease, not "bacterial meningitis" in general:
-     pneumococcal meningitis needs standard precautions only, and mapping the
-     general term to droplet would teach the wrong precaution. */
-  { re: /meningococcal|neisseria meningitidis/i, name: "meningococcal meningitis", types: ["droplet"] },
-  { re: /\b[Tt]uberculosis\b|\bTB\b/, name: "tuberculosis", types: ["airborne"] },
-  { re: /\bmeasles\b|\brubeola\b/i, name: "measles", types: ["airborne"] },
-  { re: /\bvaricella\b|chickenpox|chicken pox/i, name: "chickenpox", types: ["airborne", "contact"] },
-];
-
-/* The precautions for the ONE condition named, or null when none or more
-   than one is named — a comparison question should not light up one row. */
-export function precautionFor(text) {
-  const t = String(text ?? "").replace(/german measles/gi, "rubella");
-  const hits = CONDITIONS.filter((c) => c.re.test(t));
-  return hits.length === 1 ? { condition: hits[0].name, types: hits[0].types } : null;
-}
+import { Frame, G, T, Box, C, Anim, Loop, Flow, OnStep, Para, Chip, paraLines, useDefs, useMotion, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 /* ---- simple PPE glyphs, drawn in the app palette ---- */
 const stroke = { fill: "none", stroke: C.teal, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
@@ -59,7 +34,6 @@ function N95({ x, y }) {
     <g>
       <path {...stroke} d={`M${x + 4},${y + 22} q15,-24 30,0 q-15,10 -30,0 z`} />
       <path {...stroke} d={`M${x + 4},${y + 18} q-4,-10 15,-12 q19,2 15,12`} strokeWidth={1.2} />
-      <text x={x + 19} y={y + 22} textAnchor="middle" fontSize={7.5} fontWeight={700} fill={C.accent} fontFamily="'IBM Plex Mono',monospace">N95</text>
     </g>
   );
 }
@@ -76,25 +50,28 @@ function NegRoom({ x, y }) {
 
 /* ---- transmission scenes ----
    Each row opens with a small scene of HOW the organism spreads, which is
-   what decides the precaution. Germs and particles are drawn in the lab
-   ink tone (a hazard, not an error, so not coral). Static views show the
+   what decides the precaution. Germs and particles are drawn in opaque
+   body ink (a hazard, not an error, so not coral). Static views show the
    scene still; on its step it moves. */
-const GERM = C.labInk;
+/* Opaque body ink, so even the tiniest particle meets contrast on the
+   tinted scenes in both themes (Sol, round 12: lab ink at 75% did not). */
+const GERM = C.ink;
 
 /* A client in profile, facing right. `masked` puts a surgical mask on
    (the transport step). */
-function Profile({ x, y, masked = false }) {
+const mask = (x, y) => (
+  <g>
+    <rect x={x + 2} y={y - 1} width={10} height={8} rx={2.5} fill={C.card} stroke={C.accent} strokeWidth={1.4} />
+    <path d={`M${x + 2},${y + 1} l-7,-3 M${x + 2},${y + 5} l-7,2`} stroke={C.accent} strokeWidth={0.9} />
+  </g>
+);
+function Profile({ x, y, masked = false, always = false }) {
   return (
     <g>
       <path d={`M${x - 12},${y + 26} q0,-12 12,-13 q12,1 12,13`} fill={C.teal} fillOpacity={0.18} stroke={C.teal} strokeWidth={1.3} />
       <circle cx={x} cy={y} r={8.5} fill={C.card} stroke={C.teal} strokeWidth={1.4} />
       <path d={`M${x + 8},${y - 2} l3,3 l-2.6,1`} fill="none" stroke={C.teal} strokeWidth={1.3} strokeLinejoin="round" />
-      {masked ? (
-        <OnStep on="transport" kind="pop" delay={300}>
-          <rect x={x + 2} y={y - 1} width={10} height={8} rx={2.5} fill={C.card} stroke={C.accent} strokeWidth={1.4} />
-          <path d={`M${x + 2},${y + 1} l-7,-3 M${x + 2},${y + 5} l-7,2`} stroke={C.accent} strokeWidth={0.9} />
-        </OnStep>
-      ) : null}
+      {masked ? (always ? mask(x, y) : <OnStep on="transport" kind="pop" delay={300}>{mask(x, y)}</OnStep>) : null}
     </g>
   );
 }
@@ -124,27 +101,26 @@ function ContactScene({ x, y }) {
       <rect x={x + 8} y={rail} width={64} height={5} rx={2.5} fill={C.muted} fillOpacity={0.35} />
       {germs.map(([gx, gy], i) => <circle key={i} cx={gx} cy={gy} r={2} fill={GERM} />)}
       <WhileStep on="contact"
-        moving={<g><animateTransform attributeName="transform" type="translate" values="0,-6;0,8;0,8;0,-6" keyTimes="0;0.4;0.6;1" dur="2.4s" repeatCount="indefinite" />{hand}
-          <circle cx={x + 40} cy={y + 34} r={1.8} fill={GERM}><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.45;0.6;1" dur="2.4s" repeatCount="indefinite" /></circle></g>}
+        moving={<g><animateTransform attributeName="transform" type="translate" values="0,-4;0,18;0,18;0,-4" keyTimes="0;0.4;0.6;1" dur="2.4s" repeatCount="indefinite" />{hand}
+          <circle cx={x + 41} cy={y + 27} r={1.8} fill={GERM}><animate attributeName="opacity" values="0;0;1;1" keyTimes="0;0.45;0.6;1" dur="2.4s" repeatCount="indefinite" /></circle></g>}
         still={hand} />
     </SceneCard>
   );
 }
 
-/* Droplet: a cough sends large droplets that fall within about 3 feet. */
+/* Droplet: a cough sends larger droplets a short distance. No fixed
+   distance is drawn: droplets can travel farther than a textbook cutoff,
+   and a bracket would teach a safe boundary (Sol, PR #155). */
 function DropletScene({ x, y }) {
   const mx = x + 27, my = y + 21, floor = y + 52;
   const arcs = [13, 20, 27].map((reach) => `M${mx},${my} q${reach * 0.5},-8 ${reach},${floor - my - 4}`);
   return (
     <SceneCard x={x} y={y}>
       <Profile x={x + 17} y={y + 22} masked />
-      {[[mx + 12, floor - 6], [mx + 19, floor - 3], [mx + 26, floor - 5]].map(([dx, dy], i) => <circle key={i} cx={dx} cy={dy} r={2.6} fill={GERM} fillOpacity={0.8} />)}
+      {[[mx + 12, floor - 6], [mx + 19, floor - 3], [mx + 26, floor - 5]].map(([dx, dy], i) => <circle key={i} cx={dx} cy={dy} r={2.6} fill={GERM} />)}
       <Loop on="droplet">
         {arcs.map((d, i) => <Flow key={i} d={d} n={2} dur={1.6 + i * 0.2} r={2.6} color={GERM} shape="dot" />)}
       </Loop>
-      {/* the ~3 ft reach */}
-      <path d={`M${mx},${floor + 4} h30 M${mx},${floor + 1} v6 M${mx + 30},${floor + 1} v6`} stroke={C.muted} strokeWidth={1} />
-      <T x={mx + 32} y={floor + 8} size={8.5} weight={700} color={C.muted} mono>3ft</T>
     </SceneCard>
   );
 }
@@ -161,9 +137,9 @@ function AirborneScene({ x, y }) {
   return (
     <SceneCard x={x} y={y}>
       <Profile x={x + 17} y={y + 22} masked />
-      {AIR_DOTS.map(([dx, dy], i) => <circle key={i} cx={x + dx} cy={y + dy} r={1.1} fill={GERM} fillOpacity={0.75} />)}
+      {AIR_DOTS.map(([dx, dy], i) => <circle key={i} cx={x + dx} cy={y + dy} r={1.6} fill={GERM} />)}
       <Loop on="airborne">
-        {paths.map((d, i) => <Flow key={i} d={d} n={3} dur={4 + i * 0.6} r={1.2} color={GERM} shape="dot" />)}
+        {paths.map((d, i) => <Flow key={i} d={d} n={3} dur={4 + i * 0.6} r={1.6} color={GERM} shape="dot" />)}
       </Loop>
     </SceneCard>
   );
@@ -184,28 +160,59 @@ function WhileStep({ on, moving, still }) {
 /* A PPE glyph shrunk into a round "wear" badge. */
 const Badge = ({ cx, cy, children }) => (
   <g>
-    <circle cx={cx} cy={cy} r={13} fill={C.card} stroke={C.teal} strokeWidth={1.2} />
-    <g transform={`translate(${cx - 10.5},${cy - 10.5}) scale(0.55)`}>{children}</g>
+    <circle cx={cx} cy={cy} r={14} fill={C.card} stroke={C.teal} strokeWidth={1.2} />
+    <g transform={`translate(${cx - 11},${cy - 11}) scale(0.58)`}>{children}</g>
   </g>
 );
 
-function Row({ id, y, title, how, examples, wear, room, scene, badges, highlight }) {
+/* One precaution row. The scene and its PPE badges sit on the left; the
+   text column on the right wraps at the canvas's reading sizes, and the
+   row grows to fit it. A row the question's condition needs is outlined in
+   teal and labelled — a requirement, not an error, so not coral. */
+const TX = 104, TW = 238, LH = 1.3;
+export function rowHeight(r) {
+  const n = paraLines(r.how, TW, MIN_TEXT).length * MIN_TEXT * LH
+    + [r.examples, r.wear, r.room].reduce((a, t, i) => a + paraLines(`${["Examples", "Wear", "Room"][i]} ${t}`, TW).length * BODY_TEXT * LH, 0);
+  return Math.max(124, Math.ceil(30 + n + 14));
+}
+function Row({ id, y, r, scene, badges }) {
+  const h = rowHeight(r);
+  let ty = y + 46;
+  const block = (lead, text) => {
+    const at = ty;
+    ty += paraLines(`${lead} ${text}`, TW).length * BODY_TEXT * LH;
+    return <Para x={TX} y={at} w={TW} lead={lead} text={text} />;
+  };
+  const howAt = y + 42;
+  const howLines = paraLines(r.how, TW, MIN_TEXT).length;
+  ty = howAt + howLines * MIN_TEXT * LH + 6;
   return (
     <G id={id}>
-      <Box x={8} y={y} w={344} h={104} r={10} fill={C.surface} lift />
-      {highlight ? <rect x={5} y={y - 3} width={350} height={110} rx={12} fill="none" stroke={C.coral} strokeWidth={2} strokeDasharray="5 4" /> : null}
-      {scene(14, y + 7)}
-      <Anim on={id} kind="pop" delay={500}>{badges(y + 86)}</Anim>
-      <T x={100} y={y + 20} size={12.5} weight={700}>{title}</T>
-      <T x={100} y={y + 36} size={10.5} color={C.muted}>{how}</T>
-      <T x={100} y={y + 54} size={11}>{examples}</T>
-      <T x={100} y={y + 72} size={11}><tspan fontWeight={700} fill={C.accent}>Wear </tspan>{wear}</T>
-      <T x={100} y={y + 90} size={11}><tspan fontWeight={700} fill={C.accent}>Room </tspan>{room}</T>
+      <Box x={8} y={y} w={344} h={h} r={10} fill={C.surface} lift />
+      {scene(14, y + 10)}
+      <Anim on={id} kind="pop" delay={500}>{badges(y + 96)}</Anim>
+      <T x={TX} y={y + 24} size={15} weight={700}>{r.title}</T>
+      <Para x={TX} y={howAt} w={TW} size={MIN_TEXT} color={C.muted} text={r.how} />
+      {block("Examples", r.examples)}
+      {block("Wear", r.wear)}
+      {block("Room", r.room)}
     </G>
   );
 }
 
-/* Hand hygiene for the standard row; soap vs alcohol rub for C. diff. */
+export const ROWS = {
+  contact: { title: "Contact: spread by touch", how: "Skin, wounds, stool, surfaces and shared equipment",
+    examples: "MRSA, VRE, C. diff, scabies, head lice, RSV, congenital rubella", wear: "gown and gloves", room: "single room preferred, or cohort: same pathogen, compatible precautions; dedicated or disposable equipment when possible" },
+  droplet: { title: "Droplet: close-range spread", how: "Larger droplets from coughing, sneezing and talking",
+    examples: "influenza, pertussis, mumps, acquired rubella, meningococcal disease", wear: "surgical mask on entering the room",
+    room: "single room preferred, or cohort: same pathogen, compatible precautions" },
+  airborne: { title: "Airborne: stays in the air", how: "Tiny particles hang in the air and travel on air currents",
+    examples: "pulmonary or laryngeal TB, measles, chickenpox (+\u00a0contact)", wear: "N95 or higher respirator",
+    room: "negative-pressure isolation room, door closed" },
+};
+
+/* Hand hygiene for the standard row; soap and water for C. diff. No
+   crossed-out rub bottle: it read as a blanket ban (Sol, round 10). */
 const HandWash = ({ x, y }) => (
   <g fill="none" stroke={C.teal} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
     <path d={`M${x - 4},${y + 9} v-8 l-3,-3 a1.6,1.6 0 0 1 2.4,-2 l2.6,2.6 v-8 a1.5,1.5 0 0 1 3,0 v6 v-7.5 a1.5,1.5 0 0 1 3,0 v7.5 v-6 a1.5,1.5 0 0 1 3,0 v6 v-4 a1.5,1.5 0 0 1 3,0 v8 c0,4 -2,7 -5,7 z`} fill={C.card} />
@@ -219,47 +226,69 @@ const Soap = ({ x, y }) => (
     <path d={`M${x + 12},${y + 2} l3,3 l6,-7`} fill="none" stroke={C.teal} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
   </g>
 );
-const Rub = ({ x, y }) => (
-  <g>
-    <path d={`M${x - 5},${y - 4} h10 v12 a2,2 0 0 1 -2,2 h-6 a2,2 0 0 1 -2,-2 z M${x - 2},${y - 4} v-3 h5 l2,2`} fill={C.card} stroke={C.muted} strokeWidth={1.3} strokeLinejoin="round" />
-    <path d={`M${x + 10},${y - 3} l8,8 M${x + 18},${y - 3} l-8,8`} stroke={C.coral} strokeWidth={1.8} strokeLinecap="round" />
-  </g>
-);
 
-export function IsolationDiagram({ params = null, focus = null }) {
-  const lit = new Set(params?.types ?? []);
+/* What each player step SHOWS, as text: the image's description in the
+   player, so a screen reader gets the same row content a sighted student
+   sees, not just the spoken caption (Sol, round 11). */
+const rowText = (r) => `${r.title}. ${r.how}. Examples: ${r.examples.replace(/\u00a0/g, " ")}. Wear: ${r.wear}. Room: ${r.room}.`;
+const STANDARD_TEXT = "Standard precautions for every client, then add the precautions for how it spreads.";
+const TRANSPORT_TEXT = "Transport, droplet or airborne: the client wears a surgical mask if tolerated; chickenpox or zoster lesions are covered; staff take off a used gown and gloves and clean their hands.";
+const CDIFF_TEXT = "C. diff: soap and water. Washing removes spores; alcohol rub doesn't kill them. Facility policy sets when rub is used.";
+export const STEP_DESC = {
+  standard: STANDARD_TEXT,
+  contact: rowText(ROWS.contact),
+  cdiff: `${rowText(ROWS.contact)} ${CDIFF_TEXT}`,
+  droplet: rowText(ROWS.droplet),
+  airborne: rowText(ROWS.airborne),
+  transport: `${TRANSPORT_TEXT} Drawn beside it: a client wearing a surgical mask, labelled source control.`,
+};
+
+const DESC = "Standard precautions, including hand hygiene, for every client; transmission-based precautions are added on top. "
+  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella): gown and gloves; a single room preferred, or a cohort with clients who have the same pathogen and compatible precautions, and if neither is possible infection prevention decides the placement; dedicated or disposable equipment when possible, with shared equipment cleaned and disinfected between clients; for C. difficile, soap and water is commonly emphasized, because washing physically removes spores that alcohol rub does not reliably inactivate; current CDC and facility guidance set when alcohol rub is still used. "
+  + "Droplet precautions (larger respiratory droplets spread at close range by coughing, sneezing and talking; for example influenza, pertussis, mumps, acquired rubella, meningococcal disease): surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen and compatible precautions; if neither is possible, infection prevention decides the placement. "
+  + "Airborne precautions (tiny particles that stay in the air; for example suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox): a NIOSH-approved N95 or higher-level respirator (fit-tested if tight-fitting), negative-pressure airborne infection isolation room with the door closed. Chickenpox and disseminated zoster need airborne and contact precautions together. "
+  + "On droplet or airborne precautions, the client wears a surgical mask when transported, if tolerated, and chickenpox or zoster lesions are covered; used gown and gloves are removed and hands cleaned before transport, with clean PPE for later handling if needed; escort respiratory protection follows pathogen guidance and facility policy.";
+
+export function IsolationDiagram({ focus = null }) {
+  const y1 = 64, y2 = y1 + rowHeight(ROWS.contact) + 10, y3 = y2 + rowHeight(ROWS.droplet) + 10;
+  const yT = y3 + rowHeight(ROWS.airborne) + 10, yC = yT + 120;
   return (
-    <Frame h={442} focus={focus} title="Transmission-based precautions"
-      desc="Standard precautions, including hand hygiene, for every client. Contact precautions (spread by touch; MRSA, VRE, C. difficile, scabies, RSV): gown and gloves, private room or cohort, dedicated equipment; soap and water for C. difficile because alcohol rub does not kill its spores. Droplet precautions (large droplets that fall within about 3 feet; influenza, pertussis, mumps, rubella, meningococcal meningitis): surgical mask on entering the room, private room. Airborne precautions (tiny particles that stay in the air; tuberculosis, measles, chickenpox): N95 respirator, negative-pressure room with the door closed. Chickenpox needs airborne and contact precautions together. Clients wear a surgical mask when transported on droplet or airborne precautions.">
+    <Frame h={yC + 88} focus={focus} title="Transmission-based precautions" desc={DESC}
+      regions={{ standard: [0, 56], contact: [y1 - 14, y1 + rowHeight(ROWS.contact) + 4], droplet: [y2 - 14, y2 + rowHeight(ROWS.droplet) + 4],
+        airborne: [y3 - 14, y3 + rowHeight(ROWS.airborne) + 4], transport: [yT, yT + 110], cdiff: [yC, yC + 80] }}>
       <G id="standard">
-        <Box x={8} y={6} w={344} h={34} r={10} fill={C.card} lift />
-        <HandWash x={24} y={23} />
-        <T x={44} y={28} size={11.5}><tspan fontWeight={700} fill={C.accent}>Standard precautions</tspan> for every client — then add:</T>
+        <Box x={8} y={6} w={344} h={50} r={10} fill={C.card} lift />
+        <HandWash x={26} y={31} />
+        <T x={48} y={27} size={BODY_TEXT} weight={700} color={C.accent}>Standard precautions for every client</T>
+        <T x={48} y={46} size={MIN_TEXT} color={C.muted}>then add the precautions for how it spreads</T>
       </G>
-      <Row id="contact" y={50} highlight={lit.has("contact")}
-        title="Contact — spread by touch" how="skin, wounds, stool, surfaces, equipment"
-        examples="MRSA · VRE · C. diff · scabies · lice · RSV"
-        wear="gown + gloves" room="private or cohort; dedicated equipment"
+      <Row id="contact" y={y1} r={ROWS.contact}
         scene={(x, y) => <ContactScene x={x} y={y} />}
-        badges={(cy) => <><Badge cx={36} cy={cy}><Gown x={0} y={0} /></Badge><Badge cx={68} cy={cy}><Glove x={2} y={0} /></Badge></>} />
-      <Row id="droplet" y={164} highlight={lit.has("droplet")}
-        title="Droplet — large droplets, ~3 ft" how="coughing, sneezing, talking"
-        examples="flu · pertussis · mumps · rubella · meningococcal"
-        wear="surgical mask on entering the room" room="private; client masks for transport"
+        badges={(cy) => <><Badge cx={36} cy={cy}><Gown x={0} y={0} /></Badge><Badge cx={70} cy={cy}><Glove x={2} y={0} /></Badge></>} />
+      <Row id="droplet" y={y2} r={ROWS.droplet}
         scene={(x, y) => <DropletScene x={x} y={y} />}
-        badges={(cy) => <Badge cx={52} cy={cy}><Mask x={0} y={2} /></Badge>} />
-      <Row id="airborne" y={278} highlight={lit.has("airborne")}
-        title="Airborne — tiny particles hang in air" how="travel on air currents, farther than droplets"
-        examples="TB · measles · chickenpox (+ contact)"
-        wear="fit-tested N95 respirator" room="negative pressure, door closed"
+        badges={(cy) => <Badge cx={53} cy={cy}><Mask x={0} y={2} /></Badge>} />
+      <Row id="airborne" y={y3} r={ROWS.airborne}
         scene={(x, y) => <AirborneScene x={x} y={y} />}
-        badges={(cy) => <><Badge cx={36} cy={cy}><N95 x={0} y={4} /></Badge><Badge cx={68} cy={cy}><NegRoom x={2} y={0} /></Badge></>} />
+        badges={(cy) => <><Badge cx={36} cy={cy}><N95 x={0} y={4} /></Badge><Badge cx={70} cy={cy}><NegRoom x={2} y={0} /></Badge></>} />
+      {/* Shared by droplet AND airborne (Sol: only the droplet row said it). */}
+      <G id="transport">
+        <Box x={8} y={yT} w={344} h={110} r={10} fill={C.card} stroke={C.teal} lift />
+        <T x={18} y={yT + 22} size={BODY_TEXT} weight={700} color={C.accent}>Transport: droplet or airborne</T>
+        {/* the client, masked: source control, beside the transport rules
+            (Sol, round 13: the step no longer repeats both whole rows) */}
+        <Profile x={318} y={yT + 30} masked always />
+        <T x={342} y={yT + 100} size={MIN_TEXT} weight={600} anchor="end" color={C.muted}>client: source control</T>
+        <T x={18} y={yT + 42} size={MIN_TEXT}>Client: surgical mask if tolerated.</T>
+        <T x={18} y={yT + 61} size={MIN_TEXT}>Chickenpox or zoster: cover lesions.</T>
+        <T x={18} y={yT + 80} size={MIN_TEXT}>Staff: used gown, gloves off; clean hands.</T>
+      </G>
       <G id="cdiff">
-        <Box x={8} y={392} w={344} h={46} r={10} fill={C.noBg} stroke={C.coral} lift />
-        <T x={18} y={411} size={11.5} weight={700} color={C.danger}>C. diff: wash with soap and water</T>
-        <T x={18} y={428} size={10.5}>Alcohol rub does not kill its spores.</T>
-        <Anim on="cdiff" kind="pop" delay={300}><Soap x={278} y={416} /></Anim>
-        <Anim on="cdiff" kind="pop" delay={600}><Rub x={318} y={414} /></Anim>
+        <Box x={8} y={yC} w={344} h={80} r={10} fill={C.noBg} stroke={C.coral} lift />
+        <T x={18} y={yC + 23} size={BODY_TEXT} weight={700} color={C.danger}>C. diff: soap and water</T>
+        <T x={18} y={yC + 44} size={MIN_TEXT}>Washing removes spores; alcohol rub doesn't</T>
+        <T x={18} y={yC + 62} size={MIN_TEXT}>kill them. Facility policy sets when rub is used.</T>
+        <Anim on="cdiff" kind="pop" delay={300}><Soap x={316} y={yC + 24} /></Anim>
       </G>
     </Frame>
   );
@@ -273,24 +302,27 @@ export const isolation = {
   example: null,
   facts: [
     "Standard precautions apply to every client; transmission-based precautions are added on top of them.",
-    "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, lice, RSV) require a gown and gloves, a private room or cohorting, and dedicated equipment.",
-    "Droplet precautions (e.g., influenza, pertussis, mumps, rubella, meningococcal meningitis) require a surgical mask on entering the room and a private room; the client wears a surgical mask when transported.",
-    "Airborne precautions (e.g., tuberculosis, measles, chickenpox) require a fit-tested N95 respirator and a negative-pressure airborne infection isolation room with the door closed; the client wears a surgical mask when transported. Chickenpox (varicella) requires airborne AND contact precautions until the lesions are crusted.",
-    "Chickenpox (varicella) requires both airborne and contact precautions.",
-    "Alcohol-based hand rub does not kill C. difficile spores; hands are washed with soap and water.",
+    "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella) require a gown and gloves, and dedicated or disposable equipment when possible, with shared noncritical equipment cleaned and disinfected before another client uses it; a single room is preferred, or cohorting with clients who have the same pathogen and compatible additional precautions, and if neither is possible, infection prevention determines an appropriate placement with additional safeguards. Head lice need contact precautions until 24 hours after effective treatment; body and pubic lice need standard precautions.",
+    "Droplet precautions (e.g., influenza, pertussis, mumps, acquired rubella, meningococcal disease) require a surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen and compatible additional precautions; if neither is possible, infection prevention determines an appropriate placement with additional safeguards.",
+    "Respiratory droplets spread mainly at close range; there is no fixed distance at which transmission stops.",
+    "Airborne precautions (e.g., suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox) require a NIOSH-approved N95 or higher-level respirator, such as a PAPR (fit testing applies to tight-fitting models), and a negative-pressure airborne infection isolation room with the door closed.",
+    "Chickenpox (varicella) and disseminated zoster require airborne AND contact precautions. Localized zoster in an immunocompromised client requires airborne and contact precautions until dissemination is ruled out; localized zoster in an immunocompetent client, or once dissemination is ruled out, with the lesions covered, needs standard precautions.",
+    "Latent tuberculosis infection is not contagious and needs no isolation; extrapulmonary tuberculosis without pulmonary or laryngeal involvement needs standard precautions (draining lesions are managed separately). Congenital rubella needs contact precautions; acquired rubella needs droplet precautions.",
+    "On droplet or airborne precautions, the client wears a surgical mask, if tolerated, when transported out of the room, and affected varicella or zoster lesions are covered; used gown and gloves are removed and hand hygiene performed before transport, with clean PPE for later handling when indicated; respiratory protection for the escort follows pathogen-specific guidance and facility policy.",
+    "Alcohol-based hand rub does not reliably inactivate C. difficile spores; washing with soap and water physically removes them, and soap and water is commonly emphasized after C. difficile care in nursing exam preparation; the question's details and current course references apply. Current CDC and facility guidance determine when alcohol-based hand rub is still used in routine care (for example, when hands are not visibly soiled outside an outbreak).",
   ],
   steps: [
-    { key: "standard", focus: ["standard"], caption: "Every client gets standard precautions. Transmission-based precautions are added on top, matched to how the organism spreads.",
+    { key: "standard", desc: STEP_DESC["standard"], focus: ["standard"], caption: "Every client gets standard precautions. Transmission-based precautions are added on top, matched to how the organism spreads.",
       narration: "Every client gets standard precautions. Transmission-based precautions are added on top, and they are matched to how the organism spreads." },
-    { key: "contact", focus: ["contact"], caption: "Contact: spread by touch — skin, wounds, stool, surfaces. Gown and gloves, a private room or cohort, and dedicated equipment like a stethoscope that stays in the room.",
-      narration: "Contact precautions are for organisms spread by touch — skin, wounds, stool, and surfaces. Wear a gown and gloves. The client needs a private room or a cohort, and dedicated equipment, like a stethoscope that stays in the room." },
-    { key: "cdiff", focus: ["contact", "cdiff"], caption: "The C. diff trap: alcohol hand rub does not kill its spores. Wash with soap and water.",
-      narration: "Here is the C. diff trap. Alcohol hand rub does not kill its spores, so wash your hands with soap and water." },
-    { key: "droplet", focus: ["droplet"], caption: "Droplet: large droplets that fall within about 3 feet — flu, pertussis, mumps, rubella, meningococcal meningitis. Put on a surgical mask as you enter the room.",
-      narration: "Droplet precautions are for large droplets that fall within about three feet — influenza, pertussis, mumps, rubella, and meningococcal meningitis. Put on a surgical mask as you enter the room." },
-    { key: "airborne", focus: ["airborne"], caption: "Airborne: tiny particles that hang in the air — TB, measles, chickenpox. A fit-tested N95 respirator, and a negative-pressure room with the door kept closed. Chickenpox also needs contact precautions: gown and gloves.",
-      narration: "Airborne precautions are for tiny particles that hang in the air — tuberculosis, measles, and chickenpox. Wear a fit-tested N-ninety-five respirator, and keep the client in a negative-pressure room with the door closed. Chickenpox also needs contact precautions, so add a gown and gloves." },
-    { key: "transport", focus: ["droplet", "airborne"], caption: "If a client on droplet or airborne precautions must leave the room, the client wears a surgical mask. Chickenpox needs airborne and contact precautions together.",
-      narration: "If a client on droplet or airborne precautions has to leave the room, the client wears a surgical mask. And remember, chickenpox needs airborne and contact precautions together." },
+    { key: "contact", desc: STEP_DESC["contact"], focus: ["contact"], caption: "Contact: spread by touch, through skin, wounds, stool and surfaces, as with MRSA, C. diff, head lice and congenital rubella. Gown and gloves, a single room if possible or a cohort with the same pathogen and compatible precautions (otherwise infection prevention decides), and dedicated or disposable equipment when possible; shared equipment is cleaned and disinfected between clients.",
+      narration: "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces, as with MRSA, C. diff, head lice, and congenital rubella. Wear a gown and gloves. A single room is preferred, or a cohort with clients who have the same pathogen and compatible precautions; if neither is possible, infection prevention decides the placement. Use dedicated or disposable equipment when possible, and clean and disinfect any shared equipment between clients." },
+    { key: "cdiff", desc: STEP_DESC["cdiff"], focus: ["contact", "cdiff"], caption: "The C. diff trap: alcohol hand rub doesn't reliably kill its spores, while washing with soap and water physically removes them, so soap and water is commonly emphasized after C. diff care in nursing exam prep. Apply the question's details and your course references; CDC and facility policy set when alcohol rub is still used.",
+      narration: "Here is the C. diff trap. Alcohol hand rub doesn't reliably kill its spores, but washing with soap and water physically removes them, so soap and water is commonly emphasized after C. diff care in nursing exam prep. Apply the details of the question and your course references, and remember that CDC and facility policy set when alcohol rub is still used." },
+    { key: "droplet", desc: STEP_DESC["droplet"], focus: ["droplet"], caption: "Droplet: larger droplets spread at close range by coughing, sneezing and talking, as with influenza, pertussis, mumps, acquired rubella and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, or a cohort with the same pathogen and compatible precautions; otherwise infection prevention decides.",
+      narration: "Droplet precautions are for larger droplets that spread at close range when a client coughs, sneezes, or talks, as with influenza, pertussis, mumps, acquired rubella, and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, or a cohort with clients who have the same pathogen and compatible precautions. If neither is possible, infection prevention decides the placement." },
+    { key: "airborne", desc: STEP_DESC["airborne"], focus: ["airborne"], caption: "Airborne: tiny particles that hang in the air, as with pulmonary or laryngeal TB, measles and chickenpox. An N95 or higher-level respirator (fit-tested if tight-fitting), and a negative-pressure room with the door kept closed. Chickenpox also needs contact precautions: gown and gloves.",
+      narration: "Airborne precautions are for tiny particles that hang in the air, as with pulmonary or laryngeal tuberculosis, measles, and chickenpox. Wear an N-ninety-five or higher-level respirator, fit-tested if it is tight-fitting, and keep the client in a negative-pressure room with the door closed. Chickenpox also needs contact precautions, so add a gown and gloves." },
+    { key: "transport", desc: STEP_DESC["transport"], focus: ["transport"], caption: "If a client on droplet or airborne precautions must leave the room, the client wears a surgical mask if tolerated, and chickenpox or zoster lesions are covered; before leaving, staff remove used gown and gloves and clean their hands, using clean PPE for later handling if needed; escort respiratory protection follows the pathogen guidance and facility policy. Chickenpox needs airborne and contact precautions together.",
+      narration: "If a client on droplet or airborne precautions has to leave the room, the client wears a surgical mask if they can tolerate it, and any chickenpox or zoster lesions are covered. Before transport, staff take off a used gown and gloves and clean their hands, and put on clean protection later if it is needed. Whether the escort wears a respirator follows the guidance for that infection and facility policy. And remember, chickenpox needs airborne and contact precautions together." },
   ],
 };

@@ -217,7 +217,7 @@ describe("frames are rendered from the source tree by the trusted renderer", () 
     cpSync("package-lock.json", join(root, "package-lock.json"));
     const abg = join(root, "src/diagrams/abg.jsx");
     // the title says where the diagram code actually ran
-    writeFileSync(abg, readFileSync(abg, "utf8").replace('title: "Reading an ABG"', 'title: typeof process === "undefined" ? "ABG drawn in the browser" : "ABG drawn in Node"'));
+    writeFileSync(abg, readFileSync(abg, "utf8").replace('title: "ABG: acid–base reading"', 'title: typeof process === "undefined" ? "ABG drawn in the browser" : "ABG drawn in Node"'));
     git(root, "init", "-q"); git(root, "add", "-A");
     git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "source");
     return root;
@@ -232,7 +232,7 @@ describe("frames are rendered from the source tree by the trusted renderer", () 
       const plan = JSON.parse(readFileSync(join(out, "plan.json"), "utf8"));
       expect(plan.commit).toBe(git(root, "rev-parse", "HEAD").trim());
       expect(plan.diagrams.map((d) => d.title)).toEqual(["ABG drawn in the browser"]);
-      expect(plan.diagrams[0].steps.map((s) => s.key)).toEqual(["ph", "lungs", "kidneys", "rome", "worked", "compensation"]);
+      expect(plan.diagrams[0].steps.map((s) => s.key)).toEqual(["ph", "lungs", "kidneys", "rome", "compensation", "limits", "worked"]);
       expect(readFileSync(join(out, "abg/0.png")).subarray(1, 4).toString()).toBe("PNG");
       expect(git(root, "status", "--porcelain", "--ignored"), "rendering left the tree untouched").toBe("");
     } finally { rmSync(root, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); }
@@ -271,7 +271,7 @@ describe("the pairing and narration jobs read the source through the sandbox", (
 
   it("reads the source's own words, and offers its code no questions", async () => {
     const { withSandbox } = await import("../ops/render-diagrams.mjs");
-    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below")));
+    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH, the net state", "Begin with the pH, the net state")));
     try {
       const got = await withSandbox(root, async (call) => ({ abg: await call("raw", "abg"), propose: await call("propose", [{ id: 1, stem: "s" }]).then(() => "ran", (e) => String(e)) }));
       expect(got.abg.steps[0].narration).toMatch(/^Begin with the pH/);
@@ -304,7 +304,7 @@ describe("the pairing and narration jobs read the source through the sandbox", (
   }, 300_000);
 
   it("prepares the narration plan from the source tree, at its commit, and refuses a dirty tree", () => {
-    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below")));
+    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH, the net state", "Begin with the pH, the net state")));
     const out = join(mkdtempSync(join(tmpdir(), "narr-out-")), "plan.json");
     try {
       const r = spawnSync(process.execPath, ["ops/narrate.mjs", "--prepare", out, "--source", root], { encoding: "utf8", timeout: 240_000 });

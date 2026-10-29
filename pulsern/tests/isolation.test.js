@@ -1,41 +1,28 @@
-/* Which precautions a named condition needs — the mapping that outlines a
-   row of the isolation diagram. */
+/* The isolation diagram is a concept explainer: it never outlines a row
+   as "needed for this client" (Sol, rounds 1–5). */
 import { describe, it, expect } from "vitest";
-import { precautionFor } from "../src/diagrams/isolation.jsx";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { isolation } from "../src/diagrams/isolation.jsx";
+import { MATCHERS, proposePairs } from "../src/diagrams/match.js";
 
-describe("precautionFor", () => {
+describe("no client-specific precaution is read from question text", () => {
   it.each([
-    ["A client with MRSA in a wound", "contact"],
-    ["Clostridioides difficile diarrhea", "contact"],
-    ["A child with pertussis", "droplet"],
-    ["Neisseria meningitidis infection", "droplet"],
-    ["Tuberculosis is suspected", "airborne"],
-    ["active TB", "airborne"],
-    ["measles (rubeola)", "airborne"],
-  ])("%s → %s", (text, type) => {
-    expect(precautionFor(text).types).toEqual([type]);
+    "A client has measles and a negative rubella test.",
+    "A newborn has congenital infection caused by rubella virus.",
+    "The client has head lice. Effective treatment was completed 48 hours ago.",
+    "A client is admitted with suspected pulmonary tuberculosis.",
+  ])("%s", (stem) => {
+    expect(MATCHERS.isolation.extract(stem)).toBeNull();
+    expect(proposePairs({ stem: `${stem} Which precautions should the nurse implement?`, options: [], rationale: "" }))
+      .toEqual([{ d: "isolation", p: null }]);
   });
-
-  it("gives chickenpox both airborne and contact", () => {
-    expect(precautionFor("A child with varicella").types).toEqual(["airborne", "contact"]);
-  });
-
-  /* "German measles" is rubella (droplet), not measles (airborne). */
-  it("reads 'German measles' as rubella, not measles", () => {
-    expect(precautionFor("A pregnant client exposed to German measles")).toEqual({ condition: "rubella", types: ["droplet"] });
-  });
-
-  /* Pneumococcal meningitis needs standard precautions only. */
-  it("does not put bacterial meningitis in general on droplet", () => {
-    expect(precautionFor("bacterial meningitis caused by Streptococcus pneumoniae")).toBeNull();
-  });
-
-  it("lights no row when a question compares two conditions", () => {
-    expect(precautionFor("Which client can share a room: one with TB or one with MRSA?")).toBeNull();
-  });
-
-  it("does not read 'fluid' as flu", () => {
-    expect(precautionFor("Encourage oral fluid intake")).toBeNull();
+  /* PR #156 review: checking for the label alone would pass the old
+     unlabelled outline too. Patient-specific params must change NOTHING. */
+  it.each([["airborne"], ["contact"], ["droplet"], ["airborne", "contact"]])("draws the same diagram with params { types: %s } as with none", (...types) => {
+    const draw = (params) => renderToStaticMarkup(React.createElement(isolation.Diagram, params === undefined ? {} : { params }));
+    expect(draw({ types })).toBe(draw(undefined));
+    expect(draw({ types })).not.toContain("Needed for this client");
   });
 });
 
@@ -47,11 +34,24 @@ describe("chickenpox is shown as airborne + contact wherever it appears", () => 
     const { renderToStaticMarkup } = await import("react-dom/server");
     const { isolation } = await import("../src/diagrams/isolation.jsx");
     const html = renderToStaticMarkup(React.createElement(isolation.Diagram, {}));
-    expect(html).toContain("chickenpox (+ contact)");
-    expect(html).toMatch(/<desc[^>]*>[^<]*Chickenpox needs airborne and contact precautions/);
+    expect(html).toMatch(/chickenpox[^<]*<\/text>(?:<text[^>]*>)?\(\+\u00a0contact\)|chickenpox \(\+\u00a0contact\)/);
+    expect(html).toMatch(/<desc[^>]*>[^<]*Chickenpox and disseminated zoster need airborne and contact precautions/);
     const step = isolation.steps.find((s) => s.key === "airborne");
     expect(step.caption).toMatch(/Chickenpox also needs contact precautions/);
     expect(step.narration).toMatch(/contact precautions/);
     expect(isolation.facts.join(" ")).toMatch(/airborne AND contact/);
+  });
+});
+
+describe("step descriptions carry what the step shows (Sol, round 11)", () => {
+  it("gives the contact step every example on its row", async () => {
+    const { STEP_DESC } = await import("../src/diagrams/isolation.jsx");
+    for (const name of ["MRSA", "VRE", "C. diff", "scabies", "head lice", "RSV", "congenital rubella"]) expect(STEP_DESC.contact).toContain(name);
+    expect(isolation.steps.every((s) => typeof s.desc === "string" && s.desc.length > 20)).toBe(true);
+  });
+  it("is the image description in the player", async () => {
+    const { Explainer } = await import("../src/explainer.jsx");
+    const html = renderToStaticMarkup(React.createElement(Explainer, { diagram: isolation, startInPlayer: true, initialStep: 1 }));
+    expect(html).toMatch(/<desc[^>]*>Contact: spread by touch\. [^<]*VRE[^<]*scabies/);
   });
 });
