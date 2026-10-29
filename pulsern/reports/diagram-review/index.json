@@ -1,38 +1,40 @@
 {
   "abg": {
-    "key": "cf0731f4930fed03",
-    "sourceKey": "18cfed553fb3552fddf3bb43",
+    "key": "e12162b4537b9c85",
+    "sourceKey": "e2ca2473331bb83031085514",
     "frames": [
       "light/static",
       "light/ph",
       "light/lungs",
       "light/kidneys",
       "light/rome",
-      "light/worked",
       "light/compensation",
+      "light/limits",
+      "light/worked",
       "dark/static",
       "dark/ph",
       "dark/lungs",
       "dark/kidneys",
       "dark/rome",
-      "dark/worked",
-      "dark/compensation"
+      "dark/compensation",
+      "dark/limits",
+      "dark/worked"
     ],
     "verdict": "FAIL",
     "completed": true,
-    "reviewedAt": "2026-10-29T09:11:37.999Z",
+    "reviewedAt": "2026-10-29T09:38:50.360Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/abg/2026-10-29T09-11-37-999Z-cf0731f4930fed03.md",
+    "report": "reports/diagram-review/abg/2026-10-29T09-38-50-360Z-e12162b4537b9c85.md",
     "counts": {
       "blocker": 0,
-      "major": 3,
+      "major": 2,
       "minor": 0
     },
-    "sig": "9A4yssdVf1ezYl+mAJl0CcjZ/RjkLKth9XF/NBnP8BZo1n34FZ0KfWJfUAA9ZI1WtNcZ1s9fShctPP029YUcDA=="
+    "sig": "VqOlri8ius1RquHuhTxkvjMPUGi47rlakx/rZkkjemhvQAPOMvyxntVY/ivS8X5Vs+5G6C/LbLZ5w3Y4MFFPAw=="
   },
   "potassium": {
-    "key": "bc9958c8dd1cde99",
-    "sourceKey": "18cfed553fb3552fddf3bb43",
+    "key": "39a5d4fe61345d89",
+    "sourceKey": "e2ca2473331bb83031085514",
     "frames": [
       "light/static",
       "light/range",
@@ -51,19 +53,19 @@
     ],
     "verdict": "FAIL",
     "completed": true,
-    "reviewedAt": "2026-10-29T09:16:32.032Z",
+    "reviewedAt": "2026-10-29T09:43:25.550Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/potassium/2026-10-29T09-16-32-032Z-bc9958c8dd1cde99.md",
+    "report": "reports/diagram-review/potassium/2026-10-29T09-43-25-550Z-39a5d4fe61345d89.md",
     "counts": {
-      "blocker": 0,
-      "major": 2,
+      "blocker": 1,
+      "major": 1,
       "minor": 0
     },
-    "sig": "jrvhlrYyzxhExu3qQwSGYlu2DzFj3CmkoCKlHMXb3IyqSIU4N5nurp0Xcz4s9GOCK/XWSwzSoJtXq0T5GlugDw=="
+    "sig": "ResdZsjVWcLeK3Ql3xB1IC25s44JtmzDyUyniGuUyYqpAMm4LJBJ+bMxYqumihmQLdp/1vzkdEX96ntfpGFZDw=="
   },
   "tonicity": {
-    "key": "b52af497b62a0f25",
-    "sourceKey": "18cfed553fb3552fddf3bb43",
+    "key": "27b4801103888545",
+    "sourceKey": "e2ca2473331bb83031085514",
     "frames": [
       "light/static",
       "light/isotonic",
@@ -82,19 +84,19 @@
     ],
     "verdict": "PASS",
     "completed": true,
-    "reviewedAt": "2026-10-29T09:19:17.652Z",
+    "reviewedAt": "2026-10-29T09:46:11.678Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/tonicity/2026-10-29T09-19-17-652Z-b52af497b62a0f25.md",
+    "report": "reports/diagram-review/tonicity/2026-10-29T09-46-11-678Z-27b4801103888545.md",
     "counts": {
       "blocker": 0,
       "major": 0,
-      "minor": 0
+      "minor": 1
     },
-    "sig": "2IjSz+HoRZUDWd6zbnx4v+yjREZDbugOpNUVl0tB7CA+y8pqM5jcYsZMM3rylXSX72K3iZWyruzXMiaDlxCBDQ=="
+    "sig": "rJGBDzfLrdZ7QPPzevRcRVCXV8zwb5frxHckZwiB1fmBo4ohDKO6NvM5dhazorvopnFNXCLVDllHWZTfq5Z+BQ=="
   },
   "insulin": {
-    "key": "86c4f0e7c60dd07b",
-    "sourceKey": "18cfed553fb3552fddf3bb43",
+    "key": "ac4242bb3e69656c",
+    "sourceKey": "e2ca2473331bb83031085514",
     "frames": [
       "light/static",
       "light/idea",
@@ -115,19 +117,19 @@
     ],
     "verdict": "FAIL",
     "completed": true,
-    "reviewedAt": "2026-10-29T09:20:38.877Z",
+    "reviewedAt": "2026-10-29T09:48:32.227Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/insulin/2026-10-29T09-20-38-877Z-86c4f0e7c60dd07b.md",
+    "report": "reports/diagram-review/insulin/2026-10-29T09-48-32-227Z-ac4242bb3e69656c.md",
     "counts": {
       "blocker": 0,
-      "major": 2,
-      "minor": 0
+      "major": 1,
+      "minor": 1
     },
-    "sig": "acEFbs+ZXZyk6IG0QEDlF9Gi+/Mq8hO4Wsy39EnXx0B8XOAZdd3bUNHXjxLC4tLrEXrBz/z16D8OeXeBQ/oMDg=="
+    "sig": "ORyoxIY10f75OfotBAaewJi05E+t7QCqB9yZ1z5JLmlWrAn+Rg9BVW6nl2oY8wFHPwfMWa8NSGJsr/Ai0KnCAw=="
   },
   "isolation": {
-    "key": "b78a3bf38668d685",
-    "sourceKey": "18cfed553fb3552fddf3bb43",
+    "key": "53a4205d9fcffa9c",
+    "sourceKey": "e2ca2473331bb83031085514",
     "frames": [
       "light/static",
       "light/standard",
@@ -146,19 +148,19 @@
     ],
     "verdict": "FAIL",
     "completed": true,
-    "reviewedAt": "2026-10-29T09:23:37.476Z",
+    "reviewedAt": "2026-10-29T09:50:23.429Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/isolation/2026-10-29T09-23-37-476Z-b78a3bf38668d685.md",
+    "report": "reports/diagram-review/isolation/2026-10-29T09-50-23-429Z-53a4205d9fcffa9c.md",
     "counts": {
       "blocker": 1,
-      "major": 0,
-      "minor": 2
+      "major": 1,
+      "minor": 0
     },
-    "sig": "d4Tw6+EUnP6RQE3i1HDP1ANkSzRQ4TvtXfrlMZFj/enAatXHU0PMWNha7kGmr4gL3rh399EDPSKhjP4/XIR6Aw=="
+    "sig": "HrIA4uF74qpWZSScjsBfDHo8qMvRVJrHWKHL17RjS3kyWWujgHe+QxUJkpfoC7wvJiSbxGei/30+QMU3ih3JAA=="
   },
   "pressure-injury": {
-    "key": "ebe3db7e11991151",
-    "sourceKey": "18cfed553fb3552fddf3bb43",
+    "key": "3016c9d903430ffc",
+    "sourceKey": "e2ca2473331bb83031085514",
     "frames": [
       "light/static",
       "light/layers",
@@ -179,14 +181,14 @@
     ],
     "verdict": "FAIL",
     "completed": true,
-    "reviewedAt": "2026-10-29T09:27:01.422Z",
+    "reviewedAt": "2026-10-29T09:52:02.284Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/pressure-injury/2026-10-29T09-27-01-422Z-ebe3db7e11991151.md",
+    "report": "reports/diagram-review/pressure-injury/2026-10-29T09-52-02-284Z-3016c9d903430ffc.md",
     "counts": {
       "blocker": 0,
       "major": 2,
       "minor": 0
     },
-    "sig": "pqqE5YN3nIIiBs5zx0NOJjfXqL9TLsrDxCNPGblQhSghc2EQGm+WlYZxeeF+oqUgTC8ILDTt7DQXfmDL7sbvDQ=="
+    "sig": "BbhJZU/zmLvg+81Eff4AS4HKia73zQvzKUMOGeGD6Jnk6U0GZH3VHKBw8LZCzCHGs3P4YDi/PfqXrh/+ePT8CA=="
   }
 }
