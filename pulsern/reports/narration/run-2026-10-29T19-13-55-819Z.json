@@ -1,0 +1,304 @@
+{
+  "startedAt": "2026-10-29T19:13:55.819Z",
+  "voice": "marin",
+  "model": "gpt-4o-mini-tts",
+  "qaModel": "gpt-4o-transcribe",
+  "qaThreshold": 0.92,
+  "recorded": [
+    {
+      "diagram": "insulin",
+      "step": "rapid",
+      "similarity": 1,
+      "bytes": 258432
+    },
+    {
+      "diagram": "insulin",
+      "step": "short",
+      "similarity": 1,
+      "bytes": 312960
+    },
+    {
+      "diagram": "insulin",
+      "step": "nph",
+      "similarity": 1,
+      "bytes": 150528
+    },
+    {
+      "diagram": "insulin",
+      "step": "long",
+      "similarity": 1,
+      "bytes": 296064
+    },
+    {
+      "diagram": "insulin",
+      "step": "risk",
+      "similarity": 1,
+      "bytes": 159360
+    },
+    {
+      "diagram": "isolation",
+      "step": "contact",
+      "similarity": 1,
+      "bytes": 498432
+    },
+    {
+      "diagram": "isolation",
+      "step": "cdiff",
+      "similarity": 1,
+      "bytes": 372096
+    },
+    {
+      "diagram": "isolation",
+      "step": "droplet",
+      "similarity": 1,
+      "bytes": 405888
+    },
+    {
+      "diagram": "isolation",
+      "step": "airborne",
+      "similarity": 1,
+      "bytes": 375168
+    },
+    {
+      "diagram": "isolation",
+      "step": "transport",
+      "similarity": 1,
+      "bytes": 440064
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "layers",
+      "similarity": 1,
+      "bytes": 293760
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage1",
+      "similarity": 1,
+      "bytes": 228864
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage2",
+      "similarity": 1,
+      "bytes": 377856
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage3",
+      "similarity": 1,
+      "bytes": 225792
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage4",
+      "similarity": 1,
+      "bytes": 154368
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "other",
+      "similarity": 1,
+      "bytes": 424320
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "prevent",
+      "similarity": 1,
+      "bytes": 372096
+    }
+  ],
+  "skippedUnchanged": 20,
+  "failedQa": [],
+  "errors": [],
+  "characters": 5101,
+  "takes": [
+    {
+      "diagram": "insulin",
+      "step": "rapid",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in 10-30 minutes, peaks in 1-2 hours, and lasts 3-5 hours. It is mealtime insulin, and its exact timing follows the specific product and the prescribed plan.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/insulin--rapid--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "short",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Regular U-100 insulin given under the skin starts in 30 to 60 minutes, peaks at 2 to 4 hours and lasts 5 to 8 hours. Regular U-100 given intravenously acts much faster. Concentrated regular U-500 acts differently, and it is never given intravenously.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/insulin--short--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "nph",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Intermediate-acting NPH starts in 1–2 hours, has a long, broad peak from about 4–12 hours, and lasts 12–18 hours.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/insulin--nph--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "long",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Long-acting glargine (U-100) starts in one to two hours and has no pronounced peak. It provides a steady background level that wanes at about 24 hours. Other basal insulins, including glargine (U-300), last differently, so always check the product.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/insulin--long--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "risk",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Exam questions often test the higher risk of hypoglycemia around an insulin's expected peak, but lows can also happen at other times, including with peakless insulin.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/insulin--risk--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "contact",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces, as with MRSA, C. diff, head lice, and congenital rubella. Wear a gown and gloves. A single room is preferred or a cohort with clients who have the same pathogen and compatible precautions. If neither is possible, Infection Prevention decides the placement. Use dedicated or disposable equipment when possible, and clean and disinfect any shared equipment between clients.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/isolation--contact--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "cdiff",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Here is the C. diff trap: alcohol hand rub doesn't reliably kill its spores, but washing with soap and water physically removes them. So soap and water is commonly emphasized after C. diff care in nursing exam prep. Apply the details of the question and your course references, and remember that CDC and facility policy set when alcohol rub is still used.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/isolation--cdiff--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "droplet",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Droplet precautions are for larger droplets that spread at close range when a client coughs, sneezes, or talks, as with influenza, pertussis, mumps, acquired rubella, and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, or a cohort with clients who have the same pathogen and compatible precautions. If neither is possible, infection prevention decides the placement.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/isolation--droplet--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "airborne",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Airborne precautions are for tiny particles that hang in the air, as with pulmonary or laryngeal tuberculosis, measles, and chickenpox. Wear an N95 or higher-level respirator, fit-tested if it is tight-fitting, and keep the client in a negative-pressure room with the door closed. Chickenpox also needs contact precautions, so add a gown and gloves.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/isolation--airborne--take1.mp3"
+    },
+    {
+      "diagram": "isolation",
+      "step": "transport",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "If a client on droplet or airborne precautions has to leave the room, the client wears a surgical mask if they can tolerate it, and any chickenpox or zoster lesions are covered. Before transport, staff take off a used gown and gloves and clean their hands and put on clean protection later if it is needed. Whether the escort wears a respirator follows the guidance for that infection and facility policy. And remember, chickenpox needs airborne and contact precautions together.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/isolation--transport--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "layers",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Each column is the same skin, cut through: the epidermis, the dermis, fat, muscle, and bone. A stage describes what the tissue shows and how much tissue is lost. Real depth varies from one part of the body to another, and the stages are not a required progression.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/pressure-injury--layers--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage1",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Stage 1: The skin is intact, with an area of redness that does not blanch when you press on it. In darker skin, the color change can look different, so warmth, firmness, and sensation are checked too.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/pressure-injury--stage1--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage2",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Stage 2 is partial-thickness loss with exposed dermis. It looks like a shallow, pink, moist wound or an intact or ruptured blister filled with clear serum. There is no fat, granulation tissue, slough, or eschar. And stage 2 is only for injury from pressure, not for moisture damage, skin tears, burns, or abrasions.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/pressure-injury--stage2--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage3",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Stage 3 is full-thickness loss, with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage, or bone is exposed or directly palpable.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/pressure-injury--stage3--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "stage4",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Stage 4 is full-thickness loss, with fascia, muscle, tendon, ligament, cartilage or bone exposed or directly palpable.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/pressure-injury--stage4--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "other",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "An unstageable injury is full thickness skin and tissue loss whose extent can't be confirmed because slough or eschar obscures it. Slough in a wound whose extent can be seen doesn't make it unstageable. A deep tissue injury can be on intact or broken skin, a persistent, non-blanchable area of deep red, maroon, or purple, a blood-filled blister, or skin separating to show a dark wound bed.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/pressure-injury--other--take1.mp3"
+    },
+    {
+      "diagram": "pressure-injury",
+      "step": "prevent",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Prevention starts with the Braden Scale, and remember, a lower score means a higher risk. Reposition the client on an individualized schedule; every 2 hours is a common schedule on the exam. Keep the head of the bed at 30 degrees or lower if that is clinically appropriate. Use a pressure redistributing surface. Keep the skin clean and dry, and make sure they get enough protein, calories, and fluids.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T19-13-55-819Z/pressure-injury--prevent--take1.mp3"
+    }
+  ]
+}
