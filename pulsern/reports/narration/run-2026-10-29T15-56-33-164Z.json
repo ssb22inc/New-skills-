@@ -1,0 +1,146 @@
+{
+  "startedAt": "2026-10-29T15:56:33.164Z",
+  "voice": "marin",
+  "model": "gpt-4o-mini-tts",
+  "qaModel": "gpt-4o-transcribe",
+  "qaThreshold": 0.92,
+  "recorded": [
+    {
+      "diagram": "abg",
+      "step": "ph",
+      "similarity": 1,
+      "bytes": 370560
+    },
+    {
+      "diagram": "abg",
+      "step": "lungs",
+      "similarity": 1,
+      "bytes": 223488
+    },
+    {
+      "diagram": "abg",
+      "step": "kidneys",
+      "similarity": 1,
+      "bytes": 233856
+    },
+    {
+      "diagram": "abg",
+      "step": "rome",
+      "similarity": 1,
+      "bytes": 298368
+    },
+    {
+      "diagram": "abg",
+      "step": "compensation",
+      "similarity": 1,
+      "bytes": 880128
+    }
+  ],
+  "skippedUnchanged": 2,
+  "failedQa": [
+    {
+      "diagram": "abg",
+      "step": "limits",
+      "similarity": 0.9833836858006042,
+      "mismatch": {
+        "at": 11,
+        "expected": "1",
+        "heard": "1.5",
+        "context": "should be about 1 and a"
+      },
+      "heard": "Then, check the expected compensation. In metabolic acidosis, the PaCO2 should be about 1.5 times the bicarbonate plus 8, give or take 2. In metabolic alkalosis, two rules are in use, about 0.7 times the bicarbonate plus 21, or 40 plus 0.7 times the quantity bicarbonate minus 24. Each is give or take 2, they differ by about 2, and a value fitting either one counts. It rarely goes above about 55. For respiratory disorders, start from a PaCO2 of 40 and a bicarbonate of 24. In respiratory acidosis, the bicarbonate rises from 24 by about 1 to 2 for every 10 the PaCO2 is above 40, when it's acute, and about 3.5 to 4 when it's chronic, give or take 2. In respiratory alkalosis, it falls from 24 by about 2 for every 10 below 40, when acute, and about 4 to 5 when chronic, give or take 2. References vary in these numbers. These are approximations that assume compensation is established. The respiratory acidosis rules are used up to a PaCO2 of about 80. Acute buffering rarely raises the bicarbonate above about 30 to 32, and respiratory alkalosis alone rarely takes it below about 12 to 15. An acute change on top of chronic disease can fall between the acute and chronic estimates. When the pH is in range, the pH alone doesn't tell you the primary process. Test each possible primary disorder against its expected compensation, and keep every one that fits. A value well outside them suggests a mixed disorder."
+    }
+  ],
+  "errors": [],
+  "characters": 5050,
+  "takes": [
+    {
+      "diagram": "abg",
+      "step": "ph",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Start with the pH, the net state of the blood. Anything below 7.35 is acidemia. Anything above 7.45 is alkalemia. Exam materials often say acidosis and alkalosis, but those words name the processes, and more than one can be at work. The pH tells you the net state, not yet where it came from.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T15-56-33-164Z/abg--ph--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "lungs",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Now look at the lungs. Carbon dioxide behaves like an acid, so a PaCO2 above 45 pushes the blood toward acid—notice that its acid end is on the right, the opposite way round from the pH line.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T15-56-33-164Z/abg--lungs--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "kidneys",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Then, the kidneys. Bicarbonate is a base. Below 22 pushes toward acidosis, and above 26 pushes toward alkalosis. The actual pH depends on how it balances against the PaCO2.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T15-56-33-164Z/abg--kidneys--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "rome",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Now find the value that matches the pH, using ROME: Respiratory: The pH and PaCO2 move in opposite directions. Metabolic: The pH and bicarbonate move in the same direction. And if both values are pushing the pH the same way, both are primary problems; that is a combined disorder.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T15-56-33-164Z/abg--rome--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "compensation",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Compensation is the other system offsetting the first, so its effect on the pH opposes the first values. In compensation, the PaCO2 and the bicarbonate usually rise together or fall together, because a high PaCO2 pushes toward acid and a high bicarbonate pushes toward base. The NCLEX labels use the reference ranges. If the pH is out of range and the other value is still in its range, it is called uncompensated. If the other value is out of its range, opposing, but the pH is still abnormal, it is partially compensated. If the pH is back in range and both values are out of range with opposing effects on the pH, it is fully compensated. With the pH in range and only one value out, compensation can't be established from these values. And if both values push the pH the same way, that is a combined disorder, not compensation.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T15-56-33-164Z/abg--compensation--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "limits",
+      "take": 1,
+      "pass": false,
+      "similarity": 0.9833836858006042,
+      "mismatch": {
+        "at": 11,
+        "expected": "1",
+        "heard": "1.5",
+        "context": "should be about 1 and a"
+      },
+      "heard": "Then, check the expected compensation. In metabolic acidosis, the PaCO2 should be about 1.5 times the bicarbonate, plus 8, give or take 2. In metabolic alkalosis, two rules are in use, about 0.7 times the bicarbonate, plus 21, or 40, plus 0.7 times the quantity, bicarbonate minus 24. Each is give or take 2, they differ by about 2, and a value fitting either one counts. It rarely goes above about 55. For respiratory disorders, start from a PaCO2 of 40 and a bicarbonate of 24. In respiratory acidosis, the bicarbonate rises from 24 by about 1 to 2 for every 10 the PaCO2 is above 40, when it's acute, and about 3.5 to 4 when it's chronic, give or take 2. In respiratory alkalosis, it falls from 24 by about 2 for every 10 below 40 when acute, and about 4 to 5 when chronic, give or take 2. References vary in these numbers. These are approximations that assume compensation is established. The respiratory acidosis rules are used up to a PaCO2 of about 80. Acute buffering rarely raises the bicarbonate above about 30 to 32, and respiratory alkalosis alone rarely takes it below about 12 to 15. An acute change on top of chronic disease can fall between the acute and chronic estimates. When the pH is in range, the pH alone doesn't tell you the primary process. Test each possible primary disorder against its expected compensation, and keep every one that fits. A value well outside them suggests a mixed disorder.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T15-56-33-164Z/abg--limits--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "limits",
+      "take": 2,
+      "pass": false,
+      "similarity": 0.9833836858006042,
+      "mismatch": {
+        "at": 11,
+        "expected": "1",
+        "heard": "1.5",
+        "context": "should be about 1 and a"
+      },
+      "heard": "Then, check the expected compensation. In metabolic acidosis, the PaCO2 should be about 1.5 times the bicarbonate plus 8, give or take 2. In metabolic alkalosis, two rules are in use, about 0.7 times the bicarbonate plus 21, or 40 plus 0.7 times the quantity bicarbonate minus 24. Each is give or take 2, they differ by about 2, and a value fitting either one counts. It rarely goes above about 55. For respiratory disorders, start from a PaCO2 of 40 and a bicarbonate of 24. In respiratory acidosis, the bicarbonate rises from 24 by about 1 to 2 for every 10 the PaCO2 is above 40, when it's acute, and about 3.5 to 4 when it's chronic, give or take 2. In respiratory alkalosis, it falls from 24 by about 2 for every 10 below 40, when acute, and about 4 to 5 when chronic, give or take 2. References vary in these numbers. These are approximations that assume compensation is established. The respiratory acidosis rules are used up to a PaCO2 of about 80. Acute buffering rarely raises the bicarbonate above about 30 to 32, and respiratory alkalosis alone rarely takes it below about 12 to 15. An acute change on top of chronic disease can fall between the acute and chronic estimates. When the pH is in range, the pH alone doesn't tell you the primary process. Test each possible primary disorder against its expected compensation, and keep every one that fits. A value well outside them suggests a mixed disorder.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T15-56-33-164Z/abg--limits--take2.mp3"
+    }
+  ],
+  "stopped": "abg/limits failed the audio check on both takes; the run stopped there and nothing after it was recorded."
+}
