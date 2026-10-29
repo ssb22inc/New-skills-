@@ -1,0 +1,31 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T10:42:27.777Z",
+  "images": 14,
+  "key": "879d8dd4953b676b",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "accessibility",
+      "where": "Images 1, 6 and 7, airborne-scene particles; isolation.jsx AIR_DOTS",
+      "title": "Airborne particles are too faint in the light theme",
+      "problem": "The 1.1-unit-radius particles use labInk at 75% opacity over the teal gradient, producing approximately 2.9:1 contrast near the scene's bottom. At phone width these roughly two-pixel dots are difficult to distinguish, weakening the visual explanation of suspended particles.",
+      "fix": "Make the airborne particles opaque and use a darker existing palette token where necessary. Check the composited contrast across the entire gradient and visibility at 320px width.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2551085
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No clinical blocker found in the isolation content or its rendering logic. One light-theme graphical-contrast defect.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}

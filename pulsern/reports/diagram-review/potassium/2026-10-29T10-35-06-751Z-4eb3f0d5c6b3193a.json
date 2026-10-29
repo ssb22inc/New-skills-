@@ -1,0 +1,40 @@
+{
+  "id": "potassium",
+  "title": "Potassium & the ECG",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T10:35:06.751Z",
+  "images": 16,
+  "key": "4eb3f0d5c6b3193a",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "Images 1, 4, 9, 12; step \"hypo-care\"; fact 8; hypokalemia dynamicCaption branch",
+      "title": "Urine output is presented as an absolute prerequisite for potassium replacement",
+      "problem": "\"Because the kidneys must be able to excrete it\" turns a routine safety check into a universal contraindication. Oliguric or anuric patients, including dialysis patients, can develop hypokalemia and require carefully prescribed replacement. Conversely, preserved urine volume does not establish adequate potassium clearance. The unconditional wording can teach students to withhold necessary replacement or overestimate the reassurance provided by urine output.",
+      "fix": "Teach review of the current potassium, renal function and urine output before routine replacement. State that impaired renal function or low output requires prescriber review and individualized replacement and monitoring—not that replacement is categorically impossible. Apply the qualification to the facts, narration, SVG description and generated hypokalemia caption.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "pedagogy",
+      "where": "Images 1, 6, 7, 9, 14, 15; GOALS \"Shift K⁺ into cells\" and \"Remove K⁺\"; fact 10; step \"hyper-shift\"",
+      "title": "Emergency drug labels omit the distinctions students need to learn",
+      "problem": "\"Insulin with dextrose\" never identifies the usual exam-tested treatment as prescribed IV regular insulin, leaving preparation and route unspecified. \"Diuretics\" is broader still: potassium-sparing diuretics do not become potassium-removal therapy merely because the kidneys respond. This same diagram correctly lists them as a cause of hyperkalemia, making the unqualified removal label misleading.",
+      "fix": "For exam recognition, name prescribed IV regular insulin with dextrose for redistribution and a potassium-wasting loop diuretic, when indicated and renal response permits, for urinary removal. Keep this conceptual; do not add doses or administration regimens. Update the visible panel, facts, captions, narration and accessible description together.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2746785
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Revise before publication: the urine-output rule is too absolute, and the emergency-treatment labels omit important drug distinctions.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
