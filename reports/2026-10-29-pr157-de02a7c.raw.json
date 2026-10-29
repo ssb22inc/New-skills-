@@ -1,0 +1,50 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "6ecdc59dfcc66566f61b645393f189b0b73757c5",
+    "head": "de02a7c6fbee7ab6ba9f5600378544f548ba5bd8",
+    "pr": "157"
+  },
+  "reviewedAt": "2026-10-29T18:58:37.470Z",
+  "filesReviewed": [
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-31-56-713Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-31-56-713Z.md",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-36-06-189Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-36-06-189Z.md",
+    "pulsern/reports/diagram-review/index.json",
+    "pulsern/reports/narration/run-2026-10-29T17-27-46-727Z.json",
+    "pulsern/reports/narration/run-2026-10-29T17-27-46-727Z.md",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/narration.json",
+    "pulsern/tests/narrate.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 283,
+      "title": "Hyphenation alone does not establish equivalent speech",
+      "problem": "scriptCompounds treats every alphabetic hyphenated pair as equivalent to its closed spelling. A hyphen can distinguish different words and pronunciations: \"re-signed\" means signed again, whereas \"resigned\" means quit. The new normalization erases that distinction, allowing a recording with different meaning through the exact-word accuracy gate.",
+      "failure_scenario": "audioCheck(\"The nurse re-signed after the audit.\", \"The nurse resigned after the audit.\") returns pass: true with similarity 1. Both sides become \"nurse resigned after audit\", although the narration changes the nurse's action.",
+      "fix": "Restrict folding to explicitly vetted spelling equivalents, including the required meal-time/mealtime and iso-osmolar/isoosmolar variants, rather than deriving equivalence from every hyphen. Add a passing faithful baseline and a failing re-signed/resigned regression test. When tightening this rule, bump QA_VERSION so recordings accepted by the permissive rule are rechecked.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 91277,
+    "completionTokens": 8633,
+    "reasoningTokens": 8286,
+    "costUsd": 0.314521
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One accuracy-gate defect remains in compound normalization. The added tests cover the intended spelling variants but miss hyphenated forms whose closed spelling is a different word. I could not independently verify the refreshed visual-review signatures or the provenance of their new sourceKey from the supplied files.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
