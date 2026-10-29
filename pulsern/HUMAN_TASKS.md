@@ -172,37 +172,31 @@ Claude Code executes everything else. These run in parallel with the build.
 
 ## Read-aloud voice (added 2026-10-29)
 
-- H23 · Give the app its natural AI voice. The 🔊 Listen buttons on
-  practice questions, the Today round, Review misses, case studies and
-  flashcards already work, but until this key is set they use the
-  student's own device voice. Quality varies by device, from natural to
-  robotic. Readiness exams never have read aloud.
+- H23 · **Nothing to do.** The 🔊 Listen buttons (practice questions, the
+  Today round, Review misses, case studies, flashcards; never readiness
+  exams) use the OpenAI key already stored in the GitHub `pulsern-paid`
+  environment. No key goes on the web server.
 
-  1. Open https://vercel.com/ssb22incs-projects/pulsern/settings/environment-variables
-  2. Add a variable named `OPENAI_API_KEY`. Its value is an OpenAI API key
-     (https://platform.openai.com/api-keys). It can be the same key you
-     gave the narration job. Tick Production and Preview, then Save.
-  3. Redeploy: https://vercel.com/ssb22incs-projects/pulsern/deployments →
-     the latest Production deployment → ⋯ → Redeploy.
+  How it works:
+  - A student presses Listen. The server checks the request against the
+    bank, using the student's own access: approved content, a current pass,
+    never exam items. Nobody can make it say anything else. If the passage
+    already has checked audio, the student hears the AI voice at once.
+    Otherwise it is queued, and the device's own voice reads it this time.
+  - Every 15 minutes the job "pulsern-read-aloud"
+    (https://github.com/ssb22inc/New-skills-/actions/workflows/pulsern-read-aloud.yml)
+    voices the queued passages. It transcribes each one and checks it word
+    for word (numbers, units, negations). Only audio that passes is saved,
+    in the private `read-aloud` bucket, and from then on every student
+    hears it. A passage that fails twice keeps the device voice.
 
-  Check it works: sign in, open Practice, press 🔊 Listen to the question.
-  The label next to the buttons should say "AI voice". If it still says
-  "Your device's voice", the key is missing or wrong.
-
-  What the AI voice will say, and what it costs:
-  - Only items in the question bank that the student may open (approved,
-    with a current pass, never readiness-exam items). The words are
-    rebuilt from the bank on the server, so nobody can make it say
-    anything else. Built-in sample items use the device voice.
-  - Each new passage (a stem, a choice, a rationale) is synthesised, then
-    transcribed and checked word for word (numbers, units, negations)
-    before anyone hears it. It gets two tries; if both fail, that part
-    falls back to the device voice. Passing audio is saved in a private
-    storage bucket (`read-aloud`, created on first use) and reused free
-    from then on.
+  Limits and cost:
   - Daily caps on NEW passages: 300 per student and 4,000 for the whole app
     (UTC day). Change them with the Vercel variables `SPEAK_USER_DAILY` and
-    `SPEAK_GLOBAL_DAILY`. Over a cap, students get the device voice.
+    `SPEAK_GLOBAL_DAILY`. Each job run voices at most 200.
   - OpenAI bills `gpt-4o-mini-tts` per minute of audio, plus the
-    `gpt-4o-transcribe` check. Watch the first weeks at
+    `gpt-4o-transcribe` check. Saved audio is reused for free. Usage:
     https://platform.openai.com/usage.
+  - Optional: adding `OPENAI_API_KEY` to the Vercel project makes the
+    server voice new passages instantly, with the same check, instead of
+    queueing them.

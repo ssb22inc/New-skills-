@@ -14,6 +14,7 @@ import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments
 import { ReadAloudBar, pickDeviceVoice, ra, RATES, loadPrefs, sentences, speakLimitMs, makeVoiceClient, URL_TTL_MS, endsSession, shouldAutoRead } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, voiceCheck, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
+import { drainQueue } from "../ops/read-aloud-worker.mjs";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -153,6 +154,8 @@ function fakeStorage({ missingBucket = false } = {}) {
       return { error: null };
     },
     createSignedUrl: async (path, secs) => (files.has(path) ? { data: { signedUrl: `https://signed.example/${path}?ttl=${secs}` }, error: null } : { data: null, error: { message: "Object not found" } }),
+    list: async (dir) => ({ data: [...files.keys()].filter((k) => k.startsWith(`${dir}/`)).map((k) => ({ name: k.slice(dir.length + 1) })), error: null }),
+    remove: async (paths) => { for (const p of paths) files.delete(p); return { error: null }; },
   };
   return { calls, files, storage: { from: (b) => { expect(b).toBe(BUCKET); return bucket; }, createBucket: async (name, opts) => { calls.createBucket.push([name, opts]); bucketExists = true; return { error: null }; } } };
 }
@@ -202,9 +205,9 @@ describe("server voice: only the words of an item the student may read", () => {
     expect(f).not.toHaveBeenCalled();
   });
 
-  it("says it has no voice when the key is not set, so the app uses the device voice", async () => {
+  it("says it has no voice when storage is not configured", async () => {
     const f = fakeOpenAI();
-    expect((await speak({ ...base({ apiKey: "" }), storage: fakeStorage().storage, fetchImpl: f })).status).toBe(503);
+    expect((await speak({ ...base(), storage: null, fetchImpl: f })).status).toBe(503);
     expect(f).not.toHaveBeenCalled();
   });
 });
@@ -240,7 +243,9 @@ describe("server voice: the accuracy gate", () => {
     const f = fakeOpenAI(["Potassium 9.2 milliequivalents per liter."]), { storage, files } = fakeStorage();
     const out = await speak({ ...base(), storage, fetchImpl: f });
     expect(out.status).toBe(422);
-    expect([...files.keys()].filter((k) => k.endsWith(".mp3") || /marin\/.*\.json$/.test(k))).toEqual([]);
+    expect([...files.keys()].filter((k) => k.endsWith(".mp3"))).toEqual([]);
+    const rec = [...files.keys()].find((k) => /^marin\/.*\.json$/.test(k));
+    expect(JSON.parse(files.get(rec).toString())).toMatchObject({ pass: false, audioSha: null });
   });
 
   it("does not play saved audio without a passing record", async () => {
@@ -280,6 +285,84 @@ describe("server voice: the accuracy gate", () => {
     expect(speechKey("A.")).not.toBe(speechKey("A. "));
     expect(speechKey("A.")).not.toBe(speechKey("A.", { ...TTS, voice: "cedar" }));
     expect(speechKey("A.")).toMatch(/^[0-9a-f]{40}$/);
+  });
+});
+
+describe("server voice without a key: the queue and the voice job", () => {
+  it("queues a checked request once, counts it once, and spends nothing", async () => {
+    const f = fakeOpenAI(), { storage, files } = fakeStorage();
+    const out = await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f });
+    expect(out).toEqual({ status: 202, body: { queued: true } });
+    expect(f).not.toHaveBeenCalled();
+    const q = [...files.keys()].filter((k) => k.startsWith("queue/"));
+    expect(q).toHaveLength(1);
+    expect(JSON.parse(files.get(q[0]).toString())).toMatchObject({ text: "Potassium 2.9 milliequivalents per liter.", voice: "marin", ref: REF, seg: "opt0" });
+    expect((await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f })).status).toBe(202);
+    const used = [...files.keys()].find((k) => /^usage\/.*\/all\.json$/.test(k));
+    expect(JSON.parse(files.get(used).toString()).n).toBe(1);
+  });
+
+  it("never queues free text or an item the student cannot read", async () => {
+    const { storage, files } = fakeStorage();
+    expect((await speak({ ...base({ apiKey: "", text: "Anything." }), storage })).status).toBe(409);
+    expect((await speak({ ...base({ apiKey: "", readItem: async () => null }), storage })).status).toBe(404);
+    expect([...files.keys()]).toEqual([]);
+  });
+
+  it("holds the queue to the daily budgets", async () => {
+    const { storage, files } = fakeStorage();
+    const limits = { user: 1, global: 100 };
+    await speak({ ...base({ apiKey: "" }), storage, limits });
+    const out = await speak({ ...base({ apiKey: "", seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, limits });
+    expect(out.status).toBe(429);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+  });
+
+  it("the voice job voices and checks queued passages, then students get the audio", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const f = fakeOpenAI();
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
+    expect(r).toMatchObject({ queued: 1, voiced: 1, failed: 0, errors: [] });
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    const out = await speak({ ...base({ apiKey: "" }), storage });
+    expect(out.status).toBe(200);
+    expect(out.body.cached).toBe(true);
+  });
+
+  it("records a passage that fails the check twice, saves no audio, and never queues it again", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(["Potassium 9.2 mEq/L."]), log: () => {} });
+    expect(r).toMatchObject({ voiced: 0, failed: 1 });
+    expect([...files.keys()].some((k) => k.endsWith(".mp3"))).toBe(false);
+    expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(422);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+  });
+
+  it("keeps a passage queued when the provider fails, and stops the run", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 500 })), log: () => {} });
+    expect(r.errors).toHaveLength(1);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+  });
+
+  it("drops a queue entry that does not match its own text", async () => {
+    const { storage, files } = fakeStorage();
+    files.set("queue/marin-0000.json", Buffer.from(JSON.stringify({ text: "Hello.", voice: "marin", ref: REF, seg: "stem" })));
+    const f = fakeOpenAI();
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
+    expect(r.skipped).toBe(1);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("voices at most the run's limit", async () => {
+    const { storage } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    await speak({ ...base({ apiKey: "", seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage });
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), max: 1, log: () => {} });
+    expect(r).toMatchObject({ queued: 2, voiced: 1 });
   });
 });
 
@@ -377,6 +460,22 @@ describe("one script for the screen and the server", () => {
     expect(validResult({ correct: true, points: 0, max: 1 })).toBe(false);
     expect(validResult({ correct: false, points: 5, max: 4 })).toBe(false);
     expect(validResult({ correct: false, points: 0, max: 99 })).toBe(false);
+  });
+});
+
+describe("the voice job workflow", () => {
+  const wf = readFileSync(new URL("../../.github/workflows/pulsern-read-aloud.yml", import.meta.url), "utf8");
+  it("runs only the default branch's code, in the paid environment, never on pull requests", () => {
+    expect(wf).toContain("if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)");
+    expect(wf).toContain("environment: pulsern-paid");
+    expect(wf).not.toMatch(/pull_request/);
+    expect(wf).toContain("persist-credentials: false");
+    expect(wf).toMatch(/permissions:\s*\n\s*contents: read/);
+  });
+  it("runs the worker with a per-run limit, never cancelling a paid run midway", () => {
+    expect(wf).toContain("node ops/read-aloud-worker.mjs");
+    expect(wf).toContain("READ_ALOUD_MAX");
+    expect(wf).toContain("cancel-in-progress: false");
   });
 });
 
