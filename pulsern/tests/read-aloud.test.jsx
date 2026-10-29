@@ -10,11 +10,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments } from "../src/read-aloud-script.js";
+import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
+import { passagePaths } from "../api/_speak.js";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -309,7 +310,7 @@ describe("server voice: the accuracy gate", () => {
     });
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: flaky, log: () => {} });
     expect(r.errors).toHaveLength(1);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
     expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
   });
 
@@ -398,7 +399,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     const out = await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f });
     expect(out).toEqual({ status: 202, body: { queued: true } });
     expect(f).not.toHaveBeenCalled();
-    const q = [...files.keys()].filter((k) => k.startsWith("queue/"));
+    const q = [...files.keys()].filter((k) => /^queue(-retry)?\//.test(k));
     expect(q).toHaveLength(1);
     expect(JSON.parse(files.get(q[0]).toString())).toMatchObject({ text: "Potassium 2.9 milliequivalents per liter.", voice: "marin", ref: Q1.ref, seg: "card-front" });
     expect((await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f })).status).toBe(202);
@@ -418,7 +419,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     await speak({ ...base({ apiKey: "" }), storage, limits });
     const out = await speak({ ...base({ apiKey: "", ...Q2 }), storage, limits });
     expect(out.status).toBe(429);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
   });
 
   it("the voice job voices and checks queued passages, then students get the audio", async () => {
@@ -427,7 +428,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     const f = fakeOpenAI();
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
     expect(r).toMatchObject({ queued: 1, voiced: 1, failed: 0, errors: [] });
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
     const out = await speak({ ...base({ apiKey: "" }), storage });
     expect(out.status).toBe(200);
     expect(out.body.cached).toBe(true);
@@ -440,7 +441,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(r).toMatchObject({ voiced: 0, failed: 1 });
     expect([...files.keys()].some((k) => k.endsWith(".mp3"))).toBe(false);
     expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(422);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
   });
 
   it("keeps a passage queued when the provider fails, and stops the run", async () => {
@@ -448,7 +449,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     await speak({ ...base({ apiKey: "" }), storage });
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 500 })), log: () => {} });
     expect(r.errors).toHaveLength(1);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
   });
 
   it("drops a queue entry that does not match its own text", async () => {
@@ -482,7 +483,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     for (let run = 0; run < 6; run++) await drainQueue({ storage, apiKey: "k", fetchImpl: outage, limits, now, log: () => {} });
     expect(outage.mock.calls.filter(([u]) => u.endsWith("/audio/speech"))).toHaveLength(3); // never more than the day's spending
     expect([...files.keys()].filter((k) => /\/spend\/\d+$/.test(k))).toHaveLength(3);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1); // still waiting, not marked failed
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1); // still waiting, not marked failed
     expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
   });
 
@@ -494,7 +495,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     const today = await drainQueue({ storage, apiKey: "k", fetchImpl: f, limits, now: () => Date.UTC(2026, 9, 29, 16), log: () => {} });
     expect(today).toMatchObject({ budget: true, voiced: 0, errors: [] });
     expect(f).not.toHaveBeenCalled();
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
     const tomorrow = await drainQueue({ storage, apiKey: "k", fetchImpl: f, limits: { user: 300, admission: 5, spend: 5 }, now: () => Date.UTC(2026, 9, 30, 16), log: () => {} });
     expect(tomorrow).toMatchObject({ voiced: 1 });
     expect([...files.keys()].some((k) => k.startsWith("usage/2026-10-30/spend/"))).toBe(true);
@@ -515,7 +516,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     const { storage, files } = fakeStorage();
     const padded = { ...Q1.ref, padding: "x".repeat(2_000_000), nested: { more: [1, 2, 3] } };
     expect((await speak({ ...base({ apiKey: "", ref: padded }), storage })).status).toBe(202);
-    const q = [...files.keys()].find((k) => k.startsWith("queue/"));
+    const q = [...files.keys()].find((k) => /^queue(-retry)?\//.test(k));
     const stored = files.get(q).toString();
     expect(stored.length).toBeLessThan(QUEUE_ENTRY_MAX);
     expect(JSON.parse(stored).ref).toEqual(Q1.ref);
@@ -557,7 +558,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
     expect(r.errors[0]).toMatch(/could not read/);
     expect(r.skipped).toBe(0);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
     expect(f).not.toHaveBeenCalled();
   });
 
@@ -570,7 +571,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     const picky = vi.fn(async (url, init) => (url.endsWith("/audio/speech") && JSON.parse(init.body).input.startsWith("Potassium") ? { ok: false, status: 400 } : ok(url, init)));
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: picky, now: () => now, log: () => {} });
     expect(r).toMatchObject({ rejected: 1, voiced: 1 });
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
     expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(422); // never paid for again
   });
 
@@ -581,32 +582,33 @@ describe("server voice without a key: the queue and the voice job", () => {
     for (let run = 1; run < MAX_ATTEMPTS; run++) {
       const r = await drainQueue({ storage, apiKey: "k", fetchImpl: down, log: () => {} });
       expect(r.retried).toBe(1);
-      const q = [...files.keys()].find((k) => k.startsWith("queue/"));
+      const q = [...files.keys()].find((k) => /^queue(-retry)?\//.test(k));
       expect(JSON.parse(files.get(q).toString()).attempts).toBe(run);
     }
     const last = await drainQueue({ storage, apiKey: "k", fetchImpl: down, log: () => {} });
     expect(last.rejected).toBe(1);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
   });
 
   it("keeps a given-up passage queued until its give-up record is saved, then saves it without paying again", async () => {
     const good = fakeStorage();
     await speak({ ...base({ apiKey: "" }), storage: good.storage });
-    const q = [...good.files.keys()].find((k) => k.startsWith("queue/"));
+    const q = [...good.files.keys()].find((k) => /^queue(-retry)?\//.test(k));
     good.files.set(q, Buffer.from(JSON.stringify({ ...JSON.parse(good.files.get(q).toString()), attempts: MAX_ATTEMPTS - 1 })));
     // the last attempt fails, and writing the record fails too
     const real = good.storage.from(BUCKET);
     const noRecords = { ...good.storage, from: () => ({ ...real, upload: (p, b, o) => (/^marin\/.*\.json$/.test(p) ? Promise.resolve({ error: { message: "Internal error" } }) : real.upload(p, b, o)) }) };
     const first = await drainQueue({ storage: noRecords, apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 503 })), log: () => {} });
     expect(first.errors.some((e) => /give-up record/.test(e))).toBe(true);
-    expect(good.files.has(q)).toBe(true);
-    expect(JSON.parse(good.files.get(q).toString()).giveUp).toMatch(/gave up after 5 attempts/);
+    const kept = q.replace(/^queue\//, "queue-retry/");
+    expect(good.files.has(kept)).toBe(true);
+    expect(JSON.parse(good.files.get(kept).toString()).giveUp).toMatch(/gave up after 5 attempts/);
     // storage recovers: the record is saved and the entry removed, with no synthesis
     const f = fakeOpenAI();
     const second = await drainQueue({ storage: good.storage, apiKey: "k", fetchImpl: f, log: () => {} });
     expect(second.rejected).toBe(1);
     expect(f).not.toHaveBeenCalled();
-    expect(good.files.has(q)).toBe(false);
+    expect([...good.files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
     expect((await speak({ ...base({ apiKey: "" }), storage: good.storage })).status).toBe(422);
   });
 
@@ -614,10 +616,25 @@ describe("server voice without a key: the queue and the voice job", () => {
     const { storage, files } = fakeStorage();
     const segs = [["stem", "Which value is the priority?"], ["opt0", "Potassium 2.9 milliequivalents per liter."], ["opt1", "Sodium 138 milliequivalents per liter."]];
     for (const [seg, text] of segs) await speak({ ...base({ apiKey: "", ref: REF, seg, text }), storage });
-    files.set("queue/x.json", Buffer.from("not json")); // malformed content, read fine: dropped
     const down = vi.fn(async () => ({ ok: false, status: 500 }));
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: down, log: () => {} });
-    expect(r).toMatchObject({ providerDown: true, retried: 3, skipped: 1 });
+    expect(r).toMatchObject({ providerDown: true, retried: 3 });
+    expect(down.mock.calls.filter(([u]) => u.endsWith("/audio/speech"))).toHaveLength(3); // nothing after the third
+  });
+
+  it("serves every fresh request before any retry, however long the queue", async () => {
+    const { storage, files } = fakeStorage();
+    // 1,200 retried passages left by an outage, then one student's fresh request
+    for (let i = 0; i < 1200; i++) {
+      const text = `Card ${1000 + i}.`;
+      const key = passagePaths(text).retry;
+      files.set(key, Buffer.from(JSON.stringify({ text, voice: "marin", ref: { kind: "card", id: 1000 + i, part: "front" }, seg: "card-front", attempts: 1 })));
+    }
+    await speak({ ...base({ apiKey: "" }), storage });
+    const f = fakeOpenAI();
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, max: 1, log: () => {} });
+    expect(r.voiced).toBe(1);
+    expect(JSON.parse(f.mock.calls[0][1].body).input).toBe("Potassium 2.9 milliequivalents per liter.");
   });
 
   it("voices at most the run's limit", async () => {
@@ -625,7 +642,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     await speak({ ...base({ apiKey: "" }), storage });
     await speak({ ...base({ apiKey: "", ...Q2 }), storage });
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), max: 1, log: () => {} });
-    expect(r).toMatchObject({ queued: 2, voiced: 1 });
+    expect(r).toMatchObject({ voiced: 1 });
   });
 });
 
@@ -697,6 +714,24 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     expect(later.voiced).toBe(2); // only the new card's two sides
   });
 
+  it("gives up on a passage that keeps failing after five attempts, then moves on through the bank", async () => {
+    const { storage, files } = fakeStorage();
+    const db = fakeDb(BANK);
+    // the first result line always fails with an outage; everything else works
+    const first = verdictPassages()[0];
+    const ok = fakeOpenAI();
+    const flaky = vi.fn(async (url, init) => (url.endsWith("/audio/speech") && JSON.parse(init.body).input === first ? { ok: false, status: 500 } : ok(url, init)));
+    const runs = [];
+    for (let run = 0; run < MAX_ATTEMPTS + 1; run++) runs.push(await prewarmBank({ storage, db, apiKey: "k", fetchImpl: flaky, max: 1000 }));
+    const paidForFirst = flaky.mock.calls.filter(([u, i]) => u.endsWith("/audio/speech") && JSON.parse(i.body).input === first).length;
+    expect(paidForFirst).toBe(MAX_ATTEMPTS); // bounded, never more
+    expect(runs.slice(0, MAX_ATTEMPTS - 1).every((r) => r.failure && /^provider:/.test(r.stopped))).toBe(true);
+    expect(runs.at(-1).cursor).toMatchObject({ done: true }); // the scan finished
+    expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(200); // later items were voiced
+    const rec = [...files.keys()].find((k) => k === passagePaths(first).rec);
+    expect(JSON.parse(files.get(rec).toString()).reason).toMatch(/gave up after 5 attempts/);
+  });
+
   it("stops without paying when today's spending is used up", async () => {
     const { storage } = fakeStorage();
     const f = fakeOpenAI();
@@ -717,7 +752,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
       const r = await drainQueue({ storage, apiKey: "k", fetchImpl: broken, log: () => {} });
       expect(r.service).toBeTruthy();
       expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
-      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+      expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
       const fixed = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), log: () => {} });
       expect(fixed.voiced).toBe(1);
     });
@@ -738,7 +773,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 400 })), log: () => {} });
     expect(r.rejected).toBe(3);
     expect(r.service).toMatch(/3 refusals in a row/);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
   });
 
   it("counts live and scheduled syntheses against ONE app-wide cap", async () => {
@@ -843,7 +878,7 @@ describe("server voice: daily budgets", () => {
     const byItem = items.map((it) => out.filter((_, i) => items[i % 3] === it).map((r) => r.status));
     expect(byItem.filter((st) => st.every((x) => x === 202))).toHaveLength(2);
     expect(byItem.filter((st) => st.every((x) => x === 429))).toHaveLength(1);
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(2);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(2);
     expect(f).not.toHaveBeenCalled();
   });
 
@@ -861,7 +896,7 @@ describe("server voice: daily budgets", () => {
     const parts = questionSegments(ROW);
     const out = await Promise.all(parts.map((p) => speak({ ...base({ apiKey: "", ref: REF, seg: p.id, text: p.text }), storage })));
     expect(out.map((r) => r.status)).toEqual(parts.map(() => 202));
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(parts.length);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(parts.length);
     expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(1); // one claim for the whole item
   });
 
@@ -872,7 +907,7 @@ describe("server voice: daily budgets", () => {
     const parts = questionSegments(ROW);
     const out = await Promise.all(parts.map((p) => speak({ ...base({ apiKey: "", ref: REF, seg: p.id, text: p.text }), storage, limits })));
     expect(out.map((r) => r.status)).toEqual(parts.map(() => 429));
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1); // only the earlier card
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1); // only the earlier card
   });
 
   describe("an item claim whose request died part-way", () => {
@@ -886,7 +921,7 @@ describe("server voice: daily budgets", () => {
       await speak({ ...base({ apiKey: "" }), storage, now: t });
       const m = markerOf(files);
       files.set(m, Buffer.from(`pending:${t}`));
-      for (const k of [...files.keys()]) if (k.startsWith("queue/") || /\/(u-[0-9a-f]+|all)\/\d+$/.test(k)) files.delete(k);
+      for (const k of [...files.keys()]) if (/^queue(-retry)?\//.test(k) || /\/(u-[0-9a-f]+|all)\/\d+$/.test(k)) files.delete(k);
       return m;
     }
 
@@ -897,7 +932,7 @@ describe("server voice: daily budgets", () => {
       const out = await speak({ ...base({ apiKey: "" }), storage, now: t + CLAIM_LEASE_MS + 1000 });
       expect(out.status).toBe(202);
       expect(files.get(m).toString()).toBe("ok");
-      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+      expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
       expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(1); // the caps still count it
     });
 
@@ -907,7 +942,7 @@ describe("server voice: daily budgets", () => {
       await abandoned(files, storage, t);
       const out = await speak({ ...base({ apiKey: "" }), storage, now: t + 1000 });
       expect(out.status).toBe(503);
-      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+      expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
     });
 
     it("is taken over by exactly one of many requests, and still respects the caps", async () => {
@@ -928,7 +963,7 @@ describe("server voice: daily budgets", () => {
       const out = await speak({ ...base({ apiKey: "" }), storage, now: t + CLAIM_LEASE_MS + 1000, limits: { user: 0, admission: 100, spend: 100 } });
       expect(out.status).toBe(429);
       expect(files.has(m)).toBe(false);
-      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+      expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
     });
   });
 
@@ -949,7 +984,7 @@ describe("server voice: daily budgets", () => {
     expect((await speak({ ...base(), storage, fetchImpl: f })).status).toBe(503);
     expect((await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f })).status).toBe(503);
     expect(f).not.toHaveBeenCalled();
-    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
   });
 
   it("charges a second take to the budget too", async () => {
@@ -1071,6 +1106,42 @@ describe("the voice job workflow", () => {
     expect(wf).toContain("node ops/read-aloud-worker.mjs");
     expect(wf).toContain("READ_ALOUD_MAX");
     expect(wf).toContain("cancel-in-progress: false");
+  });
+});
+
+describe("every part that can be read has something highlighted on screen", () => {
+  /* A part refused by the voice check is shown, not voiced ("read this part
+     on screen"), so every part id a script can produce must map to a
+     highlighted element for its reader in App.jsx. */
+  const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const family = (id) => partOf(id).replace(/\d+$/, "#");
+  const target = (reader, fam) => {
+    const lit = fam.includes("#") ? `ra(${reader}, \`${fam.replace("#", "${")}` : `ra(${reader}, "${fam}"`;
+    return app.includes(lit) || (fam.startsWith("bt-") && app.includes(`ra(${reader}, \`bt-\${col.slot}\``)) || (fam.startsWith("card-") && app.includes(`ra(${reader}, show ? "card-back" : "card-front"`));
+  };
+  const types = [
+    { ...ROW, type: "mc" }, { ...ROW, type: "sata", answer: [0] }, { ...ROW, type: "order", answer: [1, 0] },
+    { type: "matrix", stem: "S.", extra: { rows: ["a"], columns: ["x", "y"] }, answer: [0] },
+    { type: "cloze", stem: "S {0}.", extra: { dropdowns: [["a", "b"]] }, answer: [1] },
+    { type: "bowtie", stem: "S.", extra: { actions: ["a"], conditions: ["c"], parameters: ["p"] }, answer: { actions: [0], condition: 0, parameters: [0] } },
+    { type: "calc", stem: "S.", extra: { unit: "mL" }, answer: 1 },
+    { type: "highlight", stem: "S.", extra: { tokens: ["t"] }, answer: [0] },
+    { ...ROW, extra: { exhibit: [{ label: "Vitals", content: "BP 90/60" }] } },
+  ];
+  const WRONG = { correct: false, points: 0, max: 1 };
+  it("the question reader and the explanation reader", () => {
+    const q = new Set(types.flatMap((t) => questionSegments(t, { ...t, ...(t.extra ?? {}) }).map((x) => family(x.id))));
+    const fb = new Set(types.flatMap((t) => questionFeedbackSegments(t, WRONG).map((x) => family(x.id))));
+    expect([...q].filter((f) => !target("qReader", f))).toEqual([]);
+    expect([...fb].filter((f) => !target("fbReader", f))).toEqual([]);
+    expect(fb.has("correction")).toBe(true);
+  });
+  it("the case and flashcard readers", () => {
+    const cs = { title: "T", intro: "I.", vitals: [["HR", "1"]], labs: [], note: "N.", steps: [{ stem: "S?", options: ["a"], type: "sata", answer: [0], rationale: "R." }] };
+    expect(caseIntroSegments(cs).map((x) => family(x.id)).filter((f) => !target("introReader", f))).toEqual([]);
+    expect(caseStepSegments(cs.steps[0]).map((x) => family(x.id)).filter((f) => !target("stepReader", f))).toEqual([]);
+    expect(caseFeedbackSegments(cs.steps[0], WRONG).map((x) => family(x.id)).filter((f) => !target("caseFbReader", f))).toEqual([]);
+    expect([...cardSegments({ front: "F", back: "B" }, false), ...cardSegments({ front: "F", back: "B" }, true)].map((x) => family(x.id)).filter((f) => !target("cardReader", f))).toEqual([]);
   });
 });
 

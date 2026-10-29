@@ -1565,7 +1565,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
       <section className="card">
         <div className="q-meta mono">
           <span>{q.cat.toUpperCase()}{mode === "review" ? " · RETRY" : ""}</span>
-          <span>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {TYPE_LABEL[q.type] ?? "MULTIPLE CHOICE"}</span>
+          <span className={ra(qReader, "instruction")}>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {TYPE_LABEL[q.type] ?? "MULTIPLE CHOICE"}</span>
         </div>
         {phase === "answering" && <ReadAloudBar reader={qReader} label="Listen to the question" />}
         {phase === "answering" && qReader.available && (
@@ -1732,10 +1732,10 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
               <p className="small mono">Next review: {nextReview === addDays(1) ? "tomorrow" : nextReview}</p>
             )}
             {q.type === "order" && !wasCorrect && (
-              <p className="small"><strong>Correct order:</strong> {q.answer.map((i) => q.options[i]).join(" → ")}</p>
+              <p className={ra(fbReader, "correction", "small")}><strong>Correct order:</strong> {q.answer.map((i) => q.options[i]).join(" → ")}</p>
             )}
             {q.type === "cloze" && !wasCorrect && (
-              <p className="small"><strong>Correct choices:</strong> {q.answer.map((a, i) => ext.dropdowns[i][a]).join(" · ")}</p>
+              <p className={ra(fbReader, "correction", "small")}><strong>Correct choices:</strong> {q.answer.map((a, i) => ext.dropdowns[i][a]).join(" · ")}</p>
             )}
             {q.type === "calc" && (
               <p className="small"><strong>{wasCorrect ? "Answer:" : "Correct answer:"}</strong> {q.answer} {ext.unit}{!wasCorrect && ` (you entered ${String(sel).trim() || "nothing"})`}</p>
@@ -1873,7 +1873,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
 
       {step >= 0 && phase !== "done" && (
         <section className="card">
-          <p className="eyebrow">Step {step + 1} of {cs.steps.length} · {s.phase}</p>
+          <p className={ra(stepReader, "instruction", "eyebrow")}>Step {step + 1} of {cs.steps.length} · {s.phase}</p>
           {phase === "answering" && <ReadAloudBar reader={stepReader} label="Listen to this step" />}
           <p className={ra(stepReader, "stem", "stem")}>{s.stem}</p>
           <div className="opts">
@@ -1896,7 +1896,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
           {phase === "answering" && <button className="btn" disabled={!sel.length} onClick={submit}>Check answer</button>}
           {phase === "feedback" && (
             <div className={ok ? "feedback ok" : "feedback no"}>
-              <p className="fb-head mono">
+              <p className={ra(caseFbReader, "verdict", "fb-head mono")}>
                 {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok ? " · +30 XP" : ""}
               </p>
               <p className="small mono">Case score so far: {total.points}/{total.max} points</p>

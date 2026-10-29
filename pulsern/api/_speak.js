@@ -365,7 +365,9 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
 
 export const passagePaths = (text, tts = TTS) => {
   const key = speechKey(text, tts);
-  return { key, mp3: `${tts.voice}/${key}.mp3`, rec: `${tts.voice}/${key}.json`, queue: `queue/${tts.voice}-${key}.json` };
+  /* queue: fresh requests; retry: ones that hit an outage, served after
+     every fresh request (ops/read-aloud-worker.mjs). */
+  return { key, mp3: `${tts.voice}/${key}.mp3`, rec: `${tts.voice}/${key}.json`, queue: `queue/${tts.voice}-${key}.json`, retry: `queue-retry/${tts.voice}-${key}.json` };
 };
 
 /* Save a checked take: the audio only if it passed, and always the record
@@ -423,7 +425,7 @@ export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, 
   const part = parts.find((s) => s.id === seg);
   if (!part || part.text !== text) return { status: 409, body: { error: 'Text does not match the item' } };
 
-  const { mp3, queue } = passagePaths(text, tts);
+  const { mp3, queue, retry } = passagePaths(text, tts);
   const bucket = storage.from(BUCKET);
 
   // Already checked: a link to the audio, or a refusal if it failed the check.
@@ -436,7 +438,8 @@ export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, 
   }
 
   // Already waiting for the voice job: nothing more to spend.
-  if (!apiKey && await readJson(bucket, queue)) return { status: 202, body: { queued: true } };
+  const waiting = async (paths) => (await readJson(bucket, paths.queue)) || (await readJson(bucket, paths.retry));
+  if (!apiKey && await waiting({ queue, retry })) return { status: 202, body: { queued: true } };
 
   const overBudget = { status: 429, body: { error: 'Daily voice limit reached' } };
   const unavailable = { status: 503, body: { error: 'Voice unavailable' } };
@@ -490,7 +493,7 @@ export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, 
     for (const p of parts) {
       const paths = passagePaths(p.text, tts);
       if (await readRecord(storage, p.text, tts, t0)) continue;
-      if (await readJson(bucket, paths.queue)) continue;
+      if (await waiting(paths)) continue;
       const entry = JSON.stringify({ text: p.text, voice: tts.voice, ref, seg: p.id, requestedAt: new Date(t0).toISOString() });
       if (entry.length > QUEUE_ENTRY_MAX) continue; // cannot happen for a valid part; never stored if it did
       if (!(await put(storage, paths.queue, entry, 'application/json'))) return unavailable;

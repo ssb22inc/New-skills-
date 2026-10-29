@@ -66,82 +66,101 @@ async function readJsonFile(bucket, path, maxBytes = Infinity) {
 }
 const put = (bucket, path, value) => bucket.upload(path, JSON.stringify(value), { contentType: "application/json", upsert: true });
 
+/* List up to `want` entries of a lane, oldest first, across pages. */
+async function listLane(bucket, dir, want) {
+  const out = [];
+  for (let offset = 0; out.length < want; offset += 1000) {
+    const { data, error } = await bucket.list(dir, { limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } });
+    if (error) {
+      if (/not found/i.test(String(error.message ?? error))) return out;
+      throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
+    }
+    out.push(...(data ?? []).filter((e) => e.name?.endsWith(".json")));
+    if (!data || data.length < 1000) break;
+  }
+  return out.slice(0, want);
+}
+
+/* Two lanes: every fresh request (queue/) before any retry
+   (queue-retry/), each oldest first. Entries are read one at a time, so a
+   long queue never sits in memory. */
 export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log }) {
   const bucket = storage.from(BUCKET);
   const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
-  const { data: entries, error } = await bucket.list("queue", { limit: 1000, sortBy: { column: "created_at", order: "asc" } });
-  if (error) {
-    if (/not found/i.test(String(error.message ?? error))) return out;
-    throw new Error(`Could not list the queue: ${error.message ?? error}`);
-  }
-  // Read each entry. A read error keeps it (reported); only content that was
-  // read and is malformed, or does not match its own name, is dropped.
-  const jobs = [];
-  for (const f of (entries ?? []).filter((e) => e.name?.endsWith(".json"))) {
-    const path = `queue/${f.name}`;
-    // Oversized entries are not ours: dropped unread.
-    if (Number(f.metadata?.size) > QUEUE_ENTRY_MAX) { await bucket.remove([path]); out.skipped++; continue; }
-    const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
-    if (got.error) { out.operational = true; out.errors.push(`${f.name}: could not read (${got.error.message ?? got.error})`); continue; }
-    const raw = got.value;
-    const ref = canonicalRef(raw?.ref);
-    if (got.malformed || got.tooBig || !raw || raw.voice !== TTS.voice || !ref || !validRequest(ref, raw.seg, raw.text) || passagePaths(raw.text).queue !== path) {
-      await bucket.remove([path]); out.skipped++; continue;
-    }
-    // Only the known fields are kept for the run.
-    jobs.push({ path, job: { text: raw.text, voice: raw.voice, ref, seg: raw.seg, requestedAt: String(raw.requestedAt ?? ""), attempts: Number.isInteger(raw.attempts) ? raw.attempts : 0, giveUp: typeof raw.giveUp === "string" ? raw.giveUp.slice(0, 200) : null } });
-  }
-  out.queued = jobs.length;
-  // Fresh requests before retried ones, oldest first.
-  jobs.sort((a, b) => (a.job.attempts ?? 0) - (b.job.attempts ?? 0) || String(a.job.requestedAt).localeCompare(String(b.job.requestedAt)));
-
   let inARow = 0, refusedInARow = 0, done = 0;
-  for (const { path, job } of jobs) {
-    if (done >= max) break;
-    if (await readRecord(storage, job.text, TTS, now())) { await bucket.remove([path]); out.skipped++; continue; } // already decided
-    /* Given up on earlier, but its record could not be saved then: save
-       the record now (no synthesis); remove the entry only once it is. */
-    if (job.giveUp) {
-      if (await saveRejected(storage, job.text, job.giveUp, { now: now() })) { await bucket.remove([path]); out.rejected++; }
-      else { out.operational = true; out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`); }
-      continue;
-    }
-    done++;
-    const v = await voiceOne({ storage, apiKey, fetchImpl, text: job.text, now, limits });
-    out.spent += v.spent;
-    if (v.result === "budget") { out.budget = true; break; }
-    if (v.result === "service") { out.service = v.error; break; }
-    if (v.result === "storage") { out.operational = true; out.errors.push(`storage: ${v.error}`); break; }
-    if (v.result === "transient") {
-      const attempts = (job.attempts ?? 0) + 1;
-      if (attempts >= MAX_ATTEMPTS) {
-        const reason = `gave up after ${attempts} attempts: ${v.error}`;
-        // The entry goes only once the record that ends its retries is saved.
-        if (await saveRejected(storage, job.text, reason, { now: now() })) { await bucket.remove([path]); out.rejected++; }
-        else {
-          await put(bucket, path, { ...job, attempts, giveUp: reason });
-          out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`);
-        }
-      } else {
-        await put(bucket, path, { ...job, attempts, lastError: String(v.error).slice(0, 200) });
-        out.retried++;
+  const touched = new Set(); // moved or rewritten this run: next run's work
+
+  for (const lane of ["queue", "queue-retry"]) {
+    // Read entries a little beyond what can be voiced, to step over ones
+    // already decided or dropped.
+    const entries = await listLane(bucket, lane, Math.max(0, max - done) * 2 + 20);
+    for (const f of entries) {
+      if (done >= max) return out;
+      const path = `${lane}/${f.name}`;
+      if (touched.has(path)) continue;
+      // Oversized entries are not ours: dropped unread.
+      if (Number(f.metadata?.size) > QUEUE_ENTRY_MAX) { await bucket.remove([path]); out.skipped++; continue; }
+      const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
+      if (got.error) { out.operational = true; out.errors.push(`${f.name}: could not read (${got.error.message ?? got.error})`); continue; }
+      const raw = got.value;
+      const ref = canonicalRef(raw?.ref);
+      const paths = raw && typeof raw.text === "string" ? passagePaths(raw.text) : null;
+      if (got.malformed || got.tooBig || !raw || raw.voice !== TTS.voice || !ref || !validRequest(ref, raw.seg, raw.text) || (lane === "queue" ? paths.queue : paths.retry) !== path) {
+        await bucket.remove([path]); out.skipped++; continue;
       }
-      // Any provider or storage failure is an operational failure of the run,
-      // even when processing carries on with the next entry.
-      out.operational = true;
-      out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: ${v.error}`);
-      if (++inARow >= MAX_TRANSIENT_IN_A_ROW) { out.providerDown = true; break; }
-      continue;
+      // Only the known fields are kept.
+      const job = { text: raw.text, voice: raw.voice, ref, seg: raw.seg, requestedAt: String(raw.requestedAt ?? ""), attempts: Number.isInteger(raw.attempts) ? raw.attempts : 0, giveUp: typeof raw.giveUp === "string" ? raw.giveUp.slice(0, 200) : null };
+      out.queued++;
+      if (await readRecord(storage, job.text, TTS, now())) { await bucket.remove([path]); out.skipped++; continue; } // already decided
+      /* Given up on earlier, but its record could not be saved then: save
+         the record now (no synthesis); remove the entry only once it is. */
+      if (job.giveUp) {
+        if (await saveRejected(storage, job.text, job.giveUp, { now: now() })) { await bucket.remove([path]); out.rejected++; }
+        else { out.operational = true; out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`); }
+        continue;
+      }
+      done++;
+      const v = await voiceOne({ storage, apiKey, fetchImpl, text: job.text, now, limits });
+      out.spent += v.spent;
+      if (v.result === "budget") { out.budget = true; return out; }
+      if (v.result === "service") { out.service = v.error; return out; }
+      if (v.result === "storage") { out.operational = true; out.errors.push(`storage: ${v.error}`); return out; }
+      if (v.result === "transient") {
+        const attempts = job.attempts + 1;
+        if (attempts >= MAX_ATTEMPTS) {
+          const reason = `gave up after ${attempts} attempts: ${v.error}`;
+          // The entry goes only once the record that ends its retries is saved.
+          if (await saveRejected(storage, job.text, reason, { now: now() })) { await bucket.remove([path]); out.rejected++; }
+          else {
+            await put(bucket, paths.retry, { ...job, attempts, giveUp: reason });
+            touched.add(paths.retry);
+            if (path !== paths.retry) await bucket.remove([path]);
+            out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`);
+          }
+        } else {
+          // Into the retry lane, behind every fresh request.
+          const { error: moveError } = await put(bucket, paths.retry, { ...job, attempts, lastError: String(v.error).slice(0, 200) });
+          touched.add(paths.retry);
+          if (!moveError && path !== paths.retry) await bucket.remove([path]);
+          out.retried++;
+        }
+        // Any provider or storage failure is an operational failure of the run,
+        // even when processing carries on with the next entry.
+        out.operational = true;
+        out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: ${v.error}`);
+        if (++inARow >= MAX_TRANSIENT_IN_A_ROW) { out.providerDown = true; return out; }
+        continue;
+      }
+      inARow = 0;
+      await bucket.remove([path]);
+      refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
+      if (v.result === "voiced") out.voiced++;
+      else if (v.result === "rejected") {
+        out.rejected++; log(`provider refused: ${job.ref.kind} ${job.ref.id} ${job.seg} (${v.error})`);
+        if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.service = `${refusedInARow} refusals in a row (${v.error})`; return out; }
+      }
+      else { out.failed++; log(`failed the check twice: ${job.ref.kind} ${job.ref.id} ${job.seg} (similarity ${v.similarity?.toFixed(3)})`); }
     }
-    inARow = 0;
-    await bucket.remove([path]);
-    refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
-    if (v.result === "voiced") out.voiced++;
-    else if (v.result === "rejected") {
-      out.rejected++; log(`provider refused: ${job.ref.kind} ${job.ref.id} ${job.seg} (${v.error})`);
-      if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.service = `${refusedInARow} refusals in a row (${v.error})`; break; }
-    }
-    else { out.failed++; log(`failed the check twice: ${job.ref.kind} ${job.ref.id} ${job.seg} (similarity ${v.similarity?.toFixed(3)})`); }
   }
   return out;
 }
@@ -205,7 +224,29 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       out.spent += v.spent;
       if (v.result === "budget") { out.budget = true; return "budget"; }
       if (v.result === "storage") { out.failure = true; return `storage: ${v.error}`; }
-      if (v.result === "service" || v.result === "transient") { out.failure = true; return `provider: ${v.error}`; }
+      if (v.result === "service") { out.failure = true; return `provider: ${v.error}`; }
+      if (v.result === "transient") {
+        /* Bounded like queued work: the attempts live in the cursor, and at
+           MAX_ATTEMPTS the passage gets a give-up record (reconsidered
+           after a week) so the scan moves on instead of paying for it on
+           every run. */
+        const key = passagePaths(text).key;
+        const attempts = ((cursor.attempts ?? {})[key] ?? 0) + 1;
+        out.failure = true;
+        if (attempts >= MAX_ATTEMPTS) {
+          if (!(await saveRejected(storage, text, `gave up after ${attempts} attempts: ${v.error}`, { now: now() }))) return `storage: could not save the give-up record`;
+          const { [key]: _, ...rest } = cursor.attempts ?? {};
+          cursor = { ...cursor, attempts: rest };
+          out.rejected++;
+          continue;
+        }
+        cursor = { ...cursor, attempts: { ...(cursor.attempts ?? {}), [key]: attempts } };
+        return `provider: ${v.error}`;
+      }
+      if (cursor.attempts?.[passagePaths(text).key]) {
+        const { [passagePaths(text).key]: _, ...rest } = cursor.attempts;
+        cursor = { ...cursor, attempts: rest };
+      }
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
       out[v.result]++;
       if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.failure = true; return `provider: ${refusedInARow} refusals in a row (${v.error})`; }
@@ -216,14 +257,14 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   while (cursor.kind) {
     if (cursor.kind === "verdicts") {
       const stop = await voice(verdictPassages());
-      if (stop) { out.stopped = stop; break; }
-      cursor = { kind: "question", afterId: 0 }; await save(); continue;
+      if (stop) { out.stopped = stop; await save(); break; } // keeps the attempt counts
+      cursor = { kind: "question", afterId: 0, attempts: cursor.attempts }; await save(); continue;
     }
     const { data: rows, error } = await BANK_QUERIES[cursor.kind](db).gt("id", cursor.afterId).order("id").limit(page);
     if (error) { out.stopped = `bank: ${error.message ?? error}`; out.failure = true; break; }
     if (!rows?.length) {
       const next = KINDS[KINDS.indexOf(cursor.kind) + 1];
-      cursor = next ? { kind: next, afterId: 0 } : { done: true, doneAt: new Date(now()).toISOString() };
+      cursor = next ? { kind: next, afterId: 0, attempts: cursor.attempts } : { done: true, doneAt: new Date(now()).toISOString() };
       await save();
       if (!next) break;
       continue;
@@ -232,7 +273,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
     for (const row of rows) {
       stop = await voice(itemPassages(cursor.kind, row));
       if (stop) break;
-      cursor = { kind: cursor.kind, afterId: row.id }; // an item counts as done only when all its passages are decided
+      cursor = { kind: cursor.kind, afterId: row.id, attempts: cursor.attempts }; // an item counts as done only when all its passages are decided
     }
     await save();
     if (stop) { out.stopped = stop; break; }
