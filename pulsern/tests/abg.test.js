@@ -456,8 +456,8 @@ describe("round 13", () => {
 
 describe("round 14", () => {
   it("keeps a stable chronic course compatible when a standard coefficient fits (Sol: 7.28 / 100 / 45)", () => {
-    const r = read(7.28, 100, 45);   // 3.5 per 10 mmHg → 45
-    expect(r.reading).toMatch(/fits a PaCO₂ sustained for days/);
+    const r = read(7.28, 100, 45);   // 3.5 per 10 mmHg → 45; round 17: PaCO₂ 100 is past the rules' range
+    expect(r.reading).toMatch(/may reflect established chronic compensation/);
     expect(r.reading).not.toMatch(/lies between them/);
   });
   it("never treats falling between the estimates as excluding a stable course", () => {
@@ -494,5 +494,21 @@ describe("round 16", () => {
   });
   it("discloses the floor in the limits panel", () => {
     expect(abg.steps.find((s) => s.key === "limits").desc(null)).toMatch(/rarely below about 12–15/);
+  });
+});
+
+describe("round 17", () => {
+  it("claims no acute fit at severe hypercapnia (Sol: 7.13 / 140 / 45)", () => {
+    const r = read(7.13, 140, 45);
+    expect(r.reading).not.toMatch(/fits a PaCO₂ change of hours/);
+    expect(r.reading).toMatch(/bedside rules are not reliable, so no acute or chronic fit is claimed/);
+    expect(r.mixedPossible).toBe(true);
+  });
+  it("caps the acute estimate where acute buffering stops", () => {
+    const r = read(7.2, 70, 40);   // acute 27–30, capped at 30; chronic 34.5–36
+    expect(r.reading).not.toMatch(/acute estimate is about 2\d–3[3-9]/);
+  });
+  it("still calls an HCO₃⁻ too low for any buffering short at high PaCO₂", () => {
+    expect(read(7.0, 100, 24).mixed).toBe("metabolic acidosis");
   });
 });
