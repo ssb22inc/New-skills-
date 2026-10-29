@@ -1,0 +1,69 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "1f807b54420cc73fbeeea7063060fc5b3bf911ad",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T21:50:49.763Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 210,
+      "title": "Unchecked device speech bypasses the accuracy gate",
+      "problem": "A 422 response means both generated takes failed verification, but the client then reads the passage through speechSynthesis without checking that output. The normal 202 path also plays unchecked device-generated speech immediately. Approval of the source text does not verify a voice's pronunciation of its numbers, units or abbreviations. This creates a student-facing audio path outside the mandatory accuracy gate.",
+      "failure_scenario": "A passage containing a medication quantity fails the server's audio check twice. Instead of withholding unverified audio, the client sends it to a device voice that can mispronounce the quantity or unit; that rendition reaches the student without any verification.",
+      "fix": "Do not substitute unchecked synthesized speech for pending or rejected audio. Keep the text available while approved audio is pending, and report when audio verification failed. Any retained fallback must satisfy the applicable adversarial accuracy gate before playback. Add mounted playback tests covering 202 and 422 responses.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 33,
+      "title": "Transient download failures delete valid queued requests",
+      "problem": "Every download error is converted into job = null, and the invalid-job branch then removes the queue object. A failed read does not establish that the stored job is malformed. The worker also reports this as a successful skip rather than an error.",
+      "failure_scenario": "Supabase returns a temporary 500 or 429 while downloading an existing, valid passage. The subsequent remove succeeds, permanently dropping that queued request without producing audio or recording a failure. It will only return if a student requests it again and spends another admission slot.",
+      "fix": "Handle download errors separately: retain the entry and report or retry the storage failure. Only discard malformed entries after successfully downloading their contents. Test an existing object whose download temporarily fails while removal remains available.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 48,
+      "title": "One permanently rejected passage can block the entire queue",
+      "problem": "Every provider failure retains the entry and breaks the run. Because entries are processed oldest first, a passage-specific permanent rejection remains first on every subsequent run. There is no retry limit or terminal handling for non-retryable provider errors.",
+      "failure_scenario": "OpenAI consistently returns a passage-specific 400, such as a content-policy rejection, for the oldest queued passage. Every scheduled run retries that passage and exits before processing any later request, so the narration service stops making progress indefinitely.",
+      "fix": "Preserve structured provider failure information and distinguish permanent passage failures from transient outages. Quarantine or terminally mark permanently rejected passages without publishing audio, and allow subsequent jobs to proceed. Bound repeated transient failures per passage and test a permanently rejected first entry followed by a valid entry.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 81552,
+    "completionTokens": 8514,
+    "reasoningTokens": 7768,
+    "costUsd": 0.2890185
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The device-voice fallback bypasses the mandatory audio accuracy gate, and two queue error paths can silently discard requests or indefinitely block later passages. The supplied tests do not cover these failures.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
