@@ -136,3 +136,10 @@ describe("worked labels name only what the parameters establish (Sol, round 6)",
     expect(insulin.dynamicCaption({ type: "short", givenAt: "12:00" })).toMatch(/regular U-100/);
   });
 });
+
+describe("round 7", () => {
+  it("names glargine U-100 in the long-acting worked caption", async () => {
+    const { insulin } = await import("../src/diagrams/insulin.jsx");
+    expect(insulin.dynamicCaption({ type: "long", givenAt: "21:00" })).toMatch(/^Glargine U-100 given at 21:00/);
+  });
+});

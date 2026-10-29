@@ -26,7 +26,7 @@ import { Frame, G, T, Box, C, Anim, OnStep, Loop, Para, paraLines, useDefs, BODY
    tissue rather than as a coloured band. */
 const LAYERS = [
   { key: "epi", name: "Epidermis", h: 8, fill: C.teal, op: 0.06, tx: "tx-epi" },
-  { key: "derm", name: "Dermis", h: 18, fill: C.teal, op: 0.18, tx: "tx-derm" },
+  { key: "derm", name: "Dermis", h: 18, fill: C.teal, op: 0.3, tx: "tx-derm" },
   { key: "fat", name: "Fat", h: 26, fill: C.lab, op: 1, tx: "tx-fat" },
   { key: "muscle", name: "Muscle", h: 24, fill: C.teal, op: 0.42, tx: "tx-muscle" },
   { key: "bone", name: "Bone", h: 16, fill: C.muted, op: 0.4, tx: "tx-bone" },
@@ -53,12 +53,23 @@ function Tissue({ x, y, w, layers = LAYERS, scale = 1, animate = null }) {
       <g key={l.key}>
         <rect x={x} y={yy} width={w} height={h} fill={l.fill} fillOpacity={l.op} />
         <rect x={x} y={yy} width={w} height={h} fill={u(l.tx)} />
-        <line x1={x} x2={x + w} y1={yy + h} y2={yy + h} stroke={C.line} strokeWidth={0.6} />
+        <line x1={x} x2={x + w} y1={yy + h} y2={yy + h} stroke={C.muted} strokeWidth={0.9} />
       </g>
     );
     yy += h;
     return animate ? <Anim key={l.key} on={animate} kind="fade" delay={i * 140}>{band}</Anim> : band;
   });
+}
+
+/* A legend swatch: the band's fill AND texture, outlined like the bands. */
+function Swatch({ l, x, y }) {
+  const u = useDefs();
+  return (
+    <g>
+      <rect x={x} y={y} width={12} height={12} fill={l.fill} fillOpacity={l.op} />
+      <rect x={x} y={y} width={12} height={12} fill={u(l.tx)} stroke={C.muted} />
+    </g>
+  );
 }
 
 /* The skin surface: a firmer line on top of the epidermis. */
@@ -314,8 +325,17 @@ export function PressureInjuryDiagram({ focus = null }) {
           wound={<Crater x={xs[2]} w={W} toLayer="fat" inset={0.18} short={6}>
             {/* slough adheres to the wound bed: drawn ON the floor */}
             <Slough cx={xs[2] + W / 2 + 2} cy={craterFloor("fat", 6) - 4} />
+            {/* exposed fat: lobules on the bed either side of the slough, so
+                the visible fat is drawn, not the slough (Sol, round 7) */}
+            {[[-9, -9], [-13, -16], [12, -9], [16, -16]].map(([dx, dy], i) => (
+              <circle key={i} cx={xs[2] + W / 2 + dx} cy={craterFloor("fat", 6) + dy} r={3} fill={C.lab} stroke={C.labInk} strokeWidth={0.9} />
+            ))}
           </Crater>}
           floor={<Deepest {...floorOf(xs[2], W, "fat", 6)} />} />
+        {/* the slough, labelled with a leader so it is not read as fat */}
+        <path className="dg-solid" d={`M${xs[2] + W / 2 + 2},${craterFloor("fat", 6) - 1} V${depthTo("muscle") - 17}`} stroke={C.ink} strokeWidth={1} />
+        <rect className="dg-solid" x={xs[2] + W / 2 - 22} y={depthTo("muscle") - 17} width={48} height={17} rx={4} fill={C.card} stroke={C.line} />
+        <T x={xs[2] + W / 2 + 2} y={depthTo("muscle") - 4} size={MIN_TEXT} weight={700} anchor="middle">slough</T>
       </G>
       {stageRow(2)}
       <G id="s4">
@@ -328,7 +348,9 @@ export function PressureInjuryDiagram({ focus = null }) {
         <Anim on="layers" kind="fade" delay={750}>
           {LAYERS.map((l, i) => (
             <g key={l.key}>
-              <rect x={LEGEND_X[i]} y={LY - 11} width={12} height={12} fill={l.fill} fillOpacity={l.op} stroke={C.line} />
+              {/* the swatch repeats the band's texture, and its outline matches
+                  the band boundaries (Sol, round 7) */}
+              <Swatch l={l} x={LEGEND_X[i]} y={LY - 11} />
               <T x={LEGEND_X[i] + 16} y={LY} size={MIN_TEXT}>{l.name}</T>
             </g>
           ))}

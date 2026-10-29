@@ -72,3 +72,16 @@ describe("round 6", () => {
     expect(potassium.facts.join(" ")).toMatch(/hypoglycemia can occur despite the dextrose/);
   });
 });
+
+describe("round 7", () => {
+  it("teaches severe hyperkalemia as urgent even with a normal ECG", () => {
+    expect(potassium.dynamicCaption({ k: 8.4 })).toMatch(/severe hyperkalemia.*urgent assessment, cardiac monitoring and escalation come first, even with a normal ECG/);
+    expect(potassium.dynamicCaption({ k: 6.5 })).toMatch(/severe hyperkalemia/);
+    expect(potassium.dynamicCaption({ k: 5.4 })).not.toMatch(/severe/);
+  });
+  it("rechecks potassium after shifting it into cells", () => {
+    const html = renderToStaticMarkup(<potassium.Diagram params={{ k: 6.2 }} focus={null} />);
+    expect(html).toMatch(/recheck K⁺/);
+    expect(potassium.steps.find((s) => s.key === "hyper-care").narration).toMatch(/Potassium is rechecked as prescribed/);
+  });
+});

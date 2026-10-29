@@ -202,7 +202,7 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
         worked: workedLines ? [[YTOP - 62, Y0 + 40], [workedY - 16, workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 6]] : [YTOP - 62, Y0 + 40] }}
       desc={`${workedText ? `${workedText}. ` : ""}Typical subcutaneous action of four insulin types over 24 hours, as illustrative curves that stay flat until onset; curve heights are arbitrary and do not compare potency or dose, and times vary by product. Rapid-acting (lispro, aspart, glulisine): onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours; it is associated with meals, and its timing follows the specific product and prescribed plan. Short-acting regular U-100: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no pronounced peak, wanes at about 24 hours. IV regular insulin and regular U-500 act differently, and detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest around a peak, but lows can also happen at other times and with peakless insulin.`}>
       <G id="axes">
-        <T x={18} y={20} size={BODY_TEXT} weight={700}>Typical SC insulin action, 24 hours</T>
+        <T x={18} y={20} size={BODY_TEXT} weight={700}>Typical SC action: hours after the dose</T>
         <T x={18} y={39} size={MIN_TEXT} color={C.muted}>illustrative: heights don't compare strength</T>
         {Object.entries(INSULINS).map(([k, ins], i) => {
           const lx = i % 2 ? 190 : 18, ly = 64 + Math.floor(i / 2) * 22;
@@ -330,7 +330,7 @@ export const insulin = {
   dynamicCaption: ({ type, givenAt } = INSULIN_EXAMPLE) => {
     const ins = INSULINS[type];
     const pw = peakWindow(type, givenAt);
-    if (!pw) return `${ins.name} insulin given at ${givenAt} has no pronounced peak: a steady effect that wanes at about a day. Lows can still happen.`;
+    if (!pw) return `${WORKED_LABEL[type]} given at ${givenAt} has no pronounced peak: a steady effect that wanes at about a day. Other basal insulins last differently. Lows can still happen.`;
     return `${ins.name} (${ins.eg}) given at ${givenAt} peaks roughly ${windowText(pw)}, the window when hypoglycemia is most likely, though lows can happen at other times too.`;
   },
 };
