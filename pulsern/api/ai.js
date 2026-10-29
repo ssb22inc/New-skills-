@@ -34,14 +34,8 @@ export default async function handler(req, res) {
       global: { headers: { Authorization: `Bearer ${tokenFromRequest(req)}` } },
     })) : null;
     const { ref, seg, text } = req.body;
-    const limits = {
-      user: Number(process.env.SPEAK_USER_DAILY) || undefined,
-      global: Number(process.env.SPEAK_GLOBAL_DAILY) || undefined,
-    };
-    const out = await speak({
-      ref, seg, text, userId: user.id, readItem, apiKey: process.env.OPENAI_API_KEY, storage,
-      limits: { user: limits.user ?? 300, global: limits.global ?? 4000 },
-    });
+    // Daily caps come from LIMITS in api/_speak.js, shared with the voice job.
+    const out = await speak({ ref, seg, text, userId: user.id, readItem, apiKey: process.env.OPENAI_API_KEY, storage });
     return res.status(out.status).json(out.body);
   }
 

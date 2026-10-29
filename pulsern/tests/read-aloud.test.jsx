@@ -12,9 +12,9 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
-import { speak, speechKey, validRequest, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS } from "../api/_speak.js";
+import { speak, speechKey, validRequest, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
-import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
+import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -404,7 +404,7 @@ describe("server voice without a key: the queue and the voice job", () => {
 
   it("holds the queue to the daily budgets", async () => {
     const { storage, files } = fakeStorage();
-    const limits = { user: 1, global: 100 };
+    const limits = { user: 1, admission: 100, spend: 100 };
     await speak({ ...base({ apiKey: "" }), storage, limits });
     const out = await speak({ ...base({ apiKey: "", seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, limits });
     expect(out.status).toBe(429);
@@ -467,7 +467,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     await speak({ ...base({ apiKey: "" }), storage });
     // speech works, transcription is down: each run pays one synthesis and keeps the entry
     const outage = vi.fn(async (url) => (url.endsWith("/audio/speech") ? { ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer } : { ok: false, status: 500 }));
-    const limits = { user: 300, global: 3 };
+    const limits = { user: 300, admission: 3, spend: 3 };
     const now = () => Date.UTC(2026, 9, 29, 16);
     for (let run = 0; run < 6; run++) await drainQueue({ storage, apiKey: "k", fetchImpl: outage, limits, now, log: () => {} });
     expect(outage.mock.calls.filter(([u]) => u.endsWith("/audio/speech"))).toHaveLength(3); // never more than the day's spending
@@ -479,13 +479,13 @@ describe("server voice without a key: the queue and the voice job", () => {
   it("waits, without paying, when today's spending is used up, and voices the passage the next day", async () => {
     const { storage, files } = fakeStorage();
     await speak({ ...base({ apiKey: "" }), storage });
-    const limits = { user: 300, global: 0 };
+    const limits = { user: 300, admission: 0, spend: 0 };
     const f = fakeOpenAI();
     const today = await drainQueue({ storage, apiKey: "k", fetchImpl: f, limits, now: () => Date.UTC(2026, 9, 29, 16), log: () => {} });
     expect(today).toMatchObject({ budget: true, voiced: 0, errors: [] });
     expect(f).not.toHaveBeenCalled();
     expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
-    const tomorrow = await drainQueue({ storage, apiKey: "k", fetchImpl: f, limits: { user: 300, global: 5 }, now: () => Date.UTC(2026, 9, 30, 16), log: () => {} });
+    const tomorrow = await drainQueue({ storage, apiKey: "k", fetchImpl: f, limits: { user: 300, admission: 5, spend: 5 }, now: () => Date.UTC(2026, 9, 30, 16), log: () => {} });
     expect(tomorrow).toMatchObject({ voiced: 1 });
     expect([...files.keys()].some((k) => k.startsWith("usage/2026-10-30/spend/"))).toBe(true);
   });
@@ -494,10 +494,10 @@ describe("server voice without a key: the queue and the voice job", () => {
     const { storage, files } = fakeStorage();
     await speak({ ...base({ apiKey: "" }), storage });
     const misheard = fakeOpenAI(["Potassium 9.2 milliequivalents per liter.", "Potassium 2.9 milliequivalents per liter."]);
-    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: misheard, limits: { user: 300, global: 1 }, now: () => Date.UTC(2026, 9, 29, 16), log: () => {} });
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: misheard, limits: { user: 300, admission: 1, spend: 1 }, now: () => Date.UTC(2026, 9, 29, 16), log: () => {} });
     expect(r).toMatchObject({ budget: true, failed: 0 });
     expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
-    const next = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), limits: { user: 300, global: 5 }, now: () => Date.UTC(2026, 9, 30, 16), log: () => {} });
+    const next = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), limits: { user: 300, admission: 5, spend: 5 }, now: () => Date.UTC(2026, 9, 30, 16), log: () => {} });
     expect(next).toMatchObject({ voiced: 1 });
   });
 
@@ -630,9 +630,87 @@ describe("the voice job: voicing the bank ahead of demand", () => {
   it("stops without paying when today's spending is used up", async () => {
     const { storage } = fakeStorage();
     const f = fakeOpenAI();
-    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1000, limits: { user: 300, global: 0 } });
+    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1000, limits: { user: 300, admission: 0, spend: 0 } });
     expect(r).toMatchObject({ budget: true, voiced: 0 });
     expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("account and setup failures, shared spending, and the run's outcome", () => {
+  const BANK = { questions: [ROW], case_studies: [], flashcards: [] };
+  for (const status of [401, 403, 404]) {
+    it(`records nothing when the provider answers ${status}, and voices the passage once the account works`, async () => {
+      const { storage, files } = fakeStorage();
+      const broken = vi.fn(async () => ({ ok: false, status }));
+      expect((await speak({ ...base(), storage, fetchImpl: broken })).status).toBe(503);
+      await speak({ ...base({ apiKey: "" }), storage });
+      const r = await drainQueue({ storage, apiKey: "k", fetchImpl: broken, log: () => {} });
+      expect(r.service).toBeTruthy();
+      expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
+      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+      const fixed = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), log: () => {} });
+      expect(fixed.voiced).toBe(1);
+    });
+  }
+
+  it("reconsiders a provider refusal after a week", async () => {
+    const { storage } = fakeStorage();
+    const t0 = Date.UTC(2026, 9, 29, 16);
+    expect((await speak({ ...base(), storage, fetchImpl: vi.fn(async () => ({ ok: false, status: 400 })), now: t0 })).status).toBe(422);
+    expect((await speak({ ...base(), storage, fetchImpl: fakeOpenAI(), now: t0 + 86400000 })).status).toBe(422);
+    expect((await speak({ ...base(), storage, fetchImpl: fakeOpenAI(), now: t0 + (REJECTION_DAYS + 1) * 86400000 })).status).toBe(200);
+  });
+
+  it("stops after three refusals in a row: that is a setup problem, not three bad passages", async () => {
+    const { storage, files } = fakeStorage();
+    const segs = [["stem", "Which value is the priority?"], ["opt0", "Potassium 2.9 milliequivalents per liter."], ["opt1", "Sodium 138 milliequivalents per liter."], ["instruction", "Choose one answer."]];
+    for (const [seg, text] of segs) await speak({ ...base({ apiKey: "", seg, text }), storage });
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 400 })), log: () => {} });
+    expect(r.rejected).toBe(3);
+    expect(r.service).toMatch(/3 refusals in a row/);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+  });
+
+  it("counts live and scheduled syntheses against ONE app-wide cap", async () => {
+    const { storage, files } = fakeStorage();
+    const limits = { user: 100, admission: 100, spend: 2 };
+    const now = Date.UTC(2026, 9, 29, 16);
+    await speak({ ...base({ apiKey: "", seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, limits, now });
+    await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), limits, now: () => now, log: () => {} }); // 1 paid
+    const f = fakeOpenAI();
+    expect((await speak({ ...base(), storage, fetchImpl: f, limits, now })).status).toBe(200); // 1 paid: the cap is reached
+    expect((await speak({ ...base({ seg: "stem", text: "Which value is the priority?" }), storage, fetchImpl: f, limits, now })).status).toBe(429);
+    expect([...files.keys()].filter((k) => /\/spend\/\d+$/.test(k))).toHaveLength(2);
+  });
+
+  it("uses the shared LIMITS by default, the same values as the route", async () => {
+    const { storage } = fakeStorage();
+    const { lines } = await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1, log: () => {} });
+    expect(lines.join("\n")).toContain(`cap ${LIMITS.spend} a day`);
+    expect(Object.isFrozen(LIMITS)).toBe(true);
+  });
+
+  it("fails the run when the provider fails while voicing the bank, even with an empty queue", async () => {
+    const { storage } = fakeStorage();
+    const r = await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 503 })), max: 10, log: () => {} });
+    expect(r.failed).toBe(true);
+    expect(r.bank.stopped).toMatch(/^provider:/);
+  });
+
+  it("fails the run on storage trouble while voicing the bank", async () => {
+    const { storage, files } = fakeStorage();
+    const real = storage.from(BUCKET);
+    const flaky = { ...real, upload: async (path, body, opts) => (path === "prewarm/cursor.json" ? { error: { message: "Internal error" } } : real.upload(path, body, opts)) };
+    const broken = { ...storage, from: () => flaky };
+    const r = await runJob({ storage: broken, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000, log: () => {} });
+    expect(r.failed).toBe(true);
+    expect(files.size).toBeGreaterThan(0);
+  });
+
+  it("passes the run when work simply stops at the run's limit or today's budget", async () => {
+    const { storage } = fakeStorage();
+    expect((await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 2, log: () => {} })).failed).toBe(false);
+    expect((await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 50, limits: { user: 300, admission: 300, spend: 0 }, log: () => {} })).failed).toBe(false);
   });
 });
 
@@ -654,7 +732,7 @@ describe("long parts", () => {
 describe("server voice: daily budgets", () => {
   it("holds a student to the limit when many requests arrive at once", async () => {
     const f = fakeOpenAI(), { storage, files } = fakeStorage();
-    const limits = { user: 3, global: 100 };
+    const limits = { user: 3, admission: 100, spend: 100 };
     const texts = ["Which value is the priority?", "Potassium 2.9 milliequivalents per liter.", "Sodium 138 milliequivalents per liter."];
     const segs = ["stem", "opt0", "opt1"];
     // the same three passages asked for five times each, all at once, before any is saved
@@ -669,7 +747,7 @@ describe("server voice: daily budgets", () => {
 
   it("holds the app-wide limit across many students at once", async () => {
     const { storage, files } = fakeStorage();
-    const limits = { user: 10, global: 4 };
+    const limits = { user: 10, admission: 4, spend: 4 };
     const out = await Promise.all(Array.from({ length: 12 }, (_, i) => speak({ ...base({ apiKey: "", userId: `u${i}` }), storage, limits, fetchImpl: fakeOpenAI() })
       .then(() => speak({ ...base({ apiKey: "", userId: `u${i}`, seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, limits }))));
     expect([...files.keys()].filter((k) => /\/all\/\d+$/.test(k)).length).toBeLessThanOrEqual(4);
@@ -686,7 +764,7 @@ describe("server voice: daily budgets", () => {
 
   it("charges a second take to the budget too", async () => {
     const f = fakeOpenAI(["Potassium 9.2 milliequivalents per liter.", "Potassium 2.9 milliequivalents per liter."]), { storage, files } = fakeStorage();
-    expect((await speak({ ...base(), storage, fetchImpl: f, limits: { user: 1, global: 100 } })).status).not.toBe(200);
+    expect((await speak({ ...base(), storage, fetchImpl: f, limits: { user: 1, admission: 100, spend: 100 } })).status).not.toBe(200);
     expect(speechCalls(f)).toBe(1); // no slot left for the retake
     expect([...files.keys()].some((k) => k.endsWith(".mp3"))).toBe(false);
   });
@@ -701,7 +779,7 @@ describe("server voice: daily budgets", () => {
 
   it("stops a student at their daily limit with no synthesis and no upload", async () => {
     const f = fakeOpenAI(), { storage, calls } = fakeStorage();
-    const limits = { user: 1, global: 100 };
+    const limits = { user: 1, admission: 100, spend: 100 };
     expect((await speak({ ...base(), storage, fetchImpl: f, limits })).status).toBe(200);
     calls.upload.length = 0;
     const other = { ...base({ seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, fetchImpl: f, limits };
@@ -716,7 +794,7 @@ describe("server voice: daily budgets", () => {
 
   it("stops everyone at the app-wide daily limit", async () => {
     const f = fakeOpenAI(), { storage } = fakeStorage();
-    const limits = { user: 100, global: 1 };
+    const limits = { user: 100, admission: 1, spend: 1 };
     await speak({ ...base(), storage, fetchImpl: f, limits });
     const out = await speak({ ...base({ seg: "opt1", text: "Sodium 138 milliequivalents per liter.", userId: "u9" }), storage, fetchImpl: f, limits });
     expect(out.status).toBe(429);
@@ -725,7 +803,7 @@ describe("server voice: daily budgets", () => {
 
   it("starts each day's budget fresh", async () => {
     const f = fakeOpenAI(), { storage } = fakeStorage();
-    const limits = { user: 1, global: 100 };
+    const limits = { user: 1, admission: 100, spend: 100 };
     const day1 = Date.UTC(2026, 9, 29, 16), day2 = Date.UTC(2026, 9, 30, 16);
     await speak({ ...base(), storage, fetchImpl: f, limits, now: day1 });
     const t = { ...base({ seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, fetchImpl: f, limits };

@@ -24,13 +24,13 @@
 // played. A passage that fails both takes is not voiced (422): the app
 // reads that part with the device's own voice instead.
 //
-// Budgets. Every paid call or queued passage claims a numbered slot that
-// storage creates only once, so the caps hold under concurrent requests:
-// per student and app-wide, per local day in Eastern time
-// (SPEAK_USER_DAILY, SPEAK_GLOBAL_DAILY). Over a cap, or if the counters
-// cannot be read, the route answers 429 and the app uses the device voice.
-// The voice job pays from a separate spending count (reserveSpend): one
-// slot per synthesis, on the day it is made.
+// Budgets (LIMITS, below: the one place they are set). Every queued
+// passage and every paid synthesis claims a numbered slot that storage
+// creates only once, so the caps hold under concurrent requests, per local
+// day in Eastern time: per student; queue admission app-wide; and paid
+// syntheses app-wide, ONE count shared by the live route and the voice job
+// (reserveSpend). Over a cap, or if the counters cannot be read, nothing is
+// spent: the route answers 429 and the work waits.
 //
 // Storage. A PRIVATE bucket ("read-aloud", created on first use): the
 // passages are paid questions, so they are only ever handed out as
@@ -50,7 +50,12 @@ export const SPEAK_MAX = 1500; // above the script's PART_MAX (900): a part alwa
 export const BUCKET = 'read-aloud';
 export const SIGNED_SECONDS = 3600;
 export const TAKES = 2;
-export const LIMITS = { user: 300, global: 4000 };
+/* The one place the daily caps are set, read by the route and the voice
+   job alike (change them here, through a reviewed pull request):
+   user      passages one student may queue or have voiced per day;
+   admission passages queued per day, app-wide;
+   spend     paid syntheses per day, app-wide, live and scheduled together. */
+export const LIMITS = Object.freeze({ user: 300, admission: 4000, spend: 4000 });
 export const TTS = {
   model: 'gpt-4o-mini-tts',
   voice: 'marin',
@@ -206,11 +211,14 @@ async function claimSlot(storage, dir, limit) {
    above) and paying for it (spend, here) are counted apart, so a retried
    or backlogged passage is always paid from the current day's budget. */
 export const reserveSpend = (storage, { now = Date.now(), limits = LIMITS } = {}) =>
-  claimSlot(storage, `usage/${quotaDay(now)}/spend`, limits.global);
-export async function reserve(storage, userId, { now = Date.now(), limits = LIMITS } = {}) {
+  claimSlot(storage, `usage/${quotaDay(now)}/spend`, limits.spend);
+/* A student's request: their own daily count, then the app-wide one
+   (admission for a queued passage; spend for a live synthesis). */
+export async function reserve(storage, userId, { now = Date.now(), limits = LIMITS, pool = 'admission' } = {}) {
   const day = quotaDay(now);
   const user = `usage/${day}/u-${sha256(String(userId)).slice(0, 24)}`;
-  return (await claimSlot(storage, user, limits.user)) && (await claimSlot(storage, `usage/${day}/all`, limits.global));
+  if (!(await claimSlot(storage, user, limits.user))) return false;
+  return pool === 'spend' ? reserveSpend(storage, { now, limits }) : claimSlot(storage, `usage/${day}/all`, limits.admission);
 }
 
 /* Small JSON files in the bucket. A missing file reads as null. */
@@ -272,11 +280,16 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
      and checked. A provider error or a refused budget part-way through is
      NOT a failed check: nothing terminal is recorded, so it is tried again. */
   const final = !!best && (best.check.pass || (!error && best.take === TAKES));
-  /* Why it stopped short: no budget left; the provider refused this
-     passage itself (a 4xx other than rate limits and timeouts), which
-     retrying will not change; or anything else, worth retrying later. */
+  /* Why it stopped short:
+     budget    no spending slot left today;
+     permanent the provider refused this passage itself (400 bad input,
+               413 too large, 422 unprocessable): retrying it will not help;
+     service   the account or setup is wrong (401, 403, 404): no passage is
+               to blame, so nothing is recorded and the run stops;
+     transient anything else (rate limits, timeouts, 5xx): retry later. */
   const errorKind = !error ? null : error === 'budget' ? 'budget'
-    : status >= 400 && status < 500 && ![408, 409, 429].includes(status) ? 'permanent' : 'transient';
+    : [400, 413, 422].includes(status) ? 'permanent'
+    : [401, 403, 404].includes(status) ? 'service' : 'transient';
   if (error) console.error('[read-aloud] voice', error);
   return { best, spent, error, errorKind, final };
 }
@@ -301,16 +314,21 @@ export async function saveChecked(storage, text, best, { now = Date.now(), tts =
   }), 'application/json');
 }
 /* The provider refused this passage itself (not an outage): record it as
-   not voiceable under this QA version, so it is never paid for again. */
+   not voiceable, so it is not paid for again; the refusal is reconsidered
+   after REJECTION_DAYS in case it came from a provider-side change. */
+export const REJECTION_DAYS = 7;
 export async function saveRejected(storage, text, reason, { now = Date.now(), tts = TTS } = {}) {
   return put(storage, passagePaths(text, tts).rec, JSON.stringify({
     qa: QA_VERSION, pass: false, model: tts.model, voice: tts.voice, textSha: sha256(text),
     audioSha: null, reason: String(reason).slice(0, 200), checkedAt: new Date(now).toISOString(),
   }), 'application/json');
 }
-export async function readRecord(storage, text, tts = TTS) {
+export async function readRecord(storage, text, tts = TTS, now = Date.now()) {
   const r = await readJson(storage.from(BUCKET), passagePaths(text, tts).rec);
-  return r?.qa === QA_VERSION && r.textSha === sha256(text) ? r : null;
+  if (!(r?.qa === QA_VERSION && r.textSha === sha256(text))) return null;
+  // A provider refusal (not a failed check) expires, so the passage is tried again.
+  if (r.reason && now - Date.parse(r.checkedAt ?? 0) > REJECTION_DAYS * 86400000) return null;
+  return r;
 }
 
 /* Returns { status, body } for the route to send.
@@ -332,7 +350,7 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
   const bucket = storage.from(BUCKET);
 
   // Already checked: a link to the audio, or a refusal if it failed the check.
-  const record = await readRecord(storage, text, tts);
+  const record = await readRecord(storage, text, tts, now);
   if (record?.pass === true) {
     const url = await signed(bucket, mp3);
     if (url) return { status: 200, body: { url, cached: true } };
@@ -344,7 +362,8 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
   if (!apiKey && await readJson(bucket, queue)) return { status: 202, body: { queued: true } };
 
   // Budgets: a slot is claimed before every paid call or queued entry.
-  const take = () => reserve(storage, userId, { now, limits });
+  const take = () => reserve(storage, userId, { now, limits }); // queue admission
+  const pay = () => reserve(storage, userId, { now, limits, pool: 'spend' }); // a live synthesis
   const overBudget = { status: 429, body: { error: 'Daily voice limit reached' } };
 
   if (!apiKey) {
@@ -354,9 +373,10 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
     return { status: 202, body: { queued: true } };
   }
 
-  const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: take });
+  const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: pay });
   if (!final) {
     if (errorKind === 'budget') return overBudget;
+    if (errorKind === 'service') return { status: 503, body: { error: 'Voice unavailable' } };
     if (errorKind === 'permanent') { await saveRejected(storage, text, error, { now, tts }); return { status: 422, body: { error: 'Voice check failed' } }; }
     return { status: 502, body: { error: 'Voice failed' } };
   }

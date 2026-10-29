@@ -195,10 +195,12 @@ Claude Code executes everything else. These run in parallel with the build.
     content, a current pass, never exam items. It can say nothing else.
 
   Limits and cost:
-  - New passages are capped each calendar day (Eastern time): 300 queued
-    per student, and 4,000 paid syntheses app-wide. Change the caps with
-    the Vercel variables `SPEAK_USER_DAILY` and `SPEAK_GLOBAL_DAILY`. At
-    the cap, work waits for the next day; nothing extra is spent.
+  - Daily caps (calendar day, Eastern time): 300 new passages per
+    student, 4,000 queued app-wide, and 4,000 paid syntheses app-wide
+    (live and scheduled together). They are set in one place, `LIMITS`
+    in `pulsern/api/_speak.js`, so a change goes through a reviewed pull
+    request. At a cap, work waits for the next day; nothing extra is
+    spent.
   - At the cap the app-wide spend is roughly $8–10 a day (`gpt-4o-mini-tts`
     plus the `gpt-4o-transcribe` check). It stops once the bank is
     voiced; after that, only new items and weekly re-checks are voiced.
