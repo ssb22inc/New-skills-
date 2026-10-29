@@ -8,7 +8,7 @@ import path from "node:path";
 import { PNG } from "pngjs";
 import { auditCommercialGovernance, auditGovernance, auditHtml } from "../ops/seo-guardian.mjs";
 import { candidateCommercialPagesFromDist, candidateGuidePagesFromDist, extractOutputText, guideCoverageFromEvidence, parseReview, runAdversary } from "../ops/seo-adversary-ai.mjs";
-import { enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
+import { adviseAdversary, enforceAdversary } from "../ops/seo-enforce-adversary.mjs";
 import { articleJsonLd, related } from "../ops/build-learn.mjs";
 import { ARTICLES } from "../ops/learn-content.mjs";
 import { CLINICAL_ARTICLES } from "../ops/learn-clinical.mjs";
@@ -832,14 +832,37 @@ describe("SEO guardian", () => {
     await expect(enforceAdversary(failJson)).rejects.toThrow(/failed/i);
   });
 
-  it("keeps the required model gate and explicit outcome enforcement in workflow", async () => {
+  it("advisory mode reports a completed FAIL but still fails when the review did not run or is malformed", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pulsern-adversary-advisory-"));
+    const failJson = path.join(directory, "fail.json");
+    await fs.writeFile(failJson, JSON.stringify({ verdict: "FAIL", summary: "Blocked.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [{ code: "BLOCK", finding: "Blocked.", requiredAction: "Fix it." }], nonBlockingExperiments: [] }));
+    const advised = await adviseAdversary(failJson);
+    expect(advised.review.verdict).toBe("FAIL");
+    expect(advised.warning).toMatch(/1 blocker/);
+    const passJson = path.join(directory, "pass.json");
+    await fs.writeFile(passJson, JSON.stringify({ verdict: "PASS", summary: "All evidence passed.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] }));
+    expect((await adviseAdversary(passJson)).warning).toBeNull();
+    await expect(adviseAdversary(path.join(directory, "missing.json"))).rejects.toThrow(/missing/i);
+    const badJson = path.join(directory, "bad.json");
+    await fs.writeFile(badJson, "{ not json");
+    await expect(adviseAdversary(badJson)).rejects.toThrow(/malformed/i);
+    await fs.writeFile(badJson, JSON.stringify({ verdict: "FAIL", summary: "No blockers.", guideCoverage: emptyCoverage, strongestObjections: [], releaseBlockers: [], nonBlockingExperiments: [] }));
+    await expect(adviseAdversary(badJson)).rejects.toThrow(/release blocker/i);
+  });
+
+  /* Owner decision 2026-10-29: the model review is advisory. It must still
+     run on every change and its verdict must still be reported, while every
+     other check stays an explicit, required outcome. */
+  it("runs the advisory model review and keeps explicit outcome enforcement in workflow", async () => {
     const workflow = await fs.readFile(new URL("../../.github/workflows/pulsern-seo-guardian.yml", import.meta.url), "utf8");
-    expect(workflow).toContain("Required adversarial model review");
+    expect(workflow).toContain("Adversarial model review (advisory");
+    expect(workflow).toContain("npm run seo:adversary");
     expect(workflow).not.toContain("env.OPENROUTER_API_KEY != ''");
-    expect(workflow).toContain('test "${{ steps.adversary.outcome }}" = "success"');
-    expect(workflow).toContain('test "${{ steps.app_boundary.outcome }}" = "success"');
-    expect(workflow).toContain('test "${{ steps.product_images.outcome }}" = "success"');
-    expect(workflow).toContain("npm run seo:enforce");
+    expect(workflow).toContain("npm run seo:enforce -- --advisory");
+    expect(workflow).not.toMatch(/seo:enforce[^\n]*\|\|/);
+    for (const id of ["tests", "build", "deterministic", "product_images", "app_boundary", "crawl", "crawl_live", "live_release", "indexnow", "sources", "commercial", "exam_rules", "accessibility"]) {
+      expect(workflow).toContain(`test "\${{ steps.${id}.outcome }}" = "success"`);
+    }
   });
 
   it("fails closed when an authentic product image, privacy assertion, or homepage binding drifts", async () => {

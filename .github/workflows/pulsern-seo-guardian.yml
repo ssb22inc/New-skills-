@@ -110,7 +110,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: npm run seo:accessibility
-      - name: Required adversarial model review
+      - name: Adversarial model review (advisory, owner decision 2026-10-29)
         id: adversary
         if: always()
         continue-on-error: true
@@ -149,5 +149,9 @@ jobs:
           test "${{ steps.commercial.outcome }}" = "success"
           test "${{ steps.exam_rules.outcome }}" = "success"
           test "${{ steps.accessibility.outcome }}" = "success"
-          test "${{ steps.adversary.outcome }}" = "success"
-          npm run seo:enforce
+          # The model review is advisory by the owner's decision of
+          # 2026-10-29 (pulsern/CLAUDE.md): it must still run and leave a
+          # complete, valid report, or this gate fails. A completed FAIL
+          # verdict is reported as a warning instead of failing the gate.
+          # Every check above stays required.
+          npm run seo:enforce -- --advisory
