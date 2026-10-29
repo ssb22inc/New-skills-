@@ -1,0 +1,62 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "ba9f71711938579083f4a8b99d1ae51ab2af689e",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T22:31:10.404Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 92,
+      "title": "Handle rejected segments before reporting that the item is being prepared",
+      "problem": "Any 202 response takes precedence over every other outcome, including 429 and 503. The reader therefore reports preparation even when required segments were never queued. The worker processes individual queued passages; it cannot complete the missing segments from that partial request.",
+      "failure_scenario": "A student has one admission left and presses Listen on an unvoiced question with several segments. One request returns 202 and the others return 429. The app says the voice is being prepared, but the scheduled job can voice only the admitted segment. If the bank prewarm scan has already finished, waiting for the next job will not make this question playable.",
+      "fix": "Check for admission/service failures before returning 'preparing' and surface the actual failure. If whole-item preparation is promised, reserve and enqueue all missing segments atomically rather than admitting each segment independently. Add a mounted test with mixed 202/429 outcomes.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 399,
+      "title": "Determine the spending day separately for each live take",
+      "problem": "The live synthesis callback captures the request's initial `now` and reuses it for every take. A synthesis made after Eastern midnight can therefore consume the previous day's slot, contrary to the documented shared cap on syntheses made each calendar day. The worker correctly obtains a fresh timestamp before each take, but the live route does not.",
+      "failure_scenario": "With OPENAI_API_KEY configured on the server, a request starts shortly before Eastern midnight. Its first take fails QA, and the second take starts after midnight but is charged to yesterday. The worker and other requests can then consume all 4,000 slots for today, allowing more than 4,000 actual syntheses today.",
+      "fix": "Use a clock evaluated immediately before each live spending reservation, while retaining an injectable clock for deterministic tests. Add a test that advances the clock across Eastern midnight between takes and verifies that the second take consumes the new day's slot.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 111319,
+    "completionTokens": 15057,
+    "reasoningTokens": 14502,
+    "costUsd": 0.428866
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Two defects remain in partial-queue handling and live synthesis quota accounting. The supplied tests do not cover either failure scenario. I could not execute the suite from the provided diff.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
