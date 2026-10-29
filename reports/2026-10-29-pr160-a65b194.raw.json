@@ -1,0 +1,69 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "a65b194c96ab310c6308e00b1d3b03acc1a9e82d",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T21:47:40.285Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 107,
+      "title": "The audio gate does not protect clinically significant terminology",
+      "problem": "voiceCheck adds exact unit matching to audioCheck's documented similarity/number/negation/direction checks, but does not require diagnoses, medications, or other clinical terms to agree. A clinically opposite word can therefore fit within the allowed transcription difference and produce a passing record. This is not the word-for-word verification described in HUMAN_TASKS.md.",
+      "failure_scenario": "Use the long medication-record prefix already present in the tests, followed by \"The client has hypokalemia.\" Have the transcription return the same passage with \"hyperkalemia\" instead. Numbers, units, negations and direction words remain unchanged, and similarity remains above 0.92. Under audioCheck's documented contract, that incorrect explanation passes and is cached for students. I could not execute this example because the imported comparator's implementation was not supplied.",
+      "fix": "Reject non-equivalent clinical wording before publishing audio, rather than relying on overall similarity and the current protected-token lists. Add adversarial tests for long passages with changed diagnoses, medication names and clinical qualifiers, including hypokalemia versus hyperkalemia.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 40,
+      "title": "Repeated worker attempts reuse one budget reservation indefinitely",
+      "problem": "The worker assumes the queue-time reservation covers its first synthesis on every run. When synthesis succeeds but transcription fails, makeChecked returns a non-final result and the entry remains queued. The next run pays for another synthesis without claiming another slot. Only second takes within an individual invocation are metered.",
+      "failure_scenario": "Queue one passage with a global limit of one. Let OpenAI speech synthesis succeed and transcription return 429 or 500. Every scheduled run retries and pays for speech again, despite the only global slot already being consumed. A failed retake reservation can similarly leave the passage repeating unmetered first takes on subsequent runs.",
+      "fix": "Make each worker synthesis attempt claim a durable spending reservation, including first takes on later runs. Separate queue-admission quotas from synthesis-attempt quotas if necessary to avoid double charging. Test repeated drains after transcription failures and assert that paid calls stop at the configured limit.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 32,
+      "title": "A transient queue download error deletes valid queued work",
+      "problem": "A download error is converted to job = null and then handled as a malformed entry. The worker removes the queue object instead of retaining it for retry, even though it never obtained or validated its contents.",
+      "failure_scenario": "Supabase listing succeeds, but downloading a valid queued passage returns a transient storage error. The subsequent remove succeeds, permanently dropping that request without producing audio or reporting an error. The passage is only queued again if a student explicitly requests it, consuming another quota reservation.",
+      "fix": "Handle download failures separately from successfully downloaded but malformed entries. Preserve the object, report the operational error and retry later. Add a test where download fails temporarily and verify that the queue entry remains and no synthesis occurs.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 78880,
+    "completionTokens": 7032,
+    "reasoningTokens": 6214,
+    "costUsd": 0.2675185
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The audio gate can accept clinically significant wording changes, worker retries can escape the spending counters, and transient storage failures can delete queued work. The tests do not cover these paths. I could not run the suite or inspect the imported narration comparator from the supplied change.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
