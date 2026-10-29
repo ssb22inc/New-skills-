@@ -1,0 +1,40 @@
+{
+  "id": "potassium",
+  "title": "Potassium & the ECG",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T11:24:12.935Z",
+  "images": 16,
+  "key": "ae0c5971e5d8ba2c",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "Images 1, 4, 9 and 12; hypo-act; HYPO_IV",
+      "title": "Standalone replacement checklist omits the current potassium check",
+      "problem": "The visible IV-replacement checklist says to review kidney function and urine output but omits the current potassium level. Fact 8, the caption and narration explicitly require all three. The inline diagram has no caption, so its visible replacement-safety checklist loses this essential check; including it in the SVG description does not fix the sighted learner's version.",
+      "fix": "Change the checklist to explicitly include the current potassium level, kidney function and urine output before routine replacement. Wrap the text and expand the panel rather than shrinking it.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "accessibility",
+      "where": "All images; kit.jsx MIN_TEXT/BODY_TEXT and fixed-width SVG viewBox",
+      "title": "Treatment text shrinks below the stated phone reading size",
+      "problem": "At a 320 CSS-pixel viewport, 13-unit text renders at approximately 11.6 pixels and 14-unit text at 12.4 pixels. This affects the treatment paragraphs and safety checklist, not just decorative labels. Unlike the captions, SVG text does not use the app's --read-size setting. The supplied screenshots do not establish readability at that smaller size.",
+      "fix": "Make teaching text respect the reading-size preference, preferably by rendering treatment panels as reflowing HTML. Otherwise use a responsive SVG layout that maintains the intended text size at the smallest supported viewport.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2728335
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Revise the standalone replacement checklist and phone text sizing. No confirmed potassium-classification error or mislabeled ECG landmark.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 1
+  }
+}

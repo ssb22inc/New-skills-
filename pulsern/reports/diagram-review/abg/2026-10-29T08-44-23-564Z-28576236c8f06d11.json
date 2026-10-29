@@ -1,0 +1,67 @@
+{
+  "id": "abg",
+  "title": "ABG: acid–base reading",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T08:44:23.564Z",
+  "images": 14,
+  "key": "28576236c8f06d11",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "clinical",
+      "where": "interpretAbg(): metabolic compensation testing and mixedResult(); claim 8",
+      "title": "Missing compensation timing makes early disorders look mixed",
+      "problem": "Respiratory compensation for a metabolic disturbance is not instantaneous. For pH 7.28, PaCO₂ 40, HCO₃⁻ 18, the function produces possible metabolic acidosis plus respiratory acidosis because Winter's expected PaCO₂ is 33–37. That is a legitimate concern in an established disturbance, but newly developed metabolic acidosis with incomplete respiratory compensation is another explanation. The output provides no such alternative, despite explicitly handling time course for respiratory disorders.",
+      "fix": "State the time-course assumption when applying expected respiratory compensation. Without onset/history, distinguish early or incomplete compensation from a possible additional respiratory process rather than presenting the mixed-disorder explanation alone. Keep the reference-range exam label separate from that assessment.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "clinical",
+      "where": "abgConsistency(), precisionOf(), and the Henderson–Hasselbalch validation policy",
+      "title": "Rounding-only validation treats approximate constants as exact",
+      "problem": "The consistency gate allows reporting-rounding error but no variation in the equation's constants. Blood-gas calculations can use different pK and CO₂-solubility constants. For example, pH 7.400, PaCO₂ 40.00, HCO₃⁻ 24.22 is coherent using pK 6.105 and solubility 0.0307, but the supplied function rejects it when those reporting precisions are supplied. Its error even says the values imply pH 'near 7.40, not 7.400'. This can reject a coherent gas as an authoring error.",
+      "fix": "Account for supported analyzer conventions or a justified model tolerance in addition to reporting precision. Retain rejection of materially inconsistent triplets, and display enough precision for any claimed discrepancy to be visible.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "compensationLimit(): metabolic alkalosis branch; ALKALOSIS_PACO2_CEILING; claim 8",
+      "title": "An approximate ceiling overrides an accepted compensation formula",
+      "problem": "The text says compensation rarely raises PaCO₂ beyond about 55, but the code makes 55 an exact upper bound. With pH 7.52, PaCO₂ 56.5, HCO₃⁻ 45, the second published rule gives 54.7 ± 2, so 56.5 fits. The cap nevertheless rejects it and treats the 1.5-mmHg excess over 55 as non-borderline evidence for an added respiratory acidosis. That contradicts both the accepted formula and the wording 'rarely' and 'about'.",
+      "fix": "Do not truncate an otherwise accepted expected interval at an approximate ceiling. Treat values above the usual ceiling as a contextual caution, with appropriate uncertainty, rather than manufacturing an exact compensation failure.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "Images 1, 7, 8, and 14: Partial compensation tile; CompTile configuration",
+      "title": "The Partial tile omits its defining reference-range condition",
+      "problem": "The tile says only 'pH still out; other value pushing back'. That also describes compensation occurring while the other value remains inside its reference range—which the caption and interpreter call uncompensated by the exam convention. For example, pH 7.32, PaCO₂ 50, HCO₃⁻ 25 satisfies the tile's wording but receives an uncompensated verdict. The standalone overview therefore teaches overlapping categories.",
+      "fix": "Include both requirements in the Partial tile: pH remains outside range, and the other value is outside its reference range in the compensating direction.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "pedagogy",
+      "where": "Claim 1; step 'ph' caption and narration; pH gauge end labels",
+      "title": "The pH state is conflated with the underlying process",
+      "problem": "Below 7.35 is acidemia and above 7.45 is alkalemia. Acidosis and alkalosis are processes that can coexist, including when pH is normal. The loose terminology is common in introductory exam materials, but 'pH tells you what the problem is' undermines this diagram's otherwise more careful treatment of mixed disorders.",
+      "fix": "Teach pH as the net state: acidemia, alkalemia, or within range. Then identify the acidosis or alkalosis processes, noting the simplified terminology students may encounter in exam materials.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.323691
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Revise before publication. The interpreter applies approximate compensation rules too rigidly, omits a timing-dependent alternative, and the compensation tiles contradict the stated classification convention.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 4,
+    "minor": 1
+  }
+}

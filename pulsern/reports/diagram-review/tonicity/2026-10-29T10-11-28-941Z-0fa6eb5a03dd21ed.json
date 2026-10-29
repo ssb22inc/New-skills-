@@ -1,0 +1,40 @@
+{
+  "id": "tonicity",
+  "title": "IV fluid tonicity",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T10:11:28.941Z",
+  "images": 14,
+  "key": "0fa6eb5a03dd21ed",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "pedagogy",
+      "where": "Images 1, 5, 6, 8, 12, 13; steps \"bags\" and \"dextrose\"; LISTS and associated narration",
+      "title": "The osmolarity–tonicity distinction never reaches the visible or narrated explanation",
+      "problem": "The facts distinguish total particle concentration from effective solute concentration, but neither the displayed text nor the narration names or explains osmolarity. After defining tonicity using effective solutes, the lesson presents D5W as isotonic and D10W as hypertonic under the same terminology. The later dextrose caveat explains their eventual effects but leaves students treating in-bag osmolarity and physiologic tonicity as interchangeable classifications.",
+      "fix": "Label the table explicitly as in-bag osmolarity/conventional NCLEX bag categories. State visibly and in narration that osmolarity counts all particles, whereas tonicity predicts cell-volume effects. Identify D5W as approximately iso-osmolar in the bag but physiologically hypotonic after glucose clearance.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "clinical",
+      "where": "Fact 5; images 1, 6, 8, 13, \"The dextrose catch\"; step \"dextrose\" caption and narration",
+      "title": "High glucose does not by itself establish slower uptake",
+      "problem": "“More slowly with high blood glucose or low insulin action” treats hyperglycemia itself as evidence that cellular glucose uptake is slower. Hyperglycemia can result from delivery exceeding clearance even when absolute uptake is increased. Reduced insulin action can impair clearance, but high glucose alone does not establish that mechanism.",
+      "fix": "Replace the rate claim with: “Dextrose is usually cleared rapidly. If delivery exceeds uptake and metabolism—for example, with impaired insulin action—glucose can accumulate and contribute to plasma tonicity.” Apply the same wording across facts, diagram text, caption and narration.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2539985
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No blocker identified. Two explanations need revision: the visible teaching does not explicitly distinguish osmolarity from tonicity, and hyperglycemia is overgeneralized as evidence of slower glucose uptake.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 1
+  }
+}

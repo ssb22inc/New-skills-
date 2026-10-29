@@ -1,0 +1,40 @@
+{
+  "id": "pressure-injury",
+  "title": "Pressure injury stages",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T12:53:52.657Z",
+  "images": 16,
+  "key": "9349677b4a2ca059",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "visual",
+      "where": "Playback of steps stage2–stage4; pressure-injury.jsx Column wound wrapper; kit.jsx .dg-fade",
+      "title": "The fade animation moves wounds across tissue boundaries",
+      "problem": "The wound entrance is not opacity-only: .dg-fade starts at translateY(6px). Stage 2's final floor is y=126 and fat begins at y=130, so its early visible frames extend into fat. The opening also starts below the skin surface, while the depth marker remains at its final position. The supplied finished-state screenshots cannot expose this error.",
+      "fix": "Give wound geometry an opacity-only entrance with no translation or scaling. Test intermediate playback frames against the tissue boundaries and depth markers.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "pedagogy",
+      "where": "Images 1, 7, 9 and 15; step other; UNSTAGEABLE constant, caption and narration",
+      "title": "Unstageable loses its full-thickness qualifier",
+      "problem": "Fact 6 correctly identifies full-thickness skin and tissue loss, but the visible card, caption and narration only describe an obscured base. That leaves the defining distinction unstated in the actual lesson: the injury is full-thickness; its extent, not simply its visibility, is undetermined.",
+      "fix": "Use: \"Unstageable: full-thickness skin and tissue loss whose extent cannot be confirmed because slough or eschar obscures it.\" Retain the distinction that slough may be present in a stageable wound when it does not obscure the extent of loss.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.0726227
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Fix the wound-entry animation before publication: it can briefly depict Stage 2 extending into fat. The delivered unstageable explanation also omits an important qualifier.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 1
+  }
+}

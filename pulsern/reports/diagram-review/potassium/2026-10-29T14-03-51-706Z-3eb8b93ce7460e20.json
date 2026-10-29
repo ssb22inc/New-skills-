@@ -1,0 +1,31 @@
+{
+  "id": "potassium",
+  "title": "Potassium & the ECG",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:03:51.706Z",
+  "images": 16,
+  "key": "3eb8b93ce7460e20",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "rules",
+      "where": "Source: kit.jsx Gauge valueBad/pinFill logic; potassium.jsx Gauge colour props. Gauge in images 1–2, 8–10 and 16.",
+      "title": "Every abnormal potassium result receives critical-state colouring",
+      "problem": "The gauge assigns danger/coral styling to any value outside 3.5–5.0, including supplied cases such as 3.49 and 5.01. Those values establish an abnormal lab category, not a critical state. The HYPO/HYPER category labels are also permanently coral. This conflicts with the project's critical/incorrect-only meaning for coral.",
+      "fix": "Keep generic category labels neutral. Use caution styling for noncritical abnormalities, reserving coral for explicitly critical teaching scenarios; do not derive critical status solely from being outside the reference range.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.3070885
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No substantiated clinical blocker found. One minor colour-semantics rule violation remains.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}

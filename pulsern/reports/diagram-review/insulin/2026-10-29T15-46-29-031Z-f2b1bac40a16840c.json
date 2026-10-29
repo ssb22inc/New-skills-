@@ -1,0 +1,49 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T15:46:29.031Z",
+  "images": 16,
+  "key": "f2b1bac40a16840c",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "pedagogy",
+      "where": "Images 5 and 13; step \"nph\" caption and narration",
+      "title": "Time-to-peak range reads as time spent at peak",
+      "problem": "\"Has a long, broad peak from about 4 to 12 hours\" can teach that one NPH dose remains at peak for eight hours. The reference range describes when maximum effect may occur; it does not establish an eight-hour sustained maximum.",
+      "fix": "Say \"NPH may reach its peak about 4–12 hours after injection; the timing varies.\" Keep the broad anticipated hypoglycemia-risk window without calling the entire interval a sustained peak.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "minor",
+      "area": "clinical",
+      "where": "Clinical claim 6; insulin.facts[5]",
+      "title": "Degludec's minimum demonstrated duration becomes an approximate endpoint",
+      "problem": "\"Degludec about 42 hours\" loses an important qualifier. Tresiba prescribing information describes glucose-lowering activity lasting at least 42 hours after the last dose in its steady-state study, not ending around 42 hours.",
+      "fix": "Use \"degludec: at least 42 hours in labeling studies\" rather than presenting 42 hours as its approximate endpoint.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "rules",
+      "where": "Images 9 and 15; Curve peak-band rectangle with fillOpacity={0.55}",
+      "title": "Dark peak bands miss the specified 4.5:1 contrast",
+      "problem": "The accent curve (#8CDCC8) over the amber band composited onto the dark card (approximately #846A3B) has roughly 3.2:1 contrast, not the claimed 4.5:1. This violates the project's stated threshold.",
+      "fix": "Reduce the dark-theme amber fill opacity, approximately to 0.30, while retaining the outlined boundaries. Measure the final composited curve and boundary contrast rather than checking tokens against the unshaded card.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.315666
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Minor revisions needed: peak-range wording, degludec's duration qualifier, and dark-theme peak-band contrast.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 3
+  }
+}
