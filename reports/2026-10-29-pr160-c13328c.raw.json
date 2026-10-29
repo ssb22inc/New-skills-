@@ -1,0 +1,73 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "c13328cd1d4c2057d23ef737da373a0dbbb4fcd6",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T23:20:45.967Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 163,
+      "title": "Queue deletion errors are ignored and can starve later requests",
+      "problem": "The worker ignores Supabase's returned error when removing completed queue entries. The already-decided and rejection paths do the same. Consequently, deletion failures are reported as successful processing rather than operational failures.",
+      "failure_scenario": "Uploads and downloads work, but remove returns an error. Completed entries remain queued, and the workflow stays green. Once 420 old, decided entries accumulate with the default max of 200, listLane repeatedly selects only those entries. Their deletion keeps failing, newer requests are never reached, and prewarming also skips those newer passages because they remain queued.",
+      "fix": "Check removal results throughout drainQueue and mark deletion failures as operational failures. Ensure undeletable decided entries cannot indefinitely hide later pending work. Add tests where remove returns an error, asserting a failed run and preservation of progress for later requests.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 535,
+      "title": "Concurrent live requests synthesize the same passage multiple times",
+      "problem": "The live path checks for a saved record and then synthesizes without acquiring a passage-level claim. The numbered budget slots cap total spending but do not deduplicate purchases. The paid-once test exercises only sequential requests.",
+      "failure_scenario": "With OPENAI_API_KEY configured on the web server, two students request the same uncached passage concurrently. Both observe no record, reserve separate spending slots, and purchase synthesis and transcription for identical text. Common passages such as \"Choose one answer.\" make this particularly plausible. Duplicate purchases consume the daily budget and can deny other students voice preparation unnecessarily.",
+      "fix": "Acquire a shared, leased claim keyed by speechKey before synthesis, recheck the saved record after acquiring it, and coordinate with scheduled synthesis as well. Add a concurrent-request test proving that identical passages produce one paid synthesis while both callers can obtain the checked result.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 285,
+      "title": "The fifteen-minute preparation message is shown when preparation cannot run again today",
+      "problem": "Every 202 response produces a message saying the voice is usually ready within 15 minutes. Queue admission does not check the remaining synthesis budget, and prewarming consumes that budget independently of admission. The UI therefore presents the short turnaround even when the system is deliberately unable to synthesize anything until the next Eastern calendar day.",
+      "failure_scenario": "While the bank is being prewarmed, the worker exhausts the 4,000-synthesis daily cap. A student then requests an unvoiced item. Admission still succeeds and returns 202, so the app displays the fifteen-minute message, although every subsequent worker run must stop at the budget cap, potentially for many hours.",
+      "fix": "Remove the unsupported turnaround estimate or return budget-aware preparation status and display that work is waiting for the next budget day. Test the displayed message for an admitted request made after the synthesis budget is exhausted.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 126236,
+    "completionTokens": 13224,
+    "reasoningTokens": 12430,
+    "costUsd": 0.4478285
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not release-ready. Storage deletion failures can silently strand requested audio, the supported live-synthesis path duplicates paid work under concurrency, and the preparation message ignores exhausted daily budgets. The unchanged narration-checker implementation was not supplied, so its normalization behavior could not be independently verified.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
