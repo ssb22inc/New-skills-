@@ -1,8 +1,14 @@
 /* Drawing kit for PulseRN concept diagrams.
    ------------------------------------------------------------------
-   Every diagram is drawn on a 360-unit-wide canvas because the app is
-   mobile-first: at a 340px phone width, 1 unit ≈ 0.94px, so 12-unit text
-   stays readable without zooming. On desktop the same drawing scales up.
+   Every diagram is drawn on a 360-unit-wide canvas. On a phone (up to
+   600px wide) the player runs edge to edge (DIAGRAM_CSS .dg-wrap), out of
+   the card and rationale padding around it, so at a 360px phone 1 unit is
+   1 CSS pixel and at 320px it is 0.89px. Text is never smaller than
+   MIN_TEXT units, and teaching text is BODY_TEXT or more, so it reads at
+   13-14px on a 360px phone without zooming (Sol, PR #155 diagram review:
+   inside the nested padding the old 9.5-12-unit labels rendered at 8-10px).
+   tests/diagram-text.test.js renders every diagram and every step and
+   fails on any smaller text. On desktop the same drawing scales up.
 
    Colour comes from the app's own tokens (var(--teal) etc.), so diagrams
    follow light and dim themes with no extra work, and the design rules in
@@ -14,14 +20,18 @@
 
    Animated explainers are the same drawing stepped through: each element
    belongs to a named group, and a step says which groups are in focus.
-   Out-of-focus groups dim rather than disappear, so the learner keeps their
-   bearings. Transitions are opacity/transform only and switch off under
+   Out-of-focus groups dim their SHAPES only: their text keeps full contrast,
+   so retained context stays readable (Sol: text faded to 18% opacity fell
+   far below 4.5:1). Coral text is drawn in the darker danger ink, which
+   passes 4.5:1 in both themes; the coral token itself stays for shapes. Transitions are opacity/transform only and switch off under
    prefers-reduced-motion. */
 import React from "react";
 
 export const W = 360;
 export const MONO = "'IBM Plex Mono',ui-monospace,monospace";
 export const SANS = "'Archivo',system-ui,sans-serif";
+export const MIN_TEXT = 13;
+export const BODY_TEXT = 14;
 
 export const C = {
   ink: "var(--ink)",
@@ -57,7 +67,7 @@ export function G({ id, children, ...rest }) {
   const inherited = React.useContext(InFocus);
   const on = !focus || inherited || focus.includes(id);
   return (
-    <g data-g={id} className="dg-g" style={{ opacity: inherited ? 1 : on ? 1 : 0.18 }} {...rest}>
+    <g data-g={id} className={on ? (focus ? "dg-g dg-on" : "dg-g") : "dg-g dg-dim"} {...rest}>
       <InFocus.Provider value={!!focus && on}>{children}</InFocus.Provider>
     </g>
   );
@@ -228,10 +238,35 @@ export function Flow({ d, n = 3, dur = 1.8, r = 2.4, color = C.teal, opacity = 0
   ));
 }
 
-export function T({ x, y, size = 12, weight = 500, color = C.ink, anchor = "start", mono = false, children, ...rest }) {
+/* Text. Coral is a fill colour for shapes; as text it falls just short of
+   4.5:1, so coral text is drawn in the danger ink (same meaning, darker). */
+export const textInk = (color) => (color === C.coral ? C.danger : color);
+export function T({ x, y, size = BODY_TEXT, weight = 500, color = C.ink, anchor = "start", mono = false, children, ...rest }) {
   return (
-    <text x={x} y={y} fontSize={size} fontWeight={weight} fill={color} textAnchor={anchor}
+    <text x={x} y={y} fontSize={size} fontWeight={weight} fill={textInk(color)} textAnchor={anchor}
       fontFamily={mono ? MONO : SANS} {...rest}>{children}</text>
+  );
+}
+
+/* Wrapped text. Archivo averages about 0.55em a character, so a line
+   holds w / (size × 0.55) characters; the layout lint in
+   ops/render-diagrams.mjs measures the real glyphs and fails on any line
+   that still overflows. Returns the lines so a layout can size its box. */
+export const CHAR_EM = 0.55;
+export const paraLines = (text, w, size = BODY_TEXT) => wrapWords(text, Math.max(4, Math.floor(w / (size * CHAR_EM))));
+export function Para({ x, y, w, text, size = BODY_TEXT, lh = 1.3, weight = 500, color = C.ink, mono = false, lead = null, leadColor = C.accent }) {
+  const lines = paraLines(lead ? `${lead} ${text}` : text, w, size);
+  return (
+    <g>
+      {lines.map((l, i) => {
+        const hasLead = lead && i === 0 && l.startsWith(lead);
+        return (
+          <T key={i} x={x} y={y + i * size * lh} size={size} weight={weight} color={color} mono={mono}>
+            {hasLead ? <><tspan fontWeight={700} fill={textInk(leadColor)}>{lead}</tspan>{l.slice(lead.length)}</> : l}
+          </T>
+        );
+      })}
+    </g>
   );
 }
 
@@ -252,19 +287,36 @@ export function Arrow({ x1, y1, x2, y2, color = "teal", sw = 2, dash, curve = 0 
     strokeLinecap="round" markerEnd={`url(#${id}-arrow-${color})`} />;
 }
 
-/* A rounded label chip: the workhorse for terms and values. */
-export function Chip({ x, y, text, color = "teal", fill, anchor = "middle", size: wanted = 11, mono = false, pad = 7, maxW = 344 }) {
-  /* A label computed from data (an ABG verdict) can be long: shrink the
-     type to fit the canvas rather than run off it. */
+/* A rounded label chip: the workhorse for terms and values. A label
+   computed from data (an ABG verdict) can be long: it wraps onto more
+   lines rather than shrinking below a readable size (Sol: shrinking to fit
+   one line made long verdicts unreadable on a phone). */
+export function wrapWords(text, maxChars) {
+  const lines = [];
+  /* Split on ordinary spaces only: a no-break space (\u00a0) keeps "(+ contact)" together. */
+  for (const word of String(text).split(/[ \t\n]+/).filter(Boolean)) {
+    const last = lines[lines.length - 1];
+    if (last != null && (last + " " + word).length <= maxChars) lines[lines.length - 1] = last + " " + word;
+    else lines.push(word);
+  }
+  return lines.length ? lines : [""];
+}
+export function Chip({ x, y, text, color = "teal", fill, anchor = "middle", size = BODY_TEXT, mono = false, pad = 8, maxW = 344 }) {
   const per = mono ? 0.62 : 0.56;
-  const size = Math.min(wanted, (maxW - pad * 2) / (text.length * per));
-  const w = Math.max(24, text.length * size * per + pad * 2);
+  const lines = wrapWords(text, Math.max(4, Math.floor((maxW - pad * 2) / (size * per))));
+  const longest = Math.max(...lines.map((l) => l.length));
+  const w = Math.max(28, longest * size * per + pad * 2);
+  const lh = size * 1.25;
+  const h = size + 9 + (lines.length - 1) * lh;
   const left = anchor === "middle" ? x - w / 2 : anchor === "end" ? x - w : x;
+  const ink = C[color] ?? color;
   return (
     <g>
-      <rect x={left} y={y - size - 3} width={w} height={size + 9} rx={(size + 9) / 2}
-        fill={fill ?? C.surface} stroke={C[color] ?? color} strokeWidth={1.2} />
-      <T x={left + w / 2} y={y + 1} size={size} anchor="middle" weight={600} color={C[color] ?? color} mono={mono}>{text}</T>
+      <rect x={left} y={y - size - 3} width={w} height={h} rx={Math.min(h, size + 9) / 2}
+        fill={fill ?? C.surface} stroke={ink} strokeWidth={1.2} />
+      {lines.map((l, i) => (
+        <T key={i} x={left + w / 2} y={y + 1 + i * lh} size={size} anchor="middle" weight={600} color={ink} mono={mono}>{l}</T>
+      ))}
     </g>
   );
 }
@@ -274,46 +326,58 @@ export function Chip({ x, y, text, color = "teal", fill, anchor = "middle", size
    relative to normal is the whole point.
 
    The out-of-range ends are lightly shaded, the normal band is a teal bar
-   with a sheen, and the value sits in a pin (coral when abnormal). On its
-   step (`anim`) the pin slides in from the middle of the normal range, so
-   the eye travels the distance from normal. `icon` draws a small symbol
-   before the title (a lung for PaCO₂, a kidney for HCO₃⁻). */
-export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, unit = "",
+   with a sheen, and the value sits in a pin (danger ink when abnormal). On
+   its step (`anim`) the pin slides in from the middle of the normal range,
+   so the eye travels the distance from normal. `icon` draws a small symbol
+   before the title (a lung for PaCO₂, a kidney for HCO₃⁻).
+
+   The pill shows the value exactly as given (`text`, or the value with
+   `decimals`): the caller passes the precision its classification uses, so
+   the picture can never show a boundary number for an abnormal reading
+   (Sol: 3.49 drawn as "3.5" beside "below 3.5"). A value beyond the scale
+   is pinned to the end WITH an arrow, never drawn as if it sat on the end
+   (Sol: 8.0 and 10.0 both looked like 7.0). */
+export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, text: shown = null, unit = "",
   leftLabel, rightLabel, leftColor = "muted", rightColor = "muted", markerColor = "coral", label, icon = null, anim = null }) {
-  /* Vertical rhythm, top to bottom: title (y-34), value pin (y-27 to y-11),
-     marker stem (y-10), bar (y), range numbers and end labels (y+19). */
+  /* Vertical rhythm, top to bottom: title (y-44), value pin (y-35 to
+     y-13), marker stem (y-12), bar (y), range numbers and end labels (y+23). */
   const u = useDefs();
-  const px = (v) => x + ((Math.min(max, Math.max(min, v)) - min) / (max - min)) * w;
+  const clamp = (v) => Math.min(max, Math.max(min, v));
+  const px = (v) => x + ((clamp(v) - min) / (max - min)) * w;
   const fmt = (v) => Number(v).toFixed(decimals);
   const valueBad = value != null && (value < lo || value > hi);
+  const off = value == null ? 0 : value > max ? 1 : value < min ? -1 : 0;
   const mx = value != null ? px(value) : 0;
-  const text = value != null ? fmt(value) : "";
-  const pillW = text.length * 7.4 + 14;
+  const text = value != null ? (shown ?? fmt(value)) : "";
+  const pillW = (text.length + (off ? 2 : 0)) * 8.6 + 16;
   const pillX = Math.min(x + w - pillW, Math.max(x, mx - pillW / 2));
-  const pinFill = valueBad ? (markerColor === "coral" ? C.danger : C[markerColor]) : C.teal;
+  const pinFill = valueBad ? (markerColor === "coral" ? C.danger : C[markerColor]) : C.accent;
   const ticks = Array.from({ length: 11 }, (_, i) => x + (i / 10) * w);
   return (
     <g>
-      {icon ? <g>{icon(x + 8, y - 38)}</g> : null}
-      {label ? <T x={icon ? x + 22 : x} y={y - 34} size={12} weight={700}>{label}</T> : null}
-      {unit ? <T x={x + w} y={y - 34} size={10} anchor="end" color={C.muted} mono>{unit}</T> : null}
+      {icon ? <g>{icon(x + 8, y - 48)}</g> : null}
+      {label ? <T x={icon ? x + 24 : x} y={y - 44} size={BODY_TEXT} weight={700}>{label}</T> : null}
+      {unit ? <T x={x + w} y={y - 44} size={MIN_TEXT} anchor="end" color={C.muted} mono>{unit}</T> : null}
       <rect x={x} y={y - 5} width={w} height={10} rx={5} fill={C.surface} stroke={C.line} />
       <rect x={x + 1} y={y - 4} width={px(lo) - x - 1} height={8} rx={4} fill={C.muted} fillOpacity={0.1} />
       <rect x={px(hi)} y={y - 4} width={x + w - px(hi) - 1} height={8} rx={4} fill={C.muted} fillOpacity={0.1} />
       {ticks.map((tx, i) => <line key={i} x1={tx} x2={tx} y1={y + 6} y2={y + 9} stroke={C.muted} strokeOpacity={0.45} strokeWidth={0.8} />)}
       <rect x={px(lo)} y={y - 5} width={px(hi) - px(lo)} height={10} rx={4} fill={u("teal")} />
       <rect x={px(lo)} y={y - 5} width={px(hi) - px(lo)} height={5} rx={3} fill={u("sheen")} />
-      <T x={px(lo)} y={y + 19} size={10.5} anchor="middle" color={C.accent} mono>{fmt(lo)}</T>
-      <T x={px(hi)} y={y + 19} size={10.5} anchor="middle" color={C.accent} mono>{fmt(hi)}</T>
-      {leftLabel ? <T x={x} y={y + 19} size={10.5} color={C[leftColor]} weight={600}>{leftLabel}</T> : null}
-      {rightLabel ? <T x={x + w} y={y + 19} size={10.5} anchor="end" color={C[rightColor]} weight={600}>{rightLabel}</T> : null}
+      <T x={px(lo)} y={y + 23} size={MIN_TEXT} anchor="middle" color={C.accent} mono>{fmt(lo)}</T>
+      <T x={px(hi)} y={y + 23} size={MIN_TEXT} anchor="middle" color={C.accent} mono>{fmt(hi)}</T>
+      {leftLabel ? <T x={x} y={y + 23} size={MIN_TEXT} color={C[leftColor]} weight={600}>{leftLabel}</T> : null}
+      {rightLabel ? <T x={x + w} y={y + 23} size={MIN_TEXT} anchor="end" color={C[rightColor]} weight={600}>{rightLabel}</T> : null}
       {value != null ? (
-        <Anim on={anim ?? []} kind="slide" from={`${((lo + hi) / 2 - Math.min(max, Math.max(min, value))) / (max - min) * w}px`} dur={1300}>
+        <Anim on={anim ?? []} kind="slide" from={`${((lo + hi) / 2 - clamp(value)) / (max - min) * w}px`} dur={1300}>
           <g filter={u("shadow")}>
-            <line x1={mx} x2={mx} y1={y - 11} y2={y + 6} stroke={pinFill} strokeWidth={2} strokeLinecap="round" />
-            <circle cx={mx} cy={y} r={3.4} fill={C.card} stroke={pinFill} strokeWidth={2} />
-            <rect x={pillX} y={y - 27} width={pillW} height={16} rx={8} fill={pinFill} />
-            <T x={pillX + pillW / 2} y={y - 15} size={11} anchor="middle" weight={700} mono color={C.card}>{text}</T>
+            <line className="dg-solid" x1={mx} x2={mx} y1={y - 12} y2={y + 6} stroke={pinFill} strokeWidth={2} strokeLinecap="round" />
+            {off ? <path className="dg-solid" d={`M${mx + off * 3},${y - 6} l${off * 8},6 l${-off * 8},6 z`} fill={pinFill} />
+              : <circle className="dg-solid" cx={mx} cy={y} r={3.4} fill={C.card} stroke={pinFill} strokeWidth={2} />}
+            <rect className="dg-solid" x={pillX} y={y - 35} width={pillW} height={22} rx={11} fill={pinFill} />
+            <T x={pillX + pillW / 2} y={y - 19} size={BODY_TEXT} anchor="middle" weight={700} mono color={C.card}>
+              {off < 0 ? "◂ " : ""}{text}{off > 0 ? " ▸" : ""}
+            </T>
           </g>
         </Anim>
       ) : null}
@@ -324,24 +388,31 @@ export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, unit = "
 /* Styles for the explainer player, injected once. Plain CSS, app tokens,
    and every motion off under prefers-reduced-motion. */
 export const DIAGRAM_CSS = `
-.dg-g{transition:opacity .45s ease}
+.dg-g :is(path,rect,circle,ellipse,line,polyline,polygon){transition:opacity .45s ease}
+.dg-dim :is(path,rect,circle,ellipse,line,polyline,polygon):not(.dg-solid):not(.dg-on *){opacity:.28}
 .dg-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 12px 10px;margin:10px 0}
+@media (max-width:600px){
+  .dg-wrap{margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);border-radius:0;border-left:0;border-right:0;padding:12px 0 10px}
+  .dg-wrap>:not(svg){padding-left:14px;padding-right:14px}
+}
 .dg-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-.dg-title{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--teal);font-weight:600}
-.dg-badge{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:2px 8px}
+.dg-title{font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-ink);font-weight:600}
+.dg-badge{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:2px 8px}
 .dg-badge.rn{color:var(--accent-ink);border-color:var(--teal)}
 .dg-caption{font-size:var(--read-size,15px);line-height:var(--read-lh,1.55);color:var(--ink);margin:10px 2px 8px;min-height:3.1em}
-.dg-controls{display:flex;align-items:center;gap:8px}
-.dg-btn{font:600 13px 'Archivo',system-ui,sans-serif;color:var(--btn-ink);background:var(--teal);border:0;border-radius:10px;padding:8px 14px;cursor:pointer;min-height:40px}
+.dg-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dg-controls>.dg-btn:not(.ghost){flex:1}
+.dg-btn{font:600 14px 'Archivo',system-ui,sans-serif;color:var(--btn-ink);background:var(--teal);border:0;border-radius:10px;padding:8px 14px;cursor:pointer;min-height:44px;min-width:44px}
 .dg-btn.ghost{color:var(--accent-ink);background:var(--card);border:1px solid var(--line)}
 .dg-btn:disabled{opacity:.45;cursor:default}
 .dg-btn:focus-visible,.dg-dot:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
-.dg-dots{display:flex;gap:6px;flex:1;justify-content:center;flex-wrap:wrap}
-.dg-dot{width:10px;height:10px;border-radius:99px;border:1px solid var(--teal);background:transparent;padding:0;cursor:pointer}
-.dg-dot.on{background:var(--teal)}
+.dg-dots{display:flex;gap:2px;order:3;flex-basis:100%;justify-content:center;flex-wrap:wrap}
+.dg-dot{width:28px;height:28px;border:0;background:transparent;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:99px}
+.dg-dot::before{content:"";width:12px;height:12px;border-radius:99px;border:1.5px solid var(--teal);box-sizing:border-box}
+.dg-dot.on::before{background:var(--teal)}
 .dg-progress{height:3px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
 .dg-progress>i{display:block;height:100%;background:var(--teal);transition:width .25s linear}
-.dg-ai{font-size:11.5px;color:var(--muted);margin:8px 2px 0}
+.dg-ai{font-size:13px;color:var(--muted);margin:8px 2px 0}
 .dg-a{animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.75,.25,1)}
 .dg-fade{animation-name:dg-fade;animation-duration:.6s}
 .dg-pop{animation-name:dg-pop;animation-duration:.55s;animation-timing-function:cubic-bezier(.3,1.45,.5,1)}
@@ -358,5 +429,5 @@ export const DIAGRAM_CSS = `
 @keyframes dg-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
 @keyframes dg-slide{from{transform:translateX(var(--from,0))}}
 @keyframes dg-press{0%,100%{transform:translateY(-6px)}40%,60%{transform:translateY(0)}}
-@media (prefers-reduced-motion: reduce){.dg-g,.dg-progress>i{transition:none}.dg-a,.dg-press,.dg-draw path{animation:none!important}}
+@media (prefers-reduced-motion: reduce){.dg-g *,.dg-progress>i{transition:none!important}.dg-a,.dg-press,.dg-draw path{animation:none!important}}
 `;

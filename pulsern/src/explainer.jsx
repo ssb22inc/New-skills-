@@ -7,9 +7,11 @@
      player  — opened straight into the steps.
 
    Honesty rules (CLAUDE.md): the diagrams, captions and narration scripts
-   are drafted by an AI, so every explainer carries the ✨ AI label and the
-   verify-against-your-materials note until the owner has signed it off as
-   RN-verified. Narration, when present, is a synthetic voice and says so.
+   are drafted by an AI, so every explainer ALWAYS carries the ✨ AI label,
+   the verify-against-your-materials note and the educational-use note. An
+   owner's RN sign-off is shown as an extra badge, never in place of them
+   (Sol, PR #155 diagram review). Narration, when present, is a synthetic
+   voice and says so.
 
    Without audio the player still works: captions advance on a reading-speed
    timer. With prefers-reduced-motion it never advances on its own. */
@@ -65,10 +67,21 @@ export function afterClip({ reduce, step, n, go }) {
   return true;
 }
 
+export const AI_NOTE = "✨ AI-drafted · verify against your course materials";
+export const EDU_NOTE = "Educational exam prep, not instructions for real-world care.";
 export function verificationLabel(rnVerified) {
-  return rnVerified
-    ? { text: "RN-verified", rn: true }
-    : { text: "✨ AI-drafted · verify against your course materials", rn: false };
+  return { text: AI_NOTE, edu: EDU_NOTE, rn: !!rnVerified };
+}
+
+/* Space plays and pauses only when the player itself has focus: on a
+   focused button it must do what the button says (Sol: Space on "Next"
+   toggled playback instead). */
+export function playerKey(key, target) {
+  const interactive = !!target && /^(BUTTON|A|INPUT|SELECT|TEXTAREA|AUDIO|VIDEO)$/.test(target.tagName ?? "");
+  if (key === "ArrowRight") return "next";
+  if (key === "ArrowLeft") return "prev";
+  if (key === " " && !interactive) return "toggle";
+  return null;
 }
 
 /* ---------- component ---------- */
@@ -129,14 +142,17 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
 
   const onKey = (e) => {
     if (!inSteps) return;
-    if (e.key === "ArrowRight") { e.preventDefault(); go(step + 1); }
-    else if (e.key === "ArrowLeft") { e.preventDefault(); go(step - 1); }
-    else if (e.key === " ") { e.preventDefault(); setPlaying((p) => !p); }
+    const action = playerKey(e.key, e.target);
+    if (!action) return;
+    e.preventDefault();
+    if (action === "next") go(step + 1);
+    else if (action === "prev") go(step - 1);
+    else setPlaying((p) => !p);
   };
 
   const badge = verificationLabel(rnVerified);
   return (
-    <section className="dg-wrap" aria-label={`Explainer: ${diagram.title}`} onKeyDown={onKey}>
+    <section className="dg-wrap" aria-label={`Explainer: ${diagram.title}`} onKeyDown={onKey} tabIndex={-1}>
       <div className="dg-head">
         <span className="dg-title">{diagram.title}</span>
         {inSteps ? <span className="dg-badge" aria-hidden="true">{step + 1} / {n}</span> : null}
@@ -169,11 +185,13 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
           <button type="button" className="dg-btn" onClick={() => { go(0); setPlaying(!reduce); }}>▶ Watch the explainer</button>
         </div>
       )}
-      {/* The RN badge is a pill; the AI note is plain text, because a long
-          pill wraps into a broken shape at phone width. */}
+      {/* The AI note is plain text, because a long pill wraps into a broken
+          shape at phone width; an RN sign-off adds a small badge. */}
       <p className="dg-ai">
-        {badge.rn ? <span className="dg-badge rn">{badge.text}</span> : <span>{badge.text}</span>}
+        {badge.rn ? <><span className="dg-badge rn">RN-verified</span>{" "}</> : null}
+        <span>{badge.text}</span>
         {clipUrl ? " · Narration is a synthetic voice." : ""}
+        <br /><span>{badge.edu}</span>
       </p>
     </section>
   );

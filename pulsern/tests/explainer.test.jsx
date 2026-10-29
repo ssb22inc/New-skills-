@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Explainer, captionMs, stepCaption, stepsFor, clipFor, verificationLabel, afterClip, MIN_STEP_MS, WORDS_PER_SECOND } from "../src/explainer.jsx";
+import { Explainer, captionMs, stepCaption, stepsFor, clipFor, verificationLabel, playerKey, EDU_NOTE, afterClip, MIN_STEP_MS, WORDS_PER_SECOND } from "../src/explainer.jsx";
 import { DIAGRAMS } from "../src/diagrams/index.js";
 
 describe("caption timing", () => {
@@ -21,11 +21,16 @@ describe("caption timing", () => {
 });
 
 describe("labelling (CLAUDE.md: AI content stays labelled)", () => {
-  it("labels an unverified explainer as AI-drafted with the verify note", () => {
-    expect(verificationLabel(false)).toEqual({ text: "✨ AI-drafted · verify against your course materials", rn: false });
+  it("labels an unverified explainer as AI-drafted with the verify and educational notes", () => {
+    expect(verificationLabel(false)).toEqual({ text: "✨ AI-drafted · verify against your course materials", edu: EDU_NOTE, rn: false });
   });
-  it("shows RN-verified only when signed off", () => {
-    expect(verificationLabel(true)).toEqual({ text: "RN-verified", rn: true });
+  /* Sol, PR #155 diagram review: RN sign-off replaced the AI label. */
+  it("keeps the AI label and notes when RN-verified, adding the RN badge", () => {
+    expect(verificationLabel(true)).toEqual({ text: "✨ AI-drafted · verify against your course materials", edu: EDU_NOTE, rn: true });
+    const html = renderToStaticMarkup(<Explainer diagram={DIAGRAMS.abg} rnVerified />);
+    expect(html).toContain("RN-verified");
+    expect(html).toContain("✨ AI-drafted");
+    expect(html).toContain(EDU_NOTE);
   });
   it("renders the AI label by default — no RN claim without sign-off", () => {
     const html = renderToStaticMarkup(<Explainer diagram={DIAGRAMS.abg} />);
@@ -160,5 +165,17 @@ describe("when a clip ends", () => {
     expect(afterClip({ reduce: false, step: 1, n: 5, go: (i) => { went = i; } })).toBe(true);
     expect(went).toBe(2);
     expect(afterClip({ reduce: false, step: 4, n: 5, go: () => { throw new Error("no step 5"); } })).toBe(false);
+  });
+});
+
+/* Sol, PR #155 diagram review: Space on a focused Next button toggled
+   playback instead of pressing the button. */
+describe("keyboard", () => {
+  it("leaves Space to a focused button, and plays/pauses only from the player itself", () => {
+    expect(playerKey(" ", { tagName: "BUTTON" })).toBe(null);
+    expect(playerKey(" ", { tagName: "SECTION" })).toBe("toggle");
+    expect(playerKey("ArrowRight", { tagName: "BUTTON" })).toBe("next");
+    expect(playerKey("ArrowLeft", { tagName: "SECTION" })).toBe("prev");
+    expect(playerKey("Enter", { tagName: "SECTION" })).toBe(null);
   });
 });
