@@ -1,0 +1,40 @@
+{
+  "id": "abg",
+  "title": "ABG: acid–base reading",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T10:01:54.984Z",
+  "images": 16,
+  "key": "aac63897ce566ac2",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "pedagogy",
+      "where": "Images 1, 7, 9 and 15; expected-compensation panel; abg.jsx RULES respiratory equations",
+      "title": "Respiratory equations do not clearly scope the coefficient or sign",
+      "problem": "“24 − 2 (acute) or 5 (chronic) × …” does not unambiguously apply the subtraction and multiplication to both alternatives. The respiratory-acidosis equation has the same grouping defect. Students copying these as standalone equations can calculate the wrong bicarbonate. For example, at PaCO₂ 20, the intended respiratory-alkalosis estimates are 20 acute and 14 chronic.",
+      "fix": "Write HCO₃⁻ ≈ 24 + k × ((PaCO₂ − 40) / 10), with k = 1 acute or 4 chronic; and HCO₃⁻ ≈ 24 − k × ((40 − PaCO₂) / 10), with k = 2 acute or 5 chronic. Retain ±2 and the units.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "Step 'limits' caption and narration versus images 7 and 15 and compensationLimit('metabolic', 'alkalosis')",
+      "title": "Following the narration can disagree with the computed verdict",
+      "problem": "The caption and narration teach only PaCO₂ ≈ 0.7 × HCO₃⁻ + 21 ±2, but the interpreter accepts either of two formulas. This changes actual decisions. With pH 7.50, PaCO₂ 53 and HCO₃⁻ 40, the narrated rule gives 47–51 mmHg, placing 53 outside expected compensation. The interpreter accepts 47–53.2 and returns partially compensated metabolic alkalosis without a mixed-disorder caution. These values are internally consistent.",
+      "fix": "Make the caption and recording acknowledge both accepted formulas and their differing estimates, or standardize the displayed teaching and interpreter on one sourced convention. Add this value set as a cross-modal regression test.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.3575085
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Needs revision: the printed respiratory equations are ambiguous, and the narrated metabolic-alkalosis rule does not match the interpreter's accepted range.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
