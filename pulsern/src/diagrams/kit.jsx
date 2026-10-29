@@ -147,8 +147,10 @@ export function slicesFor(h, focus, regions, stepKey) {
 export function Frame({ h, title, desc, focus = null, regions = null, children }) {
   const tid = React.useId();
   const { stepKey, collect = null, still = false, caption = null } = React.useContext(StepContext);
-  /* In the player the image is described by its own step, not the whole
-     lecture (Sol, round 6); the overview keeps the full description. */
+  /* In the player the image is described by its own step — the step's
+     own description of what it shows when it has one, else its caption —
+     not the whole lecture (Sol, rounds 6 and 11); the overview keeps the
+     full description. */
   const described = stepKey != null && caption ? caption : desc;
   const slices = slicesFor(h, focus, regions, stepKey) ?? [[0, h]];
   const solo = slicesFor(h, focus, regions, stepKey) != null;

@@ -108,7 +108,10 @@ function Column({ x, w, stage, title, under = null, wound = null, floor = null }
       <Tissue x={x} y={TOP} w={w} animate="layers" />
       {under ? <Anim on={key} kind="fade" dur={900}>{under}</Anim> : null}
       <Surface x={x} y={TOP} w={w} />
-      {wound ? <Anim on={key} kind="grow" origin="50% 0%" dur={1300}>{wound}</Anim> : null}
+      {/* The finished wound fades in at its full depth: a crater growing
+          from the surface left the depth ring and slough label pointing
+          into intact tissue mid-animation (Sol, round 11). */}
+      {wound ? <Anim on={key} kind="fade" dur={1100}>{wound}</Anim> : null}
       {floor ? <Loop on={key}>{floor}</Loop> : null}
       <rect x={x} y={TOP} width={w} height={BOTTOM - TOP} rx={2} fill="none" stroke={C.line} strokeWidth={0.8} />
     </g>

@@ -39,3 +39,16 @@ describe("chickenpox is shown as airborne + contact wherever it appears", () => 
     expect(isolation.facts.join(" ")).toMatch(/airborne AND contact/);
   });
 });
+
+describe("step descriptions carry what the step shows (Sol, round 11)", () => {
+  it("gives the contact step every example on its row", async () => {
+    const { STEP_DESC } = await import("../src/diagrams/isolation.jsx");
+    for (const name of ["MRSA", "VRE", "C. diff", "scabies", "head lice", "RSV", "congenital rubella"]) expect(STEP_DESC.contact).toContain(name);
+    expect(isolation.steps.every((s) => typeof s.desc === "string" && s.desc.length > 20)).toBe(true);
+  });
+  it("is the image description in the player", async () => {
+    const { Explainer } = await import("../src/explainer.jsx");
+    const html = renderToStaticMarkup(React.createElement(Explainer, { diagram: isolation, startInPlayer: true, initialStep: 1 }));
+    expect(html).toMatch(/<desc[^>]*>Contact: spread by touch\. [^<]*VRE[^<]*scabies/);
+  });
+});

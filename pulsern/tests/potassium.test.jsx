@@ -89,7 +89,7 @@ describe("round 7", () => {
 describe("round 8", () => {
   it("reviews kidney function and urine output before routine replacement, without making it absolute", () => {
     const html = renderToStaticMarkup(<potassium.Diagram params={{ k: 3.1 }} focus={null} />);
-    expect(html).toContain("Review kidney function, urine output");
+    expect(html).toContain("Check K⁺ level, kidney function, urine output");
     expect(potassium.dynamicCaption({ k: 3.1 })).toMatch(/kidney function and urine output are reviewed before routine replacement/);
     expect(potassium.steps.find((s) => s.key === "hypo-care").caption).toMatch(/not automatic withholding/);
   });

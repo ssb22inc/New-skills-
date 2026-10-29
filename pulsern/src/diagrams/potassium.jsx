@@ -141,7 +141,7 @@ const HeartIcon = (cx, cy) => (
 const LH = 1.3;
 const H = (t, w, size = MIN_TEXT) => paraLines(t, w, size).length * size * LH;
 const HYPO_CAUSES = "Loop and thiazide diuretics, vomiting or NG suction, diarrhea.";
-const HYPO_IV = [["noPush", "Never IV push or IM"], ["pump", "Diluted, on an infusion pump"], ["monitor", "Cardiac monitoring"], ["urine", "Review kidney function, urine output"]];
+const HYPO_IV = [["noPush", "Never IV push or IM"], ["pump", "Diluted, on an infusion pump"], ["monitor", "Cardiac monitoring"], ["urine", "Check K⁺ level, kidney function, urine output"]];
 const HYPER_CAUSES = "Kidney failure, K⁺-sparing diuretics, ACE inhibitors, crush injury, burns.";
 const GOALS = [
   ["Protect the heart:", "IV calcium gluconate, expected with ECG changes or a very high level; it does not lower K⁺."],

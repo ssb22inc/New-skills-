@@ -178,7 +178,7 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
       </div>
       {/* The step key lets each step play its own motion (a wound deepening,
           water crossing a membrane); without it the diagram is static. */}
-      <StepContext.Provider value={{ stepKey: inSteps ? steps[step].key : null, still: !playing, caption }}>
+      <StepContext.Provider value={{ stepKey: inSteps ? steps[step].key : null, still: !playing, caption: inSteps ? (steps[step].desc ?? caption) : null }}>
         <D params={params === undefined ? diagram.example : params} focus={inSteps ? steps[step].focus : null} />
       </StepContext.Provider>
       {inSteps ? (
