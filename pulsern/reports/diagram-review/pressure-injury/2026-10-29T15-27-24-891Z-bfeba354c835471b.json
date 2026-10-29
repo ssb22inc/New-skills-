@@ -1,0 +1,40 @@
+{
+  "id": "pressure-injury",
+  "title": "Pressure injury stages",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T15:27:24.891Z",
+  "images": 16,
+  "key": "bfeba354c835471b",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "visual",
+      "where": "Images 1–6 and 9–14; Stage 1 column; Redness()",
+      "title": "Stage 1 redness marking spills into fat",
+      "problem": "The dermis ends at y=130, but the redness fill extends to y=134 and its dashed boundary to y=133. The marking visibly enters the fat band, suggesting a subsurface injury extent that cannot be inferred from Stage 1 erythema.",
+      "fix": "Confine the erythema annotation to the skin surface rather than depicting a defined volume extending into subcutaneous tissue.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "visual",
+      "where": "Playing steps stage2, stage3 and stage4; Deepest() and Column.floor",
+      "title": "Depth-marker pulses cross the staging boundaries",
+      "problem": "The marker centers are correctly positioned, but their expanding 11-unit rings enter fat for Stage 2, muscle for Stage 3 and bone for Stage 4. Those rings are not additional tissue loss, yet their coral styling and placement make the depth annotation ambiguous during playback. The paused screenshots do not reveal this.",
+      "fix": "Use a stationary point or leader anchored to the wound floor, or clip the pulse to the wound cavity so it cannot highlight deeper, intact tissue.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2979835
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No incorrect staging definition identified. Two visual boundary defects remain in the SVG.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2
+  }
+}
