@@ -32,16 +32,16 @@ describe("partially compensated", () => {
     expect(read(7.32, 60, 30)).toMatchObject({ disorder: "respiratory acidosis", compensation: "partial" });
   });
   it("metabolic acidosis with lungs blowing off CO₂ (Kussmaul)", () => {
-    expect(read(7.25, 28, 14)).toMatchObject({ disorder: "metabolic acidosis", compensation: "partial" });
+    expect(read(7.32, 28, 14)).toMatchObject({ disorder: "metabolic acidosis", compensation: "partial" });
   });
   it("metabolic alkalosis with lungs retaining CO₂", () => {
-    expect(read(7.49, 47, 36)).toMatchObject({ disorder: "metabolic alkalosis", compensation: "partial", mixedPossible: false });   // 0.7×36+21 = 46.2 ± 2
+    expect(read(7.51, 47, 36)).toMatchObject({ disorder: "metabolic alkalosis", compensation: "partial", mixedPossible: false });   // 0.7×36+21 = 46.2 ± 2
   });
 });
 
 describe("fully compensated — pH normal, side of 7.40 tells the origin", () => {
   it("respiratory acidosis, fully compensated", () => {
-    expect(read(7.36, 55, 32)).toMatchObject({ disorder: "respiratory acidosis", compensation: "full" });
+    expect(read(7.39, 55, 32)).toMatchObject({ disorder: "respiratory acidosis", compensation: "full" });
   });
   it("metabolic acidosis, fully compensated", () => {
     expect(read(7.36, 34, 18)).toMatchObject({ disorder: "metabolic acidosis", compensation: "full", mixedPossible: false });   // Winter 35 ± 2
@@ -49,8 +49,10 @@ describe("fully compensated — pH normal, side of 7.40 tells the origin", () =>
   it("respiratory alkalosis, fully compensated", () => {
     expect(read(7.43, 30, 19)).toMatchObject({ disorder: "respiratory alkalosis", compensation: "full" });
   });
-  it("metabolic alkalosis, fully compensated", () => {
-    expect(read(7.44, 46, 33)).toMatchObject({ disorder: "metabolic alkalosis", compensation: "full", mixedPossible: false });   // 0.7×33+21 = 44.1 ± 2
+  /* 7.44/46/33 implies pH 7.48: metabolic alkalosis rarely reaches a normal
+     pH; the consistent version of that gas is partially compensated. */
+  it("metabolic alkalosis 7.47/46/33: partially compensated", () => {
+    expect(read(7.47, 46, 33)).toMatchObject({ disorder: "metabolic alkalosis", compensation: "partial", mixedPossible: false });   // 0.7×33+21 = 44.1 ± 2
   });
   /* Sol, PR #155 diagram review: the side of 7.40 is an exam heuristic, not
      how the primary is chosen. Each candidate is tested against its expected
@@ -87,8 +89,8 @@ describe("the edges", () => {
 
   /* The boundaries are inclusive normal values: 7.35 and 7.45 are normal. */
   it("treats the range limits as normal", () => {
-    expect(read(7.35, 45, 22).disorder).toBe("normal");
-    expect(read(7.45, 35, 26).disorder).toBe("normal");
+    expect(read(7.35, 45, 24).disorder).toBe("normal");
+    expect(read(7.45, 35, 24).disorder).toBe("normal");
   });
 
   it("uses the standard adult reference ranges", () => {
@@ -152,7 +154,7 @@ describe("compensation that goes too far", () => {
   });
   it("names the second disorder from the direction of the miss", () => {
     expect(read(7.48, 50, 35).mixed).toBe("respiratory acidosis");     // PaCO2 above 0.7×35+21+2
-    expect(read(7.52, 40, 34).mixed).toBe("respiratory alkalosis");    // PaCO2 below 0.7×34+21−2
+    expect(read(7.55, 40, 34).mixed).toBe("respiratory alkalosis");    // PaCO2 below 0.7×34+21−2
     expect(read(7.10, 80, 22).mixed).toBe("metabolic acidosis");       // HCO3 below the acute rise
     expect(read(7.38, 70, 40).mixed).toBe("respiratory acidosis");     // Sol's case: neither single disorder fits (metabolic alkalosis would need PaCO2 47–51)
     expect(read(7.38, 70, 40).reading).toMatch(/mixed/);
@@ -161,9 +163,9 @@ describe("compensation that goes too far", () => {
     expect(read(7.48, 50, 35).mixedPossible).toBe(true);   // limit 0.7×35+21+2 = 47.5
   });
   it("does not flag compensation within the expected range", () => {
-    expect(read(7.25, 28, 14).mixedPossible).toBe(false);  // Winter 29 ± 2
+    expect(read(7.32, 28, 14).mixedPossible).toBe(false);  // Winter 29 ± 2
     expect(read(7.32, 60, 30).mixedPossible).toBe(false);  // HCO3 up to 24 + 4×2 + 2 = 34
-    expect(read(7.36, 55, 32).mixedPossible).toBe(false);  // chronic limit 32
+    expect(read(7.39, 55, 32).mixedPossible).toBe(false);  // chronic limit 32
     expect(read(7.43, 30, 19).mixedPossible).toBe(false);  // down to 24 − 5 − 2 = 17
   });
   /* PR #134 review, finding 5: too LITTLE compensation can also mean a
@@ -171,11 +173,11 @@ describe("compensation that goes too far", () => {
   it("flags Astra's under-compensation case: pH 7.15, PaCO2 30, HCO3 10", () => {
     const r = read(7.15, 30, 10);   // Winter: 1.5×10+8 = 23 ± 2
     expect(r).toMatchObject({ disorder: "metabolic acidosis", compensation: null, romePattern: "partial", mixedPossible: true, mixed: "respiratory acidosis" });
-    expect(r.reading).toMatch(/short of the compensation expected \(about 21–25\)/);
+    expect(r.reading).toMatch(/short of the compensation expected \(about 21–25 mmHg\)/);
   });
   it("flags a metabolic disorder whose lungs have not compensated at all", () => {
-    expect(read(7.28, 40, 16)).toMatchObject({ compensation: null, romePattern: "none", mixedPossible: true, mixed: "respiratory acidosis" });   // Winter 32 ± 2
-    expect(read(7.52, 40, 34)).toMatchObject({ compensation: null, romePattern: "none", mixedPossible: true, mixed: "respiratory alkalosis" });   // 0.7×34+21 = 44.8 ± 2
+    expect(read(7.23, 40, 16)).toMatchObject({ compensation: null, romePattern: "none", mixedPossible: true, mixed: "respiratory acidosis" });   // Winter 32 ± 2
+    expect(read(7.55, 40, 34)).toMatchObject({ compensation: null, romePattern: "none", mixedPossible: true, mixed: "respiratory alkalosis" });   // 0.7×34+21 = 44.8 ± 2
   });
   it("does not flag a respiratory disorder still within the acute range", () => {
     expect(read(7.30, 55, 24)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 ≥ 22 + 1.5 − 2
@@ -186,7 +188,7 @@ describe("compensation that goes too far", () => {
     expect(read(7.10, 80, 22)).toMatchObject({ disorder: "respiratory acidosis", mixedPossible: true });
   });
   it("still reports a combined disorder as combined, not as compensation", () => {
-    expect(read(7.22, 60, 21)).toMatchObject({ primary: "both", compensation: null });
+    expect(read(7.17, 60, 21)).toMatchObject({ primary: "both", compensation: null });
   });
   it("puts the possible mixed disorder on the verdict chip, not a compensation label", async () => {
     const React = (await import("react")).default;
@@ -256,5 +258,39 @@ describe("internal consistency and precision", () => {
     const all = [...abg.facts, ...abg.steps.flatMap((x) => [x.caption ?? "", x.narration ?? ""])].join(" ");
     expect(all).not.toMatch(/leaves the blood acidic|makes it alkaline/);
     expect(all).toMatch(/heuristic/);
+  });
+});
+
+/* Sol, PR #155 diagram review, round 2. */
+describe("round 2", () => {
+  it("rejects 7.33/50/30, which implies about 7.40, even though 0.08 would have let it pass", () => {
+    expect(read(7.33, 50, 30).disorder).toBe("inconsistent");
+  });
+  it("names acidemia with an unresolved primary instead of calling a consistent gas inconsistent", () => {
+    const r = read(7.32, 44, 22);
+    expect(r.disorder).toBe("acidemia, primary process unresolved");
+    expect(r.reading).toMatch(/values agree/);
+  });
+  it("says values beyond its range are outside what it interprets, not outside what a client can show", () => {
+    const r = read(7.42, 8, 5);
+    expect(r.reading).toMatch(/outside the range this tool interprets automatically/);
+    expect(r.reading).not.toMatch(/living/);
+  });
+  it("calls in-range values 'acid–base values in range' and points to oxygenation", () => {
+    const r = read(7.40, 40, 24);
+    expect(r.reading).toMatch(/does not assess oxygenation/);
+  });
+  it("states the reference range and the expected compensation separately, with units", () => {
+    const r = read(7.30, 50, 24);
+    expect(r.reading).toMatch(/HCO₃⁻ 24 mEq\/L is inside its reference range \(22–26\); expected compensation is about 25 if acute to 28 if chronic/);
+  });
+  it("keeps the textbook example internally consistent", async () => {
+    const { ABG_EXAMPLE, abgConsistency } = await import("../src/diagrams/abg.jsx");
+    expect(abgConsistency(ABG_EXAMPLE).ok).toBe(true);
+  });
+  it("hands the pairing no values for an inconsistent question, so the concept view shows instead", async () => {
+    const { extractAbg } = await import("../src/diagrams/match.js");
+    expect(extractAbg("ABG: pH 7.20, PaCO2 60, HCO3 36")).toBeNull();
+    expect(extractAbg("ABG: pH 7.30, PaCO2 50, HCO3 24")).toEqual({ ph: 7.3, paco2: 50, hco3: 24 });
   });
 });

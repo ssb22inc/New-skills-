@@ -9,7 +9,7 @@ describe("ABG values", () => {
   it("reads the common formats", () => {
     expect(extractAbg("ABG: pH 7.30, PaCO2 55 mmHg, HCO3 24 mEq/L")).toEqual({ ph: 7.3, paco2: 55, hco3: 24 });
     expect(extractAbg("pH of 7.48, PaCO₂ 30, HCO₃⁻ 22")).toEqual({ ph: 7.48, paco2: 30, hco3: 22 });
-    expect(extractAbg("pH = 7.25; pCO2 = 40; bicarbonate 16")).toEqual({ ph: 7.25, paco2: 40, hco3: 16 });
+    expect(extractAbg("pH = 7.23; pCO2 = 40; bicarbonate 16")).toEqual({ ph: 7.23, paco2: 40, hco3: 16 });
   });
   it("returns null when any value is missing", () => {
     expect(extractAbg("pH 7.30 and PaCO2 55")).toBeNull();

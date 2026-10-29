@@ -15,6 +15,7 @@
 
 import { precautionFor } from "./isolation.jsx";
 import { stageFrom } from "./pressure-injury.jsx";
+import { abgConsistency } from "./abg.jsx";
 
 const num = (s) => Number(String(s).replace(/,/g, ""));
 
@@ -41,7 +42,11 @@ export function extractAbg(text) {
   const ph = one(PH, t, 6.8, 7.8);
   const paco2 = one(PACO2, t, 10, 130);
   const hco3 = one(HCO3, t, 3, 60);
-  return ph != null && paco2 != null && hco3 != null ? { ph, paco2, hco3 } : null;
+  if (ph == null || paco2 == null || hco3 == null) return null;
+  /* Values that cannot belong together are not drawn as the client's own:
+     the diagram is then shown as a concept, not with a "recheck" verdict
+     beside the question (Sol, PR #155 diagram review, round 2). */
+  return abgConsistency({ ph, paco2, hco3 }).ok ? { ph, paco2, hco3 } : null;
 }
 
 /* Insulin type and the time it was given. The long-acting row is glargine

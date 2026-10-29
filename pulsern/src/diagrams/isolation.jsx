@@ -9,64 +9,73 @@ import React from "react";
 import { Frame, G, T, Box, C, Anim, Loop, Flow, OnStep, Para, Chip, paraLines, useDefs, useMotion, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 /* Conditions → precautions. A disease NAME is not enough when its form
-   decides the precaution (Sol, PR #155 diagram review): latent TB needs no
-   isolation, congenital rubella is contact, localized shingles in an
-   immunocompetent client with lesions covered is standard precautions.
-   Those return no row (null) unless the question gives the qualifying
-   form. `form` checks the whole text; `not` vetoes the match. */
+   decides the precaution (Sol, PR #155 diagram review, rounds 1–2), so each
+   entry's qualifiers are tied to the condition itself, and a negated
+   qualifier ("not disseminated") does not count:
+   - TB: airborne only for suspected or confirmed PULMONARY or LARYNGEAL
+     disease; latent and extrapulmonary TB return no row.
+   - Rubella: "congenital rubella" is contact; acquired rubella droplet.
+   - Zoster: disseminated → airborne + contact; localized in an
+     immunocompromised client → airborne + contact until dissemination is
+     ruled out; once it is ruled out, or localized in an immunocompetent
+     client, standard precautions (no row).
+   - Lice: HEAD lice only (contact until 24 hours after effective
+     treatment); body and pubic lice are standard precautions.
+   Anything the text does not settle returns null: no row is outlined. */
 export const CONDITIONS = [
   { re: /\bMRSA\b|methicillin-resistant/i, name: "MRSA", types: ["contact"] },
   { re: /\bVRE\b|vancomycin-resistant/i, name: "VRE", types: ["contact"] },
   { re: /\bC\.?\s*diff(?:icile)?\b|clostridi(?:um|oides) difficile/i, name: "C. difficile", types: ["contact"] },
   { re: /\bscabies\b/i, name: "scabies", types: ["contact"] },
-  { re: /\b(?:head )?lice\b|pediculosis/i, name: "lice", types: ["contact"] },
+  { re: /\bhead lice\b|pediculosis capitis/i, name: "head lice", types: ["contact"] },
   { re: /\bRSV\b|respiratory syncytial/i, name: "RSV", types: ["contact"] },
   { re: /\binfluenza\b|\bflu\b/i, name: "influenza", types: ["droplet"] },
   { re: /\bpertussis\b|whooping cough/i, name: "pertussis", types: ["droplet"] },
   { re: /\bmumps\b/i, name: "mumps", types: ["droplet"] },
-  /* Congenital rubella is shed for months: contact precautions. */
-  { re: /\brubella\b/i, name: "congenital rubella", types: ["contact"], form: /\bcongenital\b/i },
-  { re: /\brubella\b/i, name: "rubella", types: ["droplet"], not: /\bcongenital\b/i },
+  { re: /\bcongenital rubella(?: syndrome)?\b/i, name: "congenital rubella", types: ["contact"], group: "rubella" },
+  { re: /\brubella\b/i, name: "rubella", types: ["droplet"], group: "rubella", unless: /\bcongenital rubella/i },
   /* Only meningococcal disease, not "bacterial meningitis" in general:
-     pneumococcal meningitis needs standard precautions only, and mapping the
-     general term to droplet would teach the wrong precaution. */
+     pneumococcal meningitis needs standard precautions only. */
   { re: /meningococcal|neisseria meningitidis/i, name: "meningococcal disease", types: ["droplet"] },
-  /* Infectious (pulmonary or laryngeal, active or suspected) TB only. */
-  { re: /\b[Tt]uberculosis\b|\bTB\b/, name: "infectious tuberculosis", types: ["airborne"],
-    form: /\b(?:active|suspected|pulmonary|laryngeal|infectious|cavitary|acid-fast|AFB|sputum)\b/i,
-    not: /\blatent\b|\bLTBI\b/i },
+  { re: /\b(?:pulmonary|laryngeal)\s+(?:tuberculosis|TB)\b|\b(?:tuberculosis|TB)\s+(?:of the\s+)?(?:lungs?|larynx)\b/i, name: "pulmonary or laryngeal TB", types: ["airborne"], group: "tb" },
   { re: /\bmeasles\b|\brubeola\b/i, name: "measles", types: ["airborne"] },
-  { re: /\bvaricella\b|chickenpox|chicken pox/i, name: "chickenpox", types: ["airborne", "contact"], not: /\bzoster\b|\bshingles\b/i },
-  /* Shingles: disseminated, or in an immunocompromised client, needs
-     airborne + contact; localized in an immunocompetent client with the
-     lesions covered is standard precautions, so no row. */
-  { re: /\bzoster\b|\bshingles\b/i, name: "disseminated zoster", types: ["airborne", "contact"],
-    form: /\bdisseminated\b|\bimmuno(?:compromised|suppressed)\b/i },
+  { re: /\bvaricella\b|chickenpox|chicken pox/i, name: "chickenpox", types: ["airborne", "contact"], group: "vzv", unless: /\bzoster\b|\bshingles\b/i },
+  { re: /\bdisseminated\s+(?:herpes\s+)?(?:zoster|shingles)\b|\b(?:zoster|shingles)\b[^.;]{0,25}\bdisseminated\b/i, name: "disseminated zoster", types: ["airborne", "contact"], group: "vzv",
+    unless: /\bnot disseminated\b|\bnon-?disseminated\b|without dissemination|dissemination\s+(?:has\s+been\s+|was\s+|is\s+)?(?:ruled out|excluded)/i },
+  { re: /\b(?:zoster|shingles)\b/i, name: "zoster in an immunocompromised client", types: ["airborne", "contact"], group: "vzv",
+    needs: /\bimmuno(?:compromised|suppressed)\b/i,
+    unless: /dissemination\s+(?:has\s+been\s+|was\s+|is\s+)?(?:ruled out|excluded)|\bnot disseminated\b|without dissemination|\blocalized\b[^.;]*\bimmunocompetent\b|\bimmunocompetent\b/i },
 ];
-
-/* A mention that is negated or in the past does not name the client's
-   current condition ("no history of MRSA", "MRSA was ruled out"). */
-const NEGATED_BEFORE = /\b(?:no|not|without|denies|negative for|ruled out|rule out|history of|hx of|past|previous|prior|resolved)\b[^.;:]{0,30}$/i;
-const NEGATED_AFTER = /^[^.;:]{0,20}\b(?:ruled out|negative|resolved|was excluded)\b/i;
-function current(re, t) {
-  for (const m of t.matchAll(new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g"))) {
-    const before = t.slice(0, m.index), after = t.slice(m.index + m[0].length);
-    if (!NEGATED_BEFORE.test(before) && !NEGATED_AFTER.test(after)) return true;
+/* Mentions that name a condition the text does not assert the client has
+   now. "Rule out" means suspected (still counted); "ruled out" means
+   excluded. Vaccination, immunity and exposure are not an infection. */
+const NOT_CURRENT_BEFORE = /\b(?:no|not|without|denies|negative for|ruled out|history of|hx of|past|previous|prior|resolved|vaccinated against|immuni[sz]ed against|immune to|exposed to|exposure to)\b[^.;:]{0,30}$/i;
+const NOT_CURRENT_AFTER = /^[^.;:]{0,25}\b(?:was ruled out|has been ruled out|ruled out|excluded|negative|resolved|vaccin\w*|immuni[sz]ation|shot|titer|exposure)\b/i;
+function currentMatch(re, t) {
+  const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+  for (const m of t.matchAll(g)) {
+    if (!NOT_CURRENT_BEFORE.test(t.slice(0, m.index)) && !NOT_CURRENT_AFTER.test(t.slice(m.index + m[0].length))) return true;
   }
   return false;
 }
-
-/* The precautions for the ONE condition named, or null when none, more
-   than one, or not enough is said — a comparison question should not
-   light up one row, and a guess must not either. */
+/* The precautions for the ONE condition the text asserts, or null when
+   none, more than one, or not enough is said — a comparison question
+   should not light up one row, and a guess must not either. */
 export function precautionFor(text) {
   const t = String(text ?? "").replace(/german measles/gi, "rubella");
-  const hits = CONDITIONS.filter((c) => current(c.re, t) && (!c.form || c.form.test(t)) && !(c.not && c.not.test(t)));
-  /* An unqualified TB or shingles mention is a named condition too: it
-     blocks a confident single-row answer. */
-  const named = CONDITIONS.filter((c) => current(c.re, t)).map((c) => c.name.split(" ").pop());
-  if (hits.length !== 1 || new Set(named).size > 1) return null;
-  return { condition: hits[0].name, types: hits[0].types };
+  const hits = CONDITIONS.filter((c) => currentMatch(c.re, t) && (!c.needs || currentMatch(c.needs, t)) && !(c.unless && c.unless.test(t)));
+  /* one hit per group (zoster entries overlap): the most specific wins */
+  const byGroup = new Map();
+  for (const h of hits) if (!byGroup.has(h.group ?? h.name)) byGroup.set(h.group ?? h.name, h);
+  const chosen = [...byGroup.values()];
+  if (chosen.length !== 1) return null;
+  /* A TB, zoster or lice mention that did not qualify still leaves the
+     form unsettled ("active TB" alone, "lice" with no site): no row. */
+  const c = chosen[0];
+  if (/\b(?:tuberculosis|TB)\b/i.test(t) && (c.group !== "tb" || /\blatent\b|\bLTBI\b|extrapulmonary/i.test(t))) return null;
+  if (/\b(?:zoster|shingles)\b/i.test(t) && c.group !== "vzv") return null;
+  if (/\b(?:lice|pediculosis)\b/i.test(t) && c.name !== "head lice") return null;
+  return { condition: c.name, types: c.types };
 }
 
 /* ---- simple PPE glyphs, drawn in the app palette ---- */
@@ -258,12 +267,12 @@ function Row({ id, y, r, scene, badges, highlight }) {
 
 export const ROWS = {
   contact: { title: "Contact: spread by touch", how: "Skin, wounds, stool, surfaces and shared equipment",
-    examples: "MRSA, VRE, C. diff, scabies, lice, RSV", wear: "gown and gloves", room: "single room or cohort; dedicated equipment" },
+    examples: "MRSA, VRE, C. diff, scabies, head lice, RSV, congenital rubella", wear: "gown and gloves", room: "single room or cohort; dedicated equipment" },
   droplet: { title: "Droplet: close-range spread", how: "Larger droplets from coughing, sneezing and talking",
-    examples: "influenza, pertussis, mumps, rubella, meningococcal disease", wear: "surgical mask on entering the room",
+    examples: "influenza, pertussis, mumps, acquired rubella, meningococcal disease", wear: "surgical mask on entering the room",
     room: "single room preferred, or cohort with the same pathogen" },
   airborne: { title: "Airborne: stays in the air", how: "Tiny particles hang in the air and travel on air currents",
-    examples: "infectious TB, measles, chickenpox (+\u00a0contact)", wear: "fit-tested N95 respirator",
+    examples: "pulmonary or laryngeal TB, measles, chickenpox (+\u00a0contact)", wear: "fit-tested N95 respirator",
     room: "negative-pressure isolation room, door closed" },
 };
 
@@ -289,9 +298,9 @@ const Rub = ({ x, y }) => (
 );
 
 const DESC = "Standard precautions, including hand hygiene, for every client; transmission-based precautions are added on top. "
-  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, lice, RSV): gown and gloves, a single room or cohort, dedicated equipment; for C. difficile, hands are washed with soap and water because alcohol rub is not effective against its spores. "
-  + "Droplet precautions (larger respiratory droplets spread at close range by coughing, sneezing and talking; for example influenza, pertussis, mumps, rubella, meningococcal disease): surgical mask on entering the room; a single room is preferred, or cohorting with the same pathogen. "
-  + "Airborne precautions (tiny particles that stay in the air; for example infectious pulmonary or laryngeal tuberculosis, measles, chickenpox): fit-tested N95 respirator, negative-pressure airborne infection isolation room with the door closed. Chickenpox needs airborne and contact precautions together. "
+  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella): gown and gloves, a single room or cohort, dedicated equipment; for C. difficile, hands are washed with soap and water because alcohol rub is not effective against its spores. "
+  + "Droplet precautions (larger respiratory droplets spread at close range by coughing, sneezing and talking; for example influenza, pertussis, mumps, acquired rubella, meningococcal disease): surgical mask on entering the room; a single room is preferred, or cohorting with the same pathogen. "
+  + "Airborne precautions (tiny particles that stay in the air; for example suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox): fit-tested N95 respirator, negative-pressure airborne infection isolation room with the door closed. Chickenpox and disseminated zoster need airborne and contact precautions together. "
   + "On droplet or airborne precautions, the client wears a surgical mask when transported; the N95 respirator is for staff.";
 
 export function IsolationDiagram({ params = null, focus = null }) {
@@ -299,7 +308,9 @@ export function IsolationDiagram({ params = null, focus = null }) {
   const y1 = 64, y2 = y1 + rowHeight(ROWS.contact) + 10, y3 = y2 + rowHeight(ROWS.droplet) + 10;
   const yT = y3 + rowHeight(ROWS.airborne) + 10, yC = yT + 66;
   return (
-    <Frame h={yC + 70} focus={focus} title="Transmission-based precautions" desc={DESC}>
+    <Frame h={yC + 70} focus={focus} title="Transmission-based precautions" desc={DESC}
+      regions={{ standard: [0, 56], contact: [y1 - 14, y1 + rowHeight(ROWS.contact) + 4], droplet: [y2 - 14, y2 + rowHeight(ROWS.droplet) + 4],
+        airborne: [y3 - 14, y3 + rowHeight(ROWS.airborne) + 4], transport: [yT, yT + 56], cdiff: [yC, yC + 62] }}>
       <G id="standard">
         <Box x={8} y={6} w={344} h={50} r={10} fill={C.card} lift />
         <HandWash x={26} y={31} />
@@ -341,26 +352,26 @@ export const isolation = {
   textCases: [{ condition: "MRSA", types: ["contact"] }, { condition: "chickenpox", types: ["airborne", "contact"] }, { condition: "influenza", types: ["droplet"] }],
   facts: [
     "Standard precautions apply to every client; transmission-based precautions are added on top of them.",
-    "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, lice, RSV) require a gown and gloves, a single room or cohorting, and dedicated equipment.",
-    "Droplet precautions (e.g., influenza, pertussis, mumps, rubella, meningococcal disease) require a surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen when a single room is not available.",
+    "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella) require a gown and gloves, a single room or cohorting, and dedicated equipment. Head lice need contact precautions until 24 hours after effective treatment; body and pubic lice need standard precautions.",
+    "Droplet precautions (e.g., influenza, pertussis, mumps, acquired rubella, meningococcal disease) require a surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen when a single room is not available.",
     "Respiratory droplets spread mainly at close range; there is no fixed distance at which transmission stops.",
-    "Airborne precautions (e.g., infectious pulmonary or laryngeal tuberculosis, measles, chickenpox) require a fit-tested N95 respirator and a negative-pressure airborne infection isolation room with the door closed.",
-    "Chickenpox (varicella), and disseminated zoster or zoster in an immunocompromised client, require airborne AND contact precautions. Localized zoster in an immunocompetent client with the lesions covered needs standard precautions.",
-    "Latent tuberculosis infection is not contagious and needs no isolation; congenital rubella needs contact precautions.",
+    "Airborne precautions (e.g., suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox) require a fit-tested N95 respirator and a negative-pressure airborne infection isolation room with the door closed.",
+    "Chickenpox (varicella) and disseminated zoster require airborne AND contact precautions. Localized zoster in an immunocompromised client requires airborne and contact precautions until dissemination is ruled out; localized zoster in an immunocompetent client, or once dissemination is ruled out, with the lesions covered, needs standard precautions.",
+    "Latent tuberculosis infection is not contagious and needs no isolation; extrapulmonary tuberculosis without pulmonary or laryngeal involvement needs standard precautions (draining lesions are managed separately). Congenital rubella needs contact precautions; acquired rubella needs droplet precautions.",
     "On droplet or airborne precautions, the client wears a surgical mask when transported out of the room; the N95 respirator is worn by staff.",
     "Alcohol-based hand rub is not effective against C. difficile spores; hands are washed with soap and water.",
   ],
   steps: [
     { key: "standard", focus: ["standard"], caption: "Every client gets standard precautions. Transmission-based precautions are added on top, matched to how the organism spreads.",
       narration: "Every client gets standard precautions. Transmission-based precautions are added on top, and they are matched to how the organism spreads." },
-    { key: "contact", focus: ["contact"], caption: "Contact: spread by touch, through skin, wounds, stool and surfaces. Gown and gloves, a single room or cohort, and dedicated equipment such as a stethoscope that stays in the room.",
-      narration: "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces. Wear a gown and gloves. The client needs a single room or a cohort, and dedicated equipment, such as a stethoscope that stays in the room." },
+    { key: "contact", focus: ["contact"], caption: "Contact: spread by touch, through skin, wounds, stool and surfaces, as with MRSA, C. diff, head lice and congenital rubella. Gown and gloves, a single room or cohort, and dedicated equipment such as a stethoscope that stays in the room.",
+      narration: "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces, as with MRSA, C. diff, head lice, and congenital rubella. Wear a gown and gloves. The client needs a single room or a cohort, and dedicated equipment, such as a stethoscope that stays in the room." },
     { key: "cdiff", focus: ["contact", "cdiff"], caption: "The C. diff trap: alcohol hand rub is not effective against its spores. Wash with soap and water.",
       narration: "Here is the C. diff trap. Alcohol hand rub is not effective against its spores, so wash your hands with soap and water." },
-    { key: "droplet", focus: ["droplet"], caption: "Droplet: larger droplets spread at close range by coughing, sneezing and talking, as with influenza, pertussis, mumps, rubella and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred; clients with the same pathogen can share.",
-      narration: "Droplet precautions are for larger droplets that spread at close range when a client coughs, sneezes, or talks, as with influenza, pertussis, mumps, rubella, and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, and clients with the same pathogen can share a room." },
-    { key: "airborne", focus: ["airborne"], caption: "Airborne: tiny particles that hang in the air, as with infectious TB, measles and chickenpox. A fit-tested N95 respirator, and a negative-pressure room with the door kept closed. Chickenpox also needs contact precautions: gown and gloves.",
-      narration: "Airborne precautions are for tiny particles that hang in the air, as with infectious tuberculosis, measles, and chickenpox. Wear a fit-tested N-ninety-five respirator, and keep the client in a negative-pressure room with the door closed. Chickenpox also needs contact precautions, so add a gown and gloves." },
+    { key: "droplet", focus: ["droplet"], caption: "Droplet: larger droplets spread at close range by coughing, sneezing and talking, as with influenza, pertussis, mumps, acquired rubella and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred; clients with the same pathogen can share.",
+      narration: "Droplet precautions are for larger droplets that spread at close range when a client coughs, sneezes, or talks, as with influenza, pertussis, mumps, acquired rubella, and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, and clients with the same pathogen can share a room." },
+    { key: "airborne", focus: ["airborne"], caption: "Airborne: tiny particles that hang in the air, as with pulmonary or laryngeal TB, measles and chickenpox. A fit-tested N95 respirator, and a negative-pressure room with the door kept closed. Chickenpox also needs contact precautions: gown and gloves.",
+      narration: "Airborne precautions are for tiny particles that hang in the air, as with pulmonary or laryngeal tuberculosis, measles, and chickenpox. Wear a fit-tested N-ninety-five respirator, and keep the client in a negative-pressure room with the door closed. Chickenpox also needs contact precautions, so add a gown and gloves." },
     { key: "transport", focus: ["droplet", "airborne", "transport"], caption: "If a client on droplet or airborne precautions must leave the room, the client wears a surgical mask; the N95 respirator is for staff. Chickenpox needs airborne and contact precautions together.",
       narration: "If a client on droplet or airborne precautions has to leave the room, the client wears a surgical mask. The N-ninety-five respirator is for staff. And remember, chickenpox needs airborne and contact precautions together." },
   ],

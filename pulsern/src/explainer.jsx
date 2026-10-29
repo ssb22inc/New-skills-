@@ -116,7 +116,14 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
   const clipUrl = inSteps ? clipFor(audio, steps, step) : null;
   const duration = caption ? captionMs(caption) : 0;
 
+  const sectionRef = React.useRef(null);
   const go = React.useCallback((i) => { setElapsed(0); setStep(Math.max(0, Math.min(n - 1, i))); }, [n]);
+  /* Starting the player from the overview brings it into view, so the first
+     step's drawing and caption are on screen together (Sol). */
+  const start = () => {
+    go(0); setPlaying(!reduce);
+    sectionRef.current?.scrollIntoView?.({ block: "start", behavior: reduce ? "auto" : "smooth" });
+  };
 
   /* Timed captions when there is no narration; narration drives itself. */
   React.useEffect(() => {
@@ -152,7 +159,7 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
 
   const badge = verificationLabel(rnVerified);
   return (
-    <section className="dg-wrap" aria-label={`Explainer: ${diagram.title}`} onKeyDown={onKey} tabIndex={-1}>
+    <section ref={sectionRef} className="dg-wrap" aria-label={`Explainer: ${diagram.title}`} onKeyDown={onKey} tabIndex={-1}>
       <div className="dg-head">
         <span className="dg-title">{diagram.title}</span>
         {inSteps ? <span className="dg-badge" aria-hidden="true">{step + 1} / {n}</span> : null}
@@ -182,7 +189,7 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
         </>
       ) : (
         <div className="dg-controls" style={{ marginTop: 10 }}>
-          <button type="button" className="dg-btn" onClick={() => { go(0); setPlaying(!reduce); }}>▶ Watch the explainer</button>
+          <button type="button" className="dg-btn" onClick={start}>▶ Watch the explainer</button>
         </div>
       )}
       {/* The AI note is plain text, because a long pill wraps into a broken

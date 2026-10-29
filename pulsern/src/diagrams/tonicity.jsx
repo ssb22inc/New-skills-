@@ -67,7 +67,7 @@ const Drop = ({ x, y, s = 1 }) => (
 
 /* Inside the cell = 5 effective-solute particles per sample, always. */
 export const INSIDE = 5;
-const PY = 74, PW = 110, PH = 214, SR = 17;
+const PY = 112, PW = 110, PH = 214, SR = 17, START_R = 22;
 function Panel({ id, step, x, title, outside, after, flow, sub, seed }) {
   const u = useDefs();
   const lx = x + 29, rx = x + 81, sy = PY + 68;
@@ -94,8 +94,11 @@ function Panel({ id, step, x, title, outside, after, flow, sub, seed }) {
       <Loop on={step}>
         {flow === "both" ? null : <Flow d={flow === "in" ? `M${rx},${sy + 22} L${lx},${sy + 22}` : `M${lx},${sy + 22} L${rx},${sy + 22}`} n={2} dur={1.9} />}
       </Loop>
-      {/* the cell afterwards */}
-      <Anim on={step} kind="scale" from={22 / after.r} dur={1800}>
+      {/* the cell afterwards, over a dashed ring at its starting size, so
+          "same size", "swells" and "shrinks" can be seen (Sol, round 2:
+          the samples above read as the starting cell) */}
+      <circle cx={ax} cy={cy} r={START_R} fill="none" stroke={C.muted} strokeWidth={1.2} strokeDasharray="3 3" />
+      <Anim on={step} kind="scale" from={START_R / after.r} dur={1800}>
         <Cell cx={ax} cy={cy} r={after.r} crenated={after.crenated} />
       </Anim>
       <Anim on={step} kind="fade" delay={900}>
@@ -162,7 +165,8 @@ export function TonicityDiagram({ focus = null }) {
   const hS = 32 + linesH(SAFE, 272, MIN_TEXT) + 5 + 4;
   return (
     <Frame h={yS + hS + 6} focus={focus} title="IV fluid tonicity"
-      desc="Water moves across cell membranes toward the side with more effective solute, meaning solutes that cannot cross into the cell. Each panel compares equal-size samples of the cell and the fluid around it. Isotonic fluid: the same effective solute concentration on both sides, so no net water shift (water keeps moving both ways at equal rates) and cell volume is unchanged; it expands the extracellular fluid, in the blood vessels and the tissue spaces. Hypotonic fluid: less effective solute outside, so water moves into cells and they swell. Hypertonic fluid: more effective solute outside, so water moves out of cells and they shrink. Bags as labeled by osmolarity in the bag: isotonic 0.9% NaCl, lactated Ringer's, D5W; hypotonic 0.45% and 0.225% NaCl; hypertonic 3% NaCl, D5 0.9% NaCl, D5 half normal saline, D5LR, D10W. Dextrose is taken up and metabolized, usually quickly but more slowly with high blood glucose or low insulin action, and the fluid then acts like what is left: D5W and D10W like free water (hypotonic), D5 half normal saline like half normal saline, D5 0.9% NaCl and D5LR like their isotonic bases; of the hypertonic bags, only 3% NaCl keeps pulling water out of cells. Hypotonic fluid can worsen cerebral edema and is generally avoided with increased intracranial pressure or acute brain injury; the choice depends on the clinical picture. Monitor isotonic and hypertonic infusions for fluid volume overload.">
+      regions={{ iso: [74, PY + PH], hypo: [74, PY + PH], hyper: [74, PY + PH], fluids: [yB, yB + hB], dextrose: [yD, yD + hD], safety: [yS, yS + hS] }}
+      desc="Water moves across cell membranes toward the side with more effective solute, meaning solutes that cannot cross into the cell. Each panel compares equal-size samples of the cell and the fluid around it, then shows the cell afterwards against a dashed ring at its starting size. Isotonic fluid: the same effective solute concentration on both sides, so no net water shift (water keeps moving both ways at equal rates) and cell volume is unchanged; it expands the extracellular fluid, in the blood vessels and the tissue spaces. Hypotonic fluid: less effective solute outside, so water moves into cells and they swell. Hypertonic fluid: more effective solute outside, so water moves out of cells and they shrink. Bags as labeled by osmolarity in the bag: isotonic 0.9% NaCl, lactated Ringer's, D5W; hypotonic 0.45% and 0.225% NaCl; hypertonic 3% NaCl, D5 0.9% NaCl, D5 half normal saline, D5LR, D10W. Dextrose is taken up and metabolized, usually quickly but more slowly with high blood glucose or low insulin action, and the fluid then acts like what is left: D5W and D10W like free water (hypotonic), D5 half normal saline like half normal saline, D5 0.9% NaCl and D5LR like their isotonic bases; of the hypertonic bags, only 3% NaCl keeps pulling water out of cells. Hypotonic fluid can worsen cerebral edema and is generally avoided with increased intracranial pressure or acute brain injury; the choice depends on the clinical picture. Monitor isotonic and hypertonic infusions for fluid volume overload.">
       <T x={180} y={18} size={BODY_TEXT} weight={700} anchor="middle">Water moves toward more effective solute</T>
       <T x={180} y={37} size={MIN_TEXT} anchor="middle" color={C.muted}>effective solute: cannot cross into the cell</T>
       <g>
@@ -171,7 +175,9 @@ export function TonicityDiagram({ focus = null }) {
         <Drop x={232} y={58} s={1} />
         <T x={240} y={62} size={MIN_TEXT} color={C.muted}>water</T>
       </g>
-      <Panel id="iso" step="isotonic" x={8} title="Isotonic" outside={5} flow="both" after={{ r: 22 }} sub={["No net shift", "same size"]} seed={11} />
+      <T x={180} y={88} size={MIN_TEXT} anchor="middle" color={C.muted}>Top: equal-size samples of cell and fluid.</T>
+      <T x={180} y={105} size={MIN_TEXT} anchor="middle" color={C.muted}>Bottom: the cell after; dashed ring = start size.</T>
+      <Panel id="iso" step="isotonic" x={8} title="Isotonic" outside={5} flow="both" after={{ r: START_R }} sub={["No net shift", "same size"]} seed={11} />
       <Panel id="hypo" step={["hypotonic", "safety"]} x={125} title="Hypotonic" outside={2} flow="in" after={{ r: 27 }} sub={["Water in", "cell swells"]} seed={23} />
       <Panel id="hyper" step="hypertonic" x={242} title="Hypertonic" outside={9} flow="out" after={{ r: 15, crenated: true }} sub={["Water out", "cell shrinks"]} seed={37} />
       <G id="fluids">

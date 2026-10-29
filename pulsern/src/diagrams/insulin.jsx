@@ -52,7 +52,10 @@ export function peakWindow(type, givenAt) {
   if (!ins) throw new Error(`peakWindow: unknown insulin type "${type}"`);
   const t = parseClock(givenAt);
   if (!ins.peak) return null;
-  return { from: clock(t + ins.peak[0]), to: clock(t + ins.peak[1]), nextDay: t + ins.peak[1] >= 24 };
+  /* Each end carries its own day: 0 = the dose day, 1 = the next day
+     (Sol, round 2: one "next day" flag mis-dated 23:00–07:00). */
+  const a = t + ins.peak[0], b = t + ins.peak[1];
+  return { from: clock(a), to: clock(b), fromDay: Math.floor(a / 24), toDay: Math.floor(b / 24), nextDay: b >= 24 };
 }
 
 const X0 = 40, X1 = 342, Y0 = 282, YTOP = 152;   // chart box, hours 0..24
@@ -152,6 +155,15 @@ const Syringe = ({ x, y }) => (
 
 export const INSULIN_EXAMPLE = { type: "nph", givenAt: "07:00" };
 
+/* "11:00–19:00", "23:00 dose day–07:00 next day", "01:00–09:00 next day". */
+const DAY = ["dose day", "next day", "day 3"];
+export function windowText(pw) {
+  if (!pw) return "";
+  if (pw.fromDay === 0 && pw.toDay === 0) return `${pw.from}–${pw.to}`;
+  if (pw.fromDay === pw.toDay) return `${pw.from}–${pw.to} ${DAY[pw.toDay]}`;
+  return `${pw.from} ${DAY[pw.fromDay]}–${pw.to} ${DAY[pw.toDay]}`;
+}
+
 const ROWS = [["rapid", "Rapid", "10–30 min", "1–2 h", "3–5 h"],
   ["short", "Regular U-100", "30–60 min", "2–4 h", "5–8 h"],
   ["nph", "NPH", "1–2 h", "4–12 h", "12–18 h"],
@@ -172,14 +184,17 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   const riskY = noteY + paraLines(NOTE, 324, MIN_TEXT).length * MIN_TEXT * 1.3 + 12;
   const workedY = riskY + 22 + paraLines(RISK, 300, MIN_TEXT).length * MIN_TEXT * 1.3 + 8;
   const workedText = pw
-    ? `${INSULINS[params.type].eg.split(",")[0].toUpperCase()} at ${params.givenAt}: peak about ${pw.from}–${pw.to}${pw.nextDay ? " (next day)" : ""}`
+    ? `${INSULINS[params.type].eg.split(",")[0].toUpperCase()} at ${params.givenAt}: peak about ${windowText(pw)}`
     : concept ? "" : `${INSULINS[params.type].eg.split(",")[0].toUpperCase()} at ${params.givenAt}: no pronounced peak`;
   const workedLines = workedText ? paraLines(workedText, 324).length : 0;
-  const peakText = pw ? `peak ${pw.from}–${pw.to}` : "";
+  const peakText = pw ? `peak ${windowText(pw)}` : "";
   const labelX = Math.max(X0, Math.min(X1 - peakText.length * 7.9, bandMid - (peakText.length * 7.9) / 2));
   return (
     <Frame h={workedLines ? workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 12 : workedY - 6} focus={focus} title="Insulin onset, peak and duration"
-      desc="Typical subcutaneous action of four insulin types over 24 hours, as illustrative curves that stay flat until onset. Rapid-acting (lispro, aspart, glulisine): onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours; it is associated with meals, and its timing follows the specific product and prescribed plan. Short-acting regular U-100: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no pronounced peak, wanes at about 24 hours. IV regular insulin and regular U-500 act differently, and detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest around a peak, but lows can also happen at other times and with peakless insulin.">
+      regions={{ axes: [0, Y0 + 40], rapid: [YTOP - 60, Y0 + 40], short: [YTOP - 60, Y0 + 40], nph: [YTOP - 60, Y0 + 40], long: [YTOP - 60, Y0 + 40],
+        "rapid-meal": [Y0 - 60, Y0], table: [TY, tableEnd], note: [noteY - 14, riskY - 14], "peak-risk": [riskY - 16, workedY - 18],
+        worked: [YTOP - 62, workedLines ? workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 6 : Y0 + 40] }}
+      desc={`${workedText ? `${workedText}. ` : ""}Typical subcutaneous action of four insulin types over 24 hours, as illustrative curves that stay flat until onset. Rapid-acting (lispro, aspart, glulisine): onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours; it is associated with meals, and its timing follows the specific product and prescribed plan. Short-acting regular U-100: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no pronounced peak, wanes at about 24 hours. IV regular insulin and regular U-500 act differently, and detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest around a peak, but lows can also happen at other times and with peakless insulin.`}>
       <G id="axes">
         <T x={18} y={20} size={BODY_TEXT} weight={700}>Typical SC insulin action, 24 hours</T>
         <T x={18} y={39} size={MIN_TEXT} color={C.muted}>illustrative curves; times vary by product</T>
@@ -255,8 +270,11 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
               </g>
             ) : null}
             <path d={areaPath(mine, mst.h)} fill={C.teal} fillOpacity={0.2} />
-            <Anim on="worked" kind="draw" dur={1400}>
-              <path d={curvePath(mine, mst.h)} pathLength={1} fill="none" stroke={C.teal} strokeWidth={mst.w + 1.6} strokeDasharray={mst.dash} strokeLinecap="round" />
+            {/* A fade, not the stroke-drawing animation: drawing rewrites the dash
+                pattern, and the highlighted curve must keep its legend style
+                (Sol, round 2: NPH turned solid like rapid-acting). */}
+            <Anim on="worked" kind="fade" dur={900}>
+              <path d={curvePath(mine, mst.h)} fill="none" stroke={C.teal} strokeWidth={mst.w + 1.6} strokeDasharray={mst.dash} strokeLinecap="round" />
             </Anim>
             <Syringe x={X0 + 6} y={YTOP - 20} />
             <T x={X0 + 16} y={YTOP - 18} size={MIN_TEXT} weight={700} mono color={C.accent}>{`dose ${params.givenAt}`}</T>
@@ -304,6 +322,6 @@ export const insulin = {
     const ins = INSULINS[type];
     const pw = peakWindow(type, givenAt);
     if (!pw) return `${ins.name} insulin given at ${givenAt} has no pronounced peak: a steady effect that wanes at about a day. Lows can still happen.`;
-    return `${ins.name} (${ins.eg}) given at ${givenAt} peaks roughly ${pw.from}–${pw.to}${pw.nextDay ? " the next day" : ""}, the window when hypoglycemia is most likely, though lows can happen at other times too.`;
+    return `${ins.name} (${ins.eg}) given at ${givenAt} peaks roughly ${windowText(pw)}, the window when hypoglycemia is most likely, though lows can happen at other times too.`;
   },
 };

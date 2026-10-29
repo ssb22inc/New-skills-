@@ -9,8 +9,9 @@ describe("precautionFor", () => {
     ["Clostridioides difficile diarrhea", "contact"],
     ["A child with pertussis", "droplet"],
     ["Neisseria meningitidis infection", "droplet"],
-    ["Tuberculosis is suspected", "airborne"],
-    ["active TB", "airborne"],
+    ["Pulmonary tuberculosis is suspected", "airborne"],
+    ["Rule out pulmonary TB; the client has night sweats", "airborne"],
+    ["laryngeal TB", "airborne"],
     ["measles (rubeola)", "airborne"],
   ])("%s → %s", (text, type) => {
     expect(precautionFor(text).types).toEqual([type]);
@@ -22,7 +23,9 @@ describe("precautionFor", () => {
 
   /* "German measles" is rubella (droplet), not measles (airborne). */
   it("reads 'German measles' as rubella, not measles", () => {
-    expect(precautionFor("A pregnant client exposed to German measles")).toEqual({ condition: "rubella", types: ["droplet"] });
+    expect(precautionFor("A child with German measles")).toEqual({ condition: "rubella", types: ["droplet"] });
+    // exposure is not an infection: no row
+    expect(precautionFor("A pregnant client exposed to German measles")).toBeNull();
   });
 
   /* Pneumococcal meningitis needs standard precautions only. */
@@ -43,7 +46,17 @@ describe("precautionFor", () => {
     ["Localized varicella-zoster in an immunocompetent client, lesions covered", null],
     ["Herpes zoster (shingles) on the trunk", null],
     ["Disseminated herpes zoster", { condition: "disseminated zoster", types: ["airborne", "contact"] }],
-    ["Shingles in a client who is immunocompromised", { condition: "disseminated zoster", types: ["airborne", "contact"] }],
+    ["Shingles in a client who is immunocompromised", { condition: "zoster in an immunocompromised client", types: ["airborne", "contact"] }],
+    /* Sol, PR #155 diagram review, round 2 */
+    ["Active renal tuberculosis without pulmonary or laryngeal involvement", null],
+    ["A client with congenital heart disease has acquired rubella", { condition: "rubella", types: ["droplet"] }],
+    ["An immunocompetent client has localized shingles, not disseminated disease; all lesions are covered", null],
+    ["The client received an influenza vaccine today", null],
+    ["Localized zoster in an immunocompromised client; dissemination has been ruled out", null],
+    ["A child with pubic lice", null],
+    ["Body lice found during the assessment", null],
+    ["A school-age child with head lice", { condition: "head lice", types: ["contact"] }],
+    ["Pulmonary TB was ruled out", null],
     ["A client with a history of MRSA admitted for knee surgery", null],
     ["MRSA was ruled out; the client has influenza", { condition: "influenza", types: ["droplet"] }],
     ["The client has tuberculosis", null],
@@ -65,7 +78,7 @@ describe("chickenpox is shown as airborne + contact wherever it appears", () => 
     const { isolation } = await import("../src/diagrams/isolation.jsx");
     const html = renderToStaticMarkup(React.createElement(isolation.Diagram, {}));
     expect(html).toMatch(/chickenpox[^<]*<\/text>(?:<text[^>]*>)?\(\+\u00a0contact\)|chickenpox \(\+\u00a0contact\)/);
-    expect(html).toMatch(/<desc[^>]*>[^<]*Chickenpox needs airborne and contact precautions/);
+    expect(html).toMatch(/<desc[^>]*>[^<]*Chickenpox and disseminated zoster need airborne and contact precautions/);
     const step = isolation.steps.find((s) => s.key === "airborne");
     expect(step.caption).toMatch(/Chickenpox also needs contact precautions/);
     expect(step.narration).toMatch(/contact precautions/);

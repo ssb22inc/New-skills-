@@ -8,7 +8,7 @@ import { StepContext } from "../src/diagrams/kit.jsx";
 import { potassium, classifyPotassium, displayK } from "../src/diagrams/potassium.jsx";
 
 describe("potassium boundary values", () => {
-  it.each([[3.49, "3.49", "hypokalemia"], [3.5, "3.5", "normal"], [5.0, "5.0", "normal"], [5.01, "5.01", "hyperkalemia"], [6.2, "6.2", "hyperkalemia"], [2.95, "2.95", "hypokalemia"]])(
+  it.each([[3.49, "3.49", "hypokalemia"], [3.499, "3.499", "hypokalemia"], [5.001, "5.001", "hyperkalemia"], [3.5, "3.5", "normal"], [5.0, "5.0", "normal"], [5.01, "5.01", "hyperkalemia"], [6.2, "6.2", "hyperkalemia"], [2.95, "2.95", "hypokalemia"]])(
     "%s shows as %s and reads %s in the picture and caption", (k, shown, state) => {
       expect(displayK(k)).toBe(shown);
       expect(classifyPotassium(k)).toBe(state);

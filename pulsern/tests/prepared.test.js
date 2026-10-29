@@ -217,7 +217,7 @@ describe("frames are rendered from the source tree by the trusted renderer", () 
     cpSync("package-lock.json", join(root, "package-lock.json"));
     const abg = join(root, "src/diagrams/abg.jsx");
     // the title says where the diagram code actually ran
-    writeFileSync(abg, readFileSync(abg, "utf8").replace('title: "Reading an ABG"', 'title: typeof process === "undefined" ? "ABG drawn in the browser" : "ABG drawn in Node"'));
+    writeFileSync(abg, readFileSync(abg, "utf8").replace('title: "ABG: acid–base reading"', 'title: typeof process === "undefined" ? "ABG drawn in the browser" : "ABG drawn in Node"'));
     git(root, "init", "-q"); git(root, "add", "-A");
     git(root, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "source");
     return root;

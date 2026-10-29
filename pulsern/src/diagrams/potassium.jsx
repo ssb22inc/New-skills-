@@ -14,7 +14,7 @@
    goals that can overlap under the prescribed protocol, not a fixed serial
    order. */
 import React from "react";
-import { Frame, G, T, Gauge, Box, C, Anim, Loop, Para, paraLines, useDefs, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
+import { Frame, G, T, Gauge, Box, C, Anim, Loop, Para, paraLines, useDefs, exact, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 export const K_RANGE = { lo: 3.5, hi: 5.0 };
 
@@ -23,11 +23,10 @@ export function classifyPotassium(k) {
   return k < K_RANGE.lo ? "hypokalemia" : k > K_RANGE.hi ? "hyperkalemia" : "normal";
 }
 
-/* The value as given, at least one decimal, never rounded onto a boundary. */
-export function displayK(k) {
-  const two = Number(k.toFixed(2));
-  return Number.isInteger(Math.round(two * 10)) && Math.abs(two * 10 - Math.round(two * 10)) < 1e-9 ? two.toFixed(1) : two.toFixed(2);
-}
+/* The value exactly as given, at least one decimal: every supplied digit
+   is kept, so a reading is never rounded onto a limit (Sol, round 2: 3.499
+   still showed as "3.5"). */
+export const displayK = (k) => exact(k, 1);
 
 /* One beat, drawn relative to a baseline (hypo 56 units wide, hyper 60). Shapes follow the
    classic teaching patterns:
@@ -150,6 +149,7 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
   const hHi = gy + goalsH - yHi - 6;
   return (
     <Frame h={yHi + hHi + 6} focus={focus} title="Potassium and the heart"
+      regions={{ level: [0, 96], hypo: [92, 196], hyper: [194, 316], "hypo-act": [yLo, yLo + hLo], "hyper-act": [yHi, yHi + hHi], match: [92, 316] }}
       desc={`${concept ? "Serum potassium normal range 3.5 to 5.0 mEq/L." : `Serum potassium ${displayK(params.k)} mEq/L (normal 3.5 to 5.0): ${state}.`} Illustrative ECG strips of classic findings, which may or may not appear and do not track the level predictably. Low potassium can show flattened T waves, ST depression and a prominent U wave. High potassium can show tall peaked T waves, a widened QRS and flattened P waves, and a normal ECG does not rule out dangerous hyperkalemia. Low potassium causes: loop and thiazide diuretics, vomiting or NG suction, diarrhea; IV replacement is never given by IV push or IM, is diluted on an infusion pump, and urine output is confirmed first. High potassium causes: kidney failure, potassium-sparing diuretics, ACE inhibitors, crush injury, burns. Hyperkalemia emergency goals, which can overlap under the prescribed protocol: protect the heart with IV calcium gluconate, expected with ECG changes or a very high level, which does not lower potassium; shift potassium into cells with insulin and dextrose, a temporary effect; remove potassium with dialysis, diuretics only if the kidneys respond, and binders, which act slowly and are not rescue therapy alone.`}>
       <G id="level">
         <Gauge x={20} y={62} w={320} min={2} max={7} lo={3.5} hi={5.0} value={concept ? null : params.k} decimals={1}
@@ -193,7 +193,7 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
         <Box x={8} y={yHi} w={344} h={hHi} r={10} fill={C.surface} lift />
         <T x={20} y={yHi + 22} size={BODY_TEXT} weight={700}>High K⁺</T>
         <Anim on="hyper-care" kind="fade"><Para x={20} y={yHi + 44} w={320} lead="Causes" text={HYPER_CAUSES} /></Anim>
-        <T x={20} y={headY} size={BODY_TEXT} weight={700} color={C.danger}>Emergency goals, which can overlap</T>
+        <T x={20} y={headY} size={BODY_TEXT} weight={700} color={C.danger}>Severe hyperkalemia: goals can overlap</T>
         {GOALS.map(([lead, t], i) => {
           const y = gy; gy += H(`${lead} ${t}`, 302) + 6;
           return (
@@ -245,8 +245,8 @@ export const potassium = {
       narration: "The common causes are loop and thiazide diuretics, vomiting or N-G suction, and diarrhea. I-V potassium is never pushed or given into a muscle. It is diluted and run on an infusion pump while the heart is monitored, after urine output has been confirmed, because the kidneys have to be able to clear it." },
     { key: "hyper-ecg", focus: ["hyper"], caption: "High potassium can cause tall, peaked T waves, a wider QRS and a flatter P wave, but not in a reliable order, and the ECG can look normal even when the level is dangerous.",
       narration: "High potassium can cause tall, peaked T waves, a wider Q-R-S, and a flatter P wave. But these changes do not come in a reliable order, and the E-C-G can look normal even when the level is dangerous." },
-    { key: "hyper-care", focus: ["hyper", "hyper-act"], caption: "In NCLEX priority terms, hyperkalemia care has three goals that can overlap under the prescribed protocol: protect the heart with IV calcium gluconate, which does not lower potassium; shift potassium into cells with insulin and dextrose; and remove it from the body.",
-      narration: "In NCLEX priority terms, hyperkalemia care has three goals that can overlap under the prescribed protocol. Protect the heart with I-V calcium gluconate, which does not lower the potassium. Shift potassium into the cells with insulin and dextrose. And remove it from the body, most definitively with dialysis." },
+    { key: "hyper-care", focus: ["hyper", "hyper-act"], caption: "A raised result is first recognized and reported. For severe hyperkalemia, NCLEX priority reasoning uses three goals that can overlap under the prescribed protocol: IV calcium gluconate protects the heart when the ECG shows changes or the level is very high, and does not lower potassium; insulin with dextrose shifts potassium into cells; and the body's potassium is then removed.",
+      narration: "A raised potassium result is first recognized and reported. For severe hyperkalemia, NCLEX priority reasoning uses three goals that can overlap under the prescribed protocol. I-V calcium gluconate protects the heart when the E-C-G shows changes or the level is very high, and it does not lower the potassium. Insulin with dextrose shifts potassium into the cells. And the potassium is then removed from the body, most definitively with dialysis." },
     { key: "worked", focus: ["level", "hypo", "hyper", "match"], dynamic: true, caption: null, narration: null },
   ],
   dynamicCaption: ({ k } = K_EXAMPLE) => {

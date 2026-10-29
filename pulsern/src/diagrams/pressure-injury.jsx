@@ -17,18 +17,27 @@ import React from "react";
 import { Frame, G, T, Box, C, Anim, Loop, Para, paraLines, useDefs, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 const ROMAN = { i: 1, ii: 2, iii: 3, iv: 4 };
-/* A mention preceded by one of these, within the same clause, is not the
-   client's confirmed stage. */
-const NOT_CONFIRMED = /\b(?:not|no|isn't|never|rule out|ruled out|rather than|instead of|incorrectly|mistakenly|misdocumented|previously|formerly|would be|could be|might be|if)\b[^.;,]{0,30}$/i;
+/* A stage mention counts only when the text is about a pressure injury,
+   the mention is not another disease's staging ("stage 4 chronic kidney
+   disease"), and it is not negated, hypothetical or superseded, before or
+   after ("Stage 4 was ruled out") — Sol, PR #155 diagram review, rounds 1–2.
+   Anything less certain returns null. */
+const PRESSURE_CONTEXT = /pressure\s+(?:injur|ulcer|sore|area)|decubitus|bed\s*sore|non-?blanchable|wound|eschar|slough|\bulcer\b|\bbraden\b|deep tissue|unstageable|\bDTPI\b/i;
+const OTHER_STAGING = /^[^.;:]{0,40}\b(?:kidney|renal|CKD|cancer|carcinoma|tumou?r|lymphoma|melanoma|heart failure|hypertension|COPD|labou?r|sleep|lymphedema|liver|cirrhosis|dementia|HIV)\b/i;
+const NOT_CONFIRMED = /\b(?:not|no|isn't|never|ruled out|rather than|instead of|incorrectly|mistakenly|misdocumented|previously|formerly|would be|could be|might be|if)\b[^.;,]{0,30}$/i;
+const NEGATED_AFTER = /^[^.;]{0,25}\b(?:was ruled out|has been ruled out|ruled out|excluded|was not|is not|isn't|was incorrect)\b/i;
 function mentions(text, re) {
   const out = [];
   for (const m of String(text ?? "").matchAll(re)) {
-    if (!NOT_CONFIRMED.test(text.slice(0, m.index))) out.push(m);
+    const before = text.slice(0, m.index), after = text.slice(m.index + m[0].length);
+    if (NOT_CONFIRMED.test(before) || NEGATED_AFTER.test(after) || OTHER_STAGING.test(after)) continue;
+    out.push(m);
   }
   return out;
 }
 export function stageFrom(text) {
   const t = String(text ?? "");
+  if (!PRESSURE_CONTEXT.test(t)) return null;
   const found = new Set();
   for (const m of mentions(t, /\bstage\s*(1|2|3|4|iv|iii|ii|i)\b/gi)) {
     const v = m[1].toLowerCase();
@@ -36,8 +45,6 @@ export function stageFrom(text) {
   }
   if (mentions(t, /unstageable/gi).length) found.add("unstageable");
   if (mentions(t, /deep tissue (?:pressure )?injury|\bDTPI\b|\bDTI\b/gi).length) found.add("dtpi");
-  /* A mention that was dropped above still makes the text ambiguous if it
-     disagrees with what is left ("not stage 3 but stage 4" stays stage 4). */
   return found.size === 1 ? { stage: [...found][0] } : null;
 }
 
@@ -134,13 +141,17 @@ export const craterPath = (x, w, y0, y1, inset) => {
 export const craterFloor = (toLayer, short = 1) => depthTo(toLayer) - short;
 function Crater({ x, w, toLayer, inset = 0.22, short = 1, children }) {
   const u = useDefs();
+  const clip = React.useId();
   const d = craterPath(x, w, TOP, craterFloor(toLayer, short), inset);
   return (
     <g>
+      <clipPath id={clip}><path d={d} /></clipPath>
       <path d={d} fill={u("wound")} stroke={C.danger} strokeWidth={1} strokeLinejoin="round" />
       {/* moist sheen along the upper wall */}
       <path d={d} fill={u("sheen")} opacity={0.6} />
-      {children}
+      {/* what lies in the wound bed is clipped to the wound itself, so it can
+          never be drawn into intact tissue (Sol, round 2: slough edge) */}
+      <g clipPath={`url(#${clip})`}>{children}</g>
     </g>
   );
 }
@@ -193,6 +204,10 @@ function DeepTissueStrip({ x, y, w }) {
       <ellipse cx={x + w / 2} cy={y + 18} rx={w * 0.26} ry={12} fill="#000" fillOpacity={0.38} />
       <ellipse cx={x + w / 2} cy={y + 8} rx={w * 0.2} ry={3} fill={C.coral} fillOpacity={0.35} />
       <Surface x={x} y={y} w={w} />
+      {/* the finding a nurse SEES: intact skin with a deep red-purple
+          patch over the damage (Sol, round 2: the surface looked normal) */}
+      <rect x={x + w * 0.27} y={y - 1.5} width={w * 0.46} height={4.5} rx={2.2} fill={C.coral} />
+      <rect x={x + w * 0.27} y={y - 1.5} width={w * 0.46} height={4.5} rx={2.2} fill="#000" fillOpacity={0.45} />
     </g>
   );
 }
@@ -287,6 +302,8 @@ export function PressureInjuryDiagram({ params = null, focus = null }) {
   );
   return (
     <Frame h={PY + PH + 6} focus={focus} title="Pressure injury stages"
+      regions={{ layers: [0, noteY + 6], legend: [LY - 14, LY + 4], other: [OY, OY + oh], prevent: [PY, PY + PH],
+        ...Object.fromEntries(STAGES.map(([k, t], i) => [`s${i + 1}`, [TOP - 56, rows[i] + H(`${k} ${t}`, 324)]])) }}
       desc="Cross-sections through epidermis, dermis, fat, muscle and bone. Stages describe tissue findings and the extent of tissue loss; actual depth varies by location, the stages are not a required progression, and a healing injury is not reverse-staged. Stage 1: intact skin with non-blanchable redness; in darker skin the color change can look different, so warmth, firmness and sensation are also assessed. Stage 2: partial-thickness loss with exposed dermis, a pink moist bed, or an intact or ruptured serum-filled blister; no fat, slough or eschar. Stage 3: full-thickness loss with fat visible; slough or eschar may be present; no fascia, muscle, tendon, ligament, cartilage or bone exposed. Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone. Unstageable: slough or eschar covers the base, so the extent of loss cannot be confirmed. Deep tissue pressure injury: persistent non-blanchable deep red, maroon or purple discoloration, or a blood-filled blister, in the context of pressure or shear. Prevention: Braden scale (lower score means higher risk), repositioning on an individualized schedule (every 2 hours is a common teaching schedule), head of bed at or below 30 degrees if clinically appropriate, because breathing or aspiration precautions may require a higher position; pressure-redistributing support surfaces; clean and dry skin; and protein, calories and fluids.">
       <G id="layers">
         <T x={180} y={20} size={BODY_TEXT} weight={700} anchor="middle">Stages: what the tissue shows</T>
@@ -309,7 +326,7 @@ export function PressureInjuryDiagram({ params = null, focus = null }) {
         <Column x={xs[2]} w={W} stage={3} title="Stage 3" highlight={lit === 3}
           wound={<Crater x={xs[2]} w={W} toLayer="fat" inset={0.18} short={6}>
             {/* slough adheres to the wound bed: drawn ON the floor */}
-            <Slough cx={xs[2] + W / 2 + 4} cy={craterFloor("fat", 6) - 3} />
+            <Slough cx={xs[2] + W / 2 + 2} cy={craterFloor("fat", 6) - 4} />
           </Crater>}
           floor={<Deepest {...floorOf(xs[2], W, "fat", 6)} />} />
         {stageRow(2)}

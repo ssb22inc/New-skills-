@@ -30,6 +30,13 @@ import React from "react";
 export const W = 360;
 export const MONO = "'IBM Plex Mono',ui-monospace,monospace";
 export const SANS = "'Archivo',system-ui,sans-serif";
+/* A value exactly as given: at least `min` decimals and as many more as it
+   has, so a reading is never rounded onto a reference limit (Sol: 3.499
+   was shown as "3.5" beside "below 3.5"). */
+export function exact(v, min = 0) {
+  for (let d = min; d <= 8; d++) if (Math.abs(Number(v.toFixed(d)) - v) < 1e-12) return v.toFixed(d);
+  return String(v);
+}
 export const MIN_TEXT = 13;
 export const BODY_TEXT = 14;
 
@@ -92,11 +99,28 @@ function useLive() {
   return live;
 }
 
+/* The part of the canvas a step shows. In the player each step is cropped
+   to its focused groups (`regions`: group id → [top, bottom] in canvas
+   units, from the same layout numbers the diagram draws with), so on a
+   phone the drawing being explained sits right above its caption and
+   controls instead of a screen-height away (Sol, PR #155 diagram review).
+   The overview (no focus) always shows the whole diagram. */
+export const VIEW_PAD = 10;
+export function viewFor(h, focus, regions, stepKey) {
+  if (stepKey == null || !focus || !regions) return [0, h];
+  const spans = focus.map((id) => regions[id]).filter(Boolean);
+  if (!spans.length) return [0, h];
+  const top = Math.max(0, Math.min(...spans.map((r) => r[0])) - VIEW_PAD);
+  const bottom = Math.min(h, Math.max(...spans.map((r) => r[1])) + VIEW_PAD);
+  return [top, bottom];
+}
+
 /* The root of every diagram. title/desc make it readable to screen readers
    and are what the adversarial reviewer audits alongside the image. */
-export function Frame({ h, title, desc, focus = null, children }) {
+export function Frame({ h, title, desc, focus = null, regions = null, children }) {
   const tid = React.useId();
   const { stepKey, collect = null, still = false } = React.useContext(StepContext);
+  const [vy, vy1] = viewFor(h, focus, regions, stepKey);
   /* Paused means paused: the step's finished picture, with every animation
      removed — not a picture that keeps moving behind a "Play" button (Astra,
      PR #133 review, finding 15). Pressing Play plays the step again. */
@@ -104,8 +128,8 @@ export function Frame({ h, title, desc, focus = null, children }) {
   return (
     <Motion.Provider value={{ stepKey, live, collect }}>
     <Focus.Provider value={{ focus }}>
-      <svg viewBox={`0 0 ${W} ${h}`} width="100%" role="img" aria-labelledby={`${tid}-t ${tid}-d`}
-        style={{ display: "block", fontFamily: SANS, overflow: "visible" }}>
+      <svg viewBox={`0 ${vy} ${W} ${vy1 - vy}`} width="100%" role="img" aria-labelledby={`${tid}-t ${tid}-d`}
+        style={{ display: "block", fontFamily: SANS, overflow: vy > 0 || vy1 < h ? "hidden" : "visible" }}>
         <title id={`${tid}-t`}>{title}</title>
         <desc id={`${tid}-d`}>{desc}</desc>
         <defs>
@@ -405,7 +429,8 @@ export const DIAGRAM_CSS = `
 .dg-btn{font:600 14px 'Archivo',system-ui,sans-serif;color:var(--btn-ink);background:var(--teal);border:0;border-radius:10px;padding:8px 14px;cursor:pointer;min-height:44px;min-width:44px}
 .dg-btn.ghost{color:var(--accent-ink);background:var(--card);border:1px solid var(--line)}
 .dg-btn:disabled{opacity:.45;cursor:default}
-.dg-btn:focus-visible,.dg-dot:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+/* the focus ring in accent ink: amber on white is about 2.2:1 (Sol) */
+.dg-btn:focus-visible,.dg-dot:focus-visible{outline:3px solid var(--accent-ink);outline-offset:2px}
 .dg-dots{display:flex;gap:2px;order:3;flex-basis:100%;justify-content:center;flex-wrap:wrap}
 .dg-dot{width:28px;height:28px;border:0;background:transparent;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;border-radius:99px}
 .dg-dot::before{content:"";width:12px;height:12px;border-radius:99px;border:1.5px solid var(--teal);box-sizing:border-box}

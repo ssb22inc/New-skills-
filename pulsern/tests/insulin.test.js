@@ -5,17 +5,17 @@ import { peakWindow, INSULINS } from "../src/diagrams/insulin.jsx";
 
 describe("peakWindow", () => {
   it("NPH at 07:00 peaks about 11:00–19:00", () => {
-    expect(peakWindow("nph", "07:00")).toEqual({ from: "11:00", to: "19:00", nextDay: false });
+    expect(peakWindow("nph", "07:00")).toMatchObject({ from: "11:00", to: "19:00", fromDay: 0, toDay: 0 });
   });
   it("regular insulin at 07:30 peaks 09:30–11:30", () => {
-    expect(peakWindow("short", "07:30")).toEqual({ from: "09:30", to: "11:30", nextDay: false });
+    expect(peakWindow("short", "07:30")).toMatchObject({ from: "09:30", to: "11:30", fromDay: 0, toDay: 0 });
   });
   it("rapid-acting at 12:00 peaks 13:00–14:00", () => {
-    expect(peakWindow("rapid", "12:00")).toEqual({ from: "13:00", to: "14:00", nextDay: false });
+    expect(peakWindow("rapid", "12:00")).toMatchObject({ from: "13:00", to: "14:00", fromDay: 0, toDay: 0 });
   });
   /* An evening NPH dose peaks overnight — the classic nocturnal low. */
   it("wraps past midnight and says so", () => {
-    expect(peakWindow("nph", "21:00")).toEqual({ from: "01:00", to: "09:00", nextDay: true });
+    expect(peakWindow("nph", "21:00")).toMatchObject({ from: "01:00", to: "09:00", fromDay: 1, toDay: 1 });
   });
   it("has no peak for long-acting insulin", () => {
     expect(peakWindow("long", "21:00")).toBeNull();
@@ -85,5 +85,35 @@ describe("the long-acting row names its product everywhere a student sees or hea
     expect(audioCheck(script, heard).pass).toBe(true);
     expect(audioCheck(script, heard.replace("glargine U-100 has", "glargine has")).pass).toBe(false);
     expect(audioCheck(script, heard.replace("U-300", "U-100")).pass).toBe(false);
+  });
+});
+
+/* Sol, PR #155 diagram review, round 2. */
+describe("worked example details", () => {
+  it("dates each end of an overnight window", async () => {
+    const { windowText } = await import("../src/diagrams/insulin.jsx");
+    expect(windowText(peakWindow("nph", "19:00"))).toBe("23:00 dose day–07:00 next day");
+    expect(windowText(peakWindow("nph", "21:00"))).toBe("01:00–09:00 next day");
+    expect(windowText(peakWindow("nph", "07:00"))).toBe("11:00–19:00");
+  });
+  it("keeps the highlighted curve in its own line style, for every type", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { StepContext } = await import("../src/diagrams/kit.jsx");
+    const { InsulinDiagram } = await import("../src/diagrams/insulin.jsx");
+    for (const [type, dash] of [["nph", "2 4"], ["short", "7 4"], ["long", "11 4 2 4"]]) {
+      const html = renderToStaticMarkup(React.createElement(StepContext.Provider, { value: { stepKey: "worked" } },
+        React.createElement(InsulinDiagram, { params: { type, givenAt: "08:00" } })));
+      const worked = [...html.matchAll(/<path d="[^"]*" fill="none" stroke="var\(--teal\)" stroke-width="([\d.]+)"([^>]*)>/g)].filter((m) => Number(m[1]) > 3.5);
+      expect(worked.length, type).toBeGreaterThan(0);
+      for (const m of worked) { expect(m[2]).toContain(`stroke-dasharray="${dash}"`); expect(m[2]).not.toContain("pathLength"); }
+    }
+  });
+  it("gives screen readers the worked result in the description", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { InsulinDiagram } = await import("../src/diagrams/insulin.jsx");
+    const html = renderToStaticMarkup(React.createElement(InsulinDiagram, { params: { type: "nph", givenAt: "19:00" } }));
+    expect(html).toMatch(/<desc[^>]*>NPH at 19:00: peak about 23:00 dose day–07:00 next day\./);
   });
 });

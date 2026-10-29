@@ -11,7 +11,7 @@ describe("stageFrom", () => {
     ["The client has a stage IV pressure injury", 4],
     ["documented as a Stage II pressure ulcer", 2],
     ["stage iii wound", 3],
-    ["a stage I area", 1],
+    ["a stage I pressure area", 1],
   ])("%s → %s", (text, stage) => {
     expect(stageFrom(text)).toEqual({ stage });
   });
@@ -69,6 +69,10 @@ describe("stage mentions that are not the client's stage", () => {
     ["This is not a stage 4 pressure injury.", null],
     ["The wound was incorrectly documented as stage 2; it is a stage 3 pressure injury.", { stage: 3 }],
     ["If this were stage 4, bone would be exposed.", null],
+    /* round 2 */
+    ["Stage 4 was ruled out. The heel pressure injury is stage 3.", { stage: 3 }],
+    ["The client has stage 4 chronic kidney disease and a sacral pressure injury.", null],
+    ["The client has stage 4 chronic kidney disease.", null],
   ])("%s", (text, want) => {
     expect(stageFrom(text)).toEqual(want);
   });
