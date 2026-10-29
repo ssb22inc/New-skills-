@@ -40,9 +40,14 @@ function one(re, text, min, max) {
 }
 
 /* PaCO₂ is written many ways: PaCO2, PaCO₂, PCO2, pCO₂. */
-const PH = /\bpH\s*(?:of|is|was|=|:)?\s*(7\.\d{1,2}|6\.\d{1,2})\b/gi;
-const PACO2 = /\b(?:Pa|p)?CO(?:2|₂)\s*(?:of|is|was|=|:)?\s*(\d{2,3})\b/gi;
-const HCO3 = /\b(?:HCO(?:3|₃)(?:-|⁻)?|bicarbonate(?:\s+level)?)\s*(?:of|is|was|=|:)?\s*(\d{1,2}(?:\.\d)?)\b/gi;
+/* Each value is read as a WHOLE number with every decimal it was written
+   with; a longer token is not matched at all, never cut to its prefix
+   (PR #156 review: "PaCO2 45.4" was read as 45 with whole-number
+   precision). */
+const WHOLE = String.raw`(?![\d.]*\d)`;
+const PH = new RegExp(String.raw`\bpH\s*(?:of|is|was|=|:)?\s*((?:7|6)\.\d{1,3})${WHOLE}`, "gi");
+const PACO2 = new RegExp(String.raw`\b(?:Pa|p)?CO(?:2|₂)\s*(?:of|is|was|=|:)?\s*(\d{2,3}(?:\.\d{1,2})?)${WHOLE}`, "gi");
+const HCO3 = new RegExp(String.raw`\b(?:HCO(?:3|₃)(?:-|⁻)?|bicarbonate(?:\s+level)?)\s*(?:of|is|was|=|:)?\s*(\d{1,2}(?:\.\d{1,2})?)${WHOLE}`, "gi");
 /* The whole number is read — one or two integer digits, never a partial
    match (PR #156 review: "10.0" was read as 1.0 once the range reached
    10); a longer number that doesn't fit is not matched at all. */
@@ -106,6 +111,9 @@ function unsupportedConcentration(t) {
 export function extractInsulin(text) {
   const t = normaliseDosing(text);
   if (/degludec|tresiba|detemir|levemir|toujeo/i.test(t) || unsupportedConcentration(t)) return null;
+  /* The worked window is subcutaneous action: an IV or other non-SC route
+     leaves the diagram concept-only (PR #156 review). */
+  if (/\b(?:IV|I\.V\.|intravenous(?:ly)?|infusion|drip|IV push|intramuscular(?:ly)?|IM)\b/i.test(t)) return null;
   const types = INSULIN_TYPES.filter(([, re]) => re.test(t)).map(([k]) => k);
   if (types.length !== 1) return null;
   const givenAt = clockFrom(t);

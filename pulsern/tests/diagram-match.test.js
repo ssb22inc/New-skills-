@@ -3,7 +3,7 @@
    Extraction errs toward null. A diagram shown as a concept is a small
    loss; a diagram drawing the wrong patient's numbers is a wrong lesson. */
 import { describe, it, expect } from "vitest";
-import { extractAbg, extractPotassium, proposePairs, MATCHERS } from "../src/diagrams/match.js";
+import { extractAbg, extractPotassium, extractInsulin, proposePairs, MATCHERS } from "../src/diagrams/match.js";
 
 describe("ABG values", () => {
   it("reads the common formats", () => {
@@ -158,5 +158,27 @@ describe("two-digit potassium values", () => {
   it("proposes the matching category, never the opposite one", () => {
     expect(proposePairs({ stem: "A client's potassium is 10.0 mEq/L. Which action is first?", options: [], rationale: "" }))
       .toEqual([{ d: "potassium", p: { k: 10 } }]);
+  });
+});
+
+/* PR #156 review: decimals were cut to their prefix, and IV insulin got a
+   subcutaneous peak window. */
+describe("whole ABG tokens and insulin route", () => {
+  it("reads every decimal and interprets the real gas", async () => {
+    const { interpretAbg } = await import("../src/diagrams/abg.jsx");
+    const gas = extractAbg("pH 7.34, PaCO2 45.4, HCO3 23.7");
+    expect(gas).toMatchObject({ ph: 7.34, paco2: 45.4, hco3: 23.7, precision: { ph: 2, paco2: 1, hco3: 1 } });
+    expect(interpretAbg(gas).disorder).not.toMatch(/unresolved/);
+    expect(extractAbg("ABG: pH 7.35, PaCO2 45, HCO3 23.75").hco3).toBe(23.75);
+  });
+  it("never reads a longer token by its prefix", () => {
+    expect(extractAbg("pH 7.34, PaCO2 45.456, HCO3 23.7")).toBeNull();
+    expect(extractAbg("pH 7.34, PaCO2 45.4, HCO3 23.789")).toBeNull();
+  });
+  it.each(["Regular U-100 insulin was given intravenously at 0700.", "Insulin drip of regular insulin started at 0700", "Regular insulin IV at 0700"])("leaves %s concept-only", (t) => {
+    expect(extractInsulin(t)).toBeNull();
+  });
+  it("still reads subcutaneous insulin", () => {
+    expect(extractInsulin("Regular insulin given subcutaneously at 0700")).toEqual({ type: "short", givenAt: "07:00" });
   });
 });
