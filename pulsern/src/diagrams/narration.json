@@ -94,6 +94,71 @@
         "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/insulin/0b4918491c7b73c672f8c21b89347619.mp3",
         "bytes": 220800,
         "sig": "eoq500zt7P5mHw+CCr162o/jOuojgPRHzExpr6BJphtKHcr5sO1zqgjyak+qIh9AshpjgmYZuNJV4Pc1CQ6RAA=="
+      },
+      "rapid": {
+        "id": "616084f73ed4e115",
+        "script": "771ccebe62b11ef5b2769a682356f918fb1454e29b068e552028f2eba9d2d75b",
+        "qa": 15,
+        "audio": "91f7ffc3e3e73cab3c6d68056025f393",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "575e9f89",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/insulin/91f7ffc3e3e73cab3c6d68056025f393.mp3",
+        "bytes": 258432,
+        "sig": "ODZu/eJQlUzZcA3ey5xaW086c277C2dqktsDTVXPRuqnuBgcYM0EbCwpdSMscl9y5deuIoxmDSRs7zb2oANYAA=="
+      },
+      "short": {
+        "id": "81336662b4844bf1",
+        "script": "7fc8b77f159e39048e8a1c1d0597e4d3da6e17aa73694ffdadb75569ccb94253",
+        "qa": 15,
+        "audio": "594c3403861f75407b093f93bb43debe",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "b219f6a6",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/insulin/594c3403861f75407b093f93bb43debe.mp3",
+        "bytes": 312960,
+        "sig": "jguG4j5rLtqDR+CBun2b8PMN7ApS4tpP8KPiOZir5EQvrReZMZTlHHiRfiW8G7kIAKjyM3MdiUe1GrZfDEbPCg=="
+      },
+      "nph": {
+        "id": "2b894fe583262e33",
+        "script": "58f0d97753039c3f32471a81be6b7b4ea5000a3d08e49d2f3b07b30a2995f7af",
+        "qa": 15,
+        "audio": "5611677c1f12b388a44ea98663d307ff",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "97063891",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/insulin/5611677c1f12b388a44ea98663d307ff.mp3",
+        "bytes": 150528,
+        "sig": "5PwNnoUL1g2PTv1dCzLokbGCm1CZSHFHnPmAdGMQbzkjbfTwzrMilZf7QCxfytaSLQUEBn7vfY3nxrEGwR/GCA=="
+      },
+      "long": {
+        "id": "aa31c2724c8a39e3",
+        "script": "4bc29c81e36054c0b821700fe1d69c1b72ca7a26ff7f898faaae9046e62b6437",
+        "qa": 15,
+        "audio": "54f13fbdd124ca8828fe8af5618ab9fe",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "adb5acc6",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/insulin/54f13fbdd124ca8828fe8af5618ab9fe.mp3",
+        "bytes": 296064,
+        "sig": "aO2EZKq9aMs7bju79NQGJRsYMecTUQS3k8cxL7AieX9mL6stMyDKwvThcBiPzC70SFvsnyq6XZVhMIsrc+GkCg=="
+      },
+      "risk": {
+        "id": "bfff7178f5d34348",
+        "script": "ee27ba0cb55aece99ed778f6e07646a3eb15f2678e9a7df7795283b1463a85f5",
+        "qa": 15,
+        "audio": "9c994abd74da1b2e78555a9b89f9f96b",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "ab49ca40",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/insulin/9c994abd74da1b2e78555a9b89f9f96b.mp3",
+        "bytes": 159360,
+        "sig": "QTnx2LBeRY9O2ZFSpRStEHcOzGZu8kt8GIxxLtQcuuSeBTTeSSFZGPnWxzG5+1PllSuxlGUL28oLxw2mANaHBw=="
       }
     },
     "isolation": {
@@ -109,6 +174,71 @@
         "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/isolation/545661c8d9adbb63eb0749c5bcbd1454.mp3",
         "bytes": 153600,
         "sig": "LyQXqlssjzskGgXRvN2G5hPV9HYGhqkegPkqgLLncxtDkkNbNFs2qSzuyZlaS4DHLg4TAAK0fHaDjcXj5Xm1Cw=="
+      },
+      "contact": {
+        "id": "88be4973bb0c1005",
+        "script": "9ca0c7281c854c323681b037188a9ef448e07a2d6557488612e7b1b645fb59d8",
+        "qa": 15,
+        "audio": "de399876dc1c5fdd75346aa52db9ec0e",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "34b16221",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/isolation/de399876dc1c5fdd75346aa52db9ec0e.mp3",
+        "bytes": 498432,
+        "sig": "vY4WmwaC8jBK9hIILWBNoidZ4pfizEC6iL/FlrCnf3NVSa0N69dDIG2Yj+4LzGClPhaT9kZhGJtbQMvhmvXTAQ=="
+      },
+      "cdiff": {
+        "id": "61b1acd548901f67",
+        "script": "5b424d3cf58df279f2ccddd6e8918d4198f1115e3b52598ba62e70a2d0b65c54",
+        "qa": 15,
+        "audio": "40ffd6985cad61fe06ad77c13e0b4387",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "c615261d",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/isolation/40ffd6985cad61fe06ad77c13e0b4387.mp3",
+        "bytes": 372096,
+        "sig": "shs14/b/XwtefHTPXk0axZWDQibYX+i1PzmE0bVwIWDFY074tMA17pmR9hqkj/XcC7GFAZ5Gqfdc3nCipaFOCQ=="
+      },
+      "droplet": {
+        "id": "fbb15e3092220383",
+        "script": "ada53e406d1bf48d7f5a8b92825fb5e94e47ba13d8f6de81a157735bc70e879a",
+        "qa": 15,
+        "audio": "95027dd3ccda448c90a015b881a2261d",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "80672917",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/isolation/95027dd3ccda448c90a015b881a2261d.mp3",
+        "bytes": 405888,
+        "sig": "kioHg/zUee0A3c59Gxq0tV1P0jejPoh2nAgQu1ohU9Kt8r531z4S94PTdF+amb7BiEbVd7LvZxQ0cbSJweZ2Bg=="
+      },
+      "airborne": {
+        "id": "bd17321ebc56b5da",
+        "script": "1dd9e320895b9aa366b9be7897ffb21bf5fdda537341d58c9d955e00c32396d1",
+        "qa": 15,
+        "audio": "f2c5f2b01d31be2fa54f187ad480a798",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "e4a271c1",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/isolation/f2c5f2b01d31be2fa54f187ad480a798.mp3",
+        "bytes": 375168,
+        "sig": "9xeBIC19KnUFz5RnoCmayPeckiCDAVAJAh8L4DKLhR3FXFBtN/Zl1S1JDFw2g5CIcnEsyYiPTjC1JNxRm4PDAA=="
+      },
+      "transport": {
+        "id": "442be8ee4de861b8",
+        "script": "5af79fada3c4d972c4f047c1a9756934329bc205ac0d87b9be2d9d6eed6e1753",
+        "qa": 15,
+        "audio": "330144f2e3fe0c1377f5995cff6e0efc",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "12e9a34d",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/isolation/330144f2e3fe0c1377f5995cff6e0efc.mp3",
+        "bytes": 440064,
+        "sig": "vU7faSz8eFrBk2IwgfdjfbCWg2qF9GqYOokGZ2WkX/X1gaTWdPzX5LnN2/WgrTi8Neb0K2W1HoBa62WPOs7PCQ=="
       }
     },
     "potassium": {
@@ -191,7 +321,99 @@
         "sig": "ZjgvERI9svCRdLw3tuLYDKFfBVqHCNjmKobJCUaAva052CMQYRbupcsg8axiK4OdHtU5xoHb4vhKjD/EjLT1AA=="
       }
     },
-    "pressure-injury": {},
+    "pressure-injury": {
+      "layers": {
+        "id": "ed2a94dddba410ca",
+        "script": "43e27e57cde096a82f31c316116e795e86f79cd71354c6e7bd6c8c36cac161d9",
+        "qa": 15,
+        "audio": "4c77aa04244dcc343244a1adc37c9b34",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "51c47371",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/pressure-injury/4c77aa04244dcc343244a1adc37c9b34.mp3",
+        "bytes": 293760,
+        "sig": "HwNYfkWmpl3rVFJNi7dFk8+bmBmASXpNB9yQkFcd0xhLbXnA2qSqP/CE5dMChvlV0vghWA5uSEE0fIkaPTm6Bw=="
+      },
+      "stage1": {
+        "id": "c75f330d50ee532c",
+        "script": "86f3449a534f0fbaab8e3784880b35bf97c13a47583a07e296ed29cef6c2393e",
+        "qa": 15,
+        "audio": "73f4bb5c4d4087ce7792c2e457bfd2b3",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "7dbd3113",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/pressure-injury/73f4bb5c4d4087ce7792c2e457bfd2b3.mp3",
+        "bytes": 228864,
+        "sig": "6uJu4RmKhTv20fmc4SKJHY4v64elNvxRfHWHDb8h3ZyxfgfgBmuxm/cxb32byV7yaa3mRb+bB9Q9As62OIwWBA=="
+      },
+      "stage2": {
+        "id": "4cc63a38d53906a6",
+        "script": "a5ca5881a132573fd19fac77e1dd1a9006c2b26cb8cf4a0cdb46ec07314548ec",
+        "qa": 15,
+        "audio": "20d9498cab8760b1f033d4633cda0fee",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "4c00ac97",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/pressure-injury/20d9498cab8760b1f033d4633cda0fee.mp3",
+        "bytes": 377856,
+        "sig": "C8yludx3In6CHmevgwU/FYS1loaEMVNTFKHsTO3Xy0cteXCfq+omE2VaaMDPDshYkjSDA98RmuB0g5UkifD5Ag=="
+      },
+      "stage3": {
+        "id": "aba8c71fdf677041",
+        "script": "703272662a83da675ef64658a7ec4c44b33d5873162cacbebcf1efccb008c26f",
+        "qa": 15,
+        "audio": "8ca0b95184ad3a9098dbd51b232df062",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "f2ad456b",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/pressure-injury/8ca0b95184ad3a9098dbd51b232df062.mp3",
+        "bytes": 225792,
+        "sig": "v88wLTZA9/x2y4HnxwluVBl6ieX/rdxo+atzhYiDmxGUBJq9Pao4N3BeITpR68N7Pv/rvY84Q6nFUSO89F4QBg=="
+      },
+      "stage4": {
+        "id": "8231a5b9b56bf53b",
+        "script": "b473f041ebee97618ff8e458f7e79888498956aa72d0b0801c0fb1ea527947f9",
+        "qa": 15,
+        "audio": "938c54780fe8a02217cecea5343b0bd2",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "c2f4ff00",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/pressure-injury/938c54780fe8a02217cecea5343b0bd2.mp3",
+        "bytes": 154368,
+        "sig": "GaJMIdHNNidzq8+nbUdLe/p9PGADSBVxKmXtrRJIuAbcRNEly0dv2Wrbsc3hRWbT5Qyl0IhzZndf8jfvmGVxDw=="
+      },
+      "other": {
+        "id": "e2a7a92bacffbf1f",
+        "script": "65914adc264b42562b7d1cf069df8dd96a2bca7b04136f2084dd337a1d8847d2",
+        "qa": 15,
+        "audio": "7cba5e503fee2a7d486e1539605a3edb",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "bdb9f891",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/pressure-injury/7cba5e503fee2a7d486e1539605a3edb.mp3",
+        "bytes": 424320,
+        "sig": "srPMoEUZNsXyV397pRg3E2Jwzont+pGwd0LyUsEGmxtBjiyDIioxyzEVYp4QA/ZE2YXnG93mrT9oZL56zVx9Cw=="
+      },
+      "prevent": {
+        "id": "ccf8278274c15284",
+        "script": "058a2cbb3b97793ea5eb7406f65e86d02bf286b32dc9c8fb88759406d6be5fea",
+        "qa": 15,
+        "audio": "a8884d067fe22dacda85f3aa21649c95",
+        "voice": "marin",
+        "model": "gpt-4o-mini-tts",
+        "textFp": "dfd3c8c8",
+        "similarity": 1,
+        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/pressure-injury/a8884d067fe22dacda85f3aa21649c95.mp3",
+        "bytes": 372096,
+        "sig": "cCvg4xNsJoEHy6JxLJXhdQr563BMh0tXSuWlfjmZnylPkTZP49HyPlWtpqyuCNK44/1l3S6WrOI9JkyoZGTVAg=="
+      }
+    },
     "tonicity": {
       "isotonic": {
         "id": "9ba92c8e8e2ea3c1",

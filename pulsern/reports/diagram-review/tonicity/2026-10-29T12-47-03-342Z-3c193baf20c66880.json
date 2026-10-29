@@ -1,0 +1,40 @@
+{
+  "id": "tonicity",
+  "title": "IV fluid tonicity",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T12:47:03.342Z",
+  "images": 14,
+  "key": "3c193baf20c66880",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "accessibility",
+      "where": "Images 1–4 and 8–11, effective-solute dots inside cells; tonicity.jsx Dot",
+      "title": "Solute dots fall below the project's contrast target",
+      "problem": "C.ink at 75% opacity is composited over a variable teal gradient. Dots on the darker light-theme regions and brighter dark-theme regions fall below the required 4.5:1 contrast. These dots encode the concentration comparison, so they are not decorative. Supplied-color compositing predicts the failure; exact rendered pixel ratios were not measured.",
+      "fix": "Give the dots a contrasting halo or adjust the underlying gradient. Test the composited dot/background contrast at every dot position in both themes rather than testing the ink token alone.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "minor",
+      "area": "consistency",
+      "where": "Images 1, 2, 8 and 9, intro definition; INTRO_TEXT and Frame desc",
+      "title": "Graphic drops the membrane-permeability qualification",
+      "problem": "The picture says effective solute 'cannot cross into the cell,' whereas the facts and narration correctly say it cannot freely cross over the relevant time. The absolute version can teach that ions such as sodium never cross cell membranes, rather than that they remain effective osmoles during the water shift.",
+      "fix": "Use 'does not freely cross the membrane during the water shift' consistently in the graphic and text alternatives. Wrap the label if necessary.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2661935
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Two minor corrections required. No clinical blocker identified in the supplied tonicity claims or water-shift diagrams.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2
+  }
+}

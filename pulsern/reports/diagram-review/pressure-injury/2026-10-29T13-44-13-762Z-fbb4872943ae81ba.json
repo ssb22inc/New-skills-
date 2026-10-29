@@ -1,0 +1,31 @@
+{
+  "id": "pressure-injury",
+  "title": "Pressure injury stages",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T13:44:13.762Z",
+  "images": 16,
+  "key": "fbb4872943ae81ba",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "visual",
+      "where": "Images 1, 7, 9 and 15; step \"other\"; DeepTissueStrip lower injury oval",
+      "title": "DTPI illustration depicts damage inside bone",
+      "problem": "The lower filled injury oval covers roughly 70% of the bone band's height. With coral explicitly representing damaged tissue, this depicts bony injury rather than soft-tissue injury at the bone–muscle interface. It adds an anatomical finding that the definition and narration do not establish.",
+      "fix": "Constrain the deep lesion to the muscle/soft-tissue side, abutting the upper bone boundary and extending toward the skin. Keep the bone band visually intact and label the bone–muscle interface.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.353551
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Revise the deep-tissue illustration before publication. Its damage overlay extends substantially into the bone band.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}

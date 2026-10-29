@@ -1,0 +1,40 @@
+{
+  "id": "pressure-injury",
+  "title": "Pressure injury stages",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T08:23:01.999Z",
+  "images": 16,
+  "key": "54edd363b344513b",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "pressure-injury.jsx — stageFrom(), NEGATED_BEFORE, NEGATED_AFTER and stageMentions(); question-dependent stage outlines",
+      "title": "Stage extraction can select the wrong clinical stage",
+      "problem": "stageFrom(\"The client has no fever and a stage 2 pressure injury. Teaching covers stage 4 pressure injuries.\") returns Stage 4: the unrelated 'no fever' suppresses Stage 2, while the teaching reference is accepted as the client's stage. It also returns Stage 4 for \"A stage 4 pressure injury on the left heel was ruled out.\" because the exclusion falls beyond NEGATED_AFTER's 25-character window. These produce a clinically incorrect highlighted column.",
+      "fix": "Prefer a validated, structured current-stage field over inference from unrestricted stem text. Otherwise, scope negation and assertion to the specific injury mention, reject educational and hypothetical references, and return null whenever current status is uncertain. Add both counterexamples as regression tests.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "visual",
+      "where": "Images 1–6 and 9–14 — Stage 2–4 cross-sections; Crater(), Tissue() and SharedDefs 'wound' gradient",
+      "title": "Supposedly lost tissue remains visible inside the wounds",
+      "problem": "Crater is drawn translucently over the intact tissue bands. Epidermal cells, dermal fibres and fat lobules remain visible across the coral wound interiors. This makes the illustrations read as discoloured retained tissue rather than clearly showing partial- or full-thickness tissue loss—the distinction the diagram is meant to teach.",
+      "fix": "Mask out the removed tissue with an opaque crater interior, interrupt the skin surface at the opening, and draw the remaining wound walls and exposed bed separately. Keep tissue textures only where tissue remains; preserve the intact surface for Stage 1.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.297336
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Hold publication. The stage matcher can highlight Stage 4 for an explicitly Stage 2 injury or for a stage that was ruled out. The open-wound illustrations also leave tissue-loss boundaries ambiguous.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}

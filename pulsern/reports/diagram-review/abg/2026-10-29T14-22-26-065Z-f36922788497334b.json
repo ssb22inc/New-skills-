@@ -1,0 +1,49 @@
+{
+  "id": "abg",
+  "title": "ABG: acid–base reading",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:22:26.065Z",
+  "images": 16,
+  "key": "f36922788497334b",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "Step `worked`, interpretAbg() fits filtering and compensationLimit() outsideRules branch",
+      "title": "An unavailable compensation estimate is counted as a successful fit",
+      "problem": "Above PaCO₂ 80, outsideRules returns an invented HCO₃⁻ interval extending to 60. interpretAbg() counts values inside that interval as fits even though acuteFit and chronicFit are both false. Reproducer: pH 7.37 / PaCO₂ 80 / HCO₃⁻ 45 produces a possible mixed respiratory acidosis plus metabolic alkalosis; changing PaCO₂ to 81 produces 'Respiratory acidosis · fully compensated.' Both gases pass consistency checking. Crossing the tool's validation boundary removes the mixed-disorder verdict without evidence that compensation is appropriate. The caution does not repair that headline.",
+      "fix": "Represent compensation checks as fit, outside expected range, or not evaluable. Never count outsideRules as a fit. When the relevant rule is unavailable, return an unresolved interpretation and withhold a validated single-disorder compensation verdict. Add regression tests for both gases.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "Step `limits` caption/narration versus compensationLimit() acuteB clipping and `worked` output",
+      "title": "The acute calculation silently changes the stated formula",
+      "problem": "For pH 7.24 / PaCO₂ 80 / HCO₃⁻ 33, the taught acute formula gives HCO₃⁻ 28–32 ± 2, which includes 33. The code clips the estimate to 28–30 before applying the tolerance, then reports that the value fits neither acute nor chronic estimates. 'Rarely above about 30–32' has become an absolute exclusion, and the generated estimate no longer follows the displayed equation.",
+      "fix": "Keep the formula-derived band intact and flag values above the approximate buffering limit as unusual, not automatically incompatible. Alternatively, explicitly decline to apply the linear estimate there. Do not silently substitute a different numerical band.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "rules",
+      "where": "AbgDiagram() chipColor and kit.jsx Gauge() valueBad styling; all themes",
+      "title": "Coral means any abnormality, not only incorrect or critical",
+      "problem": "Every out-of-range marker receives coral, and nearly every definite abnormal verdict does too. For example, 7.37 / 50 / 28 receives a coral fully-compensated verdict despite no evidence of a critical state. This breaks the stated palette semantics and visually equates abnormality with criticality.",
+      "fix": "Use neutral ink for noncritical abnormal results and retain explicit range labels. Reserve coral for incorrect data or genuinely critical states; do not infer criticality merely from crossing a reference limit.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.3268635
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Block publication. The interpreter can turn an unevaluable compensation check into a positive fit, and its acute respiratory-acidosis calculation contradicts the formula students are taught.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 1
+  }
+}

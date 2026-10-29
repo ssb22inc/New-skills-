@@ -1,0 +1,31 @@
+{
+  "id": "pressure-injury",
+  "title": "Pressure injury stages",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T11:33:04.687Z",
+  "images": 16,
+  "key": "6e23690ea74e333e",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "visual",
+      "where": "Live steps stage2, stage3 and stage4; Column wound animation, Deepest markers, and Stage 3 slough leader. Images 4–6 and 12–14 show only the finished states.",
+      "title": "Depth annotations point into intact tissue while the wound grows",
+      "problem": "The crater scales from 4% to full depth over 1.3 seconds, but its deepest-point ring immediately appears at the final depth. Initially, the ring therefore marks intact tissue below the actual illustrated wound. In Stage 3, the fixed slough leader likewise points into intact fat while the animated slough is still near the surface.",
+      "fix": "Fade in the finished crater without changing its depth, or delay the depth rings and slough annotation until growth finishes. Keep the slough leader synchronized with the tissue patch it labels.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.3051585
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "One live-animation error needs correction before publication. The supplied stills show finished states and conceal it; no incorrect staging definition was identified.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "id": "tonicity",
+  "title": "IV fluid tonicity",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T13:10:07.181Z",
+  "images": 14,
+  "key": "5a0292282e4e75a9",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "Images 1–4 and 8–11: hypotonic panel, dashed starting-size ring; tonicity.jsx Panel()",
+      "title": "Swollen cell obscures its starting-size reference",
+      "problem": "The dashed reference ring is drawn before the swollen cell, so the cell's translucent gradient paints over it. Source-color compositing puts the resulting contrast at roughly 2–2.5:1 in both themes, below even the 3:1 minimum for meaningful graphics. This weakens the before/after size comparison the legend explicitly asks students to use.",
+      "fix": "Draw the reference ring above the cell rather than beneath its fill. Use a contrast-tested stroke or halo that remains distinct against the cell gradient in both themes, and test the rendered comparison at phone width.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.265441
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No clinical blocker identified in the tonicity content. The hypotonic cell-size comparison has a contrast defect.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}

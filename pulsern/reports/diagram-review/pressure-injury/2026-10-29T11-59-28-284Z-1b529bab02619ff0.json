@@ -1,0 +1,31 @@
+{
+  "id": "pressure-injury",
+  "title": "Pressure injury stages",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T11:59:28.284Z",
+  "images": 16,
+  "key": "1b529bab02619ff0",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "consistency",
+      "where": "Live steps stage2 and stage3; pressure-injury.jsx wound Anim wrappers and kit.jsx @keyframes dg-fade",
+      "title": "The wound fade temporarily changes its anatomical depth",
+      "problem": "The shared fade animation also translates the wound downward by 6 units. The Stage 2 crater floor is at y=126 and fat begins at y=130, so its floor briefly crosses into fat during the entrance. In Stage 3, the slough moves with the wound while its leader remains fixed. This contradicts the intended fixed-depth entrance and is absent from paused Images 4–5 and 12–13.",
+      "fix": "Use an opacity-only entrance for wound geometry, without translation. Keep the wound contents and their callout anchors aligned throughout playback.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2894135
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No blocking clinical error found in the pressure-injury definitions or prevention claims. One source-defined animation mismatch remains; the paused screenshots do not reveal it.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}
