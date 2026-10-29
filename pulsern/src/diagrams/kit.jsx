@@ -391,8 +391,7 @@ export function Chip({ x, y, text, color = "teal", fill, anchor = "middle", size
 
    The out-of-range ends are lightly shaded, the normal band is a teal bar
    with a sheen, and the value sits in a pin (danger ink when abnormal). On
-   its step (`anim`) the pin slides in from the middle of the normal range,
-   so the eye travels the distance from normal. `icon` draws a small symbol
+   its step (`anim`) the pin fades in where its value is. `icon` draws a small symbol
    before the title (a lung for PaCO₂, a kidney for HCO₃⁻).
 
    The pill shows the value exactly as given (`text`, or the value with

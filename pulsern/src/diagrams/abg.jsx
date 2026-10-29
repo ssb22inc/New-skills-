@@ -274,8 +274,16 @@ export function interpretAbg({ ph, paco2, hco3, precision = null }) {
   /* Nothing fits as one disorder: every candidate's compensating value is
      outside its expected range. A mixed disorder, reported from the first
      candidate (metabolic before respiratory). */
-  const first = tested[0];
-  return mixedResult(first.primary, first.kind, romeFor(first), first.limit);
+  /* Report the reading that comes CLOSEST to fitting, so a borderline
+     single disorder is never hidden behind whichever candidate happens to
+     be tested first (Sol, round 12: 7.42 / 50 / 31). The others are named
+     too. */
+  const missOf = (c) => (c.limit.low ? c.limit.expected[0] - c.limit.value : c.limit.value - c.limit.expected[1]);
+  const ranked = [...tested].sort((a, b) => missOf(a) - missOf(b));
+  const best = ranked[0];
+  const res = mixedResult(best.primary, best.kind, romeFor(best), best.limit);
+  const others = ranked.slice(1).map((c) => `${c.primary} ${c.kind}, whose expected ${c.limit.name} of ${c.limit.expected[0]}–${c.limit.expected[1]} misses by ${r1(missOf(c))}`);
+  return others.length ? { ...res, reading: `${res.reading} Also considered: ${others.join("; ")}.` } : res;
 }
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
@@ -428,7 +436,11 @@ export function verdictLabel(r) {
 export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
   const concept = params === null;
   const r = concept ? null : interpretAbg(params);
-  const bad = !concept && r.disorder !== "normal";
+  /* Coral only for a definite abnormal reading; an uncertain one (compensation
+     unclear, two readings, unresolved, unsupported) is neutral ink — coral is
+     reserved for critical or incorrect states (Sol, round 12). */
+  const uncertain = !concept && (r.compensation === "unclear" || ["indeterminate", "unsupported"].includes(r.disorder) || /unresolved/.test(r.disorder));
+  const chipColor = concept || r.disorder === "normal" ? "teal" : uncertain ? "ink" : "coral";
   const label = concept ? "Read pH → PaCO₂ → HCO₃⁻ → match" : verdictLabel(r);
   const chipLines = paraLines(label, 300, BODY_TEXT).length;
   const caution = concept ? null : r.caution ?? null;
@@ -473,7 +485,7 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
       </G>
       <G id="result">
         <Anim on="worked" kind="pop" delay={1100}>
-          <Chip x={180} y={RY + 154} text={label} color={bad ? "coral" : "teal"} maxW={330} />
+          <Chip x={180} y={RY + 154} text={label} color={chipColor} maxW={330} />
           {caution ? <Para x={20} y={cautionY} w={320} size={MIN_TEXT} lead="Check:" text={caution} /> : null}
         </Anim>
       </G>
@@ -500,6 +512,31 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
   );
 }
 
+/* What each player step SHOWS, for the image's text alternative: the
+   gauge with the client's value and where it sits, the panel's text, or the
+   verdict with its caution (Sol, round 12). */
+const where = (v, lo, hi) => (v < lo ? "below" : v > hi ? "above" : "inside");
+function valueText(p, k) {
+  if (!p) return "";
+  const [name, unit, lo, hi] = { ph: ["pH", "", 7.35, 7.45], paco2: ["PaCO₂", " mmHg", 35, 45], hco3: ["HCO₃⁻", " mEq/L", 22, 26] }[k];
+  return ` This client's ${name} is ${showAbg(p, k)}${unit}, ${where(p[k], lo, hi)} the reference range ${lo}–${hi}.`;
+}
+export function abgStepDesc(key, p) {
+  const gas = p && p.ph != null ? p : null;
+  if (key === "ph") return `Gauge 1, pH, the net state: reference 7.35–7.45; below is acidemia, above is alkalemia.${valueText(gas, "ph")}`;
+  if (key === "lungs") return `Gauge 2, PaCO₂ in mmHg (the lungs; CO₂ is an acid): reference 35–45; a high PaCO₂ pushes toward acid.${valueText(gas, "paco2")}`;
+  if (key === "kidneys") return `Gauge 3, HCO₃⁻ in mEq/L (the kidneys; a base): reference 22–26; low pushes toward acid, high toward base.${valueText(gas, "hco3")}`;
+  if (key === "rome") return "Panel 4, match the pH with ROME: Respiratory Opposite, pH and PaCO₂ move apart (drawn as a seesaw); Metabolic Equal, pH and HCO₃⁻ move together (drawn as a lift).";
+  if (key === "compensation") return "Three tiles. Uncompensated: pH out; other value still in its range. Partial: pH still out; other value out of range, opposing its effect on pH. Full: pH in range; both out, with opposing effects on pH. Below: pH in range with one value out, can't tell; both pushing the same way, a combined disorder; NCLEX labels, then check the limits.";
+  if (key === "limits") return `Panel 5, expected compensation: ${RULES.map(([a, b]) => `${a ? `${a} ` : ""}${b}`).join(". ")}.`;
+  if (key === "worked") {
+    if (!gas) return "Read pH, then PaCO₂, then HCO₃⁻, then match.";
+    const r = interpretAbg(gas);
+    return `${valueText(gas, "ph").trim()}${valueText(gas, "paco2")}${valueText(gas, "hco3")} Verdict: ${verdictLabel(r)}.${r.caution ? ` Check: ${r.caution}` : ""}`;
+  }
+  return null;
+}
+
 export const abg = {
   id: "abg",
   title: "ABG: acid–base reading",
@@ -521,19 +558,19 @@ export const abg = {
     "This diagram reads acid–base balance only. Oxygenation (PaO₂, SaO₂) is assessed separately: acid–base values in range do not mean the whole ABG is normal.",
   ],
   steps: [
-    { key: "ph", focus: ["ph"], caption: "Start with pH, the net state of the blood. Below 7.35 is acidemia, above 7.45 is alkalemia. Exam materials often say acidosis and alkalosis, but those name the processes, and more than one can be at work. pH tells you the net state, not yet where it came from.",
+    { key: "ph", desc: (p) => abgStepDesc("ph", p), focus: ["ph"], caption: "Start with pH, the net state of the blood. Below 7.35 is acidemia, above 7.45 is alkalemia. Exam materials often say acidosis and alkalosis, but those name the processes, and more than one can be at work. pH tells you the net state, not yet where it came from.",
       narration: "Start with the pH, the net state of the blood. Anything below seven point three five is acidemia. Anything above seven point four five is alkalemia. Exam materials often say acidosis and alkalosis, but those words name the processes, and more than one can be at work. The pH tells you the net state, not yet where it came from." },
-    { key: "lungs", focus: ["co2"], caption: "Now the lungs. CO₂ behaves like an acid, so a PaCO₂ above 45 pushes the blood toward acid. Notice its acid end is on the right, the opposite of the pH line.",
+    { key: "lungs", desc: (p) => abgStepDesc("lungs", p), focus: ["co2"], caption: "Now the lungs. CO₂ behaves like an acid, so a PaCO₂ above 45 pushes the blood toward acid. Notice its acid end is on the right, the opposite of the pH line.",
       narration: "Now look at the lungs. Carbon dioxide behaves like an acid, so a P-A-C-O-2 above forty-five pushes the blood toward acid. Notice that its acid end is on the right, the opposite way round from the pH line." },
-    { key: "kidneys", focus: ["hco3"], caption: "Then the kidneys. Bicarbonate is a base: below 22 pushes toward acidosis, above 26 toward alkalosis. The actual pH depends on how it balances against PaCO₂.",
+    { key: "kidneys", desc: (p) => abgStepDesc("kidneys", p), focus: ["hco3"], caption: "Then the kidneys. Bicarbonate is a base: below 22 pushes toward acidosis, above 26 toward alkalosis. The actual pH depends on how it balances against PaCO₂.",
       narration: "Then the kidneys. Bicarbonate is a base. Below twenty-two pushes toward acidosis, and above twenty-six pushes toward alkalosis. The actual pH depends on how it balances against the P-A-C-O-2." },
-    { key: "rome", focus: ["rome"], caption: "Find the value that matches the pH. ROME: Respiratory, pH and PaCO₂ move Opposite ways. Metabolic, pH and HCO₃⁻ move the Equal way. If both values push the pH the same way, both are primary: a combined disorder.",
+    { key: "rome", desc: (p) => abgStepDesc("rome", p), focus: ["rome"], caption: "Find the value that matches the pH. ROME: Respiratory, pH and PaCO₂ move Opposite ways. Metabolic, pH and HCO₃⁻ move the Equal way. If both values push the pH the same way, both are primary: a combined disorder.",
       narration: "Now find the value that matches the pH, using ROME. Respiratory: the pH and P-A-C-O-2 move in opposite directions. Metabolic: the pH and bicarbonate move in the same direction. And if both values are pushing the pH the same way, both are primary problems: that is a combined disorder." },
-    { key: "compensation", focus: ["comp"], caption: "Compensation is the other system offsetting the first: its effect on pH opposes the first value's. In compensation PaCO₂ and HCO₃⁻ usually rise together or fall together, because a high PaCO₂ pushes toward acid and a high HCO₃⁻ toward base. NCLEX labels use the reference ranges: pH out with the other value still in range, uncompensated; pH out with the other value out of range, opposing, partially compensated; pH back in range with both values out of range and opposing effects on pH, fully compensated. With the pH in range and only one value out, compensation can't be established from these values. If both values push the pH the same way, it is a combined disorder, not compensation.",
+    { key: "compensation", desc: (p) => abgStepDesc("compensation", p), focus: ["comp"], caption: "Compensation is the other system offsetting the first: its effect on pH opposes the first value's. In compensation PaCO₂ and HCO₃⁻ usually rise together or fall together, because a high PaCO₂ pushes toward acid and a high HCO₃⁻ toward base. NCLEX labels use the reference ranges: pH out with the other value still in range, uncompensated; pH out with the other value out of range, opposing, partially compensated; pH back in range with both values out of range and opposing effects on pH, fully compensated. With the pH in range and only one value out, compensation can't be established from these values. If both values push the pH the same way, it is a combined disorder, not compensation.",
       narration: "Compensation is the other system offsetting the first, so its effect on the pH opposes the first value's. In compensation, the P-A-C-O-2 and the bicarbonate usually rise together or fall together, because a high P-A-C-O-2 pushes toward acid and a high bicarbonate pushes toward base. The NCLEX labels use the reference ranges. If the pH is out of range and the other value is still in its range, it is called uncompensated. If the other value is out of its range, opposing, but the pH is still abnormal, it is partially compensated. If the pH is back in range and both values are out of range with opposing effects on the pH, it is fully compensated. With the pH in range and only one value out, compensation can't be established from these values. And if both values push the pH the same way, that is a combined disorder, not compensation." },
-    { key: "limits", focus: ["rules"], caption: "Then check the expected compensation. Metabolic acidosis: PaCO₂ about 1.5 × HCO₃⁻ + 8, ± 2. Metabolic alkalosis: two rules are in use, PaCO₂ about 0.7 × HCO₃⁻ + 21 or 40 + 0.7 × (HCO₃⁻ − 24), each ± 2 (they differ by about 2), and rarely above about 55; a value fitting either counts. For respiratory disorders, start from PaCO₂ 40 and HCO₃⁻ 24. Respiratory acidosis: HCO₃⁻ ≈ 24 + k × ((PaCO₂ − 40) ÷ 10), with k = 1 if acute or 4 if chronic, ± 2. Respiratory alkalosis: HCO₃⁻ ≈ 24 − k × ((40 − PaCO₂) ÷ 10), with k = 2 if acute or 5 if chronic, ± 2. These are approximations that assume compensation is established; well outside suggests a mixed disorder.",
+    { key: "limits", desc: (p) => abgStepDesc("limits", p), focus: ["rules"], caption: "Then check the expected compensation. Metabolic acidosis: PaCO₂ about 1.5 × HCO₃⁻ + 8, ± 2. Metabolic alkalosis: two rules are in use, PaCO₂ about 0.7 × HCO₃⁻ + 21 or 40 + 0.7 × (HCO₃⁻ − 24), each ± 2 (they differ by about 2), and rarely above about 55; a value fitting either counts. For respiratory disorders, start from PaCO₂ 40 and HCO₃⁻ 24. Respiratory acidosis: HCO₃⁻ ≈ 24 + k × ((PaCO₂ − 40) ÷ 10), with k = 1 if acute or 4 if chronic, ± 2. Respiratory alkalosis: HCO₃⁻ ≈ 24 − k × ((40 − PaCO₂) ÷ 10), with k = 2 if acute or 5 if chronic, ± 2. These are approximations that assume compensation is established; well outside suggests a mixed disorder.",
       narration: "Then check the expected compensation. In metabolic acidosis, the P-A-C-O-2 should be about one and a half times the bicarbonate, plus eight, give or take two. In metabolic alkalosis, two rules are in use: about zero point seven times the bicarbonate, plus twenty-one, or forty plus zero point seven times the quantity, bicarbonate minus twenty-four. Each is give or take two, they differ by about two, and a value fitting either one counts. It rarely goes above about fifty-five. For respiratory disorders, start from a P-A-C-O-2 of forty and a bicarbonate of twenty-four. In respiratory acidosis, the bicarbonate rises from twenty-four by about one for every ten the P-A-C-O-2 is above forty when it's acute, and about four when it's chronic, give or take two. In respiratory alkalosis, it falls from twenty-four by about two for every ten below forty when acute, and about five when chronic, give or take two. These are approximations that assume compensation is established, and a value well outside them suggests a mixed disorder." },
-    { key: "worked", focus: ["ph", "co2", "hco3", "result"], dynamic: true, caption: null,
+    { key: "worked", desc: (p) => abgStepDesc("worked", p), focus: ["ph", "co2", "hco3", "result"], dynamic: true, caption: null,
       narration: null },
   ],
   /* The worked-example step reads the actual values, so it is written by

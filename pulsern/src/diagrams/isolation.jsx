@@ -50,10 +50,12 @@ function NegRoom({ x, y }) {
 
 /* ---- transmission scenes ----
    Each row opens with a small scene of HOW the organism spreads, which is
-   what decides the precaution. Germs and particles are drawn in the lab
-   ink tone (a hazard, not an error, so not coral). Static views show the
+   what decides the precaution. Germs and particles are drawn in opaque
+   body ink (a hazard, not an error, so not coral). Static views show the
    scene still; on its step it moves. */
-const GERM = C.labInk;
+/* Opaque body ink, so even the tiniest particle meets contrast on the
+   tinted scenes in both themes (Sol, round 12: lab ink at 75% did not). */
+const GERM = C.ink;
 
 /* A client in profile, facing right. `masked` puts a surgical mask on
    (the transport step). */
@@ -114,7 +116,7 @@ function DropletScene({ x, y }) {
   return (
     <SceneCard x={x} y={y}>
       <Profile x={x + 17} y={y + 22} masked />
-      {[[mx + 12, floor - 6], [mx + 19, floor - 3], [mx + 26, floor - 5]].map(([dx, dy], i) => <circle key={i} cx={dx} cy={dy} r={2.6} fill={GERM} fillOpacity={0.8} />)}
+      {[[mx + 12, floor - 6], [mx + 19, floor - 3], [mx + 26, floor - 5]].map(([dx, dy], i) => <circle key={i} cx={dx} cy={dy} r={2.6} fill={GERM} />)}
       <Loop on="droplet">
         {arcs.map((d, i) => <Flow key={i} d={d} n={2} dur={1.6 + i * 0.2} r={2.6} color={GERM} shape="dot" />)}
       </Loop>
@@ -134,9 +136,9 @@ function AirborneScene({ x, y }) {
   return (
     <SceneCard x={x} y={y}>
       <Profile x={x + 17} y={y + 22} masked />
-      {AIR_DOTS.map(([dx, dy], i) => <circle key={i} cx={x + dx} cy={y + dy} r={1.1} fill={GERM} fillOpacity={0.75} />)}
+      {AIR_DOTS.map(([dx, dy], i) => <circle key={i} cx={x + dx} cy={y + dy} r={1.6} fill={GERM} />)}
       <Loop on="airborne">
-        {paths.map((d, i) => <Flow key={i} d={d} n={3} dur={4 + i * 0.6} r={1.2} color={GERM} shape="dot" />)}
+        {paths.map((d, i) => <Flow key={i} d={d} n={3} dur={4 + i * 0.6} r={1.6} color={GERM} shape="dot" />)}
       </Loop>
     </SceneCard>
   );

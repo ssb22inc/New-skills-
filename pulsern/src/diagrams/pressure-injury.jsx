@@ -400,6 +400,20 @@ export function PressureInjuryDiagram({ focus = null }) {
   );
 }
 
+/* What each player step SHOWS, for the image's text alternative (Sol,
+   round 12): the cross-sections, the stage definitions on screen, and the
+   boxes' text. */
+const COLUMNS_TEXT = "Four cross-sections of the same skin, Stage 1 to Stage 4, through epidermis, dermis, fat, muscle and bone (legend below). Stage 1: intact skin with a dashed red area. Stage 2: a shallow wound into the dermis. Stage 3: a wound into the fat, with fat lobules and labelled slough on its bed. Stage 4: a wound down to muscle.";
+const stageText = (i) => `${STAGES[i][0]}: ${STAGES[i][1]}`;
+export function pressureStepDesc(key) {
+  if (key === "layers") return `Stages: what the tissue shows; the same skin, cut through; real depth varies. ${COLUMNS_TEXT} ${STAGES.map((_, i) => stageText(i)).join(" ")} Not a required progression; healing keeps its stage.`;
+  const m = /^stage(\d)$/.exec(key);
+  if (m) return `${COLUMNS_TEXT} The Stage ${m[1]} column is outlined. ${stageText(Number(m[1]) - 1)}`;
+  if (key === "other") return `Unstageable: a strip with slough or eschar over the base and a question mark below. ${UNSTAGEABLE} Deep tissue injury: a strip down to bone, with damage at the bone–muscle interface spreading up under a dark patch of skin. ${DTPI}`;
+  if (key === "prevent") return `Prevent: ${PREVENT.map(([, a, b]) => `${a}, ${b}`).join("; ")}. ${PREVENT_NOTE}`;
+  return null;
+}
+
 export const pressureInjury = {
   id: "pressure-injury",
   title: "Pressure injury stages",
@@ -418,19 +432,19 @@ export const pressureInjury = {
     "Prevention includes repositioning on an individualized schedule that is reassessed (every 2 hours is a commonly specified schedule), keeping the head of the bed at or below 30 degrees if clinically appropriate to reduce shear (respiratory or aspiration-prevention needs may require a higher position), pressure-redistributing support surfaces, keeping skin clean and dry, and adequate protein, calories and fluids.",
   ],
   steps: [
-    { key: "layers", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r1", "r2", "r3", "r4", "note"], caption: "Each column is the same skin cut through: epidermis, dermis, fat, muscle and bone. Stages describe what the tissue shows and how much is lost; real depth varies by location, and stages are not a required progression.",
+    { key: "layers", desc: (p) => pressureStepDesc("layers", p), focus: ["head", "s1", "s2", "s3", "s4", "legend", "r1", "r2", "r3", "r4", "note"], caption: "Each column is the same skin cut through: epidermis, dermis, fat, muscle and bone. Stages describe what the tissue shows and how much is lost; real depth varies by location, and stages are not a required progression.",
       narration: "Each column is the same skin, cut through: the epidermis, the dermis, fat, muscle, and bone. A stage describes what the tissue shows and how much tissue is lost. Real depth varies from one part of the body to another, and the stages are not a required progression." },
-    { key: "stage1", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r1"], caption: "Stage 1: the skin is intact, with redness that does not blanch when pressed. In darker skin the color change can look different, so warmth, firmness and sensation are also checked.",
+    { key: "stage1", desc: (p) => pressureStepDesc("stage1", p), focus: ["head", "s1", "s2", "s3", "s4", "legend", "r1"], caption: "Stage 1: the skin is intact, with redness that does not blanch when pressed. In darker skin the color change can look different, so warmth, firmness and sensation are also checked.",
       narration: "Stage one. The skin is intact, with an area of redness that does not blanch when you press on it. In darker skin the color change can look different, so warmth, firmness, and sensation are checked too." },
-    { key: "stage2", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r2"], caption: "Stage 2: partial-thickness loss with exposed dermis: a shallow, pink, moist wound, or an intact or ruptured serum-filled blister. No fat, granulation tissue, slough or eschar. It is only for pressure-related injury, not moisture damage, skin tears, burns or abrasions.",
+    { key: "stage2", desc: (p) => pressureStepDesc("stage2", p), focus: ["head", "s1", "s2", "s3", "s4", "legend", "r2"], caption: "Stage 2: partial-thickness loss with exposed dermis: a shallow, pink, moist wound, or an intact or ruptured serum-filled blister. No fat, granulation tissue, slough or eschar. It is only for pressure-related injury, not moisture damage, skin tears, burns or abrasions.",
       narration: "Stage two is partial-thickness loss with exposed dermis. It looks like a shallow, pink, moist wound, or an intact or ruptured blister filled with clear serum. There is no fat, granulation tissue, slough, or eschar. And Stage 2 is only for injury from pressure, not for moisture damage, skin tears, burns, or abrasions." },
-    { key: "stage3", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r3"], caption: "Stage 3: full-thickness loss with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage or bone is exposed or directly palpable.",
+    { key: "stage3", desc: (p) => pressureStepDesc("stage3", p), focus: ["head", "s1", "s2", "s3", "s4", "legend", "r3"], caption: "Stage 3: full-thickness loss with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage or bone is exposed or directly palpable.",
       narration: "Stage three is full-thickness loss, with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage, or bone is exposed, or directly palpable." },
-    { key: "stage4", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r4"], caption: "Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone.",
+    { key: "stage4", desc: (p) => pressureStepDesc("stage4", p), focus: ["head", "s1", "s2", "s3", "s4", "legend", "r4"], caption: "Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone.",
       narration: "Stage four is full-thickness loss, with fascia, muscle, tendon, ligament, cartilage, or bone exposed, or directly palpable." },
-    { key: "other", focus: ["other"], caption: "Unstageable: slough or eschar hides the base, so the extent of loss can't be confirmed. Deep tissue injury: intact or non-intact skin with a persistent, non-blanchable deep red, maroon or purple area, a blood-filled blister, or epidermal separation showing a dark wound bed.",
+    { key: "other", desc: (p) => pressureStepDesc("other", p), focus: ["other"], caption: "Unstageable: slough or eschar hides the base, so the extent of loss can't be confirmed. Deep tissue injury: intact or non-intact skin with a persistent, non-blanchable deep red, maroon or purple area, a blood-filled blister, or epidermal separation showing a dark wound bed.",
       narration: "If slough or eschar covers the base, the extent of loss can't be confirmed, so the injury is unstageable. A deep tissue injury can be on intact or broken skin: a persistent, non-blanchable area of deep red, maroon, or purple, a blood-filled blister, or skin separating to show a dark wound bed." },
-    { key: "prevent", focus: ["prevent"], caption: "Prevention: assess with the Braden scale, where a lower score means higher risk. Reposition on an individualized schedule (every 2 hours is a common NCLEX schedule), keep the head of the bed at 30° or lower if clinically appropriate, use a support surface, keep skin clean and dry, and support nutrition.",
+    { key: "prevent", desc: (p) => pressureStepDesc("prevent", p), focus: ["prevent"], caption: "Prevention: assess with the Braden scale, where a lower score means higher risk. Reposition on an individualized schedule (every 2 hours is a common NCLEX schedule), keep the head of the bed at 30° or lower if clinically appropriate, use a support surface, keep skin clean and dry, and support nutrition.",
       narration: "Prevention starts with the Braden scale, and remember, a lower score means a higher risk. Reposition the client on an individualized schedule; every two hours is a common schedule on the exam. Keep the head of the bed at thirty degrees or lower if that is clinically appropriate, use a pressure-redistributing surface, keep the skin clean and dry, and make sure they get enough protein, calories, and fluids." },
   ],
 };

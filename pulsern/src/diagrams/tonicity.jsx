@@ -219,6 +219,23 @@ export function TonicityDiagram({ focus = null }) {
   );
 }
 
+/* What each player step SHOWS, for the image's text alternative (Sol,
+   round 12): the panels, the full bag lists and the boxes' text. */
+const INTRO_TEXT = "Water moves toward more effective solute. Effective solute: cannot cross into the cell. Legend: dots are effective solute; drops are water.";
+const KEY_TEXT = "Each panel: top, equal-size samples of cell and fluid; bottom, the cell after, with a dashed ring at its start size.";
+const PANELS_TEXT = "Isotonic: the same effective solute inside and out; arrows both ways; no net shift, same size. Hypotonic: less solute in the fluid; water in, the cell swells. Hypertonic: more solute in the fluid; water out, the cell shrinks.";
+const listsText = () => `Bags by in-bag osmolarity: ${LISTS.map(([k, t]) => `${k}: ${t.replace(/\u00a0/g, " ")}`).join(". ")}. A star marks a dextrose bag.`;
+export function tonicityStepDesc(key) {
+  return {
+    isotonic: `${INTRO_TEXT} ${KEY_TEXT} ${PANELS_TEXT} The isotonic panel is outlined.`,
+    hypotonic: `${KEY_TEXT} ${PANELS_TEXT} The hypotonic panel is outlined.`,
+    hypertonic: `${KEY_TEXT} ${PANELS_TEXT} The hypertonic panel is outlined.`,
+    bags: listsText(),
+    dextrose: `${listsText()} The dextrose catch: ${DEX.join(" ")}`,
+    safety: `Safety: ${SAFE.join(" ")}`,
+  }[key] ?? null;
+}
+
 export const tonicity = {
   id: "tonicity",
   title: "IV fluid tonicity",
@@ -235,17 +252,17 @@ export const tonicity = {
     "Clients receiving isotonic or hypertonic fluids are monitored for fluid volume overload.",
   ],
   steps: [
-    { key: "isotonic", focus: ["intro", "key", "iso", "hypo", "hyper"], caption: "Water moves toward the side with more effective solute: solutes that can't freely cross the cell membrane in that time. Isotonic fluid has the same effective solute concentration as the cell, so there is no net water shift: water keeps moving both ways at the same rate and the cell keeps its size. Isotonic crystalloids such as normal saline and LR expand the fluid outside the cells, in the vessels and the tissues, which is why they are used to replace volume.",
+    { key: "isotonic", desc: (p) => tonicityStepDesc("isotonic", p), focus: ["intro", "key", "iso", "hypo", "hyper"], caption: "Water moves toward the side with more effective solute: solutes that can't freely cross the cell membrane in that time. Isotonic fluid has the same effective solute concentration as the cell, so there is no net water shift: water keeps moving both ways at the same rate and the cell keeps its size. Isotonic crystalloids such as normal saline and LR expand the fluid outside the cells, in the vessels and the tissues, which is why they are used to replace volume.",
       narration: "Water moves toward the side with more effective solute. Effective solutes are the ones that can't freely cross the cell membrane in that time. Isotonic fluid has the same effective solute concentration as the cell, so there is no net water shift. Water keeps moving both ways at the same rate, and the cell keeps its size. Isotonic crystalloids, such as normal saline and lactated Ringer's, expand the fluid outside the cells, in the blood vessels and in the tissues, which is why they are used to replace volume." },
-    { key: "hypotonic", focus: ["key", "iso", "hypo", "hyper"], caption: "Hypotonic fluid has less effective solute than the cell, so water moves into the cell and it swells.",
+    { key: "hypotonic", desc: (p) => tonicityStepDesc("hypotonic", p), focus: ["key", "iso", "hypo", "hyper"], caption: "Hypotonic fluid has less effective solute than the cell, so water moves into the cell and it swells.",
       narration: "Hypotonic fluid has less effective solute than the inside of the cell, so water moves into the cell, and the cell swells." },
-    { key: "hypertonic", focus: ["key", "iso", "hypo", "hyper"], caption: "Hypertonic fluid, like 3% saline, has more effective solute than the cell, so water is pulled out of the cell into the fluid around it, and the cell shrinks.",
+    { key: "hypertonic", desc: (p) => tonicityStepDesc("hypertonic", p), focus: ["key", "iso", "hypo", "hyper"], caption: "Hypertonic fluid, like 3% saline, has more effective solute than the cell, so water is pulled out of the cell into the fluid around it, and the cell shrinks.",
       narration: "Hypertonic fluid, like three percent saline, has more effective solute than the cell, so water is pulled out of the cell and into the fluid around it, and the cell shrinks." },
-    { key: "bags", focus: ["fluids"], caption: "Know which bag is which. These are the usual NCLEX categories, by osmolarity in the bag: osmolarity counts every particle, while tonicity is what changes cell size. They mostly agree, but dextrose is the catch: D5W is about iso-osmolar in the bag, yet acts hypotonic once the glucose is used.",
+    { key: "bags", desc: (p) => tonicityStepDesc("bags", p), focus: ["fluids"], caption: "Know which bag is which. These are the usual NCLEX categories, by osmolarity in the bag: osmolarity counts every particle, while tonicity is what changes cell size. They mostly agree, but dextrose is the catch: D5W is about iso-osmolar in the bag, yet acts hypotonic once the glucose is used.",
       narration: "Know which bag is which. These are the usual NCLEX categories, sorted by osmolarity in the bag. Osmolarity counts every particle, while tonicity is what actually changes cell size. They mostly agree, but dextrose is the catch. D-five-W is about iso-osmolar in the bag, yet it acts hypotonic once the glucose is used." },
-    { key: "dextrose", focus: ["fluids", "dextrose"], caption: "Dextrose is usually cleared quickly; if delivery outpaces uptake, as with impaired insulin action, glucose builds up. Once it is used, the fluid acts like what is left: D5W and D10W become free water, D5 ½NS acts like ½NS, and D5NS and D5LR act like their isotonic bases. Once the dextrose is used, 3% saline is the bag shown that stays hypertonic; if glucose builds up instead, dextrose fluids can raise plasma tonicity too.",
+    { key: "dextrose", desc: (p) => tonicityStepDesc("dextrose", p), focus: ["fluids", "dextrose"], caption: "Dextrose is usually cleared quickly; if delivery outpaces uptake, as with impaired insulin action, glucose builds up. Once it is used, the fluid acts like what is left: D5W and D10W become free water, D5 ½NS acts like ½NS, and D5NS and D5LR act like their isotonic bases. Once the dextrose is used, 3% saline is the bag shown that stays hypertonic; if glucose builds up instead, dextrose fluids can raise plasma tonicity too.",
       narration: "Dextrose is usually cleared quickly. But if it is given faster than the body can take it up, as with impaired insulin action, glucose builds up. Once it is used, the fluid acts like whatever is left. D-five-W and D-ten-W become free water. D-five half-normal saline acts like half-normal saline. And D-five normal saline and D-five lactated Ringer's act like their isotonic bases. Once the dextrose has been used, three percent saline is the bag shown that stays hypertonic. But if glucose builds up instead, the dextrose fluids can raise plasma tonicity too." },
-    { key: "safety", focus: ["safety"], caption: "Hypotonic fluid can worsen cerebral edema, so it is generally avoided with increased intracranial pressure or an acute brain injury; the right fluid depends on the clinical picture. Watch isotonic and hypertonic infusions for fluid overload.",
+    { key: "safety", desc: (p) => tonicityStepDesc("safety", p), focus: ["safety"], caption: "Hypotonic fluid can worsen cerebral edema, so it is generally avoided with increased intracranial pressure or an acute brain injury; the right fluid depends on the clinical picture. Watch isotonic and hypertonic infusions for fluid overload.",
       narration: "Hypotonic fluid can make cerebral edema worse, so it is generally avoided with increased intracranial pressure or an acute brain injury. The right fluid depends on the whole clinical picture. And watch anyone on isotonic or hypertonic fluids for fluid overload." },
   ],
 };

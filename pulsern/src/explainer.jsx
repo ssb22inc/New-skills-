@@ -67,6 +67,16 @@ export function afterClip({ reduce, step, n, go }) {
   return true;
 }
 
+/* The picture's text alternative for a player step: what that step SHOWS,
+   including the client's own values, written by the diagram (a string, or
+   a function of the params); the spoken caption only when it gives none
+   (Sol, rounds 11–12: a caption alone left out the values and lists on
+   screen). */
+export function stepDesc(s, params, caption) {
+  if (typeof s?.desc === "function") return s.desc(params) ?? caption;
+  return s?.desc ?? caption;
+}
+
 export const AI_NOTE = "✨ AI-drafted · verify against your course materials";
 export const EDU_NOTE = "Educational exam prep, not instructions for real-world care.";
 export function verificationLabel(rnVerified) {
@@ -178,7 +188,7 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
       </div>
       {/* The step key lets each step play its own motion (a wound deepening,
           water crossing a membrane); without it the diagram is static. */}
-      <StepContext.Provider value={{ stepKey: inSteps ? steps[step].key : null, still: !playing, caption: inSteps ? (steps[step].desc ?? caption) : null }}>
+      <StepContext.Provider value={{ stepKey: inSteps ? steps[step].key : null, still: !playing, caption: inSteps ? stepDesc(steps[step], params === undefined ? diagram.example : params, caption) : null }}>
         <D params={params === undefined ? diagram.example : params} focus={inSteps ? steps[step].focus : null} />
       </StepContext.Provider>
       {inSteps ? (
@@ -187,7 +197,12 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
           {clipUrl ? <audio ref={audioRef} src={clipUrl} preload="auto" onEnded={() => setPlaying(afterClip({ reduce, step, n, go }))} /> : null}
           <div className="dg-controls">
             <button type="button" className="dg-btn ghost" onClick={() => go(step - 1)} disabled={step === 0} aria-label="Previous step">‹</button>
-            <button type="button" className="dg-btn" onClick={() => setPlaying((p) => !p)} aria-label={playing ? "Pause" : "Play"}>{playing ? "Pause" : "Play"}</button>
+            {/* With reduced motion and no narration there is nothing to play,
+                so no Play button: the student steps through by hand (Sol,
+                round 12: Play only changed its own label). */}
+            {reduce && !clipUrl
+              ? <span className="dg-btn ghost" role="note">Step with ‹ ›</span>
+              : <button type="button" className="dg-btn" onClick={() => setPlaying((p) => !p)} aria-label={playing ? "Pause" : "Play"}>{playing ? "Pause" : "Play"}</button>}
             <div className="dg-dots" role="group" aria-label="Steps">
               {steps.map((_, i) => (
                 <button key={i} type="button" className={`dg-dot${i === step ? " on" : ""}`} aria-label={`Step ${i + 1}`} aria-current={i === step ? "step" : undefined} onClick={() => go(i)} />

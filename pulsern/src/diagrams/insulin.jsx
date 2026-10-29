@@ -299,6 +299,24 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   );
 }
 
+/* What each player step SHOWS, for the image's text alternative (Sol,
+   round 12): the curves on screen and the table, every row's onset, peak
+   and duration. */
+const CHART_TEXT = "Chart of typical subcutaneous action, hours after the dose, 0 to 24; illustrative curves whose heights don't compare strength.";
+const TABLE_TEXT = `Table: ${ROWS.map(([, a, b, c, d]) => `${a}, onset ${b}, peak ${c}, lasts ${d}`).join("; ")}.`;
+const curveText = { rapid: "rapid-acting curve: onset, peak and end marked", short: "short-acting regular U-100 curve: onset, peak and end marked", nph: "NPH curve: onset, broad peak and end marked", long: "glargine U-100 curve: onset marked, no pronounced peak, wanes about 24 hours" };
+export function insulinStepDesc(key, p) {
+  if (key === "idea") return `${CHART_TEXT} Shown: the ${curveText.rapid}.`;
+  if (curveText[key]) return `${CHART_TEXT} Shown: the ${curveText[key]}${key === "rapid" ? "; a meal symbol, labelled meal-time, timing follows the product" : ""}. The ${key === "long" ? "glargine" : key} row of the table is highlighted. ${TABLE_TEXT}${key === "long" ? ` ${NOTE}` : ""}`;
+  if (key === "risk") return `${CHART_TEXT} All four curves, with amber bands at each expected peak. Around a peak: highest hypoglycemia risk. ${RISK}`;
+  if (key === "worked") {
+    if (!p) return CHART_TEXT;
+    const pw = peakWindow(p.type, p.givenAt);
+    return `${CHART_TEXT} ${WORKED_LABEL[p.type]}, dose at ${p.givenAt}: ${pw ? `peak about ${windowText(pw)}, shaded on the chart` : "no pronounced peak"}. Around a peak: highest hypoglycemia risk. ${RISK}`;
+  }
+  return null;
+}
+
 export const insulin = {
   id: "insulin",
   title: "Insulin action times",
@@ -317,19 +335,19 @@ export const insulin = {
     "Action times vary by product and source; the product's labeling is the authority.",
   ],
   steps: [
-    { key: "idea", focus: ["axes", "rapid"], caption: "Every insulin has an onset (when it starts working) and a duration (how long it lasts). Most also have a peak, when they work hardest; glargine U-100 has no pronounced peak.",
+    { key: "idea", desc: (p) => insulinStepDesc("idea", p), focus: ["axes", "rapid"], caption: "Every insulin has an onset (when it starts working) and a duration (how long it lasts). Most also have a peak, when they work hardest; glargine U-100 has no pronounced peak.",
       narration: "Every insulin has an onset, when it starts working, and a duration, how long it lasts. Most also have a peak, when they work hardest. Glargine U-one-hundred has no pronounced peak." },
-    { key: "rapid", focus: ["axes", "rapid", "rapid-meal", "table"], caption: "Rapid-acting insulin (lispro, aspart, glulisine) starts in 10 to 30 minutes, peaks in 1 to 2 hours and lasts 3 to 5 hours. It is meal-time insulin; exact timing follows the specific product and the prescribed plan.",
+    { key: "rapid", desc: (p) => insulinStepDesc("rapid", p), focus: ["axes", "rapid", "rapid-meal", "table"], caption: "Rapid-acting insulin (lispro, aspart, glulisine) starts in 10 to 30 minutes, peaks in 1 to 2 hours and lasts 3 to 5 hours. It is meal-time insulin; exact timing follows the specific product and the prescribed plan.",
       narration: "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in ten to thirty minutes, peaks in one to two hours, and lasts three to five hours. It is meal-time insulin, and its exact timing follows the specific product and the prescribed plan." },
-    { key: "short", focus: ["axes", "short", "table"], caption: "Regular U-100 insulin given subcutaneously starts in 30 to 60 minutes, peaks at 2 to 4 hours and lasts 5 to 8 hours. Regular U-100 given IV acts much faster. Concentrated regular U-500 acts differently and is never given IV.",
+    { key: "short", desc: (p) => insulinStepDesc("short", p), focus: ["axes", "short", "table"], caption: "Regular U-100 insulin given subcutaneously starts in 30 to 60 minutes, peaks at 2 to 4 hours and lasts 5 to 8 hours. Regular U-100 given IV acts much faster. Concentrated regular U-500 acts differently and is never given IV.",
       narration: "Regular U-one-hundred insulin given under the skin starts in thirty to sixty minutes, peaks at two to four hours, and lasts five to eight hours. Regular U-one-hundred given intravenously acts much faster. Concentrated regular U-five-hundred acts differently, and it is never given intravenously." },
-    { key: "nph", focus: ["axes", "nph", "table"], caption: "Intermediate NPH starts in 1 to 2 hours, has a long, broad peak from about 4 to 12 hours, and lasts 12 to 18 hours.",
+    { key: "nph", desc: (p) => insulinStepDesc("nph", p), focus: ["axes", "nph", "table"], caption: "Intermediate NPH starts in 1 to 2 hours, has a long, broad peak from about 4 to 12 hours, and lasts 12 to 18 hours.",
       narration: "Intermediate-acting N-P-H starts in one to two hours, has a long, broad peak from about four to twelve hours, and lasts twelve to eighteen hours." },
-    { key: "long", focus: ["axes", "long", "table", "note"], caption: "Long-acting glargine U-100 starts in 1 to 2 hours and has no pronounced peak: a steady background level that wanes at about 24 hours. Other basal insulins, including glargine U-300, last differently, so check the product.",
+    { key: "long", desc: (p) => insulinStepDesc("long", p), focus: ["axes", "long", "table", "note"], caption: "Long-acting glargine U-100 starts in 1 to 2 hours and has no pronounced peak: a steady background level that wanes at about 24 hours. Other basal insulins, including glargine U-300, last differently, so check the product.",
       narration: "Long-acting glargine U-one-hundred starts in one to two hours, and has no pronounced peak. It provides a steady background level that wanes at about twenty-four hours. Other basal insulins, including glargine U-three-hundred, last differently, so always check the product." },
-    { key: "risk", focus: ["axes", "rapid", "short", "nph", "long", "peak-risk"], caption: "Exam questions often test the higher risk of hypoglycemia around an expected peak. Lows can also happen at other times, including with peakless insulin.",
+    { key: "risk", desc: (p) => insulinStepDesc("risk", p), focus: ["axes", "rapid", "short", "nph", "long", "peak-risk"], caption: "Exam questions often test the higher risk of hypoglycemia around an expected peak. Lows can also happen at other times, including with peakless insulin.",
       narration: "Exam questions often test the higher risk of hypoglycemia around an insulin's expected peak. But lows can also happen at other times, including with peakless insulin." },
-    { key: "worked", focus: ["axes", "worked", "peak-risk"], dynamic: true, caption: null, narration: null },
+    { key: "worked", desc: (p) => insulinStepDesc("worked", p), focus: ["axes", "worked", "peak-risk"], dynamic: true, caption: null, narration: null },
   ],
   dynamicCaption: ({ type, givenAt } = INSULIN_EXAMPLE) => {
     const ins = INSULINS[type];

@@ -183,3 +183,18 @@ describe("keyboard", () => {
     expect(playerKey("Enter", { tagName: "SECTION" })).toBe(null);
   });
 });
+
+/* Sol, rounds 11–12: in the player the image is described by what the step
+   shows, never only by its spoken caption. */
+describe("every step describes what it shows", () => {
+  it.each(Object.keys(DIAGRAMS))("%s", async (id) => {
+    const { stepDesc } = await import("../src/explainer.jsx");
+    const d = DIAGRAMS[id];
+    for (const s of d.steps) {
+      const text = stepDesc(s, d.example, "CAPTION");
+      expect(typeof s.desc === "function" || typeof s.desc === "string").toBe(true);
+      expect(text).not.toBe("CAPTION");
+      expect(text.length).toBeGreaterThan(40);
+    }
+  });
+});

@@ -109,3 +109,16 @@ describe("round 10", () => {
     expect(renderToStaticMarkup(<potassium.Diagram params={{ k: 6.2 }} focus={null} />)).not.toContain("not a possible result: recheck it");
   });
 });
+
+describe("round 12", () => {
+  it("describes each step with what it shows", () => {
+    const d = (k, p = { k: 6.2 }) => potassium.steps.find((s) => s.key === k).desc(p);
+    expect(d("range")).toMatch(/This client's potassium is 6\.2 mEq\/L: hyperkalemia/);
+    expect(d("range", { k: 0 })).toMatch(/not a possible result: recheck it/);
+    for (const cause of ["Kidney failure", "K⁺-sparing diuretics", "ACE inhibitors", "crush injury", "burns"]) {
+      expect(d("hyper-care")).toContain(cause);
+      expect(d("hyper-shift")).toContain(cause);
+    }
+    expect(d("hypo-care")).toMatch(/Check K⁺ level, kidney function, urine output/);
+  });
+});

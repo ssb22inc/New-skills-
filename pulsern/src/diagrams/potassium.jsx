@@ -240,6 +240,33 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
   );
 }
 
+/* What each player step SHOWS, for the image's text alternative (Sol,
+   round 12): the gauge with the client's value or the recheck notice, the
+   strip's labels, and the panels' full text. */
+const gaugeText = (p) => {
+  const base = "Serum potassium gauge in mEq/L, reference 3.5–5.0; below is hypo, above is hyper.";
+  if (!p || p.k == null) return base;
+  const st = classifyPotassium(p.k);
+  return st === "recheck"
+    ? `${base} The supplied value, ${displayK(p.k)}, is not a possible result: recheck it.`
+    : `${base} This client's potassium is ${displayK(p.k)} mEq/L: ${st}.`;
+};
+const HYPO_STRIP = "Low K⁺, below 3.5: an illustrative ECG strip that may show a flat T, ST depression and a U wave (marked).";
+const HYPER_STRIP = "High K⁺, above 5.0: an illustrative ECG strip that may show a peaked T (marked), wide QRS and flat P. A normal ECG does not rule out danger.";
+const HYPO_PANEL = `Low K⁺ panel. Causes: ${HYPO_CAUSES} IV replacement: ${HYPO_IV.map(([, t]) => t).join("; ")}.`;
+const HYPER_PANEL = `High K⁺ panel. Causes: ${HYPER_CAUSES} Severe hyperkalemia, goals can overlap: ${GOALS.map(([a, b]) => `${a} ${b}`).join(" ")}`;
+export function potassiumStepDesc(key, p) {
+  return {
+    range: gaugeText(p),
+    "hypo-ecg": HYPO_STRIP,
+    "hypo-care": `${HYPO_STRIP} ${HYPO_PANEL}`,
+    "hyper-ecg": HYPER_STRIP,
+    "hyper-care": `${HYPER_STRIP} ${HYPER_PANEL}`,
+    "hyper-shift": HYPER_PANEL,
+    worked: `${gaugeText(p)} ${HYPO_STRIP} ${HYPER_STRIP}${p && p.k != null && classifyPotassium(p.k) !== "normal" && classifyPotassium(p.k) !== "recheck" ? ` The ${classifyPotassium(p.k)} strip is outlined as this client's.` : ""}`,
+  }[key] ?? null;
+}
+
 export const potassium = {
   id: "potassium",
   title: "Potassium & the ECG",
@@ -260,19 +287,19 @@ export const potassium = {
     "Treatment goals in hyperkalemia — stabilising the heart, shifting potassium into cells (prescribed IV regular insulin with dextrose, a temporary effect; blood glucose is monitored because hypoglycemia can occur despite the dextrose, particularly in kidney failure, and potassium is reassessed) and removing it from the body — can overlap under the applicable protocol. Dialysis removes potassium definitively; a potassium-wasting loop diuretic, when indicated, needs a renal response (potassium-sparing diuretics are a cause, not a treatment); binders act slowly and are not sole rescue therapy for life-threatening hyperkalemia.",
   ],
   steps: [
-    { key: "range", focus: ["level"], caption: "Normal serum potassium is 3.5–5.0. It sets the heart's resting electrical state, so either extreme can trigger a dangerous rhythm.",
+    { key: "range", desc: (p) => potassiumStepDesc("range", p), focus: ["level"], caption: "Normal serum potassium is 3.5–5.0. It sets the heart's resting electrical state, so either extreme can trigger a dangerous rhythm.",
       narration: "Normal serum potassium is three point five to five point oh. Potassium sets the heart's resting electrical state, so a level that is either too low or too high can trigger a dangerous rhythm." },
-    { key: "hypo-ecg", focus: ["hypo"], caption: "Low potassium can flatten the T wave, depress the ST segment, and add a prominent U wave after the T. The strip is illustrative; not every client shows every change.",
+    { key: "hypo-ecg", desc: (p) => potassiumStepDesc("hypo-ecg", p), focus: ["hypo"], caption: "Low potassium can flatten the T wave, depress the ST segment, and add a prominent U wave after the T. The strip is illustrative; not every client shows every change.",
       narration: "Low potassium can flatten the T wave, push the S-T segment down, and add a prominent U wave just after the T. The strip is only an illustration, and not every client shows every change." },
-    { key: "hypo-care", focus: ["hypo", "hypo-act"], caption: "Common causes: loop and thiazide diuretics, vomiting or NG suction, diarrhea. IV potassium is never pushed or given IM: it is diluted and run on an infusion pump with the heart monitored. Before routine replacement, review the potassium, kidney function and urine output; low output or impaired kidneys need prescriber review, not automatic withholding.",
+    { key: "hypo-care", desc: (p) => potassiumStepDesc("hypo-care", p), focus: ["hypo", "hypo-act"], caption: "Common causes: loop and thiazide diuretics, vomiting or NG suction, diarrhea. IV potassium is never pushed or given IM: it is diluted and run on an infusion pump with the heart monitored. Before routine replacement, review the potassium, kidney function and urine output; low output or impaired kidneys need prescriber review, not automatic withholding.",
       narration: "The common causes are loop and thiazide diuretics, vomiting or N-G suction, and diarrhea. I-V potassium is never pushed or given into a muscle. It is diluted and run on an infusion pump while the heart is monitored. Before routine replacement, the potassium level, kidney function, and urine output are reviewed. Low output or impaired kidneys need the prescriber to review and individualize the plan, not an automatic decision to withhold it." },
-    { key: "hyper-ecg", focus: ["hyper"], caption: "High potassium can cause tall, peaked T waves, a wider QRS and a flatter P wave, but not in a reliable order, and the ECG can look normal even when the level is dangerous.",
+    { key: "hyper-ecg", desc: (p) => potassiumStepDesc("hyper-ecg", p), focus: ["hyper"], caption: "High potassium can cause tall, peaked T waves, a wider QRS and a flatter P wave, but not in a reliable order, and the ECG can look normal even when the level is dangerous.",
       narration: "High potassium can cause tall, peaked T waves, a wider Q-R-S, and a flatter P wave. But these changes do not come in a reliable order, and the E-C-G can look normal even when the level is dangerous." },
-    { key: "hyper-care", focus: ["hyper", "hyper-act"], caption: "How a raised result is handled depends on the scenario: assessing the client, cardiac monitoring and prompt escalation are prioritized together. For severe hyperkalemia, NCLEX priority reasoning uses three goals pursued alongside each other under the prescribed protocol. The first: IV calcium gluconate protects the heart when the ECG shows changes or the level is very high, and does not lower potassium.",
+    { key: "hyper-care", desc: (p) => potassiumStepDesc("hyper-care", p), focus: ["hyper", "hyper-act"], caption: "How a raised result is handled depends on the scenario: assessing the client, cardiac monitoring and prompt escalation are prioritized together. For severe hyperkalemia, NCLEX priority reasoning uses three goals pursued alongside each other under the prescribed protocol. The first: IV calcium gluconate protects the heart when the ECG shows changes or the level is very high, and does not lower potassium.",
       narration: "How a raised potassium result is handled depends on the scenario. Assessing the client, cardiac monitoring, and prompt escalation are prioritized together, and can happen at the same time. For severe hyperkalemia, NCLEX priority reasoning uses three goals that are pursued alongside each other under the prescribed protocol. The first: I-V calcium gluconate protects the heart when the E-C-G shows changes or the level is very high, and it does not lower the potassium." },
-    { key: "hyper-shift", focus: ["hyper-act"], caption: "Alongside it, prescribed IV regular insulin with dextrose shifts potassium into cells for a while: blood glucose is monitored because lows can occur despite the dextrose, and potassium is rechecked as prescribed because it can rebound. Removing potassium from the body, most definitively with dialysis, or with a potassium-wasting loop diuretic if the kidneys respond, is started as indicated rather than after the others.",
+    { key: "hyper-shift", desc: (p) => potassiumStepDesc("hyper-shift", p), focus: ["hyper-act"], caption: "Alongside it, prescribed IV regular insulin with dextrose shifts potassium into cells for a while: blood glucose is monitored because lows can occur despite the dextrose, and potassium is rechecked as prescribed because it can rebound. Removing potassium from the body, most definitively with dialysis, or with a potassium-wasting loop diuretic if the kidneys respond, is started as indicated rather than after the others.",
       narration: "Alongside it, prescribed I-V regular insulin with dextrose shifts potassium into the cells for a while. Blood glucose is monitored, because lows can still happen despite the dextrose, and potassium is rechecked as prescribed, because the shift wears off and it can rebound. And removing potassium from the body, most definitively with dialysis, or with a potassium-wasting loop diuretic if the kidneys respond, is started as indicated, not saved until the others are finished." },
-    { key: "worked", focus: ["level", "hypo", "hyper", "match"], dynamic: true, caption: null, narration: null },
+    { key: "worked", desc: (p) => potassiumStepDesc("worked", p), focus: ["level", "hypo", "hyper", "match"], dynamic: true, caption: null, narration: null },
   ],
   dynamicCaption: ({ k } = K_EXAMPLE) => {
     const s = classifyPotassium(k), v = displayK(k);
