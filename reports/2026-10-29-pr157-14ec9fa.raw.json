@@ -1,0 +1,60 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "6ecdc59dfcc66566f61b645393f189b0b73757c5",
+    "head": "14ec9fa68af2c23c01a96863f7161bbbb5094676",
+    "pr": "157"
+  },
+  "reviewedAt": "2026-10-29T18:42:38.053Z",
+  "filesReviewed": [
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-31-56-713Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-31-56-713Z.md",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-36-06-189Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-36-06-189Z.md",
+    "pulsern/reports/diagram-review/index.json",
+    "pulsern/reports/narration/run-2026-10-29T17-27-46-727Z.json",
+    "pulsern/reports/narration/run-2026-10-29T17-27-46-727Z.md",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/narration.json",
+    "pulsern/tests/narrate.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 276,
+      "title": "Unrestricted compound joining erases clinical distinctions",
+      "problem": "Joining any two alphabetic tokens treats clinically different expressions as spelling variants. For example, \"a febrile\" becomes \"afebrile\", and \"a septic\" becomes \"aseptic\". The similarity threshold does not protect these distinctions because only one space differs.",
+      "failure_scenario": "audioCheck(\"A febrile client requires further assessment for a possible infection.\", \"Afebrile client requires further assessment for a possible infection.\") returns pass=true: joinCompounds removes the mismatch and similarity remains above 0.92. A recording that changes whether the client has a fever can therefore be signed and published.",
+      "fix": "Replace unrestricted concatenation with explicitly vetted compound equivalences, such as meal-time/mealtime and iso-osmolar/isoosmolar. Add passing-baseline and rejecting-mutation tests for a febrile/afebrile and a septic/aseptic. Bump QA_VERSION when tightening the gate so existing clips are rechecked.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 282,
+      "title": "Compound equivalence is absent from the similarity check",
+      "problem": "wordMismatch compares joined compounds, but speechSimilarity still compares the original token spacing. Consequently, a spelling difference explicitly accepted by the new rule can still fail audioCheck. The added test uses a long script, which dilutes this discrepancy below the threshold.",
+      "failure_scenario": "audioCheck(\"Iso-osmolar.\", \"Isoosmolar.\") produces mismatch=null but similarity=10/11, below 0.92, and rejects the faithful transcript. Likewise, \"Pre-load and after-load.\" versus \"Preload and afterload.\" fails at 21/23 similarity. Such clips exhaust both takes and stop the recording run despite containing the accepted equivalent words.",
+      "fix": "After restricting compound equivalence safely, apply the same normalized token comparison to both wordMismatch and speechSimilarity. Add short-script and multiple-compound tests so acceptance does not depend on unrelated narration length.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 88458,
+    "completionTokens": 4205,
+    "reasoningTokens": 3624,
+    "costUsd": 0.2631935
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to ship. The new compound matcher can approve clinically opposite narration, and compound equivalence is applied inconsistently between the two QA checks. I could not independently verify the audio bytes or question-to-diagram pairings from the supplied manifests alone.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
