@@ -1,0 +1,31 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T12:24:56.050Z",
+  "images": 16,
+  "key": "e3c6363d0377719c",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "Images 8 and 16, step \"worked\": NPH trace over the shaded peak window; insulin.jsx worked curve and area fills",
+      "title": "Overlapping fills reduce essential curve contrast below the project requirement",
+      "problem": "Using the supplied theme tokens, the dark-theme teal trace has approximately 3.9:1 contrast against the amber window, falling to about 3.0:1 against the combined amber and teal fills. The corresponding light-theme filled overlap is about 3.5:1. This essential teaching curve fails the project's ≥4.5:1 requirement.",
+      "fix": "Use the higher-contrast accent ink for curve strokes and matching legend samples, or add a contrasting outline that preserves each dash pattern. Check contrast against the composited backgrounds, not just the card background.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.3003285
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Fix the worked-example curve contrast before publication.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
