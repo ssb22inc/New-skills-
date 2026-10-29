@@ -1,0 +1,62 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "e36acb70e182937d3ea0c26f4f89eaa19b250e08",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T22:24:04.726Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 384,
+      "title": "Persist only a bounded, canonical item reference",
+      "problem": "validRequest validates selected ref fields but permits arbitrary additional properties. The queue write then serializes the entire caller-supplied ref. A valid request can therefore attach megabytes of unrelated data to a passage despite the 1,500-character text limit. The worker downloads and parses up to 1,000 entries into its jobs array before processing any of them.",
+      "failure_scenario": "An entitled caller submits valid bank passages with a multi-megabyte ref.padding property, staying within the deployment's request-body limit. Each oversized entry consumes just one admission slot. Several trial accounts can accumulate gigabytes of queued JSON; the scheduled worker retains the parsed padding across the whole batch, potentially exhausting its heap before it voices or removes any entry. Subsequent runs encounter the same poisoned queue.",
+      "fix": "Construct a canonical ref containing only kind, id, part, step, and the validated scalar result fields before storing it. Enforce a small request/queue-record size limit, and make the worker reject oversized existing entries without retaining their contents across the batch. Add a test that submits a valid reference with large extra properties and verifies they are rejected or discarded.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 128,
+      "title": "Use decodable audio to unlock strict-autoplay browsers",
+      "problem": "SILENT is a WAV header with a zero-length data chunk: it contains no audio samples. A real decoder can reject its play() with NotSupportedError, leaving dataset.unlocked unset. The strict-autoplay test misses this because FakeAudio.play() marks every source unlocked without decoding it.",
+      "failure_scenario": "On a strict-autoplay browser that rejects the empty WAV, the only play() attempted during the student's tap fails. After the network requests finish, playing the actual passage occurs outside that gesture and can fail with NotAllowedError. The hook returns to idle without playing anything, and another tap repeats the same sequence. I could not execute Safari/iOS here; the empty source and the mock's unconditional acceptance are directly visible in the change.",
+      "fix": "Use a valid silent clip containing actual samples and handle failure to unlock explicitly. Add a real-browser playback check that exercises media decoding and delayed passage playback after one tap; the current FakeAudio test cannot establish this behavior.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 124547,
+    "completionTokens": 10465,
+    "reasoningTokens": 9840,
+    "costUsd": 0.416016
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not ship yet. Queue entries retain unbounded caller-controlled metadata, creating a storage and worker-exhaustion path. The mobile audio-unlock implementation also uses an empty audio file that the playback tests incorrectly assume succeeds.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
