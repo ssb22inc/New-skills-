@@ -1,0 +1,79 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "93e4948771324e1563f00c47eb4d31e994611395",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T21:44:27.094Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 102,
+      "title": "New audio bypasses the adversarial accuracy gate",
+      "problem": "Audio becomes publishable through transcription plus voiceCheck alone. The synthesizer and transcriber are both OpenAI models; there is no adversarial review before saveChecked marks the recording as passing. This violates the standing accuracy-gate requirement for all student content. The documented 0.92 similarity threshold also is not a word-for-word check: exact checks cover numbers, selected direction/negation words and units, but not arbitrary clinically decisive terms.",
+      "failure_scenario": "In a long rationale, a take substitutes \"heparin\" for \"insulin\" while preserving the surrounding words, numbers and units. Under the documented comparator contract, that single substitution can retain sufficient similarity and be published to every subsequent listener. The imported audioCheck implementation was not supplied, so this exact pair could not be executed or independently verified.",
+      "fix": "Require an adversarial accuracy verdict before publishing new recordings, covering clinical entities and semantic fidelity as well as numbers and units. Add negative tests for drug-name, diagnosis and finding substitutions in otherwise matching long passages; do not describe a fuzzy comparison as word-for-word verification.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 41,
+      "title": "Worker retries make paid calls without claiming budget slots",
+      "problem": "The worker treats the queue admission slot as payment authorization for every first take, including repeated processing of the same retained entry. When synthesis succeeds but transcription fails, makeChecked returns no best take, and the entry remains queued. Every later run can synthesize it again without reserving another slot. Backlogged entries also spend against their enqueue day's reservation rather than the day the paid call occurs.",
+      "failure_scenario": "A passage consumes one slot when queued. Its speech request succeeds, but transcription returns 500. Successive scheduled runs each purchase another synthesis while the global counter remains at one. A transcription outage therefore defeats the claimed daily paid-call cap.",
+      "fix": "Separate queue-admission limits from actual spending limits. Claim a current-day spending slot before every worker synthesis, including first attempts and retries, and retain entries without making a provider call when that budget is exhausted. Test repeated transcription failures and processing across a calendar-day boundary.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 48,
+      "title": "An interrupted second take permanently records a passage as failed",
+      "problem": "makeChecked can return a failed first take together with an error when the retake budget is unavailable or the second provider call fails. Both the worker and live route ignore that error and pass the first take to saveChecked. Its permanent pass:false record prevents all future attempts under the same QA version, even though the promised two accuracy attempts never completed.",
+      "failure_scenario": "The first take misreads a number. No global slot remains for the second take, so makeChecked stops with best.take equal to 1 and error equal to \"budget\". The worker saves a terminal failure and removes the queue entry. Tomorrow's fresh budget cannot recover the passage: speak always returns 422 from the saved record.",
+      "fix": "Distinguish a completed accuracy failure from an incomplete attempt. Save terminal pass:false only after both takes have actually been checked and failed. Preserve retryable state for budget exhaustion and provider errors in both the worker and live route, and test recovery on a later run.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/tests/ai-auth.test.js",
+      "line": 123,
+      "title": "The missing-key test passes because storage is absent from the mock",
+      "problem": "The test expects 503 when OPENAI_API_KEY is absent, but the implemented normal keyless path queues a validated request and returns 202. The createClient mock has no storage property, so speak returns \"Voice unavailable\" before reaching the keyless queue logic. Setting an OpenAI key would not change this result. The green test therefore reports coverage of a condition it never exercises.",
+      "failure_scenario": "A regression breaks the authenticated handler's normal queue setup or stops it forwarding the student's access correctly. This test still passes because undefined storage forces the same early 503, leaving the production setup described as requiring \"Nothing to do\" unverified at the handler boundary.",
+      "fix": "Provide realistic storage and student bank-reader mocks and assert that an authenticated, matching request without an OpenAI key returns 202 and creates the queue entry without calling OpenAI. Keep missing-storage behavior as a separately named 503 test.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 74179,
+    "completionTokens": 6327,
+    "reasoningTokens": 5178,
+    "costUsd": 0.248716
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not ship yet. The new audio publication path lacks the required adversarial accuracy gate, worker retries escape the stated spending budget, and a single failed take can permanently disable a passage. One integration test also passes because its storage mock is missing, not because it verifies the behavior named by the test. This assessment is based on static review; tests were not executed.",
+  "counts": {
+    "blocker": 1,
+    "major": 3,
+    "minor": 0
+  }
+}
