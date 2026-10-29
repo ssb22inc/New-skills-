@@ -1,0 +1,21 @@
+{
+  "id": "potassium",
+  "title": "Potassium & the ECG",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T15:41:20.998Z",
+  "images": 16,
+  "key": "7a46cf4531c823ee",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.283246
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No substantiated problems found in the supplied potassium images, clinical claims, or value-classification and caption logic. Recorded audio and live browser behavior were not independently verified.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
