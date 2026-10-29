@@ -62,3 +62,37 @@ describe("pressure injury matching", () => {
     expect(MATCHERS["pressure-injury"].candidate.test("A client with stage 4 chronic kidney disease")).toBe(false);
   });
 });
+
+/* Sol, PR #155 diagram review. */
+describe("stage mentions that are not the client's stage", () => {
+  it.each([
+    ["This is not a stage 4 pressure injury.", null],
+    ["The wound was incorrectly documented as stage 2; it is a stage 3 pressure injury.", { stage: 3 }],
+    ["If this were stage 4, bone would be exposed.", null],
+  ])("%s", (text, want) => {
+    expect(stageFrom(text)).toEqual(want);
+  });
+});
+
+describe("the wound drawing", () => {
+  it("reaches its own floor, so slough and depth markers sit in the wound", async () => {
+    const { craterPath } = await import("../src/diagrams/pressure-injury.jsx");
+    const d = craterPath(0, 80, 100, 160, 0.2);
+    // M a,b Q c,d e,mid Q fx,c …: the floor curve's control y is the 8th number;
+    // a quadratic from (·, mid) to (·, mid) bottoms out at (mid + c) / 2
+    const nums = d.split(/[ ,QMZ]+/).filter(Boolean).map(Number);
+    const mid = (100 + 160) / 2;
+    expect((mid + Number(nums[7])) / 2).toBeCloseTo(160);
+  });
+  it("teaches the full Stage 4 definition and keeps the HOB qualification on the tile", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { pressureInjury } = await import("../src/diagrams/pressure-injury.jsx");
+    const html = renderToStaticMarkup(React.createElement(pressureInjury.Diagram, {}));
+    expect(html).toContain("if clinically appropriate");
+    expect(html).toMatch(/exposed or directly palpable fascia/);
+    const s4 = pressureInjury.steps.find((s) => s.key === "stage4");
+    expect(s4.caption).toMatch(/exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone/);
+    expect(pressureInjury.steps.filter((s) => /^stage\d$/.test(s.key)).every((s) => s.focus.includes("legend"))).toBe(true);
+  });
+});
