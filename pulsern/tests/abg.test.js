@@ -531,3 +531,21 @@ describe("round 18", () => {
     expect(chip({ ph: 7.0, paco2: 40, hco3: 24 })).toContain("var(--coral)");
   });
 });
+
+describe("round 19", () => {
+  it("never shows the placeholder range as expected compensation (Sol: 7.11 / 81 / 25)", () => {
+    const r = read(7.11, 81, 25);
+    expect(r.reading).not.toMatch(/26\.1–60|–60 /);
+    expect(r.reading).toMatch(/compensation not evaluable here/);
+    expect(r.reading).toMatch(/raises an added metabolic acidosis/);
+    expect(r.compensation).toBe("not evaluable");
+  });
+  it("marks abnormal gauge values in body ink, not coral", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { AbgDiagram } = await import("../src/diagrams/abg.jsx");
+    const html = renderToStaticMarkup(React.createElement(AbgDiagram, { params: { ph: 7.3, paco2: 50, hco3: 24 } }));
+    const gauges = html.slice(html.indexOf('data-g="ph"'), html.indexOf('data-g="rome"'));   // past the shared defs
+    expect(gauges).not.toMatch(/var\(--coral\)|var\(--danger-ink\)/);
+  });
+});

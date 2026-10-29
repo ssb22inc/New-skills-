@@ -97,9 +97,9 @@ function Strip({ x, y, w, kind, step }) {
 function Callout({ cx, cy, lx, ly, label, step }) {
   return (
     <Anim on={step} kind="pop" delay={1500}>
-      <circle className="dg-solid" cx={cx} cy={cy} r={7.5} fill="none" stroke={C.coral} strokeWidth={1.8} />
-      <path className="dg-solid" d={`M${lx - 2},${ly + 2} L${cx + 5},${cy - 6}`} fill="none" stroke={C.coral} strokeWidth={1.8} strokeLinecap="round" />
-      <T x={lx} y={ly} size={MIN_TEXT} weight={700} color={C.coral}>{label}</T>
+      <circle className="dg-solid" cx={cx} cy={cy} r={7.5} fill="none" stroke={C.accent} strokeWidth={1.8} />
+      <path className="dg-solid" d={`M${lx - 2},${ly + 2} L${cx + 5},${cy - 6}`} fill="none" stroke={C.accent} strokeWidth={1.8} strokeLinecap="round" />
+      <T x={lx} y={ly} size={MIN_TEXT} weight={700} color={C.accent}>{label}</T>
     </Anim>
   );
 }
@@ -172,7 +172,7 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
       <G id="level">
         <Gauge x={20} y={62} w={320} min={2} max={7} lo={3.5} hi={5.0} value={shown ? params.k : null} decimals={1}
           text={shown ? displayK(params.k) : null} unit="mEq/L"
-          label="Serum potassium (K⁺)" leftLabel="◂ HYPO" rightLabel="HYPER ▸" leftColor="coral" rightColor="coral"
+          label="Serum potassium (K⁺)" leftLabel="◂ HYPO" rightLabel="HYPER ▸" leftColor="ink" rightColor="ink"
           icon={HeartIcon} anim={["range", "worked"]} />
         {/* a rejected value is said so on the picture, not only in the caption
             (Sol, round 10: it looked like the concept-only view) */}
@@ -184,14 +184,14 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
       <G id="hypo">
         <T x={20} y={112} size={BODY_TEXT} weight={700}>Low K⁺: below 3.5</T>
         <Strip x={20} y={150} w={320} kind="hypo" step="hypo-ecg" />
-        <T x={20} y={186} size={MIN_TEXT} color={C.muted}>May show: flat T, ST depression, <tspan fill={C.danger} fontWeight={700}>U wave</tspan></T>
+        <T x={20} y={186} size={MIN_TEXT} color={C.muted}>May show: flat T, ST depression, <tspan fill={C.accent} fontWeight={700}>U wave</tspan></T>
         <Callout cx={uX} cy={uY} lx={uX + 18} ly={113} label="U wave" step="hypo-ecg" />
       </G>
 
       <G id="hyper">
         <T x={20} y={214} size={BODY_TEXT} weight={700}>High K⁺: above 5.0</T>
         <Strip x={20} y={250} w={320} kind="hyper" step="hyper-ecg" />
-        <T x={20} y={286} size={MIN_TEXT} color={C.muted}>May show: <tspan fill={C.danger} fontWeight={700}>peaked T</tspan>, wide QRS, flat P</T>
+        <T x={20} y={286} size={MIN_TEXT} color={C.muted}>May show: <tspan fill={C.accent} fontWeight={700}>peaked T</tspan>, wide QRS, flat P</T>
         <T x={20} y={306} size={MIN_TEXT} weight={700} color={C.danger}>A normal ECG does not rule out danger.</T>
         <Callout cx={tX} cy={tY} lx={tX + 26} ly={214} label="peaked T" step="hyper-ecg" />
       </G>
@@ -232,7 +232,7 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
         <G id="match">
           <Anim on="worked" kind="pop" delay={900}>
             <rect className="dg-solid" x={14} y={state === "hypokalemia" ? 96 : 198} width={332} height={state === "hypokalemia" ? 98 : 116} rx={8}
-              fill="none" stroke={C.danger} strokeWidth={2} strokeDasharray="5 4" />
+              fill="none" stroke={C.accent} strokeWidth={2} strokeDasharray="5 4" />
           </Anim>
         </G>
       ) : <G id="match" />}

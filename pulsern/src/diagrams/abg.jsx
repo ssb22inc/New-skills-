@@ -300,12 +300,20 @@ export function interpretAbg({ ph, paco2, hco3, precision = null }) {
      the rules' PaCO₂ range a wide placeholder counted as compensation, so
      7.37 / 81 / 45 read "fully compensated"). */
   const fits = tested.filter((c) => !offRange(c.limit) && !c.limit.outsideRules);
-  const unevaluable = tested.find((c) => c.limit.outsideRules && !offRange(c.limit));
+  /* Handled before any expected-range or mixed-disorder wording, so the
+     placeholder interval is never shown as expected compensation (Sol,
+     round 19: 7.11 / 81 / 25 printed "about 26.1–60"). */
+  const unevaluable = tested.find((c) => c.limit.outsideRules);
   if (unevaluable) {
-    const u = unevaluable;
+    const u = unevaluable, L = u.limit;
+    const tooLow = L.short;   // below even the acute buffering estimate
+    const lowNote = tooLow
+      ? ` HCO₃⁻ ${fmtNum(L.value)} is lower than even acute buffering usually gives (the acute estimate starts at about ${L.acuteBand[0]} ± 2), which raises an added metabolic acidosis.`
+      : "";
     return { disorder: `${u.primary} ${u.kind}`, primary: u.primary, compensation: "not evaluable", mixedPossible: true,
-      caution: cautionFor(u.limit, u.primary, null),
-      reading: `${cap(u.primary)} ${u.kind} pattern, compensation not evaluable here: ${compensationText(u.limit, u.primary)}.${fits.length ? ` A ${fits.map((f) => `${f.primary} ${f.kind}`).join(" or ")} reading also fits the values.` : ""}` };
+      ...(tooLow ? { mixed: "metabolic acidosis" } : {}),
+      caution: tooLow ? "Compensation not evaluable at this PaCO₂, but HCO₃⁻ is lower than acute buffering gives: an added metabolic acidosis is possible." : cautionFor(L, u.primary, null),
+      reading: `${cap(u.primary)} ${u.kind} pattern, compensation not evaluable here: ${courseText(L)}.${lowNote}${fits.length ? ` A ${fits.map((f) => `${f.primary} ${f.kind}`).join(" or ")} reading also fits the values.` : ""}` };
   }
   const otherNormalFor = (c) => (c.primary === "respiratory" ? hco3Normal : co2Normal);
   const romeFor = (c) => (phState === "normal" ? (otherNormalFor(c) ? "unclear" : "full") : otherNormalFor(c) ? "none" : "partial");
@@ -464,7 +472,7 @@ function CompTile({ x, y, title, lines, at, i }) {
       <rect x={bx} y={y + 28} width={bw} height={7} rx={3.5} fill={C.surface} stroke={C.line} />
       <rect x={lo} y={y + 28} width={hi - lo} height={7} rx={3} fill={C.teal} fillOpacity={0.8} />
       <Anim on="compensation" kind="slide" from={`${start - mx}px`} dur={1400} delay={i * 250}>
-        <circle className="dg-solid" cx={mx} cy={y + 31.5} r={4.6} fill={inRange ? C.teal : C.danger} stroke={C.card} strokeWidth={1.5} />
+        <circle className="dg-solid" cx={mx} cy={y + 31.5} r={4.6} fill={inRange ? C.teal : C.ink} stroke={C.card} strokeWidth={1.5} />
       </Anim>
       {lines.map((l, j) => <T key={j} x={x + 54} y={y + 56 + j * 16} size={MIN_TEXT} anchor="middle" color={C.muted}>{l}</T>)}
     </g>
@@ -493,7 +501,7 @@ export function verdictLabel(r) {
   if (r.disorder === "inconsistent") return "Values don't fit: recheck";
   if (r.disorder === "unsupported") return "Outside automatic interpretation range";
   if (r.compensation === "unclear") return `${cap(r.disorder)} pattern · pH in range`;
-  if (r.compensation === "not evaluable") return `${cap(r.disorder)} · compensation not evaluable`;
+  if (r.compensation === "not evaluable") return r.mixed ? `Possible mixed: ${r.disorder} + ${r.mixed}` : `${cap(r.disorder)} · compensation not evaluable`;
   if (r.disorder === "indeterminate") return `Either: ${r.alternatives?.join(" or ") ?? "history decides"}`;
   if (r.mixed) return `Possible mixed: ${r.disorder} + ${r.mixed}`;
   return `${cap(r.disorder)}${r.compensation ? ` · ${romeLabel(r.compensation)}` : ""}`;
@@ -526,19 +534,19 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
       <G id="ph">
         <Gauge x={20} y={66} w={320} min={7.1} max={7.7} lo={7.35} hi={7.45} value={concept ? null : params.ph} decimals={2}
           text={concept ? null : showAbg(params, "ph")}
-          label="1  pH: the net state" leftLabel="ACIDEMIA" rightLabel="ALKALEMIA" leftColor="coral" rightColor="coral"
+          label="1  pH: the net state" leftLabel="ACIDEMIA" rightLabel="ALKALEMIA" leftColor="ink" rightColor="ink"
           icon={placed(BloodIcon)} anim={["ph", "worked"]} />
       </G>
       <G id="co2">
         <Gauge x={20} y={162} w={320} min={20} max={70} lo={35} hi={45} value={concept ? null : params.paco2} unit="mmHg"
           text={concept ? null : showAbg(params, "paco2")}
-          label="2  PaCO₂: lungs, CO₂ is an acid" leftLabel="BASE" rightLabel="ACID ▸" rightColor="coral"
+          label="2  PaCO₂: lungs, CO₂ is an acid" leftLabel="BASE" rightLabel="ACID ▸" rightColor="ink"
           icon={placed(LungsIcon, "lungs")} anim={["lungs", "worked"]} />
       </G>
       <G id="hco3">
         <Gauge x={20} y={258} w={320} min={12} max={36} lo={22} hi={26} value={concept ? null : params.hco3} unit="mEq/L"
           text={concept ? null : showAbg(params, "hco3")}
-          label="3  HCO₃⁻: kidneys, a base" leftLabel="◂ ACID" rightLabel="BASE" leftColor="coral"
+          label="3  HCO₃⁻: kidneys, a base" leftLabel="◂ ACID" rightLabel="BASE" leftColor="ink"
           icon={placed(KidneyIcon)} anim={["kidneys", "worked"]} />
       </G>
       <G id="rome">

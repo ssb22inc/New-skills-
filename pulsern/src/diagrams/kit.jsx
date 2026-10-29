@@ -401,7 +401,7 @@ export function Chip({ x, y, text, color = "teal", fill, anchor = "middle", size
    is pinned to the end WITH an arrow, never drawn as if it sat on the end
    (Sol: 8.0 and 10.0 both looked like 7.0). */
 export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, text: shown = null, unit = "",
-  leftLabel, rightLabel, leftColor = "muted", rightColor = "muted", markerColor = "coral", label, icon = null, anim = null }) {
+  leftLabel, rightLabel, leftColor = "muted", rightColor = "muted", markerColor = "ink", label, icon = null, anim = null }) {
   /* Vertical rhythm, top to bottom: title (y-44), value pin (y-35 to
      y-13), marker stem (y-12), bar (y), range numbers and end labels (y+23). */
   const u = useDefs();
@@ -414,6 +414,9 @@ export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, text: sh
   const text = value != null ? (shown ?? fmt(value)) : "";
   const pillW = (text.length + (off ? 2 : 0)) * 8.6 + 16;
   const pillX = Math.min(x + w - pillW, Math.max(x, mx - pillW / 2));
+  /* An out-of-range value is marked in body ink: abnormal is not by itself
+     critical, and coral is kept for critical or incorrect states (Sol,
+     round 19). The position and the range numbers say it is out of range. */
   const pinFill = valueBad ? (markerColor === "coral" ? C.danger : C[markerColor]) : C.accent;
   const ticks = Array.from({ length: 11 }, (_, i) => x + (i / 10) * w);
   return (
