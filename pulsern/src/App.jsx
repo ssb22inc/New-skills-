@@ -2606,8 +2606,11 @@ function Style() {
       .ra-chip{min-height:36px;background:var(--surface);border:1.5px solid var(--line);border-radius:99px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--accent-ink);cursor:pointer}
       .ra-chip.on{border-color:var(--teal);background:var(--pick-bg)}
       .ra-src{color:var(--muted)}
-      .ra-now{background:var(--pick-bg);box-shadow:0 0 0 6px var(--pick-bg),0 0 0 8px var(--teal);border-radius:6px;transition:background .2s,box-shadow .2s}
-      .opt.ra-now,.hl-token.ra-now,.flashcard.ra-now{border-color:var(--teal)}
+      .ra-now:not(.flashcard){background:var(--pick-bg);box-shadow:0 0 0 6px var(--pick-bg),0 0 0 8px var(--teal);border-radius:6px;transition:background .2s,box-shadow .2s}
+      .opt.ra-now,.hl-token.ra-now{border-color:var(--teal)}
+      /* The flashcard keeps its own dark face (its text is light): an outline
+         marks it instead of a new background. */
+      .flashcard.ra-now{outline:3px solid var(--teal);outline-offset:3px}
       @media (prefers-reduced-motion: reduce){.ra-now{transition:none}}
       /* stats */
       .cat-row{margin-bottom:10px}

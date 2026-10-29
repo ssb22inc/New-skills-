@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult } from "../src/read-aloud-script.js";
 import { ReadAloudBar, pickDeviceVoice, ra, RATES, loadPrefs, sentences, speakLimitMs, makeVoiceClient, URL_TTL_MS, endsSession, shouldAutoRead } from "../src/read-aloud.jsx";
-import { speak, speechKey, validRequest, voiceCheck, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS } from "../api/_speak.js";
+import { speak, speechKey, validRequest, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue } from "../ops/read-aloud-worker.mjs";
 
@@ -141,20 +141,28 @@ describe("the controls", () => {
 });
 
 /* A fake private bucket: download/upload/sign, recording calls. */
-function fakeStorage({ missingBucket = false } = {}) {
+function fakeStorage({ missingBucket = false, failCounters = false } = {}) {
   const files = new Map();
   let bucketExists = !missingBucket;
   const calls = { upload: [], createBucket: [] };
   const bucket = {
     download: async (path) => (files.has(path) ? { data: { text: async () => files.get(path).toString() }, error: null } : { data: null, error: { message: "Object not found" } }),
-    upload: async (path, body) => {
+    upload: async (path, body, opts = {}) => {
       calls.upload.push(path);
+      await Promise.resolve(); // let concurrent requests interleave, as over the network
       if (!bucketExists) return { error: { message: "Bucket not found" } };
+      if (failCounters && path.startsWith("usage/")) return { error: { message: "Internal error" } };
+      if (opts.upsert === false && files.has(path)) return { error: { message: "The resource already exists", statusCode: "409" } };
       files.set(path, Buffer.isBuffer(body) ? body : Buffer.from(String(body)));
       return { error: null };
     },
     createSignedUrl: async (path, secs) => (files.has(path) ? { data: { signedUrl: `https://signed.example/${path}?ttl=${secs}` }, error: null } : { data: null, error: { message: "Object not found" } }),
-    list: async (dir) => ({ data: [...files.keys()].filter((k) => k.startsWith(`${dir}/`)).map((k) => ({ name: k.slice(dir.length + 1) })), error: null }),
+    list: async (dir, { limit = 100, offset = 0 } = {}) => {
+      await Promise.resolve();
+      if (!bucketExists) return { data: null, error: { message: "Bucket not found" } };
+      if (failCounters && dir.startsWith("usage/")) return { data: null, error: { message: "Internal error" } };
+      return { data: [...files.keys()].filter((k) => k.startsWith(`${dir}/`) && !k.slice(dir.length + 1).includes("/")).map((k) => ({ name: k.slice(dir.length + 1) })).slice(offset, offset + limit), error: null };
+    },
     remove: async (paths) => { for (const p of paths) files.delete(p); return { error: null }; },
   };
   return { calls, files, storage: { from: (b) => { expect(b).toBe(BUCKET); return bucket; }, createBucket: async (name, opts) => { calls.createBucket.push([name, opts]); bucketExists = true; return { error: null }; } } };
@@ -258,6 +266,22 @@ describe("server voice: the accuracy gate", () => {
     expect(speechCalls(f)).toBe(2);
   });
 
+  it("rejects a changed unit or frequency even when the rest of a long passage matches", () => {
+    const long = "The nurse reviews the medication administration record for a client with heart failure who has been taking the prescribed medication for several days and reports mild fatigue, no chest pain and stable breathing at rest. ";
+    for (const [script, heard] of [
+      [`${long}Give 25 mg by mouth.`, `${long}Give 25 mcg by mouth.`],
+      [`${long}Infuse at 50 milliliters per hour.`, `${long}Infuse at 50 milliliters per kilogram.`],
+      [`${long}Give it every 4 hours as needed.`, `${long}Give it every 4 days as needed.`],
+      [`${long}The potassium is 3.1 milliequivalents per liter.`, `${long}The potassium is 3.1 millimoles per liter.`],
+    ]) {
+      const r = voiceCheck(script, heard);
+      expect(r.pass, heard.slice(-40)).toBe(false);
+      expect(r.unitMismatch, heard.slice(-40)).not.toBeNull();
+    }
+    expect(voiceCheck(`${long}Give 25 mg by mouth every 4 hours.`, `${long}Give 25 milligrams by mouth every four hours.`).pass).toBe(true);
+    expect(clinicalUnits("Give 25 mg PO q4h, 3.1 mEq/L, 92%")).toEqual(["mg", "po", "meqperl", "percent"]);
+  });
+
   it("accepts the same unit written another way, and nothing else", () => {
     for (const [script, heard] of [
       ["Potassium 2.9 milliequivalents per liter.", "Potassium 2.9 mEq/L."],
@@ -298,8 +322,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(q).toHaveLength(1);
     expect(JSON.parse(files.get(q[0]).toString())).toMatchObject({ text: "Potassium 2.9 milliequivalents per liter.", voice: "marin", ref: REF, seg: "opt0" });
     expect((await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f })).status).toBe(202);
-    const used = [...files.keys()].find((k) => /^usage\/.*\/all\.json$/.test(k));
-    expect(JSON.parse(files.get(used).toString()).n).toBe(1);
+    expect([...files.keys()].filter((k) => /^usage\/.*\/all\/\d+$/.test(k))).toHaveLength(1);
   });
 
   it("never queues free text or an item the student cannot read", async () => {
@@ -367,6 +390,53 @@ describe("server voice without a key: the queue and the voice job", () => {
 });
 
 describe("server voice: daily budgets", () => {
+  it("holds a student to the limit when many requests arrive at once", async () => {
+    const f = fakeOpenAI(), { storage, files } = fakeStorage();
+    const limits = { user: 3, global: 100 };
+    const texts = ["Which value is the priority?", "Potassium 2.9 milliequivalents per liter.", "Sodium 138 milliequivalents per liter."];
+    const segs = ["stem", "opt0", "opt1"];
+    // the same three passages asked for five times each, all at once, before any is saved
+    const reqs = Array.from({ length: 15 }, (_, i) => speak({ ...base({ apiKey: "", seg: segs[i % 3], text: texts[i % 3] }), storage, fetchImpl: f, limits }));
+    const out = await Promise.all(reqs);
+    // exactly three slots exist, and exactly three requests got through; every other one was refused
+    expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(3);
+    expect(out.filter((r) => r.status === 202)).toHaveLength(3);
+    expect(out.filter((r) => r.status === 429)).toHaveLength(12);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("holds the app-wide limit across many students at once", async () => {
+    const { storage, files } = fakeStorage();
+    const limits = { user: 10, global: 4 };
+    const out = await Promise.all(Array.from({ length: 12 }, (_, i) => speak({ ...base({ apiKey: "", userId: `u${i}` }), storage, limits, fetchImpl: fakeOpenAI() })
+      .then(() => speak({ ...base({ apiKey: "", userId: `u${i}`, seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, limits }))));
+    expect([...files.keys()].filter((k) => /\/all\/\d+$/.test(k)).length).toBeLessThanOrEqual(4);
+    expect(out.some((r) => r.status === 429)).toBe(true);
+  });
+
+  it("refuses (and spends nothing) when the budget counters cannot be read or written", async () => {
+    const f = fakeOpenAI(), { storage, files } = fakeStorage({ failCounters: true });
+    expect((await speak({ ...base(), storage, fetchImpl: f })).status).toBe(429);
+    expect((await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f })).status).toBe(429);
+    expect(f).not.toHaveBeenCalled();
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+  });
+
+  it("charges a second take to the budget too", async () => {
+    const f = fakeOpenAI(["Potassium 9.2 milliequivalents per liter.", "Potassium 2.9 milliequivalents per liter."]), { storage, files } = fakeStorage();
+    expect((await speak({ ...base(), storage, fetchImpl: f, limits: { user: 1, global: 100 } })).status).not.toBe(200);
+    expect(speechCalls(f)).toBe(1); // no slot left for the retake
+    expect([...files.keys()].some((k) => k.endsWith(".mp3"))).toBe(false);
+  });
+
+  it("counts a local calendar day in one fixed zone, never the UTC date", () => {
+    // 11 p.m. Eastern on Oct 29 is already Oct 30 in UTC
+    expect(quotaDay(Date.UTC(2026, 9, 30, 3, 0))).toBe("2026-10-29");
+    expect(quotaDay(Date.UTC(2026, 9, 30, 5, 0))).toBe("2026-10-30");
+    expect(QUOTA_TZ).toBe("America/New_York");
+    expect(readFileSync(new URL("../api/_speak.js", import.meta.url), "utf8")).not.toMatch(/toISOString\(\)\.slice\(0, ?10\)/);
+  });
+
   it("stops a student at their daily limit with no synthesis and no upload", async () => {
     const f = fakeOpenAI(), { storage, calls } = fakeStorage();
     const limits = { user: 1, global: 100 };
@@ -394,7 +464,7 @@ describe("server voice: daily budgets", () => {
   it("starts each day's budget fresh", async () => {
     const f = fakeOpenAI(), { storage } = fakeStorage();
     const limits = { user: 1, global: 100 };
-    const day1 = Date.UTC(2026, 9, 29, 12), day2 = Date.UTC(2026, 9, 30, 12);
+    const day1 = Date.UTC(2026, 9, 29, 16), day2 = Date.UTC(2026, 9, 30, 16);
     await speak({ ...base(), storage, fetchImpl: f, limits, now: day1 });
     const t = { ...base({ seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, fetchImpl: f, limits };
     expect((await speak({ ...t, now: day1 })).status).toBe(429);

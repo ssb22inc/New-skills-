@@ -15,9 +15,9 @@
    the route caps new passages per student and app-wide each day, and this
    job voices at most READ_ALOUD_MAX passages per run. */
 import { createClient } from "@supabase/supabase-js";
-import { BUCKET, TTS, makeChecked, saveChecked, readRecord, passagePaths, validRequest } from "../api/_speak.js";
+import { BUCKET, TTS, LIMITS, makeChecked, saveChecked, readRecord, passagePaths, validRequest, reserveGlobal } from "../api/_speak.js";
 
-export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), log = console.log }) {
+export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log }) {
   const bucket = storage.from(BUCKET);
   const { data: entries, error } = await bucket.list("queue", { limit: 1000, sortBy: { column: "created_at", order: "asc" } });
   if (error) {
@@ -36,7 +36,9 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
       await bucket.remove([path]); out.skipped++; continue;
     }
     if (await readRecord(storage, job.text)) { await bucket.remove([path]); out.skipped++; continue; } // already checked
-    const { best, spent, error: why } = await makeChecked({ text: job.text, apiKey, fetchImpl });
+    // The first take was paid for when the passage was queued; a second
+    // take claims its own app-wide slot.
+    const { best, spent, error: why } = await makeChecked({ text: job.text, apiKey, fetchImpl, beforeRetake: () => reserveGlobal(storage, { now: now(), limits }) });
     out.spent += spent;
     if (!best) {
       // Provider trouble: keep the entry for the next run, and stop this one.

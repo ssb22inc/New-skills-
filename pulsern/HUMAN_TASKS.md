@@ -192,7 +192,7 @@ Claude Code executes everything else. These run in parallel with the build.
 
   Limits and cost:
   - Daily caps on NEW passages: 300 per student and 4,000 for the whole app
-    (UTC day). Change them with the Vercel variables `SPEAK_USER_DAILY` and
+    (each calendar day, Eastern time). Change them with the Vercel variables `SPEAK_USER_DAILY` and
     `SPEAK_GLOBAL_DAILY`. Each job run voices at most 200.
   - OpenAI bills `gpt-4o-mini-tts` per minute of audio, plus the
     `gpt-4o-transcribe` check. Saved audio is reused for free. Usage:
