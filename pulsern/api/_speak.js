@@ -215,19 +215,25 @@ async function createOnce(storage, path, body = '1') {
   return 'error';
 }
 
-/* The outcome of another request's item claim: "ok" once confirmed,
-   "refused" if it was withdrawn (over a cap), "unknown" if still pending
-   after a few seconds. */
+/* The outcome of another request's item claim:
+   { state: "ok" }       confirmed;
+   { state: "refused" }  withdrawn (over a cap);
+   { state: "stale", since } still "pending" past its lease: its request
+                         died part-way, and the claim may be taken over;
+   { state: "unknown" }  still pending after a few seconds, or unreadable. */
 export const CLAIM_WAIT = { tries: 30, ms: 100 };
-async function claimOutcome(bucket, marker) {
+export const CLAIM_LEASE_MS = 20000;
+async function claimOutcome(bucket, marker, timeOf) {
   for (let i = 0; i < CLAIM_WAIT.tries; i++) {
     const { data, error } = await bucket.download(marker);
-    if (error) return /not found/i.test(String(error.message ?? '')) ? 'refused' : 'unknown';
-    const state = String(typeof data?.text === 'function' ? await data.text() : data ?? '').trim();
-    if (state === 'ok') return 'ok';
+    if (error) return { state: /not found/i.test(String(error.message ?? '')) ? 'refused' : 'unknown' };
+    const text = String(typeof data?.text === 'function' ? await data.text() : data ?? '').trim();
+    if (text === 'ok') return { state: 'ok' };
+    const since = Number(/^pending:(\d+)$/.exec(text)?.[1]);
+    if (!Number.isFinite(since) || timeOf() - since > CLAIM_LEASE_MS) return { state: 'stale', since: Number.isFinite(since) ? since : 0 };
     await new Promise((r) => setTimeout(r, CLAIM_WAIT.ms));
   }
-  return 'unknown';
+  return { state: 'unknown' };
 }
 
 /* "ok": a slot is held. "full": the cap is reached (or the slots are too
@@ -443,23 +449,43 @@ export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, 
        the others find it and only fill in any part not yet queued. */
     const itemKey = sha256(`${tts.voice}\n${JSON.stringify(ref)}`).slice(0, 32);
     const marker = `usage/${quotaDay(t0)}/items/${itemKey}`;
-    const mark = await createOnce(storage, marker, 'pending');
-    if (mark === 'error') return unavailable;
-    if (mark === 'created') {
-      const slot = await reserve(storage, userId, { now: t0, limits });
-      if (slot !== 'ok') {
-        await bucket.remove([marker]);
-        return slot === 'error' ? unavailable : overBudget;
-      }
+    /* Claim the item: reserve a slot, then confirm. The claim carries its
+       start time, so one whose request died part-way lapses after
+       CLAIM_LEASE_MS and can be taken over (by exactly one request: the
+       takeover is itself a marker storage creates once). A taken-over
+       claim may count a slot twice, never zero times. */
+    const own = async () => {
+      const slot = await reserve(storage, userId, { now: timeOf(), limits });
+      if (slot !== 'ok') { await bucket.remove([marker]); return slot === 'error' ? unavailable : overBudget; }
       const { error } = await bucket.upload(marker, 'ok', { contentType: 'text/plain', upsert: true });
       if (error) { await bucket.remove([marker]); return unavailable; }
+      return null;
+    };
+    const mark = await createOnce(storage, marker, `pending:${timeOf()}`);
+    if (mark === 'error') return unavailable;
+    if (mark === 'created') {
+      const refused = await own();
+      if (refused) return refused;
     } else {
       /* Another request (usually a sibling part of the same Listen) holds
          the claim: wait for its outcome, so every part of the item answers
-         the same way. */
-      const state = await claimOutcome(bucket, marker);
-      if (state === 'refused') return overBudget;
-      if (state !== 'ok') return unavailable;
+         the same way; take it over if it was abandoned. */
+      for (let round = 0; ; round++) {
+        const out = await claimOutcome(bucket, marker, timeOf);
+        if (out.state === 'ok') break;
+        if (out.state === 'refused') return overBudget;
+        if (out.state !== 'stale' || round >= 2) return unavailable;
+        const take = await createOnce(storage, `${marker}.takeover-${out.since}`);
+        if (take === 'error') return unavailable;
+        if (take === 'created') {
+          const { error } = await bucket.upload(marker, `pending:${timeOf()}`, { contentType: 'text/plain', upsert: true });
+          if (error) return unavailable;
+          const refused = await own();
+          if (refused) return refused;
+          break;
+        }
+        // someone else is taking it over: wait for their outcome
+      }
     }
     for (const p of parts) {
       const paths = passagePaths(p.text, tts);

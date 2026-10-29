@@ -6,13 +6,13 @@
    - The server voice is signed-in only, cached privately, and paid for once
      per passage; without a key it says so and the app uses the device voice.
    - Readiness exams have no read aloud. */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
-import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS } from "../api/_speak.js";
+import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
 
@@ -589,6 +589,27 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
   });
 
+  it("keeps a given-up passage queued until its give-up record is saved, then saves it without paying again", async () => {
+    const good = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage: good.storage });
+    const q = [...good.files.keys()].find((k) => k.startsWith("queue/"));
+    good.files.set(q, Buffer.from(JSON.stringify({ ...JSON.parse(good.files.get(q).toString()), attempts: MAX_ATTEMPTS - 1 })));
+    // the last attempt fails, and writing the record fails too
+    const real = good.storage.from(BUCKET);
+    const noRecords = { ...good.storage, from: () => ({ ...real, upload: (p, b, o) => (/^marin\/.*\.json$/.test(p) ? Promise.resolve({ error: { message: "Internal error" } }) : real.upload(p, b, o)) }) };
+    const first = await drainQueue({ storage: noRecords, apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 503 })), log: () => {} });
+    expect(first.errors.some((e) => /give-up record/.test(e))).toBe(true);
+    expect(good.files.has(q)).toBe(true);
+    expect(JSON.parse(good.files.get(q).toString()).giveUp).toMatch(/gave up after 5 attempts/);
+    // storage recovers: the record is saved and the entry removed, with no synthesis
+    const f = fakeOpenAI();
+    const second = await drainQueue({ storage: good.storage, apiKey: "k", fetchImpl: f, log: () => {} });
+    expect(second.rejected).toBe(1);
+    expect(f).not.toHaveBeenCalled();
+    expect(good.files.has(q)).toBe(false);
+    expect((await speak({ ...base({ apiKey: "" }), storage: good.storage })).status).toBe(422);
+  });
+
   it("stops the run after three outages in a row, without touching the rest", async () => {
     const { storage, files } = fakeStorage();
     const segs = [["stem", "Which value is the priority?"], ["opt0", "Potassium 2.9 milliequivalents per liter."], ["opt1", "Sodium 138 milliequivalents per liter."]];
@@ -852,6 +873,63 @@ describe("server voice: daily budgets", () => {
     const out = await Promise.all(parts.map((p) => speak({ ...base({ apiKey: "", ref: REF, seg: p.id, text: p.text }), storage, limits })));
     expect(out.map((r) => r.status)).toEqual(parts.map(() => 429));
     expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1); // only the earlier card
+  });
+
+  describe("an item claim whose request died part-way", () => {
+    const markerOf = (files) => [...files.keys()].find((k) => /\/items\/[0-9a-f]{32}$/.test(k));
+    const saved = { ...CLAIM_WAIT };
+    beforeEach(() => { CLAIM_WAIT.tries = 3; CLAIM_WAIT.ms = 5; });
+    afterEach(() => Object.assign(CLAIM_WAIT, saved));
+
+    async function abandoned(files, storage, t) {
+      // a first request claims the item, then its process ends before confirming
+      await speak({ ...base({ apiKey: "" }), storage, now: t });
+      const m = markerOf(files);
+      files.set(m, Buffer.from(`pending:${t}`));
+      for (const k of [...files.keys()]) if (k.startsWith("queue/") || /\/(u-[0-9a-f]+|all)\/\d+$/.test(k)) files.delete(k);
+      return m;
+    }
+
+    it("is taken over after its lease, and the item is queued with a slot claimed", async () => {
+      const { storage, files } = fakeStorage();
+      const t = Date.UTC(2026, 9, 29, 16);
+      const m = await abandoned(files, storage, t);
+      const out = await speak({ ...base({ apiKey: "" }), storage, now: t + CLAIM_LEASE_MS + 1000 });
+      expect(out.status).toBe(202);
+      expect(files.get(m).toString()).toBe("ok");
+      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+      expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(1); // the caps still count it
+    });
+
+    it("is not taken over while its lease runs, and the request says the voice is unavailable for now", async () => {
+      const { storage, files } = fakeStorage();
+      const t = Date.UTC(2026, 9, 29, 16);
+      await abandoned(files, storage, t);
+      const out = await speak({ ...base({ apiKey: "" }), storage, now: t + 1000 });
+      expect(out.status).toBe(503);
+      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    });
+
+    it("is taken over by exactly one of many requests, and still respects the caps", async () => {
+      const { storage, files } = fakeStorage();
+      const t = Date.UTC(2026, 9, 29, 16);
+      await abandoned(files, storage, t);
+      const later = t + CLAIM_LEASE_MS + 1000;
+      const out = await Promise.all(Array.from({ length: 6 }, () => speak({ ...base({ apiKey: "" }), storage, now: later })));
+      expect(out.every((r) => r.status === 202)).toBe(true);
+      expect([...files.keys()].filter((k) => k.includes(".takeover-"))).toHaveLength(1);
+      expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(1);
+    });
+
+    it("is refused in full when the taker has no slot left", async () => {
+      const { storage, files } = fakeStorage();
+      const t = Date.UTC(2026, 9, 29, 16);
+      const m = await abandoned(files, storage, t);
+      const out = await speak({ ...base({ apiKey: "" }), storage, now: t + CLAIM_LEASE_MS + 1000, limits: { user: 0, admission: 100, spend: 100 } });
+      expect(out.status).toBe(429);
+      expect(files.has(m)).toBe(false);
+      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    });
   });
 
   it("charges a take made after Eastern midnight to the new day", async () => {

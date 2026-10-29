@@ -89,7 +89,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
       await bucket.remove([path]); out.skipped++; continue;
     }
     // Only the known fields are kept for the run.
-    jobs.push({ path, job: { text: raw.text, voice: raw.voice, ref, seg: raw.seg, requestedAt: String(raw.requestedAt ?? ""), attempts: Number.isInteger(raw.attempts) ? raw.attempts : 0 } });
+    jobs.push({ path, job: { text: raw.text, voice: raw.voice, ref, seg: raw.seg, requestedAt: String(raw.requestedAt ?? ""), attempts: Number.isInteger(raw.attempts) ? raw.attempts : 0, giveUp: typeof raw.giveUp === "string" ? raw.giveUp.slice(0, 200) : null } });
   }
   out.queued = jobs.length;
   // Fresh requests before retried ones, oldest first.
@@ -99,6 +99,13 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
   for (const { path, job } of jobs) {
     if (done >= max) break;
     if (await readRecord(storage, job.text, TTS, now())) { await bucket.remove([path]); out.skipped++; continue; } // already decided
+    /* Given up on earlier, but its record could not be saved then: save
+       the record now (no synthesis); remove the entry only once it is. */
+    if (job.giveUp) {
+      if (await saveRejected(storage, job.text, job.giveUp, { now: now() })) { await bucket.remove([path]); out.rejected++; }
+      else { out.operational = true; out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`); }
+      continue;
+    }
     done++;
     const v = await voiceOne({ storage, apiKey, fetchImpl, text: job.text, now, limits });
     out.spent += v.spent;
@@ -108,8 +115,13 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
     if (v.result === "transient") {
       const attempts = (job.attempts ?? 0) + 1;
       if (attempts >= MAX_ATTEMPTS) {
-        await saveRejected(storage, job.text, `gave up after ${attempts} attempts: ${v.error}`, { now: now() });
-        await bucket.remove([path]); out.rejected++;
+        const reason = `gave up after ${attempts} attempts: ${v.error}`;
+        // The entry goes only once the record that ends its retries is saved.
+        if (await saveRejected(storage, job.text, reason, { now: now() })) { await bucket.remove([path]); out.rejected++; }
+        else {
+          await put(bucket, path, { ...job, attempts, giveUp: reason });
+          out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`);
+        }
       } else {
         await put(bucket, path, { ...job, attempts, lastError: String(v.error).slice(0, 200) });
         out.retried++;
