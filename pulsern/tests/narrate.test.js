@@ -615,4 +615,10 @@ describe("open and closed compounds", () => {
     }
     expect(audioCheck(script, "Smokers still need routine screening.").pass).toBe(false);
   });
+  it("never folds numbers, even next to a hyphenated number word", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    const script = "The forty-five-year-old client's respiratory rate and pain score are forty, five.";
+    expect(audioCheck(script, "The 45-year-old client's respiratory rate and pain score are 40, 5.").pass).toBe(true);
+    expect(audioCheck(script, "The forty-five-year-old client's respiratory rate and pain score are 405.").pass).toBe(false);
+  });
 });

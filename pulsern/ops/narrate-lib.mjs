@@ -278,7 +278,9 @@ function scriptCompounds(script) {
      (PR #157 review) */
   for (const m of String(script).toLowerCase().matchAll(/\b([a-z]{2,})-([a-z]{2,})\b/g)) {
     const l = speechTokens(m[1]).at(-1), r = speechTokens(m[2])[0];
-    if (l && r) pairs.add(`${l} ${r}`);
+    /* letters only on both sides: number words become digits, and "forty-
+       five" must never register "40 5" and fold "forty, five" into 405 */
+    if (/^[a-z]+$/.test(l ?? "") && /^[a-z]+$/.test(r ?? "")) pairs.add(`${l} ${r}`);
   }
   return pairs;
 }
