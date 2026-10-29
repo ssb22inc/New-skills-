@@ -136,11 +136,10 @@ export function compensationLimit(primary, kind, { paco2, hco3 }) {
     const mid = ([a, b]) => (a + b) / 2;
     const band = ([k1, k2]) => [24 + sign * k1 * d, 24 + sign * k2 * d].sort((a, b) => a - b);
     const acuteB = band(kA), chronicB = band(kC);
-    if (kind === "acidosis") acuteB[1] = Math.min(acuteB[1], ACUTE_RESP_ACID_HCO3_MAX - 2), acuteB[0] = Math.min(acuteB[0], acuteB[1]);
     if (kind === "acidosis" && paco2 > RESP_ACID_RULES_MAX_PACO2) {
       /* Past the rules' useful range: only a value too LOW for even acute
          buffering is called short; anything higher is left to the history. */
-      const low = Math.min(acuteB[0], ACUTE_RESP_ACID_HCO3_MAX - 2) - 2;
+      const low = Math.min(acuteB[0], ACUTE_RESP_ACID_HCO3_MAX) - 2;
       return range("HCO₃⁻", hco3, low, 60, false, [mid(acuteB), mid(chronicB)],
         { outsideRules: true, acuteFit: false, chronicFit: false, acuteBand: acuteB.map(r1), chronicBand: chronicB.map(r1) });
     }
@@ -148,7 +147,10 @@ export function compensationLimit(primary, kind, { paco2, hco3 }) {
     const lo = Math.min(acuteB[0], chronicB[0]) - 2, hi = Math.max(acuteB[1], chronicB[1]) + 2;
     return range("HCO₃⁻", hco3, lo, hi, kind === "alkalosis", [mid(acuteB), mid(chronicB)],
       { acuteFit: inBand(hco3, acuteB), chronicFit: inBand(hco3, chronicB), acuteBand: acuteB.map(r1), chronicBand: chronicB.map(r1),
-        belowFloor: kind === "alkalosis" && hco3 < RESP_ALK_HCO3_FLOOR });
+        belowFloor: kind === "alkalosis" && hco3 < RESP_ALK_HCO3_FLOOR,
+        /* the formula band is kept as taught; a value above the usual acute
+           buffering limit is flagged as unusual, not excluded (Sol, round 18) */
+        acuteUnusual: kind === "acidosis" && inBand(hco3, acuteB) && hco3 > ACUTE_RESP_ACID_HCO3_MAX });
   }
   return null;
 }
@@ -194,6 +196,7 @@ function compensationText(c, primary) {
 /* The short qualification shown under the verdict, so the uncertainty the
    reading carries is visible inline, not only in the caption (Sol, round 6). */
 function cautionFor(c, primary, compensation) {
+  if (c.acuteUnusual) return "HCO₃⁻ above about 30–32 is unusual for acute buffering alone: chronic compensation or acute-on-chronic is more likely; prior gases decide.";
   if (c.outsideRules) return "PaCO₂ beyond the bedside rules' range: chronic compensation, acute-on-chronic, or a metabolic component; prior gases decide.";
   if (c.belowFloor) return `HCO₃⁻ below about ${RESP_ALK_HCO3_FLOOR}–15 is more than respiratory alkalosis usually explains: an added metabolic acidosis is possible; the history decides.`;
   if (c.aboveCeiling) return `PaCO₂ above about ${ALKALOSIS_PACO2_CEILING}: an added respiratory acidosis is possible; the history decides.`;
@@ -219,14 +222,15 @@ function courseText(c) {
   const span = ([a, b]) => (a === b ? `${a}` : `${a}–${b}`);
   const est = `the acute estimate is about ${span(c.acuteBand)} ± 2 and the chronic about ${span(c.chronicBand)} ± 2 ${u}`;
   const acidosisRise = chronic > acute;   // HCO₃⁻ rises in respiratory acidosis, falls in alkalosis
-  if (c.acuteFit && c.chronicFit) return `${est}, and it fits both`;
+  const unusual = c.acuteUnusual ? `; an HCO₃⁻ above about 30–32 is unusual for acute buffering alone, so chronic compensation or an acute change on chronic disease is more likely` : "";
+  if (c.acuteFit && c.chronicFit) return `${est}, and it fits both${unusual}`;
   /* The two estimates are not the only time courses: an acute change on
      top of chronic disease lands between them (Sol, round 13). The
      estimates describe how long the CURRENT PaCO₂ has been at this level,
      which prior gases and the timeline show — not a history of lung
      disease alone. */
   const timeline = "prior gases and the timeline of this PaCO₂ change decide";
-  if (c.acuteFit) return `${est}: it fits a PaCO₂ change of hours; if this PaCO₂ has been sustained for days, this HCO₃⁻ would suggest an added metabolic ${acidosisRise ? "acidosis" : "alkalosis"}, so ${timeline}`;
+  if (c.acuteFit) return `${est}: it fits a PaCO₂ change of hours${unusual}; if this PaCO₂ has been sustained for days, this HCO₃⁻ would suggest an added metabolic ${acidosisRise ? "acidosis" : "alkalosis"}, so ${timeline}`;
   /* A chronic-only fit can also be an acute change on top of chronic
      disease (Sol, round 15: baseline 70/36 rising acutely to 80/37), so no
      added metabolic disorder is inferred from it; the acute change is
@@ -292,7 +296,17 @@ export function interpretAbg({ ph, paco2, hco3, precision = null }) {
       reading: `${cap(emia)} (pH ${show("ph")}), with PaCO₂ and HCO₃⁻ both inside their reference ranges. The values agree with each other, but the primary process can't be named from reference cutoffs; small shifts in both may be contributing, so the trend and history decide.` };
   }
   const tested = cands.map((c) => ({ ...c, limit: compensationLimit(c.primary, c.kind, v) }));
-  const fits = tested.filter((c) => !offRange(c.limit));
+  /* A rule that can't be applied here is NOT a fit (Sol, round 18: above
+     the rules' PaCO₂ range a wide placeholder counted as compensation, so
+     7.37 / 81 / 45 read "fully compensated"). */
+  const fits = tested.filter((c) => !offRange(c.limit) && !c.limit.outsideRules);
+  const unevaluable = tested.find((c) => c.limit.outsideRules && !offRange(c.limit));
+  if (unevaluable) {
+    const u = unevaluable;
+    return { disorder: `${u.primary} ${u.kind}`, primary: u.primary, compensation: "not evaluable", mixedPossible: true,
+      caution: cautionFor(u.limit, u.primary, null),
+      reading: `${cap(u.primary)} ${u.kind} pattern, compensation not evaluable here: ${compensationText(u.limit, u.primary)}.${fits.length ? ` A ${fits.map((f) => `${f.primary} ${f.kind}`).join(" or ")} reading also fits the values.` : ""}` };
+  }
   const otherNormalFor = (c) => (c.primary === "respiratory" ? hco3Normal : co2Normal);
   const romeFor = (c) => (phState === "normal" ? (otherNormalFor(c) ? "unclear" : "full") : otherNormalFor(c) ? "none" : "partial");
 
@@ -479,6 +493,7 @@ export function verdictLabel(r) {
   if (r.disorder === "inconsistent") return "Values don't fit: recheck";
   if (r.disorder === "unsupported") return "Outside automatic interpretation range";
   if (r.compensation === "unclear") return `${cap(r.disorder)} pattern · pH in range`;
+  if (r.compensation === "not evaluable") return `${cap(r.disorder)} · compensation not evaluable`;
   if (r.disorder === "indeterminate") return `Either: ${r.alternatives?.join(" or ") ?? "history decides"}`;
   if (r.mixed) return `Possible mixed: ${r.disorder} + ${r.mixed}`;
   return `${cap(r.disorder)}${r.compensation ? ` · ${romeLabel(r.compensation)}` : ""}`;
@@ -491,11 +506,9 @@ export function verdictLabel(r) {
 export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
   const concept = params === null;
   const r = concept ? null : interpretAbg(params);
-  /* Coral only for a definite abnormal reading; an uncertain one (compensation
-     unclear, two readings, unresolved, unsupported) is neutral ink — coral is
-     reserved for critical or incorrect states (Sol, round 12). */
-  const uncertain = !concept && (r.compensation === "unclear" || ["indeterminate", "unsupported"].includes(r.disorder) || /unresolved/.test(r.disorder));
-  const chipColor = concept || r.disorder === "normal" ? "teal" : uncertain ? "ink" : "coral";
+  /* Coral only for values that don't fit together (incorrect data): an
+     abnormal reading is not by itself critical (Sol, round 18). */
+  const chipColor = concept || r.disorder === "normal" ? "teal" : r.disorder === "inconsistent" ? "coral" : "ink";
   const label = concept ? "Read pH → PaCO₂ → HCO₃⁻ → match" : verdictLabel(r);
   const chipLines = paraLines(label, 300, BODY_TEXT).length;
   const caution = concept ? null : r.caution ?? null;

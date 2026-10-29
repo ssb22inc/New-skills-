@@ -227,7 +227,7 @@ describe("every verdict label fits", () => {
       const { renderToStaticMarkup } = await import("react-dom/server");
       const { AbgDiagram } = await import("../src/diagrams/abg.jsx");
       const html = renderToStaticMarkup(React.createElement(AbgDiagram, { params: { ph, paco2, hco3 } }));
-      const chip = [...html.matchAll(/<rect x="([-\d.]+)" y="[\d.]+" width="([\d.]+)" height="[\d.]+" rx="[\d.]+" fill="var\(--surface\)" stroke="var\(--(?:coral|teal)\)"/g)].at(-1);
+      const chip = [...html.matchAll(/<rect x="([-\d.]+)" y="[\d.]+" width="([\d.]+)" height="[\d.]+" rx="[\d.]+" fill="var\(--surface\)" stroke="var\(--(?:coral|teal|ink)\)"/g)].at(-1);
       expect(chip, "verdict chip").toBeTruthy();
       expect(Number(chip[1])).toBeGreaterThanOrEqual(0);
       expect(Number(chip[1]) + Number(chip[2])).toBeLessThanOrEqual(360);
@@ -504,11 +504,30 @@ describe("round 17", () => {
     expect(r.reading).toMatch(/bedside rules are not reliable, so no acute or chronic fit is claimed/);
     expect(r.mixedPossible).toBe(true);
   });
-  it("caps the acute estimate where acute buffering stops", () => {
-    const r = read(7.2, 70, 40);   // acute 27–30, capped at 30; chronic 34.5–36
-    expect(r.reading).not.toMatch(/acute estimate is about 2\d–3[3-9]/);
+  it("keeps the taught acute band and flags values above the usual buffering limit (round 18)", () => {
+    const r = read(7.24, 80, 33);   // acute 28–32 ± 2 includes 33
+    expect(r.reading).toMatch(/acute estimate is about 28–32 ± 2/);
+    expect(r.reading).toMatch(/unusual for acute buffering alone/);
   });
   it("still calls an HCO₃⁻ too low for any buffering short at high PaCO₂", () => {
     expect(read(7.0, 100, 24).mixed).toBe("metabolic acidosis");
+  });
+});
+
+describe("round 18", () => {
+  it("never counts an unevaluable rule as compensation (Sol: 7.37 / 80 / 45 vs 7.37 / 81 / 45)", () => {
+    expect(read(7.37, 80, 45).mixedPossible).toBe(true);
+    const r = read(7.37, 81, 45);
+    expect(r.compensation).toBe("not evaluable");
+    expect(verdictLabel(r)).toBe("Respiratory acidosis · compensation not evaluable");
+    expect(r.reading).not.toMatch(/fully compensated/);
+  });
+  it("uses coral only for values that don't fit together", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { AbgDiagram } = await import("../src/diagrams/abg.jsx");
+    const chip = (p) => { const h = renderToStaticMarkup(React.createElement(AbgDiagram, { params: p })); return h.slice(h.indexOf('data-g="result"'), h.indexOf('data-g="comp"')); };
+    expect(chip({ ph: 7.37, paco2: 50, hco3: 28 })).not.toContain("var(--coral)");
+    expect(chip({ ph: 7.0, paco2: 40, hco3: 24 })).toContain("var(--coral)");
   });
 });

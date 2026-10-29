@@ -292,6 +292,11 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
             <Anim on="worked" kind="fade" dur={900}>
               <path d={curvePath(mine, mst.h)} fill="none" stroke={C.accent} strokeWidth={mst.w + 1.6} strokeDasharray={mst.dash} strokeLinecap="round" />
             </Anim>
+            {/* solid accent boundaries on top of every fill, so the peak
+                window's edges are seen in both themes (Sol, round 18) */}
+            {mine.peak ? [mine.peak[0], mine.peak[1]].map((h) => (
+              <line key={h} className="dg-solid" x1={hx(h)} x2={hx(h)} y1={YTOP} y2={Y0} stroke={C.accent} strokeWidth={1.6} />
+            )) : null}
             <Syringe x={X0 + 6} y={YTOP - 20} />
             <T x={doseX} y={YTOP - 18} size={MIN_TEXT} weight={700} mono color={C.accent}>{`dose ${params.givenAt}`}</T>
           </OnStep>
