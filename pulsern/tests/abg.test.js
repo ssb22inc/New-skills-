@@ -13,7 +13,8 @@ describe("uncompensated", () => {
     expect(read(7.30, 55, 24)).toMatchObject({ disorder: "respiratory acidosis", primary: "respiratory", compensation: "none" });
   });
   it("respiratory alkalosis: low CO₂ (hyperventilation)", () => {
-    expect(read(7.50, 28, 24)).toMatchObject({ disorder: "respiratory alkalosis", compensation: "none" });
+    // acute fall: 24 − 2 × 1.2 = 21.6 ± 2 (7.50/28/24 sits just above that range)
+    expect(read(7.50, 28, 22)).toMatchObject({ disorder: "respiratory alkalosis", compensation: "none" });
   });
   /* Textbook values chosen to sit inside the expected-compensation ranges:
      a PaCO2 of 40 with HCO3 16 is NOT simply uncompensated (Winter 32 ± 2),
@@ -51,8 +52,21 @@ describe("fully compensated — pH normal, side of 7.40 tells the origin", () =>
   it("metabolic alkalosis, fully compensated", () => {
     expect(read(7.44, 46, 33)).toMatchObject({ disorder: "metabolic alkalosis", compensation: "full", mixedPossible: false });   // 0.7×33+21 = 44.1 ± 2
   });
-  it("refuses to guess at exactly 7.40, and does not call it compensated", () => {
-    expect(read(7.40, 55, 32)).toMatchObject({ disorder: "indeterminate", compensation: null, mixedPossible: true });
+  /* Sol, PR #155 diagram review: the side of 7.40 is an exam heuristic, not
+     how the primary is chosen. Each candidate is tested against its expected
+     compensation; at exactly 7.40 the one that fits is reported. */
+  it("does not decide by the side of 7.40, and says full compensation needs the history", () => {
+    const r = read(7.40, 55, 32);
+    expect(r).toMatchObject({ disorder: "respiratory acidosis", compensation: "full" });
+    expect(r.reading).toMatch(/history decides/);
+  });
+  it("Sol's case: pH 7.36, PaCO2 36, HCO3 19.7 is metabolic acidosis with appropriate compensation", () => {
+    expect(read(7.36, 36, 19.7)).toMatchObject({ disorder: "metabolic acidosis", compensation: "full", mixedPossible: false });   // Winter 37.6 ± 2
+  });
+  it("Sol's case: pH 7.39, PaCO2 32, HCO3 18.7 fits chronic respiratory alkalosis, not a forced metabolic primary", () => {
+    const r = read(7.39, 32, 18.7);
+    expect(r).toMatchObject({ disorder: "respiratory alkalosis", compensation: "full" });
+    expect(r.reading).toMatch(/mixed disorder can look the same/);
   });
 });
 
@@ -61,7 +75,8 @@ describe("the edges", () => {
     expect(read(7.40, 40, 24)).toMatchObject({ disorder: "normal", compensation: null });
   });
   it("combined acidosis: both systems push acid", () => {
-    expect(read(7.15, 60, 16)).toMatchObject({ disorder: "combined respiratory and metabolic acidosis", primary: "both", compensation: null });
+    // 7.15/60/16 implies pH 7.05; 7.10/60/18 is the same picture, internally consistent
+    expect(read(7.10, 60, 18)).toMatchObject({ disorder: "combined respiratory and metabolic acidosis", primary: "both", compensation: null });
   });
   it("flags a pH no value explains instead of inventing a diagnosis", () => {
     expect(read(7.25, 30, 30).disorder).toBe("inconsistent");
@@ -89,19 +104,21 @@ describe("the edges", () => {
    compensation whatever their size. Compensation has limits and does not
    overshoot; beyond them, a mixed disorder is possible. */
 describe("compensation that goes too far", () => {
-  it("flags Astra's case: pH 7.40, PaCO2 20, HCO3 12 is not simply 'fully compensated'", () => {
+  /* 7.40/20/12 sits inside chronic respiratory alkalosis (24 − 5 × 2 = 14 ± 2):
+     a single disorder fits, and the reading says a mixed one can look the same. */
+  it("Astra's case 7.40/20/12: the one disorder that fits, with the mixed caveat", () => {
     const r = read(7.40, 20, 12);
-    expect(r.compensation).toBeNull();
-    expect(r.mixedPossible).toBe(true);
-    expect(r.reading).not.toMatch(/^Fully compensated/);
+    expect(r).toMatchObject({ disorder: "respiratory alkalosis", compensation: "full" });
+    expect(r.reading).toMatch(/mixed disorder can look the same/);
   });
   /* Round 10: out of the expected range, no single compensated disorder
      is asserted — ROME is given only as a preliminary pattern. */
   it("does not call it fully compensated when PaCO2 overshoots Winter's formula", () => {
-    const r = read(7.37, 30, 17);   // expected PaCO2 1.5×17+8 = 33.5 ± 2
+    // Winter 1.5×9+8 = 21.5 ± 2; chronic respiratory alkalosis would need HCO3 ≥ 24 − 12.5 − 2 = 9.5
+    const r = read(7.40, 15, 9);
     expect(r).toMatchObject({ disorder: "metabolic acidosis", compensation: null, romePattern: "full", mixedPossible: true, mixed: "respiratory alkalosis" });
     expect(r.reading).toMatch(/^ROME pattern only:/);
-    expect(r.reading).toMatch(/31\.5–35\.5/);
+    expect(r.reading).toMatch(/19\.5–23\.5/);
     expect(r.reading).toMatch(/metabolic acidosis with respiratory alkalosis/);
   });
   it("Astra's round-10 case: pH 7.38, PaCO2 20, HCO3 11.4 is not 'fully compensated'", () => {
@@ -137,7 +154,8 @@ describe("compensation that goes too far", () => {
     expect(read(7.48, 50, 35).mixed).toBe("respiratory acidosis");     // PaCO2 above 0.7×35+21+2
     expect(read(7.52, 40, 34).mixed).toBe("respiratory alkalosis");    // PaCO2 below 0.7×34+21−2
     expect(read(7.10, 80, 22).mixed).toBe("metabolic acidosis");       // HCO3 below the acute rise
-    expect(read(7.36, 60, 40).mixed).toBe("metabolic alkalosis");      // HCO3 above the chronic rise
+    expect(read(7.38, 70, 40).mixed).toBe("respiratory acidosis");     // Sol's case: neither single disorder fits (metabolic alkalosis would need PaCO2 47–51)
+    expect(read(7.38, 70, 40).reading).toMatch(/mixed/);
   });
   it("flags respiratory 'compensation' past the metabolic alkalosis limit", () => {
     expect(read(7.48, 50, 35).mixedPossible).toBe(true);   // limit 0.7×35+21+2 = 47.5
@@ -161,7 +179,7 @@ describe("compensation that goes too far", () => {
   });
   it("does not flag a respiratory disorder still within the acute range", () => {
     expect(read(7.30, 55, 24)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 ≥ 22 + 1.5 − 2
-    expect(read(7.50, 28, 24)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 ≤ 26 − 2.4 + 2
+    expect(read(7.50, 28, 22)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 21.6 ± 2
   });
   it("flags a respiratory acidosis whose bicarbonate has not risen even acutely", () => {
     // PaCO2 80: even acutely HCO3 should be at least 22 + 4 − 2 = 24
@@ -175,7 +193,8 @@ describe("compensation that goes too far", () => {
     const { renderToStaticMarkup } = await import("react-dom/server");
     const { AbgDiagram } = await import("../src/diagrams/abg.jsx");
     const html = renderToStaticMarkup(React.createElement(AbgDiagram, { params: { ph: 7.38, paco2: 20, hco3: 11.4 } }));
-    expect(html).toContain("Possible mixed: metabolic acidosis + respiratory alkalosis");
+    const chip = html.replace(/<\/text><text[^>]*>/g, " ");   // the chip wraps onto lines
+    expect(chip).toContain("Possible mixed: metabolic acidosis + respiratory alkalosis");
     expect(html).not.toMatch(/fully compensated<\/text>|· fully compensated/);
   });
 });
@@ -197,13 +216,45 @@ describe("every verdict label fits", () => {
 });
 
 describe("the chip's safety net", () => {
-  it("shrinks an over-long label to stay on the canvas", async () => {
+  /* Sol, PR #155 diagram review: shrinking long verdicts made them unreadable. */
+  it("wraps an over-long label onto lines, at a readable size, inside the canvas", async () => {
     const React = (await import("react")).default;
     const { renderToStaticMarkup } = await import("react-dom/server");
-    const { Chip } = await import("../src/diagrams/kit.jsx");
-    const html = renderToStaticMarkup(React.createElement("svg", null, React.createElement(Chip, { x: 180, y: 20, text: "x".repeat(90), size: 12 })));
+    const { Chip, MIN_TEXT } = await import("../src/diagrams/kit.jsx");
+    const html = renderToStaticMarkup(React.createElement("svg", null, React.createElement(Chip, { x: 180, y: 20, text: "word ".repeat(30).trim() })));
     const [, x, w] = /<rect x="([-\d.]+)" y="[-\d.]+" width="([\d.]+)"/.exec(html);
     expect(Number(x)).toBeGreaterThanOrEqual(0);
     expect(Number(x) + Number(w)).toBeLessThanOrEqual(360);
+    expect((html.match(/<text/g) ?? []).length).toBeGreaterThan(1);
+    for (const m of html.matchAll(/font-size="([\d.]+)"/g)) expect(Number(m[1])).toBeGreaterThanOrEqual(MIN_TEXT);
+  });
+});
+
+/* Sol, PR #155 diagram review: values that cannot belong together must not
+   be interpreted, and the numbers shown must be the numbers classified. */
+describe("internal consistency and precision", () => {
+  it("withholds a verdict when pH and PaCO2/HCO3 disagree (7.20, 60, 36 implies about 7.40)", () => {
+    const r = read(7.20, 60, 36);
+    expect(r.disorder).toBe("inconsistent");
+    expect(r.reading).toMatch(/near 7\.40/);
+  });
+  it("refuses impossible values", () => {
+    expect(read(7.3, 0.5, 24).disorder).toBe("inconsistent");
+    expect(read(7.3, 55, 80).disorder).toBe("inconsistent");
+  });
+  it("shows decimals as given, so a boundary never looks crossed", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { AbgDiagram, abg } = await import("../src/diagrams/abg.jsx");
+    const html = renderToStaticMarkup(React.createElement(AbgDiagram, { params: { ph: 7.34, paco2: 45.4, hco3: 23.7 } }));
+    expect(html).toContain(">45.4<");
+    expect(html).toContain(">23.7<");
+    expect(abg.dynamicCaption({ ph: 7.34, paco2: 45.4, hco3: 23.7 })).toMatch(/PaCO₂ 45\.4, HCO₃⁻ 23\.7/);
+  });
+  it("teaches bicarbonate as a push, never as deciding the pH by itself", async () => {
+    const { abg } = await import("../src/diagrams/abg.jsx");
+    const all = [...abg.facts, ...abg.steps.flatMap((x) => [x.caption ?? "", x.narration ?? ""])].join(" ");
+    expect(all).not.toMatch(/leaves the blood acidic|makes it alkaline/);
+    expect(all).toMatch(/heuristic/);
   });
 });
