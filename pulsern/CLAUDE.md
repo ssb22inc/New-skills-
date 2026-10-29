@@ -7,6 +7,7 @@
 - Straight quotes in code. Accessibility: focus rings, reduced-motion, ≥4.5:1 contrast both themes.
 - Claims hygiene: compare, never equate ("like the real exam", never "same as"); readiness never promises outcomes; NCSBN trademark disclaimer stays in footer and app.
 - Owner amendment (standing, reaffirmed 2026-07-16): despite the pack's human-review framing, the ADVERSARIAL AI is the accuracy gate for ALL site content — questions, exams, cases, flashcards, images/visuals, and site copy (ops/audit-sweep.mjs, factory review passes, copy audits). Owner extension (2026-07-16, explicit order): QBank practice questions now ALSO publish through the adversarial gate at >=0.85 (content-factory --publish) so the bank can reach 3,000+ live items; the console keeps rejection authority. The owner-RN retains full rejection/oversight authority over everything; nothing unapproved reaches students.
+- Owner amendment (explicit order, 2026-10-29): the PUBLIC marketing/search pages pass without the model-based search review (ops/seo-adversary-ai.mjs). That review still runs on every change and must leave a complete, valid report or the search gate fails; a completed FAIL verdict is reported as a warning, not a release blocker (`seo:enforce -- --advisory`). Every deterministic search check stays required, and this does not change the adversarial gate for questions, exams, cases, flashcards, visuals or in-app copy.
 
 ## What this project is
 
