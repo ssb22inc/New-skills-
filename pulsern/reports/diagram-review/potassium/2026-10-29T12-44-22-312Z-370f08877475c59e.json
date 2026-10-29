@@ -1,0 +1,31 @@
+{
+  "id": "potassium",
+  "title": "Potassium & the ECG",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T12:44:22.312Z",
+  "images": 16,
+  "key": "370f08877475c59e",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "consistency",
+      "where": "Images 8 and 16; step \"worked\"; potassiumStepDesc()",
+      "title": "Text alternative calls the schematic strip the client's",
+      "problem": "The description ends with \"The hyperkalemia strip is outlined as this client's\" (and similarly for hypokalemia). The input supplies only k, not an ECG. This wording implies patient-specific ECG findings despite the diagram's explicit warning that potassium cannot predict them reliably.",
+      "fix": "Replace it with \"The outline identifies the client's potassium category; the strip shows possible findings, not this client's recorded ECG.\"",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2852185
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Correct the worked-step text alternative: it attributes an illustrative ECG pattern to a client whose only supplied measurement is potassium.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}

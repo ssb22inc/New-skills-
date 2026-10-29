@@ -1,0 +1,21 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T12:48:56.211Z",
+  "images": 16,
+  "key": "41c36e47b9b93847",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.291641
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No confirmed defects found in the supplied insulin images, narration scripts, or worked-example logic, including midnight crossings and peakless glargine. Recorded audio was not supplied, so playback could not be verified.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
