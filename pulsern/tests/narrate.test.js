@@ -607,4 +607,12 @@ describe("open and closed compounds", () => {
     expect(audioCheck("Pre-load and after-load.", "Preload and afterload.")).toMatchObject({ pass: true, mismatch: null });
     expect(audioCheck("Pre-load and after-load.", "Preload and overload.").pass).toBe(false);
   });
+  it("folds plural compounds in the same normalised form", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    const script = "Non-smokers still need routine screening.";
+    for (const heard of ["Non-smokers still need routine screening.", "Non smokers still need routine screening.", "Nonsmokers still need routine screening."]) {
+      expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
+    }
+    expect(audioCheck(script, "Smokers still need routine screening.").pass).toBe(false);
+  });
 });

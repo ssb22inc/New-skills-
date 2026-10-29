@@ -273,7 +273,13 @@ export function speechTokens(text) {
    never joined. Used by both the word check and the similarity score. */
 function scriptCompounds(script) {
   const pairs = new Set();
-  for (const m of String(script).toLowerCase().matchAll(/\b([a-z]{2,})-([a-z]{2,})\b/g)) pairs.add(`${m[1]} ${m[2]}`);
+  /* stored in the SAME normalised form the tokens are compared in (plural
+     and unit handling applied), so "non-smokers" folds as "non smoker"
+     (PR #157 review) */
+  for (const m of String(script).toLowerCase().matchAll(/\b([a-z]{2,})-([a-z]{2,})\b/g)) {
+    const l = speechTokens(m[1]).at(-1), r = speechTokens(m[2])[0];
+    if (l && r) pairs.add(`${l} ${r}`);
+  }
   return pairs;
 }
 function foldCompounds(tokens, pairs) {
