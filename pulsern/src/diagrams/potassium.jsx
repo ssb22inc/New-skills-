@@ -97,6 +97,10 @@ function Strip({ x, y, w, kind, step }) {
 function Callout({ cx, cy, lx, ly, label, step }) {
   return (
     <Anim on={step} kind="pop" delay={1500}>
+      {/* a light halo under the ring and leader keeps them visible on the
+          dark monitor in the light theme (Sol, round 20) */}
+      <circle className="dg-solid" cx={cx} cy={cy} r={7.5} fill="none" stroke={C.card} strokeWidth={4.2} />
+      <path className="dg-solid" d={`M${lx - 2},${ly + 2} L${cx + 5},${cy - 6}`} fill="none" stroke={C.card} strokeWidth={4.2} strokeLinecap="round" />
       <circle className="dg-solid" cx={cx} cy={cy} r={7.5} fill="none" stroke={C.accent} strokeWidth={1.8} />
       <path className="dg-solid" d={`M${lx - 2},${ly + 2} L${cx + 5},${cy - 6}`} fill="none" stroke={C.accent} strokeWidth={1.8} strokeLinecap="round" />
       <T x={lx} y={ly} size={MIN_TEXT} weight={700} color={C.accent}>{label}</T>

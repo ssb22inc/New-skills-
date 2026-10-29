@@ -549,3 +549,13 @@ describe("round 19", () => {
     expect(gauges).not.toMatch(/var\(--coral\)|var\(--danger-ink\)/);
   });
 });
+
+describe("round 20", () => {
+  it("rejects a triad the analyzer constants cannot produce (Sol: 7.35 / 60 / 30)", () => {
+    expect(read(7.35, 60, 30).disorder).toBe("inconsistent");
+  });
+  it("still accepts gases within the constants' range", () => {
+    expect(interpretAbg({ ph: 7.4, paco2: 40, hco3: 24.22, precision: { ph: 3, paco2: 2, hco3: 2 } }).disorder).toBe("normal");
+    expect(read(7.3, 50, 24).disorder).toBe("respiratory acidosis");
+  });
+});
