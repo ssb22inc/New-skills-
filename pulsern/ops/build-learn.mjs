@@ -9,6 +9,7 @@
    Run: node ops/build-learn.mjs   (also run by `npm run build:learn`) */
 
 import { writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { GRADING_NOTE } from "../src/grading-note.js";
 import { createHash } from "node:crypto";
 import { ARTICLES } from "./learn-content.mjs";
 import { MANIFEST_GENERATED_AT, POLICY_VERSION, SEARCH_INTENTS, intentFor, sourcesFor } from "./seo-content-policy.mjs";
@@ -273,7 +274,7 @@ ${faq}
 </article>
 </main>
 
-<footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+<footer><p class="foot">${GRADING_NOTE}</p><p class="foot">${DISCLAIMER} <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>
 `);
@@ -322,7 +323,7 @@ function renderIndex(all) {
 <p class="sub">Guides written by <a href="/about/#sheldon-bennett-rn">${esc(REVIEW_LEDGER.reviewer.displayName)}</a>, a working hospital RN. Each approved guide is tied to its sources and a review record.</p>
 <div class="cta"><p><b>Start with a question.</b> <a href="/free-nclex-practice-test/">Try 20 free NCLEX-RN practice questions</a> with the answer, the rationale, and the sources on the page. No sign-in required.</p></div>
 ${sections}
-</main><footer><p class="foot">${DISCLAIMER} <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
+</main><footer><p class="foot">${GRADING_NOTE}</p><p class="foot">${DISCLAIMER} <a href="/legal/">Terms, Privacy, and Disclaimer</a> &middot; <a href="/about/">About</a> &middot; <a href="/editorial-policy/">Editorial policy</a></p></footer>
 </body>
 </html>
 `);

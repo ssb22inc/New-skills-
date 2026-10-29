@@ -4,6 +4,7 @@
    feedback until the end, and a proportional time limit. Scoring and the
    readiness verdict are deterministic plain code (rule 6). */
 import { useState, useEffect, useRef } from "react";
+import { GRADING_NOTE_LONG } from "./grading-note.js";
 import { supabase } from "./supabase.js";
 import { ngnExt } from "./ngn.js";
 import { EXAM_FORMS, EXAM_MINUTES, FULL_STANDALONE, FULL_CASES, verdictFor } from "./exam-core.js";
@@ -255,6 +256,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
           <p className="eyebrow">Readiness self-assessment</p>
           <h2 className="h2">NCLEX-style exams</h2>
           <p className="small">Ten standardized exams of <strong>85 questions each</strong>, the real NCLEX-RN's minimum length. Every form is 55 standalone questions plus 5 full case studies (6 questions each, 30 case-study questions in all), weighted to the official test plan, with a {Math.floor(EXAM_MINUTES / 60)}h{EXAM_MINUTES % 60}m clock, one question at a time, and no feedback until you finish. These questions never appear in Practice, so your score is an honest signal, and no account is ever shown the same exam twice.</p>
+          <p className="small"><strong>Graded more strictly than the NCLEX.</strong> {GRADING_NOTE_LONG.replace(/^Readiness self-assessments are graded more strictly than the NCLEX: /, "In these exams, ")}</p>
           {isOwner && <p className="small tip">🔧 Owner dev access: every exam is open, retakes allowed, nothing is burned.</p>}
           {err && <p className="small tip" role="alert">{err}</p>}
           {ent && !isOwner && !trial && <p className="small tip">You have <strong>{examsLeft}</strong> self-assessment{examsLeft === 1 ? "" : "s"} remaining.{examsLeft === 0 && onUpgrade ? <> Add one for $45 from <button className="auth-switch" onClick={onUpgrade}>Plans & upgrades</button>.</> : null}</p>}

@@ -1,4 +1,5 @@
 import React from "react";
+import { GRADING_NOTE, GRADING_NOTE_LONG } from "./grading-note.js";
 import { planById } from "./pricing.js";
 
 const freePassLabel = planById("pass1").name.toLowerCase();
@@ -14,7 +15,7 @@ const FEATURES = [
 const FAQ = [
   ["Who created PulseRN?", "Sheldon Bennett, a working hospital RN. He started from how people actually learn and remember under pressure, then engineered the study loop around it."],
   ["Does PulseRN use real NCLEX questions?", "No. Practice items are original and built around NCSBN's published test plan and item formats. PulseRN is not affiliated with or endorsed by NCSBN. NCLEX® is a registered trademark of NCSBN."],
-  ["What does the readiness estimate tell me?", "Readiness is an estimate built from your work in PulseRN. It suggests what to review next, so every session moves you closer to exam day."],
+  ["What does the readiness estimate tell me?", `Readiness is an estimate built from your work in PulseRN. It suggests what to review next, so every session moves you closer to exam day. ${GRADING_NOTE_LONG}`],
   ["How is the content checked?", "Practice questions, case studies, flashcards, and readiness items are built around the published test plan and pass automated quality checks before they go live. Public study guides are source-cited and approved by Sheldon Bennett, RN."],
   ["Is there a free option?", `Yes. A ${freePassLabel} covers study content, and no card is needed. Readiness self-assessments are included with paid plans.`],
 ];
@@ -304,6 +305,7 @@ export default function LandingPage({ onSignIn, onStart }) {
       <footer className="land-footer">
         <div className="land-container">
           <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div></div>
+          <p className="land-disclaimer">{GRADING_NOTE}</p>
           <p className="land-disclaimer">Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse PulseRN.</p>
         </div>
       </footer>
