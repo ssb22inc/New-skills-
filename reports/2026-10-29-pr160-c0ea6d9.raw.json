@@ -1,0 +1,62 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "c0ea6d9a1a856227b4786ebb7c932dc6c5479b13",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T23:00:35.972Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 128,
+      "title": "Retain the original job if persisting its replacement fails",
+      "problem": "After the final transient attempt, if saveRejected fails, the worker writes a give-up entry to the retry lane but ignores that upload's result. It then removes the original fresh-queue entry even if the retry upload also failed. This loses the pending job and its retry history without saving a terminal record.",
+      "failure_scenario": "A fresh job reaches its fifth attempt while the provider is failing. Storage is full, so both the rejection-record upload and retry-entry upload fail, but deletion remains available. The original queue entry is deleted, leaving neither a queued job nor a rejection record.",
+      "fix": "Check the retry upload result and remove the original only after the replacement is durably saved. If neither record nor replacement can be saved, retain the original and fail the run. Add a regression test where both uploads fail while removal succeeds.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 495,
+      "title": "Do not report preparation after an unrepairable cached-audio failure",
+      "problem": "When a passing record exists but creating its signed audio URL fails, speak falls through to queue admission. The queue loop then skips that passage because readRecord still returns the passing record, and the route returns 202 despite queuing no work for it. Prewarming also skips the same record, so a missing audio object is never rebuilt.",
+      "failure_scenario": "A passage retains its passing JSON record but its MP3 is missing. Every Listen request returns 'being prepared'; no queue entry is created, and the scheduled worker continually regards the passage as already decided. A transient signing-service error also incorrectly reports preparation instead of service unavailability.",
+      "fix": "Distinguish signing-service errors from missing audio. Return an unavailable response for operational signing failures. For a missing object, invalidate or repair the cached record and ensure the worker actually regenerates the audio rather than skipping it. Test both cases with an existing passing record.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 120194,
+    "completionTokens": 10592,
+    "reasoningTokens": 10024,
+    "costUsd": 0.4064035
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes: the worker can lose queued work during a storage failure, and the API can report that audio is being prepared when no repair work was queued. This was a static review; tests were not run, and the unchanged narration normalizer was not supplied for independent verification.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
