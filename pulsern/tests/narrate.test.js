@@ -583,3 +583,15 @@ describe("spoken halves", () => {
     expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
   });
 });
+
+describe("open and closed compounds", () => {
+  it("treats meal-time and mealtime as the same words, but never joins numbers", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    const { DIAGRAMS } = await import("../src/diagrams/index.js");
+    const script = DIAGRAMS.insulin.steps.find((s) => s.key === "rapid").narration;
+    const heard = "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in 10 to 30 minutes, peaks in 1 to 2 hours, and lasts 3 to 5 hours. It is mealtime insulin, and its exact timing follows the specific product and the prescribed plan.";
+    expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
+    expect(audioCheck(script, heard.replace("mealtime", "bedtime")).pass).toBe(false);
+    expect(audioCheck("a dose of 1 2 units", "a dose of 12 units").pass).toBe(false);
+  });
+});

@@ -264,8 +264,22 @@ export function speechTokens(text) {
 }
 
 /* The first word where script and transcript disagree, or null. */
+/* A compound may be written open or closed: "meal-time" (read as "meal
+   time") and "mealtime" are the same words. Two plain-letter tokens on one
+   side that spell exactly one token on the other are joined; numbers are
+   never joined, so every digit still has to match as scripted. */
+function joinCompounds(a, b) {
+  const plain = (w) => /^[a-z]+$/.test(w ?? "");
+  const x = [...a], y = [...b];
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if (x[i] === y[i]) continue;
+    if (plain(x[i]) && plain(x[i + 1]) && x[i] + x[i + 1] === y[i]) x.splice(i, 2, y[i]);
+    else if (plain(y[i]) && plain(y[i + 1]) && y[i] + y[i + 1] === x[i]) y.splice(i, 2, x[i]);
+  }
+  return [x, y];
+}
 export function wordMismatch(script, transcript) {
-  const a = speechTokens(script), b = speechTokens(transcript);
+  const [a, b] = joinCompounds(speechTokens(script), speechTokens(transcript));
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     if (a[i] !== b[i]) return { at: i, expected: a[i] ?? "(nothing)", heard: b[i] ?? "(nothing)", context: a.slice(Math.max(0, i - 3), i + 3).join(" ") };
   }
