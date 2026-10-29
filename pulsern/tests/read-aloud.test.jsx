@@ -707,6 +707,15 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(files.size).toBeGreaterThan(0);
   });
 
+  it("fails the run for a single queued provider failure, even when the bank has nothing left to do", async () => {
+    const { storage } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const r = await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 503 })), max: 1, log: () => {} });
+    expect(r.queue).toMatchObject({ retried: 1, providerDown: false });
+    expect(r.bank.stopped).toBe("skipped");
+    expect(r.failed).toBe(true);
+  });
+
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
     const { storage } = fakeStorage();
     expect((await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 2, log: () => {} })).failed).toBe(false);

@@ -64,7 +64,7 @@ const put = (bucket, path, value) => bucket.upload(path, JSON.stringify(value), 
 
 export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log }) {
   const bucket = storage.from(BUCKET);
-  const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, errors: [] };
+  const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
   const { data: entries, error } = await bucket.list("queue", { limit: 1000, sortBy: { column: "created_at", order: "asc" } });
   if (error) {
     if (/not found/i.test(String(error.message ?? error))) return out;
@@ -76,7 +76,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
   for (const f of (entries ?? []).filter((e) => e.name?.endsWith(".json"))) {
     const path = `queue/${f.name}`;
     const got = await readJsonFile(bucket, path);
-    if (got.error) { out.errors.push(`${f.name}: could not read (${got.error.message ?? got.error})`); continue; }
+    if (got.error) { out.operational = true; out.errors.push(`${f.name}: could not read (${got.error.message ?? got.error})`); continue; }
     const job = got.value;
     if (got.malformed || !job || job.voice !== TTS.voice || !validRequest(job.ref, job.seg, job.text) || passagePaths(job.text).queue !== path) {
       await bucket.remove([path]); out.skipped++; continue;
@@ -105,6 +105,9 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
         await put(bucket, path, { ...job, attempts, lastError: String(v.error).slice(0, 200) });
         out.retried++;
       }
+      // Any provider or storage failure is an operational failure of the run,
+      // even when processing carries on with the next entry.
+      out.operational = true;
       out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: ${v.error}`);
       if (++inARow >= MAX_TRANSIENT_IN_A_ROW) { out.providerDown = true; break; }
       continue;
@@ -268,7 +271,7 @@ export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch
     ...q.errors.map((e) => `error: ${e}`),
     ...(pruned.error ? [`error: pruning: ${pruned.error}`] : []),
   ];
-  const failed = !!(q.broken || q.providerDown || q.service || w.failure || pruned.error || q.errors.some((e) => /could not read/.test(e)));
+  const failed = !!(q.broken || q.operational || q.providerDown || q.service || w.failure || pruned.error);
   return { lines, failed, queue: q, bank: w, pruned };
 }
 
