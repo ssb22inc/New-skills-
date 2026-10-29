@@ -1,0 +1,62 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "fb2bb3962f3a65e0c20347a73820e0dfea9dae25",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T22:42:50.771Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 446,
+      "title": "An abandoned pending claim blocks the reading for the rest of the day",
+      "problem": "The admission marker is created as \"pending\" without a lease or recovery mechanism. If its creator terminates before writing \"ok\" or removing the marker, every subsequent request finds that marker, waits three seconds, and returns 503. Because the marker is shared across students, the failure affects everyone requesting that reference.",
+      "failure_scenario": "The first Listen request times out or its serverless process terminates during reserve(), after createOnce() succeeds but before the marker is confirmed. No passage has been queued. Unless prewarming independently voices it, subsequent Listen requests cannot recover until the next Eastern calendar day.",
+      "fix": "Make pending claims recoverable through an expiring, atomically reclaimable lease or transactional admission and queue creation. Add a test that leaves an abandoned pending marker and verifies that a later request can complete admission without bypassing the caps.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 111,
+      "title": "The final retry deletes the request even when its rejection record cannot be saved",
+      "problem": "At MAX_ATTEMPTS, saveRejected() can return false, but that result is ignored and the queue entry is removed anyway. The passage then has neither a queued request nor the terminal record that enforces the retry limit and seven-day reconsideration period.",
+      "failure_scenario": "A passage reaches its fifth transient failure while writes to its record path are failing. saveRejected() fails, but queue removal succeeds. The pending request is lost, and the next Listen request admits it again with zero attempts, defeating the give-up policy and potentially paying for the same passage repeatedly during intermittent storage trouble.",
+      "fix": "Remove the queue entry only after the terminal record is durably saved. If that write fails, retain a terminal-pending queue state so a later run retries persistence rather than synthesis, and report the storage failure. Test a failed rejection-record upload followed by an otherwise successful queue removal.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 114380,
+    "completionTokens": 15564,
+    "reasoningTokens": 15020,
+    "costUsd": 0.4415885
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. Two failure-recovery defects can strand valid voice requests or lose their terminal retry state. The extensive tests do not exercise either failure path.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
