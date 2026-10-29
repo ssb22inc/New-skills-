@@ -232,7 +232,7 @@ describe("frames are rendered from the source tree by the trusted renderer", () 
       const plan = JSON.parse(readFileSync(join(out, "plan.json"), "utf8"));
       expect(plan.commit).toBe(git(root, "rev-parse", "HEAD").trim());
       expect(plan.diagrams.map((d) => d.title)).toEqual(["ABG drawn in the browser"]);
-      expect(plan.diagrams[0].steps.map((s) => s.key)).toEqual(["ph", "lungs", "kidneys", "rome", "worked", "compensation"]);
+      expect(plan.diagrams[0].steps.map((s) => s.key)).toEqual(["ph", "lungs", "kidneys", "rome", "compensation", "limits", "worked"]);
       expect(readFileSync(join(out, "abg/0.png")).subarray(1, 4).toString()).toBe("PNG");
       expect(git(root, "status", "--porcelain", "--ignored"), "rendering left the tree untouched").toBe("");
     } finally { rmSync(root, { recursive: true, force: true }); rmSync(out, { recursive: true, force: true }); }

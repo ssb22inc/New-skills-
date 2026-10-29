@@ -134,6 +134,8 @@ const mixedResult = (primary, kind, rome, c) => {
   const where = `${c.name} ${fmtNum(c.value)} is ${c.beyond ? "beyond what compensation alone usually reaches" : "short of the compensation expected"} (about ${c.expected[0]}–${c.expected[1]} ${unitOf(c.name)})`;
   return {
     disorder: `${primary} ${kind}`, primary, compensation: null, romePattern: rome, mixedPossible: true, mixed: secondDisorder(c),
+    caution: primary === "metabolic" && c.short ? "Or respiratory compensation is still developing; the history decides."
+      : miss <= 1 ? "Borderline: the rules are approximations; the history decides." : null,
     reading: `ROME pattern only: ${primary} ${kind}, ${romeLabel(rome)}. But ${where}, `
       + (primary === "metabolic" && c.short
         ? `which has two explanations: respiratory compensation may still be developing (it takes hours, and the expected range assumes it is established), or a second disorder (${secondDisorder(c)}) is present. The history decides.`
@@ -157,6 +159,19 @@ function compensationText(c, primary) {
   }
   if (primary === "metabolic") return `${refPart}; expected compensation, once established, is about ${c.centers[0]} ± 2 (${c.expected[0]}–${c.expected[1]} ${u})`;
   return `${refPart}; ${courseText(c)}`;
+}
+/* The short qualification shown under the verdict, so the uncertainty the
+   reading carries is visible inline, not only in the caption (Sol, round 6). */
+function cautionFor(c, primary, compensation) {
+  if (c.aboveCeiling) return `PaCO₂ above about ${ALKALOSIS_PACO2_CEILING}: an added respiratory acidosis is possible; the history decides.`;
+  if (primary === "respiratory" && !(c.acuteFit && c.chronicFit)) {
+    const rise = c.centers[1] > c.centers[0];
+    if (c.acuteFit) return `Fits the acute estimate only: if chronic, an added metabolic ${rise ? "acidosis" : "alkalosis"}; the history decides.`;
+    if (c.chronicFit) return `Fits the chronic estimate only: if acute, an added metabolic ${rise ? "alkalosis" : "acidosis"}; the history decides.`;
+    return "Between the acute and chronic estimates: subacute, or a mixed disorder; the history decides.";
+  }
+  if (compensation === "full") return "A mixed disorder can look the same; the history decides.";
+  return null;
 }
 /* Which time course a respiratory disorder's HCO₃⁻ fits, and what the
    other course would imply. */
@@ -238,6 +253,7 @@ export function interpretAbg({ ph, paco2, hco3, precision = null }) {
     if (compensation === "unclear") {
       const own = f.primary === "respiratory" ? "PaCO₂" : "HCO₃⁻", other = f.primary === "respiratory" ? "HCO₃⁻" : "PaCO₂";
       return { disorder: `${f.primary} ${f.kind}`, primary: f.primary, compensation: "unclear", mixedPossible: true,
+        caution: "Only one value is out of range, so compensation can't be established from these values.",
         reading: `A ${f.primary} ${f.kind} pattern with the pH in range: ${own} is outside its reference range, while the pH and ${other} are inside theirs; ${detail}. This may be a mild disorder whose pH never left the range, or one already compensated. These values can't tell which, so the trend and history decide.` };
     }
     const courseUnclear = (f.primary === "respiratory" && !(f.limit.acuteFit && f.limit.chronicFit)) || !!f.limit.aboveCeiling;
@@ -246,11 +262,13 @@ export function interpretAbg({ ph, paco2, hco3, precision = null }) {
       : compensation === "partial"
         ? `${cap(f.primary)} ${f.kind}, partially compensated: pH is still out of range; ${detail}.`
         : `${cap(f.primary)} ${f.kind}, fully compensated by the NCLEX convention: pH is back in range; ${detail}.${FULL_CAVEAT}`;
-    return { disorder: `${f.primary} ${f.kind}`, primary: f.primary, compensation, mixedPossible: courseUnclear, reading };
+    return { disorder: `${f.primary} ${f.kind}`, primary: f.primary, compensation, mixedPossible: courseUnclear, reading,
+      caution: cautionFor(f.limit, f.primary, compensation) };
   }
   if (fits.length > 1) {
     const names = fits.map((f) => `${f.primary} ${f.kind}`);
     return { disorder: "indeterminate", primary: null, compensation: null, mixedPossible: true, alternatives: names,
+      caution: "Only the history can tell these apart.",
       reading: `Two readings fit these values: ${names.join(" or ")}, each with the pH in range. Only the history can tell them apart, and a mixed disorder is also possible.` };
   }
   /* Nothing fits as one disorder: every candidate's compensating value is
@@ -381,6 +399,17 @@ function CompTile({ x, y, title, lines, at, i }) {
   );
 }
 
+/* The rules the interpreter uses, shown so a student can do the check the
+   explainer asks for (Sol, round 6). */
+const RULES = [
+  ["Metabolic acidosis:", "PaCO₂ ≈ 1.5 × HCO₃⁻ + 8, ± 2 (Winter's formula)"],
+  ["Metabolic alkalosis:", "PaCO₂ ≈ 0.7 × HCO₃⁻ + 21, or 40 + 0.7 × (HCO₃⁻ − 24), ± 2; rarely above about 55"],
+  ["Respiratory acidosis:", "HCO₃⁻ up about 1 (acute) or 4 (chronic) per 10 mmHg PaCO₂ above 40, ± 2"],
+  ["Respiratory alkalosis:", "HCO₃⁻ down about 2 (acute) or 5 (chronic) per 10 mmHg PaCO₂ below 40, ± 2"],
+  ["", "Approximate, once established: breathing adjusts over hours, the kidneys over days. Well outside the range suggests a mixed disorder; just outside is borderline."],
+];
+const H_RULES = 44 + RULES.reduce((a, [lead, text]) => a + paraLines(`${lead} ${text}`, 296, MIN_TEXT).length * MIN_TEXT * 1.3 + 6, 0) + 2;
+
 /* The verdict on the chip: one line of what interpretAbg() decided. */
 export function verdictLabel(r) {
   if (r.disorder === "normal") return "Acid–base values in range";
@@ -402,12 +431,17 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
   const bad = !concept && r.disorder !== "normal";
   const label = concept ? "Read pH → PaCO₂ → HCO₃⁻ → match" : verdictLabel(r);
   const chipLines = paraLines(label, 300, BODY_TEXT).length;
-  const RY = 312, CY = 464 + (chipLines - 1) * 18, TY = CY + 30;
+  const caution = concept ? null : r.caution ?? null;
+  const cautionLines = caution ? paraLines(`Check: ${caution}`, 320, MIN_TEXT).length : 0;
+  const RY = 312, CY0 = 464 + (chipLines - 1) * 18;
+  const cautionY = CY0 + 22;
+  const CY = caution ? cautionY + (cautionLines - 1) * MIN_TEXT * 1.3 + 6 : CY0, TY = CY + 30;
+  const LY = TY + 192, ruleH = H_RULES, OY = LY + ruleH + 22;
   return (
-    <Frame h={TY + 188} focus={focus} title="Acid–base reading of an arterial blood gas"
-      regions={{ ph: [0, 100], co2: [104, 196], hco3: [200, 292], rome: [RY - 4, RY + 132], result: [RY + 132, CY + 6], comp: [TY - 4, TY + 164] }}
+    <Frame h={OY + 8} focus={focus} title="Acid–base reading of an arterial blood gas"
+      regions={{ ph: [0, 100], co2: [104, 196], hco3: [200, 292], rome: [RY - 4, RY + 132], result: [RY + 132, CY + 6], comp: [TY - 4, TY + 182], rules: [LY - 4, LY + ruleH + 4] }}
       desc={concept
-        ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, and a high PaCO2 pushes toward acidosis; HCO3 normal 22 to 26 mEq/L, and a low HCO3 pushes toward acidosis, a high one toward alkalosis; the actual pH depends on both together. Match the value that moves with the pH: respiratory opposite, metabolic equal. If both values push the pH the same way, both are primary: a combined disorder, not compensation. Compensation means the other value pushes back, the opposite way: other value still normal means uncompensated; pushing back but pH still out of range means partially compensated; pH back in range means fully compensated. Compensation has expected limits; a value outside them suggests a mixed disorder."
+        ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, and a high PaCO2 pushes toward acidosis; HCO3 normal 22 to 26 mEq/L, and a low HCO3 pushes toward acidosis, a high one toward alkalosis; the actual pH depends on both together. Match the value that moves with the pH: respiratory opposite, metabolic equal. If both values push the pH the same way, both are primary: a combined disorder, not compensation. Compensation means the other value pushes back, the opposite way: other value still normal means uncompensated; pushing back but pH still out of range means partially compensated; pH back in range with both values out of range in opposite directions means fully compensated; pH in range with only one value out means compensation cannot be established from these values. Expected compensation, once established: metabolic acidosis PaCO2 about 1.5 times HCO3 plus 8, plus or minus 2; metabolic alkalosis PaCO2 about 0.7 times HCO3 plus 21, or 40 plus 0.7 times (HCO3 minus 24), plus or minus 2, rarely above about 55; respiratory acidosis HCO3 up about 1 (acute) or 4 (chronic) per 10 mmHg PaCO2 above 40; respiratory alkalosis HCO3 down about 2 (acute) or 5 (chronic) per 10 mmHg below 40, each plus or minus 2. These are approximations; a value well outside suggests a mixed disorder."
         : `pH ${showAbg(params, "ph")} (normal 7.35 to 7.45), PaCO2 ${showAbg(params, "paco2")} mmHg (35 to 45; high pushes toward acidosis), HCO3 ${showAbg(params, "hco3")} mEq/L (22 to 26; low pushes toward acidosis). ${r.reading}`}>
       <G id="ph">
         <Gauge x={20} y={66} w={320} min={7.1} max={7.7} lo={7.35} hi={7.45} value={concept ? null : params.ph} decimals={2}
@@ -440,17 +474,27 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
       <G id="result">
         <Anim on="worked" kind="pop" delay={1100}>
           <Chip x={180} y={RY + 154} text={label} color={bad ? "coral" : "teal"} maxW={330} />
+          {caution ? <Para x={20} y={cautionY} w={320} size={MIN_TEXT} lead="Check:" text={caution} /> : null}
         </Anim>
       </G>
       <G id="comp">
         <CompTile x={16} y={TY} i={0} title="Uncompensated" lines={["pH out;", "other value", "still in its", "range"]} at={6} />
         <CompTile x={126} y={TY} i={1} title="Partial" lines={["pH still out;", "other value out", "of range, the", "opposite way"]} at={20} />
-        <CompTile x={236} y={TY} i={2} title="Full" lines={["pH back", "in range;", "check the", "limits"]} at={34} />
-        <T x={20} y={TY + 140} size={MIN_TEXT} color={C.muted}>NCLEX labels. Check the expected compensation too.</T>
+        <CompTile x={236} y={TY} i={2} title="Full" lines={["pH in range;", "both values", "out, opposite", "ways"]} at={34} />
+        <T x={20} y={TY + 140} size={MIN_TEXT} weight={700}>pH in range, one value out? Can't tell.</T>
         <T x={20} y={TY + 158} size={MIN_TEXT} weight={700}>Both push the same way? A combined disorder.</T>
+        <T x={20} y={TY + 176} size={MIN_TEXT} color={C.muted}>NCLEX labels; then check the limits below.</T>
+      </G>
+      <G id="rules">
+        <Box x={20} y={LY} w={320} h={ruleH} r={10} fill={C.surface} lift />
+        <T x={32} y={LY + 22} size={BODY_TEXT} weight={700}>5  Expected compensation</T>
+        {(() => { let y = LY + 44; return RULES.map(([lead, text], i) => {
+          const at = y; y += paraLines(`${lead} ${text}`, 296, MIN_TEXT).length * MIN_TEXT * 1.3 + 6;
+          return <Para key={i} x={32} y={at} w={296} size={MIN_TEXT} lead={lead} text={text} color={lead ? C.ink : C.muted} />;
+        }); })()}
       </G>
       <G id="oxy">
-        <T x={20} y={TY + 180} size={MIN_TEXT} color={C.muted}>Oxygenation (PaO₂, SaO₂) is assessed separately.</T>
+        <T x={20} y={OY} size={MIN_TEXT} color={C.muted}>Oxygenation (PaO₂, SaO₂) is assessed separately.</T>
       </G>
     </Frame>
   );
@@ -485,10 +529,12 @@ export const abg = {
       narration: "Then the kidneys. Bicarbonate is a base. Below twenty-two pushes toward acidosis, and above twenty-six pushes toward alkalosis. The actual pH depends on how it balances against the P-A-C-O-2." },
     { key: "rome", focus: ["rome"], caption: "Find the value that matches the pH. ROME: Respiratory, pH and PaCO₂ move Opposite ways. Metabolic, pH and HCO₃⁻ move the Equal way. If both values push the pH the same way, both are primary: a combined disorder.",
       narration: "Now find the value that matches the pH, using ROME. Respiratory: the pH and P-A-C-O-2 move in opposite directions. Metabolic: the pH and bicarbonate move in the same direction. And if both values are pushing the pH the same way, both are primary problems: that is a combined disorder." },
+    { key: "compensation", focus: ["comp"], caption: "Compensation is the other system pushing back, the opposite way, to offset the first. NCLEX labels use the reference ranges: pH out with the other value still in range, uncompensated; pH out with the other value out of range the opposite way, partially compensated; pH back in range with both values out of range in opposite directions, fully compensated. With the pH in range and only one value out, compensation can't be established from these values. If both values push the same way, it is a combined disorder, not compensation.",
+      narration: "Compensation is the other system pushing back, the opposite way, to offset the first. The NCLEX labels use the reference ranges. If the pH is out of range and the other value is still in its range, it is called uncompensated. If the other value is out of its range the opposite way, but the pH is still abnormal, it is partially compensated. If the pH is back in range and both values are out of range in opposite directions, it is fully compensated. With the pH in range and only one value out, compensation can't be established from these values. And if both values push the pH the same way, that is a combined disorder, not compensation." },
+    { key: "limits", focus: ["rules"], caption: "Then check the expected compensation. Metabolic acidosis: PaCO₂ about 1.5 × HCO₃⁻ + 8, ± 2. Metabolic alkalosis: PaCO₂ about 0.7 × HCO₃⁻ + 21, ± 2, rarely above about 55. Respiratory acidosis: HCO₃⁻ up about 1 (acute) or 4 (chronic) per 10 mmHg rise in PaCO₂. Respiratory alkalosis: HCO₃⁻ down about 2 (acute) or 5 (chronic) per 10 mmHg fall. These are approximations that assume compensation is established; well outside suggests a mixed disorder.",
+      narration: "Then check the expected compensation. In metabolic acidosis, the P-A-C-O-2 should be about one and a half times the bicarbonate, plus eight, give or take two. In metabolic alkalosis, it should be about point seven times the bicarbonate, plus twenty-one, give or take two, and rarely above about fifty-five. In respiratory acidosis, the bicarbonate rises about one for every ten the P-A-C-O-2 rises when it's acute, and about four when it's chronic. In respiratory alkalosis, it falls about two when acute, and about five when chronic. These are approximations that assume compensation is established, and a value well outside them suggests a mixed disorder." },
     { key: "worked", focus: ["ph", "co2", "hco3", "result"], dynamic: true, caption: null,
       narration: null },
-    { key: "compensation", focus: ["comp", "result"], caption: "Compensation is the other system pushing back, the opposite way, to offset the first. NCLEX labels use the reference ranges: pH out with the other value still in range, uncompensated; pH out with the other value out of range and pushing back, partially compensated; pH back in range, fully compensated. If both values push the same way, it is a combined disorder, not compensation. A normal pH alone doesn't prove compensation: check the expected compensation, because too far or not far enough suggests a mixed disorder.",
-      narration: "Compensation is the other system pushing back, the opposite way, to offset the first. The NCLEX labels use the reference ranges. If the pH is out of range and the other value is still in its range, it is called uncompensated. If the other value is out of its range and pushing back, but the pH is still abnormal, it is partially compensated. And if the pH is back in range, it is fully compensated. If both values push the pH the same way, that is a combined disorder, not compensation. A normal pH alone doesn't prove compensation, so check the expected compensation. A value that has gone too far, or not far enough, suggests a second, mixed disorder." },
   ],
   /* The worked-example step reads the actual values, so it is written by
      the same function that interprets them. */

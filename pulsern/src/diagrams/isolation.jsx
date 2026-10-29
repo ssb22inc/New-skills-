@@ -199,10 +199,10 @@ function Row({ id, y, r, scene, badges }) {
 
 export const ROWS = {
   contact: { title: "Contact: spread by touch", how: "Skin, wounds, stool, surfaces and shared equipment",
-    examples: "MRSA, VRE, C. diff, scabies, head lice, RSV, congenital rubella", wear: "gown and gloves", room: "single room, or cohort only with the same pathogen and compatible precautions; dedicated equipment" },
+    examples: "MRSA, VRE, C. diff, scabies, head lice, RSV, congenital rubella", wear: "gown and gloves", room: "single room preferred, or a same-pathogen cohort; dedicated equipment" },
   droplet: { title: "Droplet: close-range spread", how: "Larger droplets from coughing, sneezing and talking",
     examples: "influenza, pertussis, mumps, acquired rubella, meningococcal disease", wear: "surgical mask on entering the room",
-    room: "single room preferred, or cohort only with the same pathogen and compatible precautions" },
+    room: "single room preferred, or a same-pathogen cohort" },
   airborne: { title: "Airborne: stays in the air", how: "Tiny particles hang in the air and travel on air currents",
     examples: "pulmonary or laryngeal TB, measles, chickenpox (+\u00a0contact)", wear: "fit-tested N95 respirator",
     room: "negative-pressure isolation room, door closed" },
@@ -230,10 +230,10 @@ const Rub = ({ x, y }) => (
 );
 
 const DESC = "Standard precautions, including hand hygiene, for every client; transmission-based precautions are added on top. "
-  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella): gown and gloves, a single room or a cohort with clients who have the same pathogen and compatible precautions, dedicated equipment; for C. difficile, hands are washed with soap and water because alcohol rub is not effective against its spores. "
-  + "Droplet precautions (larger respiratory droplets spread at close range by coughing, sneezing and talking; for example influenza, pertussis, mumps, acquired rubella, meningococcal disease): surgical mask on entering the room; a single room is preferred, or cohorting only with clients who have the same pathogen and compatible precautions. "
+  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella): gown and gloves; a single room preferred, or a cohort with clients who have the same pathogen and compatible precautions, and if neither is possible infection prevention decides the placement; dedicated equipment; for C. difficile, hands are washed with soap and water because alcohol rub is not effective against its spores. "
+  + "Droplet precautions (larger respiratory droplets spread at close range by coughing, sneezing and talking; for example influenza, pertussis, mumps, acquired rubella, meningococcal disease): surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen and compatible precautions; if neither is possible, infection prevention decides the placement. "
   + "Airborne precautions (tiny particles that stay in the air; for example suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox): fit-tested N95 respirator, negative-pressure airborne infection isolation room with the door closed. Chickenpox and disseminated zoster need airborne and contact precautions together. "
-  + "On droplet or airborne precautions, the client wears a surgical mask when transported, if tolerated, and chickenpox or zoster lesions are covered; the N95 respirator is for staff.";
+  + "On droplet or airborne precautions, the client wears a surgical mask when transported, if tolerated, and chickenpox or zoster lesions are covered; staff wear the PPE for the precaution (an N95 for airborne).";
 
 export function IsolationDiagram({ focus = null }) {
   const y1 = 64, y2 = y1 + rowHeight(ROWS.contact) + 10, y3 = y2 + rowHeight(ROWS.droplet) + 10;
@@ -261,7 +261,7 @@ export function IsolationDiagram({ focus = null }) {
       <G id="transport">
         <Box x={8} y={yT} w={344} h={74} r={10} fill={C.card} stroke={C.teal} lift />
         <T x={18} y={yT + 22} size={BODY_TEXT} weight={700} color={C.accent}>Transport: droplet or airborne</T>
-        <T x={18} y={yT + 42} size={MIN_TEXT}>The client wears a surgical mask; the N95 is for staff.</T>
+        <T x={18} y={yT + 42} size={MIN_TEXT}>The client wears a surgical mask if tolerated.</T>
         <T x={18} y={yT + 61} size={MIN_TEXT}>Chickenpox or zoster: cover the lesions too.</T>
       </G>
       <G id="cdiff">
@@ -283,27 +283,27 @@ export const isolation = {
   example: null,
   facts: [
     "Standard precautions apply to every client; transmission-based precautions are added on top of them.",
-    "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella) require a gown and gloves, a single room or cohorting with clients who have the same pathogen and compatible additional precautions, and dedicated equipment. Head lice need contact precautions until 24 hours after effective treatment; body and pubic lice need standard precautions.",
-    "Droplet precautions (e.g., influenza, pertussis, mumps, acquired rubella, meningococcal disease) require a surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen and compatible additional precautions when a single room is not available.",
+    "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella) require a gown and gloves and dedicated equipment; a single room is preferred, or cohorting with clients who have the same pathogen and compatible additional precautions, and if neither is possible, infection prevention determines an appropriate placement with additional safeguards. Head lice need contact precautions until 24 hours after effective treatment; body and pubic lice need standard precautions.",
+    "Droplet precautions (e.g., influenza, pertussis, mumps, acquired rubella, meningococcal disease) require a surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen and compatible additional precautions; if neither is possible, infection prevention determines an appropriate placement with additional safeguards.",
     "Respiratory droplets spread mainly at close range; there is no fixed distance at which transmission stops.",
     "Airborne precautions (e.g., suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox) require a fit-tested N95 respirator and a negative-pressure airborne infection isolation room with the door closed.",
     "Chickenpox (varicella) and disseminated zoster require airborne AND contact precautions. Localized zoster in an immunocompromised client requires airborne and contact precautions until dissemination is ruled out; localized zoster in an immunocompetent client, or once dissemination is ruled out, with the lesions covered, needs standard precautions.",
     "Latent tuberculosis infection is not contagious and needs no isolation; extrapulmonary tuberculosis without pulmonary or laryngeal involvement needs standard precautions (draining lesions are managed separately). Congenital rubella needs contact precautions; acquired rubella needs droplet precautions.",
-    "On droplet or airborne precautions, the client wears a surgical mask, if tolerated, when transported out of the room, and affected varicella or zoster lesions are covered; the N95 respirator is worn by staff.",
+    "On droplet or airborne precautions, the client wears a surgical mask, if tolerated, when transported out of the room, and affected varicella or zoster lesions are covered; staff wear the PPE the precaution requires (an N95 respirator for airborne).",
     "Alcohol-based hand rub is not effective against C. difficile spores; hands are washed with soap and water.",
   ],
   steps: [
     { key: "standard", focus: ["standard"], caption: "Every client gets standard precautions. Transmission-based precautions are added on top, matched to how the organism spreads.",
       narration: "Every client gets standard precautions. Transmission-based precautions are added on top, and they are matched to how the organism spreads." },
-    { key: "contact", focus: ["contact"], caption: "Contact: spread by touch, through skin, wounds, stool and surfaces, as with MRSA, C. diff, head lice and congenital rubella. Gown and gloves, a single room or a cohort only with the same pathogen and compatible precautions, and dedicated equipment such as a stethoscope that stays in the room.",
-      narration: "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces, as with MRSA, C. diff, head lice, and congenital rubella. Wear a gown and gloves. The client needs a single room, or a cohort only with clients who have the same pathogen and compatible precautions, and dedicated equipment, such as a stethoscope that stays in the room." },
+    { key: "contact", focus: ["contact"], caption: "Contact: spread by touch, through skin, wounds, stool and surfaces, as with MRSA, C. diff, head lice and congenital rubella. Gown and gloves, a single room if possible or a same-pathogen cohort (otherwise infection prevention decides), and dedicated equipment such as a stethoscope that stays in the room.",
+      narration: "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces, as with MRSA, C. diff, head lice, and congenital rubella. Wear a gown and gloves. A single room is preferred, or a cohort with clients who have the same pathogen; if neither is possible, infection prevention decides the placement. The client also needs dedicated equipment, such as a stethoscope that stays in the room." },
     { key: "cdiff", focus: ["contact", "cdiff"], caption: "The C. diff trap: alcohol hand rub is not effective against its spores. Wash with soap and water.",
       narration: "Here is the C. diff trap. Alcohol hand rub is not effective against its spores, so wash your hands with soap and water." },
-    { key: "droplet", focus: ["droplet"], caption: "Droplet: larger droplets spread at close range by coughing, sneezing and talking, as with influenza, pertussis, mumps, acquired rubella and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred; a shared room is only with the same pathogen and compatible precautions.",
-      narration: "Droplet precautions are for larger droplets that spread at close range when a client coughs, sneezes, or talks, as with influenza, pertussis, mumps, acquired rubella, and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred. A room is shared only with a client who has the same pathogen and compatible precautions." },
+    { key: "droplet", focus: ["droplet"], caption: "Droplet: larger droplets spread at close range by coughing, sneezing and talking, as with influenza, pertussis, mumps, acquired rubella and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, or a same-pathogen cohort; otherwise infection prevention decides.",
+      narration: "Droplet precautions are for larger droplets that spread at close range when a client coughs, sneezes, or talks, as with influenza, pertussis, mumps, acquired rubella, and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, or a cohort with clients who have the same pathogen. If neither is possible, infection prevention decides the placement." },
     { key: "airborne", focus: ["airborne"], caption: "Airborne: tiny particles that hang in the air, as with pulmonary or laryngeal TB, measles and chickenpox. A fit-tested N95 respirator, and a negative-pressure room with the door kept closed. Chickenpox also needs contact precautions: gown and gloves.",
       narration: "Airborne precautions are for tiny particles that hang in the air, as with pulmonary or laryngeal tuberculosis, measles, and chickenpox. Wear a fit-tested N-ninety-five respirator, and keep the client in a negative-pressure room with the door closed. Chickenpox also needs contact precautions, so add a gown and gloves." },
-    { key: "transport", focus: ["droplet", "airborne", "transport"], caption: "If a client on droplet or airborne precautions must leave the room, the client wears a surgical mask if tolerated, and chickenpox or zoster lesions are covered; the N95 respirator is for staff. Chickenpox needs airborne and contact precautions together.",
-      narration: "If a client on droplet or airborne precautions has to leave the room, the client wears a surgical mask if they can tolerate it, and any chickenpox or zoster lesions are covered. The N-ninety-five respirator is for staff. And remember, chickenpox needs airborne and contact precautions together." },
+    { key: "transport", focus: ["droplet", "airborne", "transport"], caption: "If a client on droplet or airborne precautions must leave the room, the client wears a surgical mask if tolerated, and chickenpox or zoster lesions are covered; staff keep wearing the PPE for the precaution, such as an N95 for airborne. Chickenpox needs airborne and contact precautions together.",
+      narration: "If a client on droplet or airborne precautions has to leave the room, the client wears a surgical mask if they can tolerate it, and any chickenpox or zoster lesions are covered. Staff keep wearing the protection the precaution needs, such as an N-ninety-five respirator for airborne. And remember, chickenpox needs airborne and contact precautions together." },
   ],
 };

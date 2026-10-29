@@ -117,3 +117,22 @@ describe("worked example details", () => {
     expect(html).toMatch(/<desc[^>]*>NPH at 19:00: peak about 23:00 dose day–07:00 next day\./);
   });
 });
+
+describe("worked labels name only what the parameters establish (Sol, round 6)", () => {
+  it("never relabels a rapid-acting question as lispro", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { insulin, WORKED_LABEL } = await import("../src/diagrams/insulin.jsx");
+    const html = renderToStaticMarkup(React.createElement(insulin.Diagram, { params: { type: "rapid", givenAt: "07:30" } }));
+    expect(html).not.toContain("LISPRO");
+    expect(html).toContain("Rapid-acting insulin at 07:30");
+    expect(WORKED_LABEL.short).toBe("Regular U-100");
+  });
+  it("ties the IV comparison to regular U-100", async () => {
+    const { insulin } = await import("../src/diagrams/insulin.jsx");
+    const short = insulin.steps.find((s) => s.key === "short");
+    expect(short.caption).toMatch(/Regular U-100 given IV acts much faster/);
+    expect(short.caption).toMatch(/U-500 acts differently and is never given IV/);
+    expect(insulin.dynamicCaption({ type: "short", givenAt: "12:00" })).toMatch(/regular U-100/);
+  });
+});

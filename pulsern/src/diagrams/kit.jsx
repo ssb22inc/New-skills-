@@ -146,7 +146,10 @@ export function slicesFor(h, focus, regions, stepKey) {
    and are what the adversarial reviewer audits alongside the image. */
 export function Frame({ h, title, desc, focus = null, regions = null, children }) {
   const tid = React.useId();
-  const { stepKey, collect = null, still = false } = React.useContext(StepContext);
+  const { stepKey, collect = null, still = false, caption = null } = React.useContext(StepContext);
+  /* In the player the image is described by its own step, not the whole
+     lecture (Sol, round 6); the overview keeps the full description. */
+  const described = stepKey != null && caption ? caption : desc;
   const slices = slicesFor(h, focus, regions, stepKey) ?? [[0, h]];
   const solo = slicesFor(h, focus, regions, stepKey) != null;
   /* Paused means paused: the step's finished picture, with every animation
@@ -164,7 +167,7 @@ export function Frame({ h, title, desc, focus = null, regions = null, children }
             role={i ? undefined : "img"} aria-hidden={i ? "true" : undefined} aria-labelledby={i ? undefined : `${tid}-t ${tid}-d`}
             style={{ display: "block", fontFamily: SANS, overflow: whole ? "visible" : "hidden" }}>
             {i ? null : <title id={`${tid}-t`}>{title}</title>}
-            {i ? null : <desc id={`${tid}-d`}>{desc}</desc>}
+            {i ? null : <desc id={`${tid}-d`}>{described}</desc>}
             <defs>
               {["teal", "coral", "amber", "muted", "accent"].map((k) => (
                 /* userSpaceOnUse: the head is 8 units whatever the stroke width,

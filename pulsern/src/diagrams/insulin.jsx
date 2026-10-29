@@ -23,7 +23,7 @@ import { Frame, G, T, Box, C, Anim, Loop, OnStep, Para, paraLines, BODY_TEXT, MI
 /* Hours. Onset/peak are [from, to]; peak null means peakless. */
 export const INSULINS = {
   rapid:  { name: "Rapid-acting",  eg: "lispro, aspart, glulisine", onset: [10 / 60, 30 / 60], peak: [1, 2],  duration: [3, 5] },
-  short:  { name: "Short-acting",  eg: "regular",                   onset: [0.5, 1],          peak: [2, 4],  duration: [5, 8] },
+  short:  { name: "Short-acting",  eg: "regular U-100",             onset: [0.5, 1],          peak: [2, 4],  duration: [5, 8] },
   nph:    { name: "Intermediate",  eg: "NPH",                       onset: [1, 2],            peak: [4, 12], duration: [12, 18] },
   /* Glargine U-100 only. Detemir (dose-dependent, often shorter), glargine
      U-300 (up to ~36 h) and degludec (~42 h) act differently and are never
@@ -156,6 +156,11 @@ const Syringe = ({ x, y }) => (
 
 export const INSULIN_EXAMPLE = { type: "nph", givenAt: "07:00" };
 
+/* What the worked example calls the client's insulin. The parameters give
+   only the class, so a rapid-acting question is never relabelled with one
+   product's name (Sol, round 6: aspart showed as LISPRO). */
+export const WORKED_LABEL = { rapid: "Rapid-acting insulin", short: "Regular U-100", nph: "NPH", long: "Glargine U-100" };
+
 /* "11:00–19:00", "23:00 dose day–07:00 next day", "01:00–09:00 next day". */
 const DAY = ["dose day", "next day", "day 3"];
 export function windowText(pw) {
@@ -185,8 +190,8 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   const riskY = noteY + paraLines(NOTE, 324, MIN_TEXT).length * MIN_TEXT * 1.3 + 12;
   const workedY = riskY + 22 + paraLines(RISK, 300, MIN_TEXT).length * MIN_TEXT * 1.3 + 8;
   const workedText = pw
-    ? `${INSULINS[params.type].eg.split(",")[0].toUpperCase()} at ${params.givenAt}: peak about ${windowText(pw)}`
-    : concept ? "" : `${INSULINS[params.type].eg.split(",")[0].toUpperCase()} at ${params.givenAt}: no pronounced peak`;
+    ? `${WORKED_LABEL[params.type]} at ${params.givenAt}: peak about ${windowText(pw)}`
+    : concept ? "" : `${WORKED_LABEL[params.type]} at ${params.givenAt}: no pronounced peak`;
   const workedLines = workedText ? paraLines(workedText, 324).length : 0;
   const peakText = pw ? `peak ${windowText(pw)}` : "";
   const labelX = Math.max(X0, Math.min(X1 - peakText.length * 7.9, bandMid - (peakText.length * 7.9) / 2));
@@ -312,8 +317,8 @@ export const insulin = {
       narration: "Every insulin has an onset, when it starts working, and a duration, how long it lasts. Most also have a peak, when they work hardest. Glargine U-one-hundred has no pronounced peak." },
     { key: "rapid", focus: ["axes", "rapid", "rapid-meal", "table"], caption: "Rapid-acting insulin (lispro, aspart, glulisine) starts in 10 to 30 minutes and peaks in 1 to 2 hours. It is meal-time insulin; exact timing follows the specific product and the prescribed plan.",
       narration: "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in ten to thirty minutes and peaks in one to two hours. It is meal-time insulin, and its exact timing follows the specific product and the prescribed plan." },
-    { key: "short", focus: ["axes", "short", "table"], caption: "Regular insulin given subcutaneously starts in 30 to 60 minutes and peaks at 2 to 4 hours. Given IV, it acts much faster.",
-      narration: "Regular insulin given under the skin starts in thirty to sixty minutes and peaks at two to four hours. Given intravenously, it acts much faster." },
+    { key: "short", focus: ["axes", "short", "table"], caption: "Regular U-100 insulin given subcutaneously starts in 30 to 60 minutes and peaks at 2 to 4 hours. Regular U-100 given IV acts much faster. Concentrated regular U-500 acts differently and is never given IV.",
+      narration: "Regular U-one-hundred insulin given under the skin starts in thirty to sixty minutes and peaks at two to four hours. Regular U-one-hundred given intravenously acts much faster. Concentrated regular U-five-hundred acts differently, and it is never given intravenously." },
     { key: "nph", focus: ["axes", "nph", "table"], caption: "Intermediate NPH starts in 1 to 2 hours, with a long, broad peak from about 4 to 12 hours.",
       narration: "Intermediate-acting N-P-H starts in one to two hours, and has a long, broad peak from about four to twelve hours." },
     { key: "long", focus: ["axes", "long", "table", "note"], caption: "Long-acting glargine U-100 has no pronounced peak: a steady background level that wanes at about 24 hours. Other basal insulins, including glargine U-300, last differently, so check the product.",

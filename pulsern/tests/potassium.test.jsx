@@ -59,3 +59,16 @@ describe("potassium outside the usual range (Sol, rounds 4–5)", () => {
     expect(html).toContain("Cardiac monitoring");
   });
 });
+
+describe("round 6", () => {
+  it("teaches severe hypokalemia as urgent", () => {
+    expect(potassium.dynamicCaption({ k: 2.0 })).toMatch(/severe hypokalemia: dangerous dysrhythmias are possible/);
+    expect(potassium.dynamicCaption({ k: 3.4 })).not.toMatch(/severe/);
+  });
+  it("pairs insulin with glucose monitoring everywhere it is taught", () => {
+    const html = renderToStaticMarkup(<potassium.Diagram params={{ k: 6.2 }} focus={null} />);
+    expect(html).toMatch(/monitor glucose/);
+    expect(potassium.steps.find((s) => s.key === "hyper-care").caption).toMatch(/blood glucose monitored/);
+    expect(potassium.facts.join(" ")).toMatch(/hypoglycemia can occur despite the dextrose/);
+  });
+});

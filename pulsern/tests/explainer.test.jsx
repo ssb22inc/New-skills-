@@ -73,7 +73,11 @@ describe("concept-only mode (no confirmed patient values)", () => {
     expect(html).not.toContain("7.30");
     // the legend legitimately teaches the word "uncompensated"; what must be
     // absent is a verdict about a patient
-    expect(html).not.toMatch(/(Respiratory|Metabolic|Combined)[a-z ]* (acidosis|alkalosis)|Normal ABG/);
+    // absent is a verdict about a patient (the rules panel names disorders
+    // as teaching, so only the verdict area is checked)
+    const verdict = html.slice(html.indexOf('data-g="result"'), html.indexOf('data-g="comp"'));
+    expect(verdict.length).toBeGreaterThan(0);
+    expect(verdict).not.toMatch(/(Respiratory|Metabolic|Combined)[a-z ]* (acidosis|alkalosis)|Normal ABG|Check:/);
     expect(html).toContain("Read pH → PaCO₂ → HCO₃⁻ → match");
   });
   it("drops the worked-example step, which would need values", () => {

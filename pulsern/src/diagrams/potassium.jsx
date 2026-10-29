@@ -23,6 +23,8 @@ export const K_RANGE = { lo: 3.5, hi: 5.0 };
    however extreme — an extreme result, if genuine, is the most dangerous of
    all and must not look less concerning than a milder one (Sol, round 5). */
 export const K_EXTREME = { lo: 1.5, hi: 9.5 };
+/* Below this, hypokalemia is taught as severe (a common teaching cut-off). */
+export const K_SEVERE_LOW = 2.5;
 export function classifyPotassium(k) {
   if (!Number.isFinite(k)) throw new Error("classifyPotassium: value must be a number");
   if (k <= 0) return "recheck";
@@ -140,7 +142,7 @@ const HYPO_IV = [["noPush", "Never IV push or IM"], ["pump", "Diluted, on an inf
 const HYPER_CAUSES = "Kidney failure, K⁺-sparing diuretics, ACE inhibitors, crush injury, burns.";
 const GOALS = [
   ["Protect the heart:", "IV calcium gluconate, expected with ECG changes or a very high level; it does not lower K⁺."],
-  ["Shift K⁺ into cells:", "insulin with dextrose; the effect is temporary."],
+  ["Shift K⁺ into cells:", "insulin with dextrose, temporary; monitor glucose, as lows can occur despite dextrose."],
   ["Remove K⁺:", "dialysis; diuretics only if the kidneys respond; binders act slowly, so they are not rescue therapy alone."],
 ];
 
@@ -163,7 +165,7 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
   return (
     <Frame h={yHi + hHi + 6} focus={focus} title="Potassium and the heart"
       regions={{ level: [0, 96], hypo: [92, 196], hyper: [194, 316], "hypo-act": [yLo, yLo + hLo], "hyper-act": [yHi, yHi + hHi], match: [92, 316] }}
-      desc={`${concept ? "Serum potassium normal range 3.5 to 5.0 mEq/L." : state === "recheck" ? `A potassium of ${displayK(params.k)} is not a possible result; recheck the value. Normal range 3.5 to 5.0 mEq/L.` : `Serum potassium ${displayK(params.k)} mEq/L (normal 3.5 to 5.0): ${state}.`} Illustrative ECG strips of classic findings, which may or may not appear and do not track the level predictably. Low potassium can show flattened T waves, ST depression and a prominent U wave. High potassium can show tall peaked T waves, a widened QRS and flattened P waves, and a normal ECG does not rule out dangerous hyperkalemia. Low potassium causes: loop and thiazide diuretics, vomiting or NG suction, diarrhea; IV replacement is never given by IV push or IM, is diluted on an infusion pump with cardiac monitoring, and urine output is confirmed first. High potassium causes: kidney failure, potassium-sparing diuretics, ACE inhibitors, crush injury, burns. Hyperkalemia emergency goals, which can overlap under the prescribed protocol: protect the heart with IV calcium gluconate, expected with ECG changes or a very high level, which does not lower potassium; shift potassium into cells with insulin and dextrose, a temporary effect; remove potassium with dialysis, diuretics only if the kidneys respond, and binders, which act slowly and are not rescue therapy alone.`}>
+      desc={`${concept ? "Serum potassium normal range 3.5 to 5.0 mEq/L." : state === "recheck" ? `A potassium of ${displayK(params.k)} is not a possible result; recheck the value. Normal range 3.5 to 5.0 mEq/L.` : `Serum potassium ${displayK(params.k)} mEq/L (normal 3.5 to 5.0): ${state}.`} Illustrative ECG strips of classic findings, which may or may not appear and do not track the level predictably. Low potassium can show flattened T waves, ST depression and a prominent U wave. High potassium can show tall peaked T waves, a widened QRS and flattened P waves, and a normal ECG does not rule out dangerous hyperkalemia. Low potassium causes: loop and thiazide diuretics, vomiting or NG suction, diarrhea; IV replacement is never given by IV push or IM, is diluted on an infusion pump with cardiac monitoring, and urine output is confirmed first. High potassium causes: kidney failure, potassium-sparing diuretics, ACE inhibitors, crush injury, burns. Hyperkalemia emergency goals, which can overlap under the prescribed protocol: protect the heart with IV calcium gluconate, expected with ECG changes or a very high level, which does not lower potassium; shift potassium into cells with insulin and dextrose, a temporary effect, with blood glucose monitored because hypoglycemia can occur despite the dextrose, especially in kidney failure; remove potassium with dialysis, diuretics only if the kidneys respond, and binders, which act slowly and are not rescue therapy alone.`}>
       <G id="level">
         <Gauge x={20} y={62} w={320} min={2} max={7} lo={3.5} hi={5.0} value={shown ? params.k : null} decimals={1}
           text={shown ? displayK(params.k) : null} unit="mEq/L"
@@ -247,7 +249,7 @@ export const potassium = {
     "IV potassium is never given by IV push or intramuscularly; it is diluted, given by infusion pump, with cardiac monitoring.",
     "Adequate urine output is confirmed before giving potassium, because the kidneys must be able to excrete it.",
     "In hyperkalemia with ECG changes or a severely elevated level, IV calcium gluconate stabilises the cardiac membrane; it does not lower the potassium level.",
-    "Treatment goals in hyperkalemia — stabilising the heart, shifting potassium into cells (insulin with dextrose, a temporary effect) and removing it from the body — can overlap under the applicable protocol. Dialysis removes potassium definitively; diuretics need a renal response; binders act slowly and are not sole rescue therapy for life-threatening hyperkalemia.",
+    "Treatment goals in hyperkalemia — stabilising the heart, shifting potassium into cells (insulin with dextrose, a temporary effect; blood glucose is monitored because hypoglycemia can occur despite the dextrose, particularly in kidney failure, and potassium is reassessed) and removing it from the body — can overlap under the applicable protocol. Dialysis removes potassium definitively; diuretics need a renal response; binders act slowly and are not sole rescue therapy for life-threatening hyperkalemia.",
   ],
   steps: [
     { key: "range", focus: ["level"], caption: "Normal serum potassium is 3.5–5.0. It sets the heart's resting electrical state, so either extreme can trigger a dangerous rhythm.",
@@ -258,8 +260,8 @@ export const potassium = {
       narration: "The common causes are loop and thiazide diuretics, vomiting or N-G suction, and diarrhea. I-V potassium is never pushed or given into a muscle. It is diluted and run on an infusion pump while the heart is monitored, after urine output has been confirmed, because the kidneys have to be able to clear it." },
     { key: "hyper-ecg", focus: ["hyper"], caption: "High potassium can cause tall, peaked T waves, a wider QRS and a flatter P wave, but not in a reliable order, and the ECG can look normal even when the level is dangerous.",
       narration: "High potassium can cause tall, peaked T waves, a wider Q-R-S, and a flatter P wave. But these changes do not come in a reliable order, and the E-C-G can look normal even when the level is dangerous." },
-    { key: "hyper-care", focus: ["hyper", "hyper-act"], caption: "How a raised result is handled depends on the scenario: assessing the client, cardiac monitoring and prompt escalation are prioritized together. For severe hyperkalemia, NCLEX priority reasoning uses three goals pursued alongside each other under the prescribed protocol: IV calcium gluconate protects the heart when the ECG shows changes or the level is very high, and does not lower potassium; insulin with dextrose shifts potassium into cells for a while; and removing potassium from the body, most definitively with dialysis, is started as indicated rather than after the others.",
-      narration: "How a raised potassium result is handled depends on the scenario. Assessing the client, cardiac monitoring, and prompt escalation are prioritized together, and can happen at the same time. For severe hyperkalemia, NCLEX priority reasoning uses three goals that are pursued alongside each other under the prescribed protocol. I-V calcium gluconate protects the heart when the E-C-G shows changes or the level is very high, and it does not lower the potassium. Insulin with dextrose shifts potassium into the cells for a while. And removing potassium from the body, most definitively with dialysis, is started as indicated, not saved until the others are finished." },
+    { key: "hyper-care", focus: ["hyper", "hyper-act"], caption: "How a raised result is handled depends on the scenario: assessing the client, cardiac monitoring and prompt escalation are prioritized together. For severe hyperkalemia, NCLEX priority reasoning uses three goals pursued alongside each other under the prescribed protocol: IV calcium gluconate protects the heart when the ECG shows changes or the level is very high, and does not lower potassium; insulin with dextrose shifts potassium into cells for a while, with blood glucose monitored because lows can occur despite the dextrose; and removing potassium from the body, most definitively with dialysis, is started as indicated rather than after the others.",
+      narration: "How a raised potassium result is handled depends on the scenario. Assessing the client, cardiac monitoring, and prompt escalation are prioritized together, and can happen at the same time. For severe hyperkalemia, NCLEX priority reasoning uses three goals that are pursued alongside each other under the prescribed protocol. I-V calcium gluconate protects the heart when the E-C-G shows changes or the level is very high, and it does not lower the potassium. Insulin with dextrose shifts potassium into the cells for a while, and blood glucose is monitored, because lows can still happen despite the dextrose. And removing potassium from the body, most definitively with dialysis, is started as indicated, not saved until the others are finished." },
     { key: "worked", focus: ["level", "hypo", "hyper", "match"], dynamic: true, caption: null, narration: null },
   ],
   dynamicCaption: ({ k } = K_EXAMPLE) => {
@@ -268,8 +270,13 @@ export const potassium = {
     const extreme = k < K_EXTREME.lo || k > K_EXTREME.hi
       ? " This is an extreme value: if genuine, it is potentially life-threatening, and confirming the result must not delay assessment and escalation."
       : "";
+    /* Severe hypokalemia gets its own urgency, not the borderline-low
+       teaching (Sol, round 6: 2.0 read like 3.49). */
+    const hypoRisk = k < K_SEVERE_LOW
+      ? " This is severe hypokalemia: dangerous dysrhythmias are possible, so in an exam scenario urgent assessment, cardiac monitoring and escalation come first."
+      : " Risk depends on the level, symptoms, ECG findings and how fast it is falling.";
     if (s === "normal") return `This client's potassium is ${v} mEq/L, within 3.5–5.0.`;
-    if (s === "hypokalemia") return `This client's potassium is ${v} mEq/L, below 3.5, so hypokalemia.${extreme} U waves and flat T waves are possible findings; urine output is confirmed before replacement.`;
+    if (s === "hypokalemia") return `This client's potassium is ${v} mEq/L, below 3.5, so hypokalemia.${extreme}${hypoRisk} U waves and flat T waves are possible findings; urine output is confirmed before replacement.`;
     return `This client's potassium is ${v} mEq/L, above 5.0, so hyperkalemia.${extreme} ECG changes may or may not appear, and a normal ECG does not rule out danger. Urgency depends on the level, symptoms and ECG findings, how fast it is rising, kidney function and the clinical context, not on the number alone.`;
   },
 };
