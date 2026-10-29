@@ -5,17 +5,21 @@
    - Follow-along: the part being read is highlighted, so a student can
      read and hear the same words at once (the screen passes segment ids,
      see src/read-aloud-script.js).
-   - Question first, choices with their letters, a short pause between
-     parts; the answer and rationale are never read before the student
-     answers, so listening never gives away the retrieval attempt.
+   - Question first, then the choices as the screen shows them, a short
+     pause between parts; the answer and rationale are never read before
+     the student answers, so listening never gives away the retrieval
+     attempt.
    - Their pace: 0.8x, 1x or 1.25x, remembered on this device.
    - Their choice: nothing plays until they press Listen. "Read each new
      question" keeps it hands-free once they turn it on.
 
    The voice: a natural AI voice from the PulseRN server (api/ai.js,
-   action "speak", cached so each passage is paid for once). If that is
-   not available, the best natural-sounding voice on the device is used
-   instead, and the label says which one is speaking.
+   action "speak"). The server voices only bank items the student may read,
+   rebuilt from the bank, and only audio that passed its accuracy check
+   (api/_speak.js). Anything else (a built-in item, a part that failed the
+   check, no voice set up, over the daily limit) is read by the best
+   natural-sounding voice on the device, and the label says which one is
+   speaking.
 
    Not used in readiness exams (src/exam.jsx): they stay exam conditions. */
 import React from "react";
@@ -44,29 +48,47 @@ const prefsStore = {
 };
 
 /* ---------- the AI voice (server) ---------- */
-let serverVoice = true;              // false once the server says it has no voice this session
-const urlCache = new Map();          // text -> Promise<url>
 async function accessToken() {
   try { const { data: { session } } = await supabase.auth.getSession(); return session?.access_token || ""; } catch { return ""; }
 }
-export function voiceUrl(text, fetchImpl = fetch) {
-  if (!urlCache.has(text)) {
-    const p = (async () => {
-      const token = await accessToken();
-      const r = await fetchImpl("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ action: "speak", text, token }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok || typeof data.url !== "string") { const e = new Error(data.error || "VOICE"); e.status = r.status; throw e; }
-      return data.url;
-    })();
-    p.catch(() => urlCache.delete(text));
-    urlCache.set(text, p);
-  }
-  return urlCache.get(text);
+/* Signed links last an hour on the server; reuse one for less than that. */
+export const URL_TTL_MS = 50 * 60 * 1000;
+/* Failures that mean no AI voice for the rest of this session (not set up,
+   signed out, over the daily limit, offline). Others (an item the server
+   cannot voice, a part that failed the accuracy check) affect that part
+   only. */
+export const endsSession = (status) => !status || status === 401 || status === 429 || status === 503;
+
+export function makeVoiceClient({ fetchImpl = (...a) => fetch(...a), now = () => Date.now(), token = accessToken } = {}) {
+  const cache = new Map(); // [ref, seg, text] -> { at, p }
+  const client = {
+    enabled: true,
+    url(ref, seg, text, { fresh = false } = {}) {
+      const k = JSON.stringify([ref, seg, text]);
+      const hit = cache.get(k);
+      if (!fresh && hit && now() - hit.at < URL_TTL_MS) return hit.p;
+      const p = (async () => {
+        const t = await token();
+        const r = await fetchImpl("/api/ai", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}) },
+          body: JSON.stringify({ action: "speak", ref, seg, text, token: t }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || typeof data.url !== "string") { const e = new Error(data.error || "VOICE"); e.status = r.status; throw e; }
+        return data.url;
+      })();
+      cache.set(k, { at: now(), p });
+      p.catch(() => { if (cache.get(k)?.p === p) cache.delete(k); });
+      return p;
+    },
+  };
+  return client;
 }
+const voice = makeVoiceClient();
+
+/* One reader speaks at a time across the page. */
+let speaking = null; // { owner, stop }
 
 /* ---------- the device voice (fallback) ---------- */
 /* Prefer the natural/neural voices modern systems ship; an English voice in
@@ -104,21 +126,30 @@ const wait = (ms, signal) => new Promise((resolve) => {
   signal.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
 });
 
+/* A reader starts by itself only when it is switched on (a real key, not
+   "off"), the student chose "Read each new one", and it has something to
+   read. A reader that has just been switched off never restarts. */
+export const shouldAutoRead = (key, auto, count) => key !== "off" && key != null && auto === true && count > 0;
+
 /* ---------- the hook ---------- */
 /* segments: [{ id, text }]. key: changes when the item changes (a new
    question), which stops reading and, with "Read each new question" on,
    starts reading the new one. */
-export function useReadAloud(segments, key) {
+export function useReadAloud(segments, key, ref = null) {
   const prefs = React.useSyncExternalStore(prefsStore.subscribe, prefsStore.get, prefsStore.get);
   const [status, setStatus] = React.useState("idle"); // idle | loading | playing | paused
   const [active, setActive] = React.useState(null);
-  const [source, setSource] = React.useState(serverVoice ? "ai" : "device");
+  const [source, setSource] = React.useState("ai");
   const run = React.useRef(null);   // { ctrl, audio }
   const resumeAt = React.useRef(0);
   const segsRef = React.useRef(segments);
   segsRef.current = segments;
   const prefsRef = React.useRef(prefs);
   prefsRef.current = prefs;
+  const refRef = React.useRef(ref);
+  refRef.current = ref;
+  const self = React.useRef({});
+  const stopRef = React.useRef(() => {});
 
   const halt = React.useCallback(() => {
     const r = run.current;
@@ -131,6 +162,8 @@ export function useReadAloud(segments, key) {
     halt();
     const segs = segsRef.current;
     if (!segs.length) return;
+    if (speaking && speaking.owner !== self.current) speaking.stop();
+    speaking = { owner: self.current, stop: () => stopRef.current() };
     const ctrl = new AbortController();
     const me = { ctrl, audio: null };
     run.current = me;
@@ -142,32 +175,37 @@ export function useReadAloud(segments, key) {
       resumeAt.current = i;
       const { id, text } = segs[i];
       let spoke = false;
-      if (serverVoice) {
-        try {
-          const url = await voiceUrl(text);
-          if (signal.aborted) return;
-          if (segs[i + 1]) voiceUrl(segs[i + 1].text).catch(() => {}); // the next part is ready when this one ends
+      const itemRef = refRef.current;
+      if (itemRef && voice.enabled) {
+        const playUrl = (url) => new Promise((resolve, reject) => {
           const audio = new Audio(url);
           audio.playbackRate = prefsRef.current.rate;
           audio.preservesPitch = true;
           audio.dataset.readAloud = "1";
           me.audio = audio;
           setActive(id); setStatus("playing"); setSource("ai");
-          await new Promise((resolve, reject) => {
-            audio.onended = resolve; audio.onerror = () => reject(new Error("PLAYBACK"));
-            signal.addEventListener("abort", resolve, { once: true });
-            audio.play().catch(reject);
-          });
-          spoke = true;
+          audio.onended = resolve; audio.onerror = () => reject(new Error("PLAYBACK"));
+          signal.addEventListener("abort", resolve, { once: true });
+          audio.play().catch(reject);
+        });
+        try {
+          for (let attempt = 0; attempt < 2 && !spoke; attempt++) {
+            /* A second attempt asks for a fresh link: the first may have
+               expired while the page stayed open. */
+            const url = await voice.url(itemRef, id, text, { fresh: attempt > 0 });
+            if (signal.aborted) return;
+            if (segs[i + 1]) voice.url(itemRef, segs[i + 1].id, segs[i + 1].text).catch(() => {}); // the next part is ready when this one ends
+            try { await playUrl(url); spoke = true; } catch (e) { if (e?.name === "NotAllowedError") throw e; }
+          }
         } catch (e) {
           if (signal.aborted) return;
           /* The browser would not start sound without a tap (auto-read on
              some phones): wait for the student to press Listen. */
           if (e?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("idle"); return; }
-          /* No server voice (not set up, signed out, outage): use the
-             device voice for the rest of this session. */
-          serverVoice = false;
+          if (endsSession(e?.status)) voice.enabled = false;
+          /* otherwise only this part is read by the device voice */
         }
+        if (signal.aborted) return;
       }
       if (!spoke) {
         if (!hasDeviceVoice()) { setStatus("idle"); setActive(null); setSource("none"); run.current = null; return; }
@@ -203,6 +241,7 @@ export function useReadAloud(segments, key) {
   const pause = React.useCallback(() => { halt(); setStatus("paused"); }, [halt]);
   const resume = React.useCallback(() => playFrom(resumeAt.current), [playFrom]);
   const stop = React.useCallback(() => { halt(); resumeAt.current = 0; setActive(null); setStatus("idle"); }, [halt]);
+  stopRef.current = stop;
 
   const setPrefs = React.useCallback((patch) => {
     prefsStore.set(patch);
@@ -212,8 +251,8 @@ export function useReadAloud(segments, key) {
   /* A new item: stop, and read it if the student asked for every one. */
   React.useEffect(() => {
     stop();
-    if (prefsRef.current.auto && segsRef.current.length) playFrom(0);
-    return () => halt();
+    if (shouldAutoRead(key, prefsRef.current.auto, segsRef.current.length)) playFrom(0);
+    return () => { halt(); if (speaking?.owner === self.current) speaking = null; };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Another voice starting (a diagram's narration) stops this one. */
@@ -223,7 +262,7 @@ export function useReadAloud(segments, key) {
     return () => document.removeEventListener("play", onPlay, true);
   }, [stop]);
 
-  const available = serverVoice || hasDeviceVoice();
+  const available = (voice.enabled && !!ref) || hasDeviceVoice();
   return { status, active, source, prefs, setPrefs, play, pause, resume, stop, available, isOn: (id) => active === id && status === "playing" };
 }
 

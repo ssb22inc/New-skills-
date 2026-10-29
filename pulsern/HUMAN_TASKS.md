@@ -189,9 +189,20 @@ Claude Code executes everything else. These run in parallel with the build.
   The label next to the buttons should say "AI voice". If it still says
   "Your device's voice", the key is missing or wrong.
 
-  Cost: each passage (a question stem, a choice, a rationale) is
-  synthesised once and saved in a private storage bucket (`read-aloud`,
-  created on first use). Every later listen to the same words is free.
-  OpenAI bills `gpt-4o-mini-tts` per minute of audio. Watch the first
-  weeks' usage at https://platform.openai.com/usage. Any signed-in
-  account can request speech for up to 1,500 characters at a time.
+  What the AI voice will say, and what it costs:
+  - Only items in the question bank that the student may open (approved,
+    with a current pass, never readiness-exam items). The words are
+    rebuilt from the bank on the server, so nobody can make it say
+    anything else. Built-in sample items use the device voice.
+  - Each new passage (a stem, a choice, a rationale) is synthesised, then
+    transcribed and checked word for word (numbers, units, negations)
+    before anyone hears it. It gets two tries; if both fail, that part
+    falls back to the device voice. Passing audio is saved in a private
+    storage bucket (`read-aloud`, created on first use) and reused free
+    from then on.
+  - Daily caps on NEW passages: 300 per student and 4,000 for the whole app
+    (UTC day). Change them with the Vercel variables `SPEAK_USER_DAILY` and
+    `SPEAK_GLOBAL_DAILY`. Over a cap, students get the device voice.
+  - OpenAI bills `gpt-4o-mini-tts` per minute of audio, plus the
+    `gpt-4o-transcribe` check. Watch the first weeks at
+    https://platform.openai.com/usage.

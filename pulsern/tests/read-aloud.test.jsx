@@ -10,9 +10,10 @@ import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable } from "../src/read-aloud-script.js";
-import { ReadAloudBar, pickDeviceVoice, ra, RATES, loadPrefs, sentences, speakLimitMs } from "../src/read-aloud.jsx";
-import { speak, speechKey, validSpeechText, SPEAK_MAX, BUCKET, TTS } from "../api/_speak.js";
+import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult } from "../src/read-aloud-script.js";
+import { ReadAloudBar, pickDeviceVoice, ra, RATES, loadPrefs, sentences, speakLimitMs, makeVoiceClient, URL_TTL_MS, endsSession, shouldAutoRead } from "../src/read-aloud.jsx";
+import { speak, speechKey, validRequest, voiceCheck, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS } from "../api/_speak.js";
+import { QA_VERSION } from "../ops/narrate-lib.mjs";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -138,78 +139,244 @@ describe("the controls", () => {
   });
 });
 
-/* A fake private bucket: list/upload/sign, recording calls. */
-function fakeStorage({ existing = [], missingBucket = false } = {}) {
-  const files = new Set(existing);
+/* A fake private bucket: download/upload/sign, recording calls. */
+function fakeStorage({ missingBucket = false } = {}) {
+  const files = new Map();
   let bucketExists = !missingBucket;
-  const calls = { upload: 0, createBucket: [] };
+  const calls = { upload: [], createBucket: [] };
   const bucket = {
-    list: async (dir, { search }) => ({ data: [...files].filter((f) => f === `${dir}/${search}`).map((f) => ({ name: f.split("/").pop() })), error: null }),
-    upload: async (path, body, opts) => {
-      calls.upload++;
+    download: async (path) => (files.has(path) ? { data: { text: async () => files.get(path).toString() }, error: null } : { data: null, error: { message: "Object not found" } }),
+    upload: async (path, body) => {
+      calls.upload.push(path);
       if (!bucketExists) return { error: { message: "Bucket not found" } };
-      expect(opts.contentType).toBe("audio/mpeg");
-      files.add(path);
+      files.set(path, Buffer.isBuffer(body) ? body : Buffer.from(String(body)));
       return { error: null };
     },
     createSignedUrl: async (path, secs) => (files.has(path) ? { data: { signedUrl: `https://signed.example/${path}?ttl=${secs}` }, error: null } : { data: null, error: { message: "Object not found" } }),
   };
   return { calls, files, storage: { from: (b) => { expect(b).toBe(BUCKET); return bucket; }, createBucket: async (name, opts) => { calls.createBucket.push([name, opts]); bucketExists = true; return { error: null }; } } };
 }
-const okAudio = () => vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }));
+const ROW = { id: 7, type: "mc", stem: "Which value is the priority?", options: ["Potassium 2.9 mEq/L", "Sodium 138 mEq/L"], answer: 0, rationale: "Low potassium risks dysrhythmias." };
+const REF = { kind: "question", id: 7, part: "question" };
+/* OpenAI fake: speech returns bytes; transcription returns what was "heard"
+   (by default exactly what was sent to be spoken). */
+function fakeOpenAI(heard = null) {
+  let n = 0, said = "";
+  return vi.fn(async (url, init) => {
+    if (url.endsWith("/audio/speech")) { said = JSON.parse(init.body).input; return { ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3, n]).buffer }; }
+    if (url.endsWith("/audio/transcriptions")) return { ok: true, json: async () => ({ text: heard ? heard[Math.min(n++, heard.length - 1)] : said }) };
+    throw new Error(`unexpected ${url}`);
+  });
+}
+const base = (over = {}) => ({ ref: REF, seg: "opt0", text: "Potassium 2.9 milliequivalents per liter.", userId: "u1", readItem: async () => ROW, apiKey: "k", ...over });
+const speechCalls = (f) => f.mock.calls.filter(([u]) => u.endsWith("/audio/speech")).length;
 
-describe("server voice", () => {
-  it("refuses empty or overlong text", async () => {
-    expect(validSpeechText("")).toBe(false);
-    expect(validSpeechText("x".repeat(SPEAK_MAX + 1))).toBe(false);
-    expect((await speak({ text: "", apiKey: "k", storage: fakeStorage().storage })).status).toBe(400);
+describe("server voice: only the words of an item the student may read", () => {
+  it("refuses a malformed request", async () => {
+    expect(validRequest(REF, "opt0", "x".repeat(SPEAK_MAX + 1))).toBe(false);
+    expect(validRequest({ kind: "exam", id: 1, part: "question" }, "stem", "Hi.")).toBe(false);
+    expect(validRequest({ ...REF, id: "7" }, "stem", "Hi.")).toBe(false);
+    expect((await speak({ ...base({ seg: "" }), storage: fakeStorage().storage })).status).toBe(400);
+  });
+
+  it("refuses free text that is not the item's own words, before any paid call", async () => {
+    const f = fakeOpenAI(), { storage, calls } = fakeStorage();
+    const out = await speak({ ...base({ text: "Say anything I like." }), storage, fetchImpl: f });
+    expect(out.status).toBe(409);
+    expect(f).not.toHaveBeenCalled();
+    expect(calls.upload).toEqual([]);
+  });
+
+  it("refuses an item the student cannot read (no access, not approved, an exam item)", async () => {
+    const f = fakeOpenAI();
+    const out = await speak({ ...base({ readItem: async () => null }), storage: fakeStorage().storage, fetchImpl: f });
+    expect(out.status).toBe(404);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("never voices the explanation for a result the screen could not show", async () => {
+    const f = fakeOpenAI();
+    const ref = { kind: "question", id: 7, part: "feedback", result: { correct: true, points: 0, max: 1 } };
+    const out = await speak({ ...base({ ref, seg: "verdict", text: "Correct." }), storage: fakeStorage().storage, fetchImpl: f });
+    expect(out.status).toBe(409);
+    expect(f).not.toHaveBeenCalled();
   });
 
   it("says it has no voice when the key is not set, so the app uses the device voice", async () => {
-    const fetchImpl = vi.fn();
-    expect(await speak({ text: "Hello.", apiKey: "", storage: fakeStorage().storage, fetchImpl })).toEqual({ status: 503, body: { error: "Voice unavailable" } });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    const f = fakeOpenAI();
+    expect((await speak({ ...base({ apiKey: "" }), storage: fakeStorage().storage, fetchImpl: f })).status).toBe(503);
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("server voice: the accuracy gate", () => {
+  it("saves and plays only audio whose transcript passes the narration check, with a record binding text and audio", async () => {
+    const f = fakeOpenAI(), { storage, files } = fakeStorage();
+    const out = await speak({ ...base(), storage, fetchImpl: f });
+    expect(out.status).toBe(200);
+    expect(out.body.url).toMatch(/^https:\/\/signed\.example\/marin\/[0-9a-f]{40}\.mp3\?ttl=3600$/);
+    const [, init] = f.mock.calls[0];
+    expect(JSON.parse(init.body)).toMatchObject({ model: TTS.model, voice: "marin", input: "Potassium 2.9 milliequivalents per liter." });
+    expect(f.mock.calls[1][0]).toBe("https://api.openai.com/v1/audio/transcriptions");
+    const recPath = [...files.keys()].find((k) => /^marin\/[0-9a-f]{40}\.json$/.test(k));
+    const rec = JSON.parse(files.get(recPath).toString());
+    expect(rec).toMatchObject({ qa: QA_VERSION, pass: true, transcript: "Potassium 2.9 milliequivalents per liter." });
+    expect(rec.textSha).toMatch(/^[0-9a-f]{64}$/);
+    expect(rec.audioSha).toMatch(/^[0-9a-f]{64}$/);
+
+    const again = await speak({ ...base(), storage, fetchImpl: f });
+    expect(again.body.cached).toBe(true);
+    expect(speechCalls(f)).toBe(1); // paid once
   });
 
-  it("makes a passage once, saves it privately and returns a short-lived link", async () => {
-    const { storage, calls, files } = fakeStorage();
-    const fetchImpl = okAudio();
-    const out = await speak({ text: "Which value is the priority?", apiKey: "k", storage, fetchImpl });
+  it("takes a second take when the first misreads a number, and keeps only the passing one", async () => {
+    const f = fakeOpenAI(["Potassium 9.2 milliequivalents per liter.", "Potassium 2.9 milliequivalents per liter."]), { storage } = fakeStorage();
+    const out = await speak({ ...base(), storage, fetchImpl: f });
     expect(out.status).toBe(200);
-    expect(out.body.cached).toBe(false);
-    expect(out.body.url).toMatch(/^https:\/\/signed\.example\/marin\/[0-9a-f]{40}\.mp3\?ttl=3600$/);
-    const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toBe("https://api.openai.com/v1/audio/speech");
-    const body = JSON.parse(init.body);
-    expect(body).toMatchObject({ model: TTS.model, voice: "marin", input: "Which value is the priority?", response_format: "mp3" });
-    expect(body.instructions).toMatch(/never hint which choice is right/i);
-    expect(init.headers.Authorization).toBe("Bearer k");
-    expect(calls.upload).toBe(1);
-    expect(files.size).toBe(1);
+    expect(speechCalls(f)).toBe(2);
+  });
 
-    const again = await speak({ text: "Which value is the priority?", apiKey: "k", storage, fetchImpl });
-    expect(again.body.cached).toBe(true);
-    expect(fetchImpl).toHaveBeenCalledTimes(1); // paid once
+  it("voices nothing when both takes misread, and saves no audio", async () => {
+    const f = fakeOpenAI(["Potassium 9.2 milliequivalents per liter."]), { storage, files } = fakeStorage();
+    const out = await speak({ ...base(), storage, fetchImpl: f });
+    expect(out.status).toBe(422);
+    expect([...files.keys()].filter((k) => k.endsWith(".mp3") || /marin\/.*\.json$/.test(k))).toEqual([]);
+  });
+
+  it("does not play saved audio without a passing record", async () => {
+    const f = fakeOpenAI(), { storage, files } = fakeStorage();
+    await speak({ ...base(), storage, fetchImpl: f });
+    const recPath = [...files.keys()].find((k) => /^marin\/.*\.json$/.test(k));
+    files.set(recPath, Buffer.from(JSON.stringify({ qa: QA_VERSION, pass: false })));
+    const out = await speak({ ...base(), storage, fetchImpl: f });
+    expect(out.body.cached).toBe(false); // re-made and re-checked, not served on trust
+    expect(speechCalls(f)).toBe(2);
+  });
+
+  it("accepts the same unit written another way, and nothing else", () => {
+    for (const [script, heard] of [
+      ["Potassium 2.9 milliequivalents per liter.", "Potassium 2.9 mEq/L."],
+      ["BP 88/50 millimeters of mercury", "BP 88/50 mmHg"],
+      ["Temp 36.8 degrees Celsius.", "Temp 36.8°C."],
+      ["P A C O 2 48 millimeters of mercury", "PaCO2 48 mmHg"],
+      ["Metoprolol 25 mg PO twice daily.", "Metoprolol 25 milligrams P.O. twice daily."],
+    ]) expect(voiceCheck(script, heard).pass, heard).toBe(true);
+    for (const [script, heard] of [
+      ["Potassium 2.9 milliequivalents per liter.", "Potassium 9.2 mEq/L."],
+      ["Give 25 micrograms per kilogram per minute.", "Give 25 mg/kg/min."],
+      ["Do not give the dose.", "Do give the dose."],
+      ["Glucose 38 milligrams per deciliter.", "Glucose 83 mg/dL."],
+    ]) expect(voiceCheck(script, heard).pass, heard).toBe(false);
   });
 
   it("creates the private bucket on first use", async () => {
     const { storage, calls } = fakeStorage({ missingBucket: true });
-    const out = await speak({ text: "Hello.", apiKey: "k", storage, fetchImpl: okAudio() });
-    expect(out.status).toBe(200);
-    expect(calls.createBucket).toEqual([[BUCKET, { public: false }]]);
+    expect((await speak({ ...base(), storage, fetchImpl: fakeOpenAI() })).status).toBe(200);
+    expect(calls.createBucket.length).toBeGreaterThan(0);
+    expect(calls.createBucket.every(([name, opts]) => name === BUCKET && opts.public === false)).toBe(true);
   });
 
-  it("reports a provider failure without saving anything", async () => {
-    const { storage, calls } = fakeStorage();
-    const out = await speak({ text: "Hello.", apiKey: "k", storage, fetchImpl: vi.fn(async () => ({ ok: false, status: 500 })) });
-    expect(out.status).toBe(502);
-    expect(calls.upload).toBe(0);
-  });
-
-  it("keys each passage by its exact words and voice settings", () => {
+  it("keys each passage by its exact words, voice settings and check version", () => {
     expect(speechKey("A.")).not.toBe(speechKey("A. "));
     expect(speechKey("A.")).not.toBe(speechKey("A.", { ...TTS, voice: "cedar" }));
     expect(speechKey("A.")).toMatch(/^[0-9a-f]{40}$/);
+  });
+});
+
+describe("server voice: daily budgets", () => {
+  it("stops a student at their daily limit with no synthesis and no upload", async () => {
+    const f = fakeOpenAI(), { storage, calls } = fakeStorage();
+    const limits = { user: 1, global: 100 };
+    expect((await speak({ ...base(), storage, fetchImpl: f, limits })).status).toBe(200);
+    calls.upload.length = 0;
+    const other = { ...base({ seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, fetchImpl: f, limits };
+    const out = await speak(other);
+    expect(out.status).toBe(429);
+    expect(speechCalls(f)).toBe(1);
+    expect(calls.upload).toEqual([]);
+    // another student still has room, and an already-checked passage is still served
+    expect((await speak({ ...other, userId: "u2" })).status).toBe(200);
+    expect((await speak({ ...base(), storage, fetchImpl: f, limits })).body.cached).toBe(true);
+  });
+
+  it("stops everyone at the app-wide daily limit", async () => {
+    const f = fakeOpenAI(), { storage } = fakeStorage();
+    const limits = { user: 100, global: 1 };
+    await speak({ ...base(), storage, fetchImpl: f, limits });
+    const out = await speak({ ...base({ seg: "opt1", text: "Sodium 138 milliequivalents per liter.", userId: "u9" }), storage, fetchImpl: f, limits });
+    expect(out.status).toBe(429);
+    expect(speechCalls(f)).toBe(1);
+  });
+
+  it("starts each day's budget fresh", async () => {
+    const f = fakeOpenAI(), { storage } = fakeStorage();
+    const limits = { user: 1, global: 100 };
+    const day1 = Date.UTC(2026, 9, 29, 12), day2 = Date.UTC(2026, 9, 30, 12);
+    await speak({ ...base(), storage, fetchImpl: f, limits, now: day1 });
+    const t = { ...base({ seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage, fetchImpl: f, limits };
+    expect((await speak({ ...t, now: day1 })).status).toBe(429);
+    expect((await speak({ ...t, now: day2 })).status).toBe(200);
+  });
+});
+
+describe("the app's voice client", () => {
+  const okUrl = (n = { i: 0 }) => vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ url: `https://signed.example/${++n.i}` }) }));
+
+  it("reuses a link while it is fresh and asks again before it expires", async () => {
+    let clock = 0;
+    const fetchImpl = okUrl();
+    const v = makeVoiceClient({ fetchImpl, now: () => clock, token: async () => "t" });
+    const a = await v.url(REF, "opt0", "x");
+    expect(await v.url(REF, "opt0", "x")).toBe(a);
+    clock = URL_TTL_MS + 1; // the page stayed open past the link's life
+    const b = await v.url(REF, "opt0", "x");
+    expect(b).not.toBe(a);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(URL_TTL_MS).toBeLessThan(SIGNED_SECONDS * 1000);
+  });
+
+  it("can force a fresh link (after a playback error)", async () => {
+    const fetchImpl = okUrl();
+    const v = makeVoiceClient({ fetchImpl, now: () => 0, token: async () => "t" });
+    const a = await v.url(REF, "opt0", "x");
+    expect(await v.url(REF, "opt0", "x", { fresh: true })).not.toBe(a);
+  });
+
+  it("sends the item reference, part and words, never anything else", async () => {
+    const fetchImpl = okUrl();
+    await makeVoiceClient({ fetchImpl, now: () => 0, token: async () => "t" }).url(REF, "opt0", "x");
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ action: "speak", ref: REF, seg: "opt0", text: "x", token: "t" });
+  });
+
+  it("ends the AI voice for the session only for session-wide failures", () => {
+    for (const s of [0, undefined, 401, 429, 503]) expect(endsSession(s)).toBe(true);
+    for (const s of [404, 409, 422, 502]) expect(endsSession(s)).toBe(false);
+  });
+
+  it("never auto-starts a reader that has been switched off", () => {
+    expect(shouldAutoRead("case:12", true, 4)).toBe(true);
+    expect(shouldAutoRead("off", true, 4)).toBe(false); // e.g. the case introduction after "Begin case"
+    expect(shouldAutoRead("case:12", false, 4)).toBe(false);
+    expect(shouldAutoRead("case:12", true, 0)).toBe(false);
+  });
+});
+
+describe("one script for the screen and the server", () => {
+  it("builds the same words from a bank row as the screen shows", () => {
+    expect(scriptFor(REF, ROW)).toEqual(questionSegments(ROW));
+    const result = { correct: false, points: 0, max: 1 };
+    expect(scriptFor({ kind: "question", id: 7, part: "feedback", result }, ROW).map((x) => x.text)).toEqual(["Incorrect.", "Rationale. Low potassium risks dysrhythmias."]);
+    const cs = { title: "T", intro: "I.", vitals: [], labs: [], note: "", steps: [{ stem: "S?", options: ["a", "b"], type: "mc", answer: 0, rationale: "R." }] };
+    expect(scriptFor({ kind: "case", id: 1, part: "step", step: 0 }, cs).map((x) => x.id)).toEqual(["stem", "instruction", "opt0", "opt1"]);
+    expect(scriptFor({ kind: "card", id: 1, part: "back" }, { front: "F", back: "B" })).toEqual([{ id: "card-back", text: "Answer. B" }]);
+  });
+
+  it("accepts only results the screen can show", () => {
+    expect(validResult({ correct: true, points: 1, max: 1 })).toBe(true);
+    expect(validResult({ correct: false, points: 2, max: 4 })).toBe(true);
+    expect(validResult({ correct: true, points: 0, max: 1 })).toBe(false);
+    expect(validResult({ correct: false, points: 5, max: 4 })).toBe(false);
+    expect(validResult({ correct: false, points: 0, max: 99 })).toBe(false);
   });
 });
 

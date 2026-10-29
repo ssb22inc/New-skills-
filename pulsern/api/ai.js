@@ -2,11 +2,11 @@
 // The ONLY place AI vendor keys exist. The app sends { provider, prompt }
 // plus the signed-in user's Supabase access token, never a vendor secret.
 // Swap vendors by editing MODELS — nothing else changes.
-// { action: "speak", text } is the read-aloud voice instead (api/_speak.js):
-// same sign-in door, its own vendor key (OPENAI_API_KEY).
+// { action: "speak", ref, seg, text } is the read-aloud voice instead
+// (api/_speak.js): same sign-in door, its own vendor key (OPENAI_API_KEY).
 import { createClient } from '@supabase/supabase-js';
-import { userFromRequest } from './_require-user.js';
-import { speak } from './_speak.js';
+import { tokenFromRequest, userFromRequest } from './_require-user.js';
+import { speak, bankReader } from './_speak.js';
 
 const MODELS = {
   claude:   'anthropic/claude-sonnet-4.6',
@@ -21,12 +21,27 @@ export default async function handler(req, res) {
 
   // Before any provider call. A missing session, a bad token, or an inability
   // to check one all stop here. Signed-in free-pass and trial users pass.
-  if (!(await userFromRequest(req))) return res.status(401).json({ error: 'Sign in first' });
+  const user = await userFromRequest(req);
+  if (!user) return res.status(401).json({ error: 'Sign in first' });
 
   if (req.body?.action === 'speak') {
     const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
     const storage = url && key ? createClient(url, key, { auth: { persistSession: false } }).storage : null;
-    const out = await speak({ text: req.body.text, apiKey: process.env.OPENAI_API_KEY, storage });
+    // The item is read as the student, so the database's own access rules apply.
+    const readItem = url && anonKey ? bankReader(createClient(url, anonKey, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${tokenFromRequest(req)}` } },
+    })) : null;
+    const { ref, seg, text } = req.body;
+    const limits = {
+      user: Number(process.env.SPEAK_USER_DAILY) || undefined,
+      global: Number(process.env.SPEAK_GLOBAL_DAILY) || undefined,
+    };
+    const out = await speak({
+      ref, seg, text, userId: user.id, readItem, apiKey: process.env.OPENAI_API_KEY, storage,
+      limits: { user: limits.user ?? 300, global: limits.global ?? 4000 },
+    });
     return res.status(out.status).json(out.body);
   }
 

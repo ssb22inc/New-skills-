@@ -269,7 +269,7 @@ import InstallCard from "./install.jsx";
 import { ExhibitVisual } from "./exhibits.jsx";
 import { ConceptExplainers } from "./concept-explainers.jsx";
 import { useReadAloud, ReadAloudBar, ra } from "./read-aloud.jsx";
-import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments } from "./read-aloud-script.js";
+import { questionSegments, questionFeedbackSegments, caseFeedbackSegments, caseIntroSegments, caseStepSegments, cardSegments } from "./read-aloud-script.js";
 import { ProfileCard, useProfile } from "./profile.jsx";
 import {
   isStudyLocked,
@@ -1444,18 +1444,13 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
   /* Read aloud: the question while answering, then (separately) the result
      and rationale. The answer is never in the question's script. */
   const qSegs = useMemo(() => (q && phase === "answering" ? questionSegments(q, ngnExt(q)) : []), [q, phase]);
-  const fbSegs = useMemo(() => {
-    if (!q || phase !== "feedback") return [];
-    const ex = ngnExt(q);
-    const verdict = wasCorrect ? "Correct" : credit.points > 0 ? `Partly correct: ${credit.points} of ${credit.max} points` : "Incorrect";
-    return feedbackSegments({
-      verdict, rationale: q.rationale,
-      correctOrder: q.type === "order" && !wasCorrect ? q.answer.map((i) => q.options[i]).join(", then ") : null,
-      correctChoices: q.type === "cloze" && !wasCorrect ? q.answer.map((a, i) => ex.dropdowns[i][a]).join("; ") : null,
-    });
-  }, [q, phase, wasCorrect, credit]);
-  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${q.id}:${sessionN}` : "off");
-  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${q.id}:${sessionN}` : "off");
+  const result = { correct: wasCorrect, points: credit.points, max: credit.max };
+  const fbSegs = useMemo(() => (q && phase === "feedback" ? questionFeedbackSegments(q, result) : []), [q, phase, wasCorrect, credit]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* Bank items (they carry a calibration) can use the AI voice; built-in
+     ones use the device voice. */
+  const inBank = q && calibration[q.id] !== undefined;
+  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${q.id}:${sessionN}` : "off", inBank ? { kind: "question", id: q.id, part: "question" } : null);
+  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${q.id}:${sessionN}` : "off", inBank ? { kind: "question", id: q.id, part: "feedback", result } : null);
 
   const TYPE_CHIPS =[["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
@@ -1808,14 +1803,14 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
   };
 
   /* Read aloud: the chart once, each step's question, each step's result. */
-  const introSegs = useMemo(() => caseIntroSegments(cs), [cs]);
+  const introSegs = useMemo(() => (cs && step === -1 ? caseIntroSegments(cs) : []), [cs, step]);
   const stepSegs = useMemo(() => (s && phase === "answering" ? caseStepSegments(s) : []), [s, phase]);
-  const caseFbSegs = useMemo(() => (s && phase === "feedback"
-    ? feedbackSegments({ verdict: ok ? "Correct" : credit.points > 0 ? `Partly correct: ${credit.points} of ${credit.max} points` : "Incorrect", rationale: s.rationale })
-    : []), [s, phase, ok, credit]);
-  const introReader = useReadAloud(introSegs, cs && step === -1 ? `case:${caseKey}` : "off");
-  const stepReader = useReadAloud(stepSegs, s && phase === "answering" ? `cstep:${caseKey}:${step}` : "off");
-  const caseFbReader = useReadAloud(caseFbSegs, s && phase === "feedback" ? `cfb:${caseKey}:${step}` : "off");
+  const stepResult = { correct: ok, points: credit.points, max: credit.max };
+  const caseFbSegs = useMemo(() => (s && phase === "feedback" ? caseFeedbackSegments(s, stepResult) : []), [s, phase, ok, credit]); // eslint-disable-line react-hooks/exhaustive-deps
+  const caseRef = (part, extra = {}) => (cs?.dbId ? { kind: "case", id: cs.dbId, part, ...extra } : null);
+  const introReader = useReadAloud(introSegs, cs && step === -1 ? `case:${caseKey}` : "off", caseRef("intro"));
+  const stepReader = useReadAloud(stepSegs, s && phase === "answering" ? `cstep:${caseKey}:${step}` : "off", caseRef("step", { step }));
+  const caseFbReader = useReadAloud(caseFbSegs, s && phase === "feedback" ? `cfb:${caseKey}:${step}` : "off", caseRef("feedback", { step, result: stepResult }));
 
   if (caseIdx == null) {
     // sub-category accordion: cases stay tucked away until a group is opened
@@ -2020,7 +2015,8 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
 
   /* Read aloud: the prompt, then (only after the flip) the answer. */
   const cardSegs = useMemo(() => cardSegments(cur, show), [cur, show]);
-  const cardReader = useReadAloud(cardSegs, cur ? `card:${cur.id}:${show ? "back" : "front"}` : "off");
+  const cardBankId = /^c\d+$/.test(String(cur?.id ?? "")) ? Number(String(cur.id).slice(1)) : null; // bank cards are "c<id>"
+  const cardReader = useReadAloud(cardSegs, cur ? `card:${cur.id}:${show ? "back" : "front"}` : "off", cardBankId ? { kind: "card", id: cardBankId, part: show ? "back" : "front" } : null);
 
   const chips = !embedded && (
     <div className="fchips" role="group" aria-label="Filter cards by category">

@@ -15,6 +15,8 @@
    Each segment has an id the screen uses to highlight the part being read
    (follow-along reading), and a text the voice speaks. */
 
+import { ngnExt } from "./ngn.js";
+
 /* Spoken forms for the clinical shorthand a voice is most likely to misread.
    Conservative on purpose: units and dosing frequencies only, whole tokens
    only, never a guess at a drug or a diagnosis. */
@@ -145,4 +147,51 @@ export function caseStepSegments(step) {
 export function cardSegments(card, flipped) {
   if (!card) return [];
   return [flipped ? seg("card-back", `Answer. ${card.back}`) : seg("card-front", card.front)].filter((s) => s.text);
+}
+
+/* ---------- one script source for the screen AND the voice server ----------
+   The server (api/_speak.js) rebuilds the words from the bank row with the
+   same functions and only voices a segment whose text matches exactly, so
+   it can only ever say what the item on screen says. */
+
+/* A result as the screen shows it. Anything else is refused. */
+export function validResult(r) {
+  return !!r && typeof r.correct === "boolean" && Number.isInteger(r.max) && r.max >= 1 && r.max <= 50 &&
+    Number.isInteger(r.points) && r.points >= 0 && r.points <= r.max && (!r.correct || r.points === r.max);
+}
+export const verdictText = (r) => (r.correct ? "Correct" : r.points > 0 ? `Partly correct: ${r.points} of ${r.max} points` : "Incorrect");
+
+export function questionFeedbackSegments(q, result) {
+  if (!q || !validResult(result)) return [];
+  const ex = ngnExt(q);
+  const wrong = !result.correct;
+  return feedbackSegments({
+    verdict: verdictText(result),
+    rationale: q.rationale,
+    correctOrder: q.type === "order" && wrong && Array.isArray(q.answer) ? q.answer.map((i) => q.options[i]).join(", then ") : null,
+    correctChoices: q.type === "cloze" && wrong && Array.isArray(q.answer) && Array.isArray(ex.dropdowns) ? q.answer.map((a, i) => ex.dropdowns[i]?.[a]).join("; ") : null,
+  });
+}
+export function caseFeedbackSegments(step, result) {
+  if (!step || !validResult(result)) return [];
+  return feedbackSegments({ verdict: verdictText(result), rationale: step.rationale });
+}
+
+/* ref: what is being read. { kind: "question", part: "question" | "feedback", result? }
+   { kind: "case", part: "intro" | "step" | "feedback", step?, result? }
+   { kind: "card", part: "front" | "back" } */
+export function scriptFor(ref, item) {
+  if (!ref || !item) return [];
+  if (ref.kind === "question") {
+    if (ref.part === "question") return questionSegments(item, ngnExt(item));
+    if (ref.part === "feedback") return questionFeedbackSegments(item, ref.result);
+  }
+  if (ref.kind === "case") {
+    const step = Number.isInteger(ref.step) ? item.steps?.[ref.step] : null;
+    if (ref.part === "intro") return caseIntroSegments(item);
+    if (ref.part === "step") return caseStepSegments(step);
+    if (ref.part === "feedback") return caseFeedbackSegments(step, ref.result);
+  }
+  if (ref.kind === "card" && (ref.part === "front" || ref.part === "back")) return cardSegments(item, ref.part === "back");
+  return [];
 }
