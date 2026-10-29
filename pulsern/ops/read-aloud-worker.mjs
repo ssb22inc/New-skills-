@@ -312,7 +312,9 @@ async function listAll(bucket, dir) {
 export async function pruneUsage({ storage, now = Date.now(), keepDays = 7 }) {
   const bucket = storage.from(BUCKET);
   const oldest = quotaDay(now - keepDays * 86400000);
-  const days = (await listAll(bucket, "usage").catch(() => [])).map((e) => e.name).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < oldest);
+  // A listing error is storage trouble and fails the run (runJob); an
+  // absent usage folder simply lists empty.
+  const days = (await listAll(bucket, "usage")).map((e) => e.name).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < oldest);
   let removed = 0;
   for (const day of days) {
     for (const sub of await listAll(bucket, `usage/${day}`)) {

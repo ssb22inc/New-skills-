@@ -937,6 +937,15 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(r.bank.stopped).toMatch(/^storage:/);
   });
 
+  it("fails the run when the usage folder cannot be listed for pruning", async () => {
+    const { storage } = fakeStorage();
+    const real = storage.from(BUCKET);
+    const broken = { ...storage, from: () => ({ ...real, list: (dir, o) => (dir === "usage" ? Promise.resolve({ data: null, error: { message: "Internal error" } }) : real.list(dir, o)) }) };
+    const r = await runJob({ storage: broken, db: fakeDb({ questions: [], case_studies: [], flashcards: [] }), apiKey: "k", fetchImpl: fakeOpenAI(), max: 5, log: () => {} });
+    expect(r.failed).toBe(true);
+    expect(r.lines.join("\n")).toMatch(/pruning: Could not list usage/);
+  });
+
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
     const { storage } = fakeStorage();
     expect((await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 2, log: () => {} })).failed).toBe(false);
@@ -1058,6 +1067,36 @@ describe("server voice: daily budgets", () => {
       expect(files.has(m)).toBe(false);
       expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
     });
+  });
+
+  it("counts one claim per bank item: question and explanation, both card sides, every case step", async () => {
+    const { storage, files } = fakeStorage();
+    const limits = { user: 1, admission: 100, spend: 100 };
+    const ask = (ref, parts) => Promise.all(parts.map((p) => speak({ ...base({ apiKey: "", ref, seg: p.id, text: p.text }), storage, limits })));
+    // a question, then its explanation
+    const qr = await ask(REF, questionSegments(ROW));
+    const result = { correct: false, points: 0, max: 1 };
+    const fr = await ask({ ...REF, part: "feedback", result }, questionFeedbackSegments(ROW, result));
+    expect([...qr, ...fr].every((r) => r.status === 202)).toBe(true);
+    expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(1);
+  });
+
+  it("lets a card's back and every case step reuse the item's one claim", async () => {
+    const { storage, files } = fakeStorage();
+    const limits = { user: 2, admission: 100, spend: 100 };
+    const CASE = { id: 3, title: "Sepsis", intro: "A client.", vitals: [["HR", "118"]], labs: [], note: "Confused.", steps: [{ stem: "Which cue?", options: ["HR", "Temp"], type: "mc", answer: 0, rationale: "HR." }, { stem: "Which action?", options: ["Fluids", "Wait"], type: "mc", answer: 0, rationale: "Fluids." }] };
+    const readItem = async (kind, id) => (kind === "case" && id === 3 ? CASE : readBank(kind, id));
+    const ask = (ref, parts) => Promise.all(parts.map((p) => speak({ ...base({ apiKey: "", ref, seg: p.id, text: p.text, readItem }), storage, limits })));
+    const card = { id: 4, front: "Potassium 2.9 mEq/L.", back: "Low." };
+    const out = [
+      ...(await ask({ kind: "card", id: 4, part: "front" }, cardSegments(card, false))),
+      ...(await ask({ kind: "card", id: 4, part: "back" }, cardSegments(card, true))),
+      ...(await ask({ kind: "case", id: 3, part: "intro" }, caseIntroSegments(CASE))),
+      ...(await ask({ kind: "case", id: 3, part: "step", step: 0 }, caseStepSegments(CASE.steps[0]))),
+      ...(await ask({ kind: "case", id: 3, part: "step", step: 1 }, caseStepSegments(CASE.steps[1]))),
+    ];
+    expect(out.every((r) => r.status === 202)).toBe(true);
+    expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(2); // the card, the case
   });
 
   it("charges a take made after Eastern midnight to the new day", async () => {

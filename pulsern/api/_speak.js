@@ -477,7 +477,9 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
        part admitted while its neighbours were refused. The first request
        for the item makes the claim (a marker storage creates only once);
        the others find it and only fill in any part not yet queued. */
-    const itemKey = sha256(`${tts.voice}\n${JSON.stringify(ref)}`).slice(0, 32);
+    // One claim per bank item (its question and explanation, a card's two
+    // sides, every step of a case), whatever part is asked for first.
+    const itemKey = sha256(`${tts.voice}\n${ref.kind}\n${ref.id}`).slice(0, 32);
     const marker = `usage/${quotaDay(t0)}/items/${itemKey}`;
     /* Claim the item: reserve a slot, then confirm. The claim carries its
        start time, so one whose request died part-way lapses after
