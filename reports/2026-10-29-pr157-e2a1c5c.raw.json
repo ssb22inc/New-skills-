@@ -1,0 +1,60 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "6ecdc59dfcc66566f61b645393f189b0b73757c5",
+    "head": "e2a1c5c56cccabc79965fdb43fd0fa0b34d7dca2",
+    "pr": "157"
+  },
+  "reviewedAt": "2026-10-29T18:53:01.800Z",
+  "filesReviewed": [
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-31-56-713Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-31-56-713Z.md",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-36-06-189Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-36-06-189Z.md",
+    "pulsern/reports/diagram-review/index.json",
+    "pulsern/reports/narration/run-2026-10-29T17-27-46-727Z.json",
+    "pulsern/reports/narration/run-2026-10-29T17-27-46-727Z.md",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/narration.json",
+    "pulsern/tests/narrate.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/reports/diagram-review/index.json",
+      "line": 4,
+      "title": "Existing PASS attestations are rebound to a different source",
+      "problem": "All six sourceKey values and signatures change, but their reviewedAt timestamps, review keys, and referenced reports remain unchanged. The first added mapping report explicitly holds these diagrams back as \"changed since its review\"; the subsequent report ships 678 pairings after these approval records are rebound. The supplied change contains neither fresh visual reviews nor evidence of a trusted unchanged-frame validation authorizing this rebinding. I cannot establish whether the new source actually produces exactly the previously reviewed content.",
+      "failure_scenario": "A changed source is treated as reviewed because an old PASS record is re-signed with its new sourceKey. That defeats the stale-source protection and can publish diagrams and pairings without the required adversarial accuracy gate.",
+      "fix": "Generate approval records and reports against the final source through the review job rather than editing old approvals in place. If identical frames legitimately permit review reuse, provide a verified unchanged-frame attestation binding the final source to those reviewed frames.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/narrate-lib.mjs",
+      "line": 290,
+      "title": "Concatenating normalized halves does not produce the normalized closed compound",
+      "problem": "The plural normalization is length-dependent, so normalizing each half and concatenating is not equivalent to normalizing the closed spelling. For example, \"Follow-ups are important.\" produces the folded token \"followups\": the three-letter token \"ups\" retains its s. The faithful transcript \"Followups are important.\" instead produces \"followup\", because the complete word loses its final s. audioCheck therefore rejects this legitimate spelling despite the new compound-handling contract. The non-smokers test misses this because \"smokers\" is already long enough to undergo plural normalization.",
+      "failure_scenario": "A narration script containing \"follow-ups\" or \"check-ups\" is correctly transcribed as \"followups\" or \"checkups\". Both correct takes fail QA, paid recordings are rejected, and recordAll stops the remaining run.",
+      "fix": "Map both open and closed representations to a canonical token obtained by normalizing the joined original spelling, rather than concatenating already-normalized halves. Retain the numeric guards and add passing tests for follow-ups/followups and check-ups/checkups, alongside meaningful-corruption rejection tests.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 90879,
+    "completionTokens": 8278,
+    "reasoningTokens": 7647,
+    "costUsd": 0.309976
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Needs revision. The compound normalizer still rejects legitimate closed spellings, and the review-index changes appear to retarget existing approvals without fresh review evidence. I could not independently verify the remote audio, signatures, or the 678 pairings against their source questions.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
