@@ -1,0 +1,63 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "d1bb81cc1444fcb874743cfab2d68c3768fc2f38",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T23:16:06.595Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 479,
+      "title": "The per-item quota counts question and feedback scripts separately",
+      "problem": "The item claim hashes the entire ref, including part, step and result. Consequently, a question and its explanation consume separate admissions; a flashcard's front and back consume two; and a six-step case can consume thirteen. This contradicts LIMITS and HUMAN_TASKS.md, which specify one admission per bank item with its parts counted together.",
+      "failure_scenario": "Before the relevant passages have been voiced, a student listens to 150 distinct questions and their explanations. That can exhaust the 300-item daily allowance, so the next question is refused even though the student has requested only 150 bank items. The app-wide admission allowance is inflated in the same way.",
+      "fix": "Key the admission claim by stable bank-item identity and voice, excluding the script part, step and result. Allow later scripts for that admitted item to reuse its claim. Add tests requesting both sides of a card, question plus feedback, and all steps of a case under a one-item allowance.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 315,
+      "title": "Pruning silently converts a storage outage into successful empty usage",
+      "problem": "pruneUsage catches failure of listAll(bucket, \"usage\") and substitutes an empty array. runJob therefore receives a successful pruning result rather than pruned.error, despite the worker's documented requirement that storage trouble fail the workflow.",
+      "failure_scenario": "The bank is already voiced and its cursor is marked done, but listing the usage root returns a storage error. The scheduled run reports zero old slots removed and exits successfully. Repeated failures leave usage objects accumulating without the promised failed-run signal.",
+      "fix": "Let the root listing error propagate to runJob's existing pruning catch. Add a test where only the usage-root listing fails and assert that runJob.failed is true and its summary contains the pruning diagnostic.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 125175,
+    "completionTokens": 7267,
+    "reasoningTokens": 6732,
+    "costUsd": 0.385606
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Two concrete defects need correction: daily admission counts do not match the documented per-item contract, and usage pruning can hide storage failures from the workflow. The new tests do not cover either failure path.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
