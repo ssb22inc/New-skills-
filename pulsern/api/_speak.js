@@ -10,10 +10,15 @@
 // (src/read-aloud-script.js) and must match the requested text exactly.
 // The spend is therefore bounded by the bank, not by what a caller types.
 //
-// The accuracy gate. Each new passage is synthesised, transcribed, and
-// passes only the narration job's check (ops/narrate-lib.mjs audioCheck:
-// similarity >= 0.92 AND every number, negation and direction word exactly
-// as written), with two takes. Only a passing take is saved, together with
+// The accuracy gate. The words themselves are bank content that already
+// passed the adversarial review; this gate proves the AUDIO says exactly
+// those words. Each new passage is synthesised, transcribed (by a separate
+// model, with no hint of the script), and passes only if EVERY word of the
+// transcript matches the script in order (ops/narrate-lib.mjs wordMismatch,
+// after normalising number words and spellings), the overall similarity is
+// at least 0.92, and every unit and dosing frequency matches exactly
+// (voiceCheck). One changed word fails: a drug, a diagnosis, a finding,
+// a side. Two takes. Only a passing take is saved, together with
 // a record that binds it to its text (sha256), its audio (sha256), the
 // transcript and the QA version; only audio with that record is ever
 // played. A passage that fails both takes is not voiced (422): the app
@@ -24,6 +29,8 @@
 // per student and app-wide, per local day in Eastern time
 // (SPEAK_USER_DAILY, SPEAK_GLOBAL_DAILY). Over a cap, or if the counters
 // cannot be read, the route answers 429 and the app uses the device voice.
+// The voice job pays from a separate spending count (reserveSpend): one
+// slot per synthesis, on the day it is made.
 //
 // Storage. A PRIVATE bucket ("read-aloud", created on first use): the
 // passages are paid questions, so they are only ever handed out as
@@ -194,10 +201,12 @@ async function claimSlot(storage, dir, limit) {
   }
   return false;
 }
-/* The voice job's own paid calls (ops/read-aloud-worker.mjs) count against
-   the app-wide budget too. */
-export const reserveGlobal = (storage, { now = Date.now(), limits = LIMITS } = {}) =>
-  claimSlot(storage, `usage/${quotaDay(now)}/all`, limits.global);
+/* The voice job's paid calls (ops/read-aloud-worker.mjs): one slot per
+   synthesis, on the day the call is made. Queueing a passage (admission,
+   above) and paying for it (spend, here) are counted apart, so a retried
+   or backlogged passage is always paid from the current day's budget. */
+export const reserveSpend = (storage, { now = Date.now(), limits = LIMITS } = {}) =>
+  claimSlot(storage, `usage/${quotaDay(now)}/spend`, limits.global);
 export async function reserve(storage, userId, { now = Date.now(), limits = LIMITS } = {}) {
   const day = quotaDay(now);
   const user = `usage/${day}/u-${sha256(String(userId)).slice(0, 24)}`;
@@ -230,13 +239,13 @@ async function signed(bucket, path) {
    and held to voiceCheck. Returns the best take (passing if any did) and
    how many syntheses were paid for. Shared by the live route and the
    queue worker (ops/read-aloud-worker.mjs). */
-export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, beforeRetake = null }) {
+export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, beforeTake = null }) {
   const openai = (path, init) => fetchImpl(`https://api.openai.com/v1${path}`, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${apiKey}` } });
   let best = null, spent = 0, error = null;
   try {
     for (let take = 1; take <= TAKES; take++) {
-      // A second take is a second paid call: it needs its own budget slot.
-      if (take > 1 && beforeRetake && !(await beforeRetake())) { error = 'budget'; break; }
+      // Every take is a paid call: each needs its own budget slot first.
+      if (beforeTake && !(await beforeTake())) { error = 'budget'; break; }
       const r = await openai('/audio/speech', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: tts.model, voice: tts.voice, input: text, instructions: tts.instructions, response_format: 'mp3' }),
@@ -332,8 +341,7 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
     return { status: 202, body: { queued: true } };
   }
 
-  if (!(await take())) return overBudget;
-  const { best, final, error } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeRetake: take });
+  const { best, final, error } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: take });
   if (!final) return error === 'budget' ? overBudget : { status: 502, body: { error: 'Voice failed' } };
   if (!(await saveChecked(storage, text, best, { now, tts }))) return { status: 502, body: { error: 'Voice could not be saved' } };
   if (!best.check.pass) return { status: 422, body: { error: 'Voice check failed', similarity: best.check.similarity } };

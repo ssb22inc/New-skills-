@@ -15,7 +15,7 @@
    the route caps new passages per student and app-wide each day, and this
    job voices at most READ_ALOUD_MAX passages per run. */
 import { createClient } from "@supabase/supabase-js";
-import { BUCKET, TTS, LIMITS, makeChecked, saveChecked, readRecord, passagePaths, validRequest, reserveGlobal, quotaDay } from "../api/_speak.js";
+import { BUCKET, TTS, LIMITS, makeChecked, saveChecked, readRecord, passagePaths, validRequest, reserveSpend, quotaDay } from "../api/_speak.js";
 
 export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log }) {
   const bucket = storage.from(BUCKET);
@@ -25,7 +25,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
     throw new Error(`Could not list the queue: ${error.message ?? error}`);
   }
   const files = (entries ?? []).filter((e) => e.name?.endsWith(".json"));
-  const out = { queued: files.length, voiced: 0, failed: 0, skipped: 0, spent: 0, errors: [] };
+  const out = { queued: files.length, voiced: 0, failed: 0, skipped: 0, spent: 0, budget: false, errors: [] };
   for (const f of files.slice(0, max)) {
     const path = `queue/${f.name}`;
     const { data, error: dlError } = await bucket.download(path);
@@ -36,11 +36,13 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
       await bucket.remove([path]); out.skipped++; continue;
     }
     if (await readRecord(storage, job.text)) { await bucket.remove([path]); out.skipped++; continue; } // already checked
-    // The first take was paid for when the passage was queued; a second
-    // take claims its own app-wide slot.
-    const { best, spent, error: why, final } = await makeChecked({ text: job.text, apiKey, fetchImpl, beforeRetake: () => reserveGlobal(storage, { now: now(), limits }) });
+    // Every synthesis claims a spending slot for the day it is made; with
+    // none left, the passage stays queued and nothing is paid.
+    const { best, spent, error: why, final } = await makeChecked({ text: job.text, apiKey, fetchImpl, beforeTake: () => reserveSpend(storage, { now: now(), limits }) });
     out.spent += spent;
     if (!final) {
+      // Today's spending is used up: stop quietly, the entry waits.
+      if (why === "budget") { out.budget = true; break; }
       // Provider trouble: keep the entry for the next run, and stop this one.
       out.errors.push(`${f.name}: ${why ?? "no audio"}`);
       break;
@@ -94,7 +96,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const r = await drainQueue({ storage, apiKey: OPENAI_API_KEY, max });
   const pruned = await pruneUsage({ storage }).catch((e) => ({ error: String(e?.message ?? e) }));
   if (pruned.error) r.errors.push(`pruning: ${pruned.error}`);
-  const line = `Read-aloud queue: ${r.queued} waiting · ${r.voiced} voiced and checked · ${r.failed} failed the check twice · ${r.skipped} skipped · ${r.spent} syntheses · ${pruned.removed ?? 0} old budget slots removed${r.errors.length ? ` · errors: ${r.errors.join("; ")}` : ""}`;
+  const line = `Read-aloud queue: ${r.queued} waiting · ${r.voiced} voiced and checked · ${r.failed} failed the check twice · ${r.skipped} skipped · ${r.spent} syntheses · ${pruned.removed ?? 0} old budget slots removed${r.budget ? " · today's voice budget is used up; the rest wait" : ""}${r.errors.length ? ` · errors: ${r.errors.join("; ")}` : ""}`;
   console.log(line);
   if (process.env.GITHUB_STEP_SUMMARY) {
     const { appendFileSync } = await import("node:fs");

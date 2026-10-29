@@ -314,6 +314,21 @@ describe("server voice: the accuracy gate", () => {
     expect(clinicalUnits("Give 25 mg PO q4h, 3.1 mEq/L, 92%")).toEqual(["mg", "po", "meqperl", "percent"]);
   });
 
+  it("rejects one changed word anywhere in a long passage: a drug, a diagnosis, a finding, a side", () => {
+    const long = "The nurse reviews the plan of care for a client admitted two days ago with community acquired pneumonia who reports mild fatigue, no chest pain and stable breathing at rest, and whose family is at the bedside. ";
+    for (const [said, heard] of [
+      ["Give the insulin before breakfast.", "Give the heparin before breakfast."],
+      ["The findings suggest hypokalemia.", "The findings suggest hyperkalemia."],
+      ["Crackles are heard in both bases.", "Wheezes are heard in both bases."],
+      ["Elevate the head of the bed.", "Elevate the foot of the bed."],
+    ]) {
+      const r = voiceCheck(long + said, long + heard);
+      expect(r.similarity).toBeGreaterThan(0.92); // the score alone would let it through
+      expect(r.pass, heard).toBe(false);
+      expect(r.mismatch, heard).not.toBeNull();
+    }
+  });
+
   it("accepts the same unit written another way, and nothing else", () => {
     for (const [script, heard] of [
       ["Potassium 2.9 milliequivalents per liter.", "Potassium 2.9 mEq/L."],
@@ -422,6 +437,45 @@ describe("server voice without a key: the queue and the voice job", () => {
     const r = await pruneUsage({ storage, now });
     expect(r).toEqual({ days: 2, removed: 4 });
     expect([...files.keys()].sort()).toEqual(["usage/2026-10-29/all/00000", "usage/2026-10-29/u-abc/00000"]);
+  });
+
+  it("pays for every synthesis from the spending budget, so a transcription outage cannot run past it", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    // speech works, transcription is down: each run pays one synthesis and keeps the entry
+    const outage = vi.fn(async (url) => (url.endsWith("/audio/speech") ? { ok: true, arrayBuffer: async () => new Uint8Array([1]).buffer } : { ok: false, status: 500 }));
+    const limits = { user: 300, global: 3 };
+    const now = () => Date.UTC(2026, 9, 29, 16);
+    for (let run = 0; run < 6; run++) await drainQueue({ storage, apiKey: "k", fetchImpl: outage, limits, now, log: () => {} });
+    expect(outage.mock.calls.filter(([u]) => u.endsWith("/audio/speech"))).toHaveLength(3); // never more than the day's spending
+    expect([...files.keys()].filter((k) => /\/spend\/\d+$/.test(k))).toHaveLength(3);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1); // still waiting, not marked failed
+    expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
+  });
+
+  it("waits, without paying, when today's spending is used up, and voices the passage the next day", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const limits = { user: 300, global: 0 };
+    const f = fakeOpenAI();
+    const today = await drainQueue({ storage, apiKey: "k", fetchImpl: f, limits, now: () => Date.UTC(2026, 9, 29, 16), log: () => {} });
+    expect(today).toMatchObject({ budget: true, voiced: 0, errors: [] });
+    expect(f).not.toHaveBeenCalled();
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    const tomorrow = await drainQueue({ storage, apiKey: "k", fetchImpl: f, limits: { user: 300, global: 5 }, now: () => Date.UTC(2026, 9, 30, 16), log: () => {} });
+    expect(tomorrow).toMatchObject({ voiced: 1 });
+    expect([...files.keys()].some((k) => k.startsWith("usage/2026-10-30/spend/"))).toBe(true);
+  });
+
+  it("does not record a failure when the retake has no budget, and finishes the passage later", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const misheard = fakeOpenAI(["Potassium 9.2 milliequivalents per liter.", "Potassium 2.9 milliequivalents per liter."]);
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: misheard, limits: { user: 300, global: 1 }, now: () => Date.UTC(2026, 9, 29, 16), log: () => {} });
+    expect(r).toMatchObject({ budget: true, failed: 0 });
+    expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
+    const next = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), limits: { user: 300, global: 5 }, now: () => Date.UTC(2026, 9, 30, 16), log: () => {} });
+    expect(next).toMatchObject({ voiced: 1 });
   });
 
   it("voices at most the run's limit", async () => {
