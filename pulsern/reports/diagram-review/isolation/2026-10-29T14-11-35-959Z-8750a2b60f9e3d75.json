@@ -1,0 +1,21 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:11:35.959Z",
+  "images": 14,
+  "key": "8750a2b60f9e3d75",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.271846
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No substantiated isolation-specific error found in the supplied clinical claims, images, captions, narration scripts, or relevant code. Isolation is concept-only, with no value-dependent clinical branches. Actual narration audio and the app-level NCSBN disclaimer were not supplied and could not be verified.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
