@@ -1,7 +1,7 @@
 {
   "abg": {
-    "key": "5f2c6613ed137a6c",
-    "sourceKey": "259ef5956262c8c603bc73d9",
+    "key": "2d7a6b4677ed76b2",
+    "sourceKey": "8e2d32f98f99bdb7e2bb98e0",
     "frames": [
       "light/static",
       "light/ph",
@@ -22,19 +22,19 @@
     ],
     "verdict": "FAIL",
     "completed": true,
-    "reviewedAt": "2026-10-29T13:02:30.916Z",
+    "reviewedAt": "2026-10-29T13:27:57.996Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/abg/2026-10-29T13-02-30-916Z-5f2c6613ed137a6c.md",
+    "report": "reports/diagram-review/abg/2026-10-29T13-27-57-996Z-2d7a6b4677ed76b2.md",
     "counts": {
       "blocker": 1,
-      "major": 1,
-      "minor": 0
+      "major": 0,
+      "minor": 1
     },
-    "sig": "tRAMdC/en2+NltAu3lG72GYS28KnE2GbU/2CHd0ihJQio5pAQtIZf7cGZ6zf0ZVmyxcwcn6aQwlw/LsF7h8TDw=="
+    "sig": "2t9oNxqWQrNQbPzHiJ9SW6vp34mlppD8zRUKwB4GamdW+s/96v4cuFa0FKYaiQK9h8wIvMZ1euaoO1yaE8xJBg=="
   },
   "potassium": {
-    "key": "705fd7673078d676",
-    "sourceKey": "259ef5956262c8c603bc73d9",
+    "key": "9e5d9c5fe79fdbff",
+    "sourceKey": "8e2d32f98f99bdb7e2bb98e0",
     "frames": [
       "light/static",
       "light/range",
@@ -53,21 +53,21 @@
       "dark/hyper-shift",
       "dark/worked"
     ],
-    "verdict": "FAIL",
+    "verdict": "PASS",
     "completed": true,
-    "reviewedAt": "2026-10-29T13:07:11.406Z",
+    "reviewedAt": "2026-10-29T13:34:09.529Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/potassium/2026-10-29T13-07-11-406Z-705fd7673078d676.md",
+    "report": "reports/diagram-review/potassium/2026-10-29T13-34-09-529Z-9e5d9c5fe79fdbff.md",
     "counts": {
-      "blocker": 1,
-      "major": 1,
+      "blocker": 0,
+      "major": 0,
       "minor": 1
     },
-    "sig": "Li0TkZKs926mwunRJOsg15pBJj0o5gMrKJezU4tERgy2vZ7lEIq9nO7xer2BwU4emOm0p4fw6CFe5kKEipTRBw=="
+    "sig": "PB3kbd1zFc5ahzwinWzu+pTN+hKoO5yVl5x+jIC1klPyTMtGwN5NNuEHn73r7nUAOeiixgV+K2CCJJ7DdIE0Dg=="
   },
   "tonicity": {
-    "key": "5a0292282e4e75a9",
-    "sourceKey": "259ef5956262c8c603bc73d9",
+    "key": "e0f092f931fdad38",
+    "sourceKey": "8e2d32f98f99bdb7e2bb98e0",
     "frames": [
       "light/static",
       "light/isotonic",
@@ -86,19 +86,19 @@
     ],
     "verdict": "FAIL",
     "completed": true,
-    "reviewedAt": "2026-10-29T13:10:07.181Z",
+    "reviewedAt": "2026-10-29T13:37:11.158Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/tonicity/2026-10-29T13-10-07-181Z-5a0292282e4e75a9.md",
+    "report": "reports/diagram-review/tonicity/2026-10-29T13-37-11-158Z-e0f092f931fdad38.md",
     "counts": {
       "blocker": 0,
       "major": 1,
-      "minor": 0
+      "minor": 1
     },
-    "sig": "XkKmk8sNki74swDCtuvAmxmrucKw9WR7vsrurSy4BVpl+LH6J9H2aDyBil5J4L3Fhh+2kCHRhhxqGXJCJB1NBQ=="
+    "sig": "Gi9vjuMhKNAGJCW9QR7eDFe7hclobCeAqQacwXRE9o+ewID/mgdf3PDHWOUzFt1DwafPnBFcmUYsyysWljzYCg=="
   },
   "insulin": {
-    "key": "d246fad266510b2b",
-    "sourceKey": "259ef5956262c8c603bc73d9",
+    "key": "a752ce138041bc84",
+    "sourceKey": "8e2d32f98f99bdb7e2bb98e0",
     "frames": [
       "light/static",
       "light/idea",
@@ -119,19 +119,19 @@
     ],
     "verdict": "PASS",
     "completed": true,
-    "reviewedAt": "2026-10-29T13:11:55.178Z",
+    "reviewedAt": "2026-10-29T13:38:48.144Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/insulin/2026-10-29T13-11-55-178Z-d246fad266510b2b.md",
+    "report": "reports/diagram-review/insulin/2026-10-29T13-38-48-144Z-a752ce138041bc84.md",
     "counts": {
       "blocker": 0,
       "major": 0,
-      "minor": 2
+      "minor": 1
     },
-    "sig": "28cYJuRbDpwZTs7no+Ak+Tv7r3Sy6o4YC+uV0Jce2ULSX9kJPtL2iwN/lDFhNSCLpTFKFsD/sPBjH7zootZQAQ=="
+    "sig": "Hlo8md7KAPsOAcdUQyRuqtq7NMCladnuaCrT77LpUjqLES6vPq1yvYwie2P5nW6qivihnCLUyXKpZoyTVb+cBw=="
   },
   "isolation": {
-    "key": "8bf7ae4aa84a7752",
-    "sourceKey": "259ef5956262c8c603bc73d9",
+    "key": "72c86d4a8bc89b41",
+    "sourceKey": "8e2d32f98f99bdb7e2bb98e0",
     "frames": [
       "light/static",
       "light/standard",
@@ -148,21 +148,21 @@
       "dark/airborne",
       "dark/transport"
     ],
-    "verdict": "FAIL",
+    "verdict": "PASS",
     "completed": true,
-    "reviewedAt": "2026-10-29T13:15:46.620Z",
+    "reviewedAt": "2026-10-29T13:42:21.270Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/isolation/2026-10-29T13-15-46-620Z-8bf7ae4aa84a7752.md",
+    "report": "reports/diagram-review/isolation/2026-10-29T13-42-21-270Z-72c86d4a8bc89b41.md",
     "counts": {
       "blocker": 0,
-      "major": 1,
+      "major": 0,
       "minor": 0
     },
-    "sig": "3K6GQx2Ky0g7LxPNEG/znW3CIOcIkGnKv1HIYwhFjX5h+sYjWBL1eO4RvAre/Ui1SDACnbxax5EocR15HxyfAg=="
+    "sig": "mA+x6zV9ntgI3girgvkrRtB26woON+DzpQ5w4kwTTMyyFrGeJlblV4x811QVNMXTNIuMH4+Pm7cDlpDqbjYgAQ=="
   },
   "pressure-injury": {
-    "key": "bc061e17f78dbffd",
-    "sourceKey": "259ef5956262c8c603bc73d9",
+    "key": "fbb4872943ae81ba",
+    "sourceKey": "8e2d32f98f99bdb7e2bb98e0",
     "frames": [
       "light/static",
       "light/layers",
@@ -181,16 +181,16 @@
       "dark/other",
       "dark/prevent"
     ],
-    "verdict": "PASS",
+    "verdict": "FAIL",
     "completed": true,
-    "reviewedAt": "2026-10-29T13:18:46.164Z",
+    "reviewedAt": "2026-10-29T13:44:13.762Z",
     "model": "openai/gpt-6.1-sol",
-    "report": "reports/diagram-review/pressure-injury/2026-10-29T13-18-46-164Z-bc061e17f78dbffd.md",
+    "report": "reports/diagram-review/pressure-injury/2026-10-29T13-44-13-762Z-fbb4872943ae81ba.md",
     "counts": {
       "blocker": 0,
-      "major": 0,
-      "minor": 1
+      "major": 1,
+      "minor": 0
     },
-    "sig": "HZxBKWoOp4fMNk6UMHct7hT4tQSjxMuZm1sqey9Lm5fUHV0aMdOXboToRFDYTPaK6Sp6gFQd0gDXKl6hQtf2Dw=="
+    "sig": "cfafV/HQJd2gXpCNm16v271YUXgwt6la88IO8JDuYTQUMeCl9Z5MvvUBAj0ZF8QqGwTM/lrflag6xQIQMHdpDA=="
   }
 }
