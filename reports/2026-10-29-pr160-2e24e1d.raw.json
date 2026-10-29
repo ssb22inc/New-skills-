@@ -1,0 +1,77 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "2e24e1d7801cb68da9e2d32c8ba9eb2365a8d44b",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T21:23:57.685Z",
+  "filesReviewed": [
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 78,
+      "title": "AI-generated clinical audio reaches students without the accuracy gate",
+      "problem": "The route publishes the model's audio immediately after synthesis and upload. There is no verification of the spoken content or adversarial approval bound to the generated audio. Instructions to read numbers and units exactly are not verification. Reviewing the source question does not establish that generative speech reproduced its clinical values correctly.",
+      "failure_scenario": "The speech model misreads a decimal, unit, negation, or answer choice. The resulting clip is immediately linked to the student and cached for subsequent listeners without passing the project's mandatory accuracy gate for all site content.",
+      "fix": "Pass generated clinical audio through the required adversarial accuracy gate before returning a playable URL. Bind approval to both the source text and exact audio artifact, reject mismatches, and cache only approved clips. Reuse the reviewed narration pipeline where possible.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/ai.js",
+      "line": 26,
+      "title": "Any account can trigger unlimited arbitrary-text synthesis and permanent storage",
+      "problem": "The speak action checks only sign-in and per-request text length. It accepts arbitrary text, has no per-user quota or budget enforcement, and writes every unique passage to storage using the service role. The cache does not constrain resource consumption because callers control the entire cache key through text.",
+      "failure_scenario": "A user creates an ordinary account and repeatedly submits distinct 1,500-character strings. Each request incurs a new OpenAI synthesis and a persistent storage object. The caller can exhaust the voice budget or storage independently of legitimate study activity.",
+      "fix": "Retain the authenticated user identity and enforce server-side per-user and global synthesis budgets before vendor calls. Prefer requests identifying an authorized, approved item segment rather than accepting unrestricted text, and bound storage growth. Add tests proving quota rejection performs neither synthesis nor upload.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 213,
+      "title": "Beginning a case restarts the hidden introduction alongside the first step",
+      "problem": "The auto-read effect starts whenever segments are nonempty, even when the reader key becomes \"off\". CaseStudy retains the full introSegs after leaving the introduction, so changing introReader's key to \"off\" restarts its narration instead of disabling it.",
+      "failure_scenario": "Enable \"Read each new one\", open a case, then press \"Begin case\". The introduction reader restarts the chart while the step reader starts the first question. With the AI voice, their detached Audio instances are not found by document.querySelectorAll(\"audio\"), so both can play simultaneously. With device speech, the introduction is unnecessarily queued again.",
+      "fix": "Give the hook an explicit enabled state, or supply empty introduction segments whenever step is not -1. Disabled readers must stop without auto-starting. Add a mounted-hook or CaseStudy test covering the introduction-to-first-step transition and asserting only the step reader plays.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 48,
+      "title": "Client caches one-hour signed URLs indefinitely",
+      "problem": "urlCache retains successful URL promises for the lifetime of the page, but the server signs those URLs for only 3,600 seconds. Playback errors do not invalidate a resolved cache entry or obtain a fresh signature; instead they disable serverVoice for the entire session.",
+      "failure_scenario": "A student listens to a passage, leaves the app open for more than an hour, and listens to that passage again. voiceUrl returns the expired link without contacting the server. Playback fails and all subsequent narration falls back to the device voice, even though the server and cached audio are healthy.",
+      "fix": "Cache URLs with an expiry shorter than SIGNED_SECONDS and refresh expired entries. On an expired-link playback failure, invalidate the URL and retry signing once before disabling the AI voice. Add a fake-clock test that revisits a passage after the signing TTL.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 46227,
+    "completionTokens": 6676,
+    "reasoningTokens": 5661,
+    "costUsd": 0.182326
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not ship as-is. The new speech path lacks the required accuracy gate and permits unbounded paid synthesis/storage. Auto-reading and signed-URL caching also have reproducible lifecycle defects that the supplied tests do not exercise. Review was limited to the supplied files; tests and build were not run.",
+  "counts": {
+    "blocker": 2,
+    "major": 2,
+    "minor": 0
+  }
+}
