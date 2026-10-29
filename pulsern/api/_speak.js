@@ -236,6 +236,33 @@ async function claimOutcome(bucket, marker, timeOf) {
   return { state: 'unknown' };
 }
 
+/* One synthesis per passage at a time, live or scheduled: a claim keyed
+   by the passage, with a lease (a request that dies part-way does not hold
+   it for ever; one later caller takes it over through a marker storage
+   creates once). "mine": go ahead (then recheck the record); "busy":
+   someone else is voicing it; "error": storage trouble. */
+export const PASSAGE_LEASE_MS = 120000;
+export const PASSAGE_WAIT = { tries: 50, ms: 500 };
+const claimPath = (text, tts) => `claims/${tts.voice}-${passagePaths(text, tts).key}`;
+export async function claimPassage(storage, text, timeOf = () => Date.now(), tts = TTS) {
+  const path = claimPath(text, tts);
+  const made = await createOnce(storage, path, String(timeOf()));
+  if (made !== 'exists') return made === 'created' ? 'mine' : 'error';
+  const { data, error } = await storage.from(BUCKET).download(path);
+  if (error) return isMissing(error) ? claimPassage(storage, text, timeOf, tts) : 'error';
+  const since = Number(String(typeof data?.text === 'function' ? await data.text() : data ?? '').trim());
+  if (Number.isFinite(since) && timeOf() - since <= PASSAGE_LEASE_MS) return 'busy';
+  const take = await createOnce(storage, `${path}.takeover-${Number.isFinite(since) ? since : 0}`);
+  if (take !== 'created') return take === 'exists' ? 'busy' : 'error';
+  const { error: upError } = await storage.from(BUCKET).upload(path, String(timeOf()), { contentType: 'text/plain', upsert: true });
+  return upError ? 'error' : 'mine';
+}
+export async function releasePassage(storage, text, tts = TTS) {
+  const { error } = await storage.from(BUCKET).remove([claimPath(text, tts)]);
+  if (error) console.error('[read-aloud] release', error.message ?? error);
+  return !error;
+}
+
 /* "ok": a slot is held. "full": the cap is reached (or the slots are too
    contended to claim one now). "error": the counters could not be read or
    written. Anything but "ok" spends nothing; "error" is also reported as
@@ -418,6 +445,14 @@ export async function readRecord(storage, text, tts = TTS, now = Date.now()) {
   return r;
 }
 
+/* A 202 says whether the voice job can still voice today: when today's
+   spending is used up, the item waits for the next day, and the app says
+   so instead of promising it soon. */
+async function queuedReply(storage, t0, limits) {
+  const spent = await countSlots(storage.from(BUCKET), `usage/${quotaDay(t0)}/spend`);
+  return { status: 202, body: spent != null && spent >= limits.spend ? { queued: true, after: 'tomorrow' } : { queued: true } };
+}
+
 /* Returns { status, body } for the route to send.
    200 { url }: checked audio to play.
    202 { queued }: no voice yet; the passage is queued for the voice job
@@ -466,7 +501,7 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
 
   // Already waiting for the voice job: nothing more to spend.
   const waiting = async (paths) => (await readJson(bucket, paths.queue)) || (await readJson(bucket, paths.retry));
-  if (!apiKey && await waiting({ queue, retry })) return { status: 202, body: { queued: true } };
+  if (!apiKey && await waiting({ queue, retry })) return queuedReply(storage, t0, limits);
 
   const overBudget = { status: 429, body: { error: 'Daily voice limit reached' } };
   const unavailable = { status: 503, body: { error: 'Voice unavailable' } };
@@ -527,20 +562,44 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
       if (entry.length > QUEUE_ENTRY_MAX) continue; // cannot happen for a valid part; never stored if it did
       if (!(await put(storage, paths.queue, entry, 'application/json'))) return unavailable;
     }
-    return { status: 202, body: { queued: true } };
+    return queuedReply(storage, t0, limits);
   }
 
-  // A live synthesis: every take claims a spending slot on the day it is made.
-  const pay = () => reserve(storage, userId, { now: timeOf(), limits, pool: 'spend' });
-  const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: pay });
-  if (!final) {
-    if (errorKind === 'budget') return overBudget;
-    if (errorKind === 'service' || errorKind === 'storage') return unavailable;
-    if (errorKind === 'permanent') { await saveRejected(storage, text, error, { now: timeOf(), tts }); return { status: 422, body: { error: 'Voice check failed' } }; }
-    return { status: 502, body: { error: 'Voice failed' } };
+  /* A live synthesis. One request voices a passage at a time: another
+     asking for the same words waits for that result instead of paying
+     again. */
+  const claim = await claimPassage(storage, text, timeOf, tts);
+  if (claim === 'error') return unavailable;
+  if (claim === 'busy') {
+    for (let i = 0; i < PASSAGE_WAIT.tries; i++) {
+      await new Promise((r) => setTimeout(r, PASSAGE_WAIT.ms));
+      const done = await readRecord(storage, text, tts, timeOf());
+      if (done?.pass === true) { const link = await signed(bucket, mp3); return link.url ? { status: 200, body: { url: link.url, cached: true } } : unavailable; }
+      if (done?.pass === false) return { status: 422, body: { error: 'Voice check failed' } };
+    }
+    return unavailable;
   }
-  if (!(await saveChecked(storage, text, best, { now: timeOf(), tts }))) return { status: 502, body: { error: 'Voice could not be saved' } };
-  if (!best.check.pass) return { status: 422, body: { error: 'Voice check failed', similarity: best.check.similarity } };
-  const link = await signed(bucket, mp3);
-  return link.url ? { status: 200, body: { url: link.url, cached: false } } : { status: 502, body: { error: 'Voice could not be linked' } };
+  try {
+    // It may have been finished while this request was getting the claim.
+    const now2 = await readRecord(storage, text, tts, timeOf());
+    if (now2?.pass === true) { const link = await signed(bucket, mp3); if (link.url) return { status: 200, body: { url: link.url, cached: true } }; }
+    if (now2?.pass === false) return { status: 422, body: { error: 'Voice check failed' } };
+    return await synthesiseLive();
+  } finally { await releasePassage(storage, text, tts); }
+
+  async function synthesiseLive() {
+    // Every take claims a spending slot on the day it is made.
+    const pay = () => reserve(storage, userId, { now: timeOf(), limits, pool: 'spend' });
+    const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: pay });
+    if (!final) {
+      if (errorKind === 'budget') return overBudget;
+      if (errorKind === 'service' || errorKind === 'storage') return unavailable;
+      if (errorKind === 'permanent') { await saveRejected(storage, text, error, { now: timeOf(), tts }); return { status: 422, body: { error: 'Voice check failed' } }; }
+      return { status: 502, body: { error: 'Voice failed' } };
+    }
+    if (!(await saveChecked(storage, text, best, { now: timeOf(), tts }))) return { status: 502, body: { error: 'Voice could not be saved' } };
+    if (!best.check.pass) return { status: 422, body: { error: 'Voice check failed', similarity: best.check.similarity } };
+    const link = await signed(bucket, mp3);
+    return link.url ? { status: 200, body: { url: link.url, cached: false } } : { status: 502, body: { error: 'Voice could not be linked' } };
+  }
 }

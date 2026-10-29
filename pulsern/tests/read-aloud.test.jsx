@@ -7,12 +7,13 @@
      per passage; without a key it says so and the app uses the device voice.
    - Readiness exams have no read aloud. */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createHash } from "node:crypto";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
-import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS } from "../api/_speak.js";
+import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, claimPassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
 import { passagePaths } from "../api/_speak.js";
@@ -665,6 +666,27 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(r.lines.join("\n")).toMatch(/entry kept as it was/);
   });
 
+  it("fails the run when finished entries cannot be removed, and still reaches the work behind them", async () => {
+    const { storage, files } = fakeStorage();
+    // 450 entries already decided (their records exist) that can no longer be removed...
+    for (let i = 0; i < 450; i++) {
+      const text = `Card ${2000 + i}.`;
+      const p = passagePaths(text);
+      files.set(p.queue, Buffer.from(JSON.stringify({ text, voice: "marin", ref: { kind: "card", id: 2000 + i, part: "front" }, seg: "card-front" })));
+      files.set(p.rec, Buffer.from(JSON.stringify({ qa: QA_VERSION, pass: true, textSha: createHash("sha256").update(text).digest("hex") })));
+    }
+    // ...then one student's request
+    await speak({ ...base({ apiKey: "" }), storage });
+    const real = storage.from(BUCKET);
+    const noRemove = { ...storage, from: () => ({ ...real, remove: (ps) => (ps.some((p) => p.startsWith("queue/")) ? Promise.resolve({ error: { message: "Internal error" } }) : real.remove(ps)) }) };
+    const f = fakeOpenAI();
+    const r = await runJob({ storage: noRemove, db: fakeDb({ questions: [], case_studies: [], flashcards: [] }), apiKey: "k", fetchImpl: f, max: 200, log: () => {} });
+    expect(r.failed).toBe(true);
+    expect(r.lines.join("\n")).toMatch(/could not remove/);
+    expect(JSON.parse(f.mock.calls[0][1].body).input).toBe("Potassium 2.9 milliequivalents per liter."); // the request was reached
+    expect(r.queue.voiced).toBe(1);
+  });
+
   it("stops the run after three outages in a row, without touching the rest", async () => {
     const { storage, files } = fakeStorage();
     const segs = [["stem", "Which value is the priority?"], ["opt0", "Potassium 2.9 milliequivalents per liter."], ["opt1", "Sodium 138 milliequivalents per liter."]];
@@ -1099,6 +1121,54 @@ describe("server voice: daily budgets", () => {
     expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(2); // the card, the case
   });
 
+  it("says an item will wait for tomorrow when today's voicing budget is spent", async () => {
+    const { storage, files } = fakeStorage();
+    const now = Date.UTC(2026, 9, 29, 16);
+    const limits = { user: 10, admission: 10, spend: 2 };
+    files.set("usage/2026-10-29/spend/00000", Buffer.from("1"));
+    expect((await speak({ ...base({ apiKey: "" }), storage, limits, now })).body).toEqual({ queued: true });
+    files.set("usage/2026-10-29/spend/00001", Buffer.from("1")); // the bank pre-voicing used up today's budget
+    expect((await speak({ ...base({ apiKey: "", ...Q2 }), storage, limits, now })).body).toEqual({ queued: true, after: "tomorrow" });
+    expect((await speak({ ...base({ apiKey: "" }), storage, limits, now })).body).toEqual({ queued: true, after: "tomorrow" }); // already queued
+  });
+
+  describe("one synthesis per passage at a time", () => {
+    const saved = { ...PASSAGE_WAIT };
+    beforeEach(() => { PASSAGE_WAIT.tries = 40; PASSAGE_WAIT.ms = 5; });
+    afterEach(() => Object.assign(PASSAGE_WAIT, saved));
+
+    it("pays once when two students ask for the same passage at the same time, and both hear it", async () => {
+      const { storage } = fakeStorage();
+      const f = fakeOpenAI();
+      const out = await Promise.all([speak({ ...base(), storage, fetchImpl: f }), speak({ ...base({ userId: "u2" }), storage, fetchImpl: f })]);
+      expect(out.map((r) => r.status)).toEqual([200, 200]);
+      expect(speechCalls(f)).toBe(1);
+    });
+
+    it("takes over a claim whose request died, after its lease", async () => {
+      const { storage, files } = fakeStorage();
+      let t = Date.UTC(2026, 9, 29, 16);
+      expect(await claimPassage(storage, Q1.text, () => t)).toBe("mine"); // and then that request died
+      expect(await claimPassage(storage, Q1.text, () => t + 1000)).toBe("busy");
+      t += PASSAGE_LEASE_MS + 1000;
+      const f = fakeOpenAI();
+      expect((await speak({ ...base(), storage, fetchImpl: f, now: t })).status).toBe(200);
+      expect(speechCalls(f)).toBe(1);
+      expect([...files.keys()].filter((k) => k.startsWith("claims/") && !k.includes(".takeover-"))).toEqual([]); // released
+    });
+
+    it("the voice job leaves a passage being voiced live for its next run", async () => {
+      const { storage, files } = fakeStorage();
+      await speak({ ...base({ apiKey: "" }), storage });
+      expect(await claimPassage(storage, Q1.text)).toBe("mine"); // a live request is voicing it
+      const f = fakeOpenAI();
+      const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
+      expect(f).not.toHaveBeenCalled();
+      expect(r.errors).toEqual([]);
+      expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    });
+  });
+
   it("charges a take made after Eastern midnight to the new day", async () => {
     const { storage, files } = fakeStorage();
     let t = Date.UTC(2026, 9, 30, 3, 59, 50); // 11:59:50 p.m. Eastern, Oct 29
@@ -1143,7 +1213,7 @@ describe("server voice: daily budgets", () => {
     const out = await speak(other);
     expect(out.status).toBe(429);
     expect(speechCalls(f)).toBe(1);
-    expect(calls.upload).toEqual([]);
+    expect(calls.upload.filter((p) => !p.startsWith("claims/"))).toEqual([]); // only the passage claim, released again
     // another student still has room, and an already-checked passage is still served
     expect((await speak({ ...other, userId: "u2" })).status).toBe(200);
     expect((await speak({ ...base(), storage, fetchImpl: f, limits })).body.cached).toBe(true);

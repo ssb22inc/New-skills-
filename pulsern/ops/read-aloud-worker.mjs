@@ -32,15 +32,26 @@
    or bank trouble) fails the workflow run, so it is noticed. */
 import { createClient } from "@supabase/supabase-js";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, claimPassage, releasePassage, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
 import { scriptFor, questionFeedbackSegments, caseFeedbackSegments, verdictText } from "../src/read-aloud-script.js";
 
 export const MAX_ATTEMPTS = 5;
 const MAX_TRANSIENT_IN_A_ROW = 3;
 
-/* Voice one passage. result: "voiced" | "failed" | "rejected" | "budget" | "service" | "transient". */
+/* Voice one passage. result: "voiced" | "failed" | "rejected" | "budget" |
+   "service" | "storage" | "transient" | "busy" (being voiced elsewhere
+   right now: left for the next run) | "decided" (finished elsewhere). */
 async function voiceOne({ storage, apiKey, fetchImpl, text, now, limits }) {
+  const claim = await claimPassage(storage, text, now);
+  if (claim === "busy") return { result: "busy", spent: 0 };
+  if (claim === "error") return { result: "storage", spent: 0, error: "could not claim the passage" };
+  try {
+    if (await readRecord(storage, text, TTS, now())) return { result: "decided", spent: 0 };
+    return await voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits });
+  } finally { await releasePassage(storage, text); }
+}
+async function voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits }) {
   const r = await makeChecked({ text, apiKey, fetchImpl, beforeTake: () => reserveSpend(storage, { now: now(), limits }) });
   if (!r.final) {
     if (r.errorKind === "budget") return { result: "budget", spent: r.spent };
@@ -66,19 +77,18 @@ async function readJsonFile(bucket, path, maxBytes = Infinity) {
 }
 const put = (bucket, path, value) => bucket.upload(path, JSON.stringify(value), { contentType: "application/json", upsert: true });
 
-/* List up to `want` entries of a lane, oldest first, across pages. */
-async function listLane(bucket, dir, want) {
-  const out = [];
-  for (let offset = 0; out.length < want; offset += 1000) {
+/* A lane's entries, oldest first, a page at a time and only as far as
+   the run gets: entries that cannot be cleared never hide later work. */
+async function* laneEntries(bucket, dir) {
+  for (let offset = 0; ; offset += 1000) {
     const { data, error } = await bucket.list(dir, { limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } });
     if (error) {
-      if (/not found/i.test(String(error.message ?? error))) return out;
+      if (/not found/i.test(String(error.message ?? error))) return;
       throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
     }
-    out.push(...(data ?? []).filter((e) => e.name?.endsWith(".json")));
-    if (!data || data.length < 1000) break;
+    for (const e of data ?? []) if (e.name?.endsWith(".json")) yield e;
+    if (!data || data.length < 1000) return;
   }
-  return out.slice(0, want);
 }
 
 /* Two lanes: every fresh request (queue/) before any retry
@@ -89,24 +99,28 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
   const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
   let inARow = 0, refusedInARow = 0, done = 0;
   const touched = new Set(); // moved or rewritten this run: next run's work
+  /* Every delete is checked: a failure is storage trouble (the run fails),
+     never reported as done. */
+  const drop = async (path) => {
+    const { error } = await bucket.remove([path]);
+    if (error) { out.operational = true; out.errors.push(`${path}: could not remove (${error.message ?? error})`); }
+    return !error;
+  };
 
   for (const lane of ["queue", "queue-retry"]) {
-    // Read entries a little beyond what can be voiced, to step over ones
-    // already decided or dropped.
-    const entries = await listLane(bucket, lane, Math.max(0, max - done) * 2 + 20);
-    for (const f of entries) {
+    for await (const f of laneEntries(bucket, lane)) {
       if (done >= max) return out;
       const path = `${lane}/${f.name}`;
       if (touched.has(path)) continue;
       // Oversized entries are not ours: dropped unread.
-      if (Number(f.metadata?.size) > QUEUE_ENTRY_MAX) { await bucket.remove([path]); out.skipped++; continue; }
+      if (Number(f.metadata?.size) > QUEUE_ENTRY_MAX) { await drop(path); out.skipped++; continue; }
       const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
       if (got.error) { out.operational = true; out.errors.push(`${f.name}: could not read (${got.error.message ?? got.error})`); continue; }
       const raw = got.value;
       const ref = canonicalRef(raw?.ref);
       const paths = raw && typeof raw.text === "string" ? passagePaths(raw.text) : null;
       if (got.malformed || got.tooBig || !raw || raw.voice !== TTS.voice || !ref || !validRequest(ref, raw.seg, raw.text) || (lane === "queue" ? paths.queue : paths.retry) !== path) {
-        await bucket.remove([path]); out.skipped++; continue;
+        await drop(path); out.skipped++; continue;
       }
       // Only the known fields are kept.
       const job = { text: raw.text, voice: raw.voice, ref, seg: raw.seg, requestedAt: String(raw.requestedAt ?? ""), attempts: Number.isInteger(raw.attempts) ? raw.attempts : 0, giveUp: typeof raw.giveUp === "string" ? raw.giveUp.slice(0, 200) : null };
@@ -116,17 +130,19 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
         // An unreadable record is storage trouble: keep the work, spend nothing.
         out.operational = true; out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: ${e.message}`); continue;
       }
-      if (decided) { await bucket.remove([path]); out.skipped++; continue; } // already decided
+      if (decided) { await drop(path); out.skipped++; continue; } // already decided
       /* Given up on earlier, but its record could not be saved then: save
          the record now (no synthesis); remove the entry only once it is. */
       if (job.giveUp) {
-        if (await saveRejected(storage, job.text, job.giveUp, { now: now() })) { await bucket.remove([path]); out.rejected++; }
+        if (await saveRejected(storage, job.text, job.giveUp, { now: now() })) { await drop(path); out.rejected++; }
         else { out.operational = true; out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`); }
         continue;
       }
-      done++;
       const v = await voiceOne({ storage, apiKey, fetchImpl, text: job.text, now, limits });
       out.spent += v.spent;
+      if (v.result === "busy") continue; // being voiced elsewhere: next run
+      if (v.result === "decided") { await drop(path); out.skipped++; continue; }
+      done++;
       if (v.result === "budget") { out.budget = true; return out; }
       if (v.result === "service") { out.service = v.error; return out; }
       if (v.result === "storage") { out.operational = true; out.errors.push(`storage: ${v.error}`); return out; }
@@ -135,19 +151,19 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
         if (attempts >= MAX_ATTEMPTS) {
           const reason = `gave up after ${attempts} attempts: ${v.error}`;
           // The entry goes only once the record that ends its retries is saved.
-          if (await saveRejected(storage, job.text, reason, { now: now() })) { await bucket.remove([path]); out.rejected++; }
+          if (await saveRejected(storage, job.text, reason, { now: now() })) { await drop(path); out.rejected++; }
           else {
             // Keep the work: the original goes only once its replacement is saved.
             const { error: keepError } = await put(bucket, paths.retry, { ...job, attempts, giveUp: reason });
             touched.add(paths.retry);
-            if (!keepError && path !== paths.retry) await bucket.remove([path]);
+            if (!keepError && path !== paths.retry) await drop(path);
             out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record${keepError ? " (entry kept as it was)" : ""}`);
           }
         } else {
           // Into the retry lane, behind every fresh request.
           const { error: moveError } = await put(bucket, paths.retry, { ...job, attempts, lastError: String(v.error).slice(0, 200) });
           touched.add(paths.retry);
-          if (!moveError && path !== paths.retry) await bucket.remove([path]);
+          if (!moveError && path !== paths.retry) await drop(path);
           if (moveError) out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not move to the retry lane (entry kept as it was)`);
           out.retried++;
         }
@@ -159,7 +175,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
         continue;
       }
       inARow = 0;
-      await bucket.remove([path]);
+      await drop(path);
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
       if (v.result === "voiced") out.voiced++;
       else if (v.result === "rejected") {
@@ -237,6 +253,8 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       done++;
       const v = await voiceOne({ storage, apiKey, fetchImpl, text, now, limits });
       out.spent += v.spent;
+      if (v.result === "decided") continue;
+      if (v.result === "busy") return "busy"; // being voiced elsewhere: this item again next run
       if (v.result === "budget") { out.budget = true; return "budget"; }
       if (v.result === "storage") { out.failure = true; return `storage: ${v.error}`; }
       if (v.result === "service") { out.failure = true; return `provider: ${v.error}`; }
@@ -325,6 +343,15 @@ export async function pruneUsage({ storage, now = Date.now(), keepDays = 7 }) {
         removed += Math.min(1000, files.length - i);
       }
     }
+  }
+  // Takeover markers of lapsed passage claims (rare) are kept a day, then removed.
+  const stale = (await listAll(bucket, "claims")).map((e) => e.name)
+    .filter((n) => { const t = Number(/\.takeover-(\d+)$/.exec(n)?.[1]); return Number.isFinite(t) && now - t > 86400000; })
+    .map((n) => `claims/${n}`);
+  for (let i = 0; i < stale.length; i += 1000) {
+    const { error } = await bucket.remove(stale.slice(i, i + 1000));
+    if (error) throw new Error(`Could not remove old claims: ${error.message ?? error}`);
+    removed += Math.min(1000, stale.length - i);
   }
   return { days: days.length, removed };
 }

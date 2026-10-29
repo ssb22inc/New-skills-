@@ -73,7 +73,7 @@ export function makeVoiceClient({ fetchImpl = (...a) => fetch(...a), now = () =>
           body: JSON.stringify({ action: "speak", ref, seg, text, token: t }),
         });
         const data = await r.json().catch(() => ({}));
-        if (!r.ok || r.status !== 200 || typeof data.url !== "string") { const e = new Error(data.error || "VOICE"); e.status = r.status; throw e; }
+        if (!r.ok || r.status !== 200 || typeof data.url !== "string") { const e = new Error(data.error || "VOICE"); e.status = r.status; e.after = data.after; throw e; }
         return data.url;
       })();
       cache.set(k, { at: now(), p });
@@ -95,7 +95,7 @@ export function planReading(segments, outcomes) {
   // A real failure is reported before "being prepared", which is only
   // promised when every part is either ready, decided, or on its way.
   if (outcomes.some((o) => !o.url && UNAVAILABLE(o.status))) return { kind: "unavailable" };
-  if (outcomes.some((o) => o.status === 202)) return { kind: "preparing" };
+  if (outcomes.some((o) => o.status === 202)) return { kind: outcomes.some((o) => o.status === 202 && o.after === "tomorrow") ? "preparing-tomorrow" : "preparing" };
   const steps = segments.map((s, i) => {
     const o = outcomes[i];
     if (o.url) return { id: s.id, url: o.url };
@@ -162,7 +162,7 @@ export function unlockPlayer() {
    that are not in the bank, which have no voice. */
 export function useReadAloud(segments, key, ref = null) {
   const prefs = React.useSyncExternalStore(prefsStore.subscribe, prefsStore.get, prefsStore.get);
-  // idle | loading | playing | paused | preparing | unavailable | blocked
+  // idle | loading | playing | paused | preparing | preparing-tomorrow | unavailable | blocked
   const [status, setStatus] = React.useState("idle");
   const [active, setActive] = React.useState(null);
   const [silent, setSilent] = React.useState(false); // the active part is shown, not voiced
@@ -199,7 +199,7 @@ export function useReadAloud(segments, key, ref = null) {
 
     /* Ask for every part at once: either the whole item is ready, or the
        whole item goes to the voice job together (never half a question). */
-    const ask = (s, fresh = false) => voice.url(itemRef, s.id, s.text, { fresh }).then((url) => ({ url }), (e) => ({ status: e?.status ?? 0 }));
+    const ask = (s, fresh = false) => voice.url(itemRef, s.id, s.text, { fresh }).then((url) => ({ url }), (e) => ({ status: e?.status ?? 0, after: e?.after }));
     const outcomes = await Promise.all(segs.map((s) => ask(s)));
     if (signal.aborted) return;
     const plan = planReading(segs, outcomes);
@@ -282,7 +282,8 @@ export function useReadAloud(segments, key, ref = null) {
 export const ra = (reader, id, cls = "") => (reader?.isOn(id) ? `${cls} ra-now`.trim() : cls);
 
 export const NOTES = {
-  preparing: "The AI voice for this is being prepared and is usually ready within 15 minutes.",
+  preparing: "The AI voice for this is being prepared. Try Listen again in a little while.",
+  "preparing-tomorrow": "The AI voice for this is queued. Today's voice limit has been reached, so it will be prepared after midnight (Eastern time).",
   unavailable: "The voice isn't available right now. Please try again later.",
   silent: "Read this part on screen.",
   blocked: "Your browser held back the sound. Tap the button once more to start the voice.",
@@ -297,7 +298,7 @@ export function ReadAloudBar({ reader, label = "Listen", hint }) {
     : status === "loading" ? { text: "Getting the voice ready…", on: stop, aria: "Stop reading" }
     : { text: `🔊 ${label}`, on: play, aria: `${label}: read this aloud` };
   const nextRate = RATES[(RATES.indexOf(prefs.rate) + 1) % RATES.length];
-  const note = status === "preparing" ? NOTES.preparing : status === "unavailable" ? NOTES.unavailable
+  const note = status === "preparing" || status === "preparing-tomorrow" ? NOTES[status] : status === "unavailable" ? NOTES.unavailable
     : status === "blocked" ? NOTES.blocked : status === "playing" && silent ? NOTES.silent : null;
   return (
     <div className="ra-bar" role="group" aria-label="Read aloud">

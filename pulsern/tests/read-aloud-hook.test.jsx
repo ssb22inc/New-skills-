@@ -161,6 +161,22 @@ describe("useReadAloud, mounted", () => {
     expect(reader.status).toBe("unavailable");
   });
 
+  it("says the voice will be prepared after midnight when today's budget is spent", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap(() => reader.play());
+    await flush();
+    await answerAll((p) => p.reply(202, { queued: true, after: "tomorrow" }));
+    await flush();
+    expect(env.played).toEqual([]);
+    expect(reader.status).toBe("preparing-tomorrow");
+    const { ReadAloudBar, NOTES } = mod;
+    host.innerHTML = "";
+    const r2 = createRoot(host);
+    await act(async () => r2.render(<ReadAloudBar reader={reader} />));
+    expect(host.textContent).toContain(NOTES["preparing-tomorrow"]);
+    await act(async () => r2.unmount());
+  });
+
   it("never starts audio when the voice is unavailable", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap(() => reader.play());
