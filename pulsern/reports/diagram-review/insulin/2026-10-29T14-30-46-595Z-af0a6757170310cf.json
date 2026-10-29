@@ -1,0 +1,31 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:30:46.595Z",
+  "images": 16,
+  "key": "af0a6757170310cf",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "Images 8 and 16; step \"worked\"; peak-window rectangle with fillOpacity={0.16}",
+      "title": "Peak-window boundaries are too low-contrast",
+      "problem": "The borderless amber shading has approximately 1.12:1 contrast against the light plot background and 1.35:1 against the dark background. Low-vision students cannot reliably distinguish the highlighted interval's boundaries. The readable clock-time label does not fix the chart highlight itself.",
+      "fix": "Draw opaque, high-contrast boundary lines or an outline above the curve fills, using an appropriate token such as C.accent. Retain the clock-time label and verify boundary contrast in both themes, including where the shading overlaps the curve area.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.311706
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Needs revision: the worked-example peak-window highlight has insufficient contrast.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
