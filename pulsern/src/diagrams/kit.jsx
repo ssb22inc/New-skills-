@@ -34,7 +34,9 @@ export const SANS = "'Archivo',system-ui,sans-serif";
    has, so a reading is never rounded onto a reference limit (Sol: 3.499
    was shown as "3.5" beside "below 3.5"). */
 export function exact(v, min = 0) {
-  for (let d = min; d <= 8; d++) if (Math.abs(Number(v.toFixed(d)) - v) < 1e-12) return v.toFixed(d);
+  /* a true round trip: the digits shown ARE the number (Sol, round 3:
+     3.4999999999995 was shown as 3.5) */
+  for (let d = min; d <= 17; d++) if (Number(v.toFixed(d)) === v) return v.toFixed(d);
   return String(v);
 }
 export const MIN_TEXT = 13;
@@ -70,9 +72,13 @@ const Focus = React.createContext({ focus: null });
    (Astra, PR #133 review, finding 13). */
 const InFocus = React.createContext(false);
 export function G({ id, children, ...rest }) {
-  const { focus } = React.useContext(Focus);
+  const { focus, solo } = React.useContext(Focus);
   const inherited = React.useContext(InFocus);
   const on = !focus || inherited || focus.includes(id);
+  /* In the player each step shows only its own groups (Sol, round 3: a crop
+     that merely dimmed or clipped neighbours left chopped text and whole
+     unrelated panels between the drawing and its caption). */
+  if (solo && !on) return null;
   return (
     <g data-g={id} className={on ? (focus ? "dg-g dg-on" : "dg-g") : "dg-g dg-dim"} {...rest}>
       <InFocus.Provider value={!!focus && on}>{children}</InFocus.Provider>
@@ -90,29 +96,50 @@ export const StepContext = React.createContext({ stepKey: null, collect: null, s
    which is what a rationale, a screenshot and the reviewer must see. */
 const Motion = React.createContext({ stepKey: null, live: false });
 export const useMotion = () => React.useContext(Motion);
-function useLive() {
-  const [live, setLive] = React.useState(false);
+/* Reduced motion, followed LIVE: switching it on while the player is open
+   stops the SMIL loops and the auto-advance at once (Sol, round 3). */
+export function useReducedMotion() {
+  const [reduce, setReduce] = React.useState(() => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
   React.useEffect(() => {
-    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    setLive(!reduce);
+    const mq = typeof window !== "undefined" ? window.matchMedia?.("(prefers-reduced-motion: reduce)") : null;
+    if (!mq) return undefined;
+    const on = () => setReduce(mq.matches);
+    on();
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
   }, []);
-  return live;
+  return reduce;
+}
+function useLive() {
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  const reduce = useReducedMotion();
+  return mounted && !reduce;
 }
 
-/* The part of the canvas a step shows. In the player each step is cropped
-   to its focused groups (`regions`: group id → [top, bottom] in canvas
-   units, from the same layout numbers the diagram draws with), so on a
-   phone the drawing being explained sits right above its caption and
-   controls instead of a screen-height away (Sol, PR #155 diagram review).
-   The overview (no focus) always shows the whole diagram. */
-export const VIEW_PAD = 10;
-export function viewFor(h, focus, regions, stepKey) {
-  if (stepKey == null || !focus || !regions) return [0, h];
-  const spans = focus.map((id) => regions[id]).filter(Boolean);
-  if (!spans.length) return [0, h];
-  const top = Math.max(0, Math.min(...spans.map((r) => r[0])) - VIEW_PAD);
-  const bottom = Math.min(h, Math.max(...spans.map((r) => r[1])) + VIEW_PAD);
-  return [top, bottom];
+/* What a step shows. In the player each step is composed of SLICES of the
+   canvas, one per focused region (`regions`: group id → [top, bottom], or
+   a list of such spans, in canvas units from the same layout numbers the
+   diagram draws with), stacked directly above the caption; groups that are
+   not in focus are not drawn at all. So on a phone the drawing being
+   explained sits right above its caption, and separated groups (a row and
+   a panel far below it) come together without everything in between
+   (Sol, PR #155 diagram review, rounds 2–3). The overview (no focus)
+   always shows the whole diagram. */
+export const VIEW_PAD = 4;
+export function slicesFor(h, focus, regions, stepKey) {
+  if (stepKey == null || !focus || !regions) return null;
+  const spans = focus.flatMap((id) => {
+    const r = regions[id];
+    return !r ? [] : Array.isArray(r[0]) ? r : [r];
+  }).map(([a, b]) => [Math.max(0, a - VIEW_PAD), Math.min(h, b + VIEW_PAD)]).sort((p, q) => p[0] - q[0]);
+  if (!spans.length) return null;
+  const out = [spans[0].slice()];
+  for (const [a, b] of spans.slice(1)) {
+    const last = out[out.length - 1];
+    if (a <= last[1] + 12) last[1] = Math.max(last[1], b); else out.push([a, b]);
+  }
+  return out;
 }
 
 /* The root of every diagram. title/desc make it readable to screen readers
@@ -120,30 +147,38 @@ export function viewFor(h, focus, regions, stepKey) {
 export function Frame({ h, title, desc, focus = null, regions = null, children }) {
   const tid = React.useId();
   const { stepKey, collect = null, still = false } = React.useContext(StepContext);
-  const [vy, vy1] = viewFor(h, focus, regions, stepKey);
+  const slices = slicesFor(h, focus, regions, stepKey) ?? [[0, h]];
+  const solo = slicesFor(h, focus, regions, stepKey) != null;
   /* Paused means paused: the step's finished picture, with every animation
      removed — not a picture that keeps moving behind a "Play" button (Astra,
      PR #133 review, finding 15). Pressing Play plays the step again. */
   const live = useLive() && !still;
   return (
     <Motion.Provider value={{ stepKey, live, collect }}>
-    <Focus.Provider value={{ focus }}>
-      <svg viewBox={`0 ${vy} ${W} ${vy1 - vy}`} width="100%" role="img" aria-labelledby={`${tid}-t ${tid}-d`}
-        style={{ display: "block", fontFamily: SANS, overflow: vy > 0 || vy1 < h ? "hidden" : "visible" }}>
-        <title id={`${tid}-t`}>{title}</title>
-        <desc id={`${tid}-d`}>{desc}</desc>
-        <defs>
-          {["teal", "coral", "amber", "muted", "accent"].map((k) => (
-            /* userSpaceOnUse: the head is 8 units whatever the stroke width,
-               so short arrows do not get swallowed by their own heads. */
-            <marker key={k} id={`${tid}-arrow-${k}`} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" fill={C[k]} />
-            </marker>
-          ))}
-          <SharedDefs id={tid} />
-        </defs>
-        <ArrowIds.Provider value={tid}>{children}</ArrowIds.Provider>
-      </svg>
+    <Focus.Provider value={{ focus, solo }}>
+      {slices.map(([vy, vy1], i) => {
+        const sid = i ? `${tid}-s${i}` : tid;
+        const whole = vy === 0 && vy1 === h;
+        return (
+          <svg key={i} className="dg-svg" viewBox={`0 ${vy} ${W} ${vy1 - vy}`} width="100%"
+            role={i ? undefined : "img"} aria-hidden={i ? "true" : undefined} aria-labelledby={i ? undefined : `${tid}-t ${tid}-d`}
+            style={{ display: "block", fontFamily: SANS, overflow: whole ? "visible" : "hidden" }}>
+            {i ? null : <title id={`${tid}-t`}>{title}</title>}
+            {i ? null : <desc id={`${tid}-d`}>{desc}</desc>}
+            <defs>
+              {["teal", "coral", "amber", "muted", "accent"].map((k) => (
+                /* userSpaceOnUse: the head is 8 units whatever the stroke width,
+                   so short arrows do not get swallowed by their own heads. */
+                <marker key={k} id={`${sid}-arrow-${k}`} viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill={C[k]} />
+                </marker>
+              ))}
+              <SharedDefs id={sid} />
+            </defs>
+            <ArrowIds.Provider value={sid}>{children}</ArrowIds.Provider>
+          </svg>
+        );
+      })}
     </Focus.Provider>
     </Motion.Provider>
   );
@@ -414,6 +449,7 @@ export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, text: sh
 export const DIAGRAM_CSS = `
 .dg-g :is(path,rect,circle,ellipse,line,polyline,polygon){transition:opacity .45s ease}
 .dg-dim :is(path,rect,circle,ellipse,line,polyline,polygon):not(.dg-solid):not(.dg-on *){opacity:.28}
+.dg-svg+.dg-svg{margin-top:8px}
 .dg-wrap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 12px 10px;margin:10px 0}
 @media (max-width:600px){
   .dg-wrap{margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);border-radius:0;border-left:0;border-right:0;padding:12px 0 10px}

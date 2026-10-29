@@ -114,7 +114,8 @@ function Curve({ k, step }) {
   return (
     <G id={k}>
       <path d={areaPath(ins, st.h)} fill={C.teal} fillOpacity={0.07} />
-      {ins.peak ? <rect x={hx(ins.peak[0])} y={Y0 - st.h - 4} width={hx(ins.peak[1]) - hx(ins.peak[0])} height={8} rx={4} fill={C.amber} opacity={0.55} /> : null}
+      {ins.peak ? <rect x={hx(ins.peak[0])} y={Y0 - st.h - 4} width={hx(ins.peak[1]) - hx(ins.peak[0])} height={8} rx={4} fill={C.amber} fillOpacity={0.55}
+        stroke={C.labInk} strokeWidth={1.2} /> : null}
       <Anim on={step} kind="draw" dur={1400}>
         <path d={d} pathLength={1} fill="none" stroke={C.teal} strokeWidth={st.w + 3} strokeOpacity={0.12} strokeLinecap="round" />
       </Anim>
@@ -193,7 +194,7 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
     <Frame h={workedLines ? workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 12 : workedY - 6} focus={focus} title="Insulin onset, peak and duration"
       regions={{ axes: [0, Y0 + 40], rapid: [YTOP - 60, Y0 + 40], short: [YTOP - 60, Y0 + 40], nph: [YTOP - 60, Y0 + 40], long: [YTOP - 60, Y0 + 40],
         "rapid-meal": [Y0 - 60, Y0], table: [TY, tableEnd], note: [noteY - 14, riskY - 14], "peak-risk": [riskY - 16, workedY - 18],
-        worked: [YTOP - 62, workedLines ? workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 6 : Y0 + 40] }}
+        worked: workedLines ? [[YTOP - 62, Y0 + 40], [workedY - 16, workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 6]] : [YTOP - 62, Y0 + 40] }}
       desc={`${workedText ? `${workedText}. ` : ""}Typical subcutaneous action of four insulin types over 24 hours, as illustrative curves that stay flat until onset. Rapid-acting (lispro, aspart, glulisine): onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours; it is associated with meals, and its timing follows the specific product and prescribed plan. Short-acting regular U-100: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no pronounced peak, wanes at about 24 hours. IV regular insulin and regular U-500 act differently, and detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest around a peak, but lows can also happen at other times and with peakless insulin.`}>
       <G id="axes">
         <T x={18} y={20} size={BODY_TEXT} weight={700}>Typical SC insulin action, 24 hours</T>
@@ -251,7 +252,7 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
         <Para x={18} y={noteY} w={324} size={MIN_TEXT} color={C.muted} text={NOTE} />
       </G>
       <G id="peak-risk">
-        <rect x={18} y={riskY - 9} width={18} height={8} rx={4} fill={C.amber} opacity={0.55} />
+        <rect x={18} y={riskY - 9} width={18} height={8} rx={4} fill={C.amber} fillOpacity={0.55} stroke={C.labInk} strokeWidth={1.2} />
         <T x={42} y={riskY} size={BODY_TEXT} weight={600}>Around a peak: highest hypoglycemia risk</T>
         <Para x={42} y={riskY + 20} w={300} size={MIN_TEXT} text={RISK} />
       </G>

@@ -17,7 +17,7 @@
    hyperglycemia or reduced insulin action) and the fluid then acts like
    what is left. */
 import React from "react";
-import { Frame, G, T, Box, Arrow, C, Anim, Loop, Flow, Para, paraLines, useDefs, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
+import { Frame, G, T, Box, Arrow, C, Anim, OnStep, Loop, Flow, Para, paraLines, useDefs, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 export const FLUIDS = {
   isotonic: ["0.9% NaCl (NS)", "lactated Ringer's", "D5W*"],
@@ -77,6 +77,8 @@ function Panel({ id, step, x, title, outside, after, flow, sub, seed }) {
   return (
     <G id={id}>
       <Box x={x} y={PY} w={PW} h={PH} r={10} fill={C.card} lift />
+      {/* the panel this step is about; the other two stay for comparison */}
+      <OnStep on={step}><rect className="dg-solid" x={x - 3} y={PY - 3} width={PW + 6} height={PH + 6} rx={12} fill="none" stroke={C.accent} strokeWidth={2.2} /></OnStep>
       <T x={ax} y={PY + 21} size={BODY_TEXT} weight={700} anchor="middle">{title}</T>
       <T x={lx} y={PY + 43} size={MIN_TEXT} anchor="middle" color={C.muted}>cell</T>
       <T x={rx} y={PY + 43} size={MIN_TEXT} anchor="middle" color={C.muted}>fluid</T>
@@ -147,7 +149,7 @@ const LISTS = [
 const DEX = [
   "*Dextrose counts in the bag, but cells take it up and use it (usually quickly; more slowly with high blood glucose or low insulin action). The fluid then acts like what is left:",
   "D5W, D10W: free water (hypotonic). D5 ½NS: like ½NS. D5 0.9% NaCl, D5LR: like NS and LR (isotonic).",
-  "Of the hypertonic bags, only 3% NaCl keeps pulling water out of cells.",
+  "Once the dextrose is used, 3% NaCl is the bag shown that stays hypertonic. If glucose builds up instead (high blood glucose), dextrose fluids can raise plasma tonicity too.",
 ];
 const SAFE = [
   "Hypotonic fluid can worsen cerebral edema, so it is generally avoided with increased intracranial pressure or acute brain injury; the choice depends on the clinical picture.",
@@ -165,20 +167,22 @@ export function TonicityDiagram({ focus = null }) {
   const hS = 32 + linesH(SAFE, 272, MIN_TEXT) + 5 + 4;
   return (
     <Frame h={yS + hS + 6} focus={focus} title="IV fluid tonicity"
-      regions={{ iso: [74, PY + PH], hypo: [74, PY + PH], hyper: [74, PY + PH], fluids: [yB, yB + hB], dextrose: [yD, yD + hD], safety: [yS, yS + hS] }}
-      desc="Water moves across cell membranes toward the side with more effective solute, meaning solutes that cannot cross into the cell. Each panel compares equal-size samples of the cell and the fluid around it, then shows the cell afterwards against a dashed ring at its starting size. Isotonic fluid: the same effective solute concentration on both sides, so no net water shift (water keeps moving both ways at equal rates) and cell volume is unchanged; it expands the extracellular fluid, in the blood vessels and the tissue spaces. Hypotonic fluid: less effective solute outside, so water moves into cells and they swell. Hypertonic fluid: more effective solute outside, so water moves out of cells and they shrink. Bags as labeled by osmolarity in the bag: isotonic 0.9% NaCl, lactated Ringer's, D5W; hypotonic 0.45% and 0.225% NaCl; hypertonic 3% NaCl, D5 0.9% NaCl, D5 half normal saline, D5LR, D10W. Dextrose is taken up and metabolized, usually quickly but more slowly with high blood glucose or low insulin action, and the fluid then acts like what is left: D5W and D10W like free water (hypotonic), D5 half normal saline like half normal saline, D5 0.9% NaCl and D5LR like their isotonic bases; of the hypertonic bags, only 3% NaCl keeps pulling water out of cells. Hypotonic fluid can worsen cerebral edema and is generally avoided with increased intracranial pressure or acute brain injury; the choice depends on the clinical picture. Monitor isotonic and hypertonic infusions for fluid volume overload.">
-      <T x={180} y={18} size={BODY_TEXT} weight={700} anchor="middle">Water moves toward more effective solute</T>
-      <T x={180} y={37} size={MIN_TEXT} anchor="middle" color={C.muted}>effective solute: cannot cross into the cell</T>
-      <g>
+      regions={{ intro: [0, 68], key: [74, 110], iso: [PY, PY + PH], hypo: [PY, PY + PH], hyper: [PY, PY + PH], fluids: [yB, yB + hB], dextrose: [yD, yD + hD], safety: [yS, yS + hS] }}
+      desc="Water moves across cell membranes toward the side with more effective solute, meaning solutes that cannot cross into the cell. Each panel compares equal-size samples of the cell and the fluid around it, then shows the cell afterwards against a dashed ring at its starting size. Isotonic fluid: the same effective solute concentration on both sides, so no net water shift (water keeps moving both ways at equal rates) and cell volume is unchanged; it expands the extracellular fluid, in the blood vessels and the tissue spaces. Hypotonic fluid: less effective solute outside, so water moves into cells and they swell. Hypertonic fluid: more effective solute outside, so water moves out of cells and they shrink. Bags as labeled by osmolarity in the bag: isotonic 0.9% NaCl, lactated Ringer's, D5W; hypotonic 0.45% and 0.225% NaCl; hypertonic 3% NaCl, D5 0.9% NaCl, D5 half normal saline, D5LR, D10W. Dextrose is taken up and metabolized, usually quickly but more slowly with high blood glucose or low insulin action, and the fluid then acts like what is left: D5W and D10W like free water (hypotonic), D5 half normal saline like half normal saline, D5 0.9% NaCl and D5LR like their isotonic bases; once the dextrose has been used, 3% NaCl is the fluid shown that remains hypertonic, but if glucose accumulates, dextrose-containing fluids can also raise plasma tonicity. Hypotonic fluid can worsen cerebral edema and is generally avoided with increased intracranial pressure or acute brain injury; the choice depends on the clinical picture. Monitor isotonic and hypertonic infusions for fluid volume overload.">
+      <G id="intro">
+        <T x={180} y={18} size={BODY_TEXT} weight={700} anchor="middle">Water moves toward more effective solute</T>
+        <T x={180} y={37} size={MIN_TEXT} anchor="middle" color={C.muted}>effective solute: cannot cross into the cell</T>
         <Dot p={[96, 58]} />
         <T x={103} y={62} size={MIN_TEXT} color={C.muted}>effective solute</T>
         <Drop x={232} y={58} s={1} />
         <T x={240} y={62} size={MIN_TEXT} color={C.muted}>water</T>
-      </g>
-      <T x={180} y={88} size={MIN_TEXT} anchor="middle" color={C.muted}>Top: equal-size samples of cell and fluid.</T>
-      <T x={180} y={105} size={MIN_TEXT} anchor="middle" color={C.muted}>Bottom: the cell after; dashed ring = start size.</T>
+      </G>
+      <G id="key">
+        <T x={180} y={88} size={MIN_TEXT} anchor="middle" color={C.muted}>Top: equal-size samples of cell and fluid.</T>
+        <T x={180} y={105} size={MIN_TEXT} anchor="middle" color={C.muted}>Bottom: the cell after; dashed ring = start size.</T>
+      </G>
       <Panel id="iso" step="isotonic" x={8} title="Isotonic" outside={5} flow="both" after={{ r: START_R }} sub={["No net shift", "same size"]} seed={11} />
-      <Panel id="hypo" step={["hypotonic", "safety"]} x={125} title="Hypotonic" outside={2} flow="in" after={{ r: 27 }} sub={["Water in", "cell swells"]} seed={23} />
+      <Panel id="hypo" step="hypotonic" x={125} title="Hypotonic" outside={2} flow="in" after={{ r: 27 }} sub={["Water in", "cell swells"]} seed={23} />
       <Panel id="hyper" step="hypertonic" x={242} title="Hypertonic" outside={9} flow="out" after={{ r: 15, crenated: true }} sub={["Water out", "cell shrinks"]} seed={37} />
       <G id="fluids">
         <Anim on="bags" kind="pop">
@@ -223,25 +227,25 @@ export const tonicity = {
   example: {},
   facts: [
     "Tonicity is set by effective solutes, those that cannot freely cross the cell membrane (such as sodium and chloride); water moves across the membrane toward the side with the higher effective solute concentration. Osmolarity counts all dissolved particles, including ones such as glucose that cells take up.",
-    "Isotonic fluids cause no net water shift into or out of cells: water keeps moving both ways at equal rates, so cell volume is unchanged. They expand extracellular fluid volume: they cross capillary walls freely, so after equilibration most of the infused volume is in the interstitial space and only roughly a quarter remains in the vessels. Examples: 0.9% NaCl, lactated Ringer's.",
+    "Isotonic fluids cause no net water shift into or out of cells: water keeps moving both ways at equal rates, so cell volume is unchanged. Separately from that definition, isotonic crystalloids such as 0.9% NaCl and lactated Ringer's expand extracellular fluid volume: they cross capillary walls freely, so after equilibration most of the infused volume is in the interstitial space and only roughly a quarter remains in the vessels (colloids such as albumin distribute differently).",
     "Hypotonic fluids move water into cells, which swell. Examples: 0.45% NaCl, 0.225% NaCl.",
     "Hypertonic saline (3% NaCl) pulls water out of cells into the extracellular fluid, and cells shrink.",
-    "IV bags are classified by their osmolarity in the bag: D5W is isotonic in the bag, and D5 0.9% NaCl, D5 0.45% NaCl, D5LR and D10W are hypertonic in the bag. Cells take up and metabolise the dextrose, usually quickly but more slowly with hyperglycemia or reduced insulin action, and the fluid then acts like what remains: D5W and D10W like free water (hypotonic), D5 0.45% NaCl like 0.45% NaCl, D5 0.9% NaCl and D5LR like 0.9% NaCl and lactated Ringer's. Of the hypertonic bags, only 3% NaCl has a sustained cell-shrinking effect.",
+    "IV bags are classified by their osmolarity in the bag: D5W is isotonic in the bag, and D5 0.9% NaCl, D5 0.45% NaCl, D5LR and D10W are hypertonic in the bag. Cells take up and metabolise the dextrose, usually quickly but more slowly with hyperglycemia or reduced insulin action, and the fluid then acts like what remains: D5W and D10W like free water (hypotonic), D5 0.45% NaCl like 0.45% NaCl, D5 0.9% NaCl and D5LR like 0.9% NaCl and lactated Ringer's. After the dextrose has been taken up and metabolized, 3% NaCl is the fluid shown that remains hypertonic; if glucose accumulates (delivery exceeds uptake, as with hyperglycemia or impaired insulin action), dextrose-containing fluids can also increase plasma tonicity.",
     "Hypotonic fluids can worsen cerebral edema and are generally avoided with increased intracranial pressure or acute brain injury; fluid selection depends on the clinical context.",
     "Clients receiving isotonic or hypertonic fluids are monitored for fluid volume overload.",
   ],
   steps: [
-    { key: "isotonic", focus: ["iso"], caption: "Isotonic fluid has the same effective solute concentration as the cell, so there is no net water shift: water keeps moving both ways at the same rate and the cell keeps its size. It expands the fluid outside the cells, in the vessels and the tissues, which is why it is used to replace volume.",
-      narration: "Isotonic fluid has the same effective solute concentration as the cell, so there is no net water shift. Water keeps moving both ways at the same rate, and the cell keeps its size. It expands the fluid outside the cells, in the blood vessels and in the tissues, which is why it is used to replace volume." },
-    { key: "hypotonic", focus: ["hypo"], caption: "Hypotonic fluid has less effective solute than the cell, so water moves into the cell and it swells.",
+    { key: "isotonic", focus: ["intro", "key", "iso", "hypo", "hyper"], caption: "Water moves toward the side with more effective solute: solutes that can't freely cross the cell membrane in that time. Isotonic fluid has the same effective solute concentration as the cell, so there is no net water shift: water keeps moving both ways at the same rate and the cell keeps its size. Isotonic crystalloids such as normal saline and LR expand the fluid outside the cells, in the vessels and the tissues, which is why they are used to replace volume.",
+      narration: "Water moves toward the side with more effective solute. Effective solutes are the ones that can't freely cross the cell membrane in that time. Isotonic fluid has the same effective solute concentration as the cell, so there is no net water shift. Water keeps moving both ways at the same rate, and the cell keeps its size. Isotonic crystalloids, such as normal saline and lactated Ringer's, expand the fluid outside the cells, in the blood vessels and in the tissues, which is why they are used to replace volume." },
+    { key: "hypotonic", focus: ["key", "iso", "hypo", "hyper"], caption: "Hypotonic fluid has less effective solute than the cell, so water moves into the cell and it swells.",
       narration: "Hypotonic fluid has less effective solute than the inside of the cell, so water moves into the cell, and the cell swells." },
-    { key: "hypertonic", focus: ["hyper"], caption: "Hypertonic fluid, like 3% saline, has more effective solute than the cell, so water is pulled out of the cell into the fluid around it, and the cell shrinks.",
+    { key: "hypertonic", focus: ["key", "iso", "hypo", "hyper"], caption: "Hypertonic fluid, like 3% saline, has more effective solute than the cell, so water is pulled out of the cell into the fluid around it, and the cell shrinks.",
       narration: "Hypertonic fluid, like three percent saline, has more effective solute than the cell, so water is pulled out of the cell and into the fluid around it, and the cell shrinks." },
     { key: "bags", focus: ["fluids"], caption: "Know which bag is which. Each fluid is classified as labeled, by what is in the bag, and every bag with dextrose carries a catch.",
       narration: "Know which bag is which. Each fluid is classified as it is labeled, by what is in the bag, and every bag with dextrose in it carries a catch." },
-    { key: "dextrose", focus: ["fluids", "dextrose"], caption: "Cells take up dextrose and use it, usually quickly but more slowly with high blood glucose or low insulin action. Then the fluid acts like what is left: D5W and D10W become free water, D5 ½NS acts like ½NS, and D5NS and D5LR act like their isotonic bases. Only 3% saline keeps pulling water out of cells.",
-      narration: "Cells take up dextrose and use it, usually quickly, but more slowly with high blood glucose or low insulin action. Then the fluid acts like whatever is left. D-five-W and D-ten-W become free water. D-five half-normal saline acts like half-normal saline. And D-five normal saline and D-five lactated Ringer's act like their isotonic bases. Of the hypertonic bags, only three percent saline keeps pulling water out of cells." },
-    { key: "safety", focus: ["hypo", "safety"], caption: "Hypotonic fluid can worsen cerebral edema, so it is generally avoided with increased intracranial pressure or an acute brain injury; the right fluid depends on the clinical picture. Watch isotonic and hypertonic infusions for fluid overload.",
+    { key: "dextrose", focus: ["fluids", "dextrose"], caption: "Cells take up dextrose and use it, usually quickly but more slowly with high blood glucose or low insulin action. Then the fluid acts like what is left: D5W and D10W become free water, D5 ½NS acts like ½NS, and D5NS and D5LR act like their isotonic bases. Once the dextrose is used, 3% saline is the bag shown that stays hypertonic; if glucose builds up instead, dextrose fluids can raise plasma tonicity too.",
+      narration: "Cells take up dextrose and use it, usually quickly, but more slowly with high blood glucose or low insulin action. Then the fluid acts like whatever is left. D-five-W and D-ten-W become free water. D-five half-normal saline acts like half-normal saline. And D-five normal saline and D-five lactated Ringer's act like their isotonic bases. Once the dextrose has been used, three percent saline is the bag shown that stays hypertonic. But if glucose builds up instead, the dextrose fluids can raise plasma tonicity too." },
+    { key: "safety", focus: ["safety"], caption: "Hypotonic fluid can worsen cerebral edema, so it is generally avoided with increased intracranial pressure or an acute brain injury; the right fluid depends on the clinical picture. Watch isotonic and hypertonic infusions for fluid overload.",
       narration: "Hypotonic fluid can make cerebral edema worse, so it is generally avoided with increased intracranial pressure or an acute brain injury. The right fluid depends on the whole clinical picture. And watch anyone on isotonic or hypertonic fluids for fluid overload." },
   ],
 };

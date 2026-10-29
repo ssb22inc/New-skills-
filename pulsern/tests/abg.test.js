@@ -4,13 +4,13 @@
    the clinical claim. Each case below is a standard teaching example; the
    expected reading is what an NCLEX answer key would say. */
 import { describe, it, expect } from "vitest";
-import { interpretAbg, ABG_RANGES } from "../src/diagrams/abg.jsx";
+import { interpretAbg, ABG_RANGES, abgConsistency, verdictLabel, fmtNum, abg } from "../src/diagrams/abg.jsx";
 
 const read = (ph, paco2, hco3) => interpretAbg({ ph, paco2, hco3 });
 
 describe("uncompensated", () => {
   it("respiratory acidosis: high CO₂ drives the pH down, kidneys not yet involved", () => {
-    expect(read(7.30, 55, 24)).toMatchObject({ disorder: "respiratory acidosis", primary: "respiratory", compensation: "none" });
+    expect(read(7.26, 55, 24)).toMatchObject({ disorder: "respiratory acidosis", primary: "respiratory", compensation: "none" });
   });
   it("respiratory alkalosis: low CO₂ (hyperventilation)", () => {
     // acute fall: 24 − 2 × 1.2 = 21.6 ± 2 (7.50/28/24 sits just above that range)
@@ -62,8 +62,12 @@ describe("fully compensated — pH normal, side of 7.40 tells the origin", () =>
     expect(r).toMatchObject({ disorder: "respiratory acidosis", compensation: "full" });
     expect(r.reading).toMatch(/history decides/);
   });
-  it("Sol's case: pH 7.36, PaCO2 36, HCO3 19.7 is metabolic acidosis with appropriate compensation", () => {
-    expect(read(7.36, 36, 19.7)).toMatchObject({ disorder: "metabolic acidosis", compensation: "full", mixedPossible: false });   // Winter 37.6 ± 2
+  /* Sol, round 3: a pH in range does not prove the pH ever left it, so with
+     the other value also in range the compensation is left open. */
+  it("Sol's case: pH 7.36, PaCO2 36, HCO3 19.7 is a metabolic acidosis pattern, compensation unclear", () => {
+    const r = read(7.36, 36, 19.7);   // Winter 37.6 ± 2
+    expect(r).toMatchObject({ disorder: "metabolic acidosis", compensation: "unclear", mixedPossible: true });
+    expect(r.reading).toMatch(/can't tell which/);
   });
   it("Sol's case: pH 7.39, PaCO2 32, HCO3 18.7 fits chronic respiratory alkalosis, not a forced metabolic primary", () => {
     const r = read(7.39, 32, 18.7);
@@ -155,7 +159,7 @@ describe("compensation that goes too far", () => {
   it("names the second disorder from the direction of the miss", () => {
     expect(read(7.48, 50, 35).mixed).toBe("respiratory acidosis");     // PaCO2 above 0.7×35+21+2
     expect(read(7.55, 40, 34).mixed).toBe("respiratory alkalosis");    // PaCO2 below 0.7×34+21−2
-    expect(read(7.10, 80, 22).mixed).toBe("metabolic acidosis");       // HCO3 below the acute rise
+    expect(read(7.06, 80, 22).mixed).toBe("metabolic acidosis");       // HCO3 below the acute rise
     expect(read(7.38, 70, 40).mixed).toBe("respiratory acidosis");     // Sol's case: neither single disorder fits (metabolic alkalosis would need PaCO2 47–51)
     expect(read(7.38, 70, 40).reading).toMatch(/mixed/);
   });
@@ -180,12 +184,12 @@ describe("compensation that goes too far", () => {
     expect(read(7.55, 40, 34)).toMatchObject({ compensation: null, romePattern: "none", mixedPossible: true, mixed: "respiratory alkalosis" });   // 0.7×34+21 = 44.8 ± 2
   });
   it("does not flag a respiratory disorder still within the acute range", () => {
-    expect(read(7.30, 55, 24)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 ≥ 22 + 1.5 − 2
+    expect(read(7.26, 55, 24)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 ≥ 22 + 1.5 − 2
     expect(read(7.50, 28, 22)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 21.6 ± 2
   });
   it("flags a respiratory acidosis whose bicarbonate has not risen even acutely", () => {
     // PaCO2 80: even acutely HCO3 should be at least 22 + 4 − 2 = 24
-    expect(read(7.10, 80, 22)).toMatchObject({ disorder: "respiratory acidosis", mixedPossible: true });
+    expect(read(7.06, 80, 22)).toMatchObject({ disorder: "respiratory acidosis", mixedPossible: true });
   });
   it("still reports a combined disorder as combined, not as compensation", () => {
     expect(read(7.17, 60, 21)).toMatchObject({ primary: "both", compensation: null });
@@ -291,6 +295,45 @@ describe("round 2", () => {
   it("hands the pairing no values for an inconsistent question, so the concept view shows instead", async () => {
     const { extractAbg } = await import("../src/diagrams/match.js");
     expect(extractAbg("ABG: pH 7.20, PaCO2 60, HCO3 36")).toBeNull();
-    expect(extractAbg("ABG: pH 7.30, PaCO2 50, HCO3 24")).toEqual({ ph: 7.3, paco2: 50, hco3: 24 });
+    expect(extractAbg("ABG: pH 7.30, PaCO2 50, HCO3 24")).toEqual({ ph: 7.3, paco2: 50, hco3: 24, precision: { ph: 2, paco2: 0, hco3: 0 } });
+  });
+});
+
+describe("round 3", () => {
+  /* A JavaScript number drops trailing zeros; the pH is still reported to
+     the hundredth, so 7.0 and 7.4 get a ±0.005 allowance, not ±0.05. */
+  it("treats a pH ending in zero as reported to two decimals", () => {
+    expect(read(7.0, 40, 24).disorder).toBe("inconsistent");    // implies ≈ 7.40
+    expect(read(7.4, 50, 26).disorder).toBe("inconsistent");    // implies ≈ 7.34
+    expect(read(7.2, 60, 36).disorder).toBe("inconsistent");    // implies ≈ 7.40
+    expect(read(7.3, 50, 24).disorder).toBe("respiratory acidosis");
+    expect(read(7.4, 40, 24).disorder).toBe("normal");
+  });
+  it("uses precision the caller supplies", () => {
+    expect(interpretAbg({ ph: 7.4, paco2: 40, hco3: 24, precision: { ph: 1 } }).disorder).toBe("normal");
+    expect(abgConsistency({ ph: 7.3, paco2: 50, hco3: 24, precision: { ph: 1 } }).ok).toBe(true);
+  });
+  it("keeps a consistent normal-pH gas interpretable without assuming a 40/24 baseline", () => {
+    const r = read(7.44, 40, 26.3);
+    expect(r).toMatchObject({ disorder: "metabolic alkalosis", compensation: "unclear", mixedPossible: true });
+    expect(verdictLabel(r)).toBe("Metabolic alkalosis pattern · pH in range");
+  });
+  it("never rounds a value onto a reference limit", () => {
+    expect(fmtNum(7.3499, 2)).toBe("7.3499");
+    expect(fmtNum(7.3, 2)).toBe("7.30");
+    const r = read(7.3499, 50, 26.668);
+    expect(r).toMatchObject({ disorder: "respiratory acidosis", compensation: "partial" });
+    expect(abg.dynamicCaption({ ph: 7.3499, paco2: 50, hco3: 26.668 })).toMatch(/pH 7\.3499/);
+  });
+  it("labels consistent values outside the supported range as unsupported, not inconsistent", () => {
+    const r = read(6.77, 40, 5.6);
+    expect(r.disorder).toBe("unsupported");
+    expect(verdictLabel(r)).toBe("Outside automatic interpretation range");
+    expect(verdictLabel(read(7.0, 40, 24))).toBe("Values don't fit: recheck");
+  });
+  it("shows the pH with the decimals the question wrote", async () => {
+    const { extractAbg } = await import("../src/diagrams/match.js");
+    const gas = extractAbg("ABG: pH 7.30, PaCO2 50, HCO3 24");
+    expect(abg.dynamicCaption(gas)).toMatch(/^Here: pH 7\.30, PaCO₂ 50, HCO₃⁻ 24\./);
   });
 });

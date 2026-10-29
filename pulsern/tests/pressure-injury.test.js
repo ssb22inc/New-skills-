@@ -29,6 +29,17 @@ describe("stageFrom", () => {
     expect(stageFrom("Unstageable, later found to be stage 4 after debridement")).toBeNull();
   });
 
+  /* Sol, round 3: another disease's stage before the mention, a stage only
+     asked about, or a stage not tied to the wound must not light a column. */
+  it("ignores other staging and unasserted stages", () => {
+    expect(stageFrom("A client with CKD stage 4 has a sacral pressure injury with full-thickness skin loss.")).toBeNull();
+    expect(stageFrom("A client with CKD stage 4 has a stage 3 pressure injury on the sacrum.")).toEqual({ stage: 3 });
+    expect(stageFrom("Which finding would indicate a stage 3 pressure injury?")).toBeNull();
+    expect(stageFrom("Client has a pressure injury. Stage 3 noted.")).toBeNull();
+    expect(stageFrom("The sacral pressure injury is stage 4.")).toEqual({ stage: 4 });
+    expect(stageFrom("The wound was previously documented as stage 2; it is now a stage 3 pressure injury.")).toEqual({ stage: 3 });
+  });
+
   it("repeating the same stage is still one stage", () => {
     expect(stageFrom("Stage 2 pressure injury. A stage II injury involves the dermis.")).toEqual({ stage: 2 });
   });

@@ -14,7 +14,7 @@
    the matching column can be outlined; a negated, hypothetical or
    superseded mention ("not a stage 4") never counts. */
 import React from "react";
-import { Frame, G, T, Box, C, Anim, Loop, Para, paraLines, useDefs, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
+import { Frame, G, T, Box, C, Anim, OnStep, Loop, Para, paraLines, useDefs, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 const ROMAN = { i: 1, ii: 2, iii: 3, iv: 4 };
 /* A stage mention counts only when the text is about a pressure injury,
@@ -23,29 +23,49 @@ const ROMAN = { i: 1, ii: 2, iii: 3, iv: 4 };
    after ("Stage 4 was ruled out") — Sol, PR #155 diagram review, rounds 1–2.
    Anything less certain returns null. */
 const PRESSURE_CONTEXT = /pressure\s+(?:injur|ulcer|sore|area)|decubitus|bed\s*sore|non-?blanchable|wound|eschar|slough|\bulcer\b|\bbraden\b|deep tissue|unstageable|\bDTPI\b/i;
-const OTHER_STAGING = /^[^.;:]{0,40}\b(?:kidney|renal|CKD|cancer|carcinoma|tumou?r|lymphoma|melanoma|heart failure|hypertension|COPD|labou?r|sleep|lymphedema|liver|cirrhosis|dementia|HIV)\b/i;
-const NOT_CONFIRMED = /\b(?:not|no|isn't|never|ruled out|rather than|instead of|incorrectly|mistakenly|misdocumented|previously|formerly|would be|could be|might be|if)\b[^.;,]{0,30}$/i;
+const DISEASE = "(?:kidney|renal|CKD|ESRD|cancer|carcinoma|tumou?r|lymphoma|melanoma|heart failure|hypertension|COPD|labou?r|sleep|lymphedema|liver|cirrhosis|dementia|HIV|Alzheimer)";
+const OTHER_AFTER = new RegExp(`^[^.;:]{0,40}\\b${DISEASE}\\b`, "i");
+const OTHER_BEFORE = new RegExp(`\\b${DISEASE}\\b(?:\\s+\\S+){0,2}\\s*$`, "i");
+/* Negated or excluded: the mention says the client does NOT have it. */
+const NEGATED_BEFORE = /\b(?:not|no|isn't|never|ruled out|rather than|instead of|incorrectly|mistakenly|misdocumented|previously|formerly)\b[^.;,]{0,30}$/i;
 const NEGATED_AFTER = /^[^.;]{0,25}\b(?:was ruled out|has been ruled out|ruled out|excluded|was not|is not|isn't|was incorrect)\b/i;
-function mentions(text, re) {
-  const out = [];
-  for (const m of String(text ?? "").matchAll(re)) {
-    const before = text.slice(0, m.index), after = text.slice(m.index + m[0].length);
-    if (NOT_CONFIRMED.test(before) || NEGATED_AFTER.test(after) || OTHER_STAGING.test(after)) continue;
-    out.push(m);
+/* Hypothetical or asked about: no stage is asserted (Sol, round 3). */
+const HYPOTHETICAL_BEFORE = /\b(?:which|what|would|could|might|if|indicate[sd]?|identify|distinguish|differentiate|suggests?|whether|later found)\b[^.;,]{0,40}$/i;
+/* Tied to THIS pressure injury: a wound word right after the stage, or the
+   injury named just before it ("the heel pressure injury is stage 3"). */
+const TIED_AFTER = /^\s*[:\-–]?\s*(?:\(?\s*)?(?:pressure|decubitus|wound|ulcer|injur|sore|area|non-?blanchable|sacral|heel|coccyx)/i;
+const TIED_BEFORE = /(?:pressure\s+(?:injury|ulcer|sore)|wound|decubitus|ulcer)\b[^.;]{0,25}\b(?:is|at|as|now|was|reached|progressed to|staged as|classified as)\s+(?:a\s+)?$/i;
+function stageMentions(t, re) {
+  const asserted = [];
+  let unsettled = false;
+  for (const m of t.matchAll(re)) {
+    const before = t.slice(0, m.index).split(/[.;]/).pop(), after = t.slice(m.index + m[0].length);
+    if (OTHER_AFTER.test(after) || OTHER_BEFORE.test(before)) continue;          // another disease's stage
+    if (NEGATED_BEFORE.test(before) || NEGATED_AFTER.test(after)) continue;    // explicitly not this client's
+    if (HYPOTHETICAL_BEFORE.test(before)) { unsettled = true; continue; }      // asked about, not asserted
+    if (!(TIED_AFTER.test(after) || TIED_BEFORE.test(before))) { unsettled = true; continue; }
+    asserted.push(m);
   }
-  return out;
+  return { asserted, unsettled };
 }
 export function stageFrom(text) {
   const t = String(text ?? "");
   if (!PRESSURE_CONTEXT.test(t)) return null;
   const found = new Set();
-  for (const m of mentions(t, /\bstage\s*(1|2|3|4|iv|iii|ii|i)\b/gi)) {
-    const v = m[1].toLowerCase();
-    found.add(ROMAN[v] ?? Number(v));
-  }
-  if (mentions(t, /unstageable/gi).length) found.add("unstageable");
-  if (mentions(t, /deep tissue (?:pressure )?injury|\bDTPI\b|\bDTI\b/gi).length) found.add("dtpi");
-  return found.size === 1 ? { stage: [...found][0] } : null;
+  const stages = stageMentions(t, /\bstage\s*(1|2|3|4|iv|iii|ii|i)\b/gi);
+  for (const m of stages.asserted) { const v = m[1].toLowerCase(); found.add(ROMAN[v] ?? Number(v)); }
+  const named = (re, key) => {
+    for (const m of t.matchAll(re)) {
+      const before = t.slice(0, m.index).split(/[.;]/).pop(), after = t.slice(m.index + m[0].length);
+      if (NEGATED_BEFORE.test(before) || NEGATED_AFTER.test(after)) continue;
+      if (HYPOTHETICAL_BEFORE.test(before)) { stages.unsettled = true; continue; }
+      found.add(key);
+    }
+  };
+  named(/unstageable/gi, "unstageable");
+  named(/deep tissue (?:pressure )?injury|\bDTPI\b|\bDTI\b/gi, "dtpi");
+  /* a stage asked about or left unattached makes any single answer unsafe */
+  return found.size === 1 && !stages.unsettled ? { stage: [...found][0] } : null;
 }
 
 /* Layers, top to bottom, with their band heights. */
@@ -115,6 +135,8 @@ function Column({ x, w, stage, title, under = null, wound = null, floor = null, 
   return (
     <g>
       {highlight ? <rect className="dg-solid" x={x - 3} y={TOP - 50} width={w + 6} height={BOTTOM - TOP + 56} rx={8} fill="none" stroke={C.accent} strokeWidth={2.4} /> : null}
+      {/* the column this step is about (the other columns stay for comparison) */}
+      <OnStep on={key}><rect className="dg-solid" x={x - 3} y={TOP - 50} width={w + 6} height={BOTTOM - TOP + 56} rx={8} fill="none" stroke={C.ink} strokeWidth={1.6} strokeDasharray="5 3" /></OnStep>
       <T x={x + w / 2} y={TOP - 30} size={BODY_TEXT} weight={700} anchor="middle">{title}</T>
       <rect x={x} y={TOP} width={w} height={BOTTOM - TOP} rx={2} fill={C.card} filter={u("shadow")} />
       <Tissue x={x} y={TOP} w={w} animate="layers" />
@@ -188,7 +210,8 @@ function UnstageableStrip({ x, y, w }) {
       <Surface x={x} y={y} w={w} />
       {/* eschar: a thick dark crust filling the opening, with slough at one edge */}
       <path d={`M${l - 6},${y - 1.5} Q${x + w / 2},${y - 4} ${r + 6},${y - 1.5} L${r + 1},${y + 8} Q${x + w / 2},${y + 12} ${l - 1},${y + 8} Z`} fill={C.coral} />
-      <path d={`M${l - 6},${y - 1.5} Q${x + w / 2},${y - 4} ${r + 6},${y - 1.5} L${r + 1},${y + 8} Q${x + w / 2},${y + 12} ${l - 1},${y + 8} Z`} fill="#000" fillOpacity={0.62} />
+      <path d={`M${l - 6},${y - 1.5} Q${x + w / 2},${y - 4} ${r + 6},${y - 1.5} L${r + 1},${y + 8} Q${x + w / 2},${y + 12} ${l - 1},${y + 8} Z`} fill="#000" fillOpacity={0.62}
+        stroke={C.danger} strokeWidth={1.6} />
       <Slough cx={r - 4} cy={y + 3} />
     </g>
   );
@@ -201,13 +224,13 @@ function DeepTissueStrip({ x, y, w }) {
       <Tissue x={x} y={y} w={w} layers={STRIP} scale={s} />
       {/* damage starts deep, under skin that may still be intact */}
       <ellipse cx={x + w / 2} cy={y + 18} rx={w * 0.26} ry={12} fill={C.coral} fillOpacity={0.85} />
-      <ellipse cx={x + w / 2} cy={y + 18} rx={w * 0.26} ry={12} fill="#000" fillOpacity={0.38} />
+      <ellipse cx={x + w / 2} cy={y + 18} rx={w * 0.26} ry={12} fill="#000" fillOpacity={0.38} stroke={C.danger} strokeWidth={1.2} strokeDasharray="3 2" />
       <ellipse cx={x + w / 2} cy={y + 8} rx={w * 0.2} ry={3} fill={C.coral} fillOpacity={0.35} />
       <Surface x={x} y={y} w={w} />
       {/* the finding a nurse SEES: intact skin with a deep red-purple
           patch over the damage (Sol, round 2: the surface looked normal) */}
       <rect x={x + w * 0.27} y={y - 1.5} width={w * 0.46} height={4.5} rx={2.2} fill={C.coral} />
-      <rect x={x + w * 0.27} y={y - 1.5} width={w * 0.46} height={4.5} rx={2.2} fill="#000" fillOpacity={0.45} />
+      <rect x={x + w * 0.27} y={y - 1.5} width={w * 0.46} height={4.5} rx={2.2} fill="#000" fillOpacity={0.45} stroke={C.danger} strokeWidth={1.4} />
     </g>
   );
 }
@@ -276,7 +299,7 @@ const STAGES = [
   ["Stage 4", "Full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone."],
 ];
 const UNSTAGEABLE = "Slough or eschar covers the base, so the extent of loss can't be confirmed.";
-const DTPI = "Persistent non-blanchable deep red, maroon or purple area, or a blood-filled blister.";
+const DTPI = "Intact or non-intact skin: a persistent non-blanchable deep red, maroon or purple area, a blood-filled blister, or epidermal separation showing a dark wound bed.";
 const PREVENT_NOTE = "Every 2 hours is a common NCLEX schedule; the plan is individualized and reassessed. A higher head of bed may be needed for breathing or aspiration precautions.";
 const LH = 1.3;
 const H = (t, w, size = MIN_TEXT) => paraLines(t, w, size).length * size * LH;
@@ -296,32 +319,38 @@ export function PressureInjuryDiagram({ params = null, focus = null }) {
   const pnY = PY + 30 + 2 * (tileH + 6) + 14;
   const PH = pnY - PY + H(PREVENT_NOTE, 324) + 4;
   const stageRow = (i) => (
-    <Anim on={`stage${i + 1}`} kind="fade" delay={500}>
-      <Para x={18} y={rows[i]} w={324} size={MIN_TEXT} lead={STAGES[i][0]} text={STAGES[i][1]} />
-    </Anim>
+    <G id={`r${i + 1}`}>
+      <Anim on={`stage${i + 1}`} kind="fade" delay={500}>
+        <Para x={18} y={rows[i]} w={324} size={MIN_TEXT} lead={STAGES[i][0]} text={STAGES[i][1]} />
+      </Anim>
+    </G>
   );
+  const rowSpan = (i) => [rows[i] - 14, rows[i] + H(`${STAGES[i][0]} ${STAGES[i][1]}`, 324) - 12];
   return (
     <Frame h={PY + PH + 6} focus={focus} title="Pressure injury stages"
-      regions={{ layers: [0, noteY + 6], legend: [LY - 14, LY + 4], other: [OY, OY + oh], prevent: [PY, PY + PH],
-        ...Object.fromEntries(STAGES.map(([k, t], i) => [`s${i + 1}`, [TOP - 56, rows[i] + H(`${k} ${t}`, 324)]])) }}
-      desc="Cross-sections through epidermis, dermis, fat, muscle and bone. Stages describe tissue findings and the extent of tissue loss; actual depth varies by location, the stages are not a required progression, and a healing injury is not reverse-staged. Stage 1: intact skin with non-blanchable redness; in darker skin the color change can look different, so warmth, firmness and sensation are also assessed. Stage 2: partial-thickness loss with exposed dermis, a pink moist bed, or an intact or ruptured serum-filled blister; no fat, slough or eschar. Stage 3: full-thickness loss with fat visible; slough or eschar may be present; no fascia, muscle, tendon, ligament, cartilage or bone exposed. Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone. Unstageable: slough or eschar covers the base, so the extent of loss cannot be confirmed. Deep tissue pressure injury: persistent non-blanchable deep red, maroon or purple discoloration, or a blood-filled blister, in the context of pressure or shear. Prevention: Braden scale (lower score means higher risk), repositioning on an individualized schedule (every 2 hours is a common teaching schedule), head of bed at or below 30 degrees if clinically appropriate, because breathing or aspiration precautions may require a higher position; pressure-redistributing support surfaces; clean and dry skin; and protein, calories and fluids.">
-      <G id="layers">
+      regions={{ head: [0, 46], note: [noteY - 14, noteY + 5], legend: [LY - 14, LY + 4], other: [OY, OY + oh], prevent: [PY, PY + PH],
+        ...Object.fromEntries(STAGES.map((_, i) => [`s${i + 1}`, [TOP - 52, BOTTOM + 2]])),
+        ...Object.fromEntries(STAGES.map((_, i) => [`r${i + 1}`, rowSpan(i)])) }}
+      desc="Cross-sections through epidermis, dermis, fat, muscle and bone. Stages describe tissue findings and the extent of tissue loss; actual depth varies by location, the stages are not a required progression, and a healing injury is not reverse-staged. Stage 1: intact skin with non-blanchable redness; in darker skin the color change can look different, so warmth, firmness and sensation are also assessed. Stage 2: partial-thickness loss with exposed dermis, a pink moist bed, or an intact or ruptured serum-filled blister; no fat, slough or eschar. Stage 3: full-thickness loss with fat visible; slough or eschar may be present; no fascia, muscle, tendon, ligament, cartilage or bone exposed. Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone. Unstageable: slough or eschar covers the base, so the extent of loss cannot be confirmed. Deep tissue pressure injury: intact or non-intact skin with persistent non-blanchable deep red, maroon or purple discoloration, a blood-filled blister, or epidermal separation revealing a dark wound bed, in the context of pressure or shear. Prevention: Braden scale (lower score means higher risk), repositioning on an individualized schedule (every 2 hours is a common teaching schedule), head of bed at or below 30 degrees if clinically appropriate, because breathing or aspiration precautions may require a higher position; pressure-redistributing support surfaces; clean and dry skin; and protein, calories and fluids.">
+      <G id="head">
         <T x={180} y={20} size={BODY_TEXT} weight={700} anchor="middle">Stages: what the tissue shows</T>
         <T x={180} y={39} size={MIN_TEXT} anchor="middle" color={C.muted}>the same skin, cut through; real depth varies</T>
+      </G>
+      <G id="note">
         <T x={18} y={noteY} size={MIN_TEXT} color={C.muted}>Not a required progression; healing keeps its stage.</T>
       </G>
       <G id="s1">
         <Column x={xs[0]} w={W} stage={1} title="Stage 1" highlight={lit === 1}
           under={<Redness x={xs[0] + W * 0.14} w={W * 0.72} />}
           floor={<Finger cx={xs[0] + W / 2} />} />
-        {stageRow(0)}
       </G>
+      {stageRow(0)}
       <G id="s2">
         <Column x={xs[1]} w={W} stage={2} title="Stage 2" highlight={lit === 2}
           wound={<Crater x={xs[1]} w={W} toLayer="derm" inset={0.24} short={4} />}
           floor={<Deepest {...floorOf(xs[1], W, "derm", 4)} />} />
-        {stageRow(1)}
       </G>
+      {stageRow(1)}
       <G id="s3">
         <Column x={xs[2]} w={W} stage={3} title="Stage 3" highlight={lit === 3}
           wound={<Crater x={xs[2]} w={W} toLayer="fat" inset={0.18} short={6}>
@@ -329,14 +358,14 @@ export function PressureInjuryDiagram({ params = null, focus = null }) {
             <Slough cx={xs[2] + W / 2 + 2} cy={craterFloor("fat", 6) - 4} />
           </Crater>}
           floor={<Deepest {...floorOf(xs[2], W, "fat", 6)} />} />
-        {stageRow(2)}
       </G>
+      {stageRow(2)}
       <G id="s4">
         <Column x={xs[3]} w={W} stage={4} title="Stage 4" highlight={lit === 4}
           wound={<Crater x={xs[3]} w={W} toLayer="muscle" inset={0.14} short={1} />}
           floor={<Deepest {...floorOf(xs[3], W, "muscle", 1)} />} />
-        {stageRow(3)}
       </G>
+      {stageRow(3)}
       <G id="legend">
         <Anim on="layers" kind="fade" delay={750}>
           {LAYERS.map((l, i) => (
@@ -400,18 +429,18 @@ export const pressureInjury = {
     "Prevention includes repositioning on an individualized schedule that is reassessed (every 2 hours is a commonly specified schedule), keeping the head of the bed at or below 30 degrees if clinically appropriate to reduce shear (respiratory or aspiration-prevention needs may require a higher position), pressure-redistributing support surfaces, keeping skin clean and dry, and adequate protein, calories and fluids.",
   ],
   steps: [
-    { key: "layers", focus: ["layers", "legend", "s1", "s2", "s3", "s4"], caption: "Each column is the same skin cut through: epidermis, dermis, fat, muscle and bone. Stages describe what the tissue shows and how much is lost; real depth varies by location, and stages are not a required progression.",
+    { key: "layers", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r1", "r2", "r3", "r4", "note"], caption: "Each column is the same skin cut through: epidermis, dermis, fat, muscle and bone. Stages describe what the tissue shows and how much is lost; real depth varies by location, and stages are not a required progression.",
       narration: "Each column is the same skin, cut through: the epidermis, the dermis, fat, muscle, and bone. A stage describes what the tissue shows and how much tissue is lost. Real depth varies from one part of the body to another, and the stages are not a required progression." },
-    { key: "stage1", focus: ["layers", "legend", "s1"], caption: "Stage 1: the skin is intact, with redness that does not blanch when pressed. In darker skin the color change can look different, so warmth, firmness and sensation are also checked.",
+    { key: "stage1", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r1"], caption: "Stage 1: the skin is intact, with redness that does not blanch when pressed. In darker skin the color change can look different, so warmth, firmness and sensation are also checked.",
       narration: "Stage one. The skin is intact, with an area of redness that does not blanch when you press on it. In darker skin the color change can look different, so warmth, firmness, and sensation are checked too." },
-    { key: "stage2", focus: ["layers", "legend", "s2"], caption: "Stage 2: partial-thickness loss with exposed dermis: a shallow, pink, moist wound, or an intact or ruptured serum-filled blister. No fat, slough or eschar.",
+    { key: "stage2", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r2"], caption: "Stage 2: partial-thickness loss with exposed dermis: a shallow, pink, moist wound, or an intact or ruptured serum-filled blister. No fat, slough or eschar.",
       narration: "Stage two is partial-thickness loss with exposed dermis. It looks like a shallow, pink, moist wound, or an intact or ruptured blister filled with clear serum. There is no fat, slough, or eschar." },
-    { key: "stage3", focus: ["layers", "legend", "s3"], caption: "Stage 3: full-thickness loss with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage or bone is exposed.",
+    { key: "stage3", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r3"], caption: "Stage 3: full-thickness loss with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage or bone is exposed.",
       narration: "Stage three is full-thickness loss, with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage, or bone is exposed." },
-    { key: "stage4", focus: ["layers", "legend", "s4"], caption: "Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone.",
+    { key: "stage4", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r4"], caption: "Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone.",
       narration: "Stage four is full-thickness loss, with fascia, muscle, tendon, ligament, cartilage, or bone exposed, or directly palpable." },
-    { key: "other", focus: ["other"], caption: "Unstageable: slough or eschar hides the base, so the extent of loss can't be confirmed. Deep tissue injury: a persistent, non-blanchable deep red, maroon or purple area, or a blood-filled blister.",
-      narration: "If slough or eschar covers the base, the extent of loss can't be confirmed, so the injury is unstageable. A deep tissue injury is a persistent, non-blanchable area of deep red, maroon, or purple, or a blood-filled blister." },
+    { key: "other", focus: ["other"], caption: "Unstageable: slough or eschar hides the base, so the extent of loss can't be confirmed. Deep tissue injury: intact or non-intact skin with a persistent, non-blanchable deep red, maroon or purple area, a blood-filled blister, or epidermal separation showing a dark wound bed.",
+      narration: "If slough or eschar covers the base, the extent of loss can't be confirmed, so the injury is unstageable. A deep tissue injury can be on intact or broken skin: a persistent, non-blanchable area of deep red, maroon, or purple, a blood-filled blister, or skin separating to show a dark wound bed." },
     { key: "prevent", focus: ["prevent"], caption: "Prevention: assess with the Braden scale, where a lower score means higher risk. Reposition on an individualized schedule (every 2 hours is a common NCLEX schedule), keep the head of the bed at 30° or lower if clinically appropriate, use a support surface, keep skin clean and dry, and support nutrition.",
       narration: "Prevention starts with the Braden scale, and remember, a lower score means a higher risk. Reposition the client on an individualized schedule; every two hours is a common schedule on the exam. Keep the head of the bed at thirty degrees or lower if that is clinically appropriate, use a pressure-redistributing surface, keep the skin clean and dry, and make sure they get enough protein, calories, and fluids." },
   ],

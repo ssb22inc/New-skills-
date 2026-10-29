@@ -190,8 +190,7 @@ export async function renderDiagrams({ outDir, only = null, width = 360, root = 
              colour, but a step can add its own annotations (onset/peak marks,
              a highlighted row), so each step's geometry is its own. */
           if (theme === "light") {
-            const issues = await pg.evaluate(() => {
-              const svg = document.querySelector(".shot svg");
+            const issues = await pg.evaluate(() => [...document.querySelectorAll(".shot svg")].flatMap((svg) => {
               const vb = svg.viewBox.baseVal;
               const out = [];
               /* Boxes in the canvas's own units, AFTER any transform: text
@@ -212,6 +211,10 @@ export async function renderDiagrams({ outDir, only = null, width = 360, root = 
               const tol = 0.75;
               for (const { b, s } of texts) {
                 if (b.x < vb.x - tol || b.x + b.width > vb.x + vb.width + tol) out.push(`"${s}" runs off the canvas`);
+                /* a step slice must not cut through text (Sol, round 3) */
+                const top = vb.y, bot = vb.y + vb.height;
+                if (b.y + b.height <= top + tol || b.y >= bot - tol) continue;   // wholly in another slice
+                if (b.y < top - tol || b.y + b.height > bot + tol) out.push(`"${s}" is cut by the edge of the step view`);
                 // the smallest box containing the text's start point is its container
                 const home = rects.filter((r) => b.x >= r.x - tol && b.x <= r.x + r.width && b.y + b.height / 2 >= r.y && b.y + b.height / 2 <= r.y + r.height)
                   .sort((p, q) => p.width * p.height - q.width * q.height)[0];
@@ -227,7 +230,7 @@ export async function renderDiagrams({ outDir, only = null, width = 360, root = 
                 else if (oy > Math.min(p.height, q.height) * 0.6 && ox > -4 && ox <= 1.5) out.push(`"${texts[a].s}" crowds "${texts[c].s}" (gap ${(-ox).toFixed(1)})`);
               }
               return out;
-            });
+            }));
             const where = frames[i] == null ? "static" : d.steps[frames[i]].key;
             if (issues.length) { lintFailures.push(...issues.map((m) => `${id} [${where}]: ${m}`)); }
           }

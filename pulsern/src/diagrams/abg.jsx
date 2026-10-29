@@ -18,11 +18,19 @@
       the range those rounding bounds imply. A gas outside it is not
       interpreted: an extraction or authoring error must not become
       authoritative teaching.
+      Precision policy (Sol, round 3: a JavaScript number drops trailing
+      zeros, so 7.30 looked like 7.3 and earned a ±0.05 allowance): the
+      decimals come from params.precision when the caller knows them (the
+      question text, read as written), otherwise pH is taken as reported to
+      2 decimals and PaCO₂ / HCO₃⁻ to whole numbers — more if the value
+      itself carries more.
    2. Every primary disorder the values could fit is tested against its
       expected compensation — no "which side of 7.40" shortcut picks one
       first. A primary needs its own value abnormal in the direction of the
-      problem; with a normal pH it also needs the other value to have moved
-      past baseline (a pH cannot be back in range without compensation).
+      problem. A pH in range is NOT taken to prove compensation (Sol, round
+      3): a mild disorder can keep the pH in range all along, so when the
+      other value is also in range the reading says the compensation can't
+      be told.
    3. One fit: that disorder, with the ROME compensation label. More than
       one fit: both are named, and the history decides. No fit: a mixed
       disorder, naming the second disorder the out-of-range value points to.
@@ -35,7 +43,7 @@
      respiratory alkalosis HCO₃⁻ = 24 − 2 (acute) to 5 (chronic) per 10 mmHg PaCO₂ below 40, ± 2
    The acute-to-chronic span is kept because the diagram has no history. */
 import React from "react";
-import { Frame, G, T, Gauge, Chip, Box, C, Anim, Loop, Para, paraLines, useMotion, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
+import { Frame, G, T, Gauge, Chip, Box, C, Anim, Loop, Para, paraLines, useMotion, exact, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 export const ABG_RANGES = {
   ph: { lo: 7.35, hi: 7.45 },
@@ -48,12 +56,19 @@ export const INTERPRETED = { ph: [6.8, 7.8], paco2: [10, 150], hco3: [3, 60] };
 
 const r1 = (n) => Math.round(n * 10) / 10;
 export const impliedPh = ({ paco2, hco3 }) => 6.1 + Math.log10(hco3 / (0.03 * paco2));
-const decimals = (v) => { for (let d = 0; d <= 6; d++) if (Math.abs(Number(v.toFixed(d)) - v) < 1e-9) return d; return 6; };
-const halfUnit = (v) => 0.5 * 10 ** -decimals(v);
+const decimals = (v) => { for (let d = 0; d <= 17; d++) if (Number(v.toFixed(d)) === v) return d; return 17; };
+export const DEFAULT_PRECISION = { ph: 2, paco2: 0, hco3: 0 };
+/* Decimals each value is taken as reported to (see the precision policy). */
+export function precisionOf(v, precision = null) {
+  return Object.fromEntries(Object.keys(DEFAULT_PRECISION).map((k) =>
+    [k, Math.max(precision?.[k] ?? DEFAULT_PRECISION[k], decimals(v[k]))]));
+}
 /* Do these three values belong together, given how precisely each is
    reported? Returns the implied pH range as well. */
-export function abgConsistency({ ph, paco2, hco3 }) {
-  const dc = halfUnit(paco2), dh = halfUnit(hco3), dp = halfUnit(ph);
+export function abgConsistency({ ph, paco2, hco3, precision = null }) {
+  const pr = precisionOf({ ph, paco2, hco3 }, precision);
+  const half = (k) => 0.5 * 10 ** -pr[k];
+  const dc = half("paco2"), dh = half("hco3"), dp = half("ph");
   const lo = impliedPh({ paco2: paco2 + dc, hco3: Math.max(1e-6, hco3 - dh) }) - dp;
   const hi = impliedPh({ paco2: Math.max(1e-6, paco2 - dc), hco3: hco3 + dh }) + dp;
   return { ok: ph >= lo - 1e-9 && ph <= hi + 1e-9, implied: impliedPh({ paco2, hco3 }), lo, hi };
@@ -88,7 +103,7 @@ const offRange = (c) => !!(c && (c.beyond || c.short));
 const secondDisorder = (c) => (c.name === "PaCO₂"
   ? (c.low ? "respiratory alkalosis" : "respiratory acidosis")
   : (c.low ? "metabolic acidosis" : "metabolic alkalosis"));
-const romeLabel = (rome) => (rome === "none" ? "uncompensated" : rome === "partial" ? "partially compensated" : "fully compensated");
+const romeLabel = (rome) => (rome === "none" ? "uncompensated" : rome === "partial" ? "partially compensated" : rome === "unclear" ? "pH in range" : "fully compensated");
 const mixedResult = (primary, kind, rome, c) => ({
   disorder: `${primary} ${kind}`, primary, compensation: null, romePattern: rome, mixedPossible: true, mixed: secondDisorder(c),
   reading: `ROME pattern only: ${primary} ${kind}, ${romeLabel(rome)}. `
@@ -110,33 +125,40 @@ function compensationText(c, primary) {
   return `${refPart}; ${expPart}`;
 }
 const recheck = (why) => ({ disorder: "inconsistent", primary: null, compensation: null, reading: `${why} Recheck the values before interpreting.` });
+/* Values that agree but lie outside what this tool reads automatically:
+   not an error, so never labelled as one (Sol, round 3). */
+const unsupported = (why) => ({ disorder: "unsupported", primary: null, compensation: null,
+  reading: `${why} These values are outside the range this tool interprets automatically, so no reading is given here; interpret them with your course materials.` });
 
-/* A value as given: at least `min` decimals, never rounded onto a limit. */
-export function fmtNum(v, min = 0) {
-  for (let d = min; d <= 3; d++) if (Math.abs(Number(v.toFixed(d)) - v) < 1e-9) return v.toFixed(d);
-  return v.toFixed(3);
-}
+/* A value exactly as given: at least `min` decimals, never rounded (so never
+   rounded onto a reference limit — Sol, round 3: 7.3499 showed as 7.350). */
+export const fmtNum = (v, min = 0) => exact(v, min);
+/* One of a gas's values as reported, trailing zeros included (7.30). */
+export const showAbg = (p, k) => fmtNum(p[k], precisionOf(p, p.precision)[k]);
 
 /* Each possible primary disorder: which value drives it, which compensates. */
 const CANDIDATES = [
-  { primary: "metabolic", kind: "acidosis", own: ({ hco3 }) => hco3 < ABG_RANGES.hco3.lo, moved: ({ paco2 }) => paco2 < 40 },
-  { primary: "metabolic", kind: "alkalosis", own: ({ hco3 }) => hco3 > ABG_RANGES.hco3.hi, moved: ({ paco2 }) => paco2 > 40 },
-  { primary: "respiratory", kind: "acidosis", own: ({ paco2 }) => paco2 > ABG_RANGES.paco2.hi, moved: ({ hco3 }) => hco3 > 24 },
-  { primary: "respiratory", kind: "alkalosis", own: ({ paco2 }) => paco2 < ABG_RANGES.paco2.lo, moved: ({ hco3 }) => hco3 < 24 },
+  { primary: "metabolic", kind: "acidosis", own: ({ hco3 }) => hco3 < ABG_RANGES.hco3.lo },
+  { primary: "metabolic", kind: "alkalosis", own: ({ hco3 }) => hco3 > ABG_RANGES.hco3.hi },
+  { primary: "respiratory", kind: "acidosis", own: ({ paco2 }) => paco2 > ABG_RANGES.paco2.hi },
+  { primary: "respiratory", kind: "alkalosis", own: ({ paco2 }) => paco2 < ABG_RANGES.paco2.lo },
 ];
 const FULL_CAVEAT = " Compensation usually leaves the pH a little on the side of the original problem. It can bring the pH into 7.35–7.45, especially in milder or chronic disorders, but a normal pH alone does not prove compensation: a mixed disorder can look the same, so the history decides.";
 
-export function interpretAbg({ ph, paco2, hco3 }) {
+export function interpretAbg({ ph, paco2, hco3, precision = null }) {
   for (const [k, v] of Object.entries({ ph, paco2, hco3 })) {
     if (!Number.isFinite(v)) throw new Error(`interpretAbg: ${k} must be a number`);
   }
   const v = { ph, paco2, hco3 };
-  for (const [k, [lo, hi]] of Object.entries(INTERPRETED)) {
-    if (v[k] < lo || v[k] > hi) return recheck(`${k === "ph" ? "pH" : k === "paco2" ? "PaCO₂" : "HCO₃⁻"} ${v[k]} is outside the range this tool interprets automatically.`);
-  }
-  const fit = abgConsistency(v);
+  const pr = precisionOf(v, precision);
+  const show = (k) => fmtNum(v[k], pr[k]);
+  if (paco2 <= 0 || hco3 <= 0) return recheck("PaCO₂ and HCO₃⁻ must both be above zero.");
+  const fit = abgConsistency({ ...v, precision });
   if (!fit.ok) {
-    return recheck(`These values do not agree: a PaCO₂ of ${fmtNum(paco2)} with an HCO₃⁻ of ${fmtNum(hco3)} goes with a pH near ${fit.implied.toFixed(2)}, not ${fmtNum(ph, 2)}.`);
+    return recheck(`These values do not agree: a PaCO₂ of ${show("paco2")} with an HCO₃⁻ of ${show("hco3")} goes with a pH near ${fit.implied.toFixed(2)}, not ${show("ph")}.`);
+  }
+  for (const [k, [lo, hi]] of Object.entries(INTERPRETED)) {
+    if (v[k] < lo || v[k] > hi) return unsupported(`${k === "ph" ? "pH" : k === "paco2" ? "PaCO₂" : "HCO₃⁻"} ${show(k)} is outside ${lo}–${hi}.`);
   }
   const phState = ph < ABG_RANGES.ph.lo ? "acidosis" : ph > ABG_RANGES.ph.hi ? "alkalosis" : "normal";
   const co2Normal = paco2 >= ABG_RANGES.paco2.lo && paco2 <= ABG_RANGES.paco2.hi;
@@ -157,16 +179,22 @@ export function interpretAbg({ ph, paco2, hco3 }) {
        primary process cannot be named from cutoffs (Sol, round 2). */
     const emia = phState === "acidosis" ? "acidemia" : "alkalemia";
     return { disorder: `${emia}, primary process unresolved`, primary: null, compensation: null, mixedPossible: true,
-      reading: `${cap(emia)} (pH ${fmtNum(ph, 2)}), with PaCO₂ and HCO₃⁻ both inside their reference ranges. The values agree with each other, but the primary process can't be named from reference cutoffs; small shifts in both may be contributing, so the trend and history decide.` };
+      reading: `${cap(emia)} (pH ${show("ph")}), with PaCO₂ and HCO₃⁻ both inside their reference ranges. The values agree with each other, but the primary process can't be named from reference cutoffs; small shifts in both may be contributing, so the trend and history decide.` };
   }
   const tested = cands.map((c) => ({ ...c, limit: compensationLimit(c.primary, c.kind, v) }));
-  const fits = tested.filter((c) => !offRange(c.limit) && (phState !== "normal" || c.moved(v)));
+  const fits = tested.filter((c) => !offRange(c.limit));
+  const otherNormalFor = (c) => (c.primary === "respiratory" ? hco3Normal : co2Normal);
+  const romeFor = (c) => (phState === "normal" ? (otherNormalFor(c) ? "unclear" : "full") : otherNormalFor(c) ? "none" : "partial");
 
   if (fits.length === 1) {
     const f = fits[0];
-    const otherNormal = f.primary === "respiratory" ? hco3Normal : co2Normal;
-    const compensation = phState === "normal" ? "full" : otherNormal ? "none" : "partial";
+    const compensation = romeFor(f);
     const detail = compensationText(f.limit, f.primary);
+    if (compensation === "unclear") {
+      const own = f.primary === "respiratory" ? "PaCO₂" : "HCO₃⁻", other = f.primary === "respiratory" ? "HCO₃⁻" : "PaCO₂";
+      return { disorder: `${f.primary} ${f.kind}`, primary: f.primary, compensation: "unclear", mixedPossible: true,
+        reading: `A ${f.primary} ${f.kind} pattern with the pH in range: ${own} is outside its reference range, while the pH and ${other} are inside theirs; ${detail}. This may be a mild disorder whose pH never left the range, or one already compensated. These values can't tell which, so the trend and history decide.` };
+    }
     const reading = compensation === "none"
       ? `${cap(f.primary)} ${f.kind}, uncompensated by the NCLEX convention: ${detail}.`
       : compensation === "partial"
@@ -177,16 +205,13 @@ export function interpretAbg({ ph, paco2, hco3 }) {
   if (fits.length > 1) {
     const names = fits.map((f) => `${f.primary} ${f.kind}`);
     return { disorder: "indeterminate", primary: null, compensation: null, mixedPossible: true, alternatives: names,
-      reading: `Two readings fit these values: ${names.join(" or ")}, each fully compensated. Only the history can tell them apart, and a mixed disorder is also possible.` };
+      reading: `Two readings fit these values: ${names.join(" or ")}, each with the pH in range. Only the history can tell them apart, and a mixed disorder is also possible.` };
   }
-  /* Nothing fits as one disorder: a mixed disorder, reported from the first
+  /* Nothing fits as one disorder: every candidate's compensating value is
+     outside its expected range. A mixed disorder, reported from the first
      candidate (metabolic before respiratory). */
   const first = tested[0];
-  if (phState === "normal" && !first.moved(v) && !offRange(first.limit)) {
-    return recheck("A normal pH needs the other value to have compensated, and it has not.");
-  }
-  const rome = phState === "normal" ? "full" : (first.primary === "respiratory" ? hco3Normal : co2Normal) ? "none" : "partial";
-  return mixedResult(first.primary, first.kind, rome, offRange(first.limit) ? first.limit : { ...first.limit, short: true, low: first.limit.value <= (first.limit.expected[0] + first.limit.expected[1]) / 2 });
+  return mixedResult(first.primary, first.kind, romeFor(first), first.limit);
 }
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 
@@ -292,20 +317,20 @@ function Lift({ cx, cy }) {
 /* Compensation as three small pH lines: the marker is pulled back toward
    normal as the other system compensates. It slides on its step. */
 function CompTile({ x, y, title, lines, at, i }) {
-  const bx = x + 12, bw = 80, lo = bx + 30, hi = bx + 52;
+  const bx = x + 14, bw = 80, lo = bx + 30, hi = bx + 52;
   const start = bx + 6;
   const mx = bx + at;
   const inRange = mx >= lo && mx <= hi;
   return (
     <g>
-      <Box x={x} y={y} w={104} h={102} r={9} fill={C.surface} lift />
-      <T x={x + 52} y={y + 19} size={MIN_TEXT} weight={700} anchor="middle">{title}</T>
+      <Box x={x} y={y} w={108} h={102} r={9} fill={C.surface} lift />
+      <T x={x + 54} y={y + 19} size={MIN_TEXT} weight={700} anchor="middle">{title}</T>
       <rect x={bx} y={y + 28} width={bw} height={7} rx={3.5} fill={C.surface} stroke={C.line} />
       <rect x={lo} y={y + 28} width={hi - lo} height={7} rx={3} fill={C.teal} fillOpacity={0.8} />
       <Anim on="compensation" kind="slide" from={`${start - mx}px`} dur={1400} delay={i * 250}>
         <circle className="dg-solid" cx={mx} cy={y + 31.5} r={4.6} fill={inRange ? C.teal : C.danger} stroke={C.card} strokeWidth={1.5} />
       </Anim>
-      {lines.map((l, j) => <T key={j} x={x + 52} y={y + 56 + j * 16} size={MIN_TEXT} anchor="middle" color={C.muted}>{l}</T>)}
+      {lines.map((l, j) => <T key={j} x={x + 54} y={y + 56 + j * 16} size={MIN_TEXT} anchor="middle" color={C.muted}>{l}</T>)}
     </g>
   );
 }
@@ -314,6 +339,8 @@ function CompTile({ x, y, title, lines, at, i }) {
 export function verdictLabel(r) {
   if (r.disorder === "normal") return "Acid–base values in range";
   if (r.disorder === "inconsistent") return "Values don't fit: recheck";
+  if (r.disorder === "unsupported") return "Outside automatic interpretation range";
+  if (r.compensation === "unclear") return `${cap(r.disorder)} pattern · pH in range`;
   if (r.disorder === "indeterminate") return `Either: ${r.alternatives?.join(" or ") ?? "history decides"}`;
   if (r.mixed) return `Possible mixed: ${r.disorder} + ${r.mixed}`;
   return `${cap(r.disorder)}${r.compensation ? ` · ${romeLabel(r.compensation)}` : ""}`;
@@ -335,22 +362,22 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
       regions={{ ph: [0, 100], co2: [104, 196], hco3: [200, 292], rome: [RY - 4, RY + 132], result: [RY + 132, CY + 6], comp: [TY - 4, TY + 130] }}
       desc={concept
         ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, and a high PaCO2 pushes toward acidosis; HCO3 normal 22 to 26 mEq/L, and a low HCO3 pushes toward acidosis, a high one toward alkalosis; the actual pH depends on both together. Match the value that moves with the pH: respiratory opposite, metabolic equal. Compensation: other value still normal means uncompensated; moved but pH still out of range means partially compensated; pH back in range means fully compensated. Compensation has expected limits; a value outside them suggests a mixed disorder."
-        : `pH ${fmtNum(params.ph, 2)} (normal 7.35 to 7.45), PaCO2 ${fmtNum(params.paco2)} mmHg (35 to 45; high pushes toward acidosis), HCO3 ${fmtNum(params.hco3)} mEq/L (22 to 26; low pushes toward acidosis). ${r.reading}`}>
+        : `pH ${showAbg(params, "ph")} (normal 7.35 to 7.45), PaCO2 ${showAbg(params, "paco2")} mmHg (35 to 45; high pushes toward acidosis), HCO3 ${showAbg(params, "hco3")} mEq/L (22 to 26; low pushes toward acidosis). ${r.reading}`}>
       <G id="ph">
         <Gauge x={20} y={66} w={320} min={7.1} max={7.7} lo={7.35} hi={7.45} value={concept ? null : params.ph} decimals={2}
-          text={concept ? null : fmtNum(params.ph, 2)}
+          text={concept ? null : showAbg(params, "ph")}
           label="1  pH: what is the problem?" leftLabel="ACIDOSIS" rightLabel="ALKALOSIS" leftColor="coral" rightColor="coral"
           icon={placed(BloodIcon)} anim={["ph", "worked"]} />
       </G>
       <G id="co2">
         <Gauge x={20} y={162} w={320} min={20} max={70} lo={35} hi={45} value={concept ? null : params.paco2} unit="mmHg"
-          text={concept ? null : fmtNum(params.paco2)}
+          text={concept ? null : showAbg(params, "paco2")}
           label="2  PaCO₂: lungs, CO₂ is an acid" leftLabel="BASE" rightLabel="ACID ▸" rightColor="coral"
           icon={placed(LungsIcon, "lungs")} anim={["lungs", "worked"]} />
       </G>
       <G id="hco3">
         <Gauge x={20} y={258} w={320} min={12} max={36} lo={22} hi={26} value={concept ? null : params.hco3} unit="mEq/L"
-          text={concept ? null : fmtNum(params.hco3)}
+          text={concept ? null : showAbg(params, "hco3")}
           label="3  HCO₃⁻: kidneys, a base" leftLabel="◂ ACID" rightLabel="BASE" leftColor="coral"
           icon={placed(KidneyIcon)} anim={["kidneys", "worked"]} />
       </G>
@@ -370,12 +397,14 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
         </Anim>
       </G>
       <G id="comp">
-        <CompTile x={20} y={TY} i={0} title="Uncompensated" lines={["pH out;", "other value", "still in range"]} at={6} />
-        <CompTile x={128} y={TY} i={1} title="Partial" lines={["pH still out;", "other value", "out of range"]} at={20} />
+        <CompTile x={16} y={TY} i={0} title="Uncompensated" lines={["pH out;", "other value", "still in range"]} at={6} />
+        <CompTile x={126} y={TY} i={1} title="Partial" lines={["pH still out;", "other value", "out of range"]} at={20} />
         <CompTile x={236} y={TY} i={2} title="Full" lines={["pH back", "in range;", "check limits"]} at={34} />
         <T x={20} y={TY + 124} size={MIN_TEXT} color={C.muted}>NCLEX labels. Check the expected compensation too.</T>
       </G>
-      <T x={20} y={TY + 146} size={MIN_TEXT} color={C.muted}>Oxygenation (PaO₂, SaO₂) is assessed separately.</T>
+      <G id="oxy">
+        <T x={20} y={TY + 146} size={MIN_TEXT} color={C.muted}>Oxygenation (PaO₂, SaO₂) is assessed separately.</T>
+      </G>
     </Frame>
   );
 }
@@ -386,7 +415,7 @@ export const abg = {
   concepts: ["abg"],
   Diagram: AbgDiagram,
   example: ABG_EXAMPLE,
-  textCases: [{ ph: 7.36, paco2: 36, hco3: 19.7 }, { ph: 7.38, paco2: 20, hco3: 11.4 }, { ph: 7.2, paco2: 60, hco3: 36 }, { ph: 7.34, paco2: 45.4, hco3: 23.7 }, { ph: 7.1, paco2: 60, hco3: 18 }],
+  textCases: [{ ph: 7.36, paco2: 36, hco3: 19.7 }, { ph: 7.38, paco2: 20, hco3: 11.4 }, { ph: 7.2, paco2: 60, hco3: 36 }, { ph: 7.34, paco2: 45.4, hco3: 23.7 }, { ph: 7.1, paco2: 60, hco3: 18 }, { ph: 6.77, paco2: 40, hco3: 5.6 }, { ph: 7.3499, paco2: 50, hco3: 26.668 }, { ph: 7.44, paco2: 40, hco3: 26.3 }],
   /* Every clinical claim this diagram makes, stated plainly so the
      adversarial reviewer can check each one. */
   facts: [
@@ -418,6 +447,6 @@ export const abg = {
      the same function that interprets them. */
   dynamicCaption: (params = ABG_EXAMPLE) => {
     const r = interpretAbg(params);
-    return `Here: pH ${fmtNum(params.ph, 2)}, PaCO₂ ${fmtNum(params.paco2)}, HCO₃⁻ ${fmtNum(params.hco3)}. ${r.reading}`;
+    return `Here: pH ${showAbg(params, "ph")}, PaCO₂ ${showAbg(params, "paco2")}, HCO₃⁻ ${showAbg(params, "hco3")}. ${r.reading}`;
   },
 };

@@ -16,7 +16,7 @@
    Without audio the player still works: captions advance on a reading-speed
    timer. With prefers-reduced-motion it never advances on its own. */
 import React from "react";
-import { DIAGRAM_CSS, StepContext } from "./diagrams/kit.jsx";
+import { DIAGRAM_CSS, StepContext, useReducedMotion } from "./diagrams/kit.jsx";
 
 /* ---------- pure helpers (tested without a DOM) ---------- */
 
@@ -98,9 +98,6 @@ function useDiagramCss() {
   }, []);
 }
 
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
 export function Explainer({ diagram, params, startInPlayer = false, initialStep = 0, rnVerified = false, audio = null }) {
   useDiagramCss();
   const steps = stepsFor(diagram, params);
@@ -109,7 +106,7 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
   const [playing, setPlaying] = React.useState(false);
   const [elapsed, setElapsed] = React.useState(0);
   const audioRef = React.useRef(null);
-  const reduce = React.useMemo(prefersReducedMotion, []);
+  const reduce = useReducedMotion();   // followed live: turning it on stops auto-advance at once
   const D = diagram.Diagram;
   const inSteps = step >= 0;
   const caption = inSteps ? stepCaption(diagram, step, params) : null;

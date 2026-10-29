@@ -22,12 +22,17 @@ import { Frame, G, T, Box, C, Anim, Loop, Flow, OnStep, Para, Chip, paraLines, u
    - Lice: HEAD lice only (contact until 24 hours after effective
      treatment); body and pubic lice are standard precautions.
    Anything the text does not settle returns null: no row is outlined. */
+const WHO = "(?:client|patient|child|infant|adult|older adult|resident|toddler|adolescent|man|woman)";
+const CLIENT_IMMUNOCOMPROMISED = new RegExp(`\\bimmuno(?:compromised|suppressed)\\s+${WHO}\\b|\\b${WHO}\\b[^.;]{0,40}?\\b(?:is|who is|being)\\s+immuno(?:compromised|suppressed)\\b|\\b${WHO}\\b[^.;]{0,25}?\\b(?:receiving chemotherapy|with HIV|after (?:a |an )?(?:organ|stem cell) transplant)`, "i");
 export const CONDITIONS = [
   { re: /\bMRSA\b|methicillin-resistant/i, name: "MRSA", types: ["contact"] },
   { re: /\bVRE\b|vancomycin-resistant/i, name: "VRE", types: ["contact"] },
   { re: /\bC\.?\s*diff(?:icile)?\b|clostridi(?:um|oides) difficile/i, name: "C. difficile", types: ["contact"] },
   { re: /\bscabies\b/i, name: "scabies", types: ["contact"] },
-  { re: /\bhead lice\b|pediculosis capitis/i, name: "head lice", types: ["contact"] },
+  /* Contact precautions until 24 hours after effective treatment (Sol,
+     round 3): an explicit time of 24 hours or more ends them; treatment
+     with no clear time abstains. */
+  { re: /\bhead lice\b|pediculosis capitis/i, name: "head lice", types: ["contact"], treated: true },
   { re: /\bRSV\b|respiratory syncytial/i, name: "RSV", types: ["contact"] },
   { re: /\binfluenza\b|\bflu\b/i, name: "influenza", types: ["droplet"] },
   { re: /\bpertussis\b|whooping cough/i, name: "pertussis", types: ["droplet"] },
@@ -42,37 +47,71 @@ export const CONDITIONS = [
   { re: /\bvaricella\b|chickenpox|chicken pox/i, name: "chickenpox", types: ["airborne", "contact"], group: "vzv", unless: /\bzoster\b|\bshingles\b/i },
   { re: /\bdisseminated\s+(?:herpes\s+)?(?:zoster|shingles)\b|\b(?:zoster|shingles)\b[^.;]{0,25}\bdisseminated\b/i, name: "disseminated zoster", types: ["airborne", "contact"], group: "vzv",
     unless: /\bnot disseminated\b|\bnon-?disseminated\b|without dissemination|dissemination\s+(?:has\s+been\s+|was\s+|is\s+)?(?:ruled out|excluded)/i },
+  /* Immune status must belong to the CLIENT, in the zoster mention's own
+     sentence (Sol, round 3: a nurse's immune status was borrowed). */
   { re: /\b(?:zoster|shingles)\b/i, name: "zoster in an immunocompromised client", types: ["airborne", "contact"], group: "vzv",
-    needs: /\bimmuno(?:compromised|suppressed)\b/i,
-    unless: /dissemination\s+(?:has\s+been\s+|was\s+|is\s+)?(?:ruled out|excluded)|\bnot disseminated\b|without dissemination|\blocalized\b[^.;]*\bimmunocompetent\b|\bimmunocompetent\b/i },
+    sentence: { needs: CLIENT_IMMUNOCOMPROMISED, unless: /dissemination\s+(?:has\s+been\s+|was\s+|is\s+)?(?:ruled out|excluded)|\bnot disseminated\b|without dissemination/i } },
 ];
-/* Mentions that name a condition the text does not assert the client has
-   now. "Rule out" means suspected (still counted); "ruled out" means
-   excluded. Vaccination, immunity and exposure are not an infection. */
-const NOT_CURRENT_BEFORE = /\b(?:no|not|without|denies|negative for|ruled out|history of|hx of|past|previous|prior|resolved|vaccinated against|immuni[sz]ed against|immune to|exposed to|exposure to)\b[^.;:]{0,30}$/i;
-const NOT_CURRENT_AFTER = /^[^.;:]{0,25}\b(?:was ruled out|has been ruled out|ruled out|excluded|negative|resolved|vaccin\w*|immuni[sz]ation|shot|titer|exposure)\b/i;
+/* Is this mention asserted for the client now? Negation, history,
+   contrast and exclusion are read only from the few words right before the
+   mention, inside its own clause, and from the clause right after it — so
+   "No fever in a client with measles" still names measles, while "no MRSA",
+   "history of MRSA", "pneumococcal meningitis rather than meningococcal
+   disease" and "MRSA was ruled out" do not (Sol, round 3). "Rule out"
+   means suspected and counts; vaccination, immunity and exposure are not
+   an infection. */
+const NOT_ASSERTED_BEFORE = /\b(?:no|not|without|denies|negative for|ruled out|history of|hx of|past|previous|prior|resolved|rather than|instead of|other than|vaccinated against|vaccine for|immuni[sz]ed against|immune to|exposed to|exposure to|signs of|risk of|would|if)\b(?:\s+\S+){0,3}\s*$/i;
+const NOT_ASSERTED_AFTER = /^[^.;:,]{0,25}\b(?:was ruled out|has been ruled out|ruled out|excluded|negative|resolved|vaccin\w*|immuni[sz]ation|shot|titer|exposure)\b/i;
+const clauseBefore = (t, i) => t.slice(0, i).split(/[.;:]|,\s*(?:but|and|while)\b/).pop();
 function currentMatch(re, t) {
   const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
   for (const m of t.matchAll(g)) {
-    if (!NOT_CURRENT_BEFORE.test(t.slice(0, m.index)) && !NOT_CURRENT_AFTER.test(t.slice(m.index + m[0].length))) return true;
+    if (!NOT_ASSERTED_BEFORE.test(clauseBefore(t, m.index)) && !NOT_ASSERTED_AFTER.test(t.slice(m.index + m[0].length))) return m;
   }
-  return false;
+  return null;
 }
+const sentenceAt = (t, i) => {
+  const a = Math.max(t.lastIndexOf(".", i - 1), t.lastIndexOf(";", i - 1)) + 1;
+  const ends = [t.indexOf(".", i), t.indexOf(";", i)].filter((x) => x >= 0);
+  return t.slice(a, ends.length ? Math.min(...ends) : t.length);
+};
+const hoursSinceTreatment = (t) => {
+  const m = /\b(?:treated|treatment|shampoo\w*|pediculicide)\b[^.;]{0,40}?\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b|\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b[^.;]{0,25}?\b(?:after|since)\s+(?:effective\s+)?(?:treatment|shampoo\w*|pediculicide)/i.exec(t);
+  return m ? Number(m[1] ?? m[2]) : null;
+};
+
 /* The precautions for the ONE condition the text asserts, or null when
    none, more than one, or not enough is said — a comparison question
    should not light up one row, and a guess must not either. */
 export function precautionFor(text) {
   const t = String(text ?? "").replace(/german measles/gi, "rubella");
-  const hits = CONDITIONS.filter((c) => currentMatch(c.re, t) && (!c.needs || currentMatch(c.needs, t)) && !(c.unless && c.unless.test(t)));
+  const hits = [];
+  for (const c of CONDITIONS) {
+    const m = currentMatch(c.re, t);
+    if (!m) continue;
+    if (c.needs && !currentMatch(c.needs, t)) continue;
+    if (c.unless && c.unless.test(t)) continue;
+    if (c.sentence) {
+      const sent = sentenceAt(t, m.index);
+      // immune status: the client's own sentence; a ruled-out dissemination: anywhere
+      if (!c.sentence.needs.test(sent) || c.sentence.unless.test(t)) continue;
+    }
+    if (c.treated && /\b(?:treated|treatment|shampoo\w*|pediculicide)\b/i.test(t)) {
+      const h = hoursSinceTreatment(t);
+      if (h == null || h >= 24) continue;   // ended, or not clear enough to say
+    }
+    hits.push(c);
+  }
   /* one hit per group (zoster entries overlap): the most specific wins */
   const byGroup = new Map();
   for (const h of hits) if (!byGroup.has(h.group ?? h.name)) byGroup.set(h.group ?? h.name, h);
   const chosen = [...byGroup.values()];
   if (chosen.length !== 1) return null;
   /* A TB, zoster or lice mention that did not qualify still leaves the
-     form unsettled ("active TB" alone, "lice" with no site): no row. */
+     form unsettled ("active TB" alone, "lice" with no site): no row.
+     Extrapulmonary disease beside a stated pulmonary TB does not cancel it. */
   const c = chosen[0];
-  if (/\b(?:tuberculosis|TB)\b/i.test(t) && (c.group !== "tb" || /\blatent\b|\bLTBI\b|extrapulmonary/i.test(t))) return null;
+  if (/\b(?:tuberculosis|TB)\b/i.test(t) && c.group !== "tb") return null;
   if (/\b(?:zoster|shingles)\b/i.test(t) && c.group !== "vzv") return null;
   if (/\b(?:lice|pediculosis)\b/i.test(t) && c.name !== "head lice") return null;
   return { condition: c.name, types: c.types };

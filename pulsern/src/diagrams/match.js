@@ -24,6 +24,16 @@ function all(re, text) {
   return [...new Set([...text.matchAll(re)].map((m) => num(m[1])).filter(Number.isFinite))];
 }
 
+/* The one value a pattern finds, with the decimals it was written to. */
+function oneAsWritten(re, text, min, max) {
+  const raw = [...new Set([...text.matchAll(re)].map((m) => m[1]))];
+  if (new Set(raw.map(num)).size !== 1) return null;
+  const v = num(raw[0]);
+  if (!(v >= min && v <= max)) return null;
+  const places = Math.max(...raw.map((r) => (r.split(".")[1] ?? "").length));
+  return { v, places };
+}
+
 function one(re, text, min, max) {
   const vals = all(re, text);
   if (vals.length !== 1) return null;
@@ -39,14 +49,17 @@ const K = /\b(?:potassium(?:\s+level)?|serum\s+K\+?|K\+|K⁺)\s*(?:of|is|was|=|:
 
 export function extractAbg(text) {
   const t = String(text ?? "");
-  const ph = one(PH, t, 6.8, 7.8);
-  const paco2 = one(PACO2, t, 10, 130);
-  const hco3 = one(HCO3, t, 3, 60);
+  const ph = oneAsWritten(PH, t, 6.8, 7.8);
+  const paco2 = oneAsWritten(PACO2, t, 10, 130);
+  const hco3 = oneAsWritten(HCO3, t, 3, 60);
   if (ph == null || paco2 == null || hco3 == null) return null;
+  /* The decimals as written travel with the values: "pH 7.30" is reported
+     to the hundredth even though the number 7.3 is not (Sol, round 3). */
+  const gas = { ph: ph.v, paco2: paco2.v, hco3: hco3.v, precision: { ph: ph.places, paco2: paco2.places, hco3: hco3.places } };
   /* Values that cannot belong together are not drawn as the client's own:
      the diagram is then shown as a concept, not with a "recheck" verdict
      beside the question (Sol, PR #155 diagram review, round 2). */
-  return abgConsistency({ ph, paco2, hco3 }).ok ? { ph, paco2, hco3 } : null;
+  return abgConsistency(gas).ok ? gas : null;
 }
 
 /* Insulin type and the time it was given. The long-acting row is glargine

@@ -7,22 +7,22 @@ import { extractAbg, extractPotassium, proposePairs, MATCHERS } from "../src/dia
 
 describe("ABG values", () => {
   it("reads the common formats", () => {
-    expect(extractAbg("ABG: pH 7.30, PaCO2 55 mmHg, HCO3 24 mEq/L")).toEqual({ ph: 7.3, paco2: 55, hco3: 24 });
-    expect(extractAbg("pH of 7.48, PaCO₂ 30, HCO₃⁻ 22")).toEqual({ ph: 7.48, paco2: 30, hco3: 22 });
-    expect(extractAbg("pH = 7.23; pCO2 = 40; bicarbonate 16")).toEqual({ ph: 7.23, paco2: 40, hco3: 16 });
+    expect(extractAbg("ABG: pH 7.26, PaCO2 55 mmHg, HCO3 24 mEq/L")).toEqual({ ph: 7.26, paco2: 55, hco3: 24, precision: { ph: 2, paco2: 0, hco3: 0 } });
+    expect(extractAbg("pH of 7.48, PaCO₂ 30, HCO₃⁻ 22")).toEqual({ ph: 7.48, paco2: 30, hco3: 22, precision: { ph: 2, paco2: 0, hco3: 0 } });
+    expect(extractAbg("pH = 7.23; pCO2 = 40; bicarbonate 16")).toEqual({ ph: 7.23, paco2: 40, hco3: 16, precision: { ph: 2, paco2: 0, hco3: 0 } });
   });
   it("returns null when any value is missing", () => {
-    expect(extractAbg("pH 7.30 and PaCO2 55")).toBeNull();
+    expect(extractAbg("pH 7.26 and PaCO2 55")).toBeNull();
   });
   /* Two clients, or a before-and-after: never pick one. */
   it("returns null when a value is ambiguous", () => {
-    expect(extractAbg("Client A: pH 7.30, PaCO2 55, HCO3 24. Client B: pH 7.50, PaCO2 30, HCO3 24.")).toBeNull();
+    expect(extractAbg("Client A: pH 7.26, PaCO2 55, HCO3 24. Client B: pH 7.50, PaCO2 30, HCO3 24.")).toBeNull();
   });
   it("rejects an impossible value as a misread", () => {
-    expect(extractAbg("pH 7.30, PaCO2 550, HCO3 24")).toBeNull();
+    expect(extractAbg("pH 7.26, PaCO2 550, HCO3 24")).toBeNull();
   });
   it("accepts a repeated identical value", () => {
-    expect(extractAbg("pH 7.30 ... the pH 7.30 shows, PaCO2 55, HCO3 24")).toEqual({ ph: 7.3, paco2: 55, hco3: 24 });
+    expect(extractAbg("pH 7.26 ... the pH 7.26 shows, PaCO2 55, HCO3 24")).toEqual({ ph: 7.26, paco2: 55, hco3: 24, precision: { ph: 2, paco2: 0, hco3: 0 } });
   });
 });
 
@@ -42,8 +42,8 @@ describe("potassium values", () => {
 
 describe("proposing pairs", () => {
   it("proposes ABG with values read only from the stem", () => {
-    const q = { stem: "ABG: pH 7.30, PaCO2 55, HCO3 24. What is the interpretation?", options: ["a", "b"], rationale: "Normal pH is 7.35-7.45; e.g. pH 7.50 would be alkalosis." };
-    expect(proposePairs(q)).toEqual([{ d: "abg", p: { ph: 7.3, paco2: 55, hco3: 24 } }]);
+    const q = { stem: "ABG: pH 7.26, PaCO2 55, HCO3 24. What is the interpretation?", options: ["a", "b"], rationale: "Normal pH is 7.35-7.45; e.g. pH 7.50 would be alkalosis." };
+    expect(proposePairs(q)).toEqual([{ d: "abg", p: { ph: 7.26, paco2: 55, hco3: 24, precision: { ph: 2, paco2: 0, hco3: 0 } } }]);
   });
   /* The rationale quoted a contrasting pH; that must not make the stem's
      values ambiguous or become the patient's value. */
