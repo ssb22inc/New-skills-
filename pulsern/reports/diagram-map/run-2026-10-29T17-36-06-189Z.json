@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-10-29T17:36:06.189Z",
+  "model": "openai/gpt-6.1-sol",
+  "maxUsd": 15,
+  "limit": null,
+  "dryRun": false,
+  "candidates": {
+    "potassium": 574,
+    "isolation": 1645,
+    "insulin": 317,
+    "abg": 153,
+    "pressure-injury": 220,
+    "tonicity": 249
+  },
+  "asked": 3158,
+  "attached": 678,
+  "attachedWithValues": 89,
+  "rejected": 2480,
+  "failedBatches": [],
+  "stoppedFor": null,
+  "heldBack": {},
+  "spendUsd": 5.078107,
+  "calls": 214,
+  "uncostedCalls": 0,
+  "shipped": 678
+}
