@@ -484,3 +484,15 @@ describe("round 15", () => {
     expect(desc).toMatch(/Oxygenation/);
   });
 });
+
+describe("round 16", () => {
+  it("raises an added metabolic acidosis below the usual respiratory-alkalosis floor (Sol: 7.53 / 10 / 8)", () => {
+    const r = read(7.53, 10, 8);
+    expect(r.mixedPossible).toBe(true);
+    expect(r.reading).toMatch(/rarely takes HCO₃⁻ below about 12–15, so an added metabolic acidosis is possible/);
+    expect(r.caution).toMatch(/added metabolic acidosis is possible/);
+  });
+  it("discloses the floor in the limits panel", () => {
+    expect(abg.steps.find((s) => s.key === "limits").desc(null)).toMatch(/rarely below about 12–15/);
+  });
+});

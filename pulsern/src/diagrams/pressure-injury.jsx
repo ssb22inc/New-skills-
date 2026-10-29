@@ -192,6 +192,12 @@ function UnstageableStrip({ x, y, w }) {
 /* Depth (unscaled) to the top of the bone, and the strip's drawn height. */
 const depthOf = (key) => { let d = 0; for (const l of LAYERS) { d += l.h; if (l.key === key) return d; } return d; };
 const DTPI_STRIP_H = LAYERS.reduce((a, l) => a + l.h, 0) * 0.62;
+/* A half-oval in the muscle band, flat side on the top of the bone. */
+const deepLesion = (x, y, w, s) => {
+  const base = y + depthOf("muscle") * s - 0.6, top = y + depthOf("fat") * s + 1.5;
+  const l = x + w * 0.24, r = x + w * 0.76;
+  return `M${l},${base} C${l},${top} ${r},${top} ${r},${base} Z`;
+};
 function DeepTissueStrip({ x, y, w }) {
   const s = 0.62;
   return (
@@ -202,8 +208,10 @@ function DeepTissueStrip({ x, y, w }) {
           interface and spreads up toward skin that may still be intact
           (Sol, round 9: the strip stopped in fat). */}
       <ellipse cx={x + w / 2} cy={y + 24} rx={w * 0.2} ry={10} fill={C.coral} fillOpacity={0.3} />
-      <ellipse cx={x + w / 2} cy={y + depthOf("muscle") * s - 2} rx={w * 0.27} ry={9} fill={C.coral} fillOpacity={0.85} />
-      <ellipse cx={x + w / 2} cy={y + depthOf("muscle") * s - 2} rx={w * 0.27} ry={9} fill="#000" fillOpacity={0.38} stroke={C.danger} strokeWidth={1.2} strokeDasharray="3 2" />
+      {/* the deep lesion sits in the muscle, resting ON the bone boundary;
+          the bone band stays intact (Sol, round 16) */}
+      <path d={deepLesion(x, y, w, s)} fill={C.coral} fillOpacity={0.85} />
+      <path d={deepLesion(x, y, w, s)} fill="#000" fillOpacity={0.38} stroke={C.danger} strokeWidth={1.2} strokeDasharray="3 2" />
       <ellipse cx={x + w / 2} cy={y + 8} rx={w * 0.2} ry={3} fill={C.coral} fillOpacity={0.35} />
       <Surface x={x} y={y} w={w} />
       {/* the finding a nurse SEES: intact skin with a deep red-purple
@@ -291,7 +299,7 @@ export function PressureInjuryDiagram({ focus = null }) {
   const rows = STAGES.map(([k, t]) => { const y = sy; sy += H(`${k} ${t}`, 324) + 6; return y; });
   const noteY = sy + 4;
   const OY = noteY + H("x", 324) + 14;
-  const DTY = 34 + DTPI_STRIP_H + 18;   // the DTPI strip runs to bone, so its text starts lower
+  const DTY = 34 + DTPI_STRIP_H + 52;   // the DTPI strip runs to bone, with its interface label below
   const oh = Math.max(82 + H(UNSTAGEABLE, 150), DTY + H(DTPI, 148)) - MIN_TEXT * LH + 14;
   const PY = OY + oh + 10;
   const tileH = 108;
@@ -377,6 +385,8 @@ export function PressureInjuryDiagram({ focus = null }) {
           <Box x={184} y={OY} w={168} h={oh} r={10} fill={C.surface} stroke={C.line} sw={1.2} lift />
           <T x={194} y={OY + 21} size={BODY_TEXT} weight={700}>Deep tissue injury</T>
           <DeepTissueStrip x={194} y={OY + 34} w={148} />
+          <T x={194} y={OY + 34 + DTPI_STRIP_H + 17} size={MIN_TEXT} color={C.muted}>▲ starts where muscle</T>
+          <T x={194} y={OY + 34 + DTPI_STRIP_H + 33} size={MIN_TEXT} color={C.muted}>meets bone</T>
           <Para x={194} y={OY + DTY} w={148} size={MIN_TEXT} text={DTPI} />
         </Anim>
       </G>
@@ -409,7 +419,7 @@ export function pressureStepDesc(key) {
   if (key === "layers") return `Stages: what the tissue shows; the same skin, cut through; real depth varies. ${COLUMNS_TEXT} ${STAGES.map((_, i) => stageText(i)).join(" ")} Not a required progression; healing keeps its stage.`;
   const m = /^stage(\d)$/.exec(key);
   if (m) return `${COLUMNS_TEXT} The Stage ${m[1]} column is outlined. ${stageText(Number(m[1]) - 1)}`;
-  if (key === "other") return `Unstageable: a strip with slough or eschar over the base and a question mark below. ${UNSTAGEABLE} Deep tissue injury: a strip down to bone, with damage at the bone–muscle interface spreading up under a dark patch of skin. ${DTPI}`;
+  if (key === "other") return `Unstageable: a strip with slough or eschar over the base and a question mark below. ${UNSTAGEABLE} Deep tissue injury: a strip down to bone, with damage in the muscle resting on the bone (labelled: starts where muscle meets bone) spreading up under a dark patch of skin; the bone itself is intact. ${DTPI}`;
   if (key === "prevent") return `Prevent: ${PREVENT.map(([, a, b]) => `${a}, ${b}`).join("; ")}. ${PREVENT_NOTE}`;
   return null;
 }

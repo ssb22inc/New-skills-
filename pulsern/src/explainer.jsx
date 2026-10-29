@@ -162,11 +162,15 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
     return () => clearInterval(id);
   }, [playing, inSteps, clipUrl, reduce, duration, step, n, go]);
 
+  /* The element is captured, and paused in the cleanup: moving to a step
+     without a clip, or leaving the page, unmounts it, and a detached clip
+     would otherwise keep talking over the next step (Sol, round 16). */
   React.useEffect(() => {
     const a = audioRef.current;
-    if (!a) return;
+    if (!a) return undefined;
     if (playing && clipUrl) a.play().catch(() => setPlaying(false));
     else a.pause();
+    return () => a.pause();
   }, [playing, clipUrl, step]);
 
   const onKey = (e) => {
