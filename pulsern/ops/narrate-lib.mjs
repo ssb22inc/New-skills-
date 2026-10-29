@@ -272,22 +272,24 @@ export function speechTokens(text) {
    febrile" must not pass as "afebrile" (PR #157 review). Numbers are
    never joined. Used by both the word check and the similarity score. */
 function scriptCompounds(script) {
-  const pairs = new Set();
-  /* stored in the SAME normalised form the tokens are compared in (plural
-     and unit handling applied), so "non-smokers" folds as "non smoker"
-     (PR #157 review) */
+  /* pair (in the compared, normalised form) → the canonical token: the
+     JOINED spelling, normalised as one word, so "follow-ups" folds to the
+     same token as "followups" (PR #157 review: normalising each half then
+     joining gave "followups" against "followup") */
+  const pairs = new Map();
   for (const m of String(script).toLowerCase().matchAll(/\b([a-z]{2,})-([a-z]{2,})\b/g)) {
-    const l = speechTokens(m[1]).at(-1), r = speechTokens(m[2])[0];
+    const l = speechTokens(m[1]).at(-1), r = speechTokens(m[2])[0], whole = speechTokens(m[1] + m[2]);
     /* letters only on both sides: number words become digits, and "forty-
        five" must never register "40 5" and fold "forty, five" into 405 */
-    if (/^[a-z]+$/.test(l ?? "") && /^[a-z]+$/.test(r ?? "")) pairs.add(`${l} ${r}`);
+    if (/^[a-z]+$/.test(l ?? "") && /^[a-z]+$/.test(r ?? "") && whole.length === 1) pairs.set(`${l} ${r}`, whole[0]);
   }
   return pairs;
 }
 function foldCompounds(tokens, pairs) {
   const out = [];
   for (let i = 0; i < tokens.length; i++) {
-    if (pairs.has(`${tokens[i]} ${tokens[i + 1]}`)) { out.push(tokens[i] + tokens[i + 1]); i++; } else out.push(tokens[i]);
+    const joined = pairs.get(`${tokens[i]} ${tokens[i + 1]}`);
+    if (joined) { out.push(joined); i++; } else out.push(tokens[i]);
   }
   return out;
 }

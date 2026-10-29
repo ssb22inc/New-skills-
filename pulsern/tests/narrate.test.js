@@ -615,6 +615,14 @@ describe("open and closed compounds", () => {
     }
     expect(audioCheck(script, "Smokers still need routine screening.").pass).toBe(false);
   });
+  it("folds compounds whose second half is short (follow-ups, check-ups)", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    for (const [script, heard, wrong] of [["Follow-ups are important.", "Followups are important.", "Followers are important."], ["Check-ups are important.", "Checkups are important.", "Checks are important."]]) {
+      expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
+      expect(audioCheck(script, script)).toMatchObject({ pass: true, mismatch: null });
+      expect(audioCheck(script, wrong).pass).toBe(false);
+    }
+  });
   it("never folds numbers, even next to a hyphenated number word", async () => {
     const { audioCheck } = await import("../ops/narrate-lib.mjs");
     const script = "The forty-five-year-old client's respiratory rate and pain score are forty, five.";
