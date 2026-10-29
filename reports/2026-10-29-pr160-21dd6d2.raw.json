@@ -1,0 +1,77 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "21dd6d2b99244271d83f350b8899eaa3253a5ae1",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T21:35:26.000Z",
+  "filesReviewed": [
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 164,
+      "title": "Concurrent requests bypass both daily spending limits",
+      "problem": "Quota checking is a read-modify-write operation on storage objects, with the update performed only after paid calls finish. Concurrent requests read the same counts, all pass the check, and overwrite one another's increments. Counter read errors are also treated as zero, and counter write failures are ignored.",
+      "failure_scenario": "A signed-in trial user sends many simultaneous requests for an uncached segment. Every request observes the same available allowance and starts synthesis/transcription. Hundreds of paid calls can leave the recorded count incremented by only one or two. Ordinary simultaneous students also undercount the global budget. The sequential budget tests cannot detect this.",
+      "fix": "Reserve user and global allowance atomically in durable storage before each paid synthesis, including a second take. Fail closed when quota storage is unavailable. Add concurrent-request tests with synchronized reads and tests for counter-storage failures.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 84,
+      "title": "Require exact clinical-unit agreement independently of fuzzy similarity",
+      "problem": "voiceCheck canonicalizes unit spellings but adds no exact unit comparison. The imported check is documented here as allowing 0.92 similarity while protecting numbers, negations and direction words—not units. A single mg/mcg substitution in a long passage can therefore retain high similarity and identical protected numbers. The supplied unit-mismatch test uses a short passage, which can fail on similarity alone and does not establish the claimed unit protection. The audioCheck implementation was not supplied, so additional protection inside it could not be verified.",
+      "failure_scenario": "A long approved passage specifies 25 mg, but synthesis/transcription produces 25 mcg. Only one word changes, all numbers remain identical, and similarity remains above 0.92. If audioCheck implements its documented contract, clinically incorrect audio is saved and delivered to students.",
+      "fix": "Compare the ordered clinical-unit tokens exactly after canonicalization, independently of the similarity threshold. Add long-passage tests where only mg/mcg, a unit denominator, or a dosing frequency changes, and verify that these are rejected.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 2609,
+      "title": "Follow-along styling replaces the flashcard's contrast-preserving background",
+      "problem": "The later .ra-now background shorthand overrides .flashcard's dark gradient, but the flashcard retains its explicitly light #EAF6F0 text. During reading, the card therefore uses the selection background rather than the background its text colors were designed for. On a light-theme selection background this produces light-on-light text, violating the required contrast. Exact contrast could not be measured because the theme-variable definitions were outside the supplied diff.",
+      "failure_scenario": "A student in the light theme presses Listen on a flashcard. Activating card-front or card-back adds ra-now to the entire flashcard, replacing its dark background while leaving the prompt or answer text pale.",
+      "fix": "Preserve the flashcard's dark background and highlight it with an outline or surrounding treatment, or explicitly provide contrast-safe foreground/background colors for .flashcard.ra-now in both themes. Verify computed contrast while the card is actively being read.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 116,
+      "title": "Daily quota rollover introduces explicitly forbidden UTC calendar logic",
+      "problem": "utcDay introduces toISOString().slice(0, 10) to choose a daily calendar bucket. The non-negotiable date rule requires local dates and explicitly forbids this construction for calendar logic. Documenting the quota as UTC in HUMAN_TASKS does not amend that rule.",
+      "failure_scenario": "For a student at UTC-7, the daily allowance resets at 5 p.m. rather than local midnight. A student capped during the evening receives no fresh allowance at the start of the next local day.",
+      "fix": "Apply the established local-date policy to quota rollover using a trusted local timezone, without letting callers select arbitrary quota dates. If operational spending quotas intentionally require UTC, obtain an explicit owner exception before shipping this implementation.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 60765,
+    "completionTokens": 10788,
+    "reasoningTokens": 9724,
+    "costUsd": 0.259791
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. Daily spending limits are bypassable under concurrency, and the new calendar logic violates the local-date rule. The clinical audio check and flashcard highlighting also have accuracy/accessibility concerns that need resolution before release. Review is based on the supplied files; the imported audioCheck implementation and theme-variable definitions were not provided.",
+  "counts": {
+    "blocker": 4,
+    "major": 0,
+    "minor": 0
+  }
+}
