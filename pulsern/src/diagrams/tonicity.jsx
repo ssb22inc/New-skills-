@@ -99,10 +99,13 @@ function Panel({ id, step, x, title, outside, after, flow, sub, seed }) {
       {/* the cell afterwards, over a dashed ring at its starting size, so
           "same size", "swells" and "shrinks" can be seen (Sol, round 2:
           the samples above read as the starting cell) */}
-      <circle cx={ax} cy={cy} r={START_R} fill="none" stroke={C.muted} strokeWidth={1.2} strokeDasharray="3 3" />
       <Anim on={step} kind="scale" from={START_R / after.r} dur={1800}>
         <Cell cx={ax} cy={cy} r={after.r} crenated={after.crenated} />
       </Anim>
+      {/* the start-size ring is drawn OVER the cell, in body ink on a card
+          halo, so it stays visible on a swollen cell (Sol, round 15) */}
+      <circle className="dg-solid" cx={ax} cy={cy} r={START_R} fill="none" stroke={C.card} strokeWidth={3} />
+      <circle className="dg-solid" cx={ax} cy={cy} r={START_R} fill="none" stroke={C.ink} strokeWidth={1.3} strokeDasharray="3 3" />
       <Anim on={step} kind="fade" delay={900}>
         {sub.map((line, i) => <T key={i} x={ax} y={PY + 188 + i * 17} size={MIN_TEXT} anchor="middle" color={i ? C.muted : C.ink} weight={i ? 500 : 600}>{line}</T>)}
       </Anim>

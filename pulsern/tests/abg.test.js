@@ -464,3 +464,23 @@ describe("round 14", () => {
     expect(read(7.26, 80, 35).reading).toMatch(/a stable course whose response differs from these approximations/);
   });
 });
+
+describe("round 15", () => {
+  it("keeps acute-on-chronic open when only the chronic estimate fits (Sol: 7.29 / 80 / 37, baseline 70 / 36)", () => {
+    const r = read(7.29, 80, 37);
+    expect(r.reading).toMatch(/or an acute change on top of chronic disease/);
+    expect(r.reading).not.toMatch(/would suggest an added metabolic alkalosis/);
+    expect(r.caution).toMatch(/acute change on chronic disease/);
+  });
+  it("describes the populated overview with the method as well as the values", async () => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { AbgDiagram } = await import("../src/diagrams/abg.jsx");
+    const html = renderToStaticMarkup(React.createElement(AbgDiagram, { params: { ph: 7.3, paco2: 50, hco3: 24 } }));
+    const desc = /<desc[^>]*>([^<]*)<\/desc>/.exec(html)[1];
+    expect(desc).toMatch(/pH 7\.30/);
+    expect(desc).toMatch(/respiratory opposite, metabolic equal/);
+    expect(desc).toMatch(/Expected compensation/);
+    expect(desc).toMatch(/Oxygenation/);
+  });
+});

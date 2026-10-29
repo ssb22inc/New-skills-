@@ -193,7 +193,10 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
       </StepContext.Provider>
       {inSteps ? (
         <>
-          <p className="dg-caption" aria-live="polite">{caption}</p>
+          {/* While a recorded voice is speaking, the caption is not also
+              announced, so the two never talk over each other (Sol, round
+              15); it stays on screen to read. */}
+          <p className="dg-caption" aria-live={clipUrl && playing ? "off" : "polite"}>{caption}</p>
           {clipUrl ? <audio ref={audioRef} src={clipUrl} preload="auto" onEnded={() => setPlaying(afterClip({ reduce, step, n, go }))} /> : null}
           <div className="dg-controls">
             <button type="button" className="dg-btn ghost" onClick={() => go(step - 1)} disabled={step === 0} aria-label="Previous step">‹</button>

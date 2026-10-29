@@ -122,3 +122,16 @@ describe("round 12", () => {
     expect(d("hypo-care")).toMatch(/Check K⁺ level, kidney function, urine output/);
   });
 });
+
+describe("round 15", () => {
+  it("ties calcium to ECG changes, with level-alone use per protocol", () => {
+    const html = renderToStaticMarkup(<potassium.Diagram params={{ k: 6.2 }} focus={null} />);
+    expect(html).toMatch(/hyperkalemic ECG changes/);
+    expect(potassium.steps.find((s) => s.key === "hyper-care").caption).toMatch(/for a high level alone, per protocol/);
+  });
+  it("never claims the outlined strip is the client's ECG", () => {
+    const d = potassium.steps.find((s) => s.key === "worked").desc({ k: 6.2 });
+    expect(d).toMatch(/this client's actual ECG is not supplied/);
+    expect(d).not.toMatch(/outlined as this client's/);
+  });
+});
