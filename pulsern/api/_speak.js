@@ -43,7 +43,7 @@
 // (ops/read-aloud-worker.mjs, every 15 minutes) voices and checks it; the
 // app reads it with the device voice until then (202).
 import { createHash } from 'node:crypto';
-import { scriptFor } from '../src/read-aloud-script.js';
+import { scriptFor, itemParts } from '../src/read-aloud-script.js';
 import { audioCheck, speechTokens, QA_MODEL, QA_VERSION } from '../ops/narrate-lib.mjs';
 
 export const SPEAK_MAX = 1500; // above the script's PART_MAX (900): a part always fits
@@ -95,8 +95,18 @@ const UNIT_CANON = [
   [/\bmilliliters?\b|\bmillilitres?\b/gi, ' ml '],
   [/\bmilliequivalents?\b/gi, ' meq '],
 ];
+/* Calculation signs, the same way on both sides: a transcriber may write
+   "×", "x", "*" or "times", "=" or "equals". */
+const MATH_CANON = [
+  [/\s*[·×∙]\s*(?=\d)/g, ' times '],
+  [/(\d)\s*[x*]\s*(?=\d)/gi, '$1 times '],
+  [/\s+[x*]\s+(?=\d)/gi, ' times '],
+  [/\s*=\s*/g, ' equals '],
+  [/\bequal\b/gi, 'equals'],
+];
 export function canonUnits(text) {
   let t = String(text ?? '');
+  for (const [re, to] of MATH_CANON) t = t.replace(re, to);
   for (const [re, to] of UNIT_CANON) t = t.replace(re, to);
   return t.replace(/\s+/g, ' ').trim();
 }
@@ -554,11 +564,17 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
         // someone else is taking it over: wait for their outcome
       }
     }
-    for (const p of parts) {
+    /* Every part of the item (its explanation, the card's other side,
+       every case step), plus the exact part asked for (an explanation's
+       result line can differ from the generic one). */
+    const seen = new Set();
+    const work = [...parts.map((x) => ({ ref, seg: x.id, text: x.text })), ...itemParts(ref.kind, { ...item, id: ref.id })]
+      .filter((x) => x.text && x.text.length <= SPEAK_MAX && !seen.has(x.text) && seen.add(x.text));
+    for (const p of work) {
       const paths = passagePaths(p.text, tts);
       if (await readRecord(storage, p.text, tts, t0)) continue;
       if (await waiting(paths)) continue;
-      const entry = JSON.stringify({ text: p.text, voice: tts.voice, ref, seg: p.id, requestedAt: new Date(t0).toISOString() });
+      const entry = JSON.stringify({ text: p.text, voice: tts.voice, ref: p.ref, seg: p.seg, requestedAt: new Date(t0).toISOString() });
       if (entry.length > QUEUE_ENTRY_MAX) continue; // cannot happen for a valid part; never stored if it did
       if (!(await put(storage, paths.queue, entry, 'application/json'))) return unavailable;
     }

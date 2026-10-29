@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments } from "../src/read-aloud-script.js";
+import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, claimPassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
@@ -64,6 +64,19 @@ describe("question script", () => {
   it("reads exhibits after the stem", () => {
     const segs = questionSegments({ ...MC, extra: { exhibit: [{ label: "Vital signs", content: "BP 88/50 mm Hg" }] } }, { ...MC, exhibit: [{ label: "Vital signs", content: "BP 88/50 mm Hg" }] });
     expect(segs[1]).toEqual({ id: "exhibit0", text: "Vital signs. BP 88/50 millimeters of mercury" });
+  });
+
+  it("speaks calculation signs instead of dropping them, and checks them", () => {
+    const sc = speakable("Dose = 0.1 mg/kg · 70 kg = 7 mg");
+    expect(sc).toBe("Dose equals 0.1 milligrams per kilogram times 70 kg equals 7 mg");
+    expect(speakable("2 × 3 = 6")).toBe("2 times 3 equals 6");
+    expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening, First Visit");
+    // the check accepts the same calculation however it is written, and nothing else
+    expect(voiceCheck(sc, "Dose = 0.1 mg/kg × 70 kg = 7 mg").pass).toBe(true);
+    expect(voiceCheck(sc, "Dose = 0.1 mg/kg x 70 kg = 7 mg").pass).toBe(true);
+    expect(voiceCheck(sc, "Dose equals 0.1 mg/kg, 70 kg equals 7 mg").pass).toBe(false); // the multiplication dropped
+    expect(voiceCheck(sc, "Dose = 0.1 mg/kg plus 70 kg = 7 mg").pass).toBe(false);
+    expect(voiceCheck(sc, "Dose = 0.1 mg/kg x 70 kg = 70 mg").pass).toBe(false);
   });
 
   it("spells out units and dosing shorthand, and nothing else", () => {
@@ -203,8 +216,11 @@ function fakeOpenAI(heard = null) {
 }
 /* Most queue and budget tests use one-part items (a flashcard's front), so
    one request is one passage; whole-item queueing has its own tests. */
-const CARDS = { 4: { id: 4, front: "Potassium 2.9 mEq/L.", back: "Low." }, 5: { id: 5, front: "Sodium 138 mEq/L.", back: "Normal." }, 6: { id: 6, front: "Which value is the priority?", back: "Potassium." } };
-const readBank = async (kind, id) => (kind === "question" ? (id === ROW.id ? ROW : null) : kind === "card" ? CARDS[id] ?? (id >= 100 ? { id, front: `Card ${id}.`, back: "B." } : null) : null);
+/* The queue-mechanics fixtures are one-part items: flashcards with a front
+   and no back text (a side with no text has nothing to read). Whole-item
+   queueing has its own tests with full items. */
+const CARDS = { 4: { id: 4, front: "Potassium 2.9 mEq/L.", back: "" }, 5: { id: 5, front: "Sodium 138 mEq/L.", back: "" }, 6: { id: 6, front: "Which value is the priority?", back: "" } };
+const readBank = async (kind, id) => (kind === "question" ? (id === ROW.id ? ROW : null) : kind === "card" ? CARDS[id] ?? (id >= 100 ? { id, front: `Card ${id}.`, back: "" } : null) : null);
 const CARD = (id, text) => ({ ref: { kind: "card", id, part: "front" }, seg: "card-front", text });
 const Q1 = CARD(4, "Potassium 2.9 milliequivalents per liter.");
 const Q2 = CARD(5, "Sodium 138 milliequivalents per liter.");
@@ -697,6 +713,25 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(down.mock.calls.filter(([u]) => u.endsWith("/audio/speech"))).toHaveLength(3); // nothing after the third
   });
 
+  it("reaches fresh work behind more than a page of removable entries, before any retry", async () => {
+    const { storage, files } = fakeStorage();
+    // 1,100 finished entries (records exist) at the front of the fresh lane
+    for (let i = 0; i < 1100; i++) {
+      const text = `Card ${3000 + i}.`;
+      const p = passagePaths(text);
+      files.set(p.queue, Buffer.from(JSON.stringify({ text, voice: "marin", ref: { kind: "card", id: 3000 + i, part: "front" }, seg: "card-front" })));
+      files.set(p.rec, Buffer.from(JSON.stringify({ qa: QA_VERSION, pass: true, textSha: createHash("sha256").update(text).digest("hex") })));
+    }
+    // a retry, and then a student's fresh request
+    const retryText = "Card 9999.";
+    files.set(passagePaths(retryText).retry, Buffer.from(JSON.stringify({ text: retryText, voice: "marin", ref: { kind: "card", id: 9999, part: "front" }, seg: "card-front", attempts: 1 })));
+    await speak({ ...base({ apiKey: "" }), storage });
+    const f = fakeOpenAI();
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, max: 1, log: () => {} });
+    expect(r.voiced).toBe(1);
+    expect(JSON.parse(f.mock.calls[0][1].body).input).toBe("Potassium 2.9 milliequivalents per liter."); // the fresh request, not the retry
+  });
+
   it("serves every fresh request before any retry, however long the queue", async () => {
     const { storage, files } = fakeStorage();
     // 1,200 retried passages left by an outage, then one student's fresh request
@@ -888,7 +923,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 400 })), log: () => {} });
     expect(r.rejected).toBe(3);
     expect(r.service).toMatch(/3 refusals in a row/);
-    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(1);
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(new Set(itemParts("question", ROW).map((x) => x.text)).size - 3);
   });
 
   it("counts live and scheduled syntheses against ONE app-wide cap", async () => {
@@ -1020,7 +1055,10 @@ describe("server voice: daily budgets", () => {
     const parts = questionSegments(ROW);
     const out = await Promise.all(parts.map((p) => speak({ ...base({ apiKey: "", ref: REF, seg: p.id, text: p.text }), storage })));
     expect(out.map((r) => r.status)).toEqual(parts.map(() => 202));
-    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(parts.length);
+    // every part of the item: the question AND its explanation, under one claim
+    const whole = new Set(itemParts("question", ROW).map((x) => x.text));
+    expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toHaveLength(whole.size);
+    expect(whole.size).toBeGreaterThan(parts.length);
     expect([...files.keys()].filter((k) => /\/u-[0-9a-f]+\/\d+$/.test(k))).toHaveLength(1); // one claim for the whole item
   });
 
@@ -1091,6 +1129,28 @@ describe("server voice: daily budgets", () => {
     });
   });
 
+  it("queues the whole item from one request: the card's back, the question's explanation, every case step", async () => {
+    const { storage, files } = fakeStorage();
+    const card = { id: 4, front: "Potassium 2.9 mEq/L.", back: "Low." };
+    const CASE = { id: 3, title: "Sepsis", intro: "A client.", vitals: [], labs: [], note: "", steps: [{ stem: "Which cue?", options: ["HR"], type: "mc", answer: 0, rationale: "HR." }, { stem: "Which action?", options: ["Fluids"], type: "mc", answer: 0, rationale: "Fluids." }] };
+    const readItem = async (kind, id) => (kind === "card" ? card : kind === "case" ? CASE : readBank(kind, id));
+    const queuedTexts = () => [...files.keys()].filter((k) => k.startsWith("queue/")).map((k) => JSON.parse(files.get(k).toString()).text);
+    // a card's front only
+    await speak({ ...base({ apiKey: "", readItem, ref: { kind: "card", id: 4, part: "front" }, seg: "card-front", text: "Potassium 2.9 milliequivalents per liter." }), storage });
+    expect(queuedTexts()).toContain("Answer. Low.");
+    // a question's stem only
+    await speak({ ...base({ apiKey: "", ref: REF, seg: "stem", text: "Which value is the priority?" }), storage });
+    expect(queuedTexts()).toContain("Rationale. Low potassium risks dysrhythmias.");
+    // a case's introduction only
+    await speak({ ...base({ apiKey: "", readItem, ref: { kind: "case", id: 3, part: "intro" }, seg: "case-title", text: "Sepsis." }), storage });
+    expect(queuedTexts()).toEqual(expect.arrayContaining(["Which action?", "Rationale. Fluids."]));
+    // and every queued entry carries the reference it is read under
+    for (const k of [...files.keys()].filter((x) => x.startsWith("queue/"))) {
+      const e = JSON.parse(files.get(k).toString());
+      expect(validRequest(e.ref, e.seg, e.text)).toBe(true);
+    }
+  });
+
   it("counts one claim per bank item: question and explanation, both card sides, every case step", async () => {
     const { storage, files } = fakeStorage();
     const limits = { user: 1, admission: 100, spend: 100 };
@@ -1107,9 +1167,9 @@ describe("server voice: daily budgets", () => {
     const { storage, files } = fakeStorage();
     const limits = { user: 2, admission: 100, spend: 100 };
     const CASE = { id: 3, title: "Sepsis", intro: "A client.", vitals: [["HR", "118"]], labs: [], note: "Confused.", steps: [{ stem: "Which cue?", options: ["HR", "Temp"], type: "mc", answer: 0, rationale: "HR." }, { stem: "Which action?", options: ["Fluids", "Wait"], type: "mc", answer: 0, rationale: "Fluids." }] };
-    const readItem = async (kind, id) => (kind === "case" && id === 3 ? CASE : readBank(kind, id));
-    const ask = (ref, parts) => Promise.all(parts.map((p) => speak({ ...base({ apiKey: "", ref, seg: p.id, text: p.text, readItem }), storage, limits })));
     const card = { id: 4, front: "Potassium 2.9 mEq/L.", back: "Low." };
+    const readItem = async (kind, id) => (kind === "case" && id === 3 ? CASE : kind === "card" && id === 4 ? card : readBank(kind, id));
+    const ask = (ref, parts) => Promise.all(parts.map((p) => speak({ ...base({ apiKey: "", ref, seg: p.id, text: p.text, readItem }), storage, limits })));
     const out = [
       ...(await ask({ kind: "card", id: 4, part: "front" }, cardSegments(card, false))),
       ...(await ask({ kind: "card", id: 4, part: "back" }, cardSegments(card, true))),

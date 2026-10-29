@@ -34,7 +34,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, claimPassage, releasePassage, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
-import { scriptFor, questionFeedbackSegments, caseFeedbackSegments, verdictText } from "../src/read-aloud-script.js";
+import { verdictText, itemParts } from "../src/read-aloud-script.js";
 
 export const MAX_ATTEMPTS = 5;
 const MAX_TRANSIENT_IN_A_ROW = 3;
@@ -77,18 +77,14 @@ async function readJsonFile(bucket, path, maxBytes = Infinity) {
 }
 const put = (bucket, path, value) => bucket.upload(path, JSON.stringify(value), { contentType: "application/json", upsert: true });
 
-/* A lane's entries, oldest first, a page at a time and only as far as
-   the run gets: entries that cannot be cleared never hide later work. */
-async function* laneEntries(bucket, dir) {
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await bucket.list(dir, { limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } });
-    if (error) {
-      if (/not found/i.test(String(error.message ?? error))) return;
-      throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
-    }
-    for (const e of data ?? []) if (e.name?.endsWith(".json")) yield e;
-    if (!data || data.length < 1000) return;
+/* One page of a lane, oldest first. */
+async function lanePage(bucket, dir, offset) {
+  const { data, error } = await bucket.list(dir, { limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } });
+  if (error) {
+    if (/not found/i.test(String(error.message ?? error))) return { entries: [], last: true };
+    throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
   }
+  return { entries: (data ?? []).filter((e) => e.name?.endsWith(".json")), last: !data || data.length < 1000 };
 }
 
 /* Two lanes: every fresh request (queue/) before any retry
@@ -101,14 +97,23 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
   const touched = new Set(); // moved or rewritten this run: next run's work
   /* Every delete is checked: a failure is storage trouble (the run fails),
      never reported as done. */
+  const removed = new Set();
   const drop = async (path) => {
     const { error } = await bucket.remove([path]);
     if (error) { out.operational = true; out.errors.push(`${path}: could not remove (${error.message ?? error})`); }
+    else removed.add(path);
     return !error;
   };
 
   for (const lane of ["queue", "queue-retry"]) {
-    for await (const f of laneEntries(bucket, lane)) {
+    /* Paged as far as the run gets. The next page starts after the entries
+       that are still in the lane (removed ones shift the rest up), so no
+       entry is skipped and undeletable entries never hide later work. */
+    for (let offset = 0, more = true; more;) {
+    const page = await lanePage(bucket, lane, offset);
+    more = !page.last;
+    const before = new Set(page.entries.map((e) => `${lane}/${e.name}`));
+    for (const f of page.entries) {
       if (done >= max) return out;
       const path = `${lane}/${f.name}`;
       if (touched.has(path)) continue;
@@ -184,6 +189,8 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
       }
       else { out.failed++; log(`failed the check twice: ${job.ref.kind} ${job.ref.id} ${job.seg} (similarity ${v.similarity?.toFixed(3)})`); }
     }
+    offset += [...before].filter((p) => !removed.has(p)).length;
+    }
   }
   return out;
 }
@@ -199,18 +206,7 @@ export function verdictPassages(maxPoints = 10) {
 }
 /* Every passage of one bank item, exactly as the screen and the route build them. */
 export function itemPassages(kind, row) {
-  const parts = [];
-  if (kind === "question") {
-    parts.push(...scriptFor({ kind: "question", part: "question" }, row), ...questionFeedbackSegments(row, WRONG));
-  } else if (kind === "case") {
-    parts.push(...scriptFor({ kind: "case", part: "intro" }, row));
-    (row.steps ?? []).forEach((step, i) => {
-      parts.push(...scriptFor({ kind: "case", part: "step", step: i }, row), ...caseFeedbackSegments(step, WRONG));
-    });
-  } else if (kind === "card") {
-    parts.push(...scriptFor({ kind: "card", part: "front" }, row), ...scriptFor({ kind: "card", part: "back" }, row));
-  }
-  return [...new Set(parts.map((s) => s.text))].filter((t) => t && t.length <= SPEAK_MAX);
+  return [...new Set(itemParts(kind, row).map((p) => p.text))].filter((t) => t && t.length <= SPEAK_MAX);
 }
 
 const KINDS = ["verdicts", "question", "case", "card"];

@@ -45,6 +45,13 @@ const SPOKEN = [
   [/°F\b/g, " degrees Fahrenheit"],
   [/°C\b/g, " degrees Celsius"],
   [/\s*→\s*/g, ", then "],
+  /* Calculation signs are spoken, never dropped: a middle dot or a times
+     sign between quantities is multiplication ("0.1 mg/kg · 70 kg"), and
+     "=" is "equals". A middle dot followed by words is only a separator
+     ("Newborn Screening · First Visit") and becomes a pause. */
+  [/\s*[·×∙]\s*(?=\d)/g, " times "],
+  [/(\d)\s*[x*]\s*(?=\d)/gi, "$1 times "],
+  [/\s*=\s*/g, " equals "],
   [/\s+·\s+/g, ", "],
   [/≥/g, " at least "],
   [/≤/g, " at most "],
@@ -173,6 +180,8 @@ export function caseStepSegments(step) {
 /* Flashcards: the prompt before the flip, the answer only after it. */
 export function cardSegments(card, flipped) {
   if (!card) return [];
+  // A side with no text has nothing to read.
+  if (!String((flipped ? card.back : card.front) ?? "").trim()) return [];
   return finish([flipped ? seg("card-back", `Answer. ${card.back}`) : seg("card-front", card.front)]);
 }
 
@@ -221,4 +230,31 @@ export function scriptFor(ref, item) {
   }
   if (ref.kind === "card" && (ref.part === "front" || ref.part === "back")) return cardSegments(item, ref.part === "back");
   return [];
+}
+
+/* Every voiceable part of one bank item, each with the reference it is
+   read under: a question and its explanation; a case's introduction, every
+   step and every step's explanation; both sides of a card. Used to queue a
+   whole item at once and to voice the bank ahead of demand. (The result
+   line of an explanation is shared text, voiced once for everyone.) */
+const ANY_WRONG = { correct: false, points: 0, max: 1 };
+export function itemParts(kind, row) {
+  if (!row || !Number.isInteger(row.id)) return [];
+  const out = [];
+  const add = (ref, segs) => segs.forEach((x) => out.push({ ref, seg: x.id, text: x.text }));
+  const base = { kind, id: row.id };
+  if (kind === "question") {
+    add({ ...base, part: "question" }, scriptFor({ kind, part: "question" }, row));
+    add({ ...base, part: "feedback", result: ANY_WRONG }, questionFeedbackSegments(row, ANY_WRONG));
+  } else if (kind === "case") {
+    add({ ...base, part: "intro" }, scriptFor({ kind, part: "intro" }, row));
+    (row.steps ?? []).forEach((step, i) => {
+      add({ ...base, part: "step", step: i }, scriptFor({ kind, part: "step", step: i }, row));
+      add({ ...base, part: "feedback", step: i, result: ANY_WRONG }, caseFeedbackSegments(step, ANY_WRONG));
+    });
+  } else if (kind === "card") {
+    add({ ...base, part: "front" }, scriptFor({ kind, part: "front" }, row));
+    add({ ...base, part: "back" }, scriptFor({ kind, part: "back" }, row));
+  }
+  return out;
 }
