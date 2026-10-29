@@ -583,3 +583,57 @@ describe("spoken halves", () => {
     expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
   });
 });
+
+describe("open and closed compounds", () => {
+  it("treats meal-time and mealtime as the same words, but never joins numbers", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    const { DIAGRAMS } = await import("../src/diagrams/index.js");
+    const script = DIAGRAMS.insulin.steps.find((s) => s.key === "rapid").narration;
+    const heard = "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in 10 to 30 minutes, peaks in 1 to 2 hours, and lasts 3 to 5 hours. It is mealtime insulin, and its exact timing follows the specific product and the prescribed plan.";
+    expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
+    expect(audioCheck(script, heard.replace("mealtime", "bedtime")).pass).toBe(false);
+    expect(audioCheck("a dose of 1 2 units", "a dose of 12 units").pass).toBe(false);
+  });
+  /* PR #157 review: only compounds the script hyphenates are folded. */
+  it("never joins words the script keeps apart", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    expect(audioCheck("A febrile client requires further assessment for a possible infection.", "A febrile client requires further assessment for a possible infection.").pass).toBe(true);
+    expect(audioCheck("A febrile client requires further assessment for a possible infection.", "Afebrile client requires further assessment for a possible infection.").pass).toBe(false);
+    expect(audioCheck("Use a septic technique here.", "Use aseptic technique here.").pass).toBe(false);
+  });
+  it("folds hyphenated compounds in short scripts too, for the score as well as the words", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    expect(audioCheck("Iso-osmolar.", "Isoosmolar.")).toMatchObject({ pass: true, mismatch: null });
+    expect(audioCheck("Pre-load and after-load.", "Preload and afterload.")).toMatchObject({ pass: true, mismatch: null });
+    expect(audioCheck("Pre-load and after-load.", "Preload and overload.").pass).toBe(false);
+  });
+  it("folds plural compounds in the same normalised form", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    const script = "Non-smokers still need routine screening.";
+    for (const heard of ["Non-smokers still need routine screening.", "Non smokers still need routine screening.", "Nonsmokers still need routine screening."]) {
+      expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
+    }
+    expect(audioCheck(script, "Smokers still need routine screening.").pass).toBe(false);
+  });
+  it("folds compounds whose second half is short (follow-ups, check-ups)", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    for (const [script, heard, wrong] of [["Follow-ups are important.", "Followups are important.", "Followers are important."], ["Check-ups are important.", "Checkups are important.", "Checks are important."]]) {
+      expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
+      expect(audioCheck(script, script)).toMatchObject({ pass: true, mismatch: null });
+      expect(audioCheck(script, wrong).pass).toBe(false);
+    }
+  });
+  it("folds only vetted compounds: a hyphen alone is not the same word", async () => {
+    const { audioCheck, COMPOUND_EQUIVALENTS } = await import("../ops/narrate-lib.mjs");
+    expect(audioCheck("The nurse re-signed after the audit.", "The nurse re-signed after the audit.").pass).toBe(true);
+    expect(audioCheck("The nurse re-signed after the audit.", "The nurse resigned after the audit.").pass).toBe(false);
+    expect(audioCheck("Re-cover the wound.", "Recover the wound.").pass).toBe(false);
+    expect(COMPOUND_EQUIVALENTS.has("re-signed")).toBe(false);
+  });
+  it("never folds numbers, even next to a hyphenated number word", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    const script = "The forty-five-year-old client's respiratory rate and pain score are forty, five.";
+    expect(audioCheck(script, "The 45-year-old client's respiratory rate and pain score are 40, 5.").pass).toBe(true);
+    expect(audioCheck(script, "The forty-five-year-old client's respiratory rate and pain score are 405.").pass).toBe(false);
+  });
+});

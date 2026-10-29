@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-10-29T17:31:56.713Z",
+  "model": "openai/gpt-6.1-sol",
+  "maxUsd": 15,
+  "limit": null,
+  "dryRun": false,
+  "candidates": {},
+  "asked": 0,
+  "attached": 0,
+  "attachedWithValues": 0,
+  "rejected": 0,
+  "failedBatches": [],
+  "stoppedFor": null,
+  "heldBack": {
+    "abg": "changed since its review",
+    "potassium": "changed since its review",
+    "tonicity": "changed since its review",
+    "insulin": "changed since its review",
+    "isolation": "changed since its review",
+    "pressure-injury": "changed since its review"
+  },
+  "spendUsd": 0,
+  "calls": 0,
+  "uncostedCalls": 0,
+  "shipped": 0
+}

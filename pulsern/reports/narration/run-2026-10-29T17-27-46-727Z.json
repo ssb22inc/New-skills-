@@ -1,0 +1,330 @@
+{
+  "startedAt": "2026-10-29T17:27:46.727Z",
+  "voice": "marin",
+  "model": "gpt-4o-mini-tts",
+  "qaModel": "gpt-4o-transcribe",
+  "qaThreshold": 0.92,
+  "recorded": [
+    {
+      "diagram": "abg",
+      "step": "limits",
+      "similarity": 1,
+      "bytes": 1560960
+    },
+    {
+      "diagram": "potassium",
+      "step": "hypo-ecg",
+      "similarity": 1,
+      "bytes": 208128
+    },
+    {
+      "diagram": "potassium",
+      "step": "hypo-care",
+      "similarity": 1,
+      "bytes": 484992
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-ecg",
+      "similarity": 1,
+      "bytes": 219264
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-care",
+      "similarity": 1,
+      "bytes": 651264
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-shift",
+      "similarity": 1,
+      "bytes": 497664
+    },
+    {
+      "diagram": "tonicity",
+      "step": "isotonic",
+      "similarity": 1,
+      "bytes": 513024
+    },
+    {
+      "diagram": "tonicity",
+      "step": "hypotonic",
+      "similarity": 1,
+      "bytes": 124800
+    },
+    {
+      "diagram": "tonicity",
+      "step": "hypertonic",
+      "similarity": 1,
+      "bytes": 168192
+    },
+    {
+      "diagram": "tonicity",
+      "step": "bags",
+      "similarity": 1,
+      "bytes": 351360
+    },
+    {
+      "diagram": "tonicity",
+      "step": "dextrose",
+      "similarity": 1,
+      "bytes": 634368
+    },
+    {
+      "diagram": "tonicity",
+      "step": "safety",
+      "similarity": 1,
+      "bytes": 268032
+    },
+    {
+      "diagram": "insulin",
+      "step": "idea",
+      "similarity": 1,
+      "bytes": 220800
+    }
+  ],
+  "skippedUnchanged": 7,
+  "failedQa": [
+    {
+      "diagram": "insulin",
+      "step": "rapid",
+      "similarity": 0.9954128440366973,
+      "mismatch": {
+        "at": 30,
+        "expected": "meal",
+        "heard": "mealtime",
+        "context": "hour it is meal time insulin"
+      },
+      "heard": "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in 10 to 30 minutes, peaks in 1 to 2 hours, and lasts 3 to 5 hours. It is mealtime insulin, and its exact timing follows the specific product and the prescribed plan."
+    }
+  ],
+  "errors": [],
+  "characters": 8331,
+  "takes": [
+    {
+      "diagram": "abg",
+      "step": "limits",
+      "take": 1,
+      "pass": false,
+      "similarity": 0.9969465648854962,
+      "mismatch": {
+        "at": 192,
+        "expected": "acute",
+        "heard": "and",
+        "context": "12 to 15 acute change on"
+      },
+      "heard": "Then, check the expected compensation. In metabolic acidosis, the PaCO2 should be about one and a half times the bicarbonate, plus eight, give or take two. In metabolic alkalosis, two rules are in use, about 0.7 times the bicarbonate, plus 21, or 40 plus 0.7 times the quantity bicarbonate minus 24. Each is give or take two, they differ by about two, and a value fitting either one counts. It rarely goes above about 55. For respiratory disorders, start from a PaCO2 of 40, and a bicarbonate of 24. In respiratory acidosis, the bicarbonate rises from 24 by about one to two for every 10 the PaCO2 is above 40, when it's acute, and about three and a half to four when it's chronic, give or take two. In respiratory alkalosis, it falls from 24 by about two for every 10 below 40, when acute, and about four to five when chronic, give or take two. References vary in these numbers. These are approximations that assume compensation is established. The respiratory acidosis rules are used up to a PaCO2 of about 80. Acute buffering rarely raises the bicarbonate above about 30 to 32, and respiratory alkalosis alone rarely takes it below about 12 to 15, and acute change on top of chronic disease can fall between the acute and chronic estimates. When the pH is in range, the pH alone doesn't tell you the primary process. Test each possible primary disorder against its expected compensation, and keep every one that fits. A value well outside them suggests a mixed disorder.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/abg--limits--take1.mp3"
+    },
+    {
+      "diagram": "abg",
+      "step": "limits",
+      "take": 2,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Then, check the expected compensation. In metabolic acidosis, the PaCO2 should be about one and a half times the bicarbonate, plus eight, give or take two. In metabolic alkalosis, two rules are in use, about 0.7 times the bicarbonate, plus 21, or 40 plus 0.7 times the quantity, bicarbonate minus 24. Each is give or take two, they differ by about two, and a value fitting either one counts. It rarely goes above about 55. For respiratory disorders, start from a PaCO2 of 40 and a bicarbonate of 24. In respiratory acidosis, the bicarbonate rises from 24 by about one to two for every 10 the PaCO2 is above 40, when it's acute, and about three and a half to four when it's chronic, give or take two. In respiratory alkalosis, it falls from 24 by about two for every 10 below 40, when acute, and about four to five when chronic, give or take two. References vary in these numbers. These are approximations that assume compensation is established. The respiratory acidosis rules are used up to a PaCO2 of about 80. Acute buffering rarely raises the bicarbonate above about 30 to 32, and respiratory alkalosis alone rarely takes it below about 12 to 15. An acute change on top of chronic disease can fall between the acute and chronic estimates. When the pH is in range, the pH alone doesn't tell you the primary process. Test each possible primary disorder against its expected compensation, and keep every one that fits. A value well outside them suggests a mixed disorder.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/abg--limits--take2.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hypo-ecg",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Low potassium can flatten the T wave, push the ST segment down, and add a prominent U wave just after the T. The strip is only an illustration and not every client shows every change.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/potassium--hypo-ecg--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hypo-care",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "The common causes are loop and thiazide diuretics, vomiting or NG suction, and diarrhea. IV potassium is never pushed or given into a muscle. It is diluted and run on an infusion pump while the heart is monitored. Before routine replacement, the potassium level, kidney function, and urine output are reviewed. Low output or impaired kidneys need the prescriber to review and individualize the plan, not an automatic decision to withhold it.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/potassium--hypo-care--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-ecg",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "High potassium can cause tall peaked T waves, a wider QRS and a flatter P wave, but these changes do not come in a reliable order, and the ECG can look normal even when the level is dangerous.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/potassium--hyper-ecg--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-care",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "How a raised potassium result is handled depends on the scenario. Assessing the client, cardiac monitoring, and prompt escalation are prioritized together, and can happen at the same time. For severe hyperkalemia, NCLEX priority reasoning uses three goals that are pursued alongside each other, under the prescribed protocol. The first, IV calcium gluconate stabilizes the heart, mainly when the ECG shows hyperkalemic changes. Giving it for a severely high level alone depends on the protocol. It does not lower the potassium, and severe hyperkalemia still needs urgent escalation, even with a normal ECG.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/potassium--hyper-care--take1.mp3"
+    },
+    {
+      "diagram": "potassium",
+      "step": "hyper-shift",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Alongside it, prescribed IV regular insulin with dextrose shifts potassium into the cells for a while. Blood glucose is monitored, because lows can still happen despite the dextrose, and potassium is rechecked as prescribed, because the shift wears off and it can rebound. And removing potassium from the body, most definitively with dialysis or with a potassium-wasting loop diuretic if the kidneys respond, is started as indicated, not saved until the others are finished.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/potassium--hyper-shift--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "isotonic",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Water moves toward the side with more effective solute. Effective solutes are the ones that can't freely cross the cell membrane in that time. Isotonic fluid has the same effective solute concentration as the cell, so there is no net water shift. Water keeps moving both ways at the same rate, and the cell keeps its size. Isotonic crystalloids, such as normal saline and lactated ringers, expand the fluid outside the cells, in the blood vessels, and in the tissues, which is why they are used to replace volume.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/tonicity--isotonic--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "hypotonic",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Hypotonic fluid has less effective solute than the inside of the cell, so water moves into the cell, and the cell swells.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/tonicity--hypotonic--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "hypertonic",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Hypertonic fluid, like 3% saline, has more effective solute than the cell, so water is pulled out of the cell and into the fluid around it, and the cell shrinks.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/tonicity--hypertonic--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "bags",
+      "take": 1,
+      "pass": false,
+      "similarity": 0.996415770609319,
+      "mismatch": {
+        "at": 37,
+        "expected": "iso",
+        "heard": "isoosmolar",
+        "context": "d5w is about iso osmolar in"
+      },
+      "heard": "Know which bag is which. These are the usual NCLEX categories, sorted by osmolarity in the bag. Osmolarity counts every particle, while tonicity is what actually changes cell size. They mostly agree, but dextrose is the catch. D5W is about isoosmolar in the bag, yet it acts hypotonic once the glucose is used.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/tonicity--bags--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "bags",
+      "take": 2,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Know which bag is which. These are the usual NCLEX categories, sorted by osmolarity in the bag. Osmolarity counts every particle, while tonicity is what actually changes cell size. They mostly agree, but dextrose is the catch. D5W is about iso-osmolar in the bag, yet it acts hypotonic once the glucose is used.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/tonicity--bags--take2.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "dextrose",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Dextrose is usually cleared quickly, but if it is given faster than the body can take it up, as with impaired insulin action, glucose builds up. Once it is used, the fluid acts like whatever is left. D5W and D10W become free water. D5 half normal saline acts like half normal saline, and D5 normal saline and D5 lactated ringers act like their isotonic bases. Once the dextrose has been used, 3% saline is the bag shown that stays hypertonic. But if glucose builds up instead, the dextrose fluids can raise plasma tonicity too.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/tonicity--dextrose--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "safety",
+      "take": 1,
+      "pass": false,
+      "similarity": 0.9878542510121457,
+      "mismatch": {
+        "at": 17,
+        "expected": "acute",
+        "heard": "in",
+        "context": "intracranial pressure or acute brain injury"
+      },
+      "heard": "Hypotonic fluid can make cerebral edema worse, so it is generally avoided with increased intracranial pressure or in acute brain injury. The right fluid depends on the whole clinical picture. And watch anyone on isotonic or hypertonic fluids for fluid overload.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/tonicity--safety--take1.mp3"
+    },
+    {
+      "diagram": "tonicity",
+      "step": "safety",
+      "take": 2,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Hypotonic fluid can make cerebral edema worse, so it is generally avoided with increased intracranial pressure or an acute brain injury. The right fluid depends on the whole clinical picture, and watch anyone on isotonic or hypertonic fluids for fluid overload.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/tonicity--safety--take2.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "idea",
+      "take": 1,
+      "pass": true,
+      "similarity": 1,
+      "mismatch": null,
+      "heard": "Every insulin has an onset—when it starts working—and a duration—how long it lasts. Most also have a peak—when they work hardest. Glargine U-100 has no pronounced peak.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/insulin--idea--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "rapid",
+      "take": 1,
+      "pass": false,
+      "similarity": 0.9954128440366973,
+      "mismatch": {
+        "at": 30,
+        "expected": "meal",
+        "heard": "mealtime",
+        "context": "hour it is meal time insulin"
+      },
+      "heard": "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in 10 to 30 minutes, peaks in 1 to 2 hours, and lasts 3 to 5 hours. It is mealtime insulin, and its exact timing follows the specific product and the prescribed plan.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/insulin--rapid--take1.mp3"
+    },
+    {
+      "diagram": "insulin",
+      "step": "rapid",
+      "take": 2,
+      "pass": false,
+      "similarity": 0.9954128440366973,
+      "mismatch": {
+        "at": 30,
+        "expected": "meal",
+        "heard": "mealtime",
+        "context": "hour it is meal time insulin"
+      },
+      "heard": "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in 10 to 30 minutes, peaks in 1 to 2 hours, and lasts 3 to 5 hours. It is mealtime insulin, and its exact timing follows the specific product and the prescribed plan.",
+      "error": null,
+      "file": "reports/narration-takes/2026-10-29T17-27-46-727Z/insulin--rapid--take2.mp3"
+    }
+  ],
+  "stopped": "insulin/rapid failed the audio check on both takes; the run stopped there and nothing after it was recorded."
+}
