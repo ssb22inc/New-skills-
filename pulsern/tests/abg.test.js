@@ -177,8 +177,8 @@ describe("compensation that goes too far", () => {
     expect(read(7.32, 60, 30)).toMatchObject({ disorder: "respiratory acidosis", mixedPossible: true });   // chronic 32 ± 2
     expect(read(7.32, 60, 30).mixed).toBeUndefined();
     expect(read(7.31, 60, 29).reading).toMatch(/lies between them/);   // acute 26 ± 2, chronic 32 ± 2
-    expect(read(7.39, 55, 32).reading).toMatch(/fits a chronic picture/);   // chronic 30 ± 2
-    expect(read(7.43, 30, 19).reading).toMatch(/fits a chronic picture/);   // chronic 19 ± 2
+    expect(read(7.39, 55, 32).reading).toMatch(/fits a PaCO₂ sustained for days/);   // chronic 30 ± 2
+    expect(read(7.43, 30, 19).reading).toMatch(/fits a PaCO₂ sustained for days/);   // chronic 19 ± 2
   });
   /* PR #134 review, finding 5: too LITTLE compensation can also mean a
      second disorder; the diagram has no timeline to assume "early". */
@@ -196,7 +196,7 @@ describe("compensation that goes too far", () => {
       const r = read(ph, paco2, hco3);
       expect(r).toMatchObject({ compensation: "none", mixedPossible: true });
       expect(r.mixed).toBeUndefined();
-      expect(r.reading).toMatch(/fits an acute picture; if the problem is chronic/);
+      expect(r.reading).toMatch(/fits a PaCO₂ change of hours; if this PaCO₂ has been sustained for days/);
     }
   });
   it("flags a respiratory acidosis whose bicarbonate has not risen even acutely", () => {
@@ -383,7 +383,7 @@ describe("round 4", () => {
   it("separates acute and chronic respiratory estimates (Sol: 7.28 / 60 / 27)", () => {
     const r = read(7.28, 60, 27);
     expect(r).toMatchObject({ disorder: "respiratory acidosis", compensation: "partial", mixedPossible: true });
-    expect(r.reading).toMatch(/fits an acute picture; if the problem is chronic, this HCO₃⁻ would suggest an added metabolic acidosis/);
+    expect(r.reading).toMatch(/fits a PaCO₂ change of hours; if this PaCO₂ has been sustained for days, this HCO₃⁻ would suggest an added metabolic acidosis/);
   });
   it("calls both values pushing the same way combined, not partial (Sol: 7.10 / 60 / 18)", () => {
     expect(read(7.1, 60, 18)).toMatchObject({ primary: "both", compensation: null });
@@ -440,5 +440,15 @@ describe("round 12", () => {
     expect(d("kidneys")).toMatch(/HCO₃⁻ is 24 mEq\/L, inside/);
     expect(d("worked")).toMatch(/Verdict: Respiratory acidosis/);
     expect(abg.steps.find((s) => s.key === "ph").desc(null)).not.toMatch(/This client/);
+  });
+});
+
+describe("round 13", () => {
+  it("names acute-on-chronic among the time courses between the estimates", () => {
+    expect(read(7.31, 60, 29).reading).toMatch(/an acute change on top of chronic disease/);
+    expect(read(7.31, 60, 29).caution).toMatch(/acute-on-chronic/);
+  });
+  it("tells the student what to do with a normal pH", () => {
+    expect(abg.steps.find((s) => s.key === "limits").caption).toMatch(/test each possible primary disorder against its expected compensation, and keep every one that fits/);
   });
 });

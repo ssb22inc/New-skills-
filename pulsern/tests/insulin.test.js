@@ -104,7 +104,7 @@ describe("worked example details", () => {
     for (const [type, dash] of [["nph", "2 4"], ["short", "7 4"], ["long", "11 4 2 4"]]) {
       const html = renderToStaticMarkup(React.createElement(StepContext.Provider, { value: { stepKey: "worked" } },
         React.createElement(InsulinDiagram, { params: { type, givenAt: "08:00" } })));
-      const worked = [...html.matchAll(/<path d="[^"]*" fill="none" stroke="var\(--teal\)" stroke-width="([\d.]+)"([^>]*)>/g)].filter((m) => Number(m[1]) > 3.5);
+      const worked = [...html.matchAll(/<path d="[^"]*" fill="none" stroke="var\(--accent-ink\)" stroke-width="([\d.]+)"([^>]*)>/g)].filter((m) => Number(m[1]) > 3.5);
       expect(worked.length, type).toBeGreaterThan(0);
       for (const m of worked) { expect(m[2]).toContain(`stroke-dasharray="${dash}"`); expect(m[2]).not.toContain("pathLength"); }
     }

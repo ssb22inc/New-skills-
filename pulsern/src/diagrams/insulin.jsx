@@ -106,6 +106,9 @@ const Mark = ({ x, y, label, dx = 0, dy = -10, anchor = "middle", color = C.acce
 /* One insulin: area, curve (drawn on its step), peak band, and — while its
    own step is on screen — onset / peak / end marks and a dot riding the
    curve to show the effect rising and falling. */
+/* Curves and their legend samples are drawn in the accent ink, which keeps
+   4.5:1 over the shaded peak window and area fills in both themes (Sol,
+   round 13: teal fell to about 3:1 there). */
 function Curve({ k, step }) {
   const ins = INSULINS[k], st = STYLE[k];
   const d = curvePath(ins, st.h);
@@ -119,7 +122,7 @@ function Curve({ k, step }) {
       <Anim on={step} kind="draw" dur={1400}>
         <path d={d} pathLength={1} fill="none" stroke={C.teal} strokeWidth={st.w + 3} strokeOpacity={0.12} strokeLinecap="round" />
       </Anim>
-      <path d={d} fill="none" stroke={C.teal} strokeWidth={st.w} strokeDasharray={st.dash} strokeLinecap="round" />
+      <path d={d} fill="none" stroke={C.accent} strokeWidth={st.w} strokeDasharray={st.dash} strokeLinecap="round" />
       <OnStep on={step} kind="pop" delay={900}>
         <Mark {...m.onset} label="onset" dy={18} dx={onLeft ? 4 : 0} anchor={onLeft ? "start" : "middle"} />
         {m.peak ? <Mark {...m.peak} label="peak" dy={-12} color={C.labInk} />
@@ -212,7 +215,7 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
           const lx = i % 2 ? 190 : 18, ly = 64 + Math.floor(i / 2) * 22;
           return (
             <g key={k}>
-              <line x1={lx} y1={ly - 5} x2={lx + 26} y2={ly - 5} stroke={C.teal} strokeWidth={STYLE[k].w} strokeDasharray={STYLE[k].dash} strokeLinecap="round" />
+              <line x1={lx} y1={ly - 5} x2={lx + 26} y2={ly - 5} stroke={C.accent} strokeWidth={STYLE[k].w} strokeDasharray={STYLE[k].dash} strokeLinecap="round" />
               <T x={lx + 32} y={ly} size={MIN_TEXT} weight={600}>{ins.name}</T>
             </g>
           );
@@ -287,7 +290,7 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
                 pattern, and the highlighted curve must keep its legend style
                 (Sol, round 2: NPH turned solid like rapid-acting). */}
             <Anim on="worked" kind="fade" dur={900}>
-              <path d={curvePath(mine, mst.h)} fill="none" stroke={C.teal} strokeWidth={mst.w + 1.6} strokeDasharray={mst.dash} strokeLinecap="round" />
+              <path d={curvePath(mine, mst.h)} fill="none" stroke={C.accent} strokeWidth={mst.w + 1.6} strokeDasharray={mst.dash} strokeLinecap="round" />
             </Anim>
             <Syringe x={X0 + 6} y={YTOP - 20} />
             <T x={doseX} y={YTOP - 18} size={MIN_TEXT} weight={700} mono color={C.accent}>{`dose ${params.givenAt}`}</T>
