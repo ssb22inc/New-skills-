@@ -6,25 +6,34 @@
      never starts the old item's audio;
    - moving from the question to its explanation (or to the next item)
      stops what was playing;
-   - a part refused by the check is shown, not voiced, and the rest plays. */
+   - a part refused by the check is shown, not voiced, and the rest plays;
+   - on a strict-autoplay browser, every passage still plays after one tap. */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 
 vi.mock("../src/supabase.js", () => ({ supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t" } } }) } } }));
 
-const { useReadAloud } = await import("../src/read-aloud.jsx");
-
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const SILENT_PREFIX = "data:audio/wav";
 
-/* Audio that records what was asked of it; a test ends a clip by hand. */
-let audios;
+/* Audio that records what it was asked to play. With strict = true it
+   behaves like Safari/iOS: an element may make sound only if it was first
+   played during a user gesture. A test ends a clip by hand. */
+const env = { gesture: false, strict: false, played: [], elements: [] };
 class FakeAudio {
-  constructor(src) { this.src = src; this.paused = true; this.dataset = {}; this.playbackRate = 1; audios.push(this); }
-  play() { this.paused = false; return Promise.resolve(); }
+  constructor(src) { this.src = src ?? ""; this.paused = true; this.dataset = {}; this.playbackRate = 1; this.unlocked = false; env.elements.push(this); }
+  play() {
+    if (env.strict && !this.unlocked && !env.gesture) return Promise.reject(Object.assign(new Error("not allowed"), { name: "NotAllowedError" }));
+    this.unlocked = true;
+    this.paused = false;
+    if (!String(this.src).startsWith(SILENT_PREFIX)) env.played.push(this.src);
+    return Promise.resolve();
+  }
   pause() { this.paused = true; }
   end() { this.paused = true; this.onended?.(); }
 }
+const player = () => env.elements.at(-1);
 
 /* The voice route, answered by the test: each request waits until the
    test resolves it, so timing is in the test's hands. */
@@ -35,27 +44,29 @@ function fetchStub(url, init) {
 }
 const answerAll = async (fn) => { const now = pending.splice(0); await act(async () => { for (const p of now) fn(p); }); };
 const urlFor = (p) => `https://signed.example/${p.body.ref.id}/${p.body.seg}`;
+const SEGS = [{ id: "stem", text: "Which value is the priority?" }, { id: "opt0", text: "Potassium 2.9." }, { id: "opt1", text: "Sodium 138." }];
+const REF = (id) => ({ kind: "question", id, part: "question" });
 
-let host, root, reader;
+/* A fresh copy of the module per test: its link cache, preferences and
+   shared player start empty, as on a fresh page. */
+let mod, host, root, reader;
 function Harness({ segments, itemKey, itemRef }) {
-  reader = useReadAloud(segments, itemKey, itemRef);
+  reader = mod.useReadAloud(segments, itemKey, itemRef);
   return null;
 }
 const render = async (props) => { await act(async () => root.render(<Harness {...props} />)); };
 const flush = async () => { await act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); }); };
+const tap = async (fn) => { await act(async () => { env.gesture = true; try { fn(); } finally { env.gesture = false; } }); };
+const gap = async (ms = 400) => { await act(async () => { await new Promise((r) => setTimeout(r, ms)); }); };
 
-const SEGS = [{ id: "stem", text: "Which value is the priority?" }, { id: "opt0", text: "Potassium 2.9." }, { id: "opt1", text: "Sodium 138." }];
-/* The voice client caches signed links for the page's life (as it should),
-   so each test uses item ids of its own. */
-let base = 0;
-const REF = (n) => ({ kind: "question", id: base + n, part: "question" });
-
-beforeEach(() => {
-  base += 100;
-  audios = []; pending = [];
+beforeEach(async () => {
+  Object.assign(env, { gesture: false, strict: false, played: [], elements: [] });
+  pending = [];
   vi.stubGlobal("Audio", FakeAudio);
   vi.stubGlobal("fetch", vi.fn(fetchStub));
   try { localStorage.clear(); } catch { /* ignore */ }
+  vi.resetModules();
+  mod = await import("../src/read-aloud.jsx");
   host = document.createElement("div"); document.body.appendChild(host);
   root = createRoot(host);
 });
@@ -63,112 +74,133 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 describe("useReadAloud, mounted", () => {
-  it("plays every checked part in order, highlighting each", async () => {
+  it("plays every checked part in order, highlighting each, through one shared player", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await act(async () => { reader.play(); });
+    await tap(() => reader.play());
     await flush();
     expect(pending.map((p) => p.body.seg)).toEqual(["stem", "opt0", "opt1"]); // the whole item is asked for at once
     await answerAll((p) => p.reply(200, { url: urlFor(p) }));
     await flush();
-    expect(audios.map((a) => a.src)).toEqual([`https://signed.example/${base + 1}/stem`]);
+    expect(env.played).toEqual(["https://signed.example/1/stem"]);
     expect(reader.active).toBe("stem");
     expect(reader.status).toBe("playing");
-    await act(async () => audios[0].end());
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
-    expect(audios.map((a) => a.src)).toEqual([`https://signed.example/${base + 1}/stem`, `https://signed.example/${base + 1}/opt0`]);
+    await act(async () => player().end());
+    await gap();
+    expect(env.played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt0"]);
     expect(reader.active).toBe("opt0");
+    expect(env.elements).toHaveLength(1);
+  });
+
+  it("plays every passage on a strict-autoplay browser after one tap, even when the voice was not cached", async () => {
+    env.strict = true;
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap(() => reader.play());
+    await flush();
+    await answerAll((p) => p.reply(200, { url: urlFor(p) })); // arrives after the tap is over
+    await flush();
+    expect(env.played).toEqual(["https://signed.example/1/stem"]);
+    await act(async () => player().end());
+    await gap();
+    await act(async () => player().end());
+    await gap();
+    expect(env.played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt0", "https://signed.example/1/opt1"]);
   });
 
   it("never starts audio when any part is still being prepared", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await act(async () => { reader.play(); });
+    await tap(() => reader.play());
     await flush();
     await answerAll((p) => (p.body.seg === "opt0" ? p.reply(202, { queued: true }) : p.reply(200, { url: urlFor(p) })));
     await flush();
-    expect(audios).toEqual([]);
+    expect(env.played).toEqual([]);
     expect(reader.status).toBe("preparing");
   });
 
   it("never starts audio when the voice is unavailable", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await act(async () => { reader.play(); });
+    await tap(() => reader.play());
     await flush();
     await answerAll((p) => p.reply(429, { error: "Daily voice limit reached" }));
     await flush();
-    expect(audios).toEqual([]);
+    expect(env.played).toEqual([]);
     expect(reader.status).toBe("unavailable");
   });
 
   it("shows a part refused by the check without voicing it, then plays the rest", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await act(async () => { reader.play(); });
+    await tap(() => reader.play());
     await flush();
     await answerAll((p) => (p.body.seg === "opt0" ? p.reply(422, { error: "Voice check failed" }) : p.reply(200, { url: urlFor(p) })));
     await flush();
-    await act(async () => audios[0].end());
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    await act(async () => player().end());
+    await gap();
     expect(reader.active).toBe("opt0");
     expect(reader.silent).toBe(true);
-    expect(audios).toHaveLength(1); // nothing was voiced for the refused part
-    await act(async () => { await new Promise((r) => setTimeout(r, 2500)); });
-    expect(audios.map((a) => a.src)).toEqual([`https://signed.example/${base + 1}/stem`, `https://signed.example/${base + 1}/opt1`]);
+    expect(env.played).toEqual(["https://signed.example/1/stem"]); // nothing voiced for the refused part
+    await gap(2500);
+    expect(env.played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt1"]);
   });
 
   it("does not start the old item's audio when its answer arrives after the item changed", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await act(async () => { reader.play(); });
+    await tap(() => reader.play());
     await flush();
     const late = pending.splice(0);
     await render({ segments: SEGS, itemKey: "q:2", itemRef: REF(2) }); // the student moved on
     await act(async () => { for (const p of late) p.reply(200, { url: urlFor(p) }); });
     await flush();
-    expect(audios).toEqual([]);
+    expect(env.played).toEqual([]);
     expect(reader.status).toBe("idle");
   });
 
   it("does not start audio when its answer arrives after the reader closed", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await act(async () => { reader.play(); });
+    await tap(() => reader.play());
     await flush();
     const late = pending.splice(0);
     await act(async () => root.unmount());
     await act(async () => { for (const p of late) p.reply(200, { url: urlFor(p) }); });
     await flush();
-    expect(audios).toEqual([]);
+    expect(env.played).toEqual([]);
     root = createRoot(host); // for afterEach
   });
 
   it("stops the question's audio when the explanation (or the next item) takes over", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await act(async () => { reader.play(); });
+    await tap(() => reader.play());
     await flush();
     await answerAll((p) => p.reply(200, { url: urlFor(p) }));
     await flush();
-    expect(audios[0].paused).toBe(false);
+    expect(player().paused).toBe(false);
     await render({ segments: [], itemKey: "off", itemRef: REF(1) }); // answered: the question reader switches off
-    expect(audios[0].paused).toBe(true);
+    expect(player().paused).toBe(true);
     expect(reader.status).toBe("idle");
-    expect(audios).toHaveLength(1);
+    expect(env.played).toHaveLength(1);
   });
 
-  it("never auto-starts a reader that has been switched off, even with read-each-new-one on", async () => {
-    localStorage.setItem("pulsern.readAloud.v1", JSON.stringify({ rate: 1, auto: true }));
+  it("with read-each-new-one ON, reads a new item by itself but never a reader switched off", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await act(async () => reader.setPrefs({ auto: true }));
+    expect(reader.prefs.auto).toBe(true);
+    // switched off, with something it could read: it must not start
     await render({ segments: SEGS, itemKey: "off", itemRef: REF(1) });
     await flush();
     expect(pending).toEqual([]);
-    expect(audios).toEqual([]);
+    // a new item: it starts by itself
+    await render({ segments: SEGS, itemKey: "q:2", itemRef: REF(2) });
+    await flush();
+    expect(pending.map((p) => p.body.ref.id)).toEqual([2, 2, 2]);
   });
 
   it("has no voice at all for an item outside the bank", async () => {
     await render({ segments: SEGS, itemKey: "q:local", itemRef: null });
     expect(reader.available).toBe(false);
-    await act(async () => { reader.play(); });
+    await tap(() => reader.play());
     await flush();
     expect(pending).toEqual([]);
-    expect(audios).toEqual([]);
+    expect(env.played).toEqual([]);
   });
 });

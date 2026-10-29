@@ -178,6 +178,10 @@ async function countSlots(bucket, dir) {
     if (!data || data.length < 1000) return n;
   }
 }
+/* "ok": a slot is held. "full": the cap is reached (or the slots are too
+   contended to claim one now). "error": the counters could not be read or
+   written. Anything but "ok" spends nothing; "error" is also reported as
+   an operational failure, never mistaken for a full budget. */
 async function claimSlot(storage, dir, limit) {
   const bucket = storage.from(BUCKET);
   let n = await countSlots(bucket, dir);
@@ -185,7 +189,7 @@ async function claimSlot(storage, dir, limit) {
     // First use: the bucket may not exist yet.
     await storage.createBucket(BUCKET, { public: false });
     n = await countSlots(bucket, dir);
-    if (n == null) return false;
+    if (n == null) return 'error';
   }
   let created = false;
   for (let tries = 0; tries < 25 && n < limit; tries++, n++) {
@@ -198,13 +202,13 @@ async function claimSlot(storage, dir, limit) {
       await storage.createBucket(BUCKET, { public: false });
       ({ error } = await slot());
     }
-    if (!error) return true;
+    if (!error) return 'ok';
     if (!/exist|duplicate|409/i.test(`${error.message ?? ''} ${error.statusCode ?? ''} ${error.error ?? ''}`)) {
       console.error('[read-aloud] budget slot', error.message ?? error, error.statusCode ?? '');
-      return false;
+      return 'error';
     }
   }
-  return false;
+  return 'full';
 }
 /* The voice job's paid calls (ops/read-aloud-worker.mjs): one slot per
    synthesis, on the day the call is made. Queueing a passage (admission,
@@ -217,7 +221,8 @@ export const reserveSpend = (storage, { now = Date.now(), limits = LIMITS } = {}
 export async function reserve(storage, userId, { now = Date.now(), limits = LIMITS, pool = 'admission' } = {}) {
   const day = quotaDay(now);
   const user = `usage/${day}/u-${sha256(String(userId)).slice(0, 24)}`;
-  if (!(await claimSlot(storage, user, limits.user))) return false;
+  const mine = await claimSlot(storage, user, limits.user);
+  if (mine !== 'ok') return mine;
   return pool === 'spend' ? reserveSpend(storage, { now, limits }) : claimSlot(storage, `usage/${day}/all`, limits.admission);
 }
 
@@ -253,7 +258,10 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
   try {
     for (let take = 1; take <= TAKES; take++) {
       // Every take is a paid call: each needs its own budget slot first.
-      if (beforeTake && !(await beforeTake())) { error = 'budget'; break; }
+      if (beforeTake) {
+        const slot = await beforeTake();
+        if (slot !== 'ok') { error = slot === 'error' ? 'budget counters unavailable' : 'budget'; break; }
+      }
       const r = await openai('/audio/speech', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: tts.model, voice: tts.voice, input: text, instructions: tts.instructions, response_format: 'mp3' }),
@@ -286,8 +294,11 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
                413 too large, 422 unprocessable): retrying it will not help;
      service   the account or setup is wrong (401, 403, 404): no passage is
                to blame, so nothing is recorded and the run stops;
+     storage   the budget counters could not be read or written: nothing
+               is spent, nothing recorded, and the run fails;
      transient anything else (rate limits, timeouts, 5xx): retry later. */
   const errorKind = !error ? null : error === 'budget' ? 'budget'
+    : error === 'budget counters unavailable' ? 'storage'
     : [400, 413, 422].includes(status) ? 'permanent'
     : [401, 403, 404].includes(status) ? 'service' : 'transient';
   if (error) console.error('[read-aloud] voice', error);
@@ -367,7 +378,9 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
   const overBudget = { status: 429, body: { error: 'Daily voice limit reached' } };
 
   if (!apiKey) {
-    if (!(await take())) return overBudget;
+    const slot = await take();
+    if (slot === 'error') return { status: 503, body: { error: 'Voice unavailable' } };
+    if (slot !== 'ok') return overBudget;
     const ok = await put(storage, queue, JSON.stringify({ text, voice: tts.voice, ref, seg, requestedAt: new Date(now).toISOString() }), 'application/json');
     if (!ok) return { status: 503, body: { error: 'Voice unavailable' } };
     return { status: 202, body: { queued: true } };
@@ -376,7 +389,7 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
   const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: pay });
   if (!final) {
     if (errorKind === 'budget') return overBudget;
-    if (errorKind === 'service') return { status: 503, body: { error: 'Voice unavailable' } };
+    if (errorKind === 'service' || errorKind === 'storage') return { status: 503, body: { error: 'Voice unavailable' } };
     if (errorKind === 'permanent') { await saveRejected(storage, text, error, { now, tts }); return { status: 422, body: { error: 'Voice check failed' } }; }
     return { status: 502, body: { error: 'Voice failed' } };
   }

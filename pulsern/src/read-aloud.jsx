@@ -119,6 +119,24 @@ export const shouldAutoRead = (key, auto, count) => key !== "off" && key != null
 /* One reader speaks at a time across the page. */
 let speaking = null; // { owner, stop }
 
+/* One audio element for every passage, made and started inside the
+   student's tap on Listen. Strict browsers (Safari, iOS) allow sound only
+   from an element first played during a user gesture; a fresh element per
+   passage, created after network waits, could be blocked. Reusing this one
+   keeps every later passage, and auto-read, allowed. */
+const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+let player = null;
+export function unlockPlayer() {
+  if (typeof Audio === "undefined") return null;
+  if (!player) { player = new Audio(); player.dataset.readAloud = "1"; player.preload = "auto"; }
+  if (!player.dataset.unlocked) {
+    player.src = SILENT;
+    const p = player.play();
+    if (p?.then) p.then(() => { player.dataset.unlocked = "1"; }, () => {});
+  }
+  return player;
+}
+
 /* ---------- the hook ---------- */
 /* segments: [{ id, text }]. key: changes when the item changes, which
    stops reading and, with "Read each new one" on, reads the new one.
@@ -177,10 +195,11 @@ export function useReadAloud(segments, key, ref = null) {
         await wait(readingMs(step.text, prefsRef.current.rate), signal);
       } else {
         const playUrl = (url) => new Promise((resolve, reject) => {
-          const audio = new Audio(url);
+          const audio = unlockPlayer();
+          if (!audio) { reject(new Error("NO_AUDIO")); return; }
+          audio.src = url;
           audio.playbackRate = prefsRef.current.rate;
           audio.preservesPitch = true;
-          audio.dataset.readAloud = "1";
           me.audio = audio;
           audio.onended = resolve; audio.onerror = () => reject(new Error("PLAYBACK"));
           signal.addEventListener("abort", resolve, { once: true });
@@ -209,11 +228,13 @@ export function useReadAloud(segments, key, ref = null) {
     if (!signal.aborted && run.current === me) { run.current = null; resumeAt.current = 0; setActive(null); setSilent(false); setStatus("idle"); }
   }, [halt]);
 
-  const play = React.useCallback(() => playFrom(0), [playFrom]);
+  /* Listen and Resume are taps: unlock the shared player inside them,
+     before any waiting, so the audio that follows is allowed. */
+  const play = React.useCallback(() => { unlockPlayer(); return playFrom(0); }, [playFrom]);
   /* Pause stops at the current part; resume repeats that part from its
      start, so no sentence is heard in two halves. */
   const pause = React.useCallback(() => { halt(); setStatus("paused"); }, [halt]);
-  const resume = React.useCallback(() => playFrom(resumeAt.current), [playFrom]);
+  const resume = React.useCallback(() => { unlockPlayer(); return playFrom(resumeAt.current); }, [playFrom]);
   const stop = React.useCallback(() => { halt(); resumeAt.current = 0; setActive(null); setSilent(false); setStatus("idle"); }, [halt]);
   stopRef.current = stop;
 

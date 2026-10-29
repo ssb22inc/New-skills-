@@ -45,6 +45,7 @@ async function voiceOne({ storage, apiKey, fetchImpl, text, now, limits }) {
   if (!r.final) {
     if (r.errorKind === "budget") return { result: "budget", spent: r.spent };
     if (r.errorKind === "service") return { result: "service", spent: r.spent, error: r.error };
+    if (r.errorKind === "storage") return { result: "storage", spent: r.spent, error: r.error };
     if (r.errorKind === "permanent") {
       if (!(await saveRejected(storage, text, r.error, { now: now() }))) return { result: "transient", spent: r.spent, error: "could not save" };
       return { result: "rejected", spent: r.spent, error: r.error };
@@ -96,6 +97,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
     out.spent += v.spent;
     if (v.result === "budget") { out.budget = true; break; }
     if (v.result === "service") { out.service = v.error; break; }
+    if (v.result === "storage") { out.operational = true; out.errors.push(`storage: ${v.error}`); break; }
     if (v.result === "transient") {
       const attempts = (job.attempts ?? 0) + 1;
       if (attempts >= MAX_ATTEMPTS) {
@@ -183,6 +185,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       const v = await voiceOne({ storage, apiKey, fetchImpl, text, now, limits });
       out.spent += v.spent;
       if (v.result === "budget") { out.budget = true; return "budget"; }
+      if (v.result === "storage") { out.failure = true; return `storage: ${v.error}`; }
       if (v.result === "service" || v.result === "transient") { out.failure = true; return `provider: ${v.error}`; }
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
       out[v.result]++;

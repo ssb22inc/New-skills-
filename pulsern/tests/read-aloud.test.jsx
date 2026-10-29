@@ -716,6 +716,29 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(r.failed).toBe(true);
   });
 
+  it("fails the run, with a storage diagnostic, when the spending counters are broken (not a full budget)", async () => {
+    const good = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage: good.storage }); // queued while counters worked
+    const real = good.storage.from(BUCKET);
+    const brokenCounters = { ...real, list: async (dir, o) => (dir.includes("/spend") ? { data: null, error: { message: "Internal error" } } : real.list(dir, o)) };
+    const storage = { ...good.storage, from: () => brokenCounters };
+    const f = fakeOpenAI();
+    const r = await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 10, log: () => {} });
+    expect(r.failed).toBe(true);
+    expect(r.lines.join("\n")).toMatch(/storage: budget counters unavailable/);
+    expect(r.lines.join("\n")).not.toMatch(/budget is used up/);
+    expect(f).not.toHaveBeenCalled(); // still nothing spent
+  });
+
+  it("fails the run when the counters break while voicing the bank", async () => {
+    const good = fakeStorage();
+    const real = good.storage.from(BUCKET);
+    const brokenCounters = { ...real, list: async (dir, o) => (dir.includes("/spend") ? { data: null, error: { message: "Internal error" } } : real.list(dir, o)) };
+    const r = await runJob({ storage: { ...good.storage, from: () => brokenCounters }, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 10, log: () => {} });
+    expect(r.failed).toBe(true);
+    expect(r.bank.stopped).toMatch(/^storage:/);
+  });
+
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
     const { storage } = fakeStorage();
     expect((await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 2, log: () => {} })).failed).toBe(false);
@@ -763,10 +786,10 @@ describe("server voice: daily budgets", () => {
     expect(out.some((r) => r.status === 429)).toBe(true);
   });
 
-  it("refuses (and spends nothing) when the budget counters cannot be read or written", async () => {
+  it("refuses (and spends nothing) when the budget counters cannot be read or written, and says so as an outage, not a full budget", async () => {
     const f = fakeOpenAI(), { storage, files } = fakeStorage({ failCounters: true });
-    expect((await speak({ ...base(), storage, fetchImpl: f })).status).toBe(429);
-    expect((await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f })).status).toBe(429);
+    expect((await speak({ ...base(), storage, fetchImpl: f })).status).toBe(503);
+    expect((await speak({ ...base({ apiKey: "" }), storage, fetchImpl: f })).status).toBe(503);
     expect(f).not.toHaveBeenCalled();
     expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
   });
