@@ -1,0 +1,31 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:09:09.609Z",
+  "images": 16,
+  "key": "53d066dd0311ff72",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "clinical",
+      "where": "Clinical claim 6; src/diagrams/insulin.jsx, insulin.facts entry describing other basal insulins",
+      "title": "Degludec duration needs a lower-bound qualifier",
+      "problem": "Degludec labeling describes glucose-lowering activity lasting at least 42 hours after repeated daily dosing. \"About 42 hours\" turns that demonstrated lower bound into an approximate endpoint.",
+      "fix": "Change to \"degludec lasts at least 42 hours at steady state,\" retaining the qualification that action times vary.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2880985
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "One minor clinical precision issue. No blocker found in the supplied insulin worked-example logic, including midnight rollover.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}

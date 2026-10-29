@@ -1,0 +1,31 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T13:15:46.620Z",
+  "images": 14,
+  "key": "8bf7ae4aa84a7752",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "src/explainer.jsx — p.dg-caption aria-live=\"polite\" and the audio playback effect; narrated versions of steps standard through transport",
+      "title": "Narration and screen-reader announcements can speak over each other",
+      "problem": "The caption remains a live region while recorded narration plays. Advancing a step updates that caption and starts the next audio clip, allowing duplicate or competing speech. The screenshots cannot demonstrate this, and screen-reader playback was not supplied for verification.",
+      "fix": "Disable automatic caption live-region announcements when recorded narration is active. Keep captions and diagram descriptions available for manual reading, and test step advancement with VoiceOver and NVDA.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.294106
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No confirmed clinical or pictured-label errors in the isolation content. One accessibility defect remains in narrated playback.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}

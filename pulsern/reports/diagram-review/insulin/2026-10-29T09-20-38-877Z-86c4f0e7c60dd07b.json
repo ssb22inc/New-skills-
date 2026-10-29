@@ -1,0 +1,40 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T09:20:38.877Z",
+  "images": 16,
+  "key": "86c4f0e7c60dd07b",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "insulin.jsx: workedText; inline diagram, accessible description and step 'worked' when params.type is 'rapid' (not pictured)",
+      "title": "Rapid-acting examples are falsely identified as lispro",
+      "problem": "workedText uses ins.eg.split(',')[0], so every rapid-acting case is labeled LISPRO. The parameters establish only the class; an aspart or glulisine question would acquire an unsupported drug identity. The default NPH screenshots conceal this error.",
+      "fix": "Display 'Rapid-acting insulin' unless an independently validated product name is supplied. Add tests ensuring aspart and glulisine cases cannot be relabeled lispro.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "Images 4 and 12; step 'short' caption/narration; INSULINS.short.eg and dynamicCaption",
+      "title": "U-100 restriction disappears from regular-insulin wording",
+      "problem": "The facts and table correctly restrict these times to regular U-100, but the caption and narration say 'Regular insulin given subcutaneously' and then 'Given IV.' The short step hides the note containing the U-500 exception. This makes the spoken claim broader than the intended product: regular U-500 has different action times and must not be administered IV. Generated short-acting worked captions also omit U-100.",
+      "fix": "Specify 'regular U-100' in the caption, narration and generated worked labels. Explicitly attach the IV comparison to regular U-100 rather than regular insulin generally.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.274931
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Revise before publishing. The worked-example logic invents a specific rapid-acting drug, and the regular-insulin narration drops a safety-critical concentration qualifier.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}

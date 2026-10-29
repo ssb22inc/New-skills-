@@ -1,0 +1,40 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T09:50:23.429Z",
+  "images": 14,
+  "key": "53a4205d9fcffa9c",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "Step \"transport\", caption and narration; images 7 and 14; fact 8 and DESC",
+      "title": "“Keep wearing” PPE can carry contaminated contact PPE into the corridor",
+      "problem": "The blanket instruction that staff keep wearing the precaution’s PPE also applies to the gown and gloves required for chickenpox, which this step explicitly emphasizes. That teaches retaining potentially contaminated room PPE during transport. It also incorrectly treats an N95 as an unconditional airborne-transport requirement: CDC permits transport personnel to forgo respiratory protection when the client is masked and infectious skin lesions are covered.",
+      "fix": "Separate transport PPE from room-entry PPE. Teach removal of contaminated gown/gloves and hand hygiene before transport, with clean PPE for subsequent handling when indicated. Describe escort respiratory protection using pathogen-specific guidance and facility policy rather than saying to keep all precaution PPE on.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "ROWS.contact.room and ROWS.droplet.room; steps \"contact\" and \"droplet\", captions and narration; corresponding rows throughout both themes",
+      "title": "Cohorting compatibility condition disappears from the actual teaching",
+      "problem": "Facts 2 and 3 require both the same pathogen and compatible additional precautions. The visible rows, captions and narration reduce that to a same-pathogen cohort. Sharing one pathogen does not establish roommate compatibility—for example, two clients with MRSA are not automatically compatible if only one also has C. difficile.",
+      "fix": "Include “same pathogen and compatible additional infections/precautions” in both rendered room descriptions and both spoken steps. Retain infection-prevention review when suitable placement is unavailable.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2487985
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Do not publish. The transport instruction can teach unsafe PPE use, and the student-facing cohorting advice omits a safety condition present in the facts.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}

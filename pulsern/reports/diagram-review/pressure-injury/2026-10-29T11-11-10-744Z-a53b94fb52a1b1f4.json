@@ -1,0 +1,21 @@
+{
+  "id": "pressure-injury",
+  "title": "Pressure injury stages",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T11:11:10.744Z",
+  "images": 16,
+  "key": "a53b94fb52a1b1f4",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.2894435
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No substantiated errors found in the supplied pressure-injury images, clinical claims, captions, narration scripts, or rendering logic.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}

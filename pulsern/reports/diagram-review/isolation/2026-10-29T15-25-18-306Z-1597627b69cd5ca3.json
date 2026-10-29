@@ -1,0 +1,21 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T15:25:18.306Z",
+  "images": 14,
+  "key": "1597627b69cd5ca3",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.2747135
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No substantiated errors found in the supplied isolation diagram, captions, narration scripts, or relevant rendering logic. The isolation renderer has no patient-dependent interpretation branches.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T08:55:16.495Z",
+  "images": 14,
+  "key": "681ad3c968bd7700",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "isolation.jsx: CONDITIONS rubella entries and precautionFor()",
+      "title": "Congenital rubella can incorrectly select Droplet",
+      "problem": "precautionFor(\"A newborn has congenital infection caused by rubella virus.\") returns droplet precautions. The congenital entry recognizes only the adjacent phrase \"congenital rubella\"; the generic rubella entry then defaults to acquired disease. This labels surgical-mask precautions as needed while failing to select Contact.",
+      "fix": "Use structured congenital/acquired status, or abstain when the form cannot be established. Recognize congenital status beyond one exact adjacent phrase. Add this input as a regression test expecting Contact or null, never Droplet.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "isolation.jsx: unsettled(), currentMatch(), precautionFor()",
+      "title": "Later-sentence treatment status is ignored",
+      "problem": "precautionFor(\"The client has head lice. Effective treatment was completed 48 hours ago.\") returns Contact and produces \"Needed for this client.\" Treatment cues are checked only in sentences naming a recognized condition, so the second sentence is ignored. This contradicts the diagram's own 24-hour discontinuation rule. The same defect affects resolution information for other infections.",
+      "fix": "Resolve treatment and resolution status across the relevant client narrative before asserting current precautions. Prefer structured condition/status inputs; otherwise return null when a later sentence may change applicability. Add split-sentence regression cases.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "Images 1, 3–5, 7, 8, 10–12 and 14: Contact/Droplet Room text; steps contact and droplet",
+      "title": "The displayed cohorting rule drops the compatibility requirement",
+      "problem": "Fact 2 requires compatible additional precautions, but the picture and narration reduce eligibility to having the same pathogen. \"Clients with the same pathogen can share\" is too permissive: an influenza-only client should not be cohorted solely on influenza status with a client who also has C. difficile.",
+      "fix": "Keep the qualification in the visible rows, captions and narration: cohort only with the same pathogen and compatible concurrent infection/precaution status, considering roommate risks. Do not leave this condition solely in the facts or SVG description.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "clinical",
+      "where": "Images 1, 7, 8 and 14: Transport panel; step transport caption/narration; fact 8",
+      "title": "Varicella transport teaching omits covering lesions",
+      "problem": "The transport instruction gives masking as the action and explicitly includes chickenpox, but never teaches covering affected skin lesions. Airborne transport guidance also calls for covering varicella/zoster lesions to reduce contact transmission and dispersal from lesions; a surgical mask does not address that route.",
+      "fix": "Add the lesion-covering requirement to the transport panel and narration. State that the client wears a surgical mask if tolerated and that affected varicella/zoster lesions are covered during essential transport.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "visual",
+      "where": "isolation.jsx: ContactScene(), live contact-step animation",
+      "title": "The contact animation never makes contact",
+      "problem": "The glove's lowest point is y + 28, and its maximum downward translation is 8, so it stops at y + 36 while the rail is at y + 46. The supposed transferred germ is drawn six units below the glove rather than on it. The animation therefore does not show the touch-and-carry mechanism it was written to demonstrate.",
+      "fix": "Adjust the motion so the glove visibly touches the contaminated rail, then lifts away. Position the transferred germ on the glove and synchronize its appearance with the contact phase.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.3005585
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Hold publication. The condition matcher has reproducible wrong-precaution branches. The visible cohorting and transport instructions also omit relevant safety conditions.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 2,
+    "major": 3,
+    "minor": 0
+  }
+}

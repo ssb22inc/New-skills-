@@ -1,0 +1,112 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-28T22:39:24.546Z",
+  "images": 16,
+  "key": "f82cbaac08db346f",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "Images 2 and 10; step \"idea\" caption and narration; step \"risk\"",
+      "title": "Not every insulin has a pronounced peak",
+      "problem": "\"Every insulin has ... a peak (when it works hardest)\" contradicts the glargine teaching later. The risk step then discusses only peaking insulins without stating that peakless basal insulin can also cause hypoglycemia.",
+      "fix": "Introduce onset, duration, and peak when present. Explicitly state that glargine U-100 has no pronounced peak and that hypoglycemia can occur outside peak windows and with peakless insulin.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "area": "visual",
+      "where": "Images 1–16; insulin.jsx curvePath(), landmarks(), and onset/ends annotations",
+      "title": "The curves contradict the timing landmarks",
+      "problem": "Every curve rises immediately from hour 0, before its stated onset. The onset circles sit on the baseline beneath an already-rising curve, particularly visibly for NPH and glargine. Glargine's \"ends\" marker is at 24 hours while the plotted effect is still half its plateau height.",
+      "fix": "Keep each representative curve on the baseline until its illustrative onset and place the onset marker on the actual path. For glargine, show approximate waning or continuation beyond the plotting boundary rather than labeling a substantial remaining effect \"ends.\"",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "clinical",
+      "where": "All images; chart heading, table, facts, and Frame description",
+      "title": "The action-time table never specifies the route",
+      "problem": "These are conventional subcutaneous action profiles, but the diagram presents them simply as insulin action times. Regular insulin is also tested as an IV medication, where the displayed onset and duration do not apply. The regular-insulin row also lacks the formulation restriction supplied for glargine.",
+      "fix": "Label the table as typical subcutaneous action times. Specify conventional regular U-100 and exclude IV administration and regular U-500 from that row.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "rules",
+      "where": "Images 3, 7, 11, and 15; steps \"rapid\" and \"risk\"; rapid-meal annotation",
+      "title": "The explainer switches into treatment instructions",
+      "problem": "\"Give it with a meal\" and \"make sure food and glucose checks line up with it\" are direct administration and monitoring instructions, contrary to the educational-only register. \"Give with a meal\" also reads as a universal administration rule across products with different labeled meal timing.",
+      "fix": "Use exam-prep framing: rapid-acting insulin is associated with meals, and questions may test increased hypoglycemia risk near an expected peak. State that actual administration timing and monitoring depend on the specific product and prescribed plan.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "visual",
+      "where": "insulin.jsx worked group; unpictured params.type=\"rapid\" or \"short\"",
+      "title": "Early peak labels are displaced and overlap the dose time",
+      "problem": "The Math.max(X0 + 78, ...) clamp forces the clock-window label to x=116 for rapid and regular insulin. Their peak bands occupy approximately x=51–64 and x=64–89 respectively. The label therefore lies outside or largely outside its band without a leader, and its left edge overlaps the dose-time text at nearly the same baseline.",
+      "fix": "Provide a dedicated callout area with a leader to the actual peak band, or use an expanded early-hours inset. Test worked examples for every supported insulin type, not only NPH.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "All images; table, chart ticks, and step annotations",
+      "title": "Essential text is too small at phone width",
+      "problem": "Table entries use 11 SVG units, ticks use 10, and landmark labels use 9.5. On the 360-unit canvas these become roughly 9–10 CSS pixels or less on a narrow phone after container padding. The enlarged screenshots conceal the practical reading problem. The SVG text also does not follow the app's reading-size setting.",
+      "fix": "Move the timing table into responsive HTML or stacked cards with readable CSS text. Enlarge essential chart labels and support text scaling rather than shrinking the entire drawing to fit.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "Images 2–8 and 10–16; kit.jsx G() opacity handling",
+      "title": "Context text fails contrast in both themes",
+      "problem": "Out-of-focus groups retain their text at 18% opacity. The table, timing note, and other context become effectively unreadable and fall well below the required 4.5:1 contrast. These are informational text, not disabled controls.",
+      "fix": "Dim decorative paths and fills separately from text. Keep retained context text at compliant contrast, or remove nonessential content from the step instead of displaying an illegible version.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "explainer.jsx onKey(); player controls in images 2–8 and 10–16",
+      "title": "Space cannot activate navigation buttons normally",
+      "problem": "The section-level key handler intercepts Space from every descendant button, prevents its default activation, and toggles playback. A keyboard user focusing Previous, Next, or a step dot gets playback behavior instead of the button's advertised action.",
+      "fix": "Do not handle global playback shortcuts when the event target is an interactive control. Preserve native Space activation for buttons and their existing onClick handlers.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "rules",
+      "where": "explainer.jsx verificationLabel(rnVerified) and dg-ai rendering",
+      "title": "RN verification removes mandatory AI disclosure",
+      "problem": "When rnVerified=true, the component replaces the sparkle AI label and verify-against-your-materials note with only \"RN-verified.\" The owner amendment requires all AI content to retain both disclosures; human verification does not create an exception.",
+      "fix": "Display RN verification as an additional status while retaining the AI label and verification note in both branches.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "consistency",
+      "where": "Images 8 and 16; insulin.jsx worked overlay path",
+      "title": "The worked curve breaks the line-style legend",
+      "problem": "The worked overlay uses a solid stroke for every insulin. The pictured NPH curve therefore changes from dotted to solid even though the visible legend assigns solid to rapid-acting insulin. Regular and glargine worked examples have the same inconsistency.",
+      "fix": "Preserve mst.dash on the emphasized worked curve and identify the selected insulin directly beside it.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.231261
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Do not publish. The introduction incorrectly gives every insulin a peak, and the plotted curves contradict their onset/end markers. Unpictured worked-example branches also have layout errors. The player has accessibility and AI-labeling failures.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 2,
+    "major": 7,
+    "minor": 1
+  }
+}

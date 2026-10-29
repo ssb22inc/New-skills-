@@ -1,0 +1,21 @@
+{
+  "id": "abg",
+  "title": "ABG: acid–base reading",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T11:19:27.759Z",
+  "images": 16,
+  "key": "49cb5b1006b83be5",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.322776
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No verified clinical error, incorrect interpretation branch, or image/text mismatch identified in the supplied ABG material. Recorded audio, live playback behavior, and the app-level NCSBN trademark footer were not independently verifiable.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}

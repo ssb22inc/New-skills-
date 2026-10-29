@@ -1,0 +1,31 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T13:38:48.144Z",
+  "images": 16,
+  "key": "a752ce138041bc84",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "accessibility",
+      "where": "Images 9–15, dark-theme amber peak bands; insulin.jsx Curve()",
+      "title": "Peak overlays defeat the stated 4.5:1 contrast target",
+      "problem": "The dark-theme accent trace crossing the 55%-opacity amber bands has approximately 3.0–3.2:1 contrast against the composited background, not the claimed 4.5:1. This misses the project's explicit target, although non-text graphics ordinarily have a 3:1 WCAG threshold.",
+      "fix": "Reduce the amber fill opacity or separate the trace from the band with a card-colored halo. Test the composited colors, including the underlying teal area fill, rather than checking palette tokens alone.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.3139835
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "One confirmed contrast-rule failure. No incorrect clock-window branch was found for the supported insulin types, including midnight rollover and peakless glargine.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}

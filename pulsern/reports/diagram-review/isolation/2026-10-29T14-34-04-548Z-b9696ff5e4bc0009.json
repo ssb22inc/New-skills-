@@ -1,0 +1,21 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:34:04.548Z",
+  "images": 14,
+  "key": "b9696ff5e4bc0009",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.2645135
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No actionable defect found in the isolation claims, supplied images, captions, narration scripts, or isolation-specific rendering logic. There is no patient-specific classification branch to audit. Recorded audio and live keyboard/reduced-motion behavior could not be verified from screenshots and source alone.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}

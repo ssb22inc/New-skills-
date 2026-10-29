@@ -1,0 +1,40 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:54:22.799Z",
+  "images": 16,
+  "key": "0776b4dd683ab083",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "pedagogy",
+      "where": "Images 5 and 13; step \"nph\" caption and narration; worked-example wording",
+      "title": "Distinguish time-to-peak variability from peak duration",
+      "problem": "\"Has a long, broad peak from about 4 to 12 hours\" can teach that an individual NPH dose stays at peak effect for eight hours. The listed range describes when peak action may occur, not a guaranteed duration of maximal action. Calling the whole computed interval the window when hypoglycemia is \"most likely\" reinforces that interpretation.",
+      "fix": "Say \"NPH's peak typically occurs 4–12 hours after the dose; the timing varies.\" Describe the worked interval as an expected peak-related risk window, not eight hours of sustained peak effect.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "minor",
+      "area": "clinical",
+      "where": "Clinical claim 6; insulin.facts entry describing other basal insulins",
+      "title": "Degludec's 42-hour duration needs its lower-bound qualifier",
+      "problem": "\"Degludec about 42 hours\" drops the important qualifier: product labeling reports glucose-lowering action lasting at least 42 hours at steady state. Forty-two hours should not be memorized as its expected stopping time.",
+      "fix": "Change this to \"degludec lasts at least 42 hours at steady state.\"",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.3039385
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Two wording corrections remain. The dose-to-clock calculations, midnight rollovers and peakless-glargine branch are correct.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2
+  }
+}

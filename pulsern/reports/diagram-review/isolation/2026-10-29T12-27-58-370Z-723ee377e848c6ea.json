@@ -1,0 +1,40 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T12:27:58.370Z",
+  "images": 14,
+  "key": "723ee377e848c6ea",
+  "findings": [
+    {
+      "severity": "major",
+      "area": "pedagogy",
+      "where": "Images 4 and 11; step \"cdiff\" caption and narration; fact 9",
+      "title": "“On the exam, the answer is soap and water” is an unsupported guarantee",
+      "problem": "The narration turns a commonly taught preference into a universal NCLEX answer rule. Hand-hygiene questions still depend on what the stem asks, including timing, contamination and applicable guidance. The subsequent practice-policy caveat does not undo the instruction to answer differently merely because it is an exam.",
+      "fix": "Remove the categorical exam claim. State that soap and water physically removes spores and is commonly emphasized after C. difficile care in nursing exam preparation; tell students to apply the question’s circumstances and their current course references. Preserve the distinction that alcohol-based hand rub is not sporicidal.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "visual",
+      "where": "Images 7 and 14; step \"transport\"; focus array and Explainer scroll behavior",
+      "title": "The transport lesson starts below two unnecessary full precaution rows",
+      "problem": "The step repeats the complete droplet and airborne panels before showing the transport panel and caption. At phone width, these repeats consume most of a typical viewport. Explainer scrolls to the section’s top, so narration can begin while the transport instructions and most of their caption are below the fold.",
+      "fix": "Focus the transport panel instead of repeating both full rows. Put compact masked-client illustrations beside it, explicitly labeled as client source control. Keep the transport instructions and the beginning of their caption visible together when the step opens.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.279616
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Needs revision: the C. difficile step teaches a categorical exam-answer shortcut, and the transport step buries its actual teaching content below repeated material.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}

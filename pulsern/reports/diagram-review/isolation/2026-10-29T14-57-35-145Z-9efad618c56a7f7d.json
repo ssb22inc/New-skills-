@@ -1,0 +1,31 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:57:35.145Z",
+  "images": 14,
+  "key": "9efad618c56a7f7d",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "rules",
+      "where": "Images 1, 4, 8 and 11; isolation.jsx, cdiff panel",
+      "title": "Correct hand-hygiene advice is styled as an error or critical state",
+      "problem": "The coral border and danger-colored heading emphasize “C. diff: soap and water,” a correct precaution rather than an incorrect action or a defined critical state. This conflicts with the reserved coral meaning.",
+      "fix": "Use teal for the recommended action, or amber if the panel is intended as a caution about alcohol rub and spores.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.276266
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No clinical or rendering blocker identified in the supplied isolation diagram. One minor palette-rule issue.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}

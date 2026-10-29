@@ -1,0 +1,31 @@
+{
+  "id": "tonicity",
+  "title": "IV fluid tonicity",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T09:46:11.678Z",
+  "images": 14,
+  "key": "27b4801103888545",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "accessibility",
+      "where": "src/explainer.jsx: start(); images 1 and 8, opening 'Watch the explainer'",
+      "title": "Opening the explainer drops keyboard focus",
+      "problem": "Starting the explainer unmounts the focused Watch button without transferring focus. scrollIntoView() only scrolls; it does not focus the player. Keyboard users lose their active control at the transition.",
+      "fix": "Move focus to the persistent section before removing the Watch button, or focus the Play button after the step controls mount. Use preventScroll to avoid a second scroll.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2605885
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No confirmed clinical or diagram-content errors. One keyboard-accessibility defect remains in the shared player.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}

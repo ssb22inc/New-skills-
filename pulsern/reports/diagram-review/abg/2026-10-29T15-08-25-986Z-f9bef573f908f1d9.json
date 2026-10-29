@@ -1,0 +1,40 @@
+{
+  "id": "abg",
+  "title": "ABG: acid–base reading",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T15:08:25.986Z",
+  "images": 16,
+  "key": "f9bef573f908f1d9",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "src/diagrams/abg.jsx — MODEL_TOLERANCE, abgConsistency(), and the computed worked-example verdict",
+      "title": "The consistency tolerance admits a false fully compensated reading",
+      "problem": "interpretAbg({ ph: 7.35, paco2: 60, hco3: 30 }) passes validation and returns fully compensated respiratory acidosis. Its implied pH is approximately 7.322. Even allowing whole-number rounding of PaCO₂ and HCO₃⁻ and the analyzer constants listed in the source, the highest compatible unrounded pH is approximately 7.336—insufficient to report 7.35. The symmetric +0.015 allowance incorrectly permits this: the stated analyzer variation does not shift pH upward by that amount. An inconsistent triad therefore becomes authoritative teaching at the acidemia/normal boundary.",
+      "fix": "Derive asymmetric consistency bounds directly from the supported pK and CO₂-solubility ranges, together with reporting precision, rather than adding a symmetric model tolerance. Add this exact triad as a regression test requiring a recheck verdict, not a compensation label.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "Step \"limits\" — caption and narration versus the rules panel in images 1, 7, 9, and 15",
+      "title": "The spoken algorithm omits its applicability limits",
+      "problem": "The panel limits respiratory-acidosis estimates to PaCO₂ up to about 80 and includes the bicarbonate guardrails, but the caption and narration give the equations without those restrictions. For example, pH 7.15 / PaCO₂ 100 / HCO₃⁻ 34 fits the acute equation as narrated, while the interpreter explicitly returns compensation not evaluable at that PaCO₂. A student following the spoken instructions can reach a reading the tool refuses.",
+      "fix": "Include the interpreter's approximately 80-mmHg applicability limit in both caption and narration. Also state the acute bicarbonate and respiratory-alkalosis bicarbonate cautions, preserving their approximate—not absolute—wording. Keep the spoken method aligned with the displayed rules and computed verdicts.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.1232959
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Hold publication. The consistency check admits an internally contradictory gas and labels it fully compensated. The limits narration also omits restrictions that the displayed rules and interpreter enforce.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}

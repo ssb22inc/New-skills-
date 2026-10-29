@@ -1,0 +1,121 @@
+{
+  "id": "abg",
+  "title": "Reading an ABG",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-28T22:29:52.903Z",
+  "images": 14,
+  "key": "6fa4599de2e991ef",
+  "findings": [
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "abg.jsx — interpretAbg(), normal-pH branch",
+      "title": "Valid single disorders are labeled inconsistent",
+      "problem": "A normal pH does not require both PaCO₂ and HCO₃⁻ to be outside their reference ranges. For pH 7.36, PaCO₂ 36, HCO₃⁻ 19.7, the function says the pattern does not fit a single disorder. These values are internally consistent and fit metabolic acidosis with appropriate respiratory compensation: Winter's expected PaCO₂ is approximately 35.6–39.6 mmHg.",
+      "fix": "Evaluate primary-disorder and compensation relationships even when one value remains within its population reference range. Do not infer inconsistency or a mixed disorder merely from the number of out-of-range values. Add this case as a regression test.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "abg.jsx — interpretAbg() input validation and all interpretation branches",
+      "title": "The engine confidently interprets impossible value combinations",
+      "problem": "Only finiteness is validated. For pH 7.20, PaCO₂ 60, HCO₃⁻ 36, the engine returns partially compensated respiratory acidosis. Those PaCO₂ and bicarbonate values imply a pH near 7.40, not 7.20. On an ABG, calculated bicarbonate must be consistent with measured pH and PaCO₂. The current engine can turn extraction or question-authoring errors into authoritative teaching.",
+      "fix": "Check positive PaCO₂/HCO₃⁻ values and Henderson–Hasselbalch consistency before classification, allowing reasonable reporting and exam-rounding tolerance. For gross discrepancies, withhold the verdict and request rechecking. Distinguish calculated ABG bicarbonate from separately measured serum total CO₂ if both are supported.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "Fact 6; abg.jsx — interpretAbg(), normal-pH primary selection",
+      "title": "The 7.40 shortcut is treated as proof of the primary disorder",
+      "problem": "Which side of 7.40 a normal pH occupies cannot establish which disorder came first. For pH 7.39, PaCO₂ 32, HCO₃⁻ 18.7, the engine selects metabolic acidosis and reports possible added respiratory alkalosis. This internally consistent gas is also compatible with chronic respiratory alkalosis using the stated chronic response and usual tolerance. The code never evaluates that alternative because the pH shortcut selects the primary first.",
+      "fix": "Present the 7.40 lean as a basic exam heuristic, not a diagnostic rule. Evaluate plausible respiratory and metabolic primary disorders against expected compensation and available time-course information before selecting a verdict. Preserve uncertainty when more than one interpretation remains plausible.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "abg.jsx — compensationLimit(), respiratory branches",
+      "title": "Inflated compensation envelopes can conceal a second disorder",
+      "problem": "The respiratory checks start from the entire 22–26 bicarbonate range and then add another ±2 allowance. This is wider than the standard response calculated from approximately 24 with one tolerance. For pH 7.38, PaCO₂ 70, HCO₃⁻ 40, the function accepts HCO₃⁻ 23–40 and declares fully compensated respiratory acidosis with mixedPossible=false. The usual chronic expectation is about 36, approximately 34–38 with a ±2 allowance; 40 warrants consideration of added metabolic alkalosis.",
+      "fix": "Use referenced acute and chronic expectations with an explicitly justified tolerance rather than stacking baseline-range uncertainty and an additional allowance. If baseline or chronicity prevents discrimination, report that uncertainty instead of excluding a mixed disorder. Add upper- and lower-bound regression cases.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "area": "clinical",
+      "where": "Images 4 and 11; step \"kidneys\" caption and narration",
+      "title": "Bicarbonate is incorrectly said to determine whether blood is acidic or alkaline",
+      "problem": "\"Below 22 leaves the blood acidic, above 26 makes it alkaline\" is false. Elevated bicarbonate commonly accompanies acidemic respiratory acidosis, and low bicarbonate can accompany alkalemic respiratory alkalosis. Fact 3 correctly describes a directional push; the teaching script changes that into a guaranteed pH result.",
+      "fix": "Say that low bicarbonate pushes toward acidosis and high bicarbonate pushes toward alkalosis, while the actual pH depends on its relationship to PaCO₂. Apply the same wording to caption and narration.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "consistency",
+      "where": "abg.jsx — PaCO₂/HCO₃⁻ Gauge calls; kit.jsx — Gauge formatting",
+      "title": "Displayed values can disagree with the caption and threshold classification",
+      "problem": "PaCO₂ and HCO₃⁻ default to zero displayed decimal places, but interpretation and dynamic captions retain decimals. For an internally consistent gas such as pH 7.34, PaCO₂ 45.4, HCO₃⁻ 23.7, the diagram displays PaCO₂ 45 as an abnormal marker beyond the normal limit of 45, while the caption says 45.4. HCO₃⁻ becomes 24 in the picture but remains 23.7 in the caption.",
+      "fix": "Preserve supplied clinically meaningful precision across markers, captions and narration. Ensure displayed precision cannot place a visibly normal boundary value in an abnormal classification. Test decimal inputs around every threshold.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "All images — range labels, ROME annotations, compensation tiles and result chip; kit.jsx — Chip",
+      "title": "Essential teaching text is too small at phone width",
+      "problem": "Several essential labels use 9.5–10.5 SVG-unit text, which becomes roughly 8–10 CSS pixels in the phone layout. The screenshots are enlarged raster renders, not evidence that this text is readable at its actual display size. Longer computed mixed-disorder verdicts are further shrunk to fit a single line.",
+      "fix": "Reflow the diagram into responsive sections with readable on-device text sizes. Wrap long verdicts instead of shrinking them. Test at actual 320–360 CSS-pixel viewport widths, including long mixed-disorder labels and enlarged text settings.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "Light images 1–7 — coral text; dark result chips; kit.jsx — G opacity",
+      "title": "Text contrast fails the required 4.5:1",
+      "problem": "Light-theme coral #D9503F is approximately 4.0:1 against white and 3.8:1 against the light surface, so the acid/alkalosis labels and verdict fail the project threshold. Dark coral on the dark surface is approximately 4.48:1, also just below it. Dimming contextual groups to 18% opacity makes their text effectively unreadable, including the pH line students are asked to compare during the lungs step.",
+      "fix": "Use the accessible danger-ink token for text rather than the decorative coral token. Replace extreme opacity dimming with emphasis that preserves readable contextual text, such as a focus outline or background. Verify contrast after compositing opacity in both themes.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "accessibility",
+      "where": "explainer.jsx — section onKeyDown handler",
+      "title": "Space does not activate the focused navigation button",
+      "problem": "The section intercepts every bubbling Space key, prevents its default action and toggles playback. Consequently, pressing Space on Next, Previous or a step-dot button toggles Play/Pause instead of activating that focused button.",
+      "fix": "Do not apply player-wide Space handling to events originating from buttons or other interactive elements. Preserve native button keyboard activation and test navigation using keyboard input only.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "area": "rules",
+      "where": "explainer.jsx — verificationLabel(true) and verification footer",
+      "title": "RN verification removes mandatory AI provenance",
+      "problem": "The rnVerified=true branch replaces both the ✨ AI label and the verify-against-course-materials note with only \"RN-verified\". The owner amendment explicitly requires all AI content to retain both disclosures. The pictured default state complies, but the alternate publication state does not.",
+      "fix": "Always retain the ✨ AI provenance and verification note for AI-origin content. Display RN verification as an additional badge, not a replacement.",
+      "confidence": "high"
+    },
+    {
+      "severity": "minor",
+      "area": "rules",
+      "where": "Images 1, 5, 8 and 12; abg.jsx — BloodIcon and Lift",
+      "title": "Coral is used for neutral physiology",
+      "problem": "The generic blood icon and the metabolic lift's direction chevrons are coral even though neither denotes an incorrect or critical state. This breaks the reserved colour meaning.",
+      "fix": "Use teal or a neutral token for the generic blood symbol and same-direction motion arrows. Reserve coral for abnormal or critical indicators.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.261806
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "Do not publish. The interpreter rejects valid single-disorder gases, accepts physiologically inconsistent inputs, and can misassign or miss mixed disorders. The images also expose phone-readability and contrast failures. Shared player code breaks keyboard behavior and the mandatory AI-label rule.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 5,
+    "major": 5,
+    "minor": 1
+  }
+}
