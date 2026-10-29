@@ -42,8 +42,8 @@
 // request is queued in the private bucket and the voice job
 // (ops/read-aloud-worker.mjs, every 15 minutes) voices and checks it; the
 // app reads it with the device voice until then (202).
-import { createHash } from 'node:crypto';
-import { scriptFor, itemParts } from '../src/read-aloud-script.js';
+import { createHash, randomUUID } from 'node:crypto';
+import { scriptFor, itemParts, voiceable } from '../src/read-aloud-script.js';
 import { audioCheck, speechTokens, QA_MODEL, QA_VERSION } from '../ops/narrate-lib.mjs';
 
 export const SPEAK_MAX = 1500; // above the script's PART_MAX (900): a part always fits
@@ -247,28 +247,50 @@ async function claimOutcome(bucket, marker, timeOf) {
 }
 
 /* One synthesis per passage at a time, live or scheduled: a claim keyed
-   by the passage, with a lease (a request that dies part-way does not hold
-   it for ever; one later caller takes it over through a marker storage
-   creates once). "mine": go ahead (then recheck the record); "busy":
-   someone else is voicing it; "error": storage trouble. */
+   by the passage, holding when it was taken and who holds it. The lease
+   lets a later caller take over from a request that died part-way (through
+   a marker storage creates once). The holder never outlives its lease: all
+   its paid work must END by `deadline` (makeChecked stops starting calls
+   and aborts any call still running), well inside the lease, so a claim is
+   only ever taken over from a holder that has stopped. Release removes the
+   claim only while it is still the holder's own.
+   Returns { state: "mine", owner, deadline } (go ahead, then recheck the
+   record), { state: "busy" } (someone else is voicing it) or
+   { state: "error" } (storage trouble). */
 export const PASSAGE_LEASE_MS = 120000;
+export const PASSAGE_WORK_MS = 90000;
 export const PASSAGE_WAIT = { tries: 50, ms: 500 };
 const claimPath = (text, tts) => `claims/${tts.voice}-${passagePaths(text, tts).key}`;
+const readClaim = async (storage, path) => {
+  const { data, error } = await storage.from(BUCKET).download(path);
+  if (error) return isMissing(error) ? { missing: true } : { error };
+  const [since, owner] = String(typeof data?.text === 'function' ? await data.text() : data ?? '').trim().split(' ');
+  return { since: Number(since), owner };
+};
 export async function claimPassage(storage, text, timeOf = () => Date.now(), tts = TTS) {
   const path = claimPath(text, tts);
-  const made = await createOnce(storage, path, String(timeOf()));
-  if (made !== 'exists') return made === 'created' ? 'mine' : 'error';
-  const { data, error } = await storage.from(BUCKET).download(path);
-  if (error) return isMissing(error) ? claimPassage(storage, text, timeOf, tts) : 'error';
-  const since = Number(String(typeof data?.text === 'function' ? await data.text() : data ?? '').trim());
-  if (Number.isFinite(since) && timeOf() - since <= PASSAGE_LEASE_MS) return 'busy';
-  const take = await createOnce(storage, `${path}.takeover-${Number.isFinite(since) ? since : 0}`);
-  if (take !== 'created') return take === 'exists' ? 'busy' : 'error';
-  const { error: upError } = await storage.from(BUCKET).upload(path, String(timeOf()), { contentType: 'text/plain', upsert: true });
-  return upError ? 'error' : 'mine';
+  const owner = randomUUID();
+  const mine = (at) => ({ state: 'mine', owner, deadline: at + PASSAGE_WORK_MS });
+  const at = timeOf();
+  const made = await createOnce(storage, path, `${at} ${owner}`);
+  if (made !== 'exists') return made === 'created' ? mine(at) : { state: 'error' };
+  const held = await readClaim(storage, path);
+  if (held.missing) return claimPassage(storage, text, timeOf, tts);
+  if (held.error) return { state: 'error' };
+  if (Number.isFinite(held.since) && timeOf() - held.since <= PASSAGE_LEASE_MS) return { state: 'busy' };
+  const take = await createOnce(storage, `${path}.takeover-${Number.isFinite(held.since) ? held.since : 0}`);
+  if (take !== 'created') return { state: take === 'exists' ? 'busy' : 'error' };
+  const at2 = timeOf();
+  const { error: upError } = await storage.from(BUCKET).upload(path, `${at2} ${owner}`, { contentType: 'text/plain', upsert: true });
+  return upError ? { state: 'error' } : mine(at2);
 }
-export async function releasePassage(storage, text, tts = TTS) {
-  const { error } = await storage.from(BUCKET).remove([claimPath(text, tts)]);
+export async function releasePassage(storage, text, tts = TTS, claim = null) {
+  const path = claimPath(text, tts);
+  const held = await readClaim(storage, path);
+  if (held.missing) return true;
+  if (held.error) { console.error('[read-aloud] release', held.error.message ?? held.error); return false; }
+  if (claim && held.owner !== claim.owner) return true; // taken over: the claim is no longer ours to remove
+  const { error } = await storage.from(BUCKET).remove([path]);
   if (error) console.error('[read-aloud] release', error.message ?? error);
   return !error;
 }
@@ -363,9 +385,18 @@ async function signed(bucket, path) {
    and held to voiceCheck. Returns the best take (passing if any did) and
    how many syntheses were paid for. Shared by the live route and the
    queue worker (ops/read-aloud-worker.mjs). */
-export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, beforeTake = null }) {
-  const openai = (path, init) => fetchImpl(`https://api.openai.com/v1${path}`, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${apiKey}` } });
+/* No provider call runs longer than CALL.ms, and none runs past `deadline`
+   (the passage claim's end of work): a call that would is not started, and
+   one still running then is aborted. Either is a transient failure. */
+export const CALL = { ms: 40000, min: 5000 };
+export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, beforeTake = null, deadline = Infinity, timeOf = () => Date.now() }) {
+  const openai = (path, init) => {
+    const left = deadline - timeOf();
+    if (left < CALL.min) throw new Error('out of time for this passage');
+    return fetchImpl(`https://api.openai.com/v1${path}`, { ...init, signal: AbortSignal.timeout(Math.min(CALL.ms, left)), headers: { ...(init.headers ?? {}), Authorization: `Bearer ${apiKey}` } });
+  };
   let best = null, spent = 0, error = null, status = 0;
+  if (!voiceable(text)) return { best, spent, error: 'not voiceable', errorKind: 'permanent', final: false };
   try {
     for (let take = 1; take <= TAKES; take++) {
       // Every take is a paid call: each needs its own budget slot first.
@@ -491,6 +522,8 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
   const parts = scriptFor(ref, item);
   const part = parts.find((s) => s.id === seg);
   if (!part || part.text !== text) return { status: 409, body: { error: 'Text does not match the item' } };
+  // A sign that could be read two ways is never voiced: the student reads it on screen.
+  if (!voiceable(text)) return { status: 422, body: { error: 'Read this part on screen' } };
 
   const { mp3, queue, retry } = passagePaths(text, tts);
   const bucket = storage.from(BUCKET);
@@ -585,8 +618,8 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
      asking for the same words waits for that result instead of paying
      again. */
   const claim = await claimPassage(storage, text, timeOf, tts);
-  if (claim === 'error') return unavailable;
-  if (claim === 'busy') {
+  if (claim.state === 'error') return unavailable;
+  if (claim.state === 'busy') {
     for (let i = 0; i < PASSAGE_WAIT.tries; i++) {
       await new Promise((r) => setTimeout(r, PASSAGE_WAIT.ms));
       const done = await readRecord(storage, text, tts, timeOf());
@@ -601,12 +634,12 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
     if (now2?.pass === true) { const link = await signed(bucket, mp3); if (link.url) return { status: 200, body: { url: link.url, cached: true } }; }
     if (now2?.pass === false) return { status: 422, body: { error: 'Voice check failed' } };
     return await synthesiseLive();
-  } finally { await releasePassage(storage, text, tts); }
+  } finally { await releasePassage(storage, text, tts, claim); }
 
   async function synthesiseLive() {
     // Every take claims a spending slot on the day it is made.
     const pay = () => reserve(storage, userId, { now: timeOf(), limits, pool: 'spend' });
-    const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: pay });
+    const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: pay, deadline: claim.deadline, timeOf });
     if (!final) {
       if (errorKind === 'budget') return overBudget;
       if (errorKind === 'service' || errorKind === 'storage') return unavailable;

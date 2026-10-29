@@ -11,9 +11,9 @@ import { createHash } from "node:crypto";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts } from "../src/read-aloud-script.js";
+import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts, voiceable } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
-import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, claimPassage } from "../api/_speak.js";
+import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
 import { passagePaths } from "../api/_speak.js";
@@ -57,15 +57,6 @@ describe("question script", () => {
     expect(segs.map((s) => s.id)).toEqual(["stem", "opt0", "opt1"]);
     expect(segs[2].text).toBe("Temp 36.8 degrees Celsius.");
     expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening, First Visit");
-    // a separator between readings is a pause, never an operation
-    expect(speakable("Temperature example: 36.8 °C · 98.2 °F")).toBe("Temperature example: 36.8 degrees Celsius, 98.2 degrees Fahrenheit");
-    expect(speakable("HR 110 · RR 24 · SpO2 91%")).toBe("HR 110, RR 24, S P O 2 91%");
-    expect(speakable("Weight 70 kg · 154 lb")).toBe("Weight 70 kg, 154 lb");
-    // a times sign outside a calculation is a size
-    expect(speakable("A 3 × 4 cm wound")).toBe("A 3 by 4 cm wound");
-    // the calculation is only the clause that reaches "="
-    expect(speakable("Weight 70 kg · 154 lb. Dose: 0.1 mg/kg · 70 kg = 7 mg")).toBe("Weight 70 kg, 154 lb. Dose: 0.1 milligrams per kilogram times 70 kg equals 7 mg");
-    expect(voiceCheck(speakable("36.8 °C · 98.2 °F"), "36.8 °C times 98.2 °F").pass).toBe(false);
     const quoted = questionSegments({ type: "mc", stem: "Which response is best?", options: ["\"Tell me more.\"", "(Stay with the client.)", "Call the provider"] });
     expect(quoted.slice(2).map((s) => s.text)).toEqual(["\"Tell me more.\"", "(Stay with the client.)", "Call the provider."]);
   });
@@ -75,26 +66,45 @@ describe("question script", () => {
     expect(segs[1]).toEqual({ id: "exhibit0", text: "Vital signs. BP 88/50 millimeters of mercury" });
   });
 
-  it("speaks calculation signs instead of dropping them, and checks them", () => {
-    const sc = speakable("Dose = 0.1 mg/kg · 70 kg = 7 mg");
+  it("speaks only the signs with one meaning, and never guesses at the rest", () => {
+    // one meaning: said in words
+    const sc = speakable("Dose = 0.1 mg/kg × 70 kg = 7 mg");
     expect(sc).toBe("Dose equals 0.1 milligrams per kilogram times 70 kg equals 7 mg");
-    expect(speakable("2 × 3 = 6")).toBe("2 times 3 equals 6");
+    expect(voiceable(sc)).toBe(true);
+    expect(speakable("5 * 2 = 10")).toBe("5 times 2 equals 10");
+    expect(speakable("A 3 × 4 cm wound")).toBe("A 3 times 4 cm wound");
+    // a middle dot before words separates them: a pause
     expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening, First Visit");
-    // a separator between readings is a pause, never an operation
-    expect(speakable("Temperature example: 36.8 °C · 98.2 °F")).toBe("Temperature example: 36.8 degrees Celsius, 98.2 degrees Fahrenheit");
-    expect(speakable("HR 110 · RR 24 · SpO2 91%")).toBe("HR 110, RR 24, S P O 2 91%");
-    expect(speakable("Weight 70 kg · 154 lb")).toBe("Weight 70 kg, 154 lb");
-    // a times sign outside a calculation is a size
-    expect(speakable("A 3 × 4 cm wound")).toBe("A 3 by 4 cm wound");
-    // the calculation is only the clause that reaches "="
-    expect(speakable("Weight 70 kg · 154 lb. Dose: 0.1 mg/kg · 70 kg = 7 mg")).toBe("Weight 70 kg, 154 lb. Dose: 0.1 milligrams per kilogram times 70 kg equals 7 mg");
-    expect(voiceCheck(speakable("36.8 °C · 98.2 °F"), "36.8 °C times 98.2 °F").pass).toBe(false);
+    expect(speakable("HR 110 · RR 24, MAP = 65")).toBe("HR 110, RR 24, MAP equals 65"); // an equation later changes nothing
+    // a middle dot before a number, or an x between numbers, could be either: not voiced at all
+    for (const t of ["Calculate 0.1 mg/kg · 70 kg.", "Dose = 0.1 mg/kg · 70 kg = 7 mg", "Temperature example: 36.8 °C · 98.2 °F", "A 3 x 4 cm wound", "2x3"]) {
+      expect(voiceable(speakable(t))).toBe(false);
+    }
+    expect(voiceable(speakable("Take 2x daily"))).toBe(true);
     // the check accepts the same calculation however it is written, and nothing else
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg × 70 kg = 7 mg").pass).toBe(true);
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg x 70 kg = 7 mg").pass).toBe(true);
     expect(voiceCheck(sc, "Dose equals 0.1 mg/kg, 70 kg equals 7 mg").pass).toBe(false); // the multiplication dropped
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg plus 70 kg = 7 mg").pass).toBe(false);
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg x 70 kg = 70 mg").pass).toBe(false);
+  });
+
+  it("an unsure part is shown, never voiced, queued or paid for", async () => {
+    const row = { ...ROW, id: 7, rationale: "Dose: 0.1 mg/kg · 70 kg." };
+    const parts = itemParts("question", row);
+    expect(parts.length).toBeGreaterThan(0);
+    expect(parts.every((x) => voiceable(x.text))).toBe(true);
+    expect(parts.some((x) => x.text.includes("·"))).toBe(false); // the explanation is left out
+    const fb = questionFeedbackSegments(row, { correct: false, points: 0, max: 1 });
+    const rat = fb.find((x) => !voiceable(x.text));
+    expect(rat).toBeTruthy();
+    const { storage, files } = fakeStorage();
+    const f = fakeOpenAI();
+    const readItem = async () => row;
+    const r = await speak({ ...base({ readItem, ref: { kind: "question", id: 7, part: "feedback", result: { correct: false, points: 0, max: 1 } }, seg: rat.id, text: rat.text }), storage, fetchImpl: f });
+    expect(r.status).toBe(422);
+    expect(f).not.toHaveBeenCalled();
+    expect([...files.keys()].filter((k) => k.startsWith("usage/") || k.startsWith("queue"))).toEqual([]);
   });
 
   it("spells out units and dosing shorthand, and nothing else", () => {
@@ -1226,8 +1236,8 @@ describe("server voice: daily budgets", () => {
     it("takes over a claim whose request died, after its lease", async () => {
       const { storage, files } = fakeStorage();
       let t = Date.UTC(2026, 9, 29, 16);
-      expect(await claimPassage(storage, Q1.text, () => t)).toBe("mine"); // and then that request died
-      expect(await claimPassage(storage, Q1.text, () => t + 1000)).toBe("busy");
+      expect((await claimPassage(storage, Q1.text, () => t)).state).toBe("mine"); // and then that request died
+      expect((await claimPassage(storage, Q1.text, () => t + 1000)).state).toBe("busy");
       t += PASSAGE_LEASE_MS + 1000;
       const f = fakeOpenAI();
       expect((await speak({ ...base(), storage, fetchImpl: f, now: t })).status).toBe(200);
@@ -1235,10 +1245,51 @@ describe("server voice: daily budgets", () => {
       expect([...files.keys()].filter((k) => k.startsWith("claims/") && !k.includes(".takeover-"))).toEqual([]); // released
     });
 
+    it("ends all paid work inside the lease, so a holder is never taken over while it is still working", async () => {
+      expect(PASSAGE_WORK_MS).toBeLessThan(PASSAGE_LEASE_MS);
+      const { storage } = fakeStorage();
+      let t = Date.UTC(2026, 9, 29, 16);
+      const f = fakeOpenAI(["Potassium 9.2 milliequivalents per liter."]); // every take heard wrong
+      // each call takes 50 seconds: the second take would run past the claim's end of work
+      const slow = vi.fn(async (url, init) => { t += 50000; return f(url, init); });
+      const r = await speak({ ...base(), storage, fetchImpl: slow, clock: () => t });
+      expect(r.status).toBe(502); // stopped short, nothing final recorded: tried again later
+      expect(slow).toHaveBeenCalledTimes(2); // one take (speech + transcription), and no call started past the deadline
+      expect(t - Date.UTC(2026, 9, 29, 16)).toBeLessThan(PASSAGE_LEASE_MS);
+    });
+
+    it("aborts a provider call still running at the claim's end of work", async () => {
+      const saved = { ...CALL };
+      CALL.ms = 30; CALL.min = 1;
+      try {
+        const { storage } = fakeStorage();
+        let signal = null;
+        const hang = vi.fn((url, init) => { signal = init.signal; return new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true })); });
+        const r = await speak({ ...base(), storage, fetchImpl: hang });
+        expect(signal?.aborted).toBe(true);
+        expect(r.status).toBe(502);
+        expect(hang).toHaveBeenCalledTimes(1);
+      } finally { Object.assign(CALL, saved); }
+    });
+
+    it("never removes a claim that has passed to someone else", async () => {
+      const { storage, files } = fakeStorage();
+      let t = Date.UTC(2026, 9, 29, 16);
+      const first = await claimPassage(storage, Q1.text, () => t);
+      t += PASSAGE_LEASE_MS + 1000;
+      const second = await claimPassage(storage, Q1.text, () => t);
+      expect(second.state).toBe("mine");
+      expect(second.owner).not.toBe(first.owner);
+      await releasePassage(storage, Q1.text, TTS, first); // the first holder finishes late
+      expect((await claimPassage(storage, Q1.text, () => t + 1000)).state).toBe("busy"); // still the second's
+      await releasePassage(storage, Q1.text, TTS, second);
+      expect([...files.keys()].filter((k) => k.startsWith("claims/") && !k.includes(".takeover-"))).toEqual([]);
+    });
+
     it("the voice job leaves a passage being voiced live for its next run", async () => {
       const { storage, files } = fakeStorage();
       await speak({ ...base({ apiKey: "" }), storage });
-      expect(await claimPassage(storage, Q1.text)).toBe("mine"); // a live request is voicing it
+      expect((await claimPassage(storage, Q1.text)).state).toBe("mine"); // a live request is voicing it
       const f = fakeOpenAI();
       const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
       expect(f).not.toHaveBeenCalled();

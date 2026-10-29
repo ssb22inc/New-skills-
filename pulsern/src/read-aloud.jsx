@@ -27,7 +27,7 @@
    Not used in readiness exams (src/exam.jsx): they stay exam conditions. */
 import React from "react";
 import { supabase } from "./supabase.js";
-import { partOf } from "./read-aloud-script.js";
+import { partOf, voiceable } from "./read-aloud-script.js";
 
 const PREFS_KEY = "pulsern.readAloud.v1";
 export const RATES = [0.8, 1, 1.25];
@@ -199,7 +199,7 @@ export function useReadAloud(segments, key, ref = null) {
 
     /* Ask for every part at once: either the whole item is ready, or the
        whole item goes to the voice job together (never half a question). */
-    const ask = (s, fresh = false) => voice.url(itemRef, s.id, s.text, { fresh }).then((url) => ({ url }), (e) => ({ status: e?.status ?? 0, after: e?.after }));
+    const ask = (s, fresh = false) => !voiceable(s.text) ? Promise.resolve({ status: 422 }) : voice.url(itemRef, s.id, s.text, { fresh }).then((url) => ({ url }), (e) => ({ status: e?.status ?? 0, after: e?.after }));
     const outcomes = await Promise.all(segs.map((s) => ask(s)));
     if (signal.aborted) return;
     const plan = planReading(segs, outcomes);

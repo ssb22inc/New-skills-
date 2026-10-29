@@ -202,6 +202,22 @@ describe("useReadAloud, mounted", () => {
     expect(env.played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt1"]);
   });
 
+  it("never asks the server for a part whose signs could be read two ways; shows it on screen in turn", async () => {
+    const segs = [SEGS[0], { id: "opt0", text: "0.1 milligrams per kilogram · 70 kg." }, SEGS[2]];
+    await render({ segments: segs, itemKey: "q:2", itemRef: REF(2) });
+    await tap(() => reader.play());
+    await flush();
+    expect(pending.map((p) => p.body.seg)).toEqual(["stem", "opt1"]);
+    await answerAll((p) => p.reply(200, { url: urlFor(p) }));
+    await flush();
+    await act(async () => player().end());
+    await gap();
+    expect(reader.active).toBe("opt0");
+    expect(reader.silent).toBe(true);
+    await gap(3500); // its reading time on screen
+    expect(env.played).toEqual(["https://signed.example/2/stem", "https://signed.example/2/opt1"]);
+  });
+
   it("does not start the old item's audio when its answer arrives after the item changed", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap(() => reader.play());

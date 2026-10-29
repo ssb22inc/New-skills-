@@ -52,24 +52,27 @@ const SPOKEN = [
   [/>/g, " greater than "],
 ];
 
-/* Calculation signs are spoken, never dropped, and never invented. A sign
-   is only multiplication inside a calculation, a clause that goes on to
-   "=" ("0.1 mg/kg · 70 kg = 7 mg"). Elsewhere a middle dot separates
-   items ("36.8 °C · 98.2 °F", "Newborn Screening · First Visit") and is
-   read as a pause, and a times sign between numbers is a size ("3 × 4 cm
-   wound"), read as "by". */
-const OPERATOR = /\s*(?:[·×∙*]|(?<=\d)\s*x)\s*(?=\d)/gi;
-function operators(clause) {
-  const eq = clause.lastIndexOf("=");
-  const calc = (i) => eq > i;
-  let s = clause.replace(OPERATOR, (m, i) => (calc(i) ? " times " : /[·∙]/.test(m) ? ", " : " by "));
-  return s.replace(/\s+[·∙]\s+/g, ", ");
+/* Calculation signs are spoken, never dropped, and never invented. Only
+   signs with one meaning are put into words: "×" and "*" between numbers
+   are "times", "=" is "equals". A middle dot before words separates them
+   ("Newborn Screening · First Visit") and is read as a pause. A middle dot
+   before a number ("0.1 mg/kg · 70 kg", or "36.8 °C · 98.2 °F") and an "x"
+   between numbers ("3 x 4") may be multiplication or a separator, and
+   nothing on the page says which: that passage is not voiced at all
+   (voiceable), so the student reads it on screen as written. */
+const UNSURE = /[·∙]\s*(?=\d)|\d\s*x\s*(?=\d)/i;
+export const voiceable = (script) => !UNSURE.test(String(script ?? ""));
+function operators(text) {
+  return text
+    .replace(/\s*×\s*/g, " times ")
+    .replace(/(\d)\s*\*\s*(?=\d)/g, "$1 times ")
+    .replace(/\s*[·∙]\s*(?=[^\d\s])/g, ", ");
 }
 
 /* Text for the voice: clinical shorthand spelled out, symbols the screen
    uses for layout removed, whitespace tidied. */
 export function speakable(text) {
-  let s = String(text ?? "").split(/(?<=[.;!?])\s+|\n+/).map(operators).join(" ");
+  let s = operators(String(text ?? ""));
   for (const [re, to] of SPOKEN) s = s.replace(re, to);
   return s.replace(/[☐☑●○▲△✨📋🧮]/g, "").replace(/\s+/g, " ").trim();
 }
@@ -263,5 +266,5 @@ export function itemParts(kind, row) {
     add({ ...base, part: "front" }, scriptFor({ kind, part: "front" }, row));
     add({ ...base, part: "back" }, scriptFor({ kind, part: "back" }, row));
   }
-  return out;
+  return out.filter((x) => voiceable(x.text));
 }

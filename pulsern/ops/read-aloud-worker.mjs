@@ -44,15 +44,15 @@ const MAX_TRANSIENT_IN_A_ROW = 3;
    right now: left for the next run) | "decided" (finished elsewhere). */
 async function voiceOne({ storage, apiKey, fetchImpl, text, now, limits }) {
   const claim = await claimPassage(storage, text, now);
-  if (claim === "busy") return { result: "busy", spent: 0 };
-  if (claim === "error") return { result: "storage", spent: 0, error: "could not claim the passage" };
+  if (claim.state === "busy") return { result: "busy", spent: 0 };
+  if (claim.state === "error") return { result: "storage", spent: 0, error: "could not claim the passage" };
   try {
     if (await readRecord(storage, text, TTS, now())) return { result: "decided", spent: 0 };
-    return await voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits });
-  } finally { await releasePassage(storage, text); }
+    return await voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, deadline: claim.deadline });
+  } finally { await releasePassage(storage, text, TTS, claim); }
 }
-async function voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits }) {
-  const r = await makeChecked({ text, apiKey, fetchImpl, beforeTake: () => reserveSpend(storage, { now: now(), limits }) });
+async function voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, deadline }) {
+  const r = await makeChecked({ text, apiKey, fetchImpl, deadline, timeOf: now, beforeTake: () => reserveSpend(storage, { now: now(), limits }) });
   if (!r.final) {
     if (r.errorKind === "budget") return { result: "budget", spent: r.spent };
     if (r.errorKind === "service") return { result: "service", spent: r.spent, error: r.error };
