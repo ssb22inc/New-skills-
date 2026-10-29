@@ -1,0 +1,31 @@
+{
+  "id": "tonicity",
+  "title": "IV fluid tonicity",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T11:26:38.706Z",
+  "images": 14,
+  "key": "71670c646dfb2965",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "consistency",
+      "where": "Images 1, 2, 8 and 9: introductory definition; tonicity.jsx Frame description",
+      "title": "The displayed definition drops the permeability and timescale qualifications",
+      "problem": "The picture says effective solutes 'cannot cross into the cell,' while the caption and narration correctly say they cannot freely cross on the relevant timescale. The absolute wording can teach that effective solutes never cross membranes, rather than that their restricted movement sustains an osmotic gradient.",
+      "fix": "Change the displayed definition to 'effective solute: does not freely cross the cell membrane' and retain the timescale qualification in the accessible description.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.2450085
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "One minor definition mismatch. No blocker identified in the tonicity-specific content or supplied renders.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}
