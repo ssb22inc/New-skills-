@@ -9,30 +9,23 @@ import React from "react";
 import { Frame, G, T, Box, C, Anim, Loop, Flow, OnStep, Para, Chip, paraLines, useDefs, useMotion, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 /* Conditions → precautions. A disease NAME is not enough when its form
-   decides the precaution (Sol, PR #155 diagram review, rounds 1–2), so each
-   entry's qualifiers are tied to the condition itself, and a negated
-   qualifier ("not disseminated") does not count:
+   decides the precaution (Sol, PR #155 diagram review, rounds 1–2):
    - TB: airborne only for suspected or confirmed PULMONARY or LARYNGEAL
      disease; latent and extrapulmonary TB return no row.
    - Rubella: "congenital rubella" is contact; acquired rubella droplet.
-   - Zoster: disseminated → airborne + contact; localized in an
-     immunocompromised client → airborne + contact until dissemination is
-     ruled out; once it is ruled out, or localized in an immunocompetent
-     client, standard precautions (no row).
-   - Lice: HEAD lice only (contact until 24 hours after effective
-     treatment); body and pubic lice are standard precautions.
-   Anything the text does not settle returns null: no row is outlined. */
-const WHO = "(?:client|patient|child|infant|adult|older adult|resident|toddler|adolescent|man|woman)";
-const CLIENT_IMMUNOCOMPROMISED = new RegExp(`\\bimmuno(?:compromised|suppressed)\\s+${WHO}\\b|\\b${WHO}\\b[^.;]{0,40}?\\b(?:is|who is|being)\\s+immuno(?:compromised|suppressed)\\b|\\b${WHO}\\b[^.;]{0,25}?\\b(?:receiving chemotherapy|with HIV|after (?:a |an )?(?:organ|stem cell) transplant)`, "i");
+   - Zoster: only DISSEMINATED zoster is outlined (airborne + contact).
+     Localized zoster depends on the client's immune status and whether
+     dissemination has been ruled out, which the text cannot reliably tie
+     to the right person (Sol, round 4), so it outlines nothing.
+   - Lice: HEAD lice only; body and pubic lice are standard precautions.
+   Suspected disease ("rule out pulmonary TB") counts: precautions start on
+   suspicion. Anything the text does not settle returns null. */
 export const CONDITIONS = [
   { re: /\bMRSA\b|methicillin-resistant/i, name: "MRSA", types: ["contact"] },
   { re: /\bVRE\b|vancomycin-resistant/i, name: "VRE", types: ["contact"] },
   { re: /\bC\.?\s*diff(?:icile)?\b|clostridi(?:um|oides) difficile/i, name: "C. difficile", types: ["contact"] },
   { re: /\bscabies\b/i, name: "scabies", types: ["contact"] },
-  /* Contact precautions until 24 hours after effective treatment (Sol,
-     round 3): an explicit time of 24 hours or more ends them; treatment
-     with no clear time abstains. */
-  { re: /\bhead lice\b|pediculosis capitis/i, name: "head lice", types: ["contact"], treated: true },
+  { re: /\bhead lice\b|pediculosis capitis/i, name: "head lice", types: ["contact"] },
   { re: /\bRSV\b|respiratory syncytial/i, name: "RSV", types: ["contact"] },
   { re: /\binfluenza\b|\bflu\b/i, name: "influenza", types: ["droplet"] },
   { re: /\bpertussis\b|whooping cough/i, name: "pertussis", types: ["droplet"] },
@@ -47,10 +40,6 @@ export const CONDITIONS = [
   { re: /\bvaricella\b|chickenpox|chicken pox/i, name: "chickenpox", types: ["airborne", "contact"], group: "vzv", unless: /\bzoster\b|\bshingles\b/i },
   { re: /\bdisseminated\s+(?:herpes\s+)?(?:zoster|shingles)\b|\b(?:zoster|shingles)\b[^.;]{0,25}\bdisseminated\b/i, name: "disseminated zoster", types: ["airborne", "contact"], group: "vzv",
     unless: /\bnot disseminated\b|\bnon-?disseminated\b|without dissemination|dissemination\s+(?:has\s+been\s+|was\s+|is\s+)?(?:ruled out|excluded)/i },
-  /* Immune status must belong to the CLIENT, in the zoster mention's own
-     sentence (Sol, round 3: a nurse's immune status was borrowed). */
-  { re: /\b(?:zoster|shingles)\b/i, name: "zoster in an immunocompromised client", types: ["airborne", "contact"], group: "vzv",
-    sentence: { needs: CLIENT_IMMUNOCOMPROMISED, unless: /dissemination\s+(?:has\s+been\s+|was\s+|is\s+)?(?:ruled out|excluded)|\bnot disseminated\b|without dissemination/i } },
 ];
 /* Is this mention asserted for the client now? Negation, history,
    contrast and exclusion are read only from the few words right before the
@@ -75,31 +64,39 @@ const sentenceAt = (t, i) => {
   const ends = [t.indexOf(".", i), t.indexOf(";", i)].filter((x) => x >= 0);
   return t.slice(a, ends.length ? Math.min(...ends) : t.length);
 };
-const hoursSinceTreatment = (t) => {
-  const m = /\b(?:treated|treatment|shampoo\w*|pediculicide)\b[^.;]{0,40}?\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b|\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b[^.;]{0,25}?\b(?:after|since)\s+(?:effective\s+)?(?:treatment|shampoo\w*|pediculicide)/i.exec(t);
-  return m ? Number(m[1] ?? m[2]) : null;
-};
+/* Anything that can change whether the precautions apply NOW — a negation,
+   a history, treatment or resolution, immune status, a test result — or
+   any sign of more than one client or a comparison: the text no longer
+   settles one current condition, so no row is outlined (Sol, round 4:
+   reading each such phrase in a window around the disease name kept
+   attaching it to the wrong condition or the wrong person). Abstaining
+   only drops the "Needed for this client" outline; the diagram itself
+   still shows. */
+const UNSETTLED = new RegExp([
+  String.raw`\b(?:no|not|non|negative|positive|ruled out|excluded|denies|never|without|isn't|wasn't|aren't|unlikely|doubtful)\b`,
+  String.raw`\b(?:history|hx|previous(?:ly)?|prior|past|former(?:ly)?|completed|treated|treatment|antibiotics?|antivirals?|antimicrobials?|therapy|resolved|resolving|crusted|healed|cleared|discontinu\w*|recovered)\b`,
+  String.raw`\b(?:vaccin\w*|immuni[sz]\w*|immune|immuno\w*|titer|test|tested|screen\w*|culture|PPD|TST|IGRA|latent|exposed|exposure|contact with|carrier|colonized)\b`,
+  String.raw`\b(?:versus|vs\.?|compare\w*|teach\w*|educat\w*)\b`,
+].join("|"), "i");
+/* More than one client, or a comparison, anywhere in the item. */
+const SEVERAL = /\b(?:clients|patients|another (?:client|patient)|other client|second (?:client|patient)|client [A-D]|one with|both|either|which (?:client|patient|of the))\b/i;
+const NAMED = new RegExp([...CONDITIONS.map((c) => c.re.source), String.raw`\b(?:tuberculosis|TB|zoster|shingles|lice|pediculosis)\b`].join("|"), "i");
+/* Only sentences that name a condition are read for these cues, so "The
+   nurse has no latex allergy" elsewhere in a stem does not matter. */
+const unsettled = (t) => SEVERAL.test(t) || t.split(/(?<=[.;?!])\s+/).some((x) => NAMED.test(x) && UNSETTLED.test(x));
 
 /* The precautions for the ONE condition the text asserts, or null when
    none, more than one, or not enough is said — a comparison question
    should not light up one row, and a guess must not either. */
 export function precautionFor(text) {
   const t = String(text ?? "").replace(/german measles/gi, "rubella");
+  if (unsettled(t)) return null;
   const hits = [];
   for (const c of CONDITIONS) {
     const m = currentMatch(c.re, t);
     if (!m) continue;
     if (c.needs && !currentMatch(c.needs, t)) continue;
     if (c.unless && c.unless.test(t)) continue;
-    if (c.sentence) {
-      const sent = sentenceAt(t, m.index);
-      // immune status: the client's own sentence; a ruled-out dissemination: anywhere
-      if (!c.sentence.needs.test(sent) || c.sentence.unless.test(t)) continue;
-    }
-    if (c.treated && /\b(?:treated|treatment|shampoo\w*|pediculicide)\b/i.test(t)) {
-      const h = hoursSinceTreatment(t);
-      if (h == null || h >= 24) continue;   // ended, or not clear enough to say
-    }
     hits.push(c);
   }
   /* one hit per group (zoster entries overlap): the most specific wins */
@@ -306,7 +303,7 @@ function Row({ id, y, r, scene, badges, highlight }) {
 
 export const ROWS = {
   contact: { title: "Contact: spread by touch", how: "Skin, wounds, stool, surfaces and shared equipment",
-    examples: "MRSA, VRE, C. diff, scabies, head lice, RSV, congenital rubella", wear: "gown and gloves", room: "single room or cohort; dedicated equipment" },
+    examples: "MRSA, VRE, C. diff, scabies, head lice, RSV, congenital rubella", wear: "gown and gloves", room: "single room, or cohort with the same pathogen; dedicated equipment" },
   droplet: { title: "Droplet: close-range spread", how: "Larger droplets from coughing, sneezing and talking",
     examples: "influenza, pertussis, mumps, acquired rubella, meningococcal disease", wear: "surgical mask on entering the room",
     room: "single room preferred, or cohort with the same pathogen" },
@@ -337,7 +334,7 @@ const Rub = ({ x, y }) => (
 );
 
 const DESC = "Standard precautions, including hand hygiene, for every client; transmission-based precautions are added on top. "
-  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella): gown and gloves, a single room or cohort, dedicated equipment; for C. difficile, hands are washed with soap and water because alcohol rub is not effective against its spores. "
+  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella): gown and gloves, a single room or a cohort with clients who have the same pathogen and compatible precautions, dedicated equipment; for C. difficile, hands are washed with soap and water because alcohol rub is not effective against its spores. "
   + "Droplet precautions (larger respiratory droplets spread at close range by coughing, sneezing and talking; for example influenza, pertussis, mumps, acquired rubella, meningococcal disease): surgical mask on entering the room; a single room is preferred, or cohorting with the same pathogen. "
   + "Airborne precautions (tiny particles that stay in the air; for example suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox): fit-tested N95 respirator, negative-pressure airborne infection isolation room with the door closed. Chickenpox and disseminated zoster need airborne and contact precautions together. "
   + "On droplet or airborne precautions, the client wears a surgical mask when transported; the N95 respirator is for staff.";
@@ -391,7 +388,7 @@ export const isolation = {
   textCases: [{ condition: "MRSA", types: ["contact"] }, { condition: "chickenpox", types: ["airborne", "contact"] }, { condition: "influenza", types: ["droplet"] }],
   facts: [
     "Standard precautions apply to every client; transmission-based precautions are added on top of them.",
-    "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella) require a gown and gloves, a single room or cohorting, and dedicated equipment. Head lice need contact precautions until 24 hours after effective treatment; body and pubic lice need standard precautions.",
+    "Contact precautions (e.g., MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella) require a gown and gloves, a single room or cohorting with clients who have the same pathogen and compatible additional precautions, and dedicated equipment. Head lice need contact precautions until 24 hours after effective treatment; body and pubic lice need standard precautions.",
     "Droplet precautions (e.g., influenza, pertussis, mumps, acquired rubella, meningococcal disease) require a surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen when a single room is not available.",
     "Respiratory droplets spread mainly at close range; there is no fixed distance at which transmission stops.",
     "Airborne precautions (e.g., suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox) require a fit-tested N95 respirator and a negative-pressure airborne infection isolation room with the door closed.",
@@ -403,8 +400,8 @@ export const isolation = {
   steps: [
     { key: "standard", focus: ["standard"], caption: "Every client gets standard precautions. Transmission-based precautions are added on top, matched to how the organism spreads.",
       narration: "Every client gets standard precautions. Transmission-based precautions are added on top, and they are matched to how the organism spreads." },
-    { key: "contact", focus: ["contact"], caption: "Contact: spread by touch, through skin, wounds, stool and surfaces, as with MRSA, C. diff, head lice and congenital rubella. Gown and gloves, a single room or cohort, and dedicated equipment such as a stethoscope that stays in the room.",
-      narration: "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces, as with MRSA, C. diff, head lice, and congenital rubella. Wear a gown and gloves. The client needs a single room or a cohort, and dedicated equipment, such as a stethoscope that stays in the room." },
+    { key: "contact", focus: ["contact"], caption: "Contact: spread by touch, through skin, wounds, stool and surfaces, as with MRSA, C. diff, head lice and congenital rubella. Gown and gloves, a single room or a cohort with the same pathogen, and dedicated equipment such as a stethoscope that stays in the room.",
+      narration: "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces, as with MRSA, C. diff, head lice, and congenital rubella. Wear a gown and gloves. The client needs a single room, or a cohort with clients who have the same pathogen, and dedicated equipment, such as a stethoscope that stays in the room." },
     { key: "cdiff", focus: ["contact", "cdiff"], caption: "The C. diff trap: alcohol hand rub is not effective against its spores. Wash with soap and water.",
       narration: "Here is the C. diff trap. Alcohol hand rub is not effective against its spores, so wash your hands with soap and water." },
     { key: "droplet", focus: ["droplet"], caption: "Droplet: larger droplets spread at close range by coughing, sneezing and talking, as with influenza, pertussis, mumps, acquired rubella and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred; clients with the same pathogen can share.",

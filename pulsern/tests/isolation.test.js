@@ -46,7 +46,7 @@ describe("precautionFor", () => {
     ["Localized varicella-zoster in an immunocompetent client, lesions covered", null],
     ["Herpes zoster (shingles) on the trunk", null],
     ["Disseminated herpes zoster", { condition: "disseminated zoster", types: ["airborne", "contact"] }],
-    ["Shingles in a client who is immunocompromised", { condition: "zoster in an immunocompromised client", types: ["airborne", "contact"] }],
+    ["Shingles in a client who is immunocompromised", null],
     /* Sol, PR #155 diagram review, round 2 */
     ["Active renal tuberculosis without pulmonary or laryngeal involvement", null],
     ["A client with congenital heart disease has acquired rubella", { condition: "rubella", types: ["droplet"] }],
@@ -59,16 +59,29 @@ describe("precautionFor", () => {
     ["Pulmonary TB was ruled out", null],
     /* round 3 */
     ["The client with covered localized zoster has an intact immune system. The nurse is immunocompromised.", null],
-    ["An immunocompetent nurse cares for an immunocompromised client with localized zoster", { condition: "zoster in an immunocompromised client", types: ["airborne", "contact"] }],
+    ["An immunocompetent nurse cares for an immunocompromised client with localized zoster", null],
     ["The client has pneumococcal meningitis rather than meningococcal disease", null],
-    ["No fever in a client with measles", { condition: "measles", types: ["airborne"] }],
+    ["No fever in a client with measles", null],
+    /* Sol, round 4: test results, negation after the name, history, another
+       person's immune status, ruled-out dissemination, treatment and
+       comparisons all leave the client's current need unsettled. */
+    ["A client has measles and a negative rubella test.", null],
+    ["Pulmonary TB is not suspected in this client.", null],
+    ["The client completed treatment for pulmonary TB five years ago and has no active disease.", null],
+    ["An immunocompetent client has localized zoster with covered lesions and an immunocompromised child at home.", null],
+    ["An immunocompromised client has localized zoster with covered lesions; disseminated zoster has been ruled out.", null],
+    ["A client with meningococcal disease has received effective antibiotics for 48 hours.", null],
+    ["A client with chickenpox has all lesions dry and crusted.", null],
+    ["Which client needs isolation: one with latent TB or one with pulmonary TB?", null],
+    ["A client is admitted with suspected pulmonary tuberculosis.", { condition: "pulmonary or laryngeal TB", types: ["airborne"] }],
+    ["A client has disseminated zoster.", { condition: "disseminated zoster", types: ["airborne", "contact"] }],
     ["Head lice were effectively treated 48 hours ago", null],
-    ["Head lice were treated 6 hours ago with a pediculicide", { condition: "head lice", types: ["contact"] }],
+    ["Head lice were treated 6 hours ago with a pediculicide", null],
     ["Head lice were treated 24 hours ago", null],
     ["Head lice were treated this morning", null],
     ["A client has pulmonary TB with extrapulmonary involvement", { condition: "pulmonary or laryngeal TB", types: ["airborne"] }],
     ["A client with a history of MRSA admitted for knee surgery", null],
-    ["MRSA was ruled out; the client has influenza", { condition: "influenza", types: ["droplet"] }],
+    ["MRSA was ruled out; the client has influenza", null],
     ["The client has tuberculosis", null],
   ])("%s", (text, want) => {
     expect(precautionFor(text)).toEqual(want);

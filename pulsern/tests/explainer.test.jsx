@@ -82,7 +82,7 @@ describe("concept-only mode (no confirmed patient values)", () => {
   });
   it("draws potassium without a marker or a matched strip", () => {
     const html = renderToStaticMarkup(<DIAGRAMS.potassium.Diagram params={null} />);
-    expect(html).not.toContain("6.2");
+    expect(html).not.toContain(">6.2<");
     expect(html).not.toContain('stroke-dasharray="5 4"');
   });
 });

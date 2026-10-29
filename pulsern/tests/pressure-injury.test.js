@@ -37,7 +37,7 @@ describe("stageFrom", () => {
     expect(stageFrom("Which finding would indicate a stage 3 pressure injury?")).toBeNull();
     expect(stageFrom("Client has a pressure injury. Stage 3 noted.")).toBeNull();
     expect(stageFrom("The sacral pressure injury is stage 4.")).toEqual({ stage: 4 });
-    expect(stageFrom("The wound was previously documented as stage 2; it is now a stage 3 pressure injury.")).toEqual({ stage: 3 });
+    expect(stageFrom("The wound was previously documented as stage 2; it is now a stage 3 pressure injury.")).toBeNull();
   });
 
   it("repeating the same stage is still one stage", () => {
@@ -78,10 +78,13 @@ describe("pressure injury matching", () => {
 describe("stage mentions that are not the client's stage", () => {
   it.each([
     ["This is not a stage 4 pressure injury.", null],
-    ["The wound was incorrectly documented as stage 2; it is a stage 3 pressure injury.", { stage: 3 }],
+    ["The wound was incorrectly documented as stage 2; it is a stage 3 pressure injury.", null],
     ["If this were stage 4, bone would be exposed.", null],
     /* round 2 */
-    ["Stage 4 was ruled out. The heel pressure injury is stage 3.", { stage: 3 }],
+    ["Stage 4 was ruled out. The heel pressure injury is stage 3.", null],   // round 4: any unsettled stage sentence abstains
+    ["The client has no fever and a stage 2 pressure injury. Teaching covers stage 4 pressure injuries.", null],
+    ["A stage 4 pressure injury on the left heel was ruled out.", null],
+    ["The client has no fever. The sacral pressure injury is stage 2.", { stage: 2 }],
     ["The client has stage 4 chronic kidney disease and a sacral pressure injury.", null],
     ["The client has stage 4 chronic kidney disease.", null],
   ])("%s", (text, want) => {

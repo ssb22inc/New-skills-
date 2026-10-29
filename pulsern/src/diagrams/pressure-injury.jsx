@@ -48,9 +48,28 @@ function stageMentions(t, re) {
   }
   return { asserted, unsettled };
 }
+/* Anything that can make a stage mention something other than THIS
+   client's current injury — a negation anywhere, a past or changed stage,
+   teaching or a question about stages, more than one injury or client —
+   and no column is outlined (Sol, round 4: negation read in a window
+   around each mention attached "no fever" to the stage, and missed an
+   exclusion a few words further on). Abstaining only drops the outline. */
+const UNSETTLED = new RegExp([
+  String.raw`\b(?:no|not|negative|ruled out|excluded|denies|never|without|isn't|wasn't|unlikely)\b`,
+  String.raw`\b(?:previous(?:ly)?|prior|former(?:ly)?|history|was staged|re-?stag\w*|reverse|healed|healing|resolved|later|after debridement|incorrect\w*|mistaken\w*|misdocument\w*|progress\w*|deteriorat\w*|worsen\w*)\b`,
+  String.raw`\b(?:which|what|would|could|might|if|whether|indicates?|identify|distinguish|differentiate|compare\w*|versus|vs\.?|teach\w*|educat\w*|covers|explain\w*|describe\w*|define\w*|learn\w*|example)\b`,
+].join("|"), "i");
+/* More than one injury or client anywhere in the item. */
+const SEVERAL = /\b(?:clients|patients|another (?:client|patient)|other client|second (?:client|patient|injury|wound)|injuries|ulcers|sores|wounds|both|each (?:client|patient|injury))\b/i;
+const STAGE_WORD = /\bstage\s*(?:1|2|3|4|iv|iii|ii|i)\b|unstageable|deep tissue|\bDTPI\b|\bDTI\b/i;
+/* Only sentences that mention a stage are read for these cues, so the
+   question at the end of a stem ("Which finding is expected?") does not
+   by itself unsettle a stage stated plainly before it. */
+const unsettled = (t) => SEVERAL.test(t) || t.split(/(?<=[.;?!])\s+/).some((x) => STAGE_WORD.test(x) && UNSETTLED.test(x));
+
 export function stageFrom(text) {
   const t = String(text ?? "");
-  if (!PRESSURE_CONTEXT.test(t)) return null;
+  if (!PRESSURE_CONTEXT.test(t) || unsettled(t)) return null;
   const found = new Set();
   const stages = stageMentions(t, /\bstage\s*(1|2|3|4|iv|iii|ii|i)\b/gi);
   for (const m of stages.asserted) { const v = m[1].toLowerCase(); found.add(ROMAN[v] ?? Number(v)); }
@@ -168,6 +187,10 @@ function Crater({ x, w, toLayer, inset = 0.22, short = 1, children }) {
   return (
     <g>
       <clipPath id={clip}><path d={d} /></clipPath>
+      {/* the lost tissue is gone: an opaque base hides the layers and the
+          skin surface across the opening (Sol, round 4: fibres and fat
+          lobules showed through a translucent wound) */}
+      <path d={d} fill={C.card} />
       <path d={d} fill={u("wound")} stroke={C.danger} strokeWidth={1} strokeLinejoin="round" />
       {/* moist sheen along the upper wall */}
       <path d={d} fill={u("sheen")} opacity={0.6} />

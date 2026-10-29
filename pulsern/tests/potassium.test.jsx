@@ -30,3 +30,23 @@ describe("potassium boundary values", () => {
     expect(all).toMatch(/can overlap/i);
   });
 });
+
+describe("potassium outside the interpreted range (Sol, round 4)", () => {
+  it.each([0, -1, 0.4, 12])("k = %s is not interpreted", (k) => {
+    expect(classifyPotassium(k)).toBe("recheck");
+    expect(potassium.dynamicCaption({ k })).toMatch(/recheck the value/);
+    expect(potassium.dynamicCaption({ k })).not.toMatch(/hypokalemia|hyperkalemia|replacement/);
+    const html = renderToStaticMarkup(<StepContext.Provider value={{ stepKey: "worked" }}><potassium.Diagram params={{ k }} focus={null} /></StepContext.Provider>);
+    expect(html).not.toContain("stroke-dasharray=\"5 4\"");   // no matched strip
+    expect(html).not.toContain(`>${k}<`);
+  });
+  it("does not rank urgency by the level alone", () => {
+    const c = potassium.dynamicCaption({ k: 6.2 });
+    expect(c).not.toMatch(/the higher the level/);
+    expect(c).toMatch(/Urgency depends on the level, symptoms and ECG findings/);
+  });
+  it("lists cardiac monitoring in the IV replacement panel", () => {
+    const html = renderToStaticMarkup(<potassium.Diagram params={{ k: 3.1 }} focus={null} />);
+    expect(html).toContain("Cardiac monitoring");
+  });
+});

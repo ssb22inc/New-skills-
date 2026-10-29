@@ -134,12 +134,12 @@ describe("compensation that goes too far", () => {
   });
   /* Round 11: the decision and the display must use the same bounds. */
   it("decides on the same rounded bounds it shows, so the direction cannot flip", () => {
-    // 0.7×34.3+21 = 45.01 ± 2 → shown 43.0–47.0; PaCO2 43 is on the boundary, so inside
+    // 0.7×34.3+21 = 45.01 and 40+0.7×10.3 = 47.21, ± 2 → shown 43.0–49.2; PaCO2 43 is on the boundary, so inside
     const r = read(7.52, 43, 34.3);
     expect(r).toMatchObject({ disorder: "metabolic alkalosis", compensation: "none", mixedPossible: false });
     // just below the shown bound: low, so an added respiratory ALKALOSIS
     expect(read(7.52, 42.9, 34.3)).toMatchObject({ mixedPossible: true, mixed: "respiratory alkalosis" });
-    expect(read(7.52, 42.9, 34.3).reading).toMatch(/about 43–47/);
+    expect(read(7.52, 42.9, 34.3).reading).toMatch(/about 43–49\.2/);
     // every flagged case names the disorder on the side the value actually missed
     for (let paco2 = 20; paco2 <= 70; paco2 += 0.1) {
       for (const hco3 of [12.3, 18.7, 29.9, 34.3, 38.1]) {
@@ -168,9 +168,14 @@ describe("compensation that goes too far", () => {
   });
   it("does not flag compensation within the expected range", () => {
     expect(read(7.32, 28, 14).mixedPossible).toBe(false);  // Winter 29 ± 2
-    expect(read(7.32, 60, 30).mixedPossible).toBe(false);  // HCO3 up to 24 + 4×2 + 2 = 34
-    expect(read(7.39, 55, 32).mixedPossible).toBe(false);  // chronic limit 32
-    expect(read(7.43, 30, 19).mixedPossible).toBe(false);  // down to 24 − 5 − 2 = 17
+    /* Respiratory: inside the acute-to-chronic envelope is never called mixed,
+       but fitting one time course only is reported as history-dependent
+       (Sol, round 4). */
+    expect(read(7.32, 60, 30)).toMatchObject({ disorder: "respiratory acidosis", mixedPossible: true });   // chronic 32 ± 2
+    expect(read(7.32, 60, 30).mixed).toBeUndefined();
+    expect(read(7.31, 60, 29).reading).toMatch(/lies between them/);   // acute 26 ± 2, chronic 32 ± 2
+    expect(read(7.39, 55, 32).reading).toMatch(/fits a chronic picture/);   // chronic 30 ± 2
+    expect(read(7.43, 30, 19).reading).toMatch(/fits a chronic picture/);   // chronic 19 ± 2
   });
   /* PR #134 review, finding 5: too LITTLE compensation can also mean a
      second disorder; the diagram has no timeline to assume "early". */
@@ -183,9 +188,13 @@ describe("compensation that goes too far", () => {
     expect(read(7.23, 40, 16)).toMatchObject({ compensation: null, romePattern: "none", mixedPossible: true, mixed: "respiratory acidosis" });   // Winter 32 ± 2
     expect(read(7.55, 40, 34)).toMatchObject({ compensation: null, romePattern: "none", mixedPossible: true, mixed: "respiratory alkalosis" });   // 0.7×34+21 = 44.8 ± 2
   });
-  it("does not flag a respiratory disorder still within the acute range", () => {
-    expect(read(7.26, 55, 24)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 ≥ 22 + 1.5 − 2
-    expect(read(7.50, 28, 22)).toMatchObject({ compensation: "none", mixedPossible: false });  // HCO3 21.6 ± 2
+  it("reports a respiratory disorder that fits only the acute estimate as history-dependent", () => {
+    for (const [ph, paco2, hco3] of [[7.26, 55, 24], [7.50, 28, 22]]) {
+      const r = read(ph, paco2, hco3);
+      expect(r).toMatchObject({ compensation: "none", mixedPossible: true });
+      expect(r.mixed).toBeUndefined();
+      expect(r.reading).toMatch(/fits an acute picture; if the problem is chronic/);
+    }
   });
   it("flags a respiratory acidosis whose bicarbonate has not risen even acutely", () => {
     // PaCO2 80: even acutely HCO3 should be at least 22 + 4 − 2 = 24
@@ -286,7 +295,7 @@ describe("round 2", () => {
   });
   it("states the reference range and the expected compensation separately, with units", () => {
     const r = read(7.30, 50, 24);
-    expect(r.reading).toMatch(/HCO₃⁻ 24 mEq\/L is inside its reference range \(22–26\); expected compensation is about 25 if acute to 28 if chronic/);
+    expect(r.reading).toMatch(/HCO₃⁻ 24 mEq\/L is inside its reference range \(22–26\); the acute estimate is about 25 ± 2 and the chronic about 28 ± 2 mEq\/L/);
   });
   it("keeps the textbook example internally consistent", async () => {
     const { ABG_EXAMPLE, abgConsistency } = await import("../src/diagrams/abg.jsx");
@@ -335,5 +344,33 @@ describe("round 3", () => {
     const { extractAbg } = await import("../src/diagrams/match.js");
     const gas = extractAbg("ABG: pH 7.30, PaCO2 50, HCO3 24");
     expect(abg.dynamicCaption(gas)).toMatch(/^Here: pH 7\.30, PaCO₂ 50, HCO₃⁻ 24\./);
+  });
+});
+
+describe("round 4", () => {
+  it("accepts either common metabolic-alkalosis rule (Sol: 7.48 / 50 / 36)", () => {
+    const r = read(7.48, 50, 36);   // 0.7×36+21 = 46.2; 40+0.7×12 = 48.4; ± 2 → 44.2–50.4
+    expect(r).toMatchObject({ disorder: "metabolic alkalosis", compensation: "partial", mixedPossible: false });
+    expect(r.reading).toMatch(/two common bedside rules/);
+  });
+  it("never extends alkalosis compensation past the PaCO₂ ceiling", () => {
+    expect(read(7.59, 65, 60).disorder).toBe("unsupported");
+    const r = read(7.5, 58, 44);    // consistent; rules give 51.8 and 54 ± 2, capped at 55
+    expect(r.mixed).toBe("respiratory acidosis");
+    expect(read(7.52, 54, 44).reading).toMatch(/rarely takes PaCO₂ past about 55/);
+  });
+  it("separates acute and chronic respiratory estimates (Sol: 7.28 / 60 / 27)", () => {
+    const r = read(7.28, 60, 27);
+    expect(r).toMatchObject({ disorder: "respiratory acidosis", compensation: "partial", mixedPossible: true });
+    expect(r.reading).toMatch(/fits an acute picture; if the problem is chronic, this HCO₃⁻ would suggest an added metabolic acidosis/);
+  });
+  it("calls both values pushing the same way combined, not partial (Sol: 7.10 / 60 / 18)", () => {
+    expect(read(7.1, 60, 18)).toMatchObject({ primary: "both", compensation: null });
+    expect(abg.steps.find((s) => s.key === "compensation").caption).toMatch(/combined disorder, not compensation/);
+    expect(abg.steps.find((s) => s.key === "rome").narration).toMatch(/combined disorder/);
+  });
+  it("marks a value just outside the expected range as borderline", () => {
+    expect(read(7.48, 50, 35).reading).toMatch(/borderline/);   // hi 49.7
+    expect(read(7.38, 70, 40).reading).toMatch(/rather than a single compensated one/);
   });
 });

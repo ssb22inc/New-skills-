@@ -1,21 +1,6 @@
 {
   "version": 1,
   "clips": {
-    "abg": {
-      "rome": {
-        "id": "25a0297888ebac0a",
-        "script": "60f3f2bba1c3f355a4af2a60aab3daaf875963fbe2cae14592e5d5e29ce9b9e0",
-        "qa": 15,
-        "audio": "346319510c6c7cd7629dfcdab0b0ce5f",
-        "voice": "marin",
-        "model": "gpt-4o-mini-tts",
-        "textFp": "3da84e92",
-        "similarity": 1,
-        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/abg/346319510c6c7cd7629dfcdab0b0ce5f.mp3",
-        "bytes": 229632,
-        "sig": "ULzg2X4c5jrnUkXO2rI4Kd/TEA3JTI7GrhRxqomcIInM0/TBPkWLmmaEP77+g7iEXselO7FNkL/h9hvGIagvBg=="
-      }
-    },
     "insulin": {
       "nph": {
         "id": "ffa23742882bc103",
