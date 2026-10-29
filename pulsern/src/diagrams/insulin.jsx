@@ -1,16 +1,24 @@
-/* Insulin action: onset, peak and duration, and what the peak means.
+/* Insulin action: onset, peak (when there is one) and duration.
    ------------------------------------------------------------------
-   Times are the typical ranges taught for NCLEX-RN preparation. They vary
-   by product and source, so the diagram states ranges, not single numbers,
-   and says to check the product's labeling. The peak window is computed by
+   Times are the typical SUBCUTANEOUS ranges taught for NCLEX-RN
+   preparation (Sol, PR #155 diagram review: the route was never stated,
+   and IV regular insulin acts far faster). They vary by product and
+   source, so the diagram states ranges, not single numbers, and says to
+   check the product's labeling. The peak window is computed by
    peakWindow() (pure, tested), so a worked example ("NPH at 07:00") always
    lands on the right clock times.
 
+   Curves are illustrative shapes, but they keep to the landmarks: each
+   stays on the baseline until its onset, peaks inside its peak range and
+   returns to baseline at the end of its duration. Glargine U-100 has no
+   pronounced peak and wanes at about a day, so its curve tapers off at the
+   24-hour edge instead of being marked "ends" while still high.
+
    Four curves in one palette would fail the colour rules, so they are told
-   apart by line style and labelled directly on the curve — never by colour
-   alone. */
+   apart by line style and a legend — never by colour alone — and the
+   highlighted worked-example curve keeps its own line style. */
 import React from "react";
-import { Frame, G, T, Box, C, Anim, Loop, OnStep } from "./kit.jsx";
+import { Frame, G, T, Box, C, Anim, Loop, OnStep, Para, paraLines, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
 
 /* Hours. Onset/peak are [from, to]; peak null means peakless. */
 export const INSULINS = {
@@ -47,20 +55,22 @@ export function peakWindow(type, givenAt) {
   return { from: clock(t + ins.peak[0]), to: clock(t + ins.peak[1]), nextDay: t + ins.peak[1] >= 24 };
 }
 
-const X0 = 38, X1 = 344, Y0 = 222, YTOP = 96;   // chart box, hours 0..24
+const X0 = 40, X1 = 342, Y0 = 282, YTOP = 152;   // chart box, hours 0..24
 const hx = (h) => X0 + (Math.min(24, h) / 24) * (X1 - X0);
 
-/* A smooth action curve: rises from onset to the middle of the peak range,
-   falls to the end of the duration. Peakless insulin rises to a plateau. */
+/* A smooth action curve: flat until the onset, rising to the middle of the
+   peak range, falling to the end of the duration. Peakless glargine rises
+   to a plateau and tapers at the 24-hour edge. */
+export const onsetOf = (ins) => (ins.onset[0] + ins.onset[1]) / 2;
 function curvePath(ins, height) {
-  const on = (ins.onset[0] + ins.onset[1]) / 2;
+  const on = onsetOf(ins);
   const end = ins.duration[1];
   const y = Y0 - height;
   if (!ins.peak) {
-    return `M${hx(0)},${Y0} C${hx(on)},${Y0} ${hx(on + 1)},${y} ${hx(on + 3)},${y} L${hx(end - 0.6)},${y} C${hx(end - 0.2)},${y} ${hx(end)},${Y0 - height * 0.6} ${hx(end)},${Y0 - height * 0.5}`;
+    return `M${hx(0)},${Y0} L${hx(on)},${Y0} C${hx(on + 1)},${Y0} ${hx(on + 1.5)},${y} ${hx(on + 3.5)},${y} L${hx(19)},${y} C${hx(21.5)},${y} ${hx(23)},${Y0 - height * 0.35} ${hx(24)},${Y0 - height * 0.15}`;
   }
   const pk = (ins.peak[0] + ins.peak[1]) / 2;
-  return `M${hx(0)},${Y0} C${hx(on)},${Y0} ${hx(on + (pk - on) * 0.4)},${y} ${hx(pk)},${y} C${hx(pk + (end - pk) * 0.45)},${y} ${hx(end - (end - pk) * 0.2)},${Y0} ${hx(end)},${Y0}`;
+  return `M${hx(0)},${Y0} L${hx(on)},${Y0} C${hx(on + (pk - on) * 0.45)},${Y0} ${hx(on + (pk - on) * 0.55)},${y} ${hx(pk)},${y} C${hx(pk + (end - pk) * 0.45)},${y} ${hx(end - (end - pk) * 0.2)},${Y0} ${hx(end)},${Y0}`;
 }
 
 const STYLE = {
@@ -73,22 +83,20 @@ const STYLE = {
 /* The area under a curve, closed back to the baseline. */
 const areaPath = (ins, h) => `${curvePath(ins, h)} V${Y0} H${hx(0)} Z`;
 
-/* Where on the drawn curve the onset, the peak and the end sit, for the
-   step annotations. */
+/* Where on the drawn curve the onset, the peak and the end sit. */
 function landmarks(k) {
   const ins = INSULINS[k], h = STYLE[k].h;
-  const on = (ins.onset[0] + ins.onset[1]) / 2;
   return {
-    onset: { x: hx(on), y: Y0 },
+    onset: { x: hx(onsetOf(ins)), y: Y0 },
     peak: ins.peak ? { x: hx((ins.peak[0] + ins.peak[1]) / 2), y: Y0 - h } : null,
-    end: { x: hx(ins.duration[1]), y: ins.peak ? Y0 : Y0 - h * 0.5 },
+    end: ins.peak ? { x: hx(ins.duration[1]), y: Y0 } : null,
   };
 }
 
 const Mark = ({ x, y, label, dx = 0, dy = -10, anchor = "middle", color = C.accent }) => (
   <g>
-    <circle cx={x} cy={y} r={3.6} fill={C.card} stroke={color} strokeWidth={1.8} />
-    <T x={x + dx} y={y + dy} size={9.5} weight={700} anchor={anchor} color={color}>{label}</T>
+    <circle className="dg-solid" cx={x} cy={y} r={3.8} fill={C.card} stroke={color} strokeWidth={1.8} />
+    <T x={x + dx} y={y + dy} size={MIN_TEXT} weight={700} anchor={anchor} color={color}>{label}</T>
   </g>
 );
 
@@ -99,6 +107,7 @@ function Curve({ k, step }) {
   const ins = INSULINS[k], st = STYLE[k];
   const d = curvePath(ins, st.h);
   const m = landmarks(k);
+  const onLeft = m.onset.x < X0 + 24;
   return (
     <G id={k}>
       <path d={areaPath(ins, st.h)} fill={C.teal} fillOpacity={0.07} />
@@ -108,9 +117,11 @@ function Curve({ k, step }) {
       </Anim>
       <path d={d} fill="none" stroke={C.teal} strokeWidth={st.w} strokeDasharray={st.dash} strokeLinecap="round" />
       <OnStep on={step} kind="pop" delay={900}>
-        <Mark {...m.onset} label="onset" dy={-8} dx={m.onset.x < X0 + 20 ? 10 : 0} anchor={m.onset.x < X0 + 20 ? "start" : "middle"} />
-        {m.peak ? <Mark {...m.peak} label="peak" dy={-12} color={C.labInk} /> : <T x={hx(12)} y={Y0 - st.h - 8} size={9.5} weight={700} anchor="middle" color={C.accent}>no peak — steady</T>}
-        <Mark {...m.end} label="ends" dy={m.end.y === Y0 ? -8 : -10} dx={m.end.x > X1 - 12 ? -6 : 0} anchor={m.end.x > X1 - 12 ? "end" : "middle"} />
+        <Mark {...m.onset} label="onset" dy={18} dx={onLeft ? 4 : 0} anchor={onLeft ? "start" : "middle"} />
+        {m.peak ? <Mark {...m.peak} label="peak" dy={-12} color={C.labInk} />
+          : <T x={hx(10)} y={Y0 - st.h - 10} size={MIN_TEXT} weight={700} anchor="middle" color={C.accent}>no pronounced peak</T>}
+        {m.end ? <Mark {...m.end} label="ends" dy={-10} dx={m.end.x > X1 - 16 ? -6 : 4} anchor={m.end.x > X1 - 16 ? "end" : "start"} />
+          : <T x={X1} y={Y0 - st.h - 10} size={MIN_TEXT} weight={700} anchor="end" color={C.accent}>wanes ~24 h ▸</T>}
       </OnStep>
       <Loop on={step}>
         <g className="dg-a dg-fade" style={{ animationDelay: "1.4s" }}>
@@ -123,7 +134,7 @@ function Curve({ k, step }) {
   );
 }
 
-/* "Give with a meal": a plate at dose time, on the rapid-acting step. */
+/* Meal-time insulin: a plate at dose time, on the rapid-acting step. */
 const Meal = ({ x, y }) => (
   <g fill="none" stroke={C.teal} strokeWidth={1.4} strokeLinecap="round">
     <circle cx={x} cy={y} r={7} fill={C.card} />
@@ -141,10 +152,14 @@ const Syringe = ({ x, y }) => (
 
 export const INSULIN_EXAMPLE = { type: "nph", givenAt: "07:00" };
 
-const ROWS = [["rapid", "Rapid · lispro", "10–30 min", "1–2 h", "3–5 h"],
-  ["short", "Short · regular", "30–60 min", "2–4 h", "5–8 h"],
-  ["nph", "Intermed. · NPH", "1–2 h", "4–12 h", "12–18 h"],
-  ["long", "Long · glargine U-100", "1–2 h", "none", "~24 h"]];
+const ROWS = [["rapid", "Rapid", "10–30 min", "1–2 h", "3–5 h"],
+  ["short", "Regular U-100", "30–60 min", "2–4 h", "5–8 h"],
+  ["nph", "NPH", "1–2 h", "4–12 h", "12–18 h"],
+  ["long", "Glargine U-100", "1–2 h", "none", "~24 h"]];
+const COL = [18, 140, 224, 288];
+const TY = 328, RH = 22;
+const RISK = "Lows can also happen outside the peak, and with peakless insulin.";
+const NOTE = "Subcutaneous use. IV regular insulin and regular U-500 act differently; detemir, glargine U-300 and degludec last differently. Check the product.";
 
 export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   const concept = params === null;
@@ -152,36 +167,42 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   const mine = concept ? null : INSULINS[params.type];
   const mst = concept ? null : STYLE[params.type];
   const bandMid = mine?.peak ? (hx(mine.peak[0]) + hx(mine.peak[1])) / 2 : 0;
+  const tableEnd = TY + 26 + ROWS.length * RH + 8;
+  const noteY = tableEnd + 18;
+  const riskY = noteY + paraLines(NOTE, 324, MIN_TEXT).length * MIN_TEXT * 1.3 + 12;
+  const workedY = riskY + 22 + paraLines(RISK, 300, MIN_TEXT).length * MIN_TEXT * 1.3 + 8;
+  const workedText = pw
+    ? `${INSULINS[params.type].eg.split(",")[0].toUpperCase()} at ${params.givenAt}: peak about ${pw.from}–${pw.to}${pw.nextDay ? " (next day)" : ""}`
+    : concept ? "" : `${INSULINS[params.type].eg.split(",")[0].toUpperCase()} at ${params.givenAt}: no pronounced peak`;
+  const workedLines = workedText ? paraLines(workedText, 324).length : 0;
+  const peakText = pw ? `peak ${pw.from}–${pw.to}` : "";
+  const labelX = Math.max(X0, Math.min(X1 - peakText.length * 7.9, bandMid - (peakText.length * 7.9) / 2));
   return (
-    <Frame h={416} focus={focus} title="Insulin onset, peak and duration"
-      desc="Typical action of four insulin types over 24 hours. Rapid-acting: onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours, given with a meal. Short-acting regular: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no peak, about 24 hours; detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest at the peak.">
+    <Frame h={workedLines ? workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 12 : workedY - 6} focus={focus} title="Insulin onset, peak and duration"
+      desc="Typical subcutaneous action of four insulin types over 24 hours, as illustrative curves that stay flat until onset. Rapid-acting (lispro, aspart, glulisine): onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours; it is associated with meals, and its timing follows the specific product and prescribed plan. Short-acting regular U-100: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no pronounced peak, wanes at about 24 hours. IV regular insulin and regular U-500 act differently, and detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest around a peak, but lows can also happen at other times and with peakless insulin.">
       <G id="axes">
-        <T x={18} y={20} size={12} weight={700}>Insulin effect over 24 hours</T>
-        <T x={342} y={20} size={10} anchor="end" color={C.muted}>typical ranges</T>
+        <T x={18} y={20} size={BODY_TEXT} weight={700}>Typical SC insulin action, 24 hours</T>
+        <T x={18} y={39} size={MIN_TEXT} color={C.muted}>illustrative curves; times vary by product</T>
+        {Object.entries(INSULINS).map(([k, ins], i) => {
+          const lx = i % 2 ? 190 : 18, ly = 64 + Math.floor(i / 2) * 22;
+          return (
+            <g key={k}>
+              <line x1={lx} y1={ly - 5} x2={lx + 26} y2={ly - 5} stroke={C.teal} strokeWidth={STYLE[k].w} strokeDasharray={STYLE[k].dash} strokeLinecap="round" />
+              <T x={lx + 32} y={ly} size={MIN_TEXT} weight={600}>{ins.name}</T>
+            </g>
+          );
+        })}
         {[0.33, 0.66, 1].map((f) => (
           <line key={f} x1={X0} x2={X1} y1={Y0 - (Y0 - YTOP) * f} y2={Y0 - (Y0 - YTOP) * f} stroke={C.line} strokeOpacity={0.6} strokeDasharray="2 4" />
         ))}
         <line x1={X0} y1={Y0} x2={X1} y2={Y0} stroke={C.line} strokeWidth={1.2} />
-        <line x1={X0} y1={YTOP - 20} x2={X0} y2={Y0} stroke={C.line} strokeWidth={1.2} />
+        <line x1={X0} y1={YTOP - 6} x2={X0} y2={Y0} stroke={C.line} strokeWidth={1.2} />
         {[0, 4, 8, 12, 16, 20, 24].map((h) => (
           <g key={h}>
             <line x1={hx(h)} y1={Y0} x2={hx(h)} y2={Y0 + 4} stroke={C.muted} />
-            <T x={hx(h)} y={Y0 + 16} size={10} anchor="middle" color={C.muted} mono>{h}h</T>
+            <T x={hx(h)} y={Y0 + 36} size={MIN_TEXT} anchor="middle" color={C.muted} mono>{h}h</T>
           </g>
         ))}
-        <T x={X0 + 4} y={YTOP - 8} size={10} color={C.muted}>effect (illustrative)</T>
-        {/* Legend: line style + name. The curves share one colour (the
-            design rules allow no new ones), so style carries identity — and
-            a legend keeps it unambiguous where direct labels crowded. */}
-        {Object.entries(INSULINS).map(([k, ins], i) => {
-          const lx = i % 2 ? 190 : 18, ly = 44 + Math.floor(i / 2) * 18;
-          return (
-            <g key={k}>
-              <line x1={lx} y1={ly - 4} x2={lx + 26} y2={ly - 4} stroke={C.teal} strokeWidth={STYLE[k].w} strokeDasharray={STYLE[k].dash} strokeLinecap="round" />
-              <T x={lx + 32} y={ly} size={11} weight={600}>{ins.name}</T>
-            </g>
-          );
-        })}
       </G>
       <Curve k="rapid" step={["idea", "rapid"]} />
       <Curve k="short" step="short" />
@@ -189,62 +210,59 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
       <Curve k="long" step="long" />
       <G id="rapid-meal">
         <OnStep on="rapid" kind="pop" delay={600}>
-          {/* clear of the rapid curve, with a leader back to dose time */}
           <path d={`M${hx(0) + 2},${Y0 - 2} Q${hx(3)},${Y0 - 6} ${hx(5.6)},${Y0 - 30}`} fill="none" stroke={C.teal} strokeWidth={1.2} strokeDasharray="2 3" />
           <Meal x={hx(6.6)} y={Y0 - 36} />
-          <T x={hx(6.6) + 16} y={Y0 - 32} size={10} weight={700} color={C.accent}>give with a meal</T>
+          <T x={hx(6.6) + 16} y={Y0 - 31} size={MIN_TEXT} weight={700} color={C.accent}>meal-time insulin</T>
         </OnStep>
       </G>
       <G id="table">
-        <Box x={8} y={252} w={344} h={112} r={10} fill={C.surface} lift />
+        <Box x={8} y={TY} w={344} h={tableEnd - TY} r={10} fill={C.surface} lift />
         {ROWS.map(([k], i) => (
           <OnStep key={k} on={k} kind="fade">
-            <rect x={12} y={277 + i * 19} width={336} height={18} rx={5} fill={C.teal} fillOpacity={0.14} />
+            <rect x={12} y={TY + 30 + i * RH} width={336} height={RH - 2} rx={5} fill={C.teal} fillOpacity={0.14} />
           </OnStep>
         ))}
-        <T x={18} y={270} size={10.5} weight={700} color={C.muted}>Type</T>
-        <T x={150} y={270} size={10.5} weight={700} color={C.muted}>Onset</T>
-        <T x={222} y={270} size={10.5} weight={700} color={C.muted}>Peak</T>
-        <T x={282} y={270} size={10.5} weight={700} color={C.muted}>Lasts</T>
+        {["Type", "Onset", "Peak", "Lasts"].map((h, i) => <T key={h} x={COL[i]} y={TY + 21} size={MIN_TEXT} weight={700} color={C.muted}>{h}</T>)}
         {ROWS.map(([k, a, b, c, d], i) => (
           <g key={k}>
-            <T x={18} y={290 + i * 19} size={11}>{a}</T>
-            <T x={150} y={290 + i * 19} size={11} mono>{b}</T>
-            <T x={222} y={290 + i * 19} size={11} mono color={c === "none" ? C.muted : C.ink}>{c}</T>
-            <T x={282} y={290 + i * 19} size={11} mono>{d}</T>
+            <T x={COL[0]} y={TY + 46 + i * RH} size={MIN_TEXT}>{a}</T>
+            <T x={COL[1]} y={TY + 46 + i * RH} size={MIN_TEXT} mono>{b}</T>
+            <T x={COL[2]} y={TY + 46 + i * RH} size={MIN_TEXT} mono color={c === "none" ? C.muted : C.ink}>{c}</T>
+            <T x={COL[3]} y={TY + 46 + i * RH} size={MIN_TEXT} mono>{d}</T>
           </g>
         ))}
       </G>
+      <G id="note">
+        <Para x={18} y={noteY} w={324} size={MIN_TEXT} color={C.muted} text={NOTE} />
+      </G>
       <G id="peak-risk">
-        <rect x={18} y={376} width={18} height={8} rx={4} fill={C.amber} opacity={0.55} />
-        <T x={42} y={384} size={11}>Peak = highest risk of hypoglycemia</T>
+        <rect x={18} y={riskY - 9} width={18} height={8} rx={4} fill={C.amber} opacity={0.55} />
+        <T x={42} y={riskY} size={BODY_TEXT} weight={600}>Around a peak: highest hypoglycemia risk</T>
+        <Para x={42} y={riskY + 20} w={300} size={MIN_TEXT} text={RISK} />
       </G>
       <G id="worked">
-        {/* The client's own insulin, on the worked step: its curve, its
-            peak window in clock time, and the dose time. */}
+        {/* The client's own insulin, on the worked step: its curve in its own
+            line style, its peak window in clock time on a label row above the
+            chart with a leader to the band, and the dose time. */}
         {!concept ? (
           <OnStep on="worked" kind="fade">
             {mine.peak ? (
               <g>
-                <rect x={hx(mine.peak[0])} y={YTOP + 14} width={hx(mine.peak[1]) - hx(mine.peak[0])} height={Y0 - YTOP - 14} fill={C.amber} fillOpacity={0.16} />
-                <T x={Math.max(X0 + 78, Math.min(X1 - 40, bandMid))} y={YTOP + 28} size={10} weight={700} anchor="middle" mono color={C.labInk}>{`${pw.from}–${pw.to}`}</T>
+                <rect x={hx(mine.peak[0])} y={YTOP} width={hx(mine.peak[1]) - hx(mine.peak[0])} height={Y0 - YTOP} fill={C.amber} fillOpacity={0.16} />
+                {/* its own label row, above the dose row, with a leader to the band */}
+                <path d={`M${bandMid},${YTOP - 40} V${YTOP + 2}`} stroke={C.labInk} strokeWidth={1.2} strokeDasharray="2 2" />
+                <T x={labelX} y={YTOP - 44} size={MIN_TEXT} weight={700} mono color={C.labInk}>{peakText}</T>
               </g>
             ) : null}
             <path d={areaPath(mine, mst.h)} fill={C.teal} fillOpacity={0.2} />
             <Anim on="worked" kind="draw" dur={1400}>
-              <path d={curvePath(mine, mst.h)} pathLength={1} fill="none" stroke={C.teal} strokeWidth={4} strokeLinecap="round" />
+              <path d={curvePath(mine, mst.h)} pathLength={1} fill="none" stroke={C.teal} strokeWidth={mst.w + 1.6} strokeDasharray={mst.dash} strokeLinecap="round" />
             </Anim>
-            <Syringe x={X0 + 10} y={YTOP + 26} />
-            <T x={X0 + 20} y={YTOP + 30} size={10} weight={700} mono color={C.accent}>{params.givenAt}</T>
+            <Syringe x={X0 + 6} y={YTOP - 20} />
+            <T x={X0 + 16} y={YTOP - 18} size={MIN_TEXT} weight={700} mono color={C.accent}>{`dose ${params.givenAt}`}</T>
           </OnStep>
         ) : null}
-        {pw ? (
-          <T x={18} y={406} size={11} weight={700} color={C.accent}>
-            {`${INSULINS[params.type].eg.split(",")[0].toUpperCase()} at ${params.givenAt} → peak about ${pw.from}–${pw.to}${pw.nextDay ? " (next day)" : ""}`}
-          </T>
-        ) : (
-          <T x={18} y={406} size={11} color={C.muted}>Check the product labeling — times vary by product.</T>
-        )}
+        {workedText ? <Para x={18} y={workedY} w={324} weight={700} color={C.accent} text={workedText} /> : null}
       </G>
     </Frame>
   );
@@ -256,34 +274,36 @@ export const insulin = {
   concepts: ["diabetes"],
   Diagram: InsulinDiagram,
   example: INSULIN_EXAMPLE,
+  textCases: [{ type: "rapid", givenAt: "07:30" }, { type: "short", givenAt: "12:00" }, { type: "long", givenAt: "21:00" }, { type: "nph", givenAt: "19:00" }],
   facts: [
-    "Typical rapid-acting insulin (lispro, aspart, glulisine): onset 10–30 minutes, peak 1–2 hours, duration 3–5 hours.",
-    "Typical short-acting (regular) insulin: onset 30–60 minutes, peak 2–4 hours, duration 5–8 hours.",
+    "These are typical subcutaneous action times; IV regular insulin and concentrated regular U-500 act differently.",
+    "Typical rapid-acting insulin (lispro, aspart, glulisine): onset 10–30 minutes, peak 1–2 hours, duration 3–5 hours. It is associated with meals; its timing follows the specific product's labeling and the prescribed plan.",
+    "Typical short-acting regular insulin (U-100, subcutaneous): onset 30–60 minutes, peak 2–4 hours, duration 5–8 hours.",
     "Typical intermediate-acting (NPH) insulin: onset 1–2 hours, peak 4–12 hours, duration 12–18 hours.",
     "Long-acting insulin glargine U-100: onset 1–2 hours, no pronounced peak, duration about 24 hours.",
     "Other basal insulins differ: detemir's duration is dose-dependent and can be shorter than 24 hours; glargine U-300 lasts up to about 36 hours; degludec about 42 hours.",
-    "The risk of hypoglycemia is greatest when an insulin is at its peak.",
+    "The risk of hypoglycemia is greatest around an insulin's peak, but hypoglycemia can occur at other times, including with peakless basal insulin.",
     "Action times vary by product and source; the product's labeling is the authority.",
   ],
   steps: [
-    { key: "idea", focus: ["axes", "rapid"], caption: "Every insulin has an onset (when it starts working), a peak (when it works hardest) and a duration (how long it lasts).",
-      narration: "Every insulin has three times to know: the onset, when it starts working; the peak, when it works hardest; and the duration, how long it lasts." },
-    { key: "rapid", focus: ["axes", "rapid", "rapid-meal", "table"], caption: "Rapid-acting — lispro, aspart, glulisine — starts in 10 to 30 minutes and peaks in 1 to 2 hours. Give it with a meal, so food arrives as it starts to work.",
-      narration: "Rapid-acting insulin — lispro, aspart, or glulisine — starts working in ten to thirty minutes and peaks in one to two hours. It is given with a meal, so that the food arrives as the insulin starts to work." },
-    { key: "short", focus: ["axes", "short", "table"], caption: "Short-acting regular insulin starts in 30 to 60 minutes and peaks at 2 to 4 hours.",
-      narration: "Short-acting regular insulin starts in thirty to sixty minutes and peaks at two to four hours." },
+    { key: "idea", focus: ["axes", "rapid"], caption: "Every insulin has an onset (when it starts working) and a duration (how long it lasts). Most also have a peak, when they work hardest; glargine U-100 has no pronounced peak.",
+      narration: "Every insulin has an onset, when it starts working, and a duration, how long it lasts. Most also have a peak, when they work hardest. Glargine U-one-hundred has no pronounced peak." },
+    { key: "rapid", focus: ["axes", "rapid", "rapid-meal", "table"], caption: "Rapid-acting insulin (lispro, aspart, glulisine) starts in 10 to 30 minutes and peaks in 1 to 2 hours. It is meal-time insulin; exact timing follows the specific product and the prescribed plan.",
+      narration: "Rapid-acting insulin, such as lispro, aspart, or glulisine, starts working in ten to thirty minutes and peaks in one to two hours. It is meal-time insulin, and its exact timing follows the specific product and the prescribed plan." },
+    { key: "short", focus: ["axes", "short", "table"], caption: "Regular insulin given subcutaneously starts in 30 to 60 minutes and peaks at 2 to 4 hours. Given IV, it acts much faster.",
+      narration: "Regular insulin given under the skin starts in thirty to sixty minutes and peaks at two to four hours. Given intravenously, it acts much faster." },
     { key: "nph", focus: ["axes", "nph", "table"], caption: "Intermediate NPH starts in 1 to 2 hours, with a long, broad peak from about 4 to 12 hours.",
       narration: "Intermediate-acting N-P-H starts in one to two hours, and has a long, broad peak from about four to twelve hours." },
-    { key: "long", focus: ["axes", "long", "table"], caption: "Long-acting glargine U-100 has no pronounced peak — a steady background level for about 24 hours. Others last differently, including glargine U-300, so check the product.",
-      narration: "Long-acting glargine U-one-hundred has no pronounced peak. It provides a steady background level for about twenty-four hours. Other basal insulins last differently, including glargine U-three-hundred, so always check the product." },
-    { key: "risk", focus: ["axes", "rapid", "short", "nph", "peak-risk"], caption: "The peak is when hypoglycemia is most likely. Know when each client's insulin peaks, and make sure food and glucose checks line up with it.",
-      narration: "The peak is when hypoglycemia is most likely. Know when each client's insulin peaks, and make sure food and glucose checks line up with it." },
+    { key: "long", focus: ["axes", "long", "table", "note"], caption: "Long-acting glargine U-100 has no pronounced peak: a steady background level that wanes at about 24 hours. Other basal insulins, including glargine U-300, last differently, so check the product.",
+      narration: "Long-acting glargine U-one-hundred has no pronounced peak. It provides a steady background level that wanes at about twenty-four hours. Other basal insulins, including glargine U-three-hundred, last differently, so always check the product." },
+    { key: "risk", focus: ["axes", "rapid", "short", "nph", "long", "peak-risk"], caption: "Exam questions often test the higher risk of hypoglycemia around an expected peak. Lows can also happen at other times, including with peakless insulin.",
+      narration: "Exam questions often test the higher risk of hypoglycemia around an insulin's expected peak. But lows can also happen at other times, including with peakless insulin." },
     { key: "worked", focus: ["axes", "worked", "peak-risk"], dynamic: true, caption: null, narration: null },
   ],
   dynamicCaption: ({ type, givenAt } = INSULIN_EXAMPLE) => {
     const ins = INSULINS[type];
     const pw = peakWindow(type, givenAt);
-    if (!pw) return `${ins.name} insulin given at ${givenAt} has no pronounced peak — it gives a steady effect for about a day.`;
-    return `${ins.name} (${ins.eg}) given at ${givenAt} peaks roughly ${pw.from}–${pw.to}${pw.nextDay ? " the next day" : ""} — the window to watch most closely for hypoglycemia.`;
+    if (!pw) return `${ins.name} insulin given at ${givenAt} has no pronounced peak: a steady effect that wanes at about a day. Lows can still happen.`;
+    return `${ins.name} (${ins.eg}) given at ${givenAt} peaks roughly ${pw.from}–${pw.to}${pw.nextDay ? " the next day" : ""}, the window when hypoglycemia is most likely, though lows can happen at other times too.`;
   },
 };
