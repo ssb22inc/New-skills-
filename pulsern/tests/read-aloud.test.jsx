@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
-import { speak, speechKey, validRequest, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS } from "../api/_speak.js";
+import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
 
@@ -499,6 +499,45 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
     const next = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), limits: { user: 300, admission: 5, spend: 5 }, now: () => Date.UTC(2026, 9, 30, 16), log: () => {} });
     expect(next).toMatchObject({ voiced: 1 });
+  });
+
+  it("keeps only the known fields of a reference: extra data is never stored", async () => {
+    const { storage, files } = fakeStorage();
+    const padded = { ...REF, padding: "x".repeat(2_000_000), nested: { more: [1, 2, 3] } };
+    expect((await speak({ ...base({ apiKey: "", ref: padded }), storage })).status).toBe(202);
+    const q = [...files.keys()].find((k) => k.startsWith("queue/"));
+    const stored = files.get(q).toString();
+    expect(stored.length).toBeLessThan(QUEUE_ENTRY_MAX);
+    expect(JSON.parse(stored).ref).toEqual(REF);
+    expect(canonicalRef({ ...REF, result: { correct: false, points: 0, max: 1, junk: "y" } })).toEqual({ ...REF, result: { correct: false, points: 0, max: 1 } });
+    expect(canonicalRef({ ...REF, step: "1" })).toBeNull();
+    expect(canonicalRef("nope")).toBeNull();
+  });
+
+  it("drops an oversized queue entry unread, and never keeps it in the run", async () => {
+    const { storage, files } = fakeStorage();
+    const big = JSON.stringify({ text: "Hello.", voice: "marin", ref: { ...REF, padding: "x".repeat(QUEUE_ENTRY_MAX) }, seg: "stem" });
+    files.set("queue/marin-big.json", Buffer.from(big));
+    const real = storage.from(BUCKET);
+    const downloads = [];
+    const watched = { ...storage, from: () => ({ ...real, download: (p) => { downloads.push(p); return real.download(p); }, list: async (dir, o) => {
+      const r = await real.list(dir, o);
+      return { ...r, data: r.data?.map((e) => ({ ...e, metadata: { size: files.get(`${dir}/${e.name}`)?.length } })) };
+    } }) };
+    const f = fakeOpenAI();
+    const r = await drainQueue({ storage: watched, apiKey: "k", fetchImpl: f, log: () => {} });
+    expect(r.skipped).toBe(1);
+    expect(downloads).not.toContain("queue/marin-big.json");
+    expect(files.has("queue/marin-big.json")).toBe(false);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("drops an oversized entry even when the listing gives no size", async () => {
+    const { storage, files } = fakeStorage();
+    files.set("queue/marin-big.json", Buffer.from(JSON.stringify({ text: "Hello.", voice: "marin", ref: { ...REF, padding: "x".repeat(QUEUE_ENTRY_MAX) }, seg: "stem" })));
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), log: () => {} });
+    expect(r.skipped).toBe(1);
+    expect(files.has("queue/marin-big.json")).toBe(false);
   });
 
   it("keeps a queue entry it could not read, and reports it", async () => {

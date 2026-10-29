@@ -124,7 +124,20 @@ let speaking = null; // { owner, stop }
    from an element first played during a user gesture; a fresh element per
    passage, created after network waits, could be blocked. Reusing this one
    keeps every later passage, and auto-read, allowed. */
-const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+/* A real, decodable clip of silence (8 kHz, 8-bit mono PCM, 100 ms): a
+   file with no samples can be refused by a decoder, which would leave the
+   player locked. */
+export function silentWav(ms = 100) {
+  const n = Math.round(8 * ms), b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const tag = (at, str) => { for (let i = 0; i < str.length; i++) b[at + i] = str.charCodeAt(i); };
+  tag(0, "RIFF"); v.setUint32(4, 36 + n, true); tag(8, "WAVEfmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  tag(36, "data"); v.setUint32(40, n, true); b.fill(128, 44);
+  let bin = ""; for (const x of b) bin += String.fromCharCode(x);
+  return `data:audio/wav;base64,${btoa(bin)}`;
+}
+export const SILENT = silentWav();
 let player = null;
 export function unlockPlayer() {
   if (typeof Audio === "undefined") return null;
@@ -144,7 +157,7 @@ export function unlockPlayer() {
    that are not in the bank, which have no voice. */
 export function useReadAloud(segments, key, ref = null) {
   const prefs = React.useSyncExternalStore(prefsStore.subscribe, prefsStore.get, prefsStore.get);
-  // idle | loading | playing | paused | preparing | unavailable
+  // idle | loading | playing | paused | preparing | unavailable | blocked
   const [status, setStatus] = React.useState("idle");
   const [active, setActive] = React.useState(null);
   const [silent, setSilent] = React.useState(false); // the active part is shown, not voiced
@@ -211,14 +224,14 @@ export function useReadAloud(segments, key, ref = null) {
           if (signal.aborted) return;
           /* The browser would not start sound without a tap (auto-read on
              some phones): wait for the student to press Listen. */
-          if (e?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("idle"); return; }
+          if (e?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
           /* The link may have expired while the page stayed open: ask once
              for a fresh one. */
           const again = await ask(segs[i], true);
           if (signal.aborted) return;
           try { if (!again.url) throw new Error("NO_URL"); await playUrl(again.url); } catch (e2) {
             if (signal.aborted) return;
-            if (e2?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("idle"); return; }
+            if (e2?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
             run.current = null; setActive(null); setStatus("unavailable"); return;
           }
         }
@@ -267,6 +280,7 @@ export const NOTES = {
   preparing: "The AI voice for this is being prepared and is usually ready within 15 minutes.",
   unavailable: "The voice isn't available right now. Please try again later.",
   silent: "Read this part on screen.",
+  blocked: "Your browser held back the sound. Tap the button once more to start the voice.",
 };
 
 export function ReadAloudBar({ reader, label = "Listen", hint }) {
@@ -274,10 +288,12 @@ export function ReadAloudBar({ reader, label = "Listen", hint }) {
   const { status, prefs, setPrefs, play, pause, resume, stop, silent } = reader;
   const main = status === "playing" ? { text: "⏸ Pause", on: pause, aria: "Pause reading" }
     : status === "paused" ? { text: "▶ Resume", on: resume, aria: "Resume reading" }
+    : status === "blocked" ? { text: "🔊 Tap to start the voice", on: resume, aria: "Start the voice" }
     : status === "loading" ? { text: "Getting the voice ready…", on: stop, aria: "Stop reading" }
     : { text: `🔊 ${label}`, on: play, aria: `${label}: read this aloud` };
   const nextRate = RATES[(RATES.indexOf(prefs.rate) + 1) % RATES.length];
-  const note = status === "preparing" ? NOTES.preparing : status === "unavailable" ? NOTES.unavailable : status === "playing" && silent ? NOTES.silent : null;
+  const note = status === "preparing" ? NOTES.preparing : status === "unavailable" ? NOTES.unavailable
+    : status === "blocked" ? NOTES.blocked : status === "playing" && silent ? NOTES.silent : null;
   return (
     <div className="ra-bar" role="group" aria-label="Read aloud">
       <button type="button" className="btn ra-main" onClick={main.on} aria-label={main.aria} aria-pressed={status === "playing"}>{main.text}</button>

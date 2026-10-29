@@ -130,6 +130,26 @@ export const speechKey = (text, tts = TTS) =>
   sha256([tts.model, tts.voice, tts.instructions, `qa${QA_VERSION}`, text].join('\n')).slice(0, 40);
 
 const KINDS = { question: ['question', 'feedback'], case: ['intro', 'step', 'feedback'], card: ['front', 'back'] };
+/* The reference rebuilt from its known fields only: nothing a caller adds
+   is ever kept, stored or passed on. null when it is not a valid one. */
+export function canonicalRef(ref) {
+  if (!ref || typeof ref !== 'object' || !KINDS[ref.kind]?.includes(ref.part) || !Number.isInteger(ref.id) || ref.id <= 0) return null;
+  const out = { kind: ref.kind, id: ref.id, part: ref.part };
+  if (ref.step !== undefined) {
+    if (!Number.isInteger(ref.step) || ref.step < 0 || ref.step >= 50) return null;
+    out.step = ref.step;
+  }
+  if (ref.result !== undefined) {
+    const r = ref.result;
+    if (!r || typeof r !== 'object' || typeof r.correct !== 'boolean' || !Number.isInteger(r.points) || !Number.isInteger(r.max)) return null;
+    out.result = { correct: r.correct, points: r.points, max: r.max };
+  }
+  return out;
+}
+/* A queue entry is small by construction (a canonical ref, a part id and
+   at most SPEAK_MAX characters); anything bigger is not one of ours. */
+export const QUEUE_ENTRY_MAX = 4096;
+
 export function validRequest(ref, seg, text) {
   return !!ref && !!KINDS[ref.kind]?.includes(ref.part) && Number.isInteger(ref.id) && ref.id > 0 &&
     (ref.step === undefined || (Number.isInteger(ref.step) && ref.step >= 0 && ref.step < 50)) &&
@@ -345,10 +365,12 @@ export async function readRecord(storage, text, tts = TTS, now = Date.now()) {
 /* Returns { status, body } for the route to send.
    200 { url }: checked audio to play.
    202 { queued }: no voice yet; the passage is queued for the voice job
-     (ops/read-aloud-worker.mjs), and the app reads it with the device voice
-     this time. Used when the server itself holds no OpenAI key. */
-export async function speak({ ref, seg, text, userId, readItem, apiKey, storage, fetchImpl = fetch, now = Date.now(), limits = LIMITS, tts = TTS }) {
-  if (!validRequest(ref, seg, text)) return { status: 400, body: { error: 'Bad request' } };
+     (ops/read-aloud-worker.mjs) and the app says it is being prepared.
+     Used when the server itself holds no OpenAI key. */
+export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, storage, fetchImpl = fetch, now = Date.now(), limits = LIMITS, tts = TTS }) {
+  // Only the known fields of the reference are used from here on.
+  const ref = canonicalRef(rawRef);
+  if (!ref || !validRequest(ref, seg, text)) return { status: 400, body: { error: 'Bad request' } };
   if (!storage || !readItem || !userId) return { status: 503, body: { error: 'Voice unavailable' } };
 
   // Only the words of an item this student may read, exactly as built for the screen.
@@ -381,7 +403,9 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
     const slot = await take();
     if (slot === 'error') return { status: 503, body: { error: 'Voice unavailable' } };
     if (slot !== 'ok') return overBudget;
-    const ok = await put(storage, queue, JSON.stringify({ text, voice: tts.voice, ref, seg, requestedAt: new Date(now).toISOString() }), 'application/json');
+    const entry = JSON.stringify({ text, voice: tts.voice, ref, seg, requestedAt: new Date(now).toISOString() });
+    if (entry.length > QUEUE_ENTRY_MAX) return { status: 400, body: { error: 'Bad request' } };
+    const ok = await put(storage, queue, entry, 'application/json');
     if (!ok) return { status: 503, body: { error: 'Voice unavailable' } };
     return { status: 202, body: { queued: true } };
   }

@@ -24,6 +24,9 @@ const env = { gesture: false, strict: false, played: [], elements: [] };
 class FakeAudio {
   constructor(src) { this.src = src ?? ""; this.paused = true; this.dataset = {}; this.playbackRate = 1; this.unlocked = false; env.elements.push(this); }
   play() {
+    // Like a real decoder: a WAV with no samples cannot be played.
+    if (String(this.src).startsWith(SILENT_PREFIX) && wavSamples(this.src) === 0) return Promise.reject(Object.assign(new Error("no samples"), { name: "NotSupportedError" }));
+    if (env.strict && env.refuseUnlock && String(this.src).startsWith(SILENT_PREFIX)) return Promise.reject(Object.assign(new Error("not allowed"), { name: "NotAllowedError" }));
     if (env.strict && !this.unlocked && !env.gesture) return Promise.reject(Object.assign(new Error("not allowed"), { name: "NotAllowedError" }));
     this.unlocked = true;
     this.paused = false;
@@ -34,6 +37,13 @@ class FakeAudio {
   end() { this.paused = true; this.onended?.(); }
 }
 const player = () => env.elements.at(-1);
+/* The number of samples in a base64 WAV data URL (its data chunk length). */
+function wavSamples(url) {
+  const bin = atob(String(url).split(",")[1] ?? "");
+  const at = bin.indexOf("data");
+  if (at < 0) return 0;
+  return (bin.charCodeAt(at + 4) | (bin.charCodeAt(at + 5) << 8) | (bin.charCodeAt(at + 6) << 16) | (bin.charCodeAt(at + 7) << 24)) >>> 0;
+}
 
 /* The voice route, answered by the test: each request waits until the
    test resolves it, so timing is in the test's hands. */
@@ -60,7 +70,7 @@ const tap = async (fn) => { await act(async () => { env.gesture = true; try { fn
 const gap = async (ms = 400) => { await act(async () => { await new Promise((r) => setTimeout(r, ms)); }); };
 
 beforeEach(async () => {
-  Object.assign(env, { gesture: false, strict: false, played: [], elements: [] });
+  Object.assign(env, { gesture: false, strict: false, refuseUnlock: false, played: [], elements: [] });
   pending = [];
   vi.stubGlobal("Audio", FakeAudio);
   vi.stubGlobal("fetch", vi.fn(fetchStub));
@@ -107,6 +117,28 @@ describe("useReadAloud, mounted", () => {
     await act(async () => player().end());
     await gap();
     expect(env.played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt0", "https://signed.example/1/opt1"]);
+  });
+
+  it("unlocks with a real, decodable silent clip", () => {
+    expect(mod.SILENT.startsWith("data:audio/wav;base64,")).toBe(true);
+    expect(wavSamples(mod.SILENT)).toBe(800); // 100 ms at 8 kHz
+    // an empty WAV (no samples) is what a decoder may refuse
+    expect(wavSamples("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=")).toBe(0);
+  });
+
+  it("asks for one more tap when the browser holds the sound back, and then plays", async () => {
+    env.strict = true; env.refuseUnlock = true;
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap(() => reader.play());
+    await flush();
+    await answerAll((p) => p.reply(200, { url: urlFor(p) }));
+    await flush();
+    expect(env.played).toEqual([]);
+    expect(reader.status).toBe("blocked");
+    env.refuseUnlock = false;
+    await tap(() => reader.resume()); // the second tap, with links already fetched
+    await flush();
+    expect(env.played).toEqual(["https://signed.example/1/stem"]);
   });
 
   it("never starts audio when any part is still being prepared", async () => {

@@ -32,7 +32,7 @@
    or bank trouble) fails the workflow run, so it is noticed. */
 import { createClient } from "@supabase/supabase-js";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
 import { scriptFor, questionFeedbackSegments, caseFeedbackSegments, verdictText } from "../src/read-aloud-script.js";
 
@@ -56,10 +56,13 @@ async function voiceOne({ storage, apiKey, fetchImpl, text, now, limits }) {
   return { result: r.best.check.pass ? "voiced" : "failed", spent: r.spent, similarity: r.best.check.similarity };
 }
 
-async function readJsonFile(bucket, path) {
+async function readJsonFile(bucket, path, maxBytes = Infinity) {
   const { data, error } = await bucket.download(path);
   if (error) return { error };
-  try { return { value: JSON.parse(await data.text()) }; } catch { return { malformed: true }; }
+  if (Number(data.size) > maxBytes) return { tooBig: true };
+  const text = await data.text();
+  if (text.length > maxBytes) return { tooBig: true };
+  try { return { value: JSON.parse(text) }; } catch { return { malformed: true }; }
 }
 const put = (bucket, path, value) => bucket.upload(path, JSON.stringify(value), { contentType: "application/json", upsert: true });
 
@@ -76,13 +79,17 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
   const jobs = [];
   for (const f of (entries ?? []).filter((e) => e.name?.endsWith(".json"))) {
     const path = `queue/${f.name}`;
-    const got = await readJsonFile(bucket, path);
+    // Oversized entries are not ours: dropped unread.
+    if (Number(f.metadata?.size) > QUEUE_ENTRY_MAX) { await bucket.remove([path]); out.skipped++; continue; }
+    const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
     if (got.error) { out.operational = true; out.errors.push(`${f.name}: could not read (${got.error.message ?? got.error})`); continue; }
-    const job = got.value;
-    if (got.malformed || !job || job.voice !== TTS.voice || !validRequest(job.ref, job.seg, job.text) || passagePaths(job.text).queue !== path) {
+    const raw = got.value;
+    const ref = canonicalRef(raw?.ref);
+    if (got.malformed || got.tooBig || !raw || raw.voice !== TTS.voice || !ref || !validRequest(ref, raw.seg, raw.text) || passagePaths(raw.text).queue !== path) {
       await bucket.remove([path]); out.skipped++; continue;
     }
-    jobs.push({ path, job });
+    // Only the known fields are kept for the run.
+    jobs.push({ path, job: { text: raw.text, voice: raw.voice, ref, seg: raw.seg, requestedAt: String(raw.requestedAt ?? ""), attempts: Number.isInteger(raw.attempts) ? raw.attempts : 0 } });
   }
   out.queued = jobs.length;
   // Fresh requests before retried ones, oldest first.
