@@ -1,0 +1,39 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "6ecdc59dfcc66566f61b645393f189b0b73757c5",
+    "head": "7017c0d302190dcd37d268585aa61fae4c670952",
+    "pr": "157"
+  },
+  "reviewedAt": "2026-10-29T19:03:43.823Z",
+  "filesReviewed": [
+    "pulsern/ops/narrate-lib.mjs",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-31-56-713Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-31-56-713Z.md",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-36-06-189Z.json",
+    "pulsern/reports/diagram-map/run-2026-10-29T17-36-06-189Z.md",
+    "pulsern/reports/diagram-review/index.json",
+    "pulsern/reports/narration/run-2026-10-29T17-27-46-727Z.json",
+    "pulsern/reports/narration/run-2026-10-29T17-27-46-727Z.md",
+    "pulsern/src/diagrams/item-map.json",
+    "pulsern/src/diagrams/narration.json",
+    "pulsern/tests/narrate.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 91774,
+    "completionTokens": 3704,
+    "reasoningTokens": 3596,
+    "costUsd": 0.2664735
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No concrete defect found in the supplied changes. The compound folding is restricted to an explicit allowlist, and the new tests exercise both faithful transcripts and meaningful corruptions. Verification remains limited: I could not run the tests, authenticate the signatures or audio objects, validate the 678 pairings against their source questions, or establish why the existing visual-review attestations were rebound to a new sourceKey without new review reports.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
