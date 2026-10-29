@@ -594,4 +594,17 @@ describe("open and closed compounds", () => {
     expect(audioCheck(script, heard.replace("mealtime", "bedtime")).pass).toBe(false);
     expect(audioCheck("a dose of 1 2 units", "a dose of 12 units").pass).toBe(false);
   });
+  /* PR #157 review: only compounds the script hyphenates are folded. */
+  it("never joins words the script keeps apart", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    expect(audioCheck("A febrile client requires further assessment for a possible infection.", "A febrile client requires further assessment for a possible infection.").pass).toBe(true);
+    expect(audioCheck("A febrile client requires further assessment for a possible infection.", "Afebrile client requires further assessment for a possible infection.").pass).toBe(false);
+    expect(audioCheck("Use a septic technique here.", "Use aseptic technique here.").pass).toBe(false);
+  });
+  it("folds hyphenated compounds in short scripts too, for the score as well as the words", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    expect(audioCheck("Iso-osmolar.", "Isoosmolar.")).toMatchObject({ pass: true, mismatch: null });
+    expect(audioCheck("Pre-load and after-load.", "Preload and afterload.")).toMatchObject({ pass: true, mismatch: null });
+    expect(audioCheck("Pre-load and after-load.", "Preload and overload.").pass).toBe(false);
+  });
 });

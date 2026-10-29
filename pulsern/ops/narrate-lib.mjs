@@ -157,7 +157,8 @@ function levenshtein(a, b) {
    uses (units, letters, signs), so a correct spelling of a unit — "mcg"
    for "micrograms" — does not cost similarity either. */
 export function speechSimilarity(script, transcript) {
-  const a = speechTokens(script).join(" "), b = speechTokens(transcript).join(" ");
+  const [ta, tb] = compared(script, transcript);
+  const a = ta.join(" "), b = tb.join(" ");
   if (!a.length && !b.length) return 1;
   return 1 - levenshtein(a, b) / Math.max(a.length, b.length);
 }
@@ -264,22 +265,30 @@ export function speechTokens(text) {
 }
 
 /* The first word where script and transcript disagree, or null. */
-/* A compound may be written open or closed: "meal-time" (read as "meal
-   time") and "mealtime" are the same words. Two plain-letter tokens on one
-   side that spell exactly one token on the other are joined; numbers are
-   never joined, so every digit still has to match as scripted. */
-function joinCompounds(a, b) {
-  const plain = (w) => /^[a-z]+$/.test(w ?? "");
-  const x = [...a], y = [...b];
-  for (let i = 0; i < Math.max(x.length, y.length); i++) {
-    if (x[i] === y[i]) continue;
-    if (plain(x[i]) && plain(x[i + 1]) && x[i] + x[i + 1] === y[i]) x.splice(i, 2, y[i]);
-    else if (plain(y[i]) && plain(y[i + 1]) && y[i] + y[i + 1] === x[i]) y.splice(i, 2, x[i]);
-  }
-  return [x, y];
+/* A compound may be written open or closed. Only a compound the SCRIPT
+   itself writes with a hyphen ("meal-time", "iso-osmolar") is folded to
+   its closed form, on both sides, so the transcript's "mealtime" or
+   "meal time" matches it. Arbitrary neighbours are never joined: "a
+   febrile" must not pass as "afebrile" (PR #157 review). Numbers are
+   never joined. Used by both the word check and the similarity score. */
+function scriptCompounds(script) {
+  const pairs = new Set();
+  for (const m of String(script).toLowerCase().matchAll(/\b([a-z]{2,})-([a-z]{2,})\b/g)) pairs.add(`${m[1]} ${m[2]}`);
+  return pairs;
 }
+function foldCompounds(tokens, pairs) {
+  const out = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (pairs.has(`${tokens[i]} ${tokens[i + 1]}`)) { out.push(tokens[i] + tokens[i + 1]); i++; } else out.push(tokens[i]);
+  }
+  return out;
+}
+const compared = (script, transcript) => {
+  const pairs = scriptCompounds(script);
+  return [foldCompounds(speechTokens(script), pairs), foldCompounds(speechTokens(transcript), pairs)];
+};
 export function wordMismatch(script, transcript) {
-  const [a, b] = joinCompounds(speechTokens(script), speechTokens(transcript));
+  const [a, b] = compared(script, transcript);
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     if (a[i] !== b[i]) return { at: i, expected: a[i] ?? "(nothing)", heard: b[i] ?? "(nothing)", context: a.slice(Math.max(0, i - 3), i + 3).join(" ") };
   }
