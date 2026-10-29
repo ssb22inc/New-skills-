@@ -379,6 +379,30 @@ describe("server voice: the accuracy gate", () => {
     ]) expect(voiceCheck(script, heard).pass, heard).toBe(false);
   });
 
+  it("re-voices a passage whose audio file went missing, instead of saying 'being prepared' forever", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base(), storage, fetchImpl: fakeOpenAI() }); // checked and saved
+    const mp3 = [...files.keys()].find((k) => k.endsWith(".mp3"));
+    files.delete(mp3); // the audio is lost; the passing record remains
+    const out = await speak({ ...base({ apiKey: "" }), storage });
+    expect(out.status).toBe(202);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1); // really queued
+    expect([...files.keys()].some((k) => /^marin\/.*\.json$/.test(k))).toBe(false); // the stale record is gone
+    await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), log: () => {} });
+    expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(200);
+  });
+
+  it("says the voice is unavailable, without queueing, when the link service fails", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base(), storage, fetchImpl: fakeOpenAI() });
+    const real = storage.from(BUCKET);
+    const noLinks = { ...storage, from: () => ({ ...real, createSignedUrl: async () => ({ data: null, error: { message: "Internal server error", statusCode: "500" } }) }) };
+    const out = await speak({ ...base({ apiKey: "" }), storage: noLinks });
+    expect(out.status).toBe(503);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    expect([...files.keys()].some((k) => k.endsWith(".mp3"))).toBe(true); // nothing was dropped
+  });
+
   it("creates the private bucket on first use", async () => {
     const { storage, calls } = fakeStorage({ missingBucket: true });
     expect((await speak({ ...base(), storage, fetchImpl: fakeOpenAI() })).status).toBe(200);
@@ -610,6 +634,21 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(f).not.toHaveBeenCalled();
     expect([...good.files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
     expect((await speak({ ...base({ apiKey: "" }), storage: good.storage })).status).toBe(422);
+  });
+
+  it("keeps the original entry when neither the give-up record nor its replacement can be saved", async () => {
+    const good = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage: good.storage });
+    const q = [...good.files.keys()].find((k) => k.startsWith("queue/"));
+    good.files.set(q, Buffer.from(JSON.stringify({ ...JSON.parse(good.files.get(q).toString()), attempts: MAX_ATTEMPTS - 1 })));
+    const real = good.storage.from(BUCKET);
+    // the record and the retry-lane writes fail; deletes (and the budget counters) still work
+    const full = { ...good.storage, from: () => ({ ...real, upload: (p, b, o) => (/^marin\/.*\.json$|^queue-retry\//.test(p) ? Promise.resolve({ error: { message: "Storage quota exceeded" } }) : real.upload(p, b, o)) }) };
+    const r = await runJob({ storage: full, db: fakeDb({ questions: [], case_studies: [], flashcards: [] }), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 503 })), max: 1, log: () => {} });
+    expect(good.files.has(q)).toBe(true); // the work is still there
+    expect(JSON.parse(good.files.get(q).toString()).attempts).toBe(MAX_ATTEMPTS - 1);
+    expect(r.failed).toBe(true);
+    expect(r.lines.join("\n")).toMatch(/entry kept as it was/);
   });
 
   it("stops the run after three outages in a row, without touching the rest", async () => {

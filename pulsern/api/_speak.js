@@ -301,9 +301,14 @@ async function put(storage, path, body, contentType) {
   if (error) console.error('[read-aloud] storage write', path.split('/')[0], error.message ?? error);
   return !error;
 }
+/* { url } a short-lived link; { missing } the audio file is not there;
+   { error } the link could not be made (storage trouble). */
 async function signed(bucket, path) {
   const { data, error } = await bucket.createSignedUrl(path, SIGNED_SECONDS);
-  return error || !data?.signedUrl ? null : data.signedUrl;
+  if (!error && data?.signedUrl) return { url: data.signedUrl };
+  if (error && /not found|does not exist|404/i.test(`${error.message ?? ''} ${error.statusCode ?? ''}`)) return { missing: true };
+  console.error('[read-aloud] signing', error?.message ?? error ?? 'no link');
+  return { error: true };
 }
 
 /* Synthesise and check one passage: up to TAKES takes, each transcribed
@@ -431,8 +436,13 @@ export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, 
   // Already checked: a link to the audio, or a refusal if it failed the check.
   const record = await readRecord(storage, text, tts, t0);
   if (record?.pass === true) {
-    const url = await signed(bucket, mp3);
-    if (url) return { status: 200, body: { url, cached: true } };
+    const link = await signed(bucket, mp3);
+    if (link.url) return { status: 200, body: { url: link.url, cached: true } };
+    if (link.error) return { status: 503, body: { error: 'Voice unavailable' } };
+    /* The record says checked, but the audio file is gone: drop the stale
+       record, so this passage is queued (below) and voiced again. */
+    const { error } = await bucket.remove([passagePaths(text, tts).rec]);
+    if (error) return { status: 503, body: { error: 'Voice unavailable' } };
   } else if (record?.pass === false) {
     return { status: 422, body: { error: 'Voice check failed', similarity: record.similarity } };
   }
@@ -512,6 +522,6 @@ export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, 
   }
   if (!(await saveChecked(storage, text, best, { now: timeOf(), tts }))) return { status: 502, body: { error: 'Voice could not be saved' } };
   if (!best.check.pass) return { status: 422, body: { error: 'Voice check failed', similarity: best.check.similarity } };
-  const url = await signed(bucket, mp3);
-  return url ? { status: 200, body: { url, cached: false } } : { status: 502, body: { error: 'Voice could not be linked' } };
+  const link = await signed(bucket, mp3);
+  return link.url ? { status: 200, body: { url: link.url, cached: false } } : { status: 502, body: { error: 'Voice could not be linked' } };
 }

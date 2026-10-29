@@ -132,16 +132,18 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
           // The entry goes only once the record that ends its retries is saved.
           if (await saveRejected(storage, job.text, reason, { now: now() })) { await bucket.remove([path]); out.rejected++; }
           else {
-            await put(bucket, paths.retry, { ...job, attempts, giveUp: reason });
+            // Keep the work: the original goes only once its replacement is saved.
+            const { error: keepError } = await put(bucket, paths.retry, { ...job, attempts, giveUp: reason });
             touched.add(paths.retry);
-            if (path !== paths.retry) await bucket.remove([path]);
-            out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`);
+            if (!keepError && path !== paths.retry) await bucket.remove([path]);
+            out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record${keepError ? " (entry kept as it was)" : ""}`);
           }
         } else {
           // Into the retry lane, behind every fresh request.
           const { error: moveError } = await put(bucket, paths.retry, { ...job, attempts, lastError: String(v.error).slice(0, 200) });
           touched.add(paths.retry);
           if (!moveError && path !== paths.retry) await bucket.remove([path]);
+          if (moveError) out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not move to the retry lane (entry kept as it was)`);
           out.retried++;
         }
         // Any provider or storage failure is an operational failure of the run,
