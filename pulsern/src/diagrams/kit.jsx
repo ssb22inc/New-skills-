@@ -426,6 +426,9 @@ export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, text: sh
       {ticks.map((tx, i) => <line key={i} x1={tx} x2={tx} y1={y + 6} y2={y + 9} stroke={C.muted} strokeOpacity={0.45} strokeWidth={0.8} />)}
       <rect x={px(lo)} y={y - 5} width={px(hi) - px(lo)} height={10} rx={4} fill={u("teal")} />
       <rect x={px(lo)} y={y - 5} width={px(hi) - px(lo)} height={5} rx={3} fill={u("sheen")} />
+      {/* a solid accent boundary marks the normal range in both themes; the
+          gradient is decoration (Sol, round 9) */}
+      <rect className="dg-solid" x={px(lo)} y={y - 5} width={px(hi) - px(lo)} height={10} rx={4} fill="none" stroke={C.accent} strokeWidth={1.4} />
       <T x={px(lo)} y={y + 23} size={MIN_TEXT} anchor="middle" color={C.accent} mono>{fmt(lo)}</T>
       <T x={px(hi)} y={y + 23} size={MIN_TEXT} anchor="middle" color={C.accent} mono>{fmt(hi)}</T>
       {leftLabel ? <T x={x} y={y + 23} size={MIN_TEXT} color={C[leftColor]} weight={600}>{leftLabel}</T> : null}

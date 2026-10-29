@@ -186,15 +186,21 @@ function UnstageableStrip({ x, y, w }) {
     </g>
   );
 }
+/* Depth (unscaled) to the top of the bone, and the strip's drawn height. */
+const depthOf = (key) => { let d = 0; for (const l of LAYERS) { d += l.h; if (l.key === key) return d; } return d; };
+const DTPI_STRIP_H = LAYERS.reduce((a, l) => a + l.h, 0) * 0.62;
 function DeepTissueStrip({ x, y, w }) {
   const s = 0.62;
   return (
     <g>
-      <rect x={x} y={y} width={w} height={(8 + 18 + 26) * s} fill={C.card} />
-      <Tissue x={x} y={y} w={w} layers={STRIP} scale={s} />
-      {/* damage starts deep, under skin that may still be intact */}
-      <ellipse cx={x + w / 2} cy={y + 18} rx={w * 0.26} ry={12} fill={C.coral} fillOpacity={0.85} />
-      <ellipse cx={x + w / 2} cy={y + 18} rx={w * 0.26} ry={12} fill="#000" fillOpacity={0.38} stroke={C.danger} strokeWidth={1.2} strokeDasharray="3 2" />
+      <rect x={x} y={y} width={w} height={DTPI_STRIP_H} fill={C.card} />
+      <Tissue x={x} y={y} w={w} scale={s} />
+      {/* The full depth, down to bone: the injury starts at the bone–muscle
+          interface and spreads up toward skin that may still be intact
+          (Sol, round 9: the strip stopped in fat). */}
+      <ellipse cx={x + w / 2} cy={y + 24} rx={w * 0.2} ry={10} fill={C.coral} fillOpacity={0.3} />
+      <ellipse cx={x + w / 2} cy={y + depthOf("muscle") * s - 2} rx={w * 0.27} ry={9} fill={C.coral} fillOpacity={0.85} />
+      <ellipse cx={x + w / 2} cy={y + depthOf("muscle") * s - 2} rx={w * 0.27} ry={9} fill="#000" fillOpacity={0.38} stroke={C.danger} strokeWidth={1.2} strokeDasharray="3 2" />
       <ellipse cx={x + w / 2} cy={y + 8} rx={w * 0.2} ry={3} fill={C.coral} fillOpacity={0.35} />
       <Surface x={x} y={y} w={w} />
       {/* the finding a nurse SEES: intact skin with a deep red-purple
@@ -265,7 +271,7 @@ const PREVENT = [
 const STAGES = [
   ["Stage 1", "Intact skin with non-blanchable redness. In darker skin the color change can look different; also check warmth, firmness and sensation."],
   ["Stage 2", "Partial-thickness loss with exposed dermis: a pink, moist bed, or an intact or ruptured serum-filled blister. No fat, granulation, slough or eschar. Not used for moisture damage, skin tears, burns or abrasions."],
-  ["Stage 3", "Full-thickness loss with fat visible; slough or eschar may be present. No fascia, muscle, tendon, ligament, cartilage or bone exposed."],
+  ["Stage 3", "Full-thickness loss with fat visible; slough or eschar may be present. No fascia, muscle, tendon, ligament, cartilage or bone exposed or directly palpable."],
   ["Stage 4", "Full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone."],
 ];
 const UNSTAGEABLE = "Slough or eschar covers the base, so the extent of loss can't be confirmed.";
@@ -282,7 +288,8 @@ export function PressureInjuryDiagram({ focus = null }) {
   const rows = STAGES.map(([k, t]) => { const y = sy; sy += H(`${k} ${t}`, 324) + 6; return y; });
   const noteY = sy + 4;
   const OY = noteY + H("x", 324) + 14;
-  const oh = 82 + Math.max(H(UNSTAGEABLE, 150), H(DTPI, 148)) - MIN_TEXT * LH + 14;
+  const DTY = 34 + DTPI_STRIP_H + 18;   // the DTPI strip runs to bone, so its text starts lower
+  const oh = Math.max(82 + H(UNSTAGEABLE, 150), DTY + H(DTPI, 148)) - MIN_TEXT * LH + 14;
   const PY = OY + oh + 10;
   const tileH = 108;
   const pnY = PY + 30 + 2 * (tileH + 6) + 14;
@@ -300,7 +307,7 @@ export function PressureInjuryDiagram({ focus = null }) {
       regions={{ head: [0, 46], note: [noteY - 14, noteY + 5], legend: [LY - 14, LY + 4], other: [OY, OY + oh], prevent: [PY, PY + PH],
         ...Object.fromEntries(STAGES.map((_, i) => [`s${i + 1}`, [TOP - 52, BOTTOM + 2]])),
         ...Object.fromEntries(STAGES.map((_, i) => [`r${i + 1}`, rowSpan(i)])) }}
-      desc="Cross-sections through epidermis, dermis, fat, muscle and bone. Stages describe tissue findings and the extent of tissue loss; actual depth varies by location, the stages are not a required progression, and a healing injury is not reverse-staged. Stage 1: intact skin with non-blanchable redness; in darker skin the color change can look different, so warmth, firmness and sensation are also assessed. Stage 2: partial-thickness loss with exposed dermis, a pink moist bed, or an intact or ruptured serum-filled blister; no fat, granulation tissue, slough or eschar; Stage 2 is for pressure-related injury, not moisture-associated skin damage, incontinence-associated dermatitis, skin tears, burns or abrasions. Stage 3: full-thickness loss with fat visible; slough or eschar may be present; no fascia, muscle, tendon, ligament, cartilage or bone exposed. Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone. Unstageable: slough or eschar covers the base, so the extent of loss cannot be confirmed. Deep tissue pressure injury: intact or non-intact skin with persistent non-blanchable deep red, maroon or purple discoloration, a blood-filled blister, or epidermal separation revealing a dark wound bed, resulting from intense and/or prolonged pressure and shear forces at the bone-muscle interface. Prevention: Braden scale (lower score means higher risk), repositioning on an individualized schedule (every 2 hours is a common teaching schedule), head of bed at or below 30 degrees if clinically appropriate, because breathing or aspiration precautions may require a higher position; pressure-redistributing support surfaces; clean and dry skin; and protein, calories and fluids.">
+      desc="Cross-sections through epidermis, dermis, fat, muscle and bone. Stages describe tissue findings and the extent of tissue loss; actual depth varies by location, the stages are not a required progression, and a healing injury is not reverse-staged. Stage 1: intact skin with non-blanchable redness; in darker skin the color change can look different, so warmth, firmness and sensation are also assessed. Stage 2: partial-thickness loss with exposed dermis, a pink moist bed, or an intact or ruptured serum-filled blister; no fat, granulation tissue, slough or eschar; Stage 2 is for pressure-related injury, not moisture-associated skin damage, incontinence-associated dermatitis, skin tears, burns or abrasions. Stage 3: full-thickness loss with fat visible; slough or eschar may be present; no fascia, muscle, tendon, ligament, cartilage or bone exposed or directly palpable. Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone. Unstageable: slough or eschar covers the base, so the extent of loss cannot be confirmed. Deep tissue pressure injury: intact or non-intact skin with persistent non-blanchable deep red, maroon or purple discoloration, a blood-filled blister, or epidermal separation revealing a dark wound bed, resulting from intense and/or prolonged pressure and shear forces at the bone-muscle interface. Prevention: Braden scale (lower score means higher risk), repositioning on an individualized schedule (every 2 hours is a common teaching schedule), head of bed at or below 30 degrees if clinically appropriate, because breathing or aspiration precautions may require a higher position; pressure-redistributing support surfaces; clean and dry skin; and protein, calories and fluids.">
       <G id="head">
         <T x={180} y={20} size={BODY_TEXT} weight={700} anchor="middle">Stages: what the tissue shows</T>
         <T x={180} y={39} size={MIN_TEXT} anchor="middle" color={C.muted}>the same skin, cut through; real depth varies</T>
@@ -367,7 +374,7 @@ export function PressureInjuryDiagram({ focus = null }) {
           <Box x={184} y={OY} w={168} h={oh} r={10} fill={C.surface} stroke={C.line} sw={1.2} lift />
           <T x={194} y={OY + 21} size={BODY_TEXT} weight={700}>Deep tissue injury</T>
           <DeepTissueStrip x={194} y={OY + 34} w={148} />
-          <Para x={194} y={OY + 82} w={148} size={MIN_TEXT} text={DTPI} />
+          <Para x={194} y={OY + DTY} w={148} size={MIN_TEXT} text={DTPI} />
         </Anim>
       </G>
       <G id="prevent">
@@ -400,7 +407,7 @@ export const pressureInjury = {
     "Pressure injury stages describe tissue findings and the extent of tissue loss; actual tissue depth varies by anatomical location. Stages are not a required progression, and a healing pressure injury is not reverse-staged.",
     "Stage 1 pressure injury: intact skin with a localized area of non-blanchable erythema. In darkly pigmented skin the color change may appear differently, so localized warmth, firmness and sensation changes are also assessed.",
     "Stage 2: partial-thickness skin loss with exposed dermis; the wound bed is viable, pink or red, and moist, and may present as an intact or ruptured serum-filled blister. Adipose tissue is not visible, and granulation tissue, slough and eschar are not present. Stage 2 applies only to pressure-related injury: it is not used for moisture-associated skin damage (including incontinence-associated dermatitis), skin tears, burns or abrasions.",
-    "Stage 3: full-thickness skin loss in which adipose (fat) tissue is visible; slough or eschar may be present, but fascia, muscle, tendon, ligament, cartilage and bone are not exposed.",
+    "Stage 3: full-thickness skin loss in which adipose (fat) tissue is visible; slough or eschar may be present, but fascia, muscle, tendon, ligament, cartilage and bone are neither exposed nor directly palpable.",
     "Stage 4: full-thickness skin and tissue loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone.",
     "Unstageable: full-thickness skin and tissue loss in which the extent of damage cannot be confirmed because it is obscured by slough or eschar.",
     "Deep tissue pressure injury: intact or non-intact skin with a localized area of persistent non-blanchable deep red, maroon or purple discoloration, or epidermal separation revealing a dark wound bed or a blood-filled blister. It results from intense and/or prolonged pressure and shear forces at the bone-muscle interface.",
@@ -414,8 +421,8 @@ export const pressureInjury = {
       narration: "Stage one. The skin is intact, with an area of redness that does not blanch when you press on it. In darker skin the color change can look different, so warmth, firmness, and sensation are checked too." },
     { key: "stage2", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r2"], caption: "Stage 2: partial-thickness loss with exposed dermis: a shallow, pink, moist wound, or an intact or ruptured serum-filled blister. No fat, granulation tissue, slough or eschar. It is only for pressure-related injury, not moisture damage, skin tears, burns or abrasions.",
       narration: "Stage two is partial-thickness loss with exposed dermis. It looks like a shallow, pink, moist wound, or an intact or ruptured blister filled with clear serum. There is no fat, granulation tissue, slough, or eschar. And Stage 2 is only for injury from pressure, not for moisture damage, skin tears, burns, or abrasions." },
-    { key: "stage3", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r3"], caption: "Stage 3: full-thickness loss with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage or bone is exposed.",
-      narration: "Stage three is full-thickness loss, with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage, or bone is exposed." },
+    { key: "stage3", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r3"], caption: "Stage 3: full-thickness loss with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage or bone is exposed or directly palpable.",
+      narration: "Stage three is full-thickness loss, with fat visible. Slough or eschar may be present, but no fascia, muscle, tendon, ligament, cartilage, or bone is exposed, or directly palpable." },
     { key: "stage4", focus: ["head", "s1", "s2", "s3", "s4", "legend", "r4"], caption: "Stage 4: full-thickness loss with exposed or directly palpable fascia, muscle, tendon, ligament, cartilage or bone.",
       narration: "Stage four is full-thickness loss, with fascia, muscle, tendon, ligament, cartilage, or bone exposed, or directly palpable." },
     { key: "other", focus: ["other"], caption: "Unstageable: slough or eschar hides the base, so the extent of loss can't be confirmed. Deep tissue injury: intact or non-intact skin with a persistent, non-blanchable deep red, maroon or purple area, a blood-filled blister, or epidermal separation showing a dark wound bed.",

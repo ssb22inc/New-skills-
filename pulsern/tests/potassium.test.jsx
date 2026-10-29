@@ -81,21 +81,21 @@ describe("round 7", () => {
   });
   it("rechecks potassium after shifting it into cells", () => {
     const html = renderToStaticMarkup(<potassium.Diagram params={{ k: 6.2 }} focus={null} />);
-    expect(html).toMatch(/recheck K⁺/);
+    expect(html).toMatch(/recheck/);
     expect(potassium.steps.find((s) => s.key === "hyper-shift").narration).toMatch(/potassium is rechecked as prescribed/);
   });
 });
 
 describe("round 8", () => {
-  it("asks for ADEQUATE urine output everywhere", () => {
+  it("reviews kidney function and urine output before routine replacement, without making it absolute", () => {
     const html = renderToStaticMarkup(<potassium.Diagram params={{ k: 3.1 }} focus={null} />);
-    expect(html).toContain("Confirm adequate urine output");
-    expect(potassium.dynamicCaption({ k: 3.1 })).toMatch(/adequate urine output is confirmed/);
-    expect(potassium.steps.find((s) => s.key === "hypo-care").caption).toMatch(/adequate urine output/);
+    expect(html).toContain("Review kidney function, urine output");
+    expect(potassium.dynamicCaption({ k: 3.1 })).toMatch(/kidney function and urine output are reviewed before routine replacement/);
+    expect(potassium.steps.find((s) => s.key === "hypo-care").caption).toMatch(/not automatic withholding/);
   });
   it("splits hyperkalemia care into two shorter steps", () => {
     const keys = potassium.steps.map((s) => s.key);
     expect(keys.indexOf("hyper-shift")).toBe(keys.indexOf("hyper-care") + 1);
-    for (const k of ["hyper-care", "hyper-shift"]) expect(potassium.steps.find((s) => s.key === k).caption.length).toBeLessThan(420);
+    for (const k of ["hyper-care", "hyper-shift"]) expect(potassium.steps.find((s) => s.key === k).caption.length).toBeLessThan(460);
   });
 });

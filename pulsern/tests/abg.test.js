@@ -407,3 +407,9 @@ describe("round 8", () => {
     expect(limits).toMatch(/24 − k × \(\(40 − PaCO₂\) ÷ 10\), with k = 2 if acute or 5 if chronic/);
   });
 });
+
+describe("round 9", () => {
+  it("speaks the grouped formula unambiguously", () => {
+    expect(abg.steps.find((s) => s.key === "limits").narration).toMatch(/forty plus zero point seven times the quantity, bicarbonate minus twenty-four/);
+  });
+});
