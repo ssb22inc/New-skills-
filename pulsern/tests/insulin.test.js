@@ -81,9 +81,9 @@ describe("the long-acting row names its product everywhere a student sees or hea
     const { audioCheck } = await import("../ops/narrate-lib.mjs");
     const { insulin } = await import("../src/diagrams/insulin.jsx");
     const script = insulin.steps.find((s) => s.key === "long").narration;
-    const heard = "Long-acting glargine U-100 has no pronounced peak. It provides a steady background level that wanes at about 24 hours. Other basal insulins, including glargine U-300, last differently, so always check the product.";
+    const heard = "Long-acting glargine U-100 starts in 1 to 2 hours, and has no pronounced peak. It provides a steady background level that wanes at about 24 hours. Other basal insulins, including glargine U-300, last differently, so always check the product.";
     expect(audioCheck(script, heard).pass).toBe(true);
-    expect(audioCheck(script, heard.replace("glargine U-100 has", "glargine has")).pass).toBe(false);
+    expect(audioCheck(script, heard.replace("glargine U-100 starts", "glargine starts")).pass).toBe(false);
     expect(audioCheck(script, heard.replace("U-300", "U-100")).pass).toBe(false);
   });
 });

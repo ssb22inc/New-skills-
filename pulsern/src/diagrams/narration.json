@@ -1,21 +1,6 @@
 {
   "version": 1,
   "clips": {
-    "insulin": {
-      "nph": {
-        "id": "ffa23742882bc103",
-        "script": "48db65b9a42bcbdbb213e15c0fdc3c799d7005470d452539bf2e192923808001",
-        "qa": 15,
-        "audio": "81320040e6317738b502a42036ae41e1",
-        "voice": "marin",
-        "model": "gpt-4o-mini-tts",
-        "textFp": "c01f6d04",
-        "similarity": 1,
-        "url": "https://xlfdywudgamrnzjwtrtd.supabase.co/storage/v1/object/public/explainers/insulin/81320040e6317738b502a42036ae41e1.mp3",
-        "bytes": 126720,
-        "sig": "6DhbPwXLxtguRHNauSs32IPwDaVICTG7FxEUGn0W39zsea0Nkrxo4oM1VH48MK9UxUkxPz7miNq+AND1g2twBw=="
-      }
-    },
     "isolation": {
       "standard": {
         "id": "d46ae6627ac2bc38",

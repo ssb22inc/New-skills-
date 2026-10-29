@@ -392,3 +392,18 @@ describe("round 4", () => {
     expect(read(7.38, 70, 40).reading).toMatch(/rather than a single compensated one/);
   });
 });
+
+describe("round 8", () => {
+  it("teaches the same metabolic-alkalosis rules the interpreter applies (Sol: 7.50 / 53 / 40)", () => {
+    const r = read(7.5, 53, 40);   // 0.7 × 40 + 21 = 49; 40 + 0.7 × 16 = 51.2; ± 2 → 47–53.2
+    expect(r).toMatchObject({ disorder: "metabolic alkalosis", compensation: "partial" });
+    const limits = abg.steps.find((s) => s.key === "limits");
+    expect(limits.caption).toMatch(/40 \+ 0\.7 × \(HCO₃⁻ − 24\)/);
+    expect(limits.narration).toMatch(/a value fitting either one counts/);
+  });
+  it("writes the respiratory rules with an explicit coefficient", () => {
+    const limits = abg.steps.find((s) => s.key === "limits").caption;
+    expect(limits).toMatch(/24 \+ k × \(\(PaCO₂ − 40\) ÷ 10\), with k = 1 if acute or 4 if chronic/);
+    expect(limits).toMatch(/24 − k × \(\(40 − PaCO₂\) ÷ 10\), with k = 2 if acute or 5 if chronic/);
+  });
+});

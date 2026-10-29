@@ -117,10 +117,25 @@ export function Explainer({ diagram, params, startInPlayer = false, initialStep 
   const go = React.useCallback((i) => { setElapsed(0); setStep(Math.max(0, Math.min(n - 1, i))); }, [n]);
   /* Starting the player from the overview brings it into view, so the first
      step's drawing and caption are on screen together (Sol). */
-  const start = () => {
-    go(0); setPlaying(!reduce);
-    sectionRef.current?.scrollIntoView?.({ block: "start", behavior: reduce ? "auto" : "smooth" });
-  };
+  const started = React.useRef(false);
+  const start = () => { started.current = true; go(0); setPlaying(!reduce); };
+  /* Once the player has rendered: after "Watch", focus moves to the player
+     (the button that had it is gone) and the player scrolls into view (Sol,
+     round 8: focus was lost). On later steps the focused control keeps its
+     focus, and the player scrolls back up only if its top has gone above
+     the viewport, so a tall step never leaves the next one off screen. */
+  React.useEffect(() => {
+    const el = sectionRef.current;
+    if (!inSteps || !el) return;
+    const behavior = reduce ? "auto" : "smooth";
+    if (started.current) {
+      started.current = false;
+      el.focus?.({ preventScroll: true });
+      el.scrollIntoView?.({ block: "start", behavior });
+    } else if ((el.getBoundingClientRect?.().top ?? 0) < 0) {
+      el.scrollIntoView?.({ block: "start", behavior });
+    }
+  }, [step, inSteps, reduce]);
 
   /* Timed captions when there is no narration; narration drives itself. */
   React.useEffect(() => {
