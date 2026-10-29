@@ -1,0 +1,31 @@
+{
+  "id": "tonicity",
+  "title": "IV fluid tonicity",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T14:51:47.426Z",
+  "images": 14,
+  "key": "24869d55ec6ddb85",
+  "findings": [
+    {
+      "severity": "minor",
+      "area": "rules",
+      "where": "tonicity.jsx: Dot and Drop components; particle samples and water symbols in both themes",
+      "title": "Meaning-bearing symbols fall below the required 4.5:1 contrast",
+      "problem": "Dot uses fillOpacity={0.75} and Drop uses fillOpacity={0.85}. With the supplied theme tokens, some solute dots over the cell gradient and water drops over the card background have approximately 3.7–4.2:1 contrast. These symbols encode concentration and water, rather than serving only as decoration.",
+      "fix": "Render solute dots in opaque C.ink and water symbols in opaque C.teal. Check contrast against the actual composited backgrounds in both themes.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "costUsd": 0.283071
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No clinical blocker identified. One minor violation of the project's contrast requirement.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}
