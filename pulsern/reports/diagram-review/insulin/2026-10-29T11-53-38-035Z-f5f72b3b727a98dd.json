@@ -1,0 +1,21 @@
+{
+  "id": "insulin",
+  "title": "Insulin action times",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T11:53:38.035Z",
+  "images": 16,
+  "key": "f5f72b3b727a98dd",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.289871
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No substantiated defects found in the supplied insulin images, captions, narration scripts or parameterized timing logic. Actual narration recordings were not supplied and could not be verified.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
