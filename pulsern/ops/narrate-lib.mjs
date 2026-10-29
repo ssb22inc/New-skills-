@@ -86,6 +86,12 @@ export function wordsToNumbers(text) {
       while (k < tokens.length && tokens[k] in ONES && ONES[tokens[k]] < 10) { digits += ONES[tokens[k]]; last = k; k = next(k); }
       if (digits) s += "." + digits;
     }
+    /* "one and a half" is 1.5, as a transcriber writes it (the abg/limits
+       clip was rejected because "1.5" never matched "one and a half"). */
+    if (!s.includes(".")) {
+      const a1 = next(last), a2 = next(a1), a3 = next(a2);
+      if (tokens[a1] === "and" && tokens[a2] === "a" && tokens[a3] === "half") { s = `${value}.5`; last = a3; }
+    }
     out.push(s);
     i = last + 1;
   }

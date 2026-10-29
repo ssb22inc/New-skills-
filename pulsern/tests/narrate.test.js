@@ -564,3 +564,22 @@ describe("alphanumeric clinical names keep every letter", () => {
     expect(QA_VERSION).toBeGreaterThanOrEqual(15);
   });
 });
+
+describe("spoken halves", () => {
+  it("reads 'one and a half' as 1.5, and still tells halves apart", async () => {
+    const { wordsToNumbers, audioCheck } = await import("../ops/narrate-lib.mjs");
+    expect(wordsToNumbers("about one and a half times")).toBe("about 1.5 times");
+    expect(wordsToNumbers("two and a half")).toBe("2.5");
+    expect(wordsToNumbers("one and another")).toBe("1 and another");
+    expect(audioCheck("about one and a half times the bicarbonate", "about 1.5 times the bicarbonate").pass).toBe(true);
+    expect(audioCheck("about one and a half times the bicarbonate", "about 2.5 times the bicarbonate").pass).toBe(false);
+    expect(audioCheck("about one and a half times the bicarbonate", "about 1 times the bicarbonate").pass).toBe(false);
+  });
+  it("passes the transcript that was rejected for abg/limits", async () => {
+    const { audioCheck } = await import("../ops/narrate-lib.mjs");
+    const { DIAGRAMS } = await import("../src/diagrams/index.js");
+    const script = DIAGRAMS.abg.steps.find((s) => s.key === "limits").narration;
+    const heard = (await import("../reports/narration/run-2026-10-29T15-56-33-164Z.json")).default.failedQa[0].heard;
+    expect(audioCheck(script, heard)).toMatchObject({ pass: true, mismatch: null });
+  });
+});
