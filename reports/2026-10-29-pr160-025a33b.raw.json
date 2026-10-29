@@ -1,0 +1,59 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "025a33ba2136faa2d3bdcc4ceae793b1fcf2aff0",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T22:07:15.957Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 271,
+      "title": "Fail the workflow when queued work encounters an operational error",
+      "problem": "The final failure predicate ignores queued provider and save errors unless three occur consecutively. drainQueue records these errors in q.errors, but runJob only recognizes entries containing \"could not read\". A run can therefore report provider or storage errors in its summary while exiting successfully, contradicting the documented operational-failure behavior.",
+      "failure_scenario": "Queue one passage and run with max=1 while the speech endpoint returns 503. drainQueue returns retried=1 and an error, but providerDown remains false. There is no remaining prewarm allowance, and runJob returns failed=false. The same failure occurs with the default limit when the bank's weekly scan is already complete.",
+      "fix": "Track operational failure explicitly in drainQueue and include it in runJob's failure result, independently of the consecutive-error threshold used to stop processing. Add a runJob test for a single queued provider failure with prewarming skipped or already complete.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/tests/read-aloud.test.jsx",
+      "line": 14,
+      "title": "Test the actual playback hook's checked-audio and cancellation boundaries",
+      "problem": "The tests never mount useReadAloud. Controls are rendered with fabricated reader objects, while planReading and shouldAutoRead are tested separately. Consequently, none of the tests exercise the code that decides when Audio.play is called, cancels pending requests on item changes, or stops clinical audio when leaving an item. This is new critical playback logic without a test that would catch its failure.",
+      "failure_scenario": "Removing the hook's aborted-signal check after Promise.all, or bypassing its plan.kind guard, leaves this suite green. Those regressions could respectively start an old item's audio after navigation or attempt playback despite an incomplete/refused reading plan.",
+      "fix": "Mount the real hook with controlled fetch responses and an Audio mock. Assert that unresolved/refused plans never start audio, a delayed response cannot start playback after the item changes or unmounts, and transitions between question and feedback stop the previous audio.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 98614,
+    "completionTokens": 11446,
+    "reasoningTokens": 10874,
+    "costUsd": 0.3609935
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Changes requested. Operational failures can produce successful workflow runs, and the actual browser playback hook has no tests covering its safety-critical lifecycle behavior. This was a static review of the supplied files; tests and builds were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
