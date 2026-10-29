@@ -190,7 +190,7 @@ describe("the audio check on the real scripts", () => {
      passed for "seven point three five". Real ABG script, both directions. */
   it("never lets a sign appear or disappear", () => {
     const ph = scriptOf("abg/ph");
-    const faithful = "Start with the pH. Anything below 7.35 is acidosis. Anything above 7.45 is alkalosis. The pH tells you what the problem is, not yet where it came from.";
+    const faithful = "Start with the pH, the net state of the blood. Anything below 7.35 is acidemia. Anything above 7.45 is alkalemia. Exam materials often say acidosis and alkalosis, but those words name the processes, and more than one can be at work. The pH tells you the net state, not yet where it came from.";
     expect(audioCheck(ph, faithful).pass).toBe(true);
     expect(audioCheck(ph, faithful.replace("below 7.35", "below -7.35")).pass).toBe(false);
     expect(audioCheck(ph, faithful.replace("below 7.35", "below minus seven point three five")).pass).toBe(false);

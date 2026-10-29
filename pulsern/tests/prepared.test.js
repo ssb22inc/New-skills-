@@ -271,7 +271,7 @@ describe("the pairing and narration jobs read the source through the sandbox", (
 
   it("reads the source's own words, and offers its code no questions", async () => {
     const { withSandbox } = await import("../ops/render-diagrams.mjs");
-    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below")));
+    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH, the net state", "Begin with the pH, the net state")));
     try {
       const got = await withSandbox(root, async (call) => ({ abg: await call("raw", "abg"), propose: await call("propose", [{ id: 1, stem: "s" }]).then(() => "ran", (e) => String(e)) }));
       expect(got.abg.steps[0].narration).toMatch(/^Begin with the pH/);
@@ -304,7 +304,7 @@ describe("the pairing and narration jobs read the source through the sandbox", (
   }, 300_000);
 
   it("prepares the narration plan from the source tree, at its commit, and refuses a dirty tree", () => {
-    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH. Anything below", "Begin with the pH. Anything below")));
+    const root = source((r) => editFile(r, "src/diagrams/abg.jsx", (t) => t.replace("Start with the pH, the net state", "Begin with the pH, the net state")));
     const out = join(mkdtempSync(join(tmpdir(), "narr-out-")), "plan.json");
     try {
       const r = spawnSync(process.execPath, ["ops/narrate.mjs", "--prepare", out, "--source", root], { encoding: "utf8", timeout: 240_000 });

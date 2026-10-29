@@ -353,11 +353,29 @@ describe("round 4", () => {
     expect(r).toMatchObject({ disorder: "metabolic alkalosis", compensation: "partial", mixedPossible: false });
     expect(r.reading).toMatch(/two common bedside rules/);
   });
-  it("never extends alkalosis compensation past the PaCO₂ ceiling", () => {
+  /* Round 5: the ceiling is approximate, so it cautions; it does not cut
+     an accepted rule's range. */
+  it("treats the PaCO₂ ceiling as a caution, not a cut-off (Sol: 7.52 / 56.5 / 45)", () => {
     expect(read(7.59, 65, 60).disorder).toBe("unsupported");
-    const r = read(7.5, 58, 44);    // consistent; rules give 51.8 and 54 ± 2, capped at 55
-    expect(r.mixed).toBe("respiratory acidosis");
-    expect(read(7.52, 54, 44).reading).toMatch(/rarely takes PaCO₂ past about 55/);
+    const r = read(7.52, 56.5, 45);   // 40 + 0.7 × 21 = 54.7 ± 2 fits
+    expect(r).toMatchObject({ disorder: "metabolic alkalosis", mixedPossible: true });
+    expect(r.mixed).toBeUndefined();
+    expect(r.reading).toMatch(/above about 55 is more than compensation usually reaches, so an added respiratory acidosis is possible/);
+    expect(read(7.48, 50, 36).reading).not.toMatch(/above about 55/);
+  });
+  it("offers developing compensation as well as a second disorder for under-compensated metabolic acidosis (Sol: 7.28 / 40 / 18)", () => {
+    const r = read(7.28, 40, 18);
+    expect(r.reading).toMatch(/respiratory compensation may still be developing/);
+    expect(r.reading).toMatch(/a second disorder \(respiratory acidosis\)/);
+  });
+  it("allows for analyzer constants (Sol: 7.400 / 40.00 / 24.22)", () => {
+    expect(interpretAbg({ ph: 7.4, paco2: 40, hco3: 24.22, precision: { ph: 3, paco2: 2, hco3: 2 } }).disorder).toBe("normal");
+    expect(read(7.0, 40, 24).disorder).toBe("inconsistent");
+    expect(read(7.4, 50, 26).disorder).toBe("inconsistent");
+  });
+  it("teaches pH as the net state", () => {
+    expect(abg.steps.find((s) => s.key === "ph").caption).toMatch(/Below 7\.35 is acidemia, above 7\.45 is alkalemia/);
+    expect(abg.facts[0]).toMatch(/acidemia/);
   });
   it("separates acute and chronic respiratory estimates (Sol: 7.28 / 60 / 27)", () => {
     const r = read(7.28, 60, 27);

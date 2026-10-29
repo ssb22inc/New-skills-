@@ -13,8 +13,6 @@
    - Values outside a physiologically possible range are rejected as a
      misread rather than drawn. */
 
-import { precautionFor } from "./isolation.jsx";
-import { stageFrom } from "./pressure-injury.jsx";
 import { abgConsistency } from "./abg.jsx";
 
 const num = (s) => Number(String(s).replace(/,/g, ""));
@@ -112,7 +110,7 @@ export function extractInsulin(text) {
 }
 
 export function extractPotassium(text) {
-  const k = one(K, String(text ?? ""), 1.5, 9.5);
+  const k = one(K, String(text ?? ""), 1.0, 12.0);
   return k != null ? { k } : null;
 }
 
@@ -130,13 +128,17 @@ export const MATCHERS = {
   },
   isolation: {
     candidate: /isolation|precautions|\bPPE\b|\bN95\b|respirator|airborne|droplet|negative[- ]pressure|\bgown\b/i,
-    extract: (t) => precautionFor(t),
+    /* Concept only: no client-specific row is read from the text (Sol,
+       rounds 1–5: every reading of negation, treatment or attribution in
+       free text had a counterexample). */
+    extract: () => null,
   },
   "pressure-injury": {
     /* Eschar and slough alone are not enough: burn and surgical-wound
        items use both words, and this diagram is about pressure. */
     candidate: /pressure (?:injury|injuries|ulcer|ulcers|sore|sores)|decubitus|\bbraden\b|unstageable|deep tissue (?:pressure )?injury/i,
-    extract: (t) => stageFrom(t),
+    /* Concept only, for the same reason: no stage is read from the text. */
+    extract: () => null,
   },
   insulin: {
     /* Insulin must be named: "hypoglycemia" alone pulls in questions about

@@ -1,64 +1,13 @@
-/* Which pressure injury stage a question names — the mapping that outlines
-   a column of the staging diagram — and when the diagram is proposed. */
+/* When the staging diagram is proposed. It is a concept explainer: no
+   stage is read from question text, so no column is ever outlined as the
+   client's (Sol, rounds 1–5). */
 import { describe, it, expect } from "vitest";
-import { stageFrom } from "../src/diagrams/pressure-injury.jsx";
 import { MATCHERS, proposePairs } from "../src/diagrams/match.js";
-
-describe("stageFrom", () => {
-  it.each([
-    ["A stage 3 pressure injury on the sacrum", 3],
-    ["Stage 1: non-blanchable erythema over the heel", 1],
-    ["The client has a stage IV pressure injury", 4],
-    ["documented as a Stage II pressure ulcer", 2],
-    ["stage iii wound", 3],
-    ["a stage I pressure area", 1],
-  ])("%s → %s", (text, stage) => {
-    expect(stageFrom(text)).toEqual({ stage });
-  });
-
-  it("reads unstageable and deep tissue injury", () => {
-    expect(stageFrom("The wound bed is covered with eschar and is unstageable")).toEqual({ stage: "unstageable" });
-    expect(stageFrom("A suspected deep tissue pressure injury on the heel")).toEqual({ stage: "dtpi" });
-    expect(stageFrom("purple area consistent with a deep tissue injury")).toEqual({ stage: "dtpi" });
-  });
-
-  /* Comparing stages is a common item; outlining one would steer the
-     learner towards an answer. */
-  it("lights no column when two stages are named", () => {
-    expect(stageFrom("Which finding distinguishes a stage 2 from a stage 3 pressure injury?")).toBeNull();
-    expect(stageFrom("Unstageable, later found to be stage 4 after debridement")).toBeNull();
-  });
-
-  /* Sol, round 3: another disease's stage before the mention, a stage only
-     asked about, or a stage not tied to the wound must not light a column. */
-  it("ignores other staging and unasserted stages", () => {
-    expect(stageFrom("A client with CKD stage 4 has a sacral pressure injury with full-thickness skin loss.")).toBeNull();
-    expect(stageFrom("A client with CKD stage 4 has a stage 3 pressure injury on the sacrum.")).toEqual({ stage: 3 });
-    expect(stageFrom("Which finding would indicate a stage 3 pressure injury?")).toBeNull();
-    expect(stageFrom("Client has a pressure injury. Stage 3 noted.")).toBeNull();
-    expect(stageFrom("The sacral pressure injury is stage 4.")).toEqual({ stage: 4 });
-    expect(stageFrom("The wound was previously documented as stage 2; it is now a stage 3 pressure injury.")).toBeNull();
-  });
-
-  it("repeating the same stage is still one stage", () => {
-    expect(stageFrom("Stage 2 pressure injury. A stage II injury involves the dermis.")).toEqual({ stage: 2 });
-  });
-
-  it("does not read ordinary words as a roman numeral", () => {
-    expect(stageFrom("At this stage it is important to reposition")).toBeNull();
-    expect(stageFrom("stage in the care plan")).toBeNull();
-  });
-
-  it("returns null with no stage", () => {
-    expect(stageFrom("Braden score of 12")).toBeNull();
-    expect(stageFrom(undefined)).toBeNull();
-  });
-});
 
 describe("pressure injury matching", () => {
   it("is proposed for pressure injury questions", () => {
     expect(proposePairs({ stem: "A client has a stage 3 pressure injury on the sacrum. Which finding is expected?", options: [], rationale: "" }))
-      .toEqual([{ d: "pressure-injury", p: { stage: 3 } }]);
+      .toEqual([{ d: "pressure-injury", p: null }]);
     expect(proposePairs({ stem: "The client's Braden scale score is 11. Which intervention is a priority?", options: [], rationale: "" }))
       .toEqual([{ d: "pressure-injury", p: null }]);
   });
@@ -69,26 +18,16 @@ describe("pressure injury matching", () => {
     expect(MATCHERS["pressure-injury"].candidate.test("Yellow slough in a surgical wound")).toBe(false);
   });
 
+  it.each([
+    "The client is at risk for a stage 4 pressure injury.",
+    "The client has stage 3 sacral sarcoma and a Braden score of 12.",
+    "The client has a stage 4 pressure injury. That diagnosis was ruled out on reassessment.",
+  ])("reads no stage from: %s", (stem) => {
+    expect(MATCHERS["pressure-injury"].extract(stem)).toBeNull();
+  });
+
   it("does not read a cancer or kidney-disease stage as a pressure injury", () => {
     expect(MATCHERS["pressure-injury"].candidate.test("A client with stage 4 chronic kidney disease")).toBe(false);
-  });
-});
-
-/* Sol, PR #155 diagram review. */
-describe("stage mentions that are not the client's stage", () => {
-  it.each([
-    ["This is not a stage 4 pressure injury.", null],
-    ["The wound was incorrectly documented as stage 2; it is a stage 3 pressure injury.", null],
-    ["If this were stage 4, bone would be exposed.", null],
-    /* round 2 */
-    ["Stage 4 was ruled out. The heel pressure injury is stage 3.", null],   // round 4: any unsettled stage sentence abstains
-    ["The client has no fever and a stage 2 pressure injury. Teaching covers stage 4 pressure injuries.", null],
-    ["A stage 4 pressure injury on the left heel was ruled out.", null],
-    ["The client has no fever. The sacral pressure injury is stage 2.", { stage: 2 }],
-    ["The client has stage 4 chronic kidney disease and a sacral pressure injury.", null],
-    ["The client has stage 4 chronic kidney disease.", null],
-  ])("%s", (text, want) => {
-    expect(stageFrom(text)).toEqual(want);
   });
 });
 

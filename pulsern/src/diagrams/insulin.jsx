@@ -193,12 +193,12 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
   return (
     <Frame h={workedLines ? workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 12 : workedY - 6} focus={focus} title="Insulin onset, peak and duration"
       regions={{ axes: [0, Y0 + 40], rapid: [YTOP - 60, Y0 + 40], short: [YTOP - 60, Y0 + 40], nph: [YTOP - 60, Y0 + 40], long: [YTOP - 60, Y0 + 40],
-        "rapid-meal": [Y0 - 60, Y0], table: [TY, tableEnd], note: [noteY - 14, riskY - 14], "peak-risk": [riskY - 16, workedY - 18],
+        "rapid-meal": [YTOP - 40, YTOP - 10], table: [TY, tableEnd], note: [noteY - 14, riskY - 14], "peak-risk": [riskY - 16, workedY - 18],
         worked: workedLines ? [[YTOP - 62, Y0 + 40], [workedY - 16, workedY + (workedLines - 1) * BODY_TEXT * 1.3 + 6]] : [YTOP - 62, Y0 + 40] }}
-      desc={`${workedText ? `${workedText}. ` : ""}Typical subcutaneous action of four insulin types over 24 hours, as illustrative curves that stay flat until onset. Rapid-acting (lispro, aspart, glulisine): onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours; it is associated with meals, and its timing follows the specific product and prescribed plan. Short-acting regular U-100: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no pronounced peak, wanes at about 24 hours. IV regular insulin and regular U-500 act differently, and detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest around a peak, but lows can also happen at other times and with peakless insulin.`}>
+      desc={`${workedText ? `${workedText}. ` : ""}Typical subcutaneous action of four insulin types over 24 hours, as illustrative curves that stay flat until onset; curve heights are arbitrary and do not compare potency or dose, and times vary by product. Rapid-acting (lispro, aspart, glulisine): onset 10 to 30 minutes, peak 1 to 2 hours, duration 3 to 5 hours; it is associated with meals, and its timing follows the specific product and prescribed plan. Short-acting regular U-100: onset 30 to 60 minutes, peak 2 to 4 hours, duration 5 to 8 hours. Intermediate NPH: onset 1 to 2 hours, peak 4 to 12 hours, duration 12 to 18 hours. Long-acting glargine U-100: onset 1 to 2 hours, no pronounced peak, wanes at about 24 hours. IV regular insulin and regular U-500 act differently, and detemir, glargine U-300 and degludec last differently, so check the product. Hypoglycemia risk is highest around a peak, but lows can also happen at other times and with peakless insulin.`}>
       <G id="axes">
         <T x={18} y={20} size={BODY_TEXT} weight={700}>Typical SC insulin action, 24 hours</T>
-        <T x={18} y={39} size={MIN_TEXT} color={C.muted}>illustrative curves; times vary by product</T>
+        <T x={18} y={39} size={MIN_TEXT} color={C.muted}>illustrative: heights don't compare strength</T>
         {Object.entries(INSULINS).map(([k, ins], i) => {
           const lx = i % 2 ? 190 : 18, ly = 64 + Math.floor(i / 2) * 22;
           return (
@@ -211,8 +211,9 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
         {[0.33, 0.66, 1].map((f) => (
           <line key={f} x1={X0} x2={X1} y1={Y0 - (Y0 - YTOP) * f} y2={Y0 - (Y0 - YTOP) * f} stroke={C.line} strokeOpacity={0.6} strokeDasharray="2 4" />
         ))}
-        <line x1={X0} y1={Y0} x2={X1} y2={Y0} stroke={C.line} strokeWidth={1.2} />
-        <line x1={X0} y1={YTOP - 6} x2={X0} y2={Y0} stroke={C.line} strokeWidth={1.2} />
+        {/* axes in the muted ink, which meets 3:1 in both themes (Sol, round 5) */}
+        <line x1={X0} y1={Y0} x2={X1} y2={Y0} stroke={C.muted} strokeWidth={1.2} />
+        <line x1={X0} y1={YTOP - 6} x2={X0} y2={Y0} stroke={C.muted} strokeWidth={1.2} />
         {[0, 4, 8, 12, 16, 20, 24].map((h) => (
           <g key={h}>
             <line x1={hx(h)} y1={Y0} x2={hx(h)} y2={Y0 + 4} stroke={C.muted} />
@@ -225,10 +226,12 @@ export function InsulinDiagram({ params = INSULIN_EXAMPLE, focus = null }) {
       <Curve k="nph" step="nph" />
       <Curve k="long" step="long" />
       <G id="rapid-meal">
+        {/* Off the time axis, in the label row above the chart: a plate drawn
+            at an hour on the axis read as a meal hours after the dose (Sol,
+            round 5). */}
         <OnStep on="rapid" kind="pop" delay={600}>
-          <path d={`M${hx(0) + 2},${Y0 - 2} Q${hx(3)},${Y0 - 6} ${hx(5.6)},${Y0 - 30}`} fill="none" stroke={C.teal} strokeWidth={1.2} strokeDasharray="2 3" />
-          <Meal x={hx(6.6)} y={Y0 - 36} />
-          <T x={hx(6.6) + 16} y={Y0 - 31} size={MIN_TEXT} weight={700} color={C.accent}>meal-time insulin</T>
+          <Meal x={X0 + 12} y={YTOP - 24} />
+          <T x={X0 + 30} y={YTOP - 19} size={MIN_TEXT} weight={700} color={C.accent}>meal-time: timing follows the product</T>
         </OnStep>
       </G>
       <G id="table">
@@ -295,7 +298,7 @@ export const insulin = {
   example: INSULIN_EXAMPLE,
   textCases: [{ type: "rapid", givenAt: "07:30" }, { type: "short", givenAt: "12:00" }, { type: "long", givenAt: "21:00" }, { type: "nph", givenAt: "19:00" }],
   facts: [
-    "These are typical subcutaneous action times; IV regular insulin and concentrated regular U-500 act differently.",
+    "These are typical subcutaneous action times; IV regular insulin and concentrated regular U-500 act differently. The curve heights are illustrative and do not compare potency or dose-equivalent effect.",
     "Typical rapid-acting insulin (lispro, aspart, glulisine): onset 10–30 minutes, peak 1–2 hours, duration 3–5 hours. It is associated with meals; its timing follows the specific product's labeling and the prescribed plan.",
     "Typical short-acting regular insulin (U-100, subcutaneous): onset 30–60 minutes, peak 2–4 hours, duration 5–8 hours.",
     "Typical intermediate-acting (NPH) insulin: onset 1–2 hours, peak 4–12 hours, duration 12–18 hours.",

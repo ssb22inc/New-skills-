@@ -57,15 +57,20 @@ export const ABG_RANGES = {
    of what a living client can show (Sol, round 2). */
 export const INTERPRETED = { ph: [6.8, 7.8], paco2: [10, 150], hco3: [3, 45] };
 /* Respiratory compensation for metabolic alkalosis rarely takes PaCO₂ past
-   about 55 mmHg (an approximate ceiling, Sol round 4), and the linear rules
-   are not extended beyond it. HCO₃⁻ is read up to 45 so that the expected
-   range never starts above the ceiling. */
+   about 55 mmHg. That is approximate (Sol, round 5), so it does not cut the
+   expected range: a value above it that the rules still fit is reported
+   with a caution that an added respiratory acidosis is possible. */
 export const ALKALOSIS_PACO2_CEILING = 55;
 
 const r1 = (n) => Math.round(n * 10) / 10;
 export const impliedPh = ({ paco2, hco3 }) => 6.1 + Math.log10(hco3 / (0.03 * paco2));
 const decimals = (v) => { for (let d = 0; d <= 17; d++) if (Number(v.toFixed(d)) === v) return d; return 17; };
 export const DEFAULT_PRECISION = { ph: 2, paco2: 0, hco3: 0 };
+/* Analyzers use slightly different constants (pK about 6.095–6.105, CO₂
+   solubility about 0.0301–0.0307), which moves the computed pH by up to
+   about 0.015 (Sol, round 5). That is allowed on top of reporting
+   precision; a gas further out than that is still rejected. */
+export const MODEL_TOLERANCE = 0.015;
 /* Decimals each value is taken as reported to (see the precision policy). */
 export function precisionOf(v, precision = null) {
   return Object.fromEntries(Object.keys(DEFAULT_PRECISION).map((k) =>
@@ -77,8 +82,8 @@ export function abgConsistency({ ph, paco2, hco3, precision = null }) {
   const pr = precisionOf({ ph, paco2, hco3 }, precision);
   const half = (k) => 0.5 * 10 ** -pr[k];
   const dc = half("paco2"), dh = half("hco3"), dp = half("ph");
-  const lo = impliedPh({ paco2: paco2 + dc, hco3: Math.max(1e-6, hco3 - dh) }) - dp;
-  const hi = impliedPh({ paco2: Math.max(1e-6, paco2 - dc), hco3: hco3 + dh }) + dp;
+  const lo = impliedPh({ paco2: paco2 + dc, hco3: Math.max(1e-6, hco3 - dh) }) - dp - MODEL_TOLERANCE;
+  const hi = impliedPh({ paco2: Math.max(1e-6, paco2 - dc), hco3: hco3 + dh }) + dp + MODEL_TOLERANCE;
   return { ok: ph >= lo - 1e-9 && ph <= hi + 1e-9, implied: impliedPh({ paco2, hco3 }), lo, hi };
 }
 
@@ -102,8 +107,7 @@ export function compensationLimit(primary, kind, { paco2, hco3 }) {
        fitting either is taken as compatible (Sol, round 4), up to the
        ceiling. */
     const a = 0.7 * hco3 + 21, b = 40 + 0.7 * (hco3 - 24);
-    const rawHi = Math.min(Math.max(a, b) + 2, ALKALOSIS_PACO2_CEILING);
-    return range("PaCO₂", paco2, Math.min(a, b) - 2, rawHi, false, [a, b], { capped: Math.max(a, b) + 2 > ALKALOSIS_PACO2_CEILING });
+    return range("PaCO₂", paco2, Math.min(a, b) - 2, Math.max(a, b) + 2, false, [a, b], { aboveCeiling: paco2 > ALKALOSIS_PACO2_CEILING });
   }
   if (primary === "respiratory") {
     /* Acute and chronic estimates are reported separately (Sol, round 4): a
@@ -131,7 +135,9 @@ const mixedResult = (primary, kind, rome, c) => {
   return {
     disorder: `${primary} ${kind}`, primary, compensation: null, romePattern: rome, mixedPossible: true, mixed: secondDisorder(c),
     reading: `ROME pattern only: ${primary} ${kind}, ${romeLabel(rome)}. But ${where}, `
-      + (miss <= 1
+      + (primary === "metabolic" && c.short
+        ? `which has two explanations: respiratory compensation may still be developing (it takes hours, and the expected range assumes it is established), or a second disorder (${secondDisorder(c)}) is present. The history decides.`
+        : miss <= 1
         ? `only just outside it. That is borderline, because the bedside rules are approximations: a mixed disorder (${primary} ${kind} with ${secondDisorder(c)}) is possible, and the history decides.`
         : `which suggests a mixed disorder (${primary} ${kind} with ${secondDisorder(c)}) rather than a single compensated one.`),
   };
@@ -147,9 +153,9 @@ function compensationText(c, primary) {
   const refPart = `${c.name} ${fmtNum(c.value)} ${u} is ${inside ? "inside" : "outside"} its reference range (${ref.lo}–${ref.hi})`;
   if (primary === "metabolic" && c.centers.length === 2) {
     const [a, b] = [...c.centers].sort((p, q) => p - q);
-    return `${refPart}; expected compensation is about ${a}–${b} by the two common bedside rules, ± 2 (${c.expected[0]}–${c.expected[1]} ${u}${c.capped ? `; compensation rarely takes PaCO₂ past about ${ALKALOSIS_PACO2_CEILING}` : ""})`;
+    return `${refPart}; expected compensation, once established, is about ${a}–${b} by the two common bedside rules, ± 2 (${c.expected[0]}–${c.expected[1]} ${u})${c.aboveCeiling ? `. A PaCO₂ above about ${ALKALOSIS_PACO2_CEILING} is more than compensation usually reaches, so an added respiratory acidosis is possible; the history decides` : ""}`;
   }
-  if (primary === "metabolic") return `${refPart}; expected compensation is about ${c.centers[0]} ± 2 (${c.expected[0]}–${c.expected[1]} ${u})`;
+  if (primary === "metabolic") return `${refPart}; expected compensation, once established, is about ${c.centers[0]} ± 2 (${c.expected[0]}–${c.expected[1]} ${u})`;
   return `${refPart}; ${courseText(c)}`;
 }
 /* Which time course a respiratory disorder's HCO₃⁻ fits, and what the
@@ -194,7 +200,7 @@ export function interpretAbg({ ph, paco2, hco3, precision = null }) {
   if (paco2 <= 0 || hco3 <= 0) return recheck("PaCO₂ and HCO₃⁻ must both be above zero.");
   const fit = abgConsistency({ ...v, precision });
   if (!fit.ok) {
-    return recheck(`These values do not agree: a PaCO₂ of ${show("paco2")} with an HCO₃⁻ of ${show("hco3")} goes with a pH near ${fit.implied.toFixed(2)}, not ${show("ph")}.`);
+    return recheck(`These values do not agree: a PaCO₂ of ${show("paco2")} with an HCO₃⁻ of ${show("hco3")} goes with a pH near ${fit.implied.toFixed(Math.max(2, pr.ph))}, not ${show("ph")}.`);
   }
   for (const [k, [lo, hi]] of Object.entries(INTERPRETED)) {
     if (v[k] < lo || v[k] > hi) return unsupported(`${k === "ph" ? "pH" : k === "paco2" ? "PaCO₂" : "HCO₃⁻"} ${show(k)} is outside ${lo}–${hi}.`);
@@ -234,7 +240,7 @@ export function interpretAbg({ ph, paco2, hco3, precision = null }) {
       return { disorder: `${f.primary} ${f.kind}`, primary: f.primary, compensation: "unclear", mixedPossible: true,
         reading: `A ${f.primary} ${f.kind} pattern with the pH in range: ${own} is outside its reference range, while the pH and ${other} are inside theirs; ${detail}. This may be a mild disorder whose pH never left the range, or one already compensated. These values can't tell which, so the trend and history decide.` };
     }
-    const courseUnclear = f.primary === "respiratory" && !(f.limit.acuteFit && f.limit.chronicFit);
+    const courseUnclear = (f.primary === "respiratory" && !(f.limit.acuteFit && f.limit.chronicFit)) || !!f.limit.aboveCeiling;
     const reading = compensation === "none"
       ? `${cap(f.primary)} ${f.kind}, uncompensated by the NCLEX convention: ${detail}.`
       : compensation === "partial"
@@ -363,7 +369,7 @@ function CompTile({ x, y, title, lines, at, i }) {
   const inRange = mx >= lo && mx <= hi;
   return (
     <g>
-      <Box x={x} y={y} w={108} h={102} r={9} fill={C.surface} lift />
+      <Box x={x} y={y} w={108} h={120} r={9} fill={C.surface} lift />
       <T x={x + 54} y={y + 19} size={MIN_TEXT} weight={700} anchor="middle">{title}</T>
       <rect x={bx} y={y + 28} width={bw} height={7} rx={3.5} fill={C.surface} stroke={C.line} />
       <rect x={lo} y={y + 28} width={hi - lo} height={7} rx={3} fill={C.teal} fillOpacity={0.8} />
@@ -398,15 +404,15 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
   const chipLines = paraLines(label, 300, BODY_TEXT).length;
   const RY = 312, CY = 464 + (chipLines - 1) * 18, TY = CY + 30;
   return (
-    <Frame h={TY + 172} focus={focus} title="Acid–base reading of an arterial blood gas"
-      regions={{ ph: [0, 100], co2: [104, 196], hco3: [200, 292], rome: [RY - 4, RY + 132], result: [RY + 132, CY + 6], comp: [TY - 4, TY + 148] }}
+    <Frame h={TY + 188} focus={focus} title="Acid–base reading of an arterial blood gas"
+      regions={{ ph: [0, 100], co2: [104, 196], hco3: [200, 292], rome: [RY - 4, RY + 132], result: [RY + 132, CY + 6], comp: [TY - 4, TY + 164] }}
       desc={concept
         ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, and a high PaCO2 pushes toward acidosis; HCO3 normal 22 to 26 mEq/L, and a low HCO3 pushes toward acidosis, a high one toward alkalosis; the actual pH depends on both together. Match the value that moves with the pH: respiratory opposite, metabolic equal. If both values push the pH the same way, both are primary: a combined disorder, not compensation. Compensation means the other value pushes back, the opposite way: other value still normal means uncompensated; pushing back but pH still out of range means partially compensated; pH back in range means fully compensated. Compensation has expected limits; a value outside them suggests a mixed disorder."
         : `pH ${showAbg(params, "ph")} (normal 7.35 to 7.45), PaCO2 ${showAbg(params, "paco2")} mmHg (35 to 45; high pushes toward acidosis), HCO3 ${showAbg(params, "hco3")} mEq/L (22 to 26; low pushes toward acidosis). ${r.reading}`}>
       <G id="ph">
         <Gauge x={20} y={66} w={320} min={7.1} max={7.7} lo={7.35} hi={7.45} value={concept ? null : params.ph} decimals={2}
           text={concept ? null : showAbg(params, "ph")}
-          label="1  pH: what is the problem?" leftLabel="ACIDOSIS" rightLabel="ALKALOSIS" leftColor="coral" rightColor="coral"
+          label="1  pH: the net state" leftLabel="ACIDEMIA" rightLabel="ALKALEMIA" leftColor="coral" rightColor="coral"
           icon={placed(BloodIcon)} anim={["ph", "worked"]} />
       </G>
       <G id="co2">
@@ -437,14 +443,14 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
         </Anim>
       </G>
       <G id="comp">
-        <CompTile x={16} y={TY} i={0} title="Uncompensated" lines={["pH out;", "other value", "still in range"]} at={6} />
-        <CompTile x={126} y={TY} i={1} title="Partial" lines={["pH still out;", "other value", "pushing back"]} at={20} />
-        <CompTile x={236} y={TY} i={2} title="Full" lines={["pH back", "in range;", "check limits"]} at={34} />
-        <T x={20} y={TY + 124} size={MIN_TEXT} color={C.muted}>NCLEX labels. Check the expected compensation too.</T>
-        <T x={20} y={TY + 142} size={MIN_TEXT} weight={700}>Both push the same way? A combined disorder.</T>
+        <CompTile x={16} y={TY} i={0} title="Uncompensated" lines={["pH out;", "other value", "still in its", "range"]} at={6} />
+        <CompTile x={126} y={TY} i={1} title="Partial" lines={["pH still out;", "other value out", "of range, the", "opposite way"]} at={20} />
+        <CompTile x={236} y={TY} i={2} title="Full" lines={["pH back", "in range;", "check the", "limits"]} at={34} />
+        <T x={20} y={TY + 140} size={MIN_TEXT} color={C.muted}>NCLEX labels. Check the expected compensation too.</T>
+        <T x={20} y={TY + 158} size={MIN_TEXT} weight={700}>Both push the same way? A combined disorder.</T>
       </G>
       <G id="oxy">
-        <T x={20} y={TY + 164} size={MIN_TEXT} color={C.muted}>Oxygenation (PaO₂, SaO₂) is assessed separately.</T>
+        <T x={20} y={TY + 180} size={MIN_TEXT} color={C.muted}>Oxygenation (PaO₂, SaO₂) is assessed separately.</T>
       </G>
     </Frame>
   );
@@ -460,7 +466,7 @@ export const abg = {
   /* Every clinical claim this diagram makes, stated plainly so the
      adversarial reviewer can check each one. */
   facts: [
-    "Normal arterial pH is 7.35–7.45; below 7.35 is acidosis, above 7.45 is alkalosis.",
+    "Normal arterial pH is 7.35–7.45; below 7.35 is acidemia and above 7.45 is alkalemia (the net state). Acidosis and alkalosis are the processes, which can coexist, even with a pH in range; introductory exam materials often use the process words for the pH state.",
     "Normal PaCO₂ is 35–45 mmHg; CO₂ acts as an acid, so a PaCO₂ above 45 pushes toward acidosis and below 35 toward alkalosis.",
     "Normal HCO₃⁻ is 22–26 mEq/L; bicarbonate is a base, so an HCO₃⁻ below 22 pushes toward acidosis and above 26 toward alkalosis. The actual pH depends on HCO₃⁻ and PaCO₂ together: a high HCO₃⁻ can accompany acidemic respiratory acidosis, and a low HCO₃⁻ alkalemic respiratory alkalosis.",
     "On an ABG, HCO₃⁻ is calculated from pH and PaCO₂ (Henderson–Hasselbalch), so the three values must agree; a pH far from the one PaCO₂ and HCO₃⁻ imply means the values should be rechecked before interpreting.",
@@ -471,8 +477,8 @@ export const abg = {
     "This diagram reads acid–base balance only. Oxygenation (PaO₂, SaO₂) is assessed separately: acid–base values in range do not mean the whole ABG is normal.",
   ],
   steps: [
-    { key: "ph", focus: ["ph"], caption: "Start with pH. Below 7.35 is acidosis, above 7.45 is alkalosis. pH tells you what the problem is, not yet where it came from.",
-      narration: "Start with the pH. Anything below seven point three five is acidosis. Anything above seven point four five is alkalosis. The pH tells you what the problem is, not yet where it came from." },
+    { key: "ph", focus: ["ph"], caption: "Start with pH, the net state of the blood. Below 7.35 is acidemia, above 7.45 is alkalemia. Exam materials often say acidosis and alkalosis, but those name the processes, and more than one can be at work. pH tells you the net state, not yet where it came from.",
+      narration: "Start with the pH, the net state of the blood. Anything below seven point three five is acidemia. Anything above seven point four five is alkalemia. Exam materials often say acidosis and alkalosis, but those words name the processes, and more than one can be at work. The pH tells you the net state, not yet where it came from." },
     { key: "lungs", focus: ["co2"], caption: "Now the lungs. CO₂ behaves like an acid, so a PaCO₂ above 45 pushes the blood toward acid. Notice its acid end is on the right, the opposite of the pH line.",
       narration: "Now look at the lungs. Carbon dioxide behaves like an acid, so a P-A-C-O-2 above forty-five pushes the blood toward acid. Notice that its acid end is on the right, the opposite way round from the pH line." },
     { key: "kidneys", focus: ["hco3"], caption: "Then the kidneys. Bicarbonate is a base: below 22 pushes toward acidosis, above 26 toward alkalosis. The actual pH depends on how it balances against PaCO₂.",

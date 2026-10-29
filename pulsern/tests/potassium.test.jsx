@@ -31,15 +31,24 @@ describe("potassium boundary values", () => {
   });
 });
 
-describe("potassium outside the interpreted range (Sol, round 4)", () => {
-  it.each([0, -1, 0.4, 12])("k = %s is not interpreted", (k) => {
+describe("potassium outside the usual range (Sol, rounds 4–5)", () => {
+  it.each([0, -1])("k = %s is not a result, so it is not interpreted", (k) => {
     expect(classifyPotassium(k)).toBe("recheck");
     expect(potassium.dynamicCaption({ k })).toMatch(/recheck the value/);
     expect(potassium.dynamicCaption({ k })).not.toMatch(/hypokalemia|hyperkalemia|replacement/);
     const html = renderToStaticMarkup(<StepContext.Provider value={{ stepKey: "worked" }}><potassium.Diagram params={{ k }} focus={null} /></StepContext.Provider>);
     expect(html).not.toContain("stroke-dasharray=\"5 4\"");   // no matched strip
-    expect(html).not.toContain(`>${k}<`);
   });
+  it.each([[1.4, "hypokalemia", true], [1.5, "hypokalemia", false], [9.5, "hyperkalemia", false], [9.6, "hyperkalemia", true], [10.0, "hyperkalemia", true]])(
+    "k = %s reads %s, extreme warning %s", (k, state, extreme) => {
+      expect(classifyPotassium(k)).toBe(state);
+      const c = potassium.dynamicCaption({ k });
+      expect(c).toContain(state);
+      expect(/potentially life-threatening/.test(c)).toBe(extreme);
+      if (extreme) expect(c).toMatch(/must not delay assessment and escalation/);
+      const html = renderToStaticMarkup(<StepContext.Provider value={{ stepKey: "worked" }}><potassium.Diagram params={{ k }} focus={null} /></StepContext.Provider>);
+      expect(html).toContain("stroke-dasharray=\"5 4\"");      // its strip is matched
+    });
   it("does not rank urgency by the level alone", () => {
     const c = potassium.dynamicCaption({ k: 6.2 });
     expect(c).not.toMatch(/the higher the level/);

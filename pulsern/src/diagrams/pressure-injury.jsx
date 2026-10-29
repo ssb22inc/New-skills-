@@ -10,82 +10,12 @@
    (critical state, per the colour rules); healthy tissue stays in the app's
    neutral tones.
 
-   stageFrom() reads a single, current stage from a stem (pure, tested) so
-   the matching column can be outlined; a negated, hypothetical or
-   superseded mention ("not a stage 4") never counts. */
+   The diagram is a concept explainer only: it never outlines a column as
+   this client's stage. Reading a stage from question text kept selecting
+   hypothetical, excluded or unrelated stages (Sol, rounds 1–5), and a
+   wrong outline teaches the wrong stage with the authority of a picture. */
 import React from "react";
 import { Frame, G, T, Box, C, Anim, OnStep, Loop, Para, paraLines, useDefs, BODY_TEXT, MIN_TEXT } from "./kit.jsx";
-
-const ROMAN = { i: 1, ii: 2, iii: 3, iv: 4 };
-/* A stage mention counts only when the text is about a pressure injury,
-   the mention is not another disease's staging ("stage 4 chronic kidney
-   disease"), and it is not negated, hypothetical or superseded, before or
-   after ("Stage 4 was ruled out") — Sol, PR #155 diagram review, rounds 1–2.
-   Anything less certain returns null. */
-const PRESSURE_CONTEXT = /pressure\s+(?:injur|ulcer|sore|area)|decubitus|bed\s*sore|non-?blanchable|wound|eschar|slough|\bulcer\b|\bbraden\b|deep tissue|unstageable|\bDTPI\b/i;
-const DISEASE = "(?:kidney|renal|CKD|ESRD|cancer|carcinoma|tumou?r|lymphoma|melanoma|heart failure|hypertension|COPD|labou?r|sleep|lymphedema|liver|cirrhosis|dementia|HIV|Alzheimer)";
-const OTHER_AFTER = new RegExp(`^[^.;:]{0,40}\\b${DISEASE}\\b`, "i");
-const OTHER_BEFORE = new RegExp(`\\b${DISEASE}\\b(?:\\s+\\S+){0,2}\\s*$`, "i");
-/* Negated or excluded: the mention says the client does NOT have it. */
-const NEGATED_BEFORE = /\b(?:not|no|isn't|never|ruled out|rather than|instead of|incorrectly|mistakenly|misdocumented|previously|formerly)\b[^.;,]{0,30}$/i;
-const NEGATED_AFTER = /^[^.;]{0,25}\b(?:was ruled out|has been ruled out|ruled out|excluded|was not|is not|isn't|was incorrect)\b/i;
-/* Hypothetical or asked about: no stage is asserted (Sol, round 3). */
-const HYPOTHETICAL_BEFORE = /\b(?:which|what|would|could|might|if|indicate[sd]?|identify|distinguish|differentiate|suggests?|whether|later found)\b[^.;,]{0,40}$/i;
-/* Tied to THIS pressure injury: a wound word right after the stage, or the
-   injury named just before it ("the heel pressure injury is stage 3"). */
-const TIED_AFTER = /^\s*[:\-–]?\s*(?:\(?\s*)?(?:pressure|decubitus|wound|ulcer|injur|sore|area|non-?blanchable|sacral|heel|coccyx)/i;
-const TIED_BEFORE = /(?:pressure\s+(?:injury|ulcer|sore)|wound|decubitus|ulcer)\b[^.;]{0,25}\b(?:is|at|as|now|was|reached|progressed to|staged as|classified as)\s+(?:a\s+)?$/i;
-function stageMentions(t, re) {
-  const asserted = [];
-  let unsettled = false;
-  for (const m of t.matchAll(re)) {
-    const before = t.slice(0, m.index).split(/[.;]/).pop(), after = t.slice(m.index + m[0].length);
-    if (OTHER_AFTER.test(after) || OTHER_BEFORE.test(before)) continue;          // another disease's stage
-    if (NEGATED_BEFORE.test(before) || NEGATED_AFTER.test(after)) continue;    // explicitly not this client's
-    if (HYPOTHETICAL_BEFORE.test(before)) { unsettled = true; continue; }      // asked about, not asserted
-    if (!(TIED_AFTER.test(after) || TIED_BEFORE.test(before))) { unsettled = true; continue; }
-    asserted.push(m);
-  }
-  return { asserted, unsettled };
-}
-/* Anything that can make a stage mention something other than THIS
-   client's current injury — a negation anywhere, a past or changed stage,
-   teaching or a question about stages, more than one injury or client —
-   and no column is outlined (Sol, round 4: negation read in a window
-   around each mention attached "no fever" to the stage, and missed an
-   exclusion a few words further on). Abstaining only drops the outline. */
-const UNSETTLED = new RegExp([
-  String.raw`\b(?:no|not|negative|ruled out|excluded|denies|never|without|isn't|wasn't|unlikely)\b`,
-  String.raw`\b(?:previous(?:ly)?|prior|former(?:ly)?|history|was staged|re-?stag\w*|reverse|healed|healing|resolved|later|after debridement|incorrect\w*|mistaken\w*|misdocument\w*|progress\w*|deteriorat\w*|worsen\w*)\b`,
-  String.raw`\b(?:which|what|would|could|might|if|whether|indicates?|identify|distinguish|differentiate|compare\w*|versus|vs\.?|teach\w*|educat\w*|covers|explain\w*|describe\w*|define\w*|learn\w*|example)\b`,
-].join("|"), "i");
-/* More than one injury or client anywhere in the item. */
-const SEVERAL = /\b(?:clients|patients|another (?:client|patient)|other client|second (?:client|patient|injury|wound)|injuries|ulcers|sores|wounds|both|each (?:client|patient|injury))\b/i;
-const STAGE_WORD = /\bstage\s*(?:1|2|3|4|iv|iii|ii|i)\b|unstageable|deep tissue|\bDTPI\b|\bDTI\b/i;
-/* Only sentences that mention a stage are read for these cues, so the
-   question at the end of a stem ("Which finding is expected?") does not
-   by itself unsettle a stage stated plainly before it. */
-const unsettled = (t) => SEVERAL.test(t) || t.split(/(?<=[.;?!])\s+/).some((x) => STAGE_WORD.test(x) && UNSETTLED.test(x));
-
-export function stageFrom(text) {
-  const t = String(text ?? "");
-  if (!PRESSURE_CONTEXT.test(t) || unsettled(t)) return null;
-  const found = new Set();
-  const stages = stageMentions(t, /\bstage\s*(1|2|3|4|iv|iii|ii|i)\b/gi);
-  for (const m of stages.asserted) { const v = m[1].toLowerCase(); found.add(ROMAN[v] ?? Number(v)); }
-  const named = (re, key) => {
-    for (const m of t.matchAll(re)) {
-      const before = t.slice(0, m.index).split(/[.;]/).pop(), after = t.slice(m.index + m[0].length);
-      if (NEGATED_BEFORE.test(before) || NEGATED_AFTER.test(after)) continue;
-      if (HYPOTHETICAL_BEFORE.test(before)) { stages.unsettled = true; continue; }
-      found.add(key);
-    }
-  };
-  named(/unstageable/gi, "unstageable");
-  named(/deep tissue (?:pressure )?injury|\bDTPI\b|\bDTI\b/gi, "dtpi");
-  /* a stage asked about or left unattached makes any single answer unsafe */
-  return found.size === 1 && !stages.unsettled ? { stage: [...found][0] } : null;
-}
 
 /* Layers, top to bottom, with their band heights. */
 /* Healthy tissue is graded teal — deeper is denser — so the layers read
@@ -148,12 +78,11 @@ function Redness({ x, w }) {
   return <rect x={x} y={TOP} width={w} height={depthTo("derm") - TOP + 4} fill={u("redness")} />;
 }
 
-function Column({ x, w, stage, title, under = null, wound = null, floor = null, highlight }) {
+function Column({ x, w, stage, title, under = null, wound = null, floor = null }) {
   const key = `stage${stage}`;
   const u = useDefs();
   return (
     <g>
-      {highlight ? <rect className="dg-solid" x={x - 3} y={TOP - 50} width={w + 6} height={BOTTOM - TOP + 56} rx={8} fill="none" stroke={C.accent} strokeWidth={2.4} /> : null}
       {/* the column this step is about (the other columns stay for comparison) */}
       <OnStep on={key}><rect className="dg-solid" x={x - 3} y={TOP - 50} width={w + 6} height={BOTTOM - TOP + 56} rx={8} fill="none" stroke={C.ink} strokeWidth={1.6} strokeDasharray="5 3" /></OnStep>
       <T x={x + w / 2} y={TOP - 30} size={BODY_TEXT} weight={700} anchor="middle">{title}</T>
@@ -327,8 +256,7 @@ const PREVENT_NOTE = "Every 2 hours is a common NCLEX schedule; the plan is indi
 const LH = 1.3;
 const H = (t, w, size = MIN_TEXT) => paraLines(t, w, size).length * size * LH;
 
-export function PressureInjuryDiagram({ params = null, focus = null }) {
-  const lit = params?.stage;
+export function PressureInjuryDiagram({ focus = null }) {
   const W = 80, gap = 7, x0 = 9;
   const xs = [0, 1, 2, 3].map((i) => x0 + i * (W + gap));
   const LY = BOTTOM + 22;
@@ -363,19 +291,19 @@ export function PressureInjuryDiagram({ params = null, focus = null }) {
         <T x={18} y={noteY} size={MIN_TEXT} color={C.muted}>Not a required progression; healing keeps its stage.</T>
       </G>
       <G id="s1">
-        <Column x={xs[0]} w={W} stage={1} title="Stage 1" highlight={lit === 1}
+        <Column x={xs[0]} w={W} stage={1} title="Stage 1"
           under={<Redness x={xs[0] + W * 0.14} w={W * 0.72} />}
           floor={<Finger cx={xs[0] + W / 2} />} />
       </G>
       {stageRow(0)}
       <G id="s2">
-        <Column x={xs[1]} w={W} stage={2} title="Stage 2" highlight={lit === 2}
+        <Column x={xs[1]} w={W} stage={2} title="Stage 2"
           wound={<Crater x={xs[1]} w={W} toLayer="derm" inset={0.24} short={4} />}
           floor={<Deepest {...floorOf(xs[1], W, "derm", 4)} />} />
       </G>
       {stageRow(1)}
       <G id="s3">
-        <Column x={xs[2]} w={W} stage={3} title="Stage 3" highlight={lit === 3}
+        <Column x={xs[2]} w={W} stage={3} title="Stage 3"
           wound={<Crater x={xs[2]} w={W} toLayer="fat" inset={0.18} short={6}>
             {/* slough adheres to the wound bed: drawn ON the floor */}
             <Slough cx={xs[2] + W / 2 + 2} cy={craterFloor("fat", 6) - 4} />
@@ -384,7 +312,7 @@ export function PressureInjuryDiagram({ params = null, focus = null }) {
       </G>
       {stageRow(2)}
       <G id="s4">
-        <Column x={xs[3]} w={W} stage={4} title="Stage 4" highlight={lit === 4}
+        <Column x={xs[3]} w={W} stage={4} title="Stage 4"
           wound={<Crater x={xs[3]} w={W} toLayer="muscle" inset={0.14} short={1} />}
           floor={<Deepest {...floorOf(xs[3], W, "muscle", 1)} />} />
       </G>
@@ -401,13 +329,13 @@ export function PressureInjuryDiagram({ params = null, focus = null }) {
       </G>
       <G id="other">
         <Anim on="other" kind="pop">
-          <Box x={8} y={OY} w={170} h={oh} r={10} fill={C.surface} stroke={lit === "unstageable" ? C.accent : C.line} sw={lit === "unstageable" ? 2.4 : 1.2} lift />
+          <Box x={8} y={OY} w={170} h={oh} r={10} fill={C.surface} stroke={C.line} sw={1.2} lift />
           <T x={18} y={OY + 21} size={BODY_TEXT} weight={700}>Unstageable</T>
           <UnstageableStrip x={18} y={OY + 34} w={150} />
           <Para x={18} y={OY + 82} w={150} size={MIN_TEXT} text={UNSTAGEABLE} />
         </Anim>
         <Anim on="other" kind="pop" delay={250}>
-          <Box x={184} y={OY} w={168} h={oh} r={10} fill={C.surface} stroke={lit === "dtpi" ? C.accent : C.line} sw={lit === "dtpi" ? 2.4 : 1.2} lift />
+          <Box x={184} y={OY} w={168} h={oh} r={10} fill={C.surface} stroke={C.line} sw={1.2} lift />
           <T x={194} y={OY + 21} size={BODY_TEXT} weight={700}>Deep tissue injury</T>
           <DeepTissueStrip x={194} y={OY + 34} w={148} />
           <Para x={194} y={OY + 82} w={148} size={MIN_TEXT} text={DTPI} />
@@ -439,7 +367,6 @@ export const pressureInjury = {
   concepts: ["pressure-injury"],
   Diagram: PressureInjuryDiagram,
   example: null,
-  textCases: [{ stage: 1 }, { stage: 4 }, { stage: "unstageable" }, { stage: "dtpi" }],
   facts: [
     "Pressure injury stages describe tissue findings and the extent of tissue loss; actual tissue depth varies by anatomical location. Stages are not a required progression, and a healing pressure injury is not reverse-staged.",
     "Stage 1 pressure injury: intact skin with a localized area of non-blanchable erythema. In darkly pigmented skin the color change may appear differently, so localized warmth, firmness and sensation changes are also assessed.",

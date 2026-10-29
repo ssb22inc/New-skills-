@@ -18,13 +18,14 @@ import { Frame, G, T, Gauge, Box, C, Anim, Loop, Para, paraLines, useDefs, exact
 
 export const K_RANGE = { lo: 3.5, hi: 5.0 };
 
-/* The range this teaching tool reads automatically (Sol, round 4: 0 and
-   negative values were read as hypokalemia). Outside it the value is not
-   interpreted: no marker, no matched strip, a recheck caption. */
-export const K_INTERPRETED = { lo: 1.5, hi: 9.5 };
+/* Zero or a negative number is not a potassium result (Sol, round 4): no
+   marker, no matched strip, a recheck caption. Any positive value is read,
+   however extreme — an extreme result, if genuine, is the most dangerous of
+   all and must not look less concerning than a milder one (Sol, round 5). */
+export const K_EXTREME = { lo: 1.5, hi: 9.5 };
 export function classifyPotassium(k) {
   if (!Number.isFinite(k)) throw new Error("classifyPotassium: value must be a number");
-  if (k < K_INTERPRETED.lo || k > K_INTERPRETED.hi) return "recheck";
+  if (k <= 0) return "recheck";
   return k < K_RANGE.lo ? "hypokalemia" : k > K_RANGE.hi ? "hyperkalemia" : "normal";
 }
 
@@ -162,7 +163,7 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
   return (
     <Frame h={yHi + hHi + 6} focus={focus} title="Potassium and the heart"
       regions={{ level: [0, 96], hypo: [92, 196], hyper: [194, 316], "hypo-act": [yLo, yLo + hLo], "hyper-act": [yHi, yHi + hHi], match: [92, 316] }}
-      desc={`${concept ? "Serum potassium normal range 3.5 to 5.0 mEq/L." : state === "recheck" ? `A potassium of ${displayK(params.k)} is outside the range this tool interprets; recheck the value. Normal range 3.5 to 5.0 mEq/L.` : `Serum potassium ${displayK(params.k)} mEq/L (normal 3.5 to 5.0): ${state}.`} Illustrative ECG strips of classic findings, which may or may not appear and do not track the level predictably. Low potassium can show flattened T waves, ST depression and a prominent U wave. High potassium can show tall peaked T waves, a widened QRS and flattened P waves, and a normal ECG does not rule out dangerous hyperkalemia. Low potassium causes: loop and thiazide diuretics, vomiting or NG suction, diarrhea; IV replacement is never given by IV push or IM, is diluted on an infusion pump with cardiac monitoring, and urine output is confirmed first. High potassium causes: kidney failure, potassium-sparing diuretics, ACE inhibitors, crush injury, burns. Hyperkalemia emergency goals, which can overlap under the prescribed protocol: protect the heart with IV calcium gluconate, expected with ECG changes or a very high level, which does not lower potassium; shift potassium into cells with insulin and dextrose, a temporary effect; remove potassium with dialysis, diuretics only if the kidneys respond, and binders, which act slowly and are not rescue therapy alone.`}>
+      desc={`${concept ? "Serum potassium normal range 3.5 to 5.0 mEq/L." : state === "recheck" ? `A potassium of ${displayK(params.k)} is not a possible result; recheck the value. Normal range 3.5 to 5.0 mEq/L.` : `Serum potassium ${displayK(params.k)} mEq/L (normal 3.5 to 5.0): ${state}.`} Illustrative ECG strips of classic findings, which may or may not appear and do not track the level predictably. Low potassium can show flattened T waves, ST depression and a prominent U wave. High potassium can show tall peaked T waves, a widened QRS and flattened P waves, and a normal ECG does not rule out dangerous hyperkalemia. Low potassium causes: loop and thiazide diuretics, vomiting or NG suction, diarrhea; IV replacement is never given by IV push or IM, is diluted on an infusion pump with cardiac monitoring, and urine output is confirmed first. High potassium causes: kidney failure, potassium-sparing diuretics, ACE inhibitors, crush injury, burns. Hyperkalemia emergency goals, which can overlap under the prescribed protocol: protect the heart with IV calcium gluconate, expected with ECG changes or a very high level, which does not lower potassium; shift potassium into cells with insulin and dextrose, a temporary effect; remove potassium with dialysis, diuretics only if the kidneys respond, and binders, which act slowly and are not rescue therapy alone.`}>
       <G id="level">
         <Gauge x={20} y={62} w={320} min={2} max={7} lo={3.5} hi={5.0} value={shown ? params.k : null} decimals={1}
           text={shown ? displayK(params.k) : null} unit="mEq/L"
@@ -263,9 +264,12 @@ export const potassium = {
   ],
   dynamicCaption: ({ k } = K_EXAMPLE) => {
     const s = classifyPotassium(k), v = displayK(k);
-    if (s === "recheck") return `A potassium of ${v} is outside the range this tool interprets automatically (${K_INTERPRETED.lo}–${K_INTERPRETED.hi} mEq/L), so it is not interpreted here: recheck the value.`;
+    if (s === "recheck") return `A potassium of ${v} is not a possible result, so it is not interpreted here: recheck the value.`;
+    const extreme = k < K_EXTREME.lo || k > K_EXTREME.hi
+      ? " This is an extreme value: if genuine, it is potentially life-threatening, and confirming the result must not delay assessment and escalation."
+      : "";
     if (s === "normal") return `This client's potassium is ${v} mEq/L, within 3.5–5.0.`;
-    if (s === "hypokalemia") return `This client's potassium is ${v} mEq/L, below 3.5, so hypokalemia. U waves and flat T waves are possible findings; urine output is confirmed before replacement.`;
-    return `This client's potassium is ${v} mEq/L, above 5.0, so hyperkalemia. ECG changes may or may not appear, and a normal ECG does not rule out danger. Urgency depends on the level, symptoms and ECG findings, how fast it is rising, kidney function and the clinical context, not on the number alone.`;
+    if (s === "hypokalemia") return `This client's potassium is ${v} mEq/L, below 3.5, so hypokalemia.${extreme} U waves and flat T waves are possible findings; urine output is confirmed before replacement.`;
+    return `This client's potassium is ${v} mEq/L, above 5.0, so hyperkalemia.${extreme} ECG changes may or may not appear, and a normal ECG does not rule out danger. Urgency depends on the level, symptoms and ECG findings, how fast it is rising, kidney function and the clinical context, not on the number alone.`;
   },
 };
