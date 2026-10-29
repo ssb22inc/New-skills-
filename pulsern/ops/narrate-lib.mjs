@@ -265,22 +265,28 @@ export function speechTokens(text) {
 }
 
 /* The first word where script and transcript disagree, or null. */
-/* A compound may be written open or closed. Only a compound the SCRIPT
-   itself writes with a hyphen ("meal-time", "iso-osmolar") is folded to
-   its closed form, on both sides, so the transcript's "mealtime" or
-   "meal time" matches it. Arbitrary neighbours are never joined: "a
-   febrile" must not pass as "afebrile" (PR #157 review). Numbers are
-   never joined. Used by both the word check and the similarity score. */
+/* A compound may be written open or closed. Only VETTED compounds are
+   folded: a hyphen alone does not make two spellings the same word
+   ("re-signed" is not "resigned", PR #157 review), so each entry below is
+   a compound whose closed spelling means exactly the same thing. When the
+   script writes one with a hyphen it is folded to its closed form on both
+   sides, so the transcript's "mealtime" or "meal time" matches it.
+   Arbitrary neighbours are never joined: "a febrile" must not pass as
+   "afebrile". Numbers are never joined. Used by both the word check and
+   the similarity score. */
+export const COMPOUND_EQUIVALENTS = new Set([
+  "meal-time", "iso-osmolar", "non-blanchable", "non-intact", "non-smoker",
+  "pre-load", "after-load", "follow-up", "check-up",
+]);
 function scriptCompounds(script) {
   /* pair (in the compared, normalised form) → the canonical token: the
      JOINED spelling, normalised as one word, so "follow-ups" folds to the
-     same token as "followups" (PR #157 review: normalising each half then
-     joining gave "followups" against "followup") */
+     same token as "followups" */
   const pairs = new Map();
   for (const m of String(script).toLowerCase().matchAll(/\b([a-z]{2,})-([a-z]{2,})\b/g)) {
+    const singular = `${m[1]}-${m[2].replace(/s$/, "")}`;
+    if (!COMPOUND_EQUIVALENTS.has(`${m[1]}-${m[2]}`) && !COMPOUND_EQUIVALENTS.has(singular)) continue;
     const l = speechTokens(m[1]).at(-1), r = speechTokens(m[2])[0], whole = speechTokens(m[1] + m[2]);
-    /* letters only on both sides: number words become digits, and "forty-
-       five" must never register "40 5" and fold "forty, five" into 405 */
     if (/^[a-z]+$/.test(l ?? "") && /^[a-z]+$/.test(r ?? "") && whole.length === 1) pairs.set(`${l} ${r}`, whole[0]);
   }
   return pairs;

@@ -623,6 +623,13 @@ describe("open and closed compounds", () => {
       expect(audioCheck(script, wrong).pass).toBe(false);
     }
   });
+  it("folds only vetted compounds: a hyphen alone is not the same word", async () => {
+    const { audioCheck, COMPOUND_EQUIVALENTS } = await import("../ops/narrate-lib.mjs");
+    expect(audioCheck("The nurse re-signed after the audit.", "The nurse re-signed after the audit.").pass).toBe(true);
+    expect(audioCheck("The nurse re-signed after the audit.", "The nurse resigned after the audit.").pass).toBe(false);
+    expect(audioCheck("Re-cover the wound.", "Recover the wound.").pass).toBe(false);
+    expect(COMPOUND_EQUIVALENTS.has("re-signed")).toBe(false);
+  });
   it("never folds numbers, even next to a hyphenated number word", async () => {
     const { audioCheck } = await import("../ops/narrate-lib.mjs");
     const script = "The forty-five-year-old client's respiratory rate and pain score are forty, five.";
