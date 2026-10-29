@@ -57,6 +57,15 @@ describe("question script", () => {
     expect(segs.map((s) => s.id)).toEqual(["stem", "opt0", "opt1"]);
     expect(segs[2].text).toBe("Temp 36.8 degrees Celsius.");
     expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening, First Visit");
+    // a separator between readings is a pause, never an operation
+    expect(speakable("Temperature example: 36.8 °C · 98.2 °F")).toBe("Temperature example: 36.8 degrees Celsius, 98.2 degrees Fahrenheit");
+    expect(speakable("HR 110 · RR 24 · SpO2 91%")).toBe("HR 110, RR 24, S P O 2 91%");
+    expect(speakable("Weight 70 kg · 154 lb")).toBe("Weight 70 kg, 154 lb");
+    // a times sign outside a calculation is a size
+    expect(speakable("A 3 × 4 cm wound")).toBe("A 3 by 4 cm wound");
+    // the calculation is only the clause that reaches "="
+    expect(speakable("Weight 70 kg · 154 lb. Dose: 0.1 mg/kg · 70 kg = 7 mg")).toBe("Weight 70 kg, 154 lb. Dose: 0.1 milligrams per kilogram times 70 kg equals 7 mg");
+    expect(voiceCheck(speakable("36.8 °C · 98.2 °F"), "36.8 °C times 98.2 °F").pass).toBe(false);
     const quoted = questionSegments({ type: "mc", stem: "Which response is best?", options: ["\"Tell me more.\"", "(Stay with the client.)", "Call the provider"] });
     expect(quoted.slice(2).map((s) => s.text)).toEqual(["\"Tell me more.\"", "(Stay with the client.)", "Call the provider."]);
   });
@@ -71,6 +80,15 @@ describe("question script", () => {
     expect(sc).toBe("Dose equals 0.1 milligrams per kilogram times 70 kg equals 7 mg");
     expect(speakable("2 × 3 = 6")).toBe("2 times 3 equals 6");
     expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening, First Visit");
+    // a separator between readings is a pause, never an operation
+    expect(speakable("Temperature example: 36.8 °C · 98.2 °F")).toBe("Temperature example: 36.8 degrees Celsius, 98.2 degrees Fahrenheit");
+    expect(speakable("HR 110 · RR 24 · SpO2 91%")).toBe("HR 110, RR 24, S P O 2 91%");
+    expect(speakable("Weight 70 kg · 154 lb")).toBe("Weight 70 kg, 154 lb");
+    // a times sign outside a calculation is a size
+    expect(speakable("A 3 × 4 cm wound")).toBe("A 3 by 4 cm wound");
+    // the calculation is only the clause that reaches "="
+    expect(speakable("Weight 70 kg · 154 lb. Dose: 0.1 mg/kg · 70 kg = 7 mg")).toBe("Weight 70 kg, 154 lb. Dose: 0.1 milligrams per kilogram times 70 kg equals 7 mg");
+    expect(voiceCheck(speakable("36.8 °C · 98.2 °F"), "36.8 °C times 98.2 °F").pass).toBe(false);
     // the check accepts the same calculation however it is written, and nothing else
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg × 70 kg = 7 mg").pass).toBe(true);
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg x 70 kg = 7 mg").pass).toBe(true);

@@ -45,24 +45,31 @@ const SPOKEN = [
   [/°F\b/g, " degrees Fahrenheit"],
   [/°C\b/g, " degrees Celsius"],
   [/\s*→\s*/g, ", then "],
-  /* Calculation signs are spoken, never dropped: a middle dot or a times
-     sign between quantities is multiplication ("0.1 mg/kg · 70 kg"), and
-     "=" is "equals". A middle dot followed by words is only a separator
-     ("Newborn Screening · First Visit") and becomes a pause. */
-  [/\s*[·×∙]\s*(?=\d)/g, " times "],
-  [/(\d)\s*[x*]\s*(?=\d)/gi, "$1 times "],
   [/\s*=\s*/g, " equals "],
-  [/\s+·\s+/g, ", "],
   [/≥/g, " at least "],
   [/≤/g, " at most "],
   [/</g, " less than "],
   [/>/g, " greater than "],
 ];
 
+/* Calculation signs are spoken, never dropped, and never invented. A sign
+   is only multiplication inside a calculation, a clause that goes on to
+   "=" ("0.1 mg/kg · 70 kg = 7 mg"). Elsewhere a middle dot separates
+   items ("36.8 °C · 98.2 °F", "Newborn Screening · First Visit") and is
+   read as a pause, and a times sign between numbers is a size ("3 × 4 cm
+   wound"), read as "by". */
+const OPERATOR = /\s*(?:[·×∙*]|(?<=\d)\s*x)\s*(?=\d)/gi;
+function operators(clause) {
+  const eq = clause.lastIndexOf("=");
+  const calc = (i) => eq > i;
+  let s = clause.replace(OPERATOR, (m, i) => (calc(i) ? " times " : /[·∙]/.test(m) ? ", " : " by "));
+  return s.replace(/\s+[·∙]\s+/g, ", ");
+}
+
 /* Text for the voice: clinical shorthand spelled out, symbols the screen
    uses for layout removed, whitespace tidied. */
 export function speakable(text) {
-  let s = String(text ?? "");
+  let s = String(text ?? "").split(/(?<=[.;!?])\s+|\n+/).map(operators).join(" ");
   for (const [re, to] of SPOKEN) s = s.replace(re, to);
   return s.replace(/[☐☑●○▲△✨📋🧮]/g, "").replace(/\s+/g, " ").trim();
 }
