@@ -246,51 +246,60 @@ async function claimOutcome(bucket, marker, timeOf) {
   return { state: 'unknown' };
 }
 
-/* One synthesis per passage at a time, live or scheduled: a claim keyed
-   by the passage, holding when it was taken and who holds it. The lease
-   lets a later caller take over from a request that died part-way (through
-   a marker storage creates once). The holder never outlives its lease: all
-   its paid work must END by `deadline` (makeChecked stops starting calls
-   and aborts any call still running), well inside the lease, so a claim is
-   only ever taken over from a holder that has stopped. Release removes the
-   claim only while it is still the holder's own.
-   Returns { state: "mine", owner, deadline } (go ahead, then recheck the
-   record), { state: "busy" } (someone else is voicing it) or
+/* One synthesis per passage at a time, live or scheduled. A passage's
+   claims are numbered files in its own folder, each created once (storage
+   refuses a second upload to the same name) and never changed:
+     claims/<voice>-<key>/<n>   "<taken at> <holder>"
+   The highest number is the current claim. A caller takes the next number
+   when there is no claim or the current one's lease has run out, so only
+   one caller can win any takeover. A holder releases by removing ITS OWN
+   numbered file and nothing else: whatever happens around it, a release
+   can never remove someone else's claim.
+   The lease lets a later caller take over from a request that died
+   part-way. A live holder never reaches it: all its paid work ends by
+   `deadline` (makeChecked stops starting calls and aborts any call still
+   running), well inside the lease.
+   Returns { state: "mine", path, owner, deadline } (go ahead, then recheck
+   the record), { state: "busy" } (someone else is voicing it) or
    { state: "error" } (storage trouble). */
 export const PASSAGE_LEASE_MS = 120000;
 export const PASSAGE_WORK_MS = 90000;
 export const PASSAGE_WAIT = { tries: 50, ms: 500 };
-const claimPath = (text, tts) => `claims/${tts.voice}-${passagePaths(text, tts).key}`;
-const readClaim = async (storage, path) => {
-  const { data, error } = await storage.from(BUCKET).download(path);
+export const CLAIMS_DIR = 'claims';
+const claimDir = (text, tts) => `${CLAIMS_DIR}/${tts.voice}-${passagePaths(text, tts).key}`;
+export const claimNumber = (name) => (/^\d{1,12}$/.test(name) ? Number(name) : NaN);
+const claimName = (n) => String(n).padStart(12, '0');
+export async function readClaimFile(bucket, path) {
+  const { data, error } = await bucket.download(path);
   if (error) return isMissing(error) ? { missing: true } : { error };
   const [since, owner] = String(typeof data?.text === 'function' ? await data.text() : data ?? '').trim().split(' ');
   return { since: Number(since), owner };
-};
-export async function claimPassage(storage, text, timeOf = () => Date.now(), tts = TTS) {
-  const path = claimPath(text, tts);
-  const owner = randomUUID();
-  const mine = (at) => ({ state: 'mine', owner, deadline: at + PASSAGE_WORK_MS });
-  const at = timeOf();
-  const made = await createOnce(storage, path, `${at} ${owner}`);
-  if (made !== 'exists') return made === 'created' ? mine(at) : { state: 'error' };
-  const held = await readClaim(storage, path);
-  if (held.missing) return claimPassage(storage, text, timeOf, tts);
-  if (held.error) return { state: 'error' };
-  if (Number.isFinite(held.since) && timeOf() - held.since <= PASSAGE_LEASE_MS) return { state: 'busy' };
-  const take = await createOnce(storage, `${path}.takeover-${Number.isFinite(held.since) ? held.since : 0}`);
-  if (take !== 'created') return { state: take === 'exists' ? 'busy' : 'error' };
-  const at2 = timeOf();
-  const { error: upError } = await storage.from(BUCKET).upload(path, `${at2} ${owner}`, { contentType: 'text/plain', upsert: true });
-  return upError ? { state: 'error' } : mine(at2);
 }
-export async function releasePassage(storage, text, tts = TTS, claim = null) {
-  const path = claimPath(text, tts);
-  const held = await readClaim(storage, path);
-  if (held.missing) return true;
-  if (held.error) { console.error('[read-aloud] release', held.error.message ?? held.error); return false; }
-  if (claim && held.owner !== claim.owner) return true; // taken over: the claim is no longer ours to remove
-  const { error } = await storage.from(BUCKET).remove([path]);
+export async function claimPassage(storage, text, timeOf = () => Date.now(), tts = TTS) {
+  const bucket = storage.from(BUCKET);
+  const dir = claimDir(text, tts);
+  const owner = randomUUID();
+  for (let tries = 0; tries < 5; tries++) {
+    const { data, error } = await bucket.list(dir, { limit: 1000 });
+    if (error) return { state: 'error' };
+    const top = Math.max(0, ...(data ?? []).map((e) => claimNumber(e.name)).filter(Number.isFinite));
+    if (top > 0) {
+      const held = await readClaimFile(bucket, `${dir}/${claimName(top)}`);
+      if (held.error) return { state: 'error' };
+      if (held.missing) continue; // released just now: look again
+      if (Number.isFinite(held.since) && timeOf() - held.since <= PASSAGE_LEASE_MS) return { state: 'busy' };
+    }
+    const at = timeOf();
+    const path = `${dir}/${claimName(top + 1)}`;
+    const made = await createOnce(storage, path, `${at} ${owner}`);
+    if (made === 'created') return { state: 'mine', path, owner, deadline: at + PASSAGE_WORK_MS };
+    return { state: made === 'exists' ? 'busy' : 'error' };
+  }
+  return { state: 'busy' };
+}
+export async function releasePassage(storage, claim) {
+  if (claim?.state !== 'mine') return true;
+  const { error } = await storage.from(BUCKET).remove([claim.path]);
   if (error) console.error('[read-aloud] release', error.message ?? error);
   return !error;
 }
@@ -634,7 +643,7 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
     if (now2?.pass === true) { const link = await signed(bucket, mp3); if (link.url) return { status: 200, body: { url: link.url, cached: true } }; }
     if (now2?.pass === false) return { status: 422, body: { error: 'Voice check failed' } };
     return await synthesiseLive();
-  } finally { await releasePassage(storage, text, tts, claim); }
+  } finally { await releasePassage(storage, claim); }
 
   async function synthesiseLive() {
     // Every take claims a spending slot on the day it is made.

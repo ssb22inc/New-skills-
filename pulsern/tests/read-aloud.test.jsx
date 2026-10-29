@@ -1236,13 +1236,14 @@ describe("server voice: daily budgets", () => {
     it("takes over a claim whose request died, after its lease", async () => {
       const { storage, files } = fakeStorage();
       let t = Date.UTC(2026, 9, 29, 16);
-      expect((await claimPassage(storage, Q1.text, () => t)).state).toBe("mine"); // and then that request died
+      const dead = await claimPassage(storage, Q1.text, () => t);
+      expect(dead.state).toBe("mine"); // and then that request died
       expect((await claimPassage(storage, Q1.text, () => t + 1000)).state).toBe("busy");
       t += PASSAGE_LEASE_MS + 1000;
       const f = fakeOpenAI();
       expect((await speak({ ...base(), storage, fetchImpl: f, now: t })).status).toBe(200);
       expect(speechCalls(f)).toBe(1);
-      expect([...files.keys()].filter((k) => k.startsWith("claims/") && !k.includes(".takeover-"))).toEqual([]); // released
+      expect([...files.keys()].filter((k) => k.startsWith("claims/"))).toEqual([dead.path]); // the live one released; the dead one's file waits for pruning
     });
 
     it("ends all paid work inside the lease, so a holder is never taken over while it is still working", async () => {
@@ -1272,18 +1273,36 @@ describe("server voice: daily budgets", () => {
       } finally { Object.assign(CALL, saved); }
     });
 
-    it("never removes a claim that has passed to someone else", async () => {
+    it("never removes a claim that has passed to someone else, however the release and the takeover interleave", async () => {
       const { storage, files } = fakeStorage();
       let t = Date.UTC(2026, 9, 29, 16);
       const first = await claimPassage(storage, Q1.text, () => t);
       t += PASSAGE_LEASE_MS + 1000;
-      const second = await claimPassage(storage, Q1.text, () => t);
-      expect(second.state).toBe("mine");
-      expect(second.owner).not.toBe(first.owner);
-      await releasePassage(storage, Q1.text, TTS, first); // the first holder finishes late
-      expect((await claimPassage(storage, Q1.text, () => t + 1000)).state).toBe("busy"); // still the second's
-      await releasePassage(storage, Q1.text, TTS, second);
-      expect([...files.keys()].filter((k) => k.startsWith("claims/") && !k.includes(".takeover-"))).toEqual([]);
+      // two callers race to take over the lapsed claim: exactly one wins
+      const [b, c] = await Promise.all([claimPassage(storage, Q1.text, () => t), claimPassage(storage, Q1.text, () => t)]);
+      expect([b.state, c.state].sort()).toEqual(["busy", "mine"]);
+      const second = b.state === "mine" ? b : c;
+      expect(second.path).not.toBe(first.path);
+      // the first holder's release lands after the takeover
+      await releasePassage(storage, first);
+      expect(files.has(second.path)).toBe(true);
+      expect((await claimPassage(storage, Q1.text, () => t + 1000)).state).toBe("busy"); // a third caller still waits
+      // and a release racing a fresh claim removes only its own file
+      const [, third] = await Promise.all([releasePassage(storage, second), claimPassage(storage, Q1.text, () => t + 2000)]);
+      expect(["mine", "busy"]).toContain(third.state);
+      if (third.state === "mine") expect(files.has(third.path)).toBe(true);
+      await releasePassage(storage, third);
+      expect([...files.keys()].filter((k) => k.startsWith("claims/"))).toEqual([]);
+    });
+
+    it("the voice job removes claims left by requests that died, a day later, and nothing newer", async () => {
+      const { storage, files } = fakeStorage();
+      const t = Date.UTC(2026, 9, 29, 16);
+      const dead = await claimPassage(storage, Q1.text, () => t - 2 * 86400000);
+      const live = await claimPassage(storage, "Sodium 138 milliequivalents per liter.", () => t);
+      await pruneUsage({ storage, now: t });
+      expect(files.has(dead.path)).toBe(false);
+      expect(files.has(live.path)).toBe(true);
     });
 
     it("the voice job leaves a passage being voiced live for its next run", async () => {

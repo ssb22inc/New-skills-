@@ -32,7 +32,7 @@
    or bank trouble) fails the workflow run, so it is noticed. */
 import { createClient } from "@supabase/supabase-js";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, claimPassage, releasePassage, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
 import { verdictText, itemParts } from "../src/read-aloud-script.js";
 
@@ -49,7 +49,7 @@ async function voiceOne({ storage, apiKey, fetchImpl, text, now, limits }) {
   try {
     if (await readRecord(storage, text, TTS, now())) return { result: "decided", spent: 0 };
     return await voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, deadline: claim.deadline });
-  } finally { await releasePassage(storage, text, TTS, claim); }
+  } finally { await releasePassage(storage, claim); }
 }
 async function voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, deadline }) {
   const r = await makeChecked({ text, apiKey, fetchImpl, deadline, timeOf: now, beforeTake: () => reserveSpend(storage, { now: now(), limits }) });
@@ -340,10 +340,18 @@ export async function pruneUsage({ storage, now = Date.now(), keepDays = 7 }) {
       }
     }
   }
-  // Takeover markers of lapsed passage claims (rare) are kept a day, then removed.
-  const stale = (await listAll(bucket, "claims")).map((e) => e.name)
-    .filter((n) => { const t = Number(/\.takeover-(\d+)$/.exec(n)?.[1]); return Number.isFinite(t) && now - t > 86400000; })
-    .map((n) => `claims/${n}`);
+  /* Passage claims left by requests that died (rare): a day after they
+     were taken, long past any lease, they are removed. */
+  const stale = [];
+  for (const folder of await listAll(bucket, CLAIMS_DIR)) {
+    for (const f of await listAll(bucket, `${CLAIMS_DIR}/${folder.name}`)) {
+      if (!Number.isFinite(claimNumber(f.name))) continue;
+      const path = `${CLAIMS_DIR}/${folder.name}/${f.name}`;
+      const held = await readClaimFile(bucket, path);
+      if (held.error) throw new Error(`Could not read a claim: ${held.error.message ?? held.error}`);
+      if (!held.missing && !(now - held.since <= 86400000)) stale.push(path);
+    }
+  }
   for (let i = 0; i < stale.length; i += 1000) {
     const { error } = await bucket.remove(stale.slice(i, i + 1000));
     if (error) throw new Error(`Could not remove old claims: ${error.message ?? error}`);
