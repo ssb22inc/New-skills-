@@ -1,0 +1,72 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "cb89620b94d1214502ae8f039b0f97a244c8fb71",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T23:07:27.963Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 1578,
+      "title": "Active exhibits remain collapsed during screen-only reading",
+      "problem": "Only the first exhibit is opened. Reading a later exhibit adds a highlight to its details element but does not reveal its content. This breaks the fallback that tells students to read a refused passage on screen.",
+      "failure_scenario": "A question has two exhibits. The second exhibit receives a 422 voice-check result while other passages are playable. When playback reaches that exhibit, the app displays \"Read this part on screen\" and runs its reading timer, but the clinical text remains hidden inside the collapsed details element.",
+      "fix": "Reveal an exhibit before playing or timing its active passage, while preserving the student's manual expansion choices. Add a mounted test with a second exhibit whose audio is refused; assert that its body is visible while highlighted.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 327,
+      "title": "Bank prewarming immediately retries work deferred by the queue",
+      "problem": "A queued transient failure sets q.operational but does not prevent prewarming. Prewarming checks only for a completed record, not an existing retry entry, so it can synthesize the same passage again immediately. Queue attempts and cursor attempts are independent, defeating the documented five-attempt limit per passage.",
+      "failure_scenario": "Speech synthesis succeeds for one passage but its transcription repeatedly fails; other passages succeed. The queue moves that passage to queue-retry, then prewarming reaches the same bank item and pays for another synthesis in the same run. Across five runs this can produce nine paid syntheses before the queue's fifth attempt finally writes a give-up record.",
+      "fix": "Ensure prewarming does not synthesize passages already awaiting queued retries, and use one attempt count per passage across both paths. Alternatively, stop prewarming after an operational queue failure. Add a runJob test that exercises both paths against the same failing passage.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 403,
+      "title": "QA-record read outages are treated as cache misses",
+      "problem": "readRecord uses readJson, which returns null for every download error, including storage 500s. The worker cannot distinguish an absent record from an unreadable existing record, so it can spend again and report a successful run despite the storage failure.",
+      "failure_scenario": "During a bank scan, downloading an existing passage's QA JSON returns a transient 500 while counter operations and uploads still work. Prewarming treats the already-checked passage as unvoiced, pays to synthesize and transcribe it again, overwrites its record, and leaves runJob.failed false. A record-download outage can repeat this across cached passages until the daily budget is consumed.",
+      "fix": "Distinguish missing objects from operational read failures. Propagate record-read failures so the route returns an availability error and the worker preserves work and fails the run without synthesizing that passage. Test a QA-record download failure separately from a missing record.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 121594,
+    "completionTokens": 14236,
+    "reasoningTokens": 13466,
+    "costUsd": 0.4463435
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes for three concrete playback and worker defects. The review is based on the supplied files; tests were not executed, and the imported narration verifier and deployed RLS definitions were not available for inspection.",
+  "counts": {
+    "blocker": 0,
+    "major": 3,
+    "minor": 0
+  }
+}
