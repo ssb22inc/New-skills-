@@ -48,10 +48,13 @@ const WHOLE = String.raw`(?![\d.]*\d)`;
 const PH = new RegExp(String.raw`\bpH\s*(?:of|is|was|=|:)?\s*((?:7|6)\.\d{1,3})${WHOLE}`, "gi");
 const PACO2 = new RegExp(String.raw`\b(?:Pa|p)?CO(?:2|₂)\s*(?:of|is|was|=|:)?\s*(\d{2,3}(?:\.\d{1,2})?)${WHOLE}`, "gi");
 const HCO3 = new RegExp(String.raw`\b(?:HCO(?:3|₃)(?:-|⁻)?|bicarbonate(?:\s+level)?)\s*(?:of|is|was|=|:)?\s*(\d{1,2}(?:\.\d{1,2})?)${WHOLE}`, "gi");
-/* The whole number is read — one or two integer digits, never a partial
+/* A dose is not a level: a number followed by mEq or mmol without "/L",
+   or by mg, g, mL or tablets, is not read (PR #156 review: "potassium
+   10 mEq by mouth" was read as a serum 10).
+   The whole number is read — one or two integer digits, never a partial
    match (PR #156 review: "10.0" was read as 1.0 once the range reached
    10); a longer number that doesn't fit is not matched at all. */
-const K = /\b(?:potassium(?:\s+level)?|serum\s+K\+?|K\+|K⁺)\s*(?:of|is|was|=|:)?\s*(\d{1,2}(?:\.\d{1,2})?)(?![\d.]*\d)\s*(?:mEq\/L|mmol\/L)?/gi;
+const K = /\b(?:potassium(?:\s+level)?|serum\s+K\+?|K\+|K⁺)\s*(?:of|is|was|=|:)?\s*(\d{1,2}(?:\.\d{1,2})?)(?![\d.]*\d)(?!\s*(?:mEq|mmol)(?!\s*\/\s*L)|\s*(?:mg|g|mL|tablets?|tabs?)\b)\s*(?:mEq\/L|mmol\/L)?/gi;
 
 export function extractAbg(text) {
   const t = String(text ?? "");
@@ -113,7 +116,8 @@ export function extractInsulin(text) {
   if (/degludec|tresiba|detemir|levemir|toujeo/i.test(t) || unsupportedConcentration(t)) return null;
   /* The worked window is subcutaneous action: an IV or other non-SC route
      leaves the diagram concept-only (PR #156 review). */
-  if (/\b(?:IV|I\.V\.|intravenous(?:ly)?|infusion|drip|IV push|intramuscular(?:ly)?|IM)\b/i.test(t)) return null;
+  const route = t.replace(/\bI\.\s?V\.?(?=\W|$)/gi, " IV ").replace(/\bI\.\s?M\.?(?=\W|$)/gi, " IM ");   // dotted forms
+  if (/\b(?:IV|intravenous(?:ly)?|infusion|drip|intramuscular(?:ly)?|IM)\b/i.test(route)) return null;
   const types = INSULIN_TYPES.filter(([, re]) => re.test(t)).map(([k]) => k);
   if (types.length !== 1) return null;
   const givenAt = clockFrom(t);

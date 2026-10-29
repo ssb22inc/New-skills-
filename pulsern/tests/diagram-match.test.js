@@ -182,3 +182,15 @@ describe("whole ABG tokens and insulin route", () => {
     expect(extractInsulin("Regular insulin given subcutaneously at 0700")).toEqual({ type: "short", givenAt: "07:00" });
   });
 });
+
+describe("doses are not levels; dotted routes", () => {
+  it.each(["A client with hypokalemia is prescribed potassium 10 mEq by mouth daily.", "potassium 20 mmol IV", "potassium 10 tablets"])("does not read a dose: %s", (t) => {
+    expect(extractPotassium(t)).toBeNull();
+  });
+  it.each(["Potassium 10.0 mEq/L", "potassium 6.8 mmol/L", "potassium 5.9", "serum K 6.8 mEq / L"])("still reads a level: %s", (t) => {
+    expect(extractPotassium(t)).not.toBeNull();
+  });
+  it.each(["Regular U-100 insulin was given I.V. at 0700.", "Regular insulin at 0700, given I.V.", "Regular insulin I.M. at 0700"])("leaves %s concept-only", (t) => {
+    expect(extractInsulin(t)).toBeNull();
+  });
+});
