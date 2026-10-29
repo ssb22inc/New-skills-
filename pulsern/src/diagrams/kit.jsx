@@ -433,8 +433,10 @@ export function Gauge({ x, y, w, min, max, lo, hi, value, decimals = 0, text: sh
       <T x={px(hi)} y={y + 23} size={MIN_TEXT} anchor="middle" color={C.accent} mono>{fmt(hi)}</T>
       {leftLabel ? <T x={x} y={y + 23} size={MIN_TEXT} color={C[leftColor]} weight={600}>{leftLabel}</T> : null}
       {rightLabel ? <T x={x + w} y={y + 23} size={MIN_TEXT} anchor="end" color={C[rightColor]} weight={600}>{rightLabel}</T> : null}
+      {/* The pin stays at its value and fades in: sliding it from mid-range
+          showed a value it never had (Sol, round 10). */}
       {value != null ? (
-        <Anim on={anim ?? []} kind="slide" from={`${((lo + hi) / 2 - clamp(value)) / (max - min) * w}px`} dur={1300}>
+        <Anim on={anim ?? []} kind="fade" dur={900}>
           <g filter={u("shadow")}>
             <line className="dg-solid" x1={mx} x2={mx} y1={y - 12} y2={y + 6} stroke={pinFill} strokeWidth={2} strokeLinecap="round" />
             {off ? <path className="dg-solid" d={`M${mx + off * 3},${y - 6} l${off * 8},6 l${-off * 8},6 z`} fill={pinFill} />

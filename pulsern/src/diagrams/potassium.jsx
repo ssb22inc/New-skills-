@@ -174,6 +174,11 @@ export function PotassiumDiagram({ params = K_EXAMPLE, focus = null }) {
           text={shown ? displayK(params.k) : null} unit="mEq/L"
           label="Serum potassium (K⁺)" leftLabel="◂ HYPO" rightLabel="HYPER ▸" leftColor="coral" rightColor="coral"
           icon={HeartIcon} anim={["range", "worked"]} />
+        {/* a rejected value is said so on the picture, not only in the caption
+            (Sol, round 10: it looked like the concept-only view) */}
+        {state === "recheck" ? (
+          <T x={180} y={44} size={MIN_TEXT} weight={700} anchor="middle" color={C.danger}>{`K⁺ ${displayK(params.k)} is not a possible result: recheck it`}</T>
+        ) : null}
       </G>
 
       <G id="hypo">

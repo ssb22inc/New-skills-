@@ -99,3 +99,13 @@ describe("round 8", () => {
     for (const k of ["hyper-care", "hyper-shift"]) expect(potassium.steps.find((s) => s.key === k).caption.length).toBeLessThan(460);
   });
 });
+
+describe("round 10", () => {
+  it.each([0, -1])("shows a visible recheck notice for k = %s", (k) => {
+    const html = renderToStaticMarkup(<StepContext.Provider value={{ stepKey: "worked" }}><potassium.Diagram params={{ k }} focus={null} /></StepContext.Provider>);
+    expect(html).toContain("is not a possible result: recheck it");
+  });
+  it("never shows the notice for a real value", () => {
+    expect(renderToStaticMarkup(<potassium.Diagram params={{ k: 6.2 }} focus={null} />)).not.toContain("not a possible result: recheck it");
+  });
+});

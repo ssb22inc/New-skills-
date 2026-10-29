@@ -208,7 +208,8 @@ export const ROWS = {
     room: "negative-pressure isolation room, door closed" },
 };
 
-/* Hand hygiene for the standard row; soap vs alcohol rub for C. diff. */
+/* Hand hygiene for the standard row; soap and water for C. diff. No
+   crossed-out rub bottle: it read as a blanket ban (Sol, round 10). */
 const HandWash = ({ x, y }) => (
   <g fill="none" stroke={C.teal} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round">
     <path d={`M${x - 4},${y + 9} v-8 l-3,-3 a1.6,1.6 0 0 1 2.4,-2 l2.6,2.6 v-8 a1.5,1.5 0 0 1 3,0 v6 v-7.5 a1.5,1.5 0 0 1 3,0 v7.5 v-6 a1.5,1.5 0 0 1 3,0 v6 v-4 a1.5,1.5 0 0 1 3,0 v8 c0,4 -2,7 -5,7 z`} fill={C.card} />
@@ -222,15 +223,9 @@ const Soap = ({ x, y }) => (
     <path d={`M${x + 12},${y + 2} l3,3 l6,-7`} fill="none" stroke={C.teal} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
   </g>
 );
-const Rub = ({ x, y }) => (
-  <g>
-    <path d={`M${x - 5},${y - 4} h10 v12 a2,2 0 0 1 -2,2 h-6 a2,2 0 0 1 -2,-2 z M${x - 2},${y - 4} v-3 h5 l2,2`} fill={C.card} stroke={C.muted} strokeWidth={1.3} strokeLinejoin="round" />
-    <path d={`M${x + 10},${y - 3} l8,8 M${x + 18},${y - 3} l-8,8`} stroke={C.danger} strokeWidth={2} strokeLinecap="round" />
-  </g>
-);
 
 const DESC = "Standard precautions, including hand hygiene, for every client; transmission-based precautions are added on top. "
-  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella): gown and gloves; a single room preferred, or a cohort with clients who have the same pathogen and compatible precautions, and if neither is possible infection prevention decides the placement; dedicated equipment; for C. difficile, hands are washed with soap and water because alcohol rub is not effective against its spores. "
+  + "Contact precautions (spread by touch: skin, wounds, stool, surfaces; for example MRSA, VRE, C. difficile, scabies, head lice, RSV, congenital rubella): gown and gloves; a single room preferred, or a cohort with clients who have the same pathogen and compatible precautions, and if neither is possible infection prevention decides the placement; dedicated equipment; for C. difficile, soap and water is the expected NCLEX answer, because washing physically removes spores that alcohol rub does not reliably inactivate; current CDC and facility guidance set when alcohol rub is still used. "
   + "Droplet precautions (larger respiratory droplets spread at close range by coughing, sneezing and talking; for example influenza, pertussis, mumps, acquired rubella, meningococcal disease): surgical mask on entering the room; a single room is preferred, or cohorting with clients who have the same pathogen and compatible precautions; if neither is possible, infection prevention decides the placement. "
   + "Airborne precautions (tiny particles that stay in the air; for example suspected or confirmed pulmonary or laryngeal tuberculosis, measles, chickenpox): fit-tested N95 respirator, negative-pressure airborne infection isolation room with the door closed. Chickenpox and disseminated zoster need airborne and contact precautions together. "
   + "On droplet or airborne precautions, the client wears a surgical mask when transported, if tolerated, and chickenpox or zoster lesions are covered; used gown and gloves are removed and hands cleaned before transport, with clean PPE for later handling if needed; escort respiratory protection follows pathogen guidance and facility policy.";
@@ -239,9 +234,9 @@ export function IsolationDiagram({ focus = null }) {
   const y1 = 64, y2 = y1 + rowHeight(ROWS.contact) + 10, y3 = y2 + rowHeight(ROWS.droplet) + 10;
   const yT = y3 + rowHeight(ROWS.airborne) + 10, yC = yT + 102;
   return (
-    <Frame h={yC + 70} focus={focus} title="Transmission-based precautions" desc={DESC}
+    <Frame h={yC + 88} focus={focus} title="Transmission-based precautions" desc={DESC}
       regions={{ standard: [0, 56], contact: [y1 - 14, y1 + rowHeight(ROWS.contact) + 4], droplet: [y2 - 14, y2 + rowHeight(ROWS.droplet) + 4],
-        airborne: [y3 - 14, y3 + rowHeight(ROWS.airborne) + 4], transport: [yT, yT + 92], cdiff: [yC, yC + 62] }}>
+        airborne: [y3 - 14, y3 + rowHeight(ROWS.airborne) + 4], transport: [yT, yT + 92], cdiff: [yC, yC + 80] }}>
       <G id="standard">
         <Box x={8} y={6} w={344} h={50} r={10} fill={C.card} lift />
         <HandWash x={26} y={31} />
@@ -266,11 +261,11 @@ export function IsolationDiagram({ focus = null }) {
         <T x={18} y={yT + 80} size={MIN_TEXT}>Staff: used gown and gloves off, hands clean.</T>
       </G>
       <G id="cdiff">
-        <Box x={8} y={yC} w={344} h={62} r={10} fill={C.noBg} stroke={C.coral} lift />
+        <Box x={8} y={yC} w={344} h={80} r={10} fill={C.noBg} stroke={C.coral} lift />
         <T x={18} y={yC + 23} size={BODY_TEXT} weight={700} color={C.danger}>C. diff: soap and water</T>
-        <T x={18} y={yC + 44} size={MIN_TEXT}>Alcohol rub is not effective on its spores.</T>
-        <Anim on="cdiff" kind="pop" delay={300}><Soap x={274} y={yC + 24} /></Anim>
-        <Anim on="cdiff" kind="pop" delay={600}><Rub x={316} y={yC + 22} /></Anim>
+        <T x={18} y={yC + 44} size={MIN_TEXT}>Washing removes spores; alcohol rub doesn't</T>
+        <T x={18} y={yC + 62} size={MIN_TEXT}>kill them. Facility policy sets when rub is used.</T>
+        <Anim on="cdiff" kind="pop" delay={300}><Soap x={316} y={yC + 24} /></Anim>
       </G>
     </Frame>
   );
@@ -291,15 +286,15 @@ export const isolation = {
     "Chickenpox (varicella) and disseminated zoster require airborne AND contact precautions. Localized zoster in an immunocompromised client requires airborne and contact precautions until dissemination is ruled out; localized zoster in an immunocompetent client, or once dissemination is ruled out, with the lesions covered, needs standard precautions.",
     "Latent tuberculosis infection is not contagious and needs no isolation; extrapulmonary tuberculosis without pulmonary or laryngeal involvement needs standard precautions (draining lesions are managed separately). Congenital rubella needs contact precautions; acquired rubella needs droplet precautions.",
     "On droplet or airborne precautions, the client wears a surgical mask, if tolerated, when transported out of the room, and affected varicella or zoster lesions are covered; used gown and gloves are removed and hand hygiene performed before transport, with clean PPE for later handling when indicated; respiratory protection for the escort follows pathogen-specific guidance and facility policy.",
-    "Alcohol-based hand rub is not effective against C. difficile spores; hands are washed with soap and water.",
+    "Alcohol-based hand rub does not reliably inactivate C. difficile spores; washing with soap and water physically removes them, and soap and water is the expected NCLEX answer for C. difficile. Current CDC and facility guidance determine when alcohol-based hand rub is still used in routine care (for example, when hands are not visibly soiled outside an outbreak).",
   ],
   steps: [
     { key: "standard", focus: ["standard"], caption: "Every client gets standard precautions. Transmission-based precautions are added on top, matched to how the organism spreads.",
       narration: "Every client gets standard precautions. Transmission-based precautions are added on top, and they are matched to how the organism spreads." },
     { key: "contact", focus: ["contact"], caption: "Contact: spread by touch, through skin, wounds, stool and surfaces, as with MRSA, C. diff, head lice and congenital rubella. Gown and gloves, a single room if possible or a cohort with the same pathogen and compatible precautions (otherwise infection prevention decides), and dedicated equipment such as a stethoscope that stays in the room.",
       narration: "Contact precautions are for organisms spread by touch, through skin, wounds, stool, and surfaces, as with MRSA, C. diff, head lice, and congenital rubella. Wear a gown and gloves. A single room is preferred, or a cohort with clients who have the same pathogen and compatible precautions; if neither is possible, infection prevention decides the placement. The client also needs dedicated equipment, such as a stethoscope that stays in the room." },
-    { key: "cdiff", focus: ["contact", "cdiff"], caption: "The C. diff trap: alcohol hand rub is not effective against its spores. Wash with soap and water.",
-      narration: "Here is the C. diff trap. Alcohol hand rub is not effective against its spores, so wash your hands with soap and water." },
+    { key: "cdiff", focus: ["contact", "cdiff"], caption: "The C. diff trap: for exam questions, the answer is soap and water, because washing physically removes the spores that alcohol hand rub does not reliably kill. In practice, CDC and facility policy set when alcohol rub is still used.",
+      narration: "Here is the C. diff trap. On the exam, the answer is soap and water, because washing physically removes the spores that alcohol hand rub doesn't reliably kill. In practice, CDC and facility policy set when alcohol rub is still used." },
     { key: "droplet", focus: ["droplet"], caption: "Droplet: larger droplets spread at close range by coughing, sneezing and talking, as with influenza, pertussis, mumps, acquired rubella and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, or a cohort with the same pathogen and compatible precautions; otherwise infection prevention decides.",
       narration: "Droplet precautions are for larger droplets that spread at close range when a client coughs, sneezes, or talks, as with influenza, pertussis, mumps, acquired rubella, and meningococcal disease. Put on a surgical mask as you enter the room. A single room is preferred, or a cohort with clients who have the same pathogen and compatible precautions. If neither is possible, infection prevention decides the placement." },
     { key: "airborne", focus: ["airborne"], caption: "Airborne: tiny particles that hang in the air, as with pulmonary or laryngeal TB, measles and chickenpox. A fit-tested N95 respirator, and a negative-pressure room with the door kept closed. Chickenpox also needs contact precautions: gown and gloves.",
