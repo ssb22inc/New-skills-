@@ -246,3 +246,21 @@ describe("useReadAloud, mounted", () => {
     expect(env.played).toEqual([]);
   });
 });
+
+describe("exhibits while being read", () => {
+  it("opens the exhibit being read, leaves the student's own choices alone otherwise", async () => {
+    const { ExhibitTabs } = await import("../src/exhibit-tabs.jsx");
+    const tabs = [{ label: "Vitals", content: "BP 90/60" }, { label: "Labs", content: "K 2.9" }];
+    const r = (active) => ({ status: active ? "playing" : "idle", active, isOn: (id) => id === active });
+    await act(async () => root.render(<ExhibitTabs tabs={tabs} reader={r(null)} />));
+    const panels = host.querySelectorAll("details");
+    expect([...panels].map((d) => d.open)).toEqual([true, false]);
+    // the student closes the first panel themselves
+    panels[0].open = false;
+    // read aloud reaches the second exhibit (say, shown on screen only): it opens and is highlighted
+    await act(async () => root.render(<ExhibitTabs tabs={tabs} reader={r("exhibit1")} />));
+    expect(panels[1].open).toBe(true);
+    expect(panels[1].className).toContain("ra-now");
+    expect(panels[0].open).toBe(false); // their choice stands
+  });
+});

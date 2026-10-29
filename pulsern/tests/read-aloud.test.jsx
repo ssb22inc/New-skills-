@@ -576,8 +576,10 @@ describe("server voice without a key: the queue and the voice job", () => {
   });
 
   it("keeps a queue entry it could not read, and reports it", async () => {
-    const { storage, files } = fakeStorage({ failDownload: (p) => p.startsWith("queue/") });
+    let broken = false;
+    const { storage, files } = fakeStorage({ failDownload: (p) => broken && p.startsWith("queue/") });
     await speak({ ...base({ apiKey: "" }), storage });
+    broken = true; // the queue becomes unreadable after the entry was written
     const f = fakeOpenAI();
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
     expect(r.errors[0]).toMatch(/could not read/);
@@ -634,6 +636,18 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(f).not.toHaveBeenCalled();
     expect([...good.files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
     expect((await speak({ ...base({ apiKey: "" }), storage: good.storage })).status).toBe(422);
+  });
+
+  it("keeps a queued entry, spends nothing and fails the run when its check record cannot be read", async () => {
+    const good = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage: good.storage });
+    const real = good.storage.from(BUCKET);
+    const unreadable = { ...good.storage, from: () => ({ ...real, download: (p) => (/^marin\/.*\.json$/.test(p) ? Promise.resolve({ data: null, error: { message: "Internal server error", statusCode: "500" } }) : real.download(p)) }) };
+    const f = fakeOpenAI();
+    const r = await runJob({ storage: unreadable, db: fakeDb({ questions: [], case_studies: [], flashcards: [] }), apiKey: "k", fetchImpl: f, max: 5, log: () => {} });
+    expect(r.failed).toBe(true);
+    expect(f).not.toHaveBeenCalled();
+    expect([...good.files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
   });
 
   it("keeps the original entry when neither the give-up record nor its replacement can be saved", async () => {
@@ -769,6 +783,46 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(200); // later items were voiced
     const rec = [...files.keys()].find((k) => k === passagePaths(first).rec);
     expect(JSON.parse(files.get(rec).toString()).reason).toMatch(/gave up after 5 attempts/);
+  });
+
+  it("leaves a passage waiting in the queue to the queue: never voiced twice, attempts counted once", async () => {
+    const { storage, files } = fakeStorage();
+    const db = fakeDb({ questions: [], case_studies: [], flashcards: [{ id: 4, front: "Potassium 2.9 mEq/L.", back: "Low." }] });
+    await speak({ ...base({ apiKey: "" }), storage }); // card 4's front is queued
+    const q = [...files.keys()].find((k) => k.startsWith("queue/"));
+    files.set(q.replace(/^queue\//, "queue-retry/"), files.get(q)); files.delete(q); // ...and waiting to retry
+    const f = fakeOpenAI();
+    await prewarmBank({ storage, db, apiKey: "k", fetchImpl: f, max: 1000 });
+    expect(f.mock.calls.some(([u, i]) => u.endsWith("/audio/speech") && JSON.parse(i.body).input === "Potassium 2.9 milliequivalents per liter.")).toBe(false);
+  });
+
+  it("does not voice the bank in a run where the queue hit an outage", async () => {
+    const { storage } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const ok = fakeOpenAI();
+    // transcription fails for the queued passage only
+    const f = vi.fn(async (url, init) => (url.endsWith("/audio/transcriptions") ? { ok: false, status: 500 } : ok(url, init)));
+    const r = await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 50, log: () => {} });
+    expect(r.queue.operational).toBe(true);
+    expect(r.bank.stopped).toBe("skipped");
+    expect(f.mock.calls.filter(([u]) => u.endsWith("/audio/speech"))).toHaveLength(1);
+    expect(r.failed).toBe(true);
+  });
+
+  it("treats an unreadable check record as storage trouble: no new purchase, the run fails", async () => {
+    const { storage, files } = fakeStorage();
+    // prewarm once so records exist, then make record reads fail
+    await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000 });
+    files.delete("prewarm/cursor.json");
+    const real = storage.from(BUCKET);
+    const unreadable = { ...storage, from: () => ({ ...real, download: (p) => (/^marin\/.*\.json$/.test(p) ? Promise.resolve({ data: null, error: { message: "Internal server error", statusCode: "500" } }) : real.download(p)) }) };
+    const f = fakeOpenAI();
+    const w = await prewarmBank({ storage: unreadable, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1000 });
+    expect(w.failure).toBe(true);
+    expect(w.stopped).toMatch(/^storage:/);
+    expect(f).not.toHaveBeenCalled();
+    // the route says unavailable, and queues nothing
+    expect((await speak({ ...base({ apiKey: "" }), storage: unreadable })).status).toBe(503);
   });
 
   it("stops without paying when today's spending is used up", async () => {
@@ -1153,9 +1207,11 @@ describe("every part that can be read has something highlighted on screen", () =
      on screen"), so every part id a script can produce must map to a
      highlighted element for its reader in App.jsx. */
   const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+  const exhibits = readFileSync(new URL("../src/exhibit-tabs.jsx", import.meta.url), "utf8");
   const family = (id) => partOf(id).replace(/\d+$/, "#");
   const target = (reader, fam) => {
     const lit = fam.includes("#") ? `ra(${reader}, \`${fam.replace("#", "${")}` : `ra(${reader}, "${fam}"`;
+    if (fam === "exhibit#") return reader === "qReader" && app.includes("<ExhibitTabs tabs={ext.exhibit} reader={qReader} />") && exhibits.includes("ra(reader, `exhibit${i}`");
     return app.includes(lit) || (fam.startsWith("bt-") && app.includes(`ra(${reader}, \`bt-\${col.slot}\``)) || (fam.startsWith("card-") && app.includes(`ra(${reader}, show ? "card-back" : "card-front"`));
   };
   const types = [

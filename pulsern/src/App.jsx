@@ -269,6 +269,7 @@ import InstallCard from "./install.jsx";
 import { ExhibitVisual } from "./exhibits.jsx";
 import { ConceptExplainers } from "./concept-explainers.jsx";
 import { useReadAloud, ReadAloudBar, ra } from "./read-aloud.jsx";
+import { ExhibitTabs } from "./exhibit-tabs.jsx";
 import { questionSegments, questionFeedbackSegments, caseFeedbackSegments, caseIntroSegments, caseStepSegments, cardSegments } from "./read-aloud-script.js";
 import { ProfileCard, useProfile } from "./profile.jsx";
 import {
@@ -1572,16 +1573,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
           <Why label="how listening helps">Follow the highlighted words while you listen: hearing and reading the same words together helps many learners stay focused on long stems. The answer is never read out. Choose yours first, then listen to the explanation, because the effort of answering is what builds the memory. Slow it to 0.8× for dense items, and turn on "Read each new one" for hands-free practice.</Why>
         )}
         <ExhibitVisual spec={ext.visual} />
-        {Array.isArray(ext.exhibit) && ext.exhibit.length > 0 && (
-          <div className="exhibit">
-            {ext.exhibit.map((tab, i) => (
-              <details key={i} className={ra(qReader, `exhibit${i}`, "exhibit-tab")} open={i === 0}>
-                <summary className="mono">📋 {tab.label}</summary>
-                <p className="small exhibit-body">{tab.content}</p>
-              </details>
-            ))}
-          </div>
-        )}
+        <ExhibitTabs tabs={ext.exhibit} reader={qReader} />
 
         {q.type === "cloze" ? (
           <p className={ra(qReader, "stem", "stem")}>

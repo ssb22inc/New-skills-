@@ -285,9 +285,20 @@ export async function reserve(storage, userId, { now = Date.now(), limits = LIMI
 }
 
 /* Small JSON files in the bucket. A missing file reads as null. */
+/* Reading a small JSON file: null when it is not there (or not JSON).
+   Any other failure is storage trouble, never mistaken for "absent": it
+   throws StorageReadError, so nothing is re-bought or re-queued on the
+   strength of an unreadable record. */
+export class StorageReadError extends Error {}
+const isMissing = (error) => /not.?found|does not exist|404/i.test(`${error?.message ?? ''} ${error?.statusCode ?? ''} ${error?.error ?? ''}`);
 async function readJson(bucket, path) {
   const { data, error } = await bucket.download(path);
-  if (error || !data) return null;
+  if (error) {
+    if (isMissing(error)) return null;
+    console.error('[read-aloud] storage read', path.split('/')[0], error.message ?? error);
+    throw new StorageReadError(`could not read ${path.split('/')[0]}: ${error.message ?? error}`);
+  }
+  if (!data) return null;
   try { return JSON.parse(typeof data.text === 'function' ? await data.text() : String(data)); } catch { return null; }
 }
 async function put(storage, path, body, contentType) {
@@ -412,7 +423,13 @@ export async function readRecord(storage, text, tts = TTS, now = Date.now()) {
    202 { queued }: no voice yet; the passage is queued for the voice job
      (ops/read-aloud-worker.mjs) and the app says it is being prepared.
      Used when the server itself holds no OpenAI key. */
-export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, storage, fetchImpl = fetch, now, clock, limits = LIMITS, tts = TTS }) {
+export async function speak(args) {
+  try { return await speakUnguarded(args); } catch (e) {
+    if (e instanceof StorageReadError) return { status: 503, body: { error: 'Voice unavailable' } };
+    throw e;
+  }
+}
+async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey, storage, fetchImpl = fetch, now, clock, limits = LIMITS, tts = TTS }) {
   /* The time is read when it is used: a take paid after midnight is
      charged to the new day. (now fixes it for tests; clock lets a test
      move it between takes.) */

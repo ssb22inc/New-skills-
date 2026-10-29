@@ -111,7 +111,12 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
       // Only the known fields are kept.
       const job = { text: raw.text, voice: raw.voice, ref, seg: raw.seg, requestedAt: String(raw.requestedAt ?? ""), attempts: Number.isInteger(raw.attempts) ? raw.attempts : 0, giveUp: typeof raw.giveUp === "string" ? raw.giveUp.slice(0, 200) : null };
       out.queued++;
-      if (await readRecord(storage, job.text, TTS, now())) { await bucket.remove([path]); out.skipped++; continue; } // already decided
+      let decided;
+      try { decided = await readRecord(storage, job.text, TTS, now()); } catch (e) {
+        // An unreadable record is storage trouble: keep the work, spend nothing.
+        out.operational = true; out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: ${e.message}`); continue;
+      }
+      if (decided) { await bucket.remove([path]); out.skipped++; continue; } // already decided
       /* Given up on earlier, but its record could not be saved then: save
          the record now (no synthesis); remove the entry only once it is. */
       if (job.giveUp) {
@@ -219,7 +224,15 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   };
   const voice = async (texts) => {
     for (const text of texts) {
-      if (await readRecord(storage, text, TTS, now())) continue;
+      let decided;
+      try { decided = await readRecord(storage, text, TTS, now()); } catch (e) { out.failure = true; return `storage: ${e.message}`; }
+      if (decided) continue;
+      // Waiting in the queue (fresh or retry): the queue owns it and its attempt count.
+      const paths = passagePaths(text);
+      const waiting = await Promise.all([paths.queue, paths.retry].map((p) => bucket.download(p)));
+      if (waiting.some((w) => !w.error)) continue;
+      const unreadable = waiting.find((w) => w.error && !/not.?found|404/i.test(`${w.error.message ?? ""} ${w.error.statusCode ?? ""}`));
+      if (unreadable) { out.failure = true; return `storage: could not read the queue (${unreadable.error.message ?? unreadable.error})`; }
       if (done >= max) return "max";
       done++;
       const v = await voiceOne({ storage, apiKey, fetchImpl, text, now, limits });
@@ -323,7 +336,9 @@ export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch
   try { q = await drainQueue({ storage, apiKey, fetchImpl, max, now, limits, log }); }
   catch (e) { q = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, errors: [String(e?.message ?? e)], broken: true }; }
   const left = Math.max(0, max - (q.voiced + q.failed + q.rejected + q.retried));
-  const skip = q.budget || q.providerDown || q.service || q.broken || !left;
+  // The bank waits for a clean queue run: after any operational failure the
+  // provider or storage is suspect, and nothing more is spent this run.
+  const skip = q.budget || q.providerDown || q.service || q.broken || q.operational || !left;
   let w;
   try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, apiKey, fetchImpl, max: left, now, limits }); }
   catch (e) { w = { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: String(e?.message ?? e), failure: true }; }
