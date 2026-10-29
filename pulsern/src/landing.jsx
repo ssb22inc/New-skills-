@@ -6,7 +6,7 @@ const freePassLabel = planById("pass1").name.toLowerCase();
 const FEATURES = [
   ["Retrieval practice", "You learn by pulling the answer out of memory. Every session starts with a question, not a lecture."],
   ["Spaced repetition", "What you miss comes back on a real calendar date, right before you'd forget it, so it's there on exam day."],
-  ["Adaptive practice", "PulseRN finds your weak spots across the eight NCSBN client-needs categories and works them until they're strengths."],
+  ["Adaptive practice", "PulseRN tracks your results across the eight NCSBN client-needs categories and focuses practice on your weaker areas."],
   ["A plan for each day", "A focused Today round and a weekly plan built around your exam date, so you always know what to do next."],
   ["The study library", "10,000+ practice questions, 500+ case studies, 1,100+ flashcards, dosage calculation, and an AI tutor when you want another explanation."],
 ];
@@ -14,7 +14,7 @@ const FEATURES = [
 const FAQ = [
   ["Who created PulseRN?", "Sheldon Bennett, a working hospital RN. He started from how people actually learn and remember under pressure, then engineered the study loop around it."],
   ["Does PulseRN use real NCLEX questions?", "No. Practice items are original and built around NCSBN's published test plan and item formats. PulseRN is not affiliated with or endorsed by NCSBN. NCLEX® is a registered trademark of NCSBN."],
-  ["What does the readiness estimate tell me?", "Readiness is an estimate built from your work in PulseRN. It shows you exactly what to practice next, so every session moves you closer to exam day."],
+  ["What does the readiness estimate tell me?", "Readiness is an estimate built from your work in PulseRN. It suggests what to review next, so every session moves you closer to exam day."],
   ["How is the content checked?", "Practice questions, case studies, flashcards, and readiness items are built around the published test plan and pass automated quality checks before they go live. Public study guides are source-cited and approved by Sheldon Bennett, RN."],
   ["Is there a free option?", `Yes. A ${freePassLabel} covers study content, and no card is needed. Readiness self-assessments are included with paid plans.`],
 ];
