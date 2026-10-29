@@ -268,6 +268,8 @@ import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.js
 import InstallCard from "./install.jsx";
 import { ExhibitVisual } from "./exhibits.jsx";
 import { ConceptExplainers } from "./concept-explainers.jsx";
+import { useReadAloud, ReadAloudBar, ra } from "./read-aloud.jsx";
+import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments } from "./read-aloud-script.js";
 import { ProfileCard, useProfile } from "./profile.jsx";
 import {
   isStudyLocked,
@@ -979,7 +981,7 @@ function Tour({ trial, onAnswer, onSkip }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Quick tour, Settings, Sign out.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Quick tour, Settings, Sign out.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 7-day pass with full study access (no exams). Access passes are one-time payments that do not auto-renew: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). Add-ons, also one-time: 7-day renewal pass $45 (content only, never charged automatically) or an extra self-assessment $45. Refunds: if paid access has not been used, a full refund can be requested within 7 days of purchase; after 7 days, or once paid access has been used, payments are non-refundable, except where the law requires otherwise (see the Terms). Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
@@ -1439,7 +1441,23 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, phase]);
 
-  const TYPE_CHIPS = [["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
+  /* Read aloud: the question while answering, then (separately) the result
+     and rationale. The answer is never in the question's script. */
+  const qSegs = useMemo(() => (q && phase === "answering" ? questionSegments(q, ngnExt(q)) : []), [q, phase]);
+  const fbSegs = useMemo(() => {
+    if (!q || phase !== "feedback") return [];
+    const ex = ngnExt(q);
+    const verdict = wasCorrect ? "Correct" : credit.points > 0 ? `Partly correct: ${credit.points} of ${credit.max} points` : "Incorrect";
+    return feedbackSegments({
+      verdict, rationale: q.rationale,
+      correctOrder: q.type === "order" && !wasCorrect ? q.answer.map((i) => q.options[i]).join(", then ") : null,
+      correctChoices: q.type === "cloze" && !wasCorrect ? q.answer.map((a, i) => ex.dropdowns[i][a]).join("; ") : null,
+    });
+  }, [q, phase, wasCorrect, credit]);
+  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${q.id}:${sessionN}` : "off");
+  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${q.id}:${sessionN}` : "off");
+
+  const TYPE_CHIPS =[["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
   if (auto && phase === "pick") return (
     <section className="card"><p className="eyebrow">Practice</p><p className="small">Loading a question…</p></section>
@@ -1554,11 +1572,15 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
           <span>{q.cat.toUpperCase()}{mode === "review" ? " · RETRY" : ""}</span>
           <span>{"▲".repeat(q.diff)}{"△".repeat(3 - q.diff)} · {TYPE_LABEL[q.type] ?? "MULTIPLE CHOICE"}</span>
         </div>
+        {phase === "answering" && <ReadAloudBar reader={qReader} label="Listen to the question" />}
+        {phase === "answering" && qReader.available && (
+          <Why label="how listening helps">Follow the highlighted words while you listen: hearing and reading the same words together helps many learners stay focused on long stems. The answer is never read out. Choose yours first, then listen to the explanation, because the effort of answering is what builds the memory. Slow it to 0.8× for dense items, and turn on "Read each new one" for hands-free practice.</Why>
+        )}
         <ExhibitVisual spec={ext.visual} />
         {Array.isArray(ext.exhibit) && ext.exhibit.length > 0 && (
           <div className="exhibit">
             {ext.exhibit.map((tab, i) => (
-              <details key={i} className="exhibit-tab" open={i === 0}>
+              <details key={i} className={ra(qReader, `exhibit${i}`, "exhibit-tab")} open={i === 0}>
                 <summary className="mono">📋 {tab.label}</summary>
                 <p className="small exhibit-body">{tab.content}</p>
               </details>
@@ -1567,12 +1589,12 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
         )}
 
         {q.type === "cloze" ? (
-          <p className="stem">
+          <p className={ra(qReader, "stem", "stem")}>
             {q.stem.split(/\{(\d+)\}/).map((part, idx) => {
               if (idx % 2 === 0) return <span key={idx}>{part}</span>;
               const gap = Number(part);
               return (
-                <select key={idx} className="cloze-dd"
+                <select key={idx} className={ra(qReader, `gap${gap}`, "cloze-dd")}
                   value={Number.isInteger(sel[gap]) ? sel[gap] : ""}
                   disabled={phase !== "answering"}
                   onChange={(e) => setClozeGap(gap, Number(e.target.value))}>
@@ -1583,13 +1605,13 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
             })}
           </p>
         ) : (
-          <p className="stem">{q.stem}</p>
+          <p className={ra(qReader, "stem", "stem")}>{q.stem}</p>
         )}
 
         {q.type === "highlight" && (
           <div className="hl-box" role="group" aria-label="Tap each finding to highlight it">
             {ext.tokens.map((t, i) => {
-              let cls = "hl-token";
+              let cls = ra(qReader, `tok${i}`, "hl-token");
               if (sel.includes(i)) cls += " picked";
               if (phase === "feedback") {
                 if (q.answer.includes(i)) cls += " right";
@@ -1607,7 +1629,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
               {ext.columns.map((c, ci) => <span key={ci} className="small mono mx-colhead">{c}</span>)}
             </div>
             {ext.rows.map((r, ri) => (
-              <div key={ri} className="mx-row" style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
+              <div key={ri} className={ra(qReader, `row${ri}`, "mx-row")} style={{ gridTemplateColumns: `2fr repeat(${ext.columns.length}, 1fr)` }}>
                 <span className="small">
                   {phase === "feedback" && <strong>{sel[ri] === q.answer[ri] ? "✓ " : "✗ "}</strong>}{r}
                 </span>
@@ -1636,7 +1658,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
               { slot: "condition", label: "Condition · pick 1", items: ext.conditions, cap: 1, picked: Number.isInteger(sel.condition) ? [sel.condition] : [], keyed: [q.answer.condition] },
               { slot: "parameters", label: "Parameters to monitor · pick 2", items: ext.parameters, cap: 2, picked: sel.parameters ?? [], keyed: q.answer.parameters },
             ].map((col) => (
-              <div key={col.slot} className="bt-col">
+              <div key={col.slot} className={ra(qReader, `bt-${col.slot}`, "bt-col")}>
                 <p className="small mono bt-label">{col.label.toUpperCase()}</p>
                 {col.items.map((it, i) => {
                   let cls = "opt bt-opt";
@@ -1676,7 +1698,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
         {["mc", "sata", "order"].includes(q.type) && (
         <div className="opts">
           {q.options.map((opt, i) => {
-            let cls = "opt";
+            let cls = ra(qReader, `opt${i}`, "opt");
             if (q.type !== "order") {
               if (sel.includes(i)) cls += " picked";
               if (phase === "feedback") {
@@ -1706,7 +1728,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
 
         {phase === "feedback" && (
           <div className={wasCorrect ? "feedback ok" : "feedback no"}>
-            <p className="fb-head mono">
+            <p className={ra(fbReader, "verdict", "fb-head mono")}>
               {wasCorrect ? `CORRECT${credit.max > 1 ? ` · ${credit.points}/${credit.max} POINTS` : ""} · +${10 * q.diff} XP`
                 : credit.points > 0 ? `PARTIAL CREDIT · ${credit.points}/${credit.max} POINTS · IT RETURNS IN REVIEW MISSES`
                 : `INCORRECT${credit.max > 1 ? ` · 0/${credit.max} POINTS` : ""} · IT RETURNS IN REVIEW MISSES`}
@@ -1732,7 +1754,8 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
             {q.type === "highlight" && !wasCorrect && (
               <p className="small"><strong>Should be highlighted:</strong> {q.answer.map((i) => ext.tokens[i]).join(" · ")}</p>
             )}
-            <p className="rationale"><strong>Rationale.</strong> {q.rationale}</p>
+            <ReadAloudBar reader={fbReader} label="Listen to the explanation" />
+            <p className={ra(fbReader, "rationale", "rationale")}><strong>Rationale.</strong> {q.rationale}</p>
             {q.ai && <p className="small">{calibration[q.id] !== undefined ? "✨ AI-assisted practice item that passed automated quality checks." : "✨ AI-assisted practice item."}</p>}
             {/* Astra-confirmed concept diagrams for this exact question (if any) */}
             <ConceptExplainers key={`dx${q.id}`} q={q} />
@@ -1784,6 +1807,16 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
     else setPhase("done");
   };
 
+  /* Read aloud: the chart once, each step's question, each step's result. */
+  const introSegs = useMemo(() => caseIntroSegments(cs), [cs]);
+  const stepSegs = useMemo(() => (s && phase === "answering" ? caseStepSegments(s) : []), [s, phase]);
+  const caseFbSegs = useMemo(() => (s && phase === "feedback"
+    ? feedbackSegments({ verdict: ok ? "Correct" : credit.points > 0 ? `Partly correct: ${credit.points} of ${credit.max} points` : "Incorrect", rationale: s.rationale })
+    : []), [s, phase, ok, credit]);
+  const introReader = useReadAloud(introSegs, cs && step === -1 ? `case:${caseKey}` : "off");
+  const stepReader = useReadAloud(stepSegs, s && phase === "answering" ? `cstep:${caseKey}:${step}` : "off");
+  const caseFbReader = useReadAloud(caseFbSegs, s && phase === "feedback" ? `cfb:${caseKey}:${step}` : "off");
+
   if (caseIdx == null) {
     // sub-category accordion: cases stay tucked away until a group is opened
     const groups = [
@@ -1829,14 +1862,15 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
           <span>{cs.cat.toUpperCase()}</span>
           <button className="auth-switch mono" style={{ color: "var(--accent-ink)", fontSize: 11 }} onClick={() => setCaseIdx(null)}>← ALL CASES</button>
         </div>
-        <h2 className="h2">{cs.title}</h2>
+        <h2 className={ra(introReader, "case-title", "h2")}>{cs.title}</h2>
+        {step === -1 && <ReadAloudBar reader={introReader} label="Listen to the case" />}
 
-        <p className="small">{cs.intro}</p>
-        <div className="chart mono">
+        <p className={ra(introReader, "case-intro", "small")}>{cs.intro}</p>
+        <div className={ra(introReader, "case-chart", "chart mono")}>
           {cs.vitals.map(([k, v]) => <span key={k} className="chip">{k} {v}</span>)}
           {cs.labs.map(([k, v]) => <span key={k} className="chip lab">{k} {v}</span>)}
         </div>
-        <p className="small note">Nurse's note: {cs.note}</p>
+        <p className={ra(introReader, "case-note", "small note")}>Nurse's note: {cs.note}</p>
         {cs.ai && <p className="small">✨ AI-assisted case that passed automated quality checks.</p>}
         <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
         {step === -1 && <button className="btn" onClick={start}>Begin case →</button>}
@@ -1845,10 +1879,11 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
       {step >= 0 && phase !== "done" && (
         <section className="card">
           <p className="eyebrow">Step {step + 1} of {cs.steps.length} · {s.phase}</p>
-          <p className="stem">{s.stem}</p>
+          {phase === "answering" && <ReadAloudBar reader={stepReader} label="Listen to this step" />}
+          <p className={ra(stepReader, "stem", "stem")}>{s.stem}</p>
           <div className="opts">
             {s.options.map((opt, i) => {
-              let cls = "opt";
+              let cls = ra(stepReader, `opt${i}`, "opt");
               if (sel.includes(i)) cls += " picked";
               if (phase === "feedback") {
                 const corr = s.type === "mc" ? i === s.answer : s.answer.includes(i);
@@ -1870,7 +1905,8 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
                 {ok ? "CORRECT" : credit.points > 0 ? "PARTIAL CREDIT" : "INCORRECT"} · {credit.points}/{credit.max} POINT{credit.max === 1 ? "" : "S"}{ok ? " · +30 XP" : ""}
               </p>
               <p className="small mono">Case score so far: {total.points}/{total.max} points</p>
-              <p className="rationale"><strong>Rationale.</strong> {s.rationale}</p>
+              <ReadAloudBar reader={caseFbReader} label="Listen to the explanation" />
+              <p className={ra(caseFbReader, "rationale", "rationale")}><strong>Rationale.</strong> {s.rationale}</p>
               <TutorExplain key={`${caseIdx}-${step}`} q={{ ...s, id: 100 + caseIdx * 10 + step }} wasCorrect={ok} provider={provider} isBank={false} />
               <button className="btn" onClick={next}>{step + 1 < cs.steps.length ? "Next step →" : "Finish case"}</button>
             </div>
@@ -1982,6 +2018,10 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
   const nextReview = filtered.map((c) => srsMap[c.id]?.due).filter((d) => d && d > todayStr()).sort()[0];
   const nextDue = filtered.some((c) => !srsMap[c.id]) ? addDays(1) : nextReview;
 
+  /* Read aloud: the prompt, then (only after the flip) the answer. */
+  const cardSegs = useMemo(() => cardSegments(cur, show), [cur, show]);
+  const cardReader = useReadAloud(cardSegs, cur ? `card:${cur.id}:${show ? "back" : "front"}` : "off");
+
   const chips = !embedded && (
     <div className="fchips" role="group" aria-label="Filter cards by category">
       {[...CATS, CALC_CHIP].map((c) => (
@@ -2010,7 +2050,8 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
       <section className="card">
         <p className="eyebrow">Spaced repetition · {sessionQueue.length} in today's queue · deck of {filtered.length}</p>
         <p className="small mono" style={{ marginBottom: 6 }}>{cur.cat.toUpperCase()} · {cur.topic.toUpperCase()}{cur.ai ? " · ✨ AI" : ""}</p>
-        <button className="flashcard" onClick={() => { if (!show) onFlip?.(); setShow((s) => !s); }}>
+        <ReadAloudBar reader={cardReader} label={show ? "Listen to the answer" : "Listen to the card"} />
+        <button className={ra(cardReader, show ? "card-back" : "card-front", "flashcard")} onClick={() => { if (!show) onFlip?.(); setShow((s) => !s); }}>
           <p className="fc-side mono">{show ? "ANSWER" : "PROMPT · TAP TO FLIP"}</p>
           <p className="fc-text">{show ? cur.back : cur.front}</p>
         </button>
@@ -2560,6 +2601,18 @@ function Style() {
       .stage-label{text-align:center;margin-bottom:0}
       .rationale.tutor{border-left:4px solid var(--teal)}
       .tutor-btn{margin-bottom:8px;display:block}
+      /* Read aloud: a big, obvious Listen button, then small chips for stop,
+         speed and auto-read. The part being read gets a soft teal wash
+         (follow-along), never a new color. */
+      .ra-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:4px 0 12px}
+      .ra-main{margin-top:0;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:10px 18px;border-radius:99px;font-size:15px}
+      .ra-main:focus-visible,.ra-chip:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+      .ra-chip{min-height:36px;background:var(--surface);border:1.5px solid var(--line);border-radius:99px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--accent-ink);cursor:pointer}
+      .ra-chip.on{border-color:var(--teal);background:var(--pick-bg)}
+      .ra-src{color:var(--muted)}
+      .ra-now{background:var(--pick-bg);box-shadow:0 0 0 6px var(--pick-bg),0 0 0 8px var(--teal);border-radius:6px;transition:background .2s,box-shadow .2s}
+      .opt.ra-now,.hl-token.ra-now,.flashcard.ra-now{border-color:var(--teal)}
+      @media (prefers-reduced-motion: reduce){.ra-now{transition:none}}
       /* stats */
       .cat-row{margin-bottom:10px}
       .cat-top{display:flex;justify-content:space-between;gap:8px}

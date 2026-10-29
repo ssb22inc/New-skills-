@@ -169,3 +169,29 @@ Claude Code executes everything else. These run in parallel with the build.
   holds in `pulsern-paid` (H20) and proposes pairings with `main`'s
   matcher. If you already created a `pulsern-bank-read` environment or a
   reader account, you can delete them.
+
+## Read-aloud voice (added 2026-10-29)
+
+- H23 · Give the app its natural AI voice. The 🔊 Listen buttons on
+  practice questions, the Today round, Review misses, case studies and
+  flashcards already work, but until this key is set they use the
+  student's own device voice. Quality varies by device, from natural to
+  robotic. Readiness exams never have read aloud.
+
+  1. Open https://vercel.com/ssb22incs-projects/pulsern/settings/environment-variables
+  2. Add a variable named `OPENAI_API_KEY`. Its value is an OpenAI API key
+     (https://platform.openai.com/api-keys). It can be the same key you
+     gave the narration job. Tick Production and Preview, then Save.
+  3. Redeploy: https://vercel.com/ssb22incs-projects/pulsern/deployments →
+     the latest Production deployment → ⋯ → Redeploy.
+
+  Check it works: sign in, open Practice, press 🔊 Listen to the question.
+  The label next to the buttons should say "AI voice". If it still says
+  "Your device's voice", the key is missing or wrong.
+
+  Cost: each passage (a question stem, a choice, a rationale) is
+  synthesised once and saved in a private storage bucket (`read-aloud`,
+  created on first use). Every later listen to the same words is free.
+  OpenAI bills `gpt-4o-mini-tts` per minute of audio. Watch the first
+  weeks' usage at https://platform.openai.com/usage. Any signed-in
+  account can request speech for up to 1,500 characters at a time.

@@ -1,0 +1,148 @@
+/* Read-aloud scripts: exactly what is spoken, in what order.
+   ------------------------------------------------------------------
+   Pure code (CLAUDE.md rule 6). The voice only speaks what these
+   functions return, so what a student hears is the item on screen,
+   word for word, in reading order:
+
+   - the question first, then any exhibit, then the choices exactly as the
+     screen shows them (no letters: the screen has none, and the choice
+     being read is highlighted, so what is heard matches what is seen);
+   - never the answer, the rationale or the XP before the student answers
+     (questionSegments takes no answer and never reads q.answer);
+   - after the answer, a separate script reads the result and the
+     rationale (feedbackSegments).
+
+   Each segment has an id the screen uses to highlight the part being read
+   (follow-along reading), and a text the voice speaks. */
+
+/* Spoken forms for the clinical shorthand a voice is most likely to misread.
+   Conservative on purpose: units and dosing frequencies only, whole tokens
+   only, never a guess at a drug or a diagnosis. */
+const SPOKEN = [
+  [/\bmEq\/L\b/g, "milliequivalents per liter"],
+  [/\bmmol\/L\b/g, "millimoles per liter"],
+  [/\bmg\/dL\b/g, "milligrams per deciliter"],
+  [/\bg\/dL\b/g, "grams per deciliter"],
+  [/\bmcg\/kg\/min\b/g, "micrograms per kilogram per minute"],
+  [/\bmg\/kg\b/g, "milligrams per kilogram"],
+  [/\bmL\/hr?\b/g, "milliliters per hour"],
+  [/\bmL\/kg\b/g, "milliliters per kilogram"],
+  [/\bunits\/hr?\b/g, "units per hour"],
+  [/\bgtt\/min\b/g, "drops per minute"],
+  [/\bmm ?Hg\b/g, "millimeters of mercury"],
+  [/\/mm³/g, " per cubic millimeter"],
+  [/\bq(\d{1,2})h\b/gi, "every $1 hours"],
+  [/\bPRN\b/g, "as needed"],
+  [/\bNPO\b/g, "N P O"],
+  [/\bSpO₂|\bSpO2\b/g, "S P O 2"],
+  [/\bPaCO₂|\bPaCO2\b/g, "P A C O 2"],
+  [/\bPaO₂|\bPaO2\b/g, "P A O 2"],
+  [/\bHCO₃⁻?|\bHCO3-?(?=\W|$)/g, "bicarbonate"],
+  [/\bK⁺/g, "potassium"],
+  [/\bNa⁺/g, "sodium"],
+  [/°F\b/g, " degrees Fahrenheit"],
+  [/°C\b/g, " degrees Celsius"],
+  [/\s*→\s*/g, ", then "],
+  [/\s+·\s+/g, ", "],
+  [/≥/g, " at least "],
+  [/≤/g, " at most "],
+  [/</g, " less than "],
+  [/>/g, " greater than "],
+];
+
+/* Text for the voice: clinical shorthand spelled out, symbols the screen
+   uses for layout removed, whitespace tidied. */
+export function speakable(text) {
+  let s = String(text ?? "");
+  for (const [re, to] of SPOKEN) s = s.replace(re, to);
+  return s.replace(/[☐☑●○▲△✨📋🧮]/g, "").replace(/\s+/g, " ").trim();
+}
+
+/* Where an item takes its answer: these instructions are what the screen
+   shows as the item-type label, said the way a tutor would say it. */
+const INSTRUCTION = {
+  mc: "Choose one answer.",
+  sata: "Select all that apply.",
+  order: "Put these in the correct order.",
+  calc: "Enter a number.",
+  highlight: "Choose each finding that applies.",
+};
+
+const seg = (id, text) => ({ id, text: speakable(text) });
+const sentence = (s) => { const t = String(s ?? "").trim(); return /[.?!:]["'”’)\]]*$/.test(t) ? t : `${t}.`; };
+
+/* ext is ngnExt(q): the item's NGN payload merged in (src/ngn.js). */
+export function questionSegments(q, ext = q) {
+  if (!q) return [];
+  const out = [];
+  const type = q.type ?? "mc";
+  if (type === "cloze") {
+    const stem = String(q.stem ?? "").replace(/\{(\d+)\}/g, (_, n) => ` blank ${Number(n) + 1} `);
+    out.push(seg("stem", stem));
+  } else {
+    out.push(seg("stem", q.stem));
+  }
+  if (Array.isArray(ext.exhibit)) {
+    ext.exhibit.forEach((tab, i) => { if (tab?.content) out.push(seg(`exhibit${i}`, `${sentence(tab.label ?? "Exhibit")} ${tab.content}`)); });
+  }
+  /* Many stems already end with the instruction ("Select all that
+     apply."); say it once. */
+  const said = (t) => String(q.stem ?? "").toLowerCase().includes(t.toLowerCase().replace(/\.$/, ""));
+  const instruct = (t) => { if (!said(t)) out.push(seg("instruction", t)); };
+  if (["mc", "sata", "order"].includes(type) && Array.isArray(q.options)) {
+    instruct(INSTRUCTION[type]);
+    q.options.forEach((o, i) => out.push(seg(`opt${i}`, sentence(o))));
+  } else if (type === "highlight" && Array.isArray(ext.tokens)) {
+    instruct(INSTRUCTION.highlight);
+    ext.tokens.forEach((t, i) => out.push(seg(`tok${i}`, sentence(t))));
+  } else if (type === "matrix" && Array.isArray(ext.rows) && Array.isArray(ext.columns)) {
+    out.push(seg("instruction", `For each row, choose: ${ext.columns.join(", or ")}.`));
+    ext.rows.forEach((r, i) => out.push(seg(`row${i}`, `Row ${i + 1}. ${sentence(r)}`)));
+  } else if (type === "bowtie") {
+    const group = (id, label, items) => Array.isArray(items) && items.length
+      ? out.push(seg(id, `${label} ${items.map((it) => sentence(it)).join(" ")}`)) : 0;
+    group("bt-actions", "Actions to take. Pick two.", ext.actions);
+    group("bt-condition", "The condition. Pick one.", ext.conditions);
+    group("bt-parameters", "Parameters to monitor. Pick two.", ext.parameters);
+  } else if (type === "cloze" && Array.isArray(ext.dropdowns)) {
+    ext.dropdowns.forEach((opts, i) => out.push(seg(`gap${i}`, `Blank ${i + 1}: ${(opts ?? []).join(", or ")}.`)));
+  } else if (type === "calc") {
+    out.push(seg("instruction", `${INSTRUCTION.calc}${ext.unit ? ` Answer in ${ext.unit}.` : ""}`));
+  }
+  return out.filter((s) => s.text);
+}
+
+/* After an answer: the result in plain words, then the rationale. Points
+   are said as the screen shows them; XP is not read (it is a game score,
+   not the lesson). */
+export function feedbackSegments({ verdict, rationale, correctOrder, correctChoices } = {}) {
+  const out = [];
+  if (verdict) out.push(seg("verdict", sentence(verdict)));
+  if (correctOrder) out.push(seg("correction", `The correct order is: ${correctOrder}.`));
+  if (correctChoices) out.push(seg("correction", `The correct choices are: ${correctChoices}.`));
+  if (rationale) out.push(seg("rationale", `Rationale. ${rationale}`));
+  return out.filter((s) => s.text);
+}
+
+/* Case study: the chart is read once, before step one. */
+export function caseIntroSegments(cs) {
+  if (!cs) return [];
+  const chart = [...(cs.vitals ?? []), ...(cs.labs ?? [])].map(([k, v]) => `${k} ${v}`).join("; ");
+  return [
+    seg("case-title", sentence(cs.title)),
+    seg("case-intro", cs.intro),
+    chart ? seg("case-chart", `Chart: ${chart}.`) : null,
+    cs.note ? seg("case-note", `Nurse's note: ${cs.note}`) : null,
+  ].filter((s) => s && s.text);
+}
+
+export function caseStepSegments(step) {
+  if (!step) return [];
+  return questionSegments({ stem: step.stem, options: step.options, type: step.type === "sata" ? "sata" : "mc" });
+}
+
+/* Flashcards: the prompt before the flip, the answer only after it. */
+export function cardSegments(card, flipped) {
+  if (!card) return [];
+  return [flipped ? seg("card-back", `Answer. ${card.back}`) : seg("card-front", card.front)].filter((s) => s.text);
+}

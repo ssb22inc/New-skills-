@@ -109,6 +109,24 @@ describe("AI endpoints require a signed-in user", () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 
+  it("turns an anonymous read-aloud call away before the voice provider", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    try {
+      const res = await call(aiHandler, { method: "POST", headers: {}, body: { action: "speak", text: "Which value is the priority?" } });
+      expect(res.code).toBe(401);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally { delete process.env.OPENAI_API_KEY; }
+  });
+
+  it("answers a signed-in read-aloud call with 503 when the voice key is not set", async () => {
+    signedIn();
+    delete process.env.OPENAI_API_KEY;
+    const res = await call(aiHandler, { method: "POST", headers: { authorization: "Bearer t" }, body: { action: "speak", text: "Hello." } });
+    expect(res.code).toBe(503);
+    expect(res.body).toEqual({ error: "Voice unavailable" });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("turns an empty anonymous call away with 401, not a prompt error", async () => {
     const res = await call(aiHandler, { method: "POST", headers: {}, body: {} });
     expect(res.code).toBe(401);

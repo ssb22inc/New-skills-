@@ -2,7 +2,11 @@
 // The ONLY place AI vendor keys exist. The app sends { provider, prompt }
 // plus the signed-in user's Supabase access token, never a vendor secret.
 // Swap vendors by editing MODELS — nothing else changes.
+// { action: "speak", text } is the read-aloud voice instead (api/_speak.js):
+// same sign-in door, its own vendor key (OPENAI_API_KEY).
+import { createClient } from '@supabase/supabase-js';
 import { userFromRequest } from './_require-user.js';
+import { speak } from './_speak.js';
 
 const MODELS = {
   claude:   'anthropic/claude-sonnet-4.6',
@@ -18,6 +22,13 @@ export default async function handler(req, res) {
   // Before any provider call. A missing session, a bad token, or an inability
   // to check one all stop here. Signed-in free-pass and trial users pass.
   if (!(await userFromRequest(req))) return res.status(401).json({ error: 'Sign in first' });
+
+  if (req.body?.action === 'speak') {
+    const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const storage = url && key ? createClient(url, key, { auth: { persistSession: false } }).storage : null;
+    const out = await speak({ text: req.body.text, apiKey: process.env.OPENAI_API_KEY, storage });
+    return res.status(out.status).json(out.body);
+  }
 
   const { provider, prompt, maxTokens = 1000 } = req.body || {};
   const model = MODELS[provider] || MODELS.claude;
