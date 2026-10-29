@@ -1,0 +1,79 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "5cf963b44968cfa6cd41f5e5980bc5fe8dec9ac8",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T22:00:37.081Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 278,
+      "title": "Provider authentication failures permanently reject otherwise valid passages",
+      "problem": "The error classification treats almost every 4xx response as a permanent refusal of the passage. That includes 401 and 403 authentication or project-permission failures, and 404 model/endpoint configuration failures. Both execution paths save a terminal rejection record for these errors. Those records are subsequently reused indefinitely under the current QA version.",
+      "failure_scenario": "The OpenAI key is revoked or temporarily misconfigured. Each prewarming run marks up to its run limit of valid passages as unvoiceable. Restoring the key does not recover those passages: readRecord finds pass=false, the route returns 422, and prewarming skips them.",
+      "fix": "Only persist a terminal rejection for an explicitly identified passage-specific refusal. Treat authentication, permission, model configuration and other service-wide failures as run failures without creating rejection records. Add recovery tests showing that a passage remains eligible after a 401 or 403 and succeeds once credentials are corrected.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 241,
+      "title": "The documented global spending override never reaches the paid worker",
+      "problem": "The CLI calls drainQueue and prewarmBank without supplying limits, so both always use LIMITS.global=4000. SPEAK_GLOBAL_DAILY is read only by the Vercel route, while the worker independently synthesizes the bank ahead of demand. Lowering the documented Vercel cap therefore does not lower the worker's paid synthesis cap.",
+      "failure_scenario": "The owner sets SPEAK_GLOBAL_DAILY=100 to reduce daily spend. New student admissions are capped at 100, but the scheduled worker continues prewarming and can make 4,000 paid syntheses that day even with no student requests.",
+      "fix": "Give the route and worker an authoritative shared spending-limit configuration, or explicitly propagate a worker setting through the workflow and correct the setup instructions. Test the production worker configuration path with a non-default cap, rather than only passing custom limits directly into imported functions.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 347,
+      "title": "Live synthesis and scheduled synthesis do not share the app-wide spending counter",
+      "problem": "The live route's beforeTake callback claims usage/<day>/all through reserve, whereas the worker claims usage/<day>/spend through reserveSpend. When OPENAI_API_KEY is present on the server—a supported execution path—each path can independently exhaust a full global allowance.",
+      "failure_scenario": "The scheduled worker spends 4,000 synthesis slots prewarming the bank. Signed-in students can still cause another 4,000 live syntheses that day because the route checks the separate all counter. The stated app-wide synthesis ceiling is exceeded.",
+      "fix": "Require both execution paths to claim the same paid-spend counter immediately before every synthesis. Keep queue-admission and per-student accounting separate as needed. Add a mixed worker/live-route test proving their combined synthesis count cannot exceed one global limit.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 261,
+      "title": "Prewarming provider and storage failures still produce successful workflow runs",
+      "problem": "prewarmBank reports synthesis/transcription outages and failed audio saves through stopped values beginning with \"provider:\". The CLI failure condition checks only \"bank:\" and \"cursor:\" values, so these failures exit successfully. Unexpected exceptions caught around prewarmBank are likewise generally converted into successful runs. This contradicts the documented promise that provider outages or storage trouble fail the job.",
+      "failure_scenario": "With an empty student queue, OpenAI returns 503 during bank prewarming. Prewarming stops immediately, q.providerDown remains false, pruning succeeds, and the workflow exits zero. Repeated scheduled runs remain green while no bank audio is produced. A failed storage write during prewarming follows the same path.",
+      "fix": "Represent operational failure separately from normal stops such as max, budget and skipped, and make every provider/storage operational failure produce a nonzero CLI exit. Add tests for the CLI exit decision with an empty queue and failing prewarming provider or storage.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 93458,
+    "completionTokens": 8649,
+    "reasoningTokens": 7577,
+    "costUsd": 0.3201335
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. Provider authentication failures can permanently disable read-aloud passages, the paid worker does not honor the documented configurable spending cap, and live synthesis uses a separate spending counter. Prewarming outages can also leave the workflow green. Review is based on the supplied diffs; I could not run the tests or inspect the imported narration QA implementation.",
+  "counts": {
+    "blocker": 0,
+    "major": 4,
+    "minor": 0
+  }
+}
