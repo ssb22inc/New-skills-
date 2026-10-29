@@ -1,0 +1,53 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "0be699708d8578380dde02419586de1c3b4cc47a",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T23:38:26.515Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 52,
+      "title": "Numeric text after a separator is incorrectly spoken as multiplication",
+      "problem": "The middle-dot replacement assumes that any dot followed by a digit means multiplication. Clinical cards and chart text also use middle dots to separate measurements or observations. Because voiceCheck compares the transcript against this already-modified script, accurately reading the incorrect multiplication passes the gate.",
+      "failure_scenario": "An approved flashcard containing \"Temperature example: 36.8 °C · 98.2 °F\" is converted to \"Temperature example: 36.8 degrees Celsius times 98.2 degrees Fahrenheit\". The student hears multiplication between equivalent temperature measurements even though the reviewed content contains only a separator.",
+      "fix": "Distinguish the middle-dot separator from multiplication using explicit calculation context rather than merely checking the next character. Keep ordinary list separators as pauses, preserve actual multiplication expressions, and add regression tests for both clinical measurement lists and the existing dose-calculation example.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 134021,
+    "completionTokens": 11166,
+    "reasoningTokens": 10870,
+    "costUsd": 0.446711
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not release as written. The script builder can turn ordinary clinical-text separators into multiplication instructions, and the audio accuracy check will approve the altered meaning.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
