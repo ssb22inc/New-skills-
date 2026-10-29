@@ -2606,6 +2606,7 @@ function Style() {
       .ra-chip{min-height:36px;background:var(--surface);border:1.5px solid var(--line);border-radius:99px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--accent-ink);cursor:pointer}
       .ra-chip.on{border-color:var(--teal);background:var(--pick-bg)}
       .ra-src{color:var(--muted)}
+      .ra-note{flex-basis:100%;color:var(--muted);margin-top:2px}
       .ra-now:not(.flashcard){background:var(--pick-bg);box-shadow:0 0 0 6px var(--pick-bg),0 0 0 8px var(--teal);border-radius:6px;transition:background .2s,box-shadow .2s}
       .opt.ra-now,.hl-token.ra-now{border-color:var(--teal)}
       /* The flashcard keeps its own dark face (its text is light): an outline

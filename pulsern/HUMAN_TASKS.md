@@ -178,25 +178,31 @@ Claude Code executes everything else. These run in parallel with the build.
   environment. No key goes on the web server.
 
   How it works:
-  - A student presses Listen. The server checks the request against the
-    bank, using the student's own access: approved content, a current pass,
-    never exam items. Nobody can make it say anything else. If the passage
-    already has checked audio, the student hears the AI voice at once.
-    Otherwise it is queued, and the device's own voice reads it this time.
-  - Every 15 minutes the job "pulsern-read-aloud"
+  - Students only ever hear AI audio that passed the accuracy check. The
+    audio is transcribed back and must match the bank text word for word,
+    including every number, unit and dosing frequency. There is no
+    fallback to an unchecked device voice.
+  - The job "pulsern-read-aloud"
     (https://github.com/ssb22inc/New-skills-/actions/workflows/pulsern-read-aloud.yml)
-    voices the queued passages. It transcribes each one and checks it word
-    for word (numbers, units, negations). Only audio that passes is saved,
-    in the private `read-aloud` bucket, and from then on every student
-    hears it. A passage that fails twice keeps the device voice.
+    runs every 15 minutes and voices the bank ahead of demand: every
+    practice question with its explanation, every case study and every
+    flashcard, resuming where it stopped. Items students have asked for
+    go first.
+  - If a student presses Listen before an item is voiced, the app says
+    "being prepared" and moves that item to the front. A part that cannot
+    be voiced accurately is highlighted with "read this part on screen".
+  - The server reads each item with the student's own access: approved
+    content, a current pass, never exam items. It can say nothing else.
 
   Limits and cost:
-  - Daily caps on NEW passages: 300 per student and 4,000 for the whole app
-    (each calendar day, Eastern time). Change them with the Vercel variables `SPEAK_USER_DAILY` and
-    `SPEAK_GLOBAL_DAILY`. Each job run voices at most 200.
-  - OpenAI bills `gpt-4o-mini-tts` per minute of audio, plus the
-    `gpt-4o-transcribe` check. Saved audio is reused for free. Usage:
-    https://platform.openai.com/usage.
-  - Optional: adding `OPENAI_API_KEY` to the Vercel project makes the
-    server voice new passages instantly, with the same check, instead of
-    queueing them.
+  - New passages are capped each calendar day (Eastern time): 300 queued
+    per student, and 4,000 paid syntheses app-wide. Change the caps with
+    the Vercel variables `SPEAK_USER_DAILY` and `SPEAK_GLOBAL_DAILY`. At
+    the cap, work waits for the next day; nothing extra is spent.
+  - At the cap the app-wide spend is roughly $8–10 a day (`gpt-4o-mini-tts`
+    plus the `gpt-4o-transcribe` check). It stops once the bank is
+    voiced; after that, only new items and weekly re-checks are voiced.
+    Saved audio is reused free. Usage: https://platform.openai.com/usage.
+  - Each run's summary (voiced, failed the check, refused, budget, errors)
+    is on the job's run page. A provider outage or storage trouble marks
+    the run as failed so it is noticed.

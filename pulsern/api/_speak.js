@@ -46,7 +46,7 @@ import { createHash } from 'node:crypto';
 import { scriptFor } from '../src/read-aloud-script.js';
 import { audioCheck, speechTokens, QA_MODEL, QA_VERSION } from '../ops/narrate-lib.mjs';
 
-export const SPEAK_MAX = 1500;
+export const SPEAK_MAX = 1500; // above the script's PART_MAX (900): a part always fits
 export const BUCKET = 'read-aloud';
 export const SIGNED_SECONDS = 3600;
 export const TAKES = 2;
@@ -241,7 +241,7 @@ async function signed(bucket, path) {
    queue worker (ops/read-aloud-worker.mjs). */
 export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, beforeTake = null }) {
   const openai = (path, init) => fetchImpl(`https://api.openai.com/v1${path}`, { ...init, headers: { ...(init.headers ?? {}), Authorization: `Bearer ${apiKey}` } });
-  let best = null, spent = 0, error = null;
+  let best = null, spent = 0, error = null, status = 0;
   try {
     for (let take = 1; take <= TAKES; take++) {
       // Every take is a paid call: each needs its own budget slot first.
@@ -251,7 +251,7 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
         body: JSON.stringify({ model: tts.model, voice: tts.voice, input: text, instructions: tts.instructions, response_format: 'mp3' }),
       });
       spent++;
-      if (!r.ok) { error = `speech ${r.status}`; break; }
+      if (!r.ok) { error = `speech ${r.status}`; status = r.status; break; }
       const audio = Buffer.from(await r.arrayBuffer());
       if (!audio.length) { error = 'empty audio'; break; }
       /* No prompt for the transcriber: hinting the script would bias it
@@ -261,7 +261,7 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
       form.append('language', 'en');
       form.append('file', new Blob([audio], { type: 'audio/mpeg' }), 'clip.mp3');
       const t = await openai('/audio/transcriptions', { method: 'POST', body: form });
-      if (!t.ok) { error = `transcription ${t.status}`; break; }
+      if (!t.ok) { error = `transcription ${t.status}`; status = t.status; break; }
       const transcript = String((await t.json())?.text ?? '');
       const check = voiceCheck(text, transcript);
       best = { audio, transcript, check, take };
@@ -272,8 +272,13 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
      and checked. A provider error or a refused budget part-way through is
      NOT a failed check: nothing terminal is recorded, so it is tried again. */
   const final = !!best && (best.check.pass || (!error && best.take === TAKES));
+  /* Why it stopped short: no budget left; the provider refused this
+     passage itself (a 4xx other than rate limits and timeouts), which
+     retrying will not change; or anything else, worth retrying later. */
+  const errorKind = !error ? null : error === 'budget' ? 'budget'
+    : status >= 400 && status < 500 && ![408, 409, 429].includes(status) ? 'permanent' : 'transient';
   if (error) console.error('[read-aloud] voice', error);
-  return { best, spent, error, final };
+  return { best, spent, error, errorKind, final };
 }
 
 export const passagePaths = (text, tts = TTS) => {
@@ -293,6 +298,14 @@ export async function saveChecked(storage, text, best, { now = Date.now(), tts =
     textSha: sha256(text), audioSha: pass ? sha256(best.audio) : null, similarity: best.check.similarity,
     mismatch: pass ? null : best.check.mismatch ?? null,
     transcript: best.transcript, take: best.take, checkedAt: new Date(now).toISOString(),
+  }), 'application/json');
+}
+/* The provider refused this passage itself (not an outage): record it as
+   not voiceable under this QA version, so it is never paid for again. */
+export async function saveRejected(storage, text, reason, { now = Date.now(), tts = TTS } = {}) {
+  return put(storage, passagePaths(text, tts).rec, JSON.stringify({
+    qa: QA_VERSION, pass: false, model: tts.model, voice: tts.voice, textSha: sha256(text),
+    audioSha: null, reason: String(reason).slice(0, 200), checkedAt: new Date(now).toISOString(),
   }), 'application/json');
 }
 export async function readRecord(storage, text, tts = TTS) {
@@ -341,8 +354,12 @@ export async function speak({ ref, seg, text, userId, readItem, apiKey, storage,
     return { status: 202, body: { queued: true } };
   }
 
-  const { best, final, error } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: take });
-  if (!final) return error === 'budget' ? overBudget : { status: 502, body: { error: 'Voice failed' } };
+  const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: take });
+  if (!final) {
+    if (errorKind === 'budget') return overBudget;
+    if (errorKind === 'permanent') { await saveRejected(storage, text, error, { now, tts }); return { status: 422, body: { error: 'Voice check failed' } }; }
+    return { status: 502, body: { error: 'Voice failed' } };
+  }
   if (!(await saveChecked(storage, text, best, { now, tts }))) return { status: 502, body: { error: 'Voice could not be saved' } };
   if (!best.check.pass) return { status: 422, body: { error: 'Voice check failed', similarity: best.check.similarity } };
   const url = await signed(bucket, mp3);

@@ -71,6 +71,33 @@ const INSTRUCTION = {
 };
 
 const seg = (id, text) => ({ id, text: speakable(text) });
+
+/* Long parts (a long rationale) are voiced in pieces of at most PART_MAX
+   characters, split at sentence ends. The pieces share the part's id
+   before "~", so the screen keeps the same element highlighted. */
+export const PART_MAX = 900;
+export const partOf = (id) => String(id ?? "").split("~")[0];
+function pieces(text) {
+  if (text.length <= PART_MAX) return [text];
+  const out = [];
+  let cur = "";
+  for (const sentence of text.split(/(?<=[.?!;:])\s+(?=\S)/)) {
+    if (cur && (cur + " " + sentence).length > PART_MAX) { out.push(cur); cur = ""; }
+    // a single sentence longer than the limit is cut at word boundaries
+    let rest = sentence;
+    while (rest.length > PART_MAX) {
+      const cut = rest.lastIndexOf(" ", PART_MAX);
+      const at = cut > 0 ? cut : PART_MAX;
+      if (cur) { out.push(cur); cur = ""; }
+      out.push(rest.slice(0, at).trim());
+      rest = rest.slice(at).trim();
+    }
+    cur = cur ? `${cur} ${rest}` : rest;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+const finish = (segs) => segs.filter((s) => s && s.text).flatMap((s) => pieces(s.text).map((t, i) => ({ id: i ? `${s.id}~${i + 1}` : s.id, text: t })));
 const sentence = (s) => { const t = String(s ?? "").trim(); return /[.?!:]["'”’)\]]*$/.test(t) ? t : `${t}.`; };
 
 /* ext is ngnExt(q): the item's NGN payload merged in (src/ngn.js). */
@@ -111,7 +138,7 @@ export function questionSegments(q, ext = q) {
   } else if (type === "calc") {
     out.push(seg("instruction", `${INSTRUCTION.calc}${ext.unit ? ` Answer in ${ext.unit}.` : ""}`));
   }
-  return out.filter((s) => s.text);
+  return finish(out);
 }
 
 /* After an answer: the result in plain words, then the rationale. Points
@@ -123,19 +150,19 @@ export function feedbackSegments({ verdict, rationale, correctOrder, correctChoi
   if (correctOrder) out.push(seg("correction", `The correct order is: ${correctOrder}.`));
   if (correctChoices) out.push(seg("correction", `The correct choices are: ${correctChoices}.`));
   if (rationale) out.push(seg("rationale", `Rationale. ${rationale}`));
-  return out.filter((s) => s.text);
+  return finish(out);
 }
 
 /* Case study: the chart is read once, before step one. */
 export function caseIntroSegments(cs) {
   if (!cs) return [];
   const chart = [...(cs.vitals ?? []), ...(cs.labs ?? [])].map(([k, v]) => `${k} ${v}`).join("; ");
-  return [
+  return finish([
     seg("case-title", sentence(cs.title)),
     seg("case-intro", cs.intro),
     chart ? seg("case-chart", `Chart: ${chart}.`) : null,
     cs.note ? seg("case-note", `Nurse's note: ${cs.note}`) : null,
-  ].filter((s) => s && s.text);
+  ]);
 }
 
 export function caseStepSegments(step) {
@@ -146,7 +173,7 @@ export function caseStepSegments(step) {
 /* Flashcards: the prompt before the flip, the answer only after it. */
 export function cardSegments(card, flipped) {
   if (!card) return [];
-  return [flipped ? seg("card-back", `Answer. ${card.back}`) : seg("card-front", card.front)].filter((s) => s.text);
+  return finish([flipped ? seg("card-back", `Answer. ${card.back}`) : seg("card-front", card.front)]);
 }
 
 /* ---------- one script source for the screen AND the voice server ----------

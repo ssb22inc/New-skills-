@@ -10,11 +10,11 @@ import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult } from "../src/read-aloud-script.js";
-import { ReadAloudBar, pickDeviceVoice, ra, RATES, loadPrefs, sentences, speakLimitMs, makeVoiceClient, URL_TTL_MS, endsSession, shouldAutoRead } from "../src/read-aloud.jsx";
+import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments } from "../src/read-aloud-script.js";
+import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, BUCKET, TTS, SIGNED_SECONDS } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
-import { drainQueue, pruneUsage } from "../ops/read-aloud-worker.mjs";
+import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -102,15 +102,21 @@ describe("the controls", () => {
     expect(html).not.toContain("Stop");
   });
 
-  it("offers pause and stop while reading, and says which voice is speaking", () => {
-    const html = renderToStaticMarkup(<ReadAloudBar reader={reader({ status: "playing", source: "device" })} />);
+  it("offers pause and stop while reading, labelled as the AI voice", () => {
+    const html = renderToStaticMarkup(<ReadAloudBar reader={reader({ status: "playing" })} />);
     expect(html).toContain("⏸ Pause");
     expect(html).toContain("■ Stop");
-    expect(html).toContain("Your device&#x27;s voice");
-    expect(renderToStaticMarkup(<ReadAloudBar reader={reader({ status: "playing" })} />)).toContain("AI voice");
+    expect(html).toContain("AI voice");
   });
 
-  it("renders nothing when no voice is available", () => {
+  it("says plainly when the voice is being prepared, unavailable, or a part is on screen only", () => {
+    expect(renderToStaticMarkup(<ReadAloudBar reader={reader({ status: "preparing" })} />)).toContain(NOTES.preparing);
+    expect(renderToStaticMarkup(<ReadAloudBar reader={reader({ status: "unavailable" })} />)).toContain(NOTES.unavailable.replace("'", "&#x27;"));
+    expect(renderToStaticMarkup(<ReadAloudBar reader={reader({ status: "playing", silent: true })} />)).toContain(NOTES.silent);
+    expect(renderToStaticMarkup(<ReadAloudBar reader={reader({ status: "playing" })} />)).not.toContain("ra-note");
+  });
+
+  it("renders nothing for an item with no voice (not in the bank)", () => {
     expect(renderToStaticMarkup(<ReadAloudBar reader={reader({ available: false })} />)).toBe("");
   });
 
@@ -125,28 +131,37 @@ describe("the controls", () => {
     expect(RATES).toEqual([0.8, 1, 1.25]);
   });
 
-  it("gives the device voice one sentence at a time, never splitting a number", () => {
-    expect(sentences("Potassium is 2.9 mEq/L. Which action is first? Give it now")).toEqual(["Potassium is 2.9 mEq/L.", "Which action is first?", "Give it now"]);
-    expect(speakLimitMs("one two three")).toBe(4000);
-    expect(speakLimitMs(Array(50).fill("w").join(" "), 1)).toBe(50000);
-    expect(speakLimitMs(Array(50).fill("w").join(" "), 1.25)).toBe(40000);
+  it("reads only checked AI audio: the whole item, or nothing", () => {
+    const segs = [{ id: "stem", text: "S." }, { id: "opt0", text: "A." }, { id: "opt1", text: "B." }];
+    expect(planReading(segs, [{ url: "u1" }, { url: "u2" }, { url: "u3" }])).toEqual({ kind: "play", steps: [{ id: "stem", url: "u1" }, { id: "opt0", url: "u2" }, { id: "opt1", url: "u3" }] });
+    // one part still being voiced: nothing plays (never half a question)
+    expect(planReading(segs, [{ url: "u1" }, { status: 202 }, { url: "u3" }])).toEqual({ kind: "preparing" });
+    // a part that failed the check is shown, not voiced, and the rest plays
+    expect(planReading(segs, [{ url: "u1" }, { status: 422 }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A." });
+    // signed out, offline, over the limit, or nothing voiceable
+    for (const status of [0, 401, 429, 503, 400]) expect(planReading(segs, [{ url: "u1" }, { status }, { url: "u3" }])).toEqual({ kind: "unavailable" });
+    expect(planReading(segs, [{ status: 422 }, { status: 422 }, { status: 422 }])).toEqual({ kind: "unavailable" });
   });
 
-  it("prefers a natural English voice on the device", () => {
-    const v = (name, lang, localService = true) => ({ name, lang, localService });
-    expect(pickDeviceVoice([v("Fred", "en-US"), v("Microsoft Aria Online (Natural)", "en-US", false), v("Thomas", "fr-FR")]).name).toMatch(/Aria/);
-    expect(pickDeviceVoice([v("Fred", "en-US")]).name).toBe("Fred");
-    expect(pickDeviceVoice([v("Thomas", "fr-FR")])).toBeNull();
+  it("gives a part shown on screen time to be read", () => {
+    expect(readingMs("one two")).toBe(2000);
+    expect(readingMs(Array(30).fill("w").join(" "))).toBe(10000);
+    expect(readingMs(Array(30).fill("w").join(" "), 1.25)).toBe(8000);
+  });
+
+  it("keeps the same element highlighted across the pieces of a long part", () => {
+    const r = { isOn: (id) => partOf("rationale~2") === id };
+    expect(ra(r, "rationale", "rationale")).toBe("rationale ra-now");
   });
 });
 
 /* A fake private bucket: download/upload/sign, recording calls. */
-function fakeStorage({ missingBucket = false, failCounters = false } = {}) {
+function fakeStorage({ missingBucket = false, failCounters = false, failDownload = () => false } = {}) {
   const files = new Map();
   let bucketExists = !missingBucket;
   const calls = { upload: [], createBucket: [] };
   const bucket = {
-    download: async (path) => (files.has(path) ? { data: { text: async () => files.get(path).toString() }, error: null } : { data: null, error: { message: "Object not found" } }),
+    download: async (path) => (failDownload(path) ? { data: null, error: { message: "Internal server error", statusCode: "500" } } : files.has(path) ? { data: { text: async () => files.get(path).toString() }, error: null } : { data: null, error: { message: "Object not found" } }),
     upload: async (path, body, opts = {}) => {
       calls.upload.push(path);
       await Promise.resolve(); // let concurrent requests interleave, as over the network
@@ -286,6 +301,14 @@ describe("server voice: the accuracy gate", () => {
     expect(r.errors).toHaveLength(1);
     expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
     expect([...files.keys()].filter((k) => k.startsWith("marin/"))).toEqual([]);
+  });
+
+  it("records a passage the provider refuses outright, and never pays for it again", async () => {
+    const { storage } = fakeStorage();
+    const refuse = vi.fn(async () => ({ ok: false, status: 400 }));
+    expect((await speak({ ...base(), storage, fetchImpl: refuse })).status).toBe(422);
+    expect((await speak({ ...base(), storage, fetchImpl: refuse })).status).toBe(422);
+    expect(refuse).toHaveBeenCalledTimes(1);
   });
 
   it("does not play saved audio without a passing record", async () => {
@@ -478,12 +501,153 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(next).toMatchObject({ voiced: 1 });
   });
 
+  it("keeps a queue entry it could not read, and reports it", async () => {
+    const { storage, files } = fakeStorage({ failDownload: (p) => p.startsWith("queue/") });
+    await speak({ ...base({ apiKey: "" }), storage });
+    const f = fakeOpenAI();
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
+    expect(r.errors[0]).toMatch(/could not read/);
+    expect(r.skipped).toBe(0);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toHaveLength(1);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it("records a passage the provider refuses outright and moves on to the next", async () => {
+    const { storage, files } = fakeStorage();
+    const now = Date.UTC(2026, 9, 29, 16);
+    await speak({ ...base({ apiKey: "", now: now - 1000 }), storage });
+    await speak({ ...base({ apiKey: "", seg: "opt1", text: "Sodium 138 milliequivalents per liter.", now }), storage });
+    const ok = fakeOpenAI();
+    const picky = vi.fn(async (url, init) => (url.endsWith("/audio/speech") && JSON.parse(init.body).input.startsWith("Potassium") ? { ok: false, status: 400 } : ok(url, init)));
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: picky, now: () => now, log: () => {} });
+    expect(r).toMatchObject({ rejected: 1, voiced: 1 });
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+    expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(422); // never paid for again
+  });
+
+  it("retries an outage on later runs, then gives up after the attempt limit", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const down = vi.fn(async () => ({ ok: false, status: 503 }));
+    for (let run = 1; run < MAX_ATTEMPTS; run++) {
+      const r = await drainQueue({ storage, apiKey: "k", fetchImpl: down, log: () => {} });
+      expect(r.retried).toBe(1);
+      const q = [...files.keys()].find((k) => k.startsWith("queue/"));
+      expect(JSON.parse(files.get(q).toString()).attempts).toBe(run);
+    }
+    const last = await drainQueue({ storage, apiKey: "k", fetchImpl: down, log: () => {} });
+    expect(last.rejected).toBe(1);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
+  });
+
+  it("stops the run after three outages in a row, without touching the rest", async () => {
+    const { storage, files } = fakeStorage();
+    const segs = [["stem", "Which value is the priority?"], ["opt0", "Potassium 2.9 milliequivalents per liter."], ["opt1", "Sodium 138 milliequivalents per liter."]];
+    for (const [seg, text] of segs) await speak({ ...base({ apiKey: "", seg, text }), storage });
+    files.set("queue/x.json", Buffer.from("not json")); // malformed content, read fine: dropped
+    const down = vi.fn(async () => ({ ok: false, status: 500 }));
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: down, log: () => {} });
+    expect(r).toMatchObject({ providerDown: true, retried: 3, skipped: 1 });
+  });
+
   it("voices at most the run's limit", async () => {
     const { storage } = fakeStorage();
     await speak({ ...base({ apiKey: "" }), storage });
     await speak({ ...base({ apiKey: "", seg: "opt1", text: "Sodium 138 milliequivalents per liter." }), storage });
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(), max: 1, log: () => {} });
     expect(r).toMatchObject({ queued: 2, voiced: 1 });
+  });
+});
+
+/* A fake bank read with the service role: records the filters applied. */
+function fakeDb(tables) {
+  const seen = [];
+  return {
+    seen,
+    from(table) {
+      const f = { table, eq: [], is: [], gt: null, limit: Infinity };
+      seen.push(f);
+      const chain = {
+        select: () => chain,
+        eq: (c, v) => (f.eq.push([c, v]), chain),
+        is: (c, v) => (f.is.push([c, v]), chain),
+        gt: (c, v) => ((f.gt = v), chain),
+        order: () => chain,
+        limit: (n) => ((f.limit = n), chain),
+        then: (resolve) => resolve({ data: (tables[table] ?? []).filter((r) => r.id > (f.gt ?? 0)).slice(0, f.limit), error: null }),
+      };
+      return chain;
+    },
+  };
+}
+
+describe("the voice job: voicing the bank ahead of demand", () => {
+  const BANK = {
+    questions: [ROW, { ...ROW, id: 9, stem: "Which action comes first?", options: ["Call the provider", "Recheck the level"], rationale: "Recheck first." }],
+    case_studies: [{ id: 3, title: "Sepsis", intro: "A client.", vitals: [["HR", "118"]], labs: [], note: "Confused.", steps: [{ stem: "Which cue?", options: ["HR", "Temp"], type: "mc", answer: 0, rationale: "HR." }] }],
+    flashcards: [{ id: 4, front: "Antidote for heparin?", back: "Protamine sulfate" }],
+  };
+
+  it("voices the result lines, then every question, case and card, and remembers where it got to", async () => {
+    const { storage, files } = fakeStorage();
+    const db = fakeDb(BANK);
+    const r = await prewarmBank({ storage, db, apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000 });
+    expect(r.cursor).toMatchObject({ done: true });
+    const records = [...files.keys()].filter((k) => /^marin\/.*\.json$/.test(k)).length;
+    const expected = new Set([...verdictPassages(), ...BANK.questions.flatMap((q) => itemPassages("question", q)), ...itemPassages("case", BANK.case_studies[0]), ...itemPassages("card", BANK.flashcards[0])]).size;
+    expect(records).toBe(expected);
+    // exam items are never read
+    for (const t of ["questions", "case_studies"]) expect(db.seen.filter((f) => f.table === t).every((f) => f.is.some(([c, v]) => c === "exam_form" && v === null))).toBe(true);
+    expect(db.seen.every((f) => f.eq.some(([c, v]) => c === "approved" && v === true))).toBe(true);
+    // a student then hears the AI voice at once
+    expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(200);
+  });
+
+  it("stops at the run's limit and resumes where it stopped", async () => {
+    const { storage, files } = fakeStorage();
+    const db = fakeDb(BANK);
+    const first = await prewarmBank({ storage, db, apiKey: "k", fetchImpl: fakeOpenAI(), max: 5 });
+    expect(first.stopped).toBe("max");
+    const after = [...files.keys()].filter((k) => /^marin\/.*\.json$/.test(k)).length;
+    expect(after).toBe(5);
+    const second = await prewarmBank({ storage, db, apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000 });
+    expect(second.cursor).toMatchObject({ done: true });
+  });
+
+  it("waits a week before scanning the bank again", async () => {
+    const { storage } = fakeStorage();
+    const db = fakeDb(BANK);
+    const t0 = Date.UTC(2026, 9, 29, 16);
+    await prewarmBank({ storage, db, apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000, now: () => t0 });
+    const f = fakeOpenAI();
+    const soon = await prewarmBank({ storage, db: fakeDb({ ...BANK, flashcards: [...BANK.flashcards, { id: 5, front: "New?", back: "Yes" }] }), apiKey: "k", fetchImpl: f, max: 1000, now: () => t0 + 86400000 });
+    expect(f).not.toHaveBeenCalled();
+    expect(soon.cursor.done).toBe(true);
+    const later = await prewarmBank({ storage, db: fakeDb({ ...BANK, flashcards: [...BANK.flashcards, { id: 5, front: "New?", back: "Yes" }] }), apiKey: "k", fetchImpl: f, max: 1000, now: () => t0 + 8 * 86400000 });
+    expect(later.voiced).toBe(2); // only the new card's two sides
+  });
+
+  it("stops without paying when today's spending is used up", async () => {
+    const { storage } = fakeStorage();
+    const f = fakeOpenAI();
+    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1000, limits: { user: 300, global: 0 } });
+    expect(r).toMatchObject({ budget: true, voiced: 0 });
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe("long parts", () => {
+  it("splits a long rationale at sentence ends into pieces that share the part's id", () => {
+    const sentenceText = "The client needs careful reassessment of potassium after each replacement dose. ";
+    const long = { ...ROW, rationale: sentenceText.repeat(30).trim() };
+    const fb = questionFeedbackSegments(long, { correct: false, points: 0, max: 1 });
+    const parts = fb.filter((x) => partOf(x.id) === "rationale");
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.map((x) => x.id)).toEqual(parts.map((_, i) => (i ? `rationale~${i + 1}` : "rationale")));
+    for (const x of parts) { expect(x.text.length).toBeLessThanOrEqual(PART_MAX); expect(x.text).toMatch(/\.$/); }
+    expect(parts.map((x) => x.text).join(" ")).toBe(`Rationale. ${long.rationale}`);
+    // and the server accepts every piece
+    for (const x of parts) expect(validRequest({ kind: "question", id: 7, part: "feedback", result: { correct: false, points: 0, max: 1 } }, x.id, x.text)).toBe(true);
   });
 });
 
@@ -597,11 +761,6 @@ describe("the app's voice client", () => {
     const fetchImpl = okUrl();
     await makeVoiceClient({ fetchImpl, now: () => 0, token: async () => "t" }).url(REF, "opt0", "x");
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ action: "speak", ref: REF, seg: "opt0", text: "x", token: "t" });
-  });
-
-  it("ends the AI voice for the session only for session-wide failures", () => {
-    for (const s of [0, undefined, 401, 429, 503]) expect(endsSession(s)).toBe(true);
-    for (const s of [404, 409, 422, 502]) expect(endsSession(s)).toBe(false);
   });
 
   it("never auto-starts a reader that has been switched off", () => {
