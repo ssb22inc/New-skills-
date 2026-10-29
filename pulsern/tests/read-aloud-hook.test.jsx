@@ -151,6 +151,16 @@ describe("useReadAloud, mounted", () => {
     expect(reader.status).toBe("preparing");
   });
 
+  it("reports the real failure, not 'being prepared', when some parts were queued and others refused", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap(() => reader.play());
+    await flush();
+    await answerAll((p) => (p.body.seg === "stem" ? p.reply(202, { queued: true }) : p.reply(429, { error: "Daily voice limit reached" })));
+    await flush();
+    expect(env.played).toEqual([]);
+    expect(reader.status).toBe("unavailable");
+  });
+
   it("never starts audio when the voice is unavailable", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap(() => reader.play());

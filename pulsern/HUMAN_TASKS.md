@@ -195,9 +195,10 @@ Claude Code executes everything else. These run in parallel with the build.
     content, a current pass, never exam items. It can say nothing else.
 
   Limits and cost:
-  - Daily caps (calendar day, Eastern time): 300 new passages per
-    student, 4,000 queued app-wide, and 4,000 paid syntheses app-wide
-    (live and scheduled together). They are set in one place, `LIMITS`
+  - Daily caps (calendar day, Eastern time): 300 new items sent to the
+    voice job per student (each item's parts together), 4,000 items
+    app-wide, and 4,000 paid syntheses app-wide (live and scheduled
+    together). They are set in one place, `LIMITS`
     in `pulsern/api/_speak.js`, so a change goes through a reviewed pull
     request. At a cap, work waits for the next day; nothing extra is
     spent.

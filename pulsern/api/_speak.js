@@ -52,8 +52,9 @@ export const SIGNED_SECONDS = 3600;
 export const TAKES = 2;
 /* The one place the daily caps are set, read by the route and the voice
    job alike (change them here, through a reviewed pull request):
-   user      passages one student may queue or have voiced per day;
-   admission passages queued per day, app-wide;
+   user      items one student may send to the voice job (each item's
+             parts together), or passages voiced live, per day;
+   admission items sent to the voice job per day, app-wide;
    spend     paid syntheses per day, app-wide, live and scheduled together. */
 export const LIMITS = Object.freeze({ user: 300, admission: 4000, spend: 4000 });
 export const TTS = {
@@ -198,6 +199,37 @@ async function countSlots(bucket, dir) {
     if (!data || data.length < 1000) return n;
   }
 }
+/* Create a marker file only if it does not exist yet: "created" (this
+   caller owns it), "exists", or "error". */
+async function createOnce(storage, path, body = '1') {
+  const bucket = storage.from(BUCKET);
+  const up = () => bucket.upload(path, body, { contentType: 'text/plain', upsert: false });
+  let { error } = await up();
+  if (error && /bucket not found|not found/i.test(String(error.message ?? ''))) {
+    await storage.createBucket(BUCKET, { public: false });
+    ({ error } = await up());
+  }
+  if (!error) return 'created';
+  if (/exist|duplicate|409/i.test(`${error.message ?? ''} ${error.statusCode ?? ''} ${error.error ?? ''}`)) return 'exists';
+  console.error('[read-aloud] item claim', error.message ?? error);
+  return 'error';
+}
+
+/* The outcome of another request's item claim: "ok" once confirmed,
+   "refused" if it was withdrawn (over a cap), "unknown" if still pending
+   after a few seconds. */
+export const CLAIM_WAIT = { tries: 30, ms: 100 };
+async function claimOutcome(bucket, marker) {
+  for (let i = 0; i < CLAIM_WAIT.tries; i++) {
+    const { data, error } = await bucket.download(marker);
+    if (error) return /not found/i.test(String(error.message ?? '')) ? 'refused' : 'unknown';
+    const state = String(typeof data?.text === 'function' ? await data.text() : data ?? '').trim();
+    if (state === 'ok') return 'ok';
+    await new Promise((r) => setTimeout(r, CLAIM_WAIT.ms));
+  }
+  return 'unknown';
+}
+
 /* "ok": a slot is held. "full": the cap is reached (or the slots are too
    contended to claim one now). "error": the counters could not be read or
    written. Anything but "ok" spends nothing; "error" is also reported as
@@ -367,7 +399,12 @@ export async function readRecord(storage, text, tts = TTS, now = Date.now()) {
    202 { queued }: no voice yet; the passage is queued for the voice job
      (ops/read-aloud-worker.mjs) and the app says it is being prepared.
      Used when the server itself holds no OpenAI key. */
-export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, storage, fetchImpl = fetch, now = Date.now(), limits = LIMITS, tts = TTS }) {
+export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, storage, fetchImpl = fetch, now, clock, limits = LIMITS, tts = TTS }) {
+  /* The time is read when it is used: a take paid after midnight is
+     charged to the new day. (now fixes it for tests; clock lets a test
+     move it between takes.) */
+  const timeOf = clock ?? (now === undefined ? () => Date.now() : () => now);
+  const t0 = timeOf();
   // Only the known fields of the reference are used from here on.
   const ref = canonicalRef(rawRef);
   if (!ref || !validRequest(ref, seg, text)) return { status: 400, body: { error: 'Bad request' } };
@@ -376,14 +413,15 @@ export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, 
   // Only the words of an item this student may read, exactly as built for the screen.
   const item = await readItem(ref.kind, ref.id).catch(() => null);
   if (!item) return { status: 404, body: { error: 'Not available' } };
-  const part = scriptFor(ref, item).find((s) => s.id === seg);
+  const parts = scriptFor(ref, item);
+  const part = parts.find((s) => s.id === seg);
   if (!part || part.text !== text) return { status: 409, body: { error: 'Text does not match the item' } };
 
   const { mp3, queue } = passagePaths(text, tts);
   const bucket = storage.from(BUCKET);
 
   // Already checked: a link to the audio, or a refusal if it failed the check.
-  const record = await readRecord(storage, text, tts, now);
+  const record = await readRecord(storage, text, tts, t0);
   if (record?.pass === true) {
     const url = await signed(bucket, mp3);
     if (url) return { status: 200, body: { url, cached: true } };
@@ -394,30 +432,56 @@ export async function speak({ ref: rawRef, seg, text, userId, readItem, apiKey, 
   // Already waiting for the voice job: nothing more to spend.
   if (!apiKey && await readJson(bucket, queue)) return { status: 202, body: { queued: true } };
 
-  // Budgets: a slot is claimed before every paid call or queued entry.
-  const take = () => reserve(storage, userId, { now, limits }); // queue admission
-  const pay = () => reserve(storage, userId, { now, limits, pool: 'spend' }); // a live synthesis
   const overBudget = { status: 429, body: { error: 'Daily voice limit reached' } };
+  const unavailable = { status: 503, body: { error: 'Voice unavailable' } };
 
   if (!apiKey) {
-    const slot = await take();
-    if (slot === 'error') return { status: 503, body: { error: 'Voice unavailable' } };
-    if (slot !== 'ok') return overBudget;
-    const entry = JSON.stringify({ text, voice: tts.voice, ref, seg, requestedAt: new Date(now).toISOString() });
-    if (entry.length > QUEUE_ENTRY_MAX) return { status: 400, body: { error: 'Bad request' } };
-    const ok = await put(storage, queue, entry, 'application/json');
-    if (!ok) return { status: 503, body: { error: 'Voice unavailable' } };
+    /* The whole item is queued at once, under ONE claim per item per day:
+       a 202 always means every part of the item is on its way, never a
+       part admitted while its neighbours were refused. The first request
+       for the item makes the claim (a marker storage creates only once);
+       the others find it and only fill in any part not yet queued. */
+    const itemKey = sha256(`${tts.voice}\n${JSON.stringify(ref)}`).slice(0, 32);
+    const marker = `usage/${quotaDay(t0)}/items/${itemKey}`;
+    const mark = await createOnce(storage, marker, 'pending');
+    if (mark === 'error') return unavailable;
+    if (mark === 'created') {
+      const slot = await reserve(storage, userId, { now: t0, limits });
+      if (slot !== 'ok') {
+        await bucket.remove([marker]);
+        return slot === 'error' ? unavailable : overBudget;
+      }
+      const { error } = await bucket.upload(marker, 'ok', { contentType: 'text/plain', upsert: true });
+      if (error) { await bucket.remove([marker]); return unavailable; }
+    } else {
+      /* Another request (usually a sibling part of the same Listen) holds
+         the claim: wait for its outcome, so every part of the item answers
+         the same way. */
+      const state = await claimOutcome(bucket, marker);
+      if (state === 'refused') return overBudget;
+      if (state !== 'ok') return unavailable;
+    }
+    for (const p of parts) {
+      const paths = passagePaths(p.text, tts);
+      if (await readRecord(storage, p.text, tts, t0)) continue;
+      if (await readJson(bucket, paths.queue)) continue;
+      const entry = JSON.stringify({ text: p.text, voice: tts.voice, ref, seg: p.id, requestedAt: new Date(t0).toISOString() });
+      if (entry.length > QUEUE_ENTRY_MAX) continue; // cannot happen for a valid part; never stored if it did
+      if (!(await put(storage, paths.queue, entry, 'application/json'))) return unavailable;
+    }
     return { status: 202, body: { queued: true } };
   }
 
+  // A live synthesis: every take claims a spending slot on the day it is made.
+  const pay = () => reserve(storage, userId, { now: timeOf(), limits, pool: 'spend' });
   const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: pay });
   if (!final) {
     if (errorKind === 'budget') return overBudget;
-    if (errorKind === 'service' || errorKind === 'storage') return { status: 503, body: { error: 'Voice unavailable' } };
-    if (errorKind === 'permanent') { await saveRejected(storage, text, error, { now, tts }); return { status: 422, body: { error: 'Voice check failed' } }; }
+    if (errorKind === 'service' || errorKind === 'storage') return unavailable;
+    if (errorKind === 'permanent') { await saveRejected(storage, text, error, { now: timeOf(), tts }); return { status: 422, body: { error: 'Voice check failed' } }; }
     return { status: 502, body: { error: 'Voice failed' } };
   }
-  if (!(await saveChecked(storage, text, best, { now, tts }))) return { status: 502, body: { error: 'Voice could not be saved' } };
+  if (!(await saveChecked(storage, text, best, { now: timeOf(), tts }))) return { status: 502, body: { error: 'Voice could not be saved' } };
   if (!best.check.pass) return { status: 422, body: { error: 'Voice check failed', similarity: best.check.similarity } };
   const url = await signed(bucket, mp3);
   return url ? { status: 200, body: { url, cached: false } } : { status: 502, body: { error: 'Voice could not be linked' } };

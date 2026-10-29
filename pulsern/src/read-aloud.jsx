@@ -89,7 +89,12 @@ const voice = makeVoiceClient();
    { kind: "preparing" }   some part is not voiced yet (202)
    { kind: "unavailable" } signed out, offline, over the daily limit, no
                            voice service, or no part could be voiced */
+/* Failures that mean the item cannot be voiced now, whatever else came back. */
+const UNAVAILABLE = (status) => !status || status === 401 || status === 429 || status === 503 || status >= 500;
 export function planReading(segments, outcomes) {
+  // A real failure is reported before "being prepared", which is only
+  // promised when every part is either ready, decided, or on its way.
+  if (outcomes.some((o) => !o.url && UNAVAILABLE(o.status))) return { kind: "unavailable" };
   if (outcomes.some((o) => o.status === 202)) return { kind: "preparing" };
   const steps = segments.map((s, i) => {
     const o = outcomes[i];
