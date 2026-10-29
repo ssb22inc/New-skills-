@@ -43,7 +43,10 @@ function one(re, text, min, max) {
 const PH = /\bpH\s*(?:of|is|was|=|:)?\s*(7\.\d{1,2}|6\.\d{1,2})\b/gi;
 const PACO2 = /\b(?:Pa|p)?CO(?:2|₂)\s*(?:of|is|was|=|:)?\s*(\d{2,3})\b/gi;
 const HCO3 = /\b(?:HCO(?:3|₃)(?:-|⁻)?|bicarbonate(?:\s+level)?)\s*(?:of|is|was|=|:)?\s*(\d{1,2}(?:\.\d)?)\b/gi;
-const K = /\b(?:potassium(?:\s+level)?|serum\s+K\+?|K\+|K⁺)\s*(?:of|is|was|=|:)?\s*(\d(?:\.\d{1,2})?)\s*(?:mEq\/L|mmol\/L)?/gi;
+/* The whole number is read — one or two integer digits, never a partial
+   match (PR #156 review: "10.0" was read as 1.0 once the range reached
+   10); a longer number that doesn't fit is not matched at all. */
+const K = /\b(?:potassium(?:\s+level)?|serum\s+K\+?|K\+|K⁺)\s*(?:of|is|was|=|:)?\s*(\d{1,2}(?:\.\d{1,2})?)(?![\d.]*\d)\s*(?:mEq\/L|mmol\/L)?/gi;
 
 export function extractAbg(text) {
   const t = String(text ?? "");

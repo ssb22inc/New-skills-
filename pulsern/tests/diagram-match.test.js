@@ -145,3 +145,18 @@ describe("insulin concentration", () => {
     expect(extractInsulin("Insulin glargine was given at 2100.")).toEqual({ type: "long", givenAt: "21:00" });
   });
 });
+
+/* PR #156 review: once the range reached 10, "10.0" was read as 1.0 and a
+   severe high potassium became a severe low one. */
+describe("two-digit potassium values", () => {
+  it.each([["Potassium 10.0 mEq/L", 10], ["potassium of 11.0", 11], ["K+ 12.0", 12], ["potassium 3.2 mEq/L", 3.2]])("%s reads %s", (text, k) => {
+    expect(extractPotassium(text)).toEqual({ k });
+  });
+  it.each(["potassium 12.5", "potassium 103", "potassium 0.9", "K+ 5.123"])("%s is not read", (text) => {
+    expect(extractPotassium(text)).toBeNull();
+  });
+  it("proposes the matching category, never the opposite one", () => {
+    expect(proposePairs({ stem: "A client's potassium is 10.0 mEq/L. Which action is first?", options: [], rationale: "" }))
+      .toEqual([{ d: "potassium", p: { k: 10 } }]);
+  });
+});

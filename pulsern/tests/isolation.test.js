@@ -17,9 +17,12 @@ describe("no client-specific precaution is read from question text", () => {
     expect(proposePairs({ stem: `${stem} Which precautions should the nurse implement?`, options: [], rationale: "" }))
       .toEqual([{ d: "isolation", p: null }]);
   });
-  it("never draws a 'Needed for this client' outline", () => {
-    const html = renderToStaticMarkup(React.createElement(isolation.Diagram, { params: { types: ["airborne"] } }));
-    expect(html).not.toContain("Needed for this client");
+  /* PR #156 review: checking for the label alone would pass the old
+     unlabelled outline too. Patient-specific params must change NOTHING. */
+  it.each([["airborne"], ["contact"], ["droplet"], ["airborne", "contact"]])("draws the same diagram with params { types: %s } as with none", (...types) => {
+    const draw = (params) => renderToStaticMarkup(React.createElement(isolation.Diagram, params === undefined ? {} : { params }));
+    expect(draw({ types })).toBe(draw(undefined));
+    expect(draw({ types })).not.toContain("Needed for this client");
   });
 });
 

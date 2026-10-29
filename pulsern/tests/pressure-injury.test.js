@@ -53,3 +53,15 @@ describe("the wound drawing", () => {
     expect(pressureInjury.steps.filter((s) => /^stage\d$/.test(s.key)).every((s) => s.focus.includes("legend"))).toBe(true);
   });
 });
+
+/* Patient-specific params must change nothing: no column is ever outlined
+   as the client's (PR #156 review, same check as isolation). */
+describe("concept-only drawing", () => {
+  it.each([1, 2, 3, 4, "unstageable", "dtpi"])("draws the same diagram with params { stage: %s } as with none", async (stage) => {
+    const React = (await import("react")).default;
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { pressureInjury } = await import("../src/diagrams/pressure-injury.jsx");
+    const draw = (props) => renderToStaticMarkup(React.createElement(pressureInjury.Diagram, props));
+    expect(draw({ params: { stage } })).toBe(draw({}));
+  });
+});
