@@ -1,0 +1,21 @@
+{
+  "id": "tonicity",
+  "title": "IV fluid tonicity",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-10-29T09:19:17.652Z",
+  "images": 14,
+  "key": "b52af497b62a0f25",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.229006
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No reportable problems found in the supplied tonicity images, clinical claims, captions, narration scripts, or applicable rendering logic. Actual narration audio was not supplied for verification.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
