@@ -1,0 +1,19 @@
+{
+  "startedAt": "2026-10-29T01:12:03.287Z",
+  "voice": "marin",
+  "model": "gpt-4o-mini-tts",
+  "qaModel": "gpt-4o-transcribe",
+  "qaThreshold": 0.92,
+  "recorded": [],
+  "skippedUnchanged": 0,
+  "failedQa": [],
+  "errors": [
+    {
+      "diagram": "abg",
+      "step": "ph",
+      "error": "OpenAI /audio/speech 429: {\n    \"error\": {\n        \"message\": \"You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.\",\n   "
+    }
+  ],
+  "characters": 0,
+  "takes": []
+}

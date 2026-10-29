@@ -2,7 +2,10 @@
   "version": 1,
   "clips": {
     "abg": {},
+    "insulin": {},
+    "isolation": {},
     "potassium": {},
+    "pressure-injury": {},
     "tonicity": {}
   }
 }
