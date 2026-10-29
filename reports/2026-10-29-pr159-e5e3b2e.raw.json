@@ -1,0 +1,41 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "e7fee442fd9e59997d1dcbe1d67ba0426f3346ab",
+    "head": "e5e3b2ea6cea06b644678057c105bcd83c7266cd",
+    "pr": "159"
+  },
+  "reviewedAt": "2026-10-29T19:36:50.844Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-seo-guardian.yml",
+    "pulsern/tests/seo-guardian.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": ".github/workflows/pulsern-seo-guardian.yml",
+      "line": 157,
+      "title": "Adversarial rejection no longer blocks publication",
+      "problem": "The new conditional converts both adversarial-review failures and seo:enforce failures into successful warning output. If the adversary fails, enforcement is skipped entirely. This violates the supplied standing rule that adversarial AI approval is the accuracy gate for all site content. An owner exception asserted in comments and test text does not establish an exception to those review rules.",
+      "failure_scenario": "All other checks succeed, but the adversary returns FAIL because a public page contains incorrect exam guidance. The adversary step tolerates the failure, this conditional skips seo:enforce, and the final step exits successfully after printing a warning. The workflow therefore reports success despite the content rejection. A missing API key or provider failure can take the same fail-open path.",
+      "fix": "Restore the required successful adversary outcome and run seo:enforce with failures propagated. Restore the test's fail-closed invariant and add a negative-path check showing that a rejected or unavailable review cannot produce a successful gate.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 6503,
+    "completionTokens": 1170,
+    "reasoningTokens": 858,
+    "costUsd": 0.027956
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Reject. This change makes the mandatory adversarial accuracy gate fail open and changes its regression test to require that bypass.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
