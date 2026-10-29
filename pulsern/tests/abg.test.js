@@ -174,9 +174,10 @@ describe("compensation that goes too far", () => {
     /* Respiratory: inside the acute-to-chronic envelope is never called mixed,
        but fitting one time course only is reported as history-dependent
        (Sol, round 4). */
-    expect(read(7.32, 60, 30)).toMatchObject({ disorder: "respiratory acidosis", mixedPossible: true });   // chronic 32 ± 2
+    // Round 14: coefficients vary (acute 1–2, chronic 3.5–4), so 30 fits both
+    expect(read(7.32, 60, 30)).toMatchObject({ disorder: "respiratory acidosis", mixedPossible: false });
     expect(read(7.32, 60, 30).mixed).toBeUndefined();
-    expect(read(7.31, 60, 29).reading).toMatch(/lies between them/);   // acute 26 ± 2, chronic 32 ± 2
+    expect(read(7.26, 80, 35).reading).toMatch(/lies between them/);   // acute 28–32 ± 2, chronic 38–40 ± 2
     expect(read(7.39, 55, 32).reading).toMatch(/fits a PaCO₂ sustained for days/);   // chronic 30 ± 2
     expect(read(7.43, 30, 19).reading).toMatch(/fits a PaCO₂ sustained for days/);   // chronic 19 ± 2
   });
@@ -298,7 +299,7 @@ describe("round 2", () => {
   });
   it("states the reference range and the expected compensation separately, with units", () => {
     const r = read(7.30, 50, 24);
-    expect(r.reading).toMatch(/HCO₃⁻ 24 mEq\/L is inside its reference range \(22–26\); the acute estimate is about 25 ± 2 and the chronic about 28 ± 2 mEq\/L/);
+    expect(r.reading).toMatch(/HCO₃⁻ 24 mEq\/L is inside its reference range \(22–26\); the acute estimate is about 25–26 ± 2 and the chronic about 27\.5–28 ± 2 mEq\/L/);
   });
   it("keeps the textbook example internally consistent", async () => {
     const { ABG_EXAMPLE, abgConsistency } = await import("../src/diagrams/abg.jsx");
@@ -406,8 +407,8 @@ describe("round 8", () => {
   });
   it("writes the respiratory rules with an explicit coefficient", () => {
     const limits = abg.steps.find((s) => s.key === "limits").caption;
-    expect(limits).toMatch(/24 \+ k × \(\(PaCO₂ − 40\) ÷ 10\), with k = 1 if acute or 4 if chronic/);
-    expect(limits).toMatch(/24 − k × \(\(40 − PaCO₂\) ÷ 10\), with k = 2 if acute or 5 if chronic/);
+    expect(limits).toMatch(/24 \+ k × \(\(PaCO₂ − 40\) ÷ 10\), with k about 1–2 if acute or 3\.5–4 if chronic/);
+    expect(limits).toMatch(/24 − k × \(\(40 − PaCO₂\) ÷ 10\), with k about 2 if acute or 4–5 if chronic/);
   });
 });
 
@@ -445,10 +446,21 @@ describe("round 12", () => {
 
 describe("round 13", () => {
   it("names acute-on-chronic among the time courses between the estimates", () => {
-    expect(read(7.31, 60, 29).reading).toMatch(/an acute change on top of chronic disease/);
-    expect(read(7.31, 60, 29).caution).toMatch(/acute-on-chronic/);
+    expect(read(7.26, 80, 35).reading).toMatch(/an acute change on top of chronic disease/);
+    expect(read(7.26, 80, 35).caution).toMatch(/acute-on-chronic/);
   });
   it("tells the student what to do with a normal pH", () => {
     expect(abg.steps.find((s) => s.key === "limits").caption).toMatch(/test each possible primary disorder against its expected compensation, and keep every one that fits/);
+  });
+});
+
+describe("round 14", () => {
+  it("keeps a stable chronic course compatible when a standard coefficient fits (Sol: 7.28 / 100 / 45)", () => {
+    const r = read(7.28, 100, 45);   // 3.5 per 10 mmHg → 45
+    expect(r.reading).toMatch(/fits a PaCO₂ sustained for days/);
+    expect(r.reading).not.toMatch(/lies between them/);
+  });
+  it("never treats falling between the estimates as excluding a stable course", () => {
+    expect(read(7.26, 80, 35).reading).toMatch(/a stable course whose response differs from these approximations/);
   });
 });

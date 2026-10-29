@@ -40,8 +40,8 @@
      metabolic acidosis    PaCO₂ = 1.5 × HCO₃⁻ + 8 ± 2 (Winter's formula)
      metabolic alkalosis   PaCO₂ = 0.7 × HCO₃⁻ + 21 or 40 + 0.7 × (HCO₃⁻ − 24), ± 2,
                            either rule accepted, never past about 55 mmHg
-     respiratory acidosis  HCO₃⁻ = 24 + 1 (acute) or 4 (chronic) per 10 mmHg PaCO₂ above 40, ± 2
-     respiratory alkalosis HCO₃⁻ = 24 − 2 (acute) or 5 (chronic) per 10 mmHg PaCO₂ below 40, ± 2
+     respiratory acidosis  HCO₃⁻ = 24 + 1–2 (acute) or 3.5–4 (chronic) per 10 mmHg PaCO₂ above 40, ± 2
+     respiratory alkalosis HCO₃⁻ = 24 − 2 (acute) or 4–5 (chronic) per 10 mmHg PaCO₂ below 40, ± 2
    The diagram has no history, so a respiratory value fitting only the
    acute or only the chronic estimate is reported as such, with the mixed
    disorder the other time course would imply (Sol, round 4). */
@@ -91,6 +91,9 @@ export function abgConsistency({ ph, paco2, hco3, precision = null }) {
    whether the actual value is beyond it (overshoot) or short of it. One
    rounding, to the 0.1 the values are reported in, used both to decide and
    to display (Astra, PR #134 review, round 11). */
+/* HCO₃⁻ change per 10 mmHg PaCO₂, [acute, chronic], each as a range of the
+   values references use. */
+export const COEFFICIENTS = { acidosis: [[1, 2], [3.5, 4]], alkalosis: [[2, 2], [4, 5]] };
 export function compensationLimit(primary, kind, { paco2, hco3 }) {
   const range = (name, value, rawLo, rawHi, towardLow, centers, extra = {}) => {
     const lo = r1(rawLo), hi = r1(rawHi);
@@ -113,11 +116,19 @@ export function compensationLimit(primary, kind, { paco2, hco3 }) {
     /* Acute and chronic estimates are reported separately (Sol, round 4): a
        value that fits only one of them is a single disorder only for that
        time course. */
+    /* The per-10-mmHg coefficients vary between references (Sol, round 14:
+       a chronic rise of 3.5 is as standard as 4), so each time course is a
+       band of estimates, not one point. */
     const d = kind === "acidosis" ? (paco2 - 40) / 10 : (40 - paco2) / 10;
-    const [acute, chronic] = kind === "acidosis" ? [24 + d, 24 + 4 * d] : [24 - 2 * d, 24 - 5 * d];
-    const lo = Math.min(acute, chronic) - 2, hi = Math.max(acute, chronic) + 2;
-    return range("HCO₃⁻", hco3, lo, hi, kind === "alkalosis", [acute, chronic],
-      { acuteFit: within(hco3, acute), chronicFit: within(hco3, chronic) });
+    const sign = kind === "acidosis" ? 1 : -1;
+    const [kA, kC] = COEFFICIENTS[kind];
+    const band = ([k1, k2]) => [24 + sign * k1 * d, 24 + sign * k2 * d].sort((a, b) => a - b);
+    const acuteB = band(kA), chronicB = band(kC);
+    const inBand = (v, [a, b]) => v >= r1(a - 2) && v <= r1(b + 2);
+    const lo = Math.min(acuteB[0], chronicB[0]) - 2, hi = Math.max(acuteB[1], chronicB[1]) + 2;
+    const mid = ([a, b]) => (a + b) / 2;
+    return range("HCO₃⁻", hco3, lo, hi, kind === "alkalosis", [mid(acuteB), mid(chronicB)],
+      { acuteFit: inBand(hco3, acuteB), chronicFit: inBand(hco3, chronicB), acuteBand: acuteB.map(r1), chronicBand: chronicB.map(r1) });
   }
   return null;
 }
@@ -168,7 +179,7 @@ function cautionFor(c, primary, compensation) {
     const rise = c.centers[1] > c.centers[0];
     if (c.acuteFit) return `Fits a PaCO₂ change of hours: if sustained for days, an added metabolic ${rise ? "acidosis" : "alkalosis"}; prior gases decide.`;
     if (c.chronicFit) return `Fits a PaCO₂ sustained for days: if new, an added metabolic ${rise ? "alkalosis" : "acidosis"}; prior gases decide.`;
-    return "Between the acute and chronic estimates: subacute, acute-on-chronic, or mixed; prior gases decide.";
+    return "Between the acute and chronic estimates: subacute, acute-on-chronic, a stable course outside these approximations, or mixed; prior gases decide.";
   }
   if (compensation === "full") return "A mixed disorder can look the same; the history decides.";
   return null;
@@ -177,7 +188,8 @@ function cautionFor(c, primary, compensation) {
    other course would imply. */
 function courseText(c) {
   const [acute, chronic] = c.centers, u = unitOf(c.name);
-  const est = `the acute estimate is about ${acute} ± 2 and the chronic about ${chronic} ± 2 ${u}`;
+  const span = ([a, b]) => (a === b ? `${a}` : `${a}–${b}`);
+  const est = `the acute estimate is about ${span(c.acuteBand)} ± 2 and the chronic about ${span(c.chronicBand)} ± 2 ${u}`;
   const acidosisRise = chronic > acute;   // HCO₃⁻ rises in respiratory acidosis, falls in alkalosis
   if (c.acuteFit && c.chronicFit) return `${est}, and it fits both`;
   /* The two estimates are not the only time courses: an acute change on
@@ -188,7 +200,7 @@ function courseText(c) {
   const timeline = "prior gases and the timeline of this PaCO₂ change decide";
   if (c.acuteFit) return `${est}: it fits a PaCO₂ change of hours; if this PaCO₂ has been sustained for days, this HCO₃⁻ would suggest an added metabolic ${acidosisRise ? "acidosis" : "alkalosis"}, so ${timeline}`;
   if (c.chronicFit) return `${est}: it fits a PaCO₂ sustained for days; if this PaCO₂ is new, this HCO₃⁻ would suggest an added metabolic ${acidosisRise ? "alkalosis" : "acidosis"}, so ${timeline}`;
-  return `${est}: it lies between them, which fits a subacute course, an acute change on top of chronic disease, or a mixed disorder; ${timeline}`;
+  return `${est}: it lies between them, which fits a subacute course, an acute change on top of chronic disease, a stable course whose response differs from these approximations, or a mixed disorder; ${timeline}`;
 }
 const recheck = (why) => ({ disorder: "inconsistent", primary: null, compensation: null, reading: `${why} Recheck the values before interpreting.` });
 /* Values that agree but lie outside what this tool reads automatically:
@@ -418,8 +430,8 @@ function CompTile({ x, y, title, lines, at, i }) {
 const RULES = [
   ["Metabolic acidosis:", "PaCO₂ ≈ 1.5 × HCO₃⁻ + 8, ± 2 (Winter's formula)"],
   ["Metabolic alkalosis:", "PaCO₂ ≈ 0.7 × HCO₃⁻ + 21, or 40 + 0.7 × (HCO₃⁻ − 24), ± 2; rarely above about 55"],
-  ["Respiratory acidosis:", "HCO₃⁻ ≈ 24 + k × ((PaCO₂ − 40) ÷ 10), k = 1 acute or 4 chronic, ± 2 mEq/L"],
-  ["Respiratory alkalosis:", "HCO₃⁻ ≈ 24 − k × ((40 − PaCO₂) ÷ 10), k = 2 acute or 5 chronic, ± 2 mEq/L"],
+  ["Respiratory acidosis:", "HCO₃⁻ ≈ 24 + k × ((PaCO₂ − 40) ÷ 10), k ≈ 1–2 acute or 3.5–4 chronic, ± 2 mEq/L"],
+  ["Respiratory alkalosis:", "HCO₃⁻ ≈ 24 − k × ((40 − PaCO₂) ÷ 10), k ≈ 2 acute or 4–5 chronic, ± 2 mEq/L"],
   ["", "Approximate, once established: breathing adjusts over hours, the kidneys over days; an acute change on chronic disease can fall between. With a normal pH, test each possible primary against these and keep every one that fits. Well outside suggests a mixed disorder; just outside is borderline."],
 ];
 const H_RULES = 44 + RULES.reduce((a, [lead, text]) => a + paraLines(`${lead} ${text}`, 296, MIN_TEXT).length * MIN_TEXT * 1.3 + 6, 0) + 2;
@@ -459,7 +471,7 @@ export function AbgDiagram({ params = ABG_EXAMPLE, focus = null }) {
     <Frame h={OY + 8} focus={focus} title="Acid–base reading of an arterial blood gas"
       regions={{ ph: [0, 100], co2: [104, 196], hco3: [200, 292], rome: [RY - 4, RY + 132], result: [RY + 132, CY + 6], comp: [TY - 4, TY + 182], rules: [LY - 4, LY + ruleH + 4] }}
       desc={concept
-        ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, and a high PaCO2 pushes toward acidosis; HCO3 normal 22 to 26 mEq/L, and a low HCO3 pushes toward acidosis, a high one toward alkalosis; the actual pH depends on both together. Match the value that moves with the pH: respiratory opposite, metabolic equal. If both values push the pH the same way, both are primary: a combined disorder, not compensation. Compensation means the other value has an opposing effect on pH: other value still normal means uncompensated; out of range with an opposing effect on pH but pH still out of range means partially compensated; pH back in range with both values out of range and opposing effects on pH means fully compensated (in compensation PaCO2 and HCO3 usually rise or fall together); pH in range with only one value out means compensation cannot be established from these values. Expected compensation, once established: metabolic acidosis PaCO2 about 1.5 times HCO3 plus 8, plus or minus 2; metabolic alkalosis PaCO2 about 0.7 times HCO3 plus 21, or 40 plus 0.7 times (HCO3 minus 24), plus or minus 2, rarely above about 55; respiratory acidosis HCO3 about 24 plus 1 (acute) or 4 (chronic) for each 10 mmHg PaCO2 is above 40; respiratory alkalosis HCO3 about 24 minus 2 (acute) or 5 (chronic) for each 10 mmHg PaCO2 is below 40, each plus or minus 2. These are approximations; a value well outside suggests a mixed disorder."
+        ? "Method: pH normal 7.35 to 7.45; PaCO2 normal 35 to 45 mmHg, and a high PaCO2 pushes toward acidosis; HCO3 normal 22 to 26 mEq/L, and a low HCO3 pushes toward acidosis, a high one toward alkalosis; the actual pH depends on both together. Match the value that moves with the pH: respiratory opposite, metabolic equal. If both values push the pH the same way, both are primary: a combined disorder, not compensation. Compensation means the other value has an opposing effect on pH: other value still normal means uncompensated; out of range with an opposing effect on pH but pH still out of range means partially compensated; pH back in range with both values out of range and opposing effects on pH means fully compensated (in compensation PaCO2 and HCO3 usually rise or fall together); pH in range with only one value out means compensation cannot be established from these values. Expected compensation, once established: metabolic acidosis PaCO2 about 1.5 times HCO3 plus 8, plus or minus 2; metabolic alkalosis PaCO2 about 0.7 times HCO3 plus 21, or 40 plus 0.7 times (HCO3 minus 24), plus or minus 2, rarely above about 55; respiratory acidosis HCO3 about 24 plus 1 to 2 (acute) or 3.5 to 4 (chronic) for each 10 mmHg PaCO2 is above 40; respiratory alkalosis HCO3 about 24 minus 2 (acute) or 4 to 5 (chronic) for each 10 mmHg PaCO2 is below 40, each plus or minus 2; references vary in these coefficients. These are approximations; a value well outside suggests a mixed disorder."
         : `pH ${showAbg(params, "ph")} (normal 7.35 to 7.45), PaCO2 ${showAbg(params, "paco2")} mmHg (35 to 45; high pushes toward acidosis), HCO3 ${showAbg(params, "hco3")} mEq/L (22 to 26; low pushes toward acidosis). ${r.reading}`}>
       <G id="ph">
         <Gauge x={20} y={66} w={320} min={7.1} max={7.7} lo={7.35} hi={7.45} value={concept ? null : params.ph} decimals={2}
@@ -560,7 +572,7 @@ export const abg = {
     "ROME: in respiratory disorders pH and PaCO₂ move in opposite directions; in metabolic disorders pH and HCO₃⁻ move in the same direction.",
     "NCLEX compensation labels follow the reference ranges, after a direction check: if PaCO₂ and HCO₃⁻ both push the pH the same way, both are primary (a combined disorder), not compensation. Otherwise, pH out of range with the other system's value still in its reference range is called uncompensated; pH out of range with that value outside its range, with an opposing effect on pH, is partially compensated (in compensation PaCO₂ and HCO₃⁻ usually rise together or fall together); pH back in 7.35–7.45 is fully compensated. A compensating shift can happen while a value is still inside its reference range, and a normal pH alone does not establish compensation, so the expected compensation is checked too.",
     "As a basic exam heuristic, a compensated pH below 7.40 is often read as an original acidosis and above 7.40 as an original alkalosis; it is not a diagnostic rule, and the expected compensation and the history decide.",
-    "Compensation has limits. Expected respiratory compensation for metabolic acidosis is PaCO₂ ≈ 1.5 × HCO₃⁻ + 8 ± 2 (Winter's formula). For metabolic alkalosis two bedside rules are in common use, PaCO₂ ≈ 0.7 × HCO₃⁻ + 21 and PaCO₂ ≈ 40 + 0.7 × (HCO₃⁻ − 24), each ± 2; they differ by about 2 mmHg, and respiratory compensation rarely raises PaCO₂ beyond about 55 mmHg. In respiratory acidosis HCO₃⁻ rises about 1 mEq/L per 10 mmHg rise in PaCO₂ when acute and about 4 when chronic, from about 24; in respiratory alkalosis it falls about 2 (acute) or 5 (chronic) per 10 mmHg fall, each ± 2. The acute and chronic estimates are separate: a value fitting only one of them is a single disorder only for that time course, so the history decides. A compensating value outside the expected range, beyond it or short of it, suggests a mixed disorder; just outside it is borderline, because the rules are approximations. Compensation usually leaves a residual pH shift toward the original problem; it can bring the pH into 7.35–7.45, especially in milder or chronic disorders (for example, PaCO₂ 50 with HCO₃⁻ 28 gives a pH of about 7.37), but that alone does not exclude a mixed disorder.",
+    "Compensation has limits. Expected respiratory compensation for metabolic acidosis is PaCO₂ ≈ 1.5 × HCO₃⁻ + 8 ± 2 (Winter's formula). For metabolic alkalosis two bedside rules are in common use, PaCO₂ ≈ 0.7 × HCO₃⁻ + 21 and PaCO₂ ≈ 40 + 0.7 × (HCO₃⁻ − 24), each ± 2; they differ by about 2 mmHg, and respiratory compensation rarely raises PaCO₂ beyond about 55 mmHg. In respiratory acidosis HCO₃⁻ rises about 1–2 mEq/L per 10 mmHg rise in PaCO₂ when acute and about 3.5–4 when chronic, from about 24; in respiratory alkalosis it falls about 2 (acute) or 4–5 (chronic) per 10 mmHg fall, each ± 2. References vary in these coefficients, so a value just outside one estimate does not exclude that time course. The acute and chronic estimates are separate: a value fitting only one of them is a single disorder only for that time course, so the history decides. A compensating value outside the expected range, beyond it or short of it, suggests a mixed disorder; just outside it is borderline, because the rules are approximations. Compensation usually leaves a residual pH shift toward the original problem; it can bring the pH into 7.35–7.45, especially in milder or chronic disorders (for example, PaCO₂ 50 with HCO₃⁻ 28 gives a pH of about 7.37), but that alone does not exclude a mixed disorder.",
     "This diagram reads acid–base balance only. Oxygenation (PaO₂, SaO₂) is assessed separately: acid–base values in range do not mean the whole ABG is normal.",
   ],
   steps: [
@@ -574,8 +586,8 @@ export const abg = {
       narration: "Now find the value that matches the pH, using ROME. Respiratory: the pH and P-A-C-O-2 move in opposite directions. Metabolic: the pH and bicarbonate move in the same direction. And if both values are pushing the pH the same way, both are primary problems: that is a combined disorder." },
     { key: "compensation", desc: (p) => abgStepDesc("compensation", p), focus: ["comp"], caption: "Compensation is the other system offsetting the first: its effect on pH opposes the first value's. In compensation PaCO₂ and HCO₃⁻ usually rise together or fall together, because a high PaCO₂ pushes toward acid and a high HCO₃⁻ toward base. NCLEX labels use the reference ranges: pH out with the other value still in range, uncompensated; pH out with the other value out of range, opposing, partially compensated; pH back in range with both values out of range and opposing effects on pH, fully compensated. With the pH in range and only one value out, compensation can't be established from these values. If both values push the pH the same way, it is a combined disorder, not compensation.",
       narration: "Compensation is the other system offsetting the first, so its effect on the pH opposes the first value's. In compensation, the P-A-C-O-2 and the bicarbonate usually rise together or fall together, because a high P-A-C-O-2 pushes toward acid and a high bicarbonate pushes toward base. The NCLEX labels use the reference ranges. If the pH is out of range and the other value is still in its range, it is called uncompensated. If the other value is out of its range, opposing, but the pH is still abnormal, it is partially compensated. If the pH is back in range and both values are out of range with opposing effects on the pH, it is fully compensated. With the pH in range and only one value out, compensation can't be established from these values. And if both values push the pH the same way, that is a combined disorder, not compensation." },
-    { key: "limits", desc: (p) => abgStepDesc("limits", p), focus: ["rules"], caption: "Then check the expected compensation. Metabolic acidosis: PaCO₂ about 1.5 × HCO₃⁻ + 8, ± 2. Metabolic alkalosis: two rules are in use, PaCO₂ about 0.7 × HCO₃⁻ + 21 or 40 + 0.7 × (HCO₃⁻ − 24), each ± 2 (they differ by about 2), and rarely above about 55; a value fitting either counts. For respiratory disorders, start from PaCO₂ 40 and HCO₃⁻ 24. Respiratory acidosis: HCO₃⁻ ≈ 24 + k × ((PaCO₂ − 40) ÷ 10), with k = 1 if acute or 4 if chronic, ± 2. Respiratory alkalosis: HCO₃⁻ ≈ 24 − k × ((40 − PaCO₂) ÷ 10), with k = 2 if acute or 5 if chronic, ± 2. These are approximations that assume compensation is established, and an acute change on top of chronic disease can fall between the acute and chronic estimates. With a normal pH, a normal pH alone doesn't identify the primary process: test each possible primary disorder against its expected compensation, and keep every one that fits. Well outside suggests a mixed disorder.",
-      narration: "Then check the expected compensation. In metabolic acidosis, the P-A-C-O-2 should be about one and a half times the bicarbonate, plus eight, give or take two. In metabolic alkalosis, two rules are in use: about zero point seven times the bicarbonate, plus twenty-one, or forty plus zero point seven times the quantity, bicarbonate minus twenty-four. Each is give or take two, they differ by about two, and a value fitting either one counts. It rarely goes above about fifty-five. For respiratory disorders, start from a P-A-C-O-2 of forty and a bicarbonate of twenty-four. In respiratory acidosis, the bicarbonate rises from twenty-four by about one for every ten the P-A-C-O-2 is above forty when it's acute, and about four when it's chronic, give or take two. In respiratory alkalosis, it falls from twenty-four by about two for every ten below forty when acute, and about five when chronic, give or take two. These are approximations that assume compensation is established, and an acute change on top of chronic disease can fall between the acute and chronic estimates. When the pH is in range, the pH alone doesn't tell you the primary process: test each possible primary disorder against its expected compensation, and keep every one that fits. A value well outside them suggests a mixed disorder." },
+    { key: "limits", desc: (p) => abgStepDesc("limits", p), focus: ["rules"], caption: "Then check the expected compensation. Metabolic acidosis: PaCO₂ about 1.5 × HCO₃⁻ + 8, ± 2. Metabolic alkalosis: two rules are in use, PaCO₂ about 0.7 × HCO₃⁻ + 21 or 40 + 0.7 × (HCO₃⁻ − 24), each ± 2 (they differ by about 2), and rarely above about 55; a value fitting either counts. For respiratory disorders, start from PaCO₂ 40 and HCO₃⁻ 24. Respiratory acidosis: HCO₃⁻ ≈ 24 + k × ((PaCO₂ − 40) ÷ 10), with k about 1–2 if acute or 3.5–4 if chronic, ± 2. Respiratory alkalosis: HCO₃⁻ ≈ 24 − k × ((40 − PaCO₂) ÷ 10), with k about 2 if acute or 4–5 if chronic, ± 2. These are approximations that assume compensation is established, and an acute change on top of chronic disease can fall between the acute and chronic estimates. With a normal pH, a normal pH alone doesn't identify the primary process: test each possible primary disorder against its expected compensation, and keep every one that fits. Well outside suggests a mixed disorder.",
+      narration: "Then check the expected compensation. In metabolic acidosis, the P-A-C-O-2 should be about one and a half times the bicarbonate, plus eight, give or take two. In metabolic alkalosis, two rules are in use: about zero point seven times the bicarbonate, plus twenty-one, or forty plus zero point seven times the quantity, bicarbonate minus twenty-four. Each is give or take two, they differ by about two, and a value fitting either one counts. It rarely goes above about fifty-five. For respiratory disorders, start from a P-A-C-O-2 of forty and a bicarbonate of twenty-four. In respiratory acidosis, the bicarbonate rises from twenty-four by about one to two for every ten the P-A-C-O-2 is above forty when it's acute, and about three and a half to four when it's chronic, give or take two. In respiratory alkalosis, it falls from twenty-four by about two for every ten below forty when acute, and about four to five when chronic, give or take two. References vary in these numbers. These are approximations that assume compensation is established, and an acute change on top of chronic disease can fall between the acute and chronic estimates. When the pH is in range, the pH alone doesn't tell you the primary process: test each possible primary disorder against its expected compensation, and keep every one that fits. A value well outside them suggests a mixed disorder." },
     { key: "worked", desc: (p) => abgStepDesc("worked", p), focus: ["ph", "co2", "hco3", "result"], dynamic: true, caption: null,
       narration: null },
   ],

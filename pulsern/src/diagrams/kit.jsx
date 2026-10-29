@@ -485,6 +485,7 @@ export const DIAGRAM_CSS = `
 .dg-ai{font-size:13px;color:var(--muted);margin:8px 2px 0}
 .dg-a{animation-fill-mode:both;animation-timing-function:cubic-bezier(.2,.75,.25,1)}
 .dg-fade{animation-name:dg-fade;animation-duration:.6s}
+.dg-appear{animation-name:dg-appear;animation-duration:.6s}
 .dg-pop{animation-name:dg-pop;animation-duration:.55s;animation-timing-function:cubic-bezier(.3,1.45,.5,1)}
 .dg-grow{animation-name:dg-grow;animation-duration:1.2s}
 .dg-scale{animation-name:dg-scale;animation-duration:1.6s;animation-timing-function:cubic-bezier(.45,0,.25,1)}
@@ -493,6 +494,7 @@ export const DIAGRAM_CSS = `
 .dg-press{animation:dg-press 1.6s ease-in-out infinite}
 .dg-slide{animation-name:dg-slide;animation-duration:1.3s}
 @keyframes dg-fade{from{opacity:0;transform:translateY(6px)}}
+@keyframes dg-appear{from{opacity:0}}
 @keyframes dg-pop{from{opacity:0;transform:scale(.55)}}
 @keyframes dg-grow{from{transform:scaleY(.04)}}
 @keyframes dg-scale{from{transform:scale(var(--from,1))}}
