@@ -1,0 +1,42 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "fd2ca26405a88c6ef3b7707fe3b6b1d84681e52b",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-30T00:12:41.507Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 140762,
+    "completionTokens": 12020,
+    "reasoningTokens": 11912,
+    "costUsd": 0.4721035
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No confirmed actionable defects found in the supplied diff. The new route checks authentication and student-scoped bank access before serving or queueing audio, and the playback code suppresses stale responses. Verification remains limited: ops/narrate-lib.mjs and the production RLS policies were not supplied, so I could not independently verify the imported transcript normalizer or database entitlement enforcement. Tests were reviewed statically, not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
