@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "e9aeb7ac1aabbaf3bb902188a6959d414e1e2ffc",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T12:01:10.682Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 135,
+      "title": "Do not convert mathematical grouping into pauses",
+      "problem": "asides() treats every embedded parenthesized expression as an aside. Because speakable() also processes calculation stems and rationales, this removes mathematical grouping. The audio gate compares the transcript against the already-transformed script, so it cannot detect this loss of meaning.",
+      "failure_scenario": "speakable(\"Calculate the anion gap: 140 - (104 + 24).\") produces \"Calculate the anion gap: 140 -, 104 + 24.\" The grouped subtraction yielding 12 can consequently be narrated as the ungrouped expression yielding 60. Both checked audio and device narration receive the altered script.",
+      "fix": "Preserve mathematical grouping and explicitly speak it, or refuse narration for expressions whose grouping cannot safely be verbalized. Restrict comma conversion to genuine prose asides. Add a regression test using grouped clinical arithmetic such as the anion-gap formula.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 41435,
+    "completionTokens": 4710,
+    "reasoningTokens": 4412,
+    "costUsd": 0.150686
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One blocking defect: the new parenthesis normalization can erase clinically significant mathematical grouping before narration and its accuracy check. The supplied tests do not cover this case.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
