@@ -16,7 +16,7 @@ import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, should
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE } from "../ops/read-aloud-worker.mjs";
-import { passagePaths } from "../api/_speak.js";
+import { passagePaths, CHECK_VERSION, checkFailure, readRecord } from "../api/_speak.js";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -542,6 +542,40 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
   });
 
+  it("logs what was expected and what was heard for a passage that fails the check", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const lines = [];
+    await drainQueue({ storage, apiKey: "k", fetchImpl: fakeOpenAI(["Potassium 9.2 mEq/L."]), log: (l) => lines.push(l) });
+    expect(lines.join("\n")).toMatch(/failed the check twice: card 4 card-front: expected "2\.9", heard "9\.2"/);
+    // and the record keeps both, with the check's version
+    const rec = JSON.parse(files.get(passagePaths(Q1.text).rec).toString());
+    expect(rec).toMatchObject({ pass: false, check: CHECK_VERSION, transcript: "Potassium 9.2 mEq/L." });
+    expect(rec.mismatch).toMatchObject({ expected: "2.9", heard: "9.2" });
+  });
+
+  it("voices again a passage that failed an older version of the check, and nothing else", async () => {
+    const { storage, files } = fakeStorage();
+    const sha = (t) => createHash("sha256").update(t).digest("hex");
+    const put = (text, rec) => files.set(passagePaths(text).rec, Buffer.from(JSON.stringify({ qa: QA_VERSION, textSha: sha(text), checkedAt: new Date().toISOString(), ...rec })));
+    put("Older failure.", { pass: false, check: CHECK_VERSION - 1 });
+    put("Current failure.", { pass: false, check: CHECK_VERSION });
+    put("Unversioned failure.", { pass: false }); // written before the field existed: version 1
+    put("Passed long ago.", { pass: true, check: CHECK_VERSION - 1 });
+    put("Refused by the provider.", { pass: false, reason: "speech 400", check: CHECK_VERSION - 1 });
+    expect(await readRecord(storage, "Older failure.")).toBe(null);
+    expect(await readRecord(storage, "Current failure.")).toMatchObject({ pass: false });
+    expect(await readRecord(storage, "Unversioned failure.") === null).toBe(CHECK_VERSION !== 1);
+    expect(await readRecord(storage, "Passed long ago.")).toMatchObject({ pass: true });
+    expect(await readRecord(storage, "Refused by the provider.")).toMatchObject({ reason: "speech 400" });
+  });
+
+  it("describes a failed take in a line a person can act on", () => {
+    expect(checkFailure({ similarity: 0.95, mismatch: { expected: "a", heard: "(nothing)", context: "give a dose" } })).toBe('expected "a", heard "(nothing)" near "give a dose" (similarity 0.950)');
+    expect(checkFailure({ similarity: 0.99, mismatch: null, unitMismatch: { expected: "mg", heard: "mcg" } })).toBe('expected "mg", heard "mcg" (similarity 0.990)');
+    expect(checkFailure({ similarity: 0.81, mismatch: null })).toBe("similarity 0.810");
+  });
+
   it("keeps a passage queued when the provider fails, and stops the run", async () => {
     const { storage, files } = fakeStorage();
     await speak({ ...base({ apiKey: "" }), storage });
@@ -868,6 +902,14 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     case_studies: [{ id: 3, title: "Sepsis", intro: "A client.", vitals: [["HR", "118"]], labs: [], note: "Confused.", steps: [{ stem: "Which cue?", options: ["HR", "Temp"], type: "mc", answer: 0, rationale: "HR." }] }],
     flashcards: [{ id: 4, front: "Antidote for heparin?", back: "Protamine sulfate" }],
   };
+
+  it("logs each passage that fails the check while voicing the bank, with the item it belongs to", async () => {
+    const { storage } = fakeStorage();
+    const lines = [];
+    await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(["Something else entirely."]), max: 3, log: (l) => lines.push(l) });
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0]).toMatch(/^failed the check twice: (result line|question \d+|case \d+|card \d+): expected "/);
+  });
 
   it("voices the result lines, then every question, case and card, and remembers where it got to", async () => {
     const { storage, files } = fakeStorage();

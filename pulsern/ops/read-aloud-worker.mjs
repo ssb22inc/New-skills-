@@ -32,7 +32,7 @@
    or bank trouble) fails the workflow run, so it is noticed. */
 import { createClient } from "@supabase/supabase-js";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
 import { verdictText, itemParts, voiceable } from "../src/read-aloud-script.js";
 
@@ -64,7 +64,7 @@ async function voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, dea
     return { result: "transient", spent: r.spent, error: r.error ?? "no audio" };
   }
   if (!(await saveChecked(storage, text, r.best, { now: now() }))) return { result: "transient", spent: r.spent, error: "could not save" };
-  return { result: r.best.check.pass ? "voiced" : "failed", spent: r.spent, similarity: r.best.check.similarity };
+  return { result: r.best.check.pass ? "voiced" : "failed", spent: r.spent, similarity: r.best.check.similarity, why: r.best.check.pass ? null : checkFailure(r.best.check) };
 }
 
 async function readJsonFile(bucket, path, maxBytes = Infinity) {
@@ -188,7 +188,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
         out.rejected++; log(`provider refused: ${job.ref.kind} ${job.ref.id} ${job.seg} (${v.error})`);
         if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.service = `${refusedInARow} refusals in a row (${v.error})`; return out; }
       }
-      else { out.failed++; log(`failed the check twice: ${job.ref.kind} ${job.ref.id} ${job.seg} (similarity ${v.similarity?.toFixed(3)})`); }
+      else { out.failed++; log(`failed the check twice: ${job.ref.kind} ${job.ref.id} ${job.seg}: ${v.why}`); }
     }
     offset += [...before].filter((p) => !removed.has(p)).length;
     }
@@ -218,7 +218,7 @@ export const BANK_QUERIES = {
   card: (db) => db.from("flashcards").select("id, front, back").eq("approved", true),
 };
 
-export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50 }) {
+export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50, log = () => {} }) {
   const bucket = storage.from(BUCKET);
   // stopped: null (all done), "max" or "budget" (normal), or an operational failure (failed: true)
   const out = { voiced: 0, failed: 0, rejected: 0, spent: 0, budget: false, stopped: null, failure: false, cursor: null };
@@ -235,7 +235,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
     const { error } = await put(bucket, "prewarm/cursor.json", cursor);
     if (error) throw new Error(`could not save the cursor: ${error.message ?? error}`);
   };
-  const voice = async (texts) => {
+  const voice = async (texts, label) => {
     for (const text of texts) {
       let decided;
       try { decided = await readRecord(storage, text, TTS, now()); } catch (e) { out.failure = true; return `storage: ${e.message}`; }
@@ -279,6 +279,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       }
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
       out[v.result]++;
+      if (v.result === "failed") log(`failed the check twice: ${label}: ${v.why}`);
       if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.failure = true; return `provider: ${refusedInARow} refusals in a row (${v.error})`; }
     }
     return null;
@@ -286,7 +287,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
 
   while (cursor.kind) {
     if (cursor.kind === "verdicts") {
-      const stop = await voice(verdictPassages());
+      const stop = await voice(verdictPassages(), "result line");
       if (stop) { out.stopped = stop; await save(); break; } // keeps the attempt counts
       cursor = { kind: "question", afterId: 0, attempts: cursor.attempts }; await save(); continue;
     }
@@ -301,7 +302,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
     }
     let stop = null;
     for (const row of rows) {
-      stop = await voice(itemPassages(cursor.kind, row));
+      stop = await voice(itemPassages(cursor.kind, row), `${cursor.kind} ${row.id}`);
       if (stop) break;
       cursor = { kind: cursor.kind, afterId: row.id, attempts: cursor.attempts }; // an item counts as done only when all its passages are decided
     }
@@ -403,7 +404,7 @@ export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch
   // provider or storage is suspect, and nothing more is spent this run.
   const skip = q.budget || q.providerDown || q.service || q.broken || q.operational || !left;
   let w;
-  try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, apiKey, fetchImpl, max: left, now, limits }); }
+  try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, apiKey, fetchImpl, max: left, now, limits, log }); }
   catch (e) { w = { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: String(e?.message ?? e), failure: true }; }
   const pruned = await pruneUsage({ storage, now: now() }).catch((e) => ({ error: String(e?.message ?? e) }));
   const lines = [
