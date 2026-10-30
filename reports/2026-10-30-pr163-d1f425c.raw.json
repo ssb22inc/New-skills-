@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "17745a40c7c93ee152570fd6d0bc627aea57d0ab",
+    "head": "d1f425c4ffbf8b8318f350891c63f8524c7bb9a4",
+    "pr": "163"
+  },
+  "reviewedAt": "2026-10-30T04:23:34.990Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 26,
+      "title": "Nearby dates are rewritten as pain scores",
+      "problem": "PAIN_BEFORE and PAIN_AFTER identify a pain score solely by proximity to the word \"pain\". They also match dates ending in /10, including the beginning of a date with a year. Because speakable() performs this replacement before synthesis and verification, the audio gate checks against the altered script rather than detecting the clinical-content change.",
+      "failure_scenario": "An approved case note containing \"The client reports abdominal pain since 7/10.\" becomes \"The client reports abdominal pain since 7 out of 10.\" Likewise, \"On 7/10 the client reported pain\" is changed by PAIN_AFTER. The resulting narration misstates a date and can pass voiceCheck because the rewritten text is its expected script.",
+      "fix": "Restrict conversion to unambiguous pain-rating constructions rather than sentence proximity, and preserve dates and ambiguous fractions verbatim. Add speakable() regression tests for dates before and after \"pain\", including dates with years, alongside the existing pain-score tests.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 32778,
+    "completionTokens": 3525,
+    "reasoningTokens": 3212,
+    "costUsd": 0.1171935
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One release-blocking defect: pain-score normalization can alter an approved item's clinical timeline before the audio accuracy check runs.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
