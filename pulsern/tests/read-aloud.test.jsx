@@ -56,7 +56,7 @@ describe("question script", () => {
     const segs = questionSegments({ type: "sata", stem: "Which findings need follow-up? Select all that apply.", options: ["Glucose 38 mg/dL", "Temp 36.8 °C"] });
     expect(segs.map((s) => s.id)).toEqual(["stem", "opt0", "opt1"]);
     expect(segs[2].text).toBe("Temp 36.8 degrees Celsius.");
-    expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening, First Visit");
+    expect(voiceable(speakable("Newborn Screening · First Visit"))).toBe(false); // a middle dot is never guessed at
     const quoted = questionSegments({ type: "mc", stem: "Which response is best?", options: ["\"Tell me more.\"", "(Stay with the client.)", "Call the provider"] });
     expect(quoted.slice(2).map((s) => s.text)).toEqual(["\"Tell me more.\"", "(Stay with the client.)", "Call the provider."]);
   });
@@ -73,15 +73,12 @@ describe("question script", () => {
     expect(voiceable(sc)).toBe(true);
     expect(speakable("5 * 2 = 10")).toBe("5 times 2 equals 10");
     expect(speakable("A 3 × 4 cm wound")).toBe("A 3 times 4 cm wound");
-    // a middle dot where a new label starts, in a passage with no "=": a pause
-    expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening, First Visit");
-    expect(speakable("NGN Case Study · Deteriorating Client")).toBe("NGN Case Study, Deteriorating Client");
-    expect(speakable("pH 7.35–7.45 · PaCO₂ 35–45")).toBe("pH 7.35–7.45, P A C O 2 35–45");
-    expect(speakable("0730 · Client reports dizziness.")).toBe("0730, Client reports dizziness.");
-    // any other middle dot, or an x between numbers, could be multiplication: not voiced at all
+    // a middle dot, or an x between numbers, could be multiplication: never voiced, never turned into a pause
     for (const t of ["Calculate 0.1 mg/kg · 70 kg.", "Dose = 0.1 mg/kg · 70 kg = 7 mg", "Temperature example: 36.8 °C · 98.2 °F",
-      "Dose = 2 mg/mL · volume in mL", "Dose = 2 mg/mL · Volume", "Give 2 mg/mL · volume", "0.5 – 2.0 ng/mL · hold dose if pulse < 60/min",
-      "HR 110 · RR 24, MAP = 65", "A 3 x 4 cm wound", "2x3"]) {
+      "Dose = 2 mg/mL · volume in mL", "Dose = 2 mg/mL · Volume", "2 mg/mL · Volume in mL", "Give 2 mg/mL · volume",
+      "Calculate MAP using (SBP + 2 · DBP) / 3.", "0.5 – 2.0 ng/mL · hold dose if pulse < 60/min",
+      "HR 110 · RR 24, MAP = 65", "Newborn Screening · First Visit", "pH 7.35–7.45 · PaCO₂ 35–45", "A 3 x 4 cm wound", "2x3"]) {
+      expect(speakable(t)).toContain(/x/i.test(t) && !/[·]/.test(t) ? "x" : "·"); // the sign is kept as written
       expect(voiceable(speakable(t)), t).toBe(false);
     }
     expect(voiceable(speakable("Take 2x daily"))).toBe(true);
