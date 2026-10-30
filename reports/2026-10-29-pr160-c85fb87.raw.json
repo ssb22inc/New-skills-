@@ -1,0 +1,63 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "c85fb87ce316f7946fac2b2411c172cfd771cf20",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-29T23:59:45.148Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 293,
+      "title": "Deleting claims allows generation reuse and concurrent holders",
+      "problem": "The next claim number is derived from files that remain in storage, while releasePassage deletes those files. A stale claimant can therefore create a higher-numbered claim alongside a new, active lower-numbered claim. Both callers return state \"mine\" and can pay to synthesise the same passage.",
+      "failure_scenario": "Holder A has claim 1 and produces no final record after a transient failure. After its lease expires, B reads claim 1 as stale, then pauses before uploading claim 2. A's delayed release deletes claim 1. C now sees an empty directory and acquires a fresh claim 1. B resumes and successfully creates claim 2. On the supported concurrent live/worker path, B and C both find no record and start paid synthesis. The existing concurrency tests do not exercise release and generation reuse between the stale read and upload.",
+      "fix": "Use an atomic lease with a monotonic generation and fencing token, such as a database RPC, rather than allocating generations from deletable files. Add a test that pauses a stale takeover after reading the old claim, releases that claim, acquires a fresh claim, and then resumes the takeover; only one new holder must succeed.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 106,
+      "title": "All-refused scripts are treated as temporary outages instead of shown on screen",
+      "problem": "planReading discards a valid set of silent steps whenever none has an audio URL. Consequently, the documented \"Read this part on screen\" highlighting works only when another segment has playable audio. A short flashcard side normally has exactly one segment, so a permanent accuracy-check refusal never receives that fallback.",
+      "failure_scenario": "A flashcard front fails both voice-check takes and the server saves pass=false. Every subsequent Listen request returns 422. The client reports \"The voice isn't available right now. Please try again later,\" without highlighting the card or displaying \"Read this part on screen.\" Retrying cannot resolve this failed-check record under the current QA version. The all-422 unit assertion currently cements this behavior.",
+      "fix": "Distinguish permanent check refusals from transient unavailability. Allow an all-422 script to run its screen-only highlighting sequence, or provide an explicit permanent-refusal state with the documented on-screen instruction. Test a one-segment flashcard refusal and update the all-422 expectation.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 137913,
+    "completionTokens": 13283,
+    "reasoningTokens": 12649,
+    "costUsd": 0.477611
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Two defects remain: passage claims can admit concurrent synthesis after a lease/release race, and permanently refused single-part items do not receive the documented on-screen fallback.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
