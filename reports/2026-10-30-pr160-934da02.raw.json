@@ -1,0 +1,56 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "934da029f6c26e742afd05d0e0f9292276f27bde",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-30T00:40:50.659Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/browser/read-aloud.html",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "minor",
+      "file": "pulsern/public/product/product-screenshots.json",
+      "line": 68,
+      "title": "Practice screenshot retains the previous question's alt text",
+      "problem": "The replacement image shows a Management of Care prioritization question, but its alt text still describes a Psychosocial Integrity question about therapeutic communication.",
+      "failure_scenario": "A screen-reader user encountering this screenshot through the product metadata receives a description of a different question and category from those shown in the image.",
+      "fix": "Update the alt text to describe the prioritization question actually captured, and regenerate any public markup that copies this metadata.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 134883,
+    "completionTokens": 13055,
+    "reasoningTokens": 12832,
+    "costUsd": 0.467756
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No substantiated clinical, scoring, or authorization defect was found in the supplied read-aloud implementation. One accessibility metadata mismatch remains in the recaptured screenshots. This was a static review; tests and the build were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 1
+  }
+}
