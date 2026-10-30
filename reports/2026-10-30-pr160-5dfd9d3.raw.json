@@ -1,0 +1,48 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "5dfd9d3be0d882d78983e5cf9c6c7fd9aeae3b24",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-30T01:06:57.857Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/index.html",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/browser/read-aloud.html",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx",
+    "pulsern/tests/seo-guardian.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 151591,
+    "completionTokens": 12413,
+    "reasoningTokens": 12346,
+    "costUsd": 0.503106
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects confirmed in the supplied diff or images. This was a static review: tests were not executed, and the unchanged audioCheck/speechTokens implementation was not supplied, so the complete audio-normalization gate could not be independently verified.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
