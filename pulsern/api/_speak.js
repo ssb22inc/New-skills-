@@ -85,6 +85,7 @@ const UNIT_CANON = [
   [/\b(?:drops?|gtt)\s*(?:\/|per)\s*(?:minutes?|min)\b/gi, ' gttpermin '],
   [/\b(?:millimeters?|millimetres?)\s+of\s+mercury\b|\bmm\s?hg\b/gi, ' mmhg '],
   [/\bcentimet(?:er|re)s?\b/gi, ' cm '],
+  [/\bdecilit(?:er|re)s?\b/gi, ' dl '],
   [/\bmillimet(?:er|re)s?\b/gi, ' mm '],
   [/\bby\s+mouth\b|\borally\b/gi, ' po '],
   [/\b(?:nanograms?|ng)\s*(?:\/|per)\s*(?:milliliters?|millilitres?|ml)\b/gi, ' ngperml '],
@@ -121,11 +122,13 @@ const COMPOUNDS = new Set([
   'dropdown', 'healthcare', 'readback', 'cosignature', 'readministered',
   'nontherapeutic', 'nonessential', 'nonslip', 'recheck', 'rechecking', 'reevaluate', 'reevaluation', 'reassess', 'reassessment',
   'prehydration', 'handoff', 'counterpressure', 'fingerstick', 'uteroplacental',
+  'nonjudgmental', 'nonsmoking', 'nonoperative', 'nonimmune', 'postsurgical', 'recontamination', 'microaspiration', 'microabrasion',
+  'semipermeable', 'underdose', 'overdose', 'overdosing', 'oversedation', 'timeframe', 'timeout', 'standalone', 'followup',
 ]);
 /* Only the exact splits of the listed compounds are matched, so a pair
    that is not one ("Read post-operative") never uses up a word another
    compound needs. */
-const COMPOUND_PREFIXES = ['non', 'post', 'pre', 'anti', 'inter', 'intra', 'multi', 'peri', 'ante', 'sub', 'supra', 'drop', 'health', 'read', 'co', 're', 'hand', 'counter', 'finger', 'utero'];
+const COMPOUND_PREFIXES = ['non', 'post', 'pre', 'anti', 'inter', 'intra', 'multi', 'peri', 'ante', 'sub', 'supra', 'drop', 'health', 'read', 'co', 're', 'hand', 'counter', 'finger', 'utero', 'micro', 'semi', 'under', 'over', 'time', 'stand', 'follow'];
 const COMPOUND_SPLITS = new RegExp(`\\b(?:${[...COMPOUNDS].flatMap((c) => COMPOUND_PREFIXES
   .filter((p) => c.startsWith(p) && c.length - p.length >= 2)
   .map((p) => `${p}[\\s-]+${c.slice(p.length)}`)).join('|')})\\b`, 'gi');
@@ -154,6 +157,11 @@ const SPELLING_CANON = [
   [new RegExp(`${QTY}\\s*(?:mins?|minutes?)\\b`, 'gi'), '$1 minute'],
   [new RegExp(`${QTY}\\s*(?:lbs?|pounds?)\\b`, 'gi'), '$1 pound'],
   [new RegExp(`${QTY}\\s*(?:gtts?|drops?)\\b`, 'gi'), '$1 drop'],
+  [new RegExp(`${QTY}\\s*(?:hrs?|hours?)\\b`, 'gi'), '$1 hour'],
+  [new RegExp(`${QTY}\\s*(?:L|liters?|litres?)\\b`, 'gi'), '$1 liter'],
+  /* the same word in the transcriber's other spelling (a closed list) */
+  [/\bdistention\b/gi, 'distension'],
+  [/\bserosanguinous\b/gi, 'serosanguineous'],
   /* subscript digits as digits ("CO₂" / "CO2"). A Roman numeral is never
      read as a number: "stage IV antibiotics" is intravenous, not stage 4. */
   [/[₀-₉]/g, (d) => String(d.charCodeAt(0) - 0x2080)],
@@ -210,14 +218,18 @@ export function clinicalUnits(text) {
   for (const [re, to] of UNIT_WORDS) t = t.replace(re, to);
   return speechTokens(t).filter((w) => CLINICAL_UNITS.has(w));
 }
+const near = (tokens, at) => tokens.slice(Math.max(0, at - 3), at + 3).join(' ');
 export function voiceCheck(script, transcript) {
   const check = audioCheck(canonUnits(script), canonUnits(transcript));
   const want = clinicalUnits(script), got = clinicalUnits(transcript);
   const i = want.findIndex((u, k) => got[k] !== u);
+  const at = i === -1 ? want.length : i;
   const unitMismatch = want.length !== got.length || i !== -1
-    ? { at: i === -1 ? want.length : i, expected: want[i === -1 ? want.length : i] ?? '(nothing)', heard: got[i === -1 ? want.length : i] ?? '(nothing)' }
+    ? { at, expected: want[at] ?? '(nothing)', heard: got[at] ?? '(nothing)', context: near(want, at), heardContext: near(got, at) }
     : null;
-  return { ...check, unitMismatch, pass: check.pass && !unitMismatch };
+  /* For the failure log: what was heard around the same place. */
+  const mismatch = check.mismatch && { ...check.mismatch, heardContext: near(speechTokens(canonUnits(transcript)), check.mismatch.at) };
+  return { ...check, mismatch, unitMismatch, pass: check.pass && !unitMismatch };
 }
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
@@ -576,14 +588,15 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
-export const CHECK_VERSION = 4; // 2: the spellings in SPELLING_CANON; 3: compounds, ÷, receptor subtypes, waves, mm³, cm, by mouth; 4: count per time, ng/mL, min/lb/gtt after a number, subscripts, stage numbers, e.g./i.e., more compounds
+export const CHECK_VERSION = 5; // 2: the spellings in SPELLING_CANON; 3: compounds, ÷, receptor subtypes, waves, mm³, cm, by mouth; 4: count per time, ng/mL, min/lb/gtt after a number, subscripts, stage numbers, e.g./i.e., more compounds; 5: hour/liter after a number, deciliter, two spellings, more compounds
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */
 export function checkFailure(check) {
   const m = check?.unitMismatch ?? check?.mismatch;
   if (!m) return `similarity ${Number(check?.similarity ?? 0).toFixed(3)}`;
   const near = m.context ? ` near "${String(m.context).slice(0, 80)}"` : '';
-  return `expected "${m.expected}", heard "${m.heard}"${near} (similarity ${Number(check.similarity ?? 0).toFixed(3)})`;
+  const heard = m.heardContext ? ` (heard "${String(m.heardContext).slice(0, 80)}")` : '';
+  return `expected "${m.expected}", heard "${m.heard}"${near}${heard} (similarity ${Number(check.similarity ?? 0).toFixed(3)})`;
 }
 export async function saveChecked(storage, text, best, { now = Date.now(), tts = TTS } = {}) {
   const { mp3, rec } = passagePaths(text, tts);
