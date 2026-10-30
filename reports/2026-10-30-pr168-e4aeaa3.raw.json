@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "e4aeaa3202a8b2c7a5ecdf00e0adc895b25f715b",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T14:14:11.721Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 162,
+      "title": "Lowercase formula factors are mistaken for parenthetical asides",
+      "problem": "A lowercase preceding word and an operator-free bracket do not establish that the bracket is prose. Named factors can also use implicit multiplication. For example, speakable(\"For minute ventilation, use tidal volume (respiratory rate).\") returns \"For minute ventilation, use tidal volume, respiratory rate.\" The parentheses were the multiplication cue; replacing them with commas changes a clinical calculation into a list.",
+      "failure_scenario": "An approved question or rationale expresses a formula using adjacent lowercase named factors. The rebuilt narration loses the mathematical grouping, and voiceCheck cannot catch the change because it checks the audio against that already-modified script. No bank inventory was supplied, so I could not verify whether this notation is currently present.",
+      "fix": "Preserve brackets whenever the text could represent adjacent mathematical factors. Prefer an explicit whitelist of recognizable prose labels over treating arbitrary words after lowercase text as safe. Add exact-output regression tests for lowercase named-factor formulas, including tidal volume (respiratory rate), and keep their brackets or refuse narration when interpretation is ambiguous.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 47820,
+    "completionTokens": 8970,
+    "reasoningTokens": 8638,
+    "costUsd": 0.2092485
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One remaining accuracy defect: the bracket normalizer can erase implicit multiplication in clinical formulas before the audio check runs. Review was static; tests were not executed.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
