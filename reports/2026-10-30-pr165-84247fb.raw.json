@@ -1,0 +1,44 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "74cd592a0771492c742ef9551d134cf6162c72b0",
+    "head": "84247fb71c6aa1e1ed96a2dc4312fa61cca8c30b",
+    "pr": "165"
+  },
+  "reviewedAt": "2026-10-30T05:50:34.033Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 143,
+      "title": "Greek-letter normalization consumes unary minus signs",
+      "problem": "The separator `[\\s-]+` treats a mathematical minus as an optional subtype separator. For example, `Potassium delta -1 milliequivalents per liter.` and `Potassium delta 1 milliequivalents per liter.` both canonicalize to the same text containing `delta1`. The word comparison and clinical-unit comparison therefore cannot detect the changed sign.",
+      "failure_scenario": "A passage reports a negative potassium delta, but the synthesized audio omits the minus. If transcribed as `Potassium delta 1 milliequivalents per liter.`, the take passes voiceCheck and can be cached and served despite changing the lab trend.",
+      "fix": "Preserve mathematical signs. Restrict joining to recognized subtype notation rather than accepting arbitrary whitespace/hyphen sequences after every listed Greek letter. Add a regression test requiring negative versus positive delta values to fail while retaining the intended beta-1/beta1 equivalence.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 46007,
+    "completionTokens": 3940,
+    "reasoningTokens": 3624,
+    "costUsd": 0.154416
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One accuracy-gate defect needs correction: the new Greek-letter normalization can erase a negative sign and approve audio containing a changed clinical value. No other concrete defects were identified in the supplied changes.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
