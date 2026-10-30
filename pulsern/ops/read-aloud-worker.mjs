@@ -90,7 +90,10 @@ async function lanePage(bucket, dir, offset) {
 /* Two lanes: every fresh request (queue/) before any retry
    (queue-retry/), each oldest first. Entries are read one at a time, so a
    long queue never sits in memory. */
-export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity }) {
+/* onChecked: called for every passage that got a verdict (voiced, or
+   failed the check), so the caller knows work was done even if a later
+   step throws. */
+export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, onChecked = () => {} }) {
   const bucket = storage.from(BUCKET);
   const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
   let inARow = 0, refusedInARow = 0, done = 0;
@@ -184,6 +187,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
       inARow = 0;
       await drop(path);
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
+      if (v.result === "voiced" || v.result === "failed") onChecked();
       if (v.result === "voiced") out.voiced++;
       else if (v.result === "rejected") {
         out.rejected++; log(`provider refused: ${job.ref.kind} ${job.ref.id} ${job.seg} (${v.error})`);
@@ -219,7 +223,7 @@ export const BANK_QUERIES = {
   card: (db) => db.from("flashcards").select("id, front, back").eq("approved", true),
 };
 
-export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50, log = () => {}, until = Infinity }) {
+export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50, log = () => {}, until = Infinity, onChecked = () => {} }) {
   const bucket = storage.from(BUCKET);
   // stopped: null (all done), "max" or "budget" (normal), or an operational failure (failed: true)
   const out = { voiced: 0, failed: 0, rejected: 0, spent: 0, budget: false, stopped: null, failure: false, cursor: null };
@@ -242,6 +246,8 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   };
   const voice = async (texts, label) => {
     for (const text of texts) {
+      // The run's time is checked before every passage, cached ones included.
+      if (now() >= until) return "max";
       let decided;
       try { decided = await readRecord(storage, text, TTS, now()); } catch (e) { out.failure = true; return `storage: ${e.message}`; }
       if (decided) continue;
@@ -284,6 +290,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       }
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
       out[v.result]++;
+      if (v.result === "voiced" || v.result === "failed") onChecked();
       if (v.result === "failed") log(`failed the check twice: ${label}: ${v.why}`);
       if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.failure = true; return `provider: ${refusedInARow} refusals in a row (${v.error})`; }
     }
@@ -291,6 +298,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   };
 
   while (cursor.kind) {
+    if (now() >= until) { out.stopped = "max"; await save(); break; }
     if (cursor.kind === "verdicts") {
       const stop = await voice(verdictPassages(), "result line");
       if (stop) { out.stopped = stop; await save(); break; } // keeps the attempt counts
@@ -401,15 +409,16 @@ export async function pruneClaims({ bucket, now }) {
    workflow run. Caps always come from LIMITS (api/_speak.js), the same
    values the route uses. */
 export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity }) {
-  let q;
-  try { q = await drainQueue({ storage, apiKey, fetchImpl, max, now, limits, log, until }); }
+  let q, checked = 0;
+  const onChecked = () => { checked++; };
+  try { q = await drainQueue({ storage, apiKey, fetchImpl, max, now, limits, log, until, onChecked }); }
   catch (e) { q = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, errors: [String(e?.message ?? e)], broken: true }; }
   const left = Math.max(0, max - (q.voiced + q.failed + q.rejected + q.retried));
   // The bank waits for a clean queue run: after any operational failure the
   // provider or storage is suspect, and nothing more is spent this run.
   const skip = q.budget || q.providerDown || q.service || q.broken || q.operational || q.timeUp || !left;
   let w;
-  try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, apiKey, fetchImpl, max: left, now, limits, log, until }); }
+  try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, apiKey, fetchImpl, max: left, now, limits, log, until, onChecked }); }
   catch (e) { w = { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: String(e?.message ?? e), failure: true }; }
   const pruned = await pruneUsage({ storage, now: now() }).catch((e) => ({ error: String(e?.message ?? e) }));
   const lines = [
@@ -429,7 +438,8 @@ export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch
      the workflow waits before it starts the next run. A provider refusal
      is not progress, and a setup problem (the repeated-refusal breaker,
      or an account or setup error) never chains, whatever came before. */
-  const progress = q.voiced + q.failed + w.voiced + w.failed > 0;
+  // Counted as it happened, so work done before a step threw still counts.
+  const progress = checked > 0;
   const setup = !!q.service || !!w.service || /refusals in a row/.test(String(w.stopped ?? ""));
   const more = !setup && !q.budget && !w.budget && (failed ? progress : (w.stopped === "max" || !left || !!q.timeUp));
   return { lines, failed, more, progress, setup, queue: q, bank: w, pruned };

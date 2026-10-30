@@ -1354,6 +1354,20 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(account.progress).toBe(true);
     expect(account.setup).toBe(true);
     expect(account.more).toBe(false);
+    // a storage failure that throws after some work (the cursor cannot be saved): the work still counts, carry on
+    const cursorFails = fakeStorage();
+    const cb = cursorFails.storage.from(BUCKET);
+    const up = cb.upload;
+    let voicedSoFar = 0;
+    cb.upload = async (path, body, opts) => {
+      if (path.endsWith(".mp3")) voicedSoFar++;
+      if (path === "prewarm/cursor.json" && voicedSoFar > 0) return { error: { message: "Internal server error", statusCode: "500" } };
+      return up(path, body, opts);
+    };
+    const thrown = await runJob({ storage: cursorFails.storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 50, log: () => {} });
+    expect(thrown.failed).toBe(true);
+    expect(thrown.progress).toBe(true);
+    expect(thrown.more).toBe(true);
     // and refusals alone are never progress
     const refused = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 400 })), max: 50, log: () => {} });
     expect(refused.progress).toBe(false);
@@ -1376,6 +1390,25 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     const q = await runJob({ storage: busy.storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 200, now: clock, until: t - 1, log: () => {} });
     expect(q.queue.timeUp).toBe(true);
     expect(q.more).toBe(true);
+  });
+
+  it("checks the time before every passage, cached ones included, and keeps its place", async () => {
+    const { storage, files } = fakeStorage();
+    // voice the whole bank once
+    await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000 });
+    // a new check version: the scan starts again over a bank that is all cached, and every record read takes a minute
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "verdicts", afterId: 0, check: CHECK_VERSION - 1 })));
+    let t = Date.UTC(2026, 9, 30, 8);
+    const bucket = storage.from(BUCKET);
+    const download = bucket.download;
+    let reads = 0;
+    bucket.download = async (path) => { if (/^marin\/.*\.json$/.test(path)) { reads++; t += 60000; } return download(path); };
+    const f = fakeOpenAI();
+    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1000, now: () => t, until: t + 3 * 60000 });
+    expect(r.stopped).toBe("max");
+    expect(reads).toBeLessThanOrEqual(4); // stopped at the time limit, not at the end of the bank
+    expect(f).not.toHaveBeenCalled();
+    expect(JSON.parse(files.get("prewarm/cursor.json").toString()).done).toBeFalsy(); // its place is kept for the next run
   });
 
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
