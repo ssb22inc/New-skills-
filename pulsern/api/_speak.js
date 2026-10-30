@@ -86,7 +86,8 @@ const UNIT_CANON = [
   [/\b(?:millimeters?|millimetres?)\s+of\s+mercury\b|\bmm\s?hg\b/gi, ' mmhg '],
   [/\bcentimet(?:er|re)s?\b/gi, ' cm '],
   [/\bmillimet(?:er|re)s?\b/gi, ' mm '],
-  [/\bby\s+mouth\b/gi, ' po '],
+  [/\bby\s+mouth\b|\borally\b/gi, ' po '],
+  [/\b(?:nanograms?|ng)\s*(?:\/|per)\s*(?:milliliters?|millilitres?|ml)\b/gi, ' ngperml '],
   [/\s*°\s*c\b|\bdegrees?\s+(?:celsius|c)\b/gi, ' degc '],
   [/\s*°\s*f\b|\bdegrees?\s+(?:fahrenheit|f)\b/gi, ' degf '],
   [/\bs\s*p\s*o\s*(?:2|two|₂)\b|\bspo2\b/gi, ' spo2 '],
@@ -118,11 +119,13 @@ const COMPOUNDS = new Set([
   'nonadherent', 'nonadherence', 'noncompliant', 'noncompliance', 'nonreactive', 'nonstress', 'nonblanchable',
   'antiinflammatory', 'multidisciplinary', 'interdisciplinary', 'interprofessional', 'preexisting', 'prediabetes',
   'dropdown', 'healthcare', 'readback', 'cosignature', 'readministered',
+  'nontherapeutic', 'nonessential', 'nonslip', 'recheck', 'rechecking', 'reevaluate', 'reevaluation', 'reassess', 'reassessment',
+  'prehydration', 'handoff', 'counterpressure', 'fingerstick', 'uteroplacental',
 ]);
 /* Only the exact splits of the listed compounds are matched, so a pair
    that is not one ("Read post-operative") never uses up a word another
    compound needs. */
-const COMPOUND_PREFIXES = ['non', 'post', 'pre', 'anti', 'inter', 'intra', 'multi', 'peri', 'ante', 'sub', 'supra', 'drop', 'health', 'read', 'co', 're'];
+const COMPOUND_PREFIXES = ['non', 'post', 'pre', 'anti', 'inter', 'intra', 'multi', 'peri', 'ante', 'sub', 'supra', 'drop', 'health', 'read', 'co', 're', 'hand', 'counter', 'finger', 'utero'];
 const COMPOUND_SPLITS = new RegExp(`\\b(?:${[...COMPOUNDS].flatMap((c) => COMPOUND_PREFIXES
   .filter((p) => c.startsWith(p) && c.length - p.length >= 2)
   .map((p) => `${p}[\\s-]+${c.slice(p.length)}`)).join('|')})\\b`, 'gi');
@@ -138,6 +141,18 @@ const SPELLING_CANON = [
   [/\b(\d{1,3})((?:,\d{3})+)\b/g, (m) => m.replace(/,/g, '')],
   [/\band\s*\/\s*or\b/gi, 'and or'],
   [/\s+slash\s+/gi, ' / '],
+  // a count per unit of time with no unit before the slash ("118/min")
+  [/(\b\d+(?:\.\d+)?)\s*\/\s*(?=(?:mins?|minutes?|hrs?|hours?|h|days?|wk|weeks?|secs?|seconds?)\b)/gi, '$1 per '],
+  // after a number: a short unit and its word ("300 min" / "300 minutes", "6 lb" / "6 pounds", "15 gtt" / "15 drops")
+  [/\b(\d+(?:\.\d+)?)\s*(?:mins?|minutes?)\b/gi, '$1 minute'],
+  [/\b(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b/gi, '$1 pound'],
+  [/\b(\d+(?:\.\d+)?)\s*(?:gtts?|drops?)\b/gi, '$1 drop'],
+  // subscript digits as digits ("CO₂" / "CO2"); a Roman stage number ("stage III" / "stage 3")
+  [/[₀-₉]/g, (d) => String(d.charCodeAt(0) - 0x2080)],
+  [/\bstage\s+(IV|I{1,3})\b/gi, (m, r) => `stage ${{ i: 1, ii: 2, iii: 3, iv: 4 }[r.toLowerCase()]}`],
+  // "e.g." and "i.e." however written or said
+  [/\be\.?\s?g\.?(?=[\s,;:)]|$)|\bfor example\b/gi, 'eg'],
+  [/\bi\.?\s?e\.?(?=[\s,;:)]|$)|\bthat is\b/gi, 'ie'],
   [RATE, '$1 per '],
   [/\bper\s+(?:mins?|minutes?)\b/gi, 'per minute'],
   [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
@@ -538,7 +553,7 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
-export const CHECK_VERSION = 3; // 2: the spellings in SPELLING_CANON; 3: prefixes, ÷, Greek letters, waves, mm³, cm, by mouth
+export const CHECK_VERSION = 4; // 2: the spellings in SPELLING_CANON; 3: compounds, ÷, receptor subtypes, waves, mm³, cm, by mouth; 4: count per time, ng/mL, min/lb/gtt after a number, subscripts, stage numbers, e.g./i.e., more compounds
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */
 export function checkFailure(check) {

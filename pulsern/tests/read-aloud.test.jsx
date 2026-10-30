@@ -237,6 +237,38 @@ describe("question script", () => {
     for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
   });
 
+  it("accepts the third round of spellings from the failure log, and still rejects a changed value", () => {
+    const pass = [
+      ["Heart rate is below 60/min in this client.", "Heart rate is below 60 per minute in this client."],
+      ["Respiratory rate of 6/min and shallow.", "Respiratory rate of 6/minute and shallow."],
+      ["Digoxin level 0.5–2.0 ng/mL.", "Digoxin level 0.5 to 2.0 nanograms per milliliter."],
+      ["Divide by 300 min equals 9000.", "Divide by 300 minutes equals 9000."],
+      ["Report a 6 lb weight loss.", "Report a 6 pound weight loss."],
+      ["The drop factor is 15 gtt/mL.", "The drop factor is 15 drops per mL."],
+      ["pH below 7.35 and CO₂ is high.", "pH below 7.35 and CO2 is high."],
+      ["A client with a stage III pressure injury.", "A client with a stage 3 pressure injury."],
+      ["Unless specifically required (e.g., during feeding).", "Unless specifically required (eg, during feeding)."],
+      ["Unless specifically required, e.g. during feeding.", "Unless specifically required, for example during feeding."],
+      ["Option 0 uses non therapeutic phrases.", "Option 0 uses nontherapeutic phrases."],
+      ["Before re checking the level.", "Before rechecking the level."],
+      ["The nurse reviews the 0700 hand off report.", "The nurse reviews the 0700 handoff report."],
+      ["Late decelerations reflect utero-placental insufficiency.", "Late decelerations reflect uteroplacental insufficiency."],
+      ["Take it PO daily.", "Take it orally daily."],
+    ];
+    for (const [w, h] of pass) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(true);
+    const fail = [
+      ["Heart rate is below 60/min in this client.", "Heart rate is below 16 per minute in this client."],
+      ["Heart rate is below 60/min in this client.", "Heart rate is below 60 per hour in this client."],
+      ["Report a 6 lb weight loss.", "Report a 6 kg weight loss."],
+      ["A client with a stage III pressure injury.", "A client with a stage 2 pressure injury."],
+      ["pH below 7.35 and CO₂ is high.", "pH below 7.35 and CO is high."],
+      ["Level of 8/10 and rising.", "Level of 8 out of 10 and rising."], // two numbers with a slash are never reworded
+      ["Digoxin level 2.0 ng/mL.", "Digoxin level 2.0 micrograms per milliliter."],
+    ];
+    for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
+    expect(speakable("Heart rate 118/min.")).toBe("Heart rate 118 per minute.");
+  });
+
   it("voices a long part in shorter pieces, where the voice is less likely to skip words", () => {
     expect(PART_MAX).toBeLessThanOrEqual(450);
   });

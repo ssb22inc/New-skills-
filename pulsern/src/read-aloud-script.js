@@ -34,6 +34,7 @@ const SPOKEN = [
   [/\bmg\/dL\b/g, "milligrams per deciliter"],
   [/\bg\/dL\b/g, "grams per deciliter"],
   [/\bmcg\/kg\/min\b/g, "micrograms per kilogram per minute"],
+  [/\bng\/mL\b/g, "nanograms per milliliter"],
   [/\bmg\/kg\b/g, "milligrams per kilogram"],
   [/\bmL\/hr?\b/g, "milliliters per hour"],
   [/\bmL\/kg\b/g, "milliliters per kilogram"],
@@ -64,6 +65,8 @@ const SPOKEN = [
   [/\band\/or\b/gi, "and or"],
   [/\s*÷\s*/g, " divided by "],
   [RATE, "$1 per "],
+  // a count per unit of time with no unit before the slash ("118/min", "60/min")
+  [/(\b\d+(?:\.\d+)?)\s*\/\s*(?=(?:min|mins|minute|hr|hrs|hour|h|day|wk|week|sec)\b)/g, "$1 per "],
   [/([A-Za-z][\w⁺⁻₀-₉-]*)\s*\/\s*(?=[A-Za-z])/g, "$1 slash "],
   [/\bper (?:min|mins)\b/g, "per minute"],
   [/\bper (?:hr|hrs|h)\b/g, "per hour"],
