@@ -135,6 +135,9 @@ const COMPOUND_SPLITS = new RegExp(`\\b(?:${[...COMPOUNDS].flatMap((c) => COMPOU
    min", "5 milligrams/minute") reaches RATE in one form. Only that span
    is converted: the rest of the text is left to the word check. */
 const NUM_WORD = 'zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred';
+/* A quantity before a unit: digits ("30") or a number in words ("thirty",
+   "three hundred"), so a unit rule treats both spellings alike. */
+const QTY = `(\\b\\d+(?:\\.\\d+)?|\\b(?:${NUM_WORD})(?:[\\s-]+(?:${NUM_WORD}|and))*)`;
 const RATE_IN_WORDS = new RegExp(`\\b(?:${NUM_WORD})(?:[\\s-]+(?:${NUM_WORD}|and))*(?=\\s+(?:${RATE_UNITS})\\s*(?:\\/|\\s+slash\\s+))`, 'gi');
 const SPELLING_CANON = [
   [RATE_IN_WORDS, (m) => wordsToNumbers(m).trim()],
@@ -148,12 +151,12 @@ const SPELLING_CANON = [
      ("thirty minutes") needs no rule here: the word check reads number
      words as digits and a plural as its singular (speechTokens), so
      "30 minute" and "thirty minutes" already compare equal. */
-  [/\b(\d+(?:\.\d+)?)\s*(?:mins?|minutes?)\b/gi, '$1 minute'],
-  [/\b(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b/gi, '$1 pound'],
-  [/\b(\d+(?:\.\d+)?)\s*(?:gtts?|drops?)\b/gi, '$1 drop'],
-  // subscript digits as digits ("CO₂" / "CO2"); a Roman stage number ("stage III" / "stage 3")
+  [new RegExp(`${QTY}\\s*(?:mins?|minutes?)\\b`, 'gi'), '$1 minute'],
+  [new RegExp(`${QTY}\\s*(?:lbs?|pounds?)\\b`, 'gi'), '$1 pound'],
+  [new RegExp(`${QTY}\\s*(?:gtts?|drops?)\\b`, 'gi'), '$1 drop'],
+  /* subscript digits as digits ("CO₂" / "CO2"). A Roman numeral is never
+     read as a number: "stage IV antibiotics" is intravenous, not stage 4. */
   [/[₀-₉]/g, (d) => String(d.charCodeAt(0) - 0x2080)],
-  [/\bstage\s+(IV|I{1,3})\b/gi, (m, r) => `stage ${{ i: 1, ii: 2, iii: 3, iv: 4 }[r.toLowerCase()]}`],
   /* "e.g." and "i.e." as the words they stand for. Only the DOTTED forms
      (and a bare lower-case "eg") are read this way: an undotted "IE" is
      infective endocarditis, never "that is". */
@@ -281,10 +284,24 @@ export function quotaDay(now, tz = QUOTA_TZ) {
    once (upsert off: a second create of the same name fails), so each paid
    call holds a distinct slot below the limit, however many requests run at
    once. Any storage error refuses the call (fail closed). */
+/* A brief storage blip (a timeout, a 5xx) is tried again, twice, before
+   it counts as storage trouble: one slow call must not stop a whole run.
+   An answer (the slot exists, it is not found) is never retried. */
+export const STORAGE_RETRY = { tries: 3, ms: [1000, 3000] };
+const transient = (error) => !!error && !/exist|duplicate|409|not.?found|404/i.test(`${error.message ?? ''} ${error.statusCode ?? ''} ${error.error ?? ''}`);
+async function retried(call) {
+  let out;
+  for (let i = 0; i < STORAGE_RETRY.tries; i++) {
+    out = await call();
+    if (!transient(out?.error)) return out;
+    if (i < STORAGE_RETRY.tries - 1) await new Promise((r) => setTimeout(r, STORAGE_RETRY.ms[i] ?? 3000));
+  }
+  return out;
+}
 async function countSlots(bucket, dir) {
   let n = 0;
   for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await bucket.list(dir, { limit: 1000, offset });
+    const { data, error } = await retried(() => bucket.list(dir, { limit: 1000, offset }));
     if (error) { console.error('[read-aloud] storage list', dir.split('/')[0], error.message ?? error); return null; }
     n += (data ?? []).length;
     if (!data || data.length < 1000) return n;
@@ -405,7 +422,7 @@ async function claimSlot(storage, dir, limit) {
   }
   let created = false;
   for (let tries = 0; tries < 25 && n < limit; tries++, n++) {
-    const slot = () => bucket.upload(`${dir}/${String(n).padStart(5, '0')}`, '1', { contentType: 'text/plain', upsert: false });
+    const slot = () => retried(() => bucket.upload(`${dir}/${String(n).padStart(5, '0')}`, '1', { contentType: 'text/plain', upsert: false }));
     let { error } = await slot();
     // First use: listing a bucket that does not exist yet can come back
     // empty rather than as an error, so the write is where it shows.

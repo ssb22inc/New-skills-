@@ -423,8 +423,12 @@ export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch
   /* More to do right away: the run stopped at its own limit (the queue
      used it all, or the bank scan reached it), not at today's budget, the
      end of the work, or a failure. The workflow then starts the next run. */
-  const more = !failed && !q.budget && !w.budget && (w.stopped === "max" || !left);
-  return { lines, failed, more, queue: q, bank: w, pruned };
+  /* After a failure the job carries on only if this run still got work
+     done (a brief blip, not an outage), and the workflow waits before it
+     starts the next run; a run that got nothing done stops the chain. */
+  const progress = q.voiced + q.failed + q.rejected + w.voiced + w.failed + w.rejected > 0;
+  const more = !q.budget && !w.budget && (failed ? progress : (w.stopped === "max" || !left));
+  return { lines, failed, more, progress, queue: q, bank: w, pruned };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
