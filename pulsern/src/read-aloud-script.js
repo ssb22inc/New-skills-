@@ -134,6 +134,7 @@ export function speakable(text) {
    "(s)" is left alone, since it can be seconds ("time(s)"). A part that
    is wholly in brackets is left as it is. */
 /* Brackets that group arithmetic are never an aside: "140 - (104 + 24)",
+   "VO2 = CO (CaO2-CvO2)",
    "(2 mg/kg)(70 kg)" or "(D/H) × Q" without them is another calculation.
    A group is read as a pause only when it plainly stands apart in prose:
    - a space (or the start) before it, and a space, punctuation mark or
@@ -144,7 +145,10 @@ export function speakable(text) {
    - no number, sign, word for an operation or other bracket right before
      or after it, even across a space ("(2 mg/kg) (70 kg)").
    Anything else keeps its brackets exactly as written. */
-const MATH_SIGN = /[+×*÷=^<>≤≥≠−–·∙/]|\d\s*[-x]\s*\d|\s-\s|\b(?:plus|minus|times|divided|multiplied|equals?|over|per)\b/i;
+/* Any sign of a formula ANYWHERE in the passage ("VO2 = CO (CaO2-CvO2)"):
+   then no bracket in it is touched. */
+const FORMULA = /[=+×*÷^<>≤≥≠−·∙]|\d\s*[-x/]\s*\d|\s-\s|[A-Za-z]\w*\d\w*\s*-\s*\w|\w\s*-\s*[A-Za-z]\w*\d|\b(?:plus|minus|times|divided\s+by|multiplied\s+by|equals?)\b/i;
+const MATH_SIGN = /[+×*÷=^<>≤≥≠−–·∙/]|\d\s*[-x]\s*\d|\s-\s|\w*\d\w*\s*-\s*\w|\w\s*-\s*\w*\d|\b(?:plus|minus|times|divided|multiplied|equals?|over|per)\b/i;
 const MATH_BEFORE = /(?:[-+×*÷=^/−–·∙\d)\]]|\b(?:x|plus|minus|times|divided\s+by|multiplied\s+by|equals?|over|of|per))\s*$/i;
 const MATH_AFTER = /^\s*(?:[-+×*÷=^/−–·∙²³\d(\[]|(?:x|plus|minus|times|divided|multiplied|equals?|over|per)\b)/i;
 const aside = (inner, before, after) =>
@@ -153,7 +157,7 @@ const aside = (inner, before, after) =>
 const COUNTED = "tablet|capsule|dose|drop|puff|vial|patch|spray|syringe|ampule|bag|suppositor(?:y|ie)";
 function asides(text) {
   const t = text.trim().replace(new RegExp(`\\b(${COUNTED})\\(s\\)`, "gi"), "$1s");
-  if (/\w\(s\)/.test(t)) return t;
+  if (/\w\(s\)/.test(t) || FORMULA.test(t)) return t;
   if (/^\([^()]*\)[.!?]?$/.test(t)) return t;
   return t
     .replace(/(\s*)\(([^()]*)\)/g, (m, space, inner, at) => {

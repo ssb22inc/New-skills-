@@ -382,6 +382,9 @@ describe("question script", () => {
     expect(speakable("Use (D/H)Q.")).toBe("Use (D slash H)Q.");
     expect(speakable("Use (D/H) × Q.")).toBe("Use (D slash H) times Q.");
     expect(speakable("Calculate (2 mg/kg) (70 kg).")).toBe("Calculate (2 milligrams per kilogram) (70 kg).");
+    // a passage with any sign of a formula keeps every bracket as written (Sol, PR #168)
+    expect(speakable("VO2 = CO (CaO2-CvO2).")).toBe("VO2 equals CO (CaO2-CvO2).");
+    for (const t of ["Oxygen use is CO (CaO2-CvO2).", "Use CO (Ca - Cv) here.", "MAP is DBP plus (pulse pressure) today.", "Give (dose) then 2 + 2 (check)."]) expect(speakable(t), t).toContain("(");
     expect(speakable("Use (D/H) (Q).")).toBe("Use (D slash H) (Q).");
     expect(speakable("Give (weight) (dose) now.")).toBe("Give (weight) (dose) now.");
     expect(speakable("Use [D/H] (Q).")).toBe("Use [D slash H] (Q).");
