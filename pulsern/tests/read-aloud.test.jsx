@@ -1340,6 +1340,17 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(blip.failed).toBe(true);
     expect(blip.progress).toBe(true);
     expect(blip.more).toBe(true);
+    // the provider refuses every request after some work (a setup problem): never chain, whatever came before
+    let n = 0;
+    const refusing = vi.fn(async (url, init) => (++n > 6 ? { ok: false, status: 400 } : ok(url, init)));
+    const setup = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: refusing, max: 50, log: () => {} });
+    expect(setup.failed).toBe(true);
+    expect(setup.setup).toBe(true);
+    expect(setup.more).toBe(false);
+    // and refusals alone are never progress
+    const refused = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 400 })), max: 50, log: () => {} });
+    expect(refused.progress).toBe(false);
+    expect(refused.more).toBe(false);
   });
 
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
