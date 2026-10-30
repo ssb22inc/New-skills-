@@ -1,0 +1,45 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "195d24b0f8ddbd365cb1a370a2d76b681dc13653",
+    "head": "20ffd80917c36ff68190874664d4ecab0b37cf47",
+    "pr": "166"
+  },
+  "reviewedAt": "2026-10-30T07:08:48.301Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 429,
+      "title": "Repeated provider refusals now keep the failed-run chain alive",
+      "problem": "The new progress calculation counts provider refusals as progress and permits chaining after every failure type. Both queue processing and bank prewarming deliberately stop after three consecutive provider refusals because that indicates a setup problem. Those same three refusals now make progress true and more true, automatically restarting the job despite that circuit breaker.",
+      "failure_scenario": "If a provider configuration problem makes every speech request return 400, each run records three passages as rejected, detects the repeated-refusal setup failure, and then dispatches another run after ten minutes. The next run skips those rejection records and rejects the next passages. This continues through the bank until the daily slot budget is exhausted, leaving affected passages unavailable for seven days rather than stopping the chain during the persistent failure.",
+      "fix": "Propagate an explicit non-retryable setup/circuit-open outcome from both queue processing and bank prewarming, and prohibit self-dispatch for that outcome regardless of prior progress. Add a multi-run test with persistent 400 responses proving that three consecutive refusals stop automatic chaining.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 52880,
+    "completionTokens": 4997,
+    "reasoningTokens": 4660,
+    "costUsd": 0.1821685
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One operational regression needs correction: failure chaining defeats the existing provider-setup circuit breaker. No additional concrete defects were identified in the supplied changes. Tests were reviewed but not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
