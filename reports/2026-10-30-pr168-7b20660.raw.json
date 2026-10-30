@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "7b20660bdd768e3a90ffff6a1734021ebdd36ce9",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T13:35:11.585Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 145,
+      "title": "Variable subtraction can be mistaken for a prose aside",
+      "problem": "MATH_SIGN recognizes ASCII subtraction only between two digits or with spaces around the minus sign. MATH_BEFORE also does not recognize a preceding identifier as an implicit multiplication factor. Consequently, speakable(\"VO2 = CO (CaO2-CvO2).\") produces \"VO2 equals CO, CaO2-CvO2.\" The parentheses establishing the product have become a comma-separated list, contradicting the guarantee that arithmetic grouping is preserved.",
+      "failure_scenario": "A cardiac oxygen-consumption rationale uses the Fick relationship written as `VO2 = CO (CaO2-CvO2).` The script builder removes its meaningful grouping. The audio gate then checks the recording against that already-altered script, so it cannot detect the corruption before students hear it.",
+      "fix": "Conservatively preserve parentheses containing symbolic subtraction, including unspaced ASCII minus, and parentheses adjacent to identifiers that may be multiplication factors. Add an exact-output regression for this formula; uncertain mathematical groups should remain unchanged or be refused for voicing.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 46028,
+    "completionTokens": 9009,
+    "reasoningTokens": 8683,
+    "costUsd": 0.2051585
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One unsafe bracket rewrite can alter a clinical formula before the audio accuracy gate sees it. The added arithmetic tests miss this case.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
