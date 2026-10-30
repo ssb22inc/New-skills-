@@ -1,0 +1,44 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "74cd592a0771492c742ef9551d134cf6162c72b0",
+    "head": "b0dff56202e45d9a5cf576270062ef85c2079417",
+    "pr": "165"
+  },
+  "reviewedAt": "2026-10-30T05:33:40.347Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 143,
+      "title": "Wave-name normalization rejects capitalization-only transcript differences",
+      "problem": "The new wave-name regex uses `g`, not `gi`. It converts `T waves` to `Twaves` but leaves `T Waves` as two words. Under the exact-token comparison documented for voiceCheck, capitalization alone therefore becomes a word mismatch. The imported audioCheck implementation was not supplied, so I could not verify this end-to-end.",
+      "failure_scenario": "The script is `Hyperkalemia causes peaked T waves.` and the transcriber writes the correctly spoken audio as `Hyperkalemia causes peaked T Waves.` The canonical strings contain `Twaves` versus `T Waves`. If both takes receive that capitalization, the passage is recorded as failed and checked audio becomes unavailable despite an accurate reading.",
+      "fix": "Make the wave-name rule case-insensitive and add a regression test requiring voiceCheck to accept `T waves` versus `T Waves`, including a hyphenated mixed-case variant.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 45621,
+    "completionTokens": 5930,
+    "reasoningTokens": 5628,
+    "costUsd": 0.173351
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes for a capitalization-sensitive regression in the speech checker. No other concrete defect found in the supplied changes. Review was static; tests were not run.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
