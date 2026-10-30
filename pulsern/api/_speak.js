@@ -616,7 +616,7 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
        result line can differ from the generic one). */
     const seen = new Set();
     const work = [...parts.map((x) => ({ ref, seg: x.id, text: x.text })), ...itemParts(ref.kind, { ...item, id: ref.id })]
-      .filter((x) => x.text && x.text.length <= SPEAK_MAX && !seen.has(x.text) && seen.add(x.text));
+      .filter((x) => x.text && x.text.length <= SPEAK_MAX && voiceable(x.text) && !seen.has(x.text) && seen.add(x.text));
     for (const p of work) {
       const paths = passagePaths(p.text, tts);
       if (await readRecord(storage, p.text, tts, t0)) continue;

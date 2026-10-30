@@ -54,19 +54,23 @@ const SPOKEN = [
 
 /* Calculation signs are spoken, never dropped, and never invented. Only
    signs with one meaning are put into words: "×" and "*" between numbers
-   are "times", "=" is "equals". A middle dot before words separates them
-   ("Newborn Screening · First Visit") and is read as a pause. A middle dot
-   before a number ("0.1 mg/kg · 70 kg", or "36.8 °C · 98.2 °F") and an "x"
-   between numbers ("3 x 4") may be multiplication or a separator, and
-   nothing on the page says which: that passage is not voiced at all
-   (voiceable), so the student reads it on screen as written. */
-const UNSURE = /[·∙]\s*(?=\d)|\d\s*x\s*(?=\d)/i;
+   are "times", "=" is "equals".
+   A middle dot is read as a pause only where it plainly separates items:
+   a new label starts after it (a capital letter, or "pH": "NGN Case Study
+   · Deteriorating Client", "pH 7.35–7.45 · PaCO₂ 35–45") in a passage
+   with no "=". Any other middle dot ("0.1 mg/kg · 70 kg", "2 mg/mL ·
+   volume", "36.8 °C · 98.2 °F") and an "x" between numbers ("3 x 4") may
+   be multiplication, and nothing on the page says which: that passage is
+   not voiced at all (voiceable), so the student reads it on screen as
+   written. */
+const UNSURE = /[·∙]|\d\s*x\s*(?=\d)/i;
 export const voiceable = (script) => !UNSURE.test(String(script ?? ""));
+const SEPARATED = /\s+[·∙]\s+(?=[A-Z]|pH\b)/g;
 function operators(text) {
-  return text
+  const out = text
     .replace(/\s*×\s*/g, " times ")
-    .replace(/(\d)\s*\*\s*(?=\d)/g, "$1 times ")
-    .replace(/\s*[·∙]\s*(?=[^\d\s])/g, ", ");
+    .replace(/(\d)\s*\*\s*(?=\d)/g, "$1 times ");
+  return out.includes("=") ? out : out.replace(SEPARATED, ", ");
 }
 
 /* Text for the voice: clinical shorthand spelled out, symbols the screen

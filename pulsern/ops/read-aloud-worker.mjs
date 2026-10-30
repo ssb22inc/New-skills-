@@ -34,7 +34,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
-import { verdictText, itemParts } from "../src/read-aloud-script.js";
+import { verdictText, itemParts, voiceable } from "../src/read-aloud-script.js";
 
 export const MAX_ATTEMPTS = 5;
 const MAX_TRANSIENT_IN_A_ROW = 3;
@@ -124,7 +124,8 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
       const raw = got.value;
       const ref = canonicalRef(raw?.ref);
       const paths = raw && typeof raw.text === "string" ? passagePaths(raw.text) : null;
-      if (got.malformed || got.tooBig || !raw || raw.voice !== TTS.voice || !ref || !validRequest(ref, raw.seg, raw.text) || (lane === "queue" ? paths.queue : paths.retry) !== path) {
+      // A passage that is never voiced (voiceable) is not work: dropped, not refused.
+      if (got.malformed || got.tooBig || !raw || raw.voice !== TTS.voice || !ref || !validRequest(ref, raw.seg, raw.text) || !voiceable(raw.text) || (lane === "queue" ? paths.queue : paths.retry) !== path) {
         await drop(path); out.skipped++; continue;
       }
       // Only the known fields are kept.

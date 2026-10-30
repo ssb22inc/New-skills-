@@ -73,12 +73,16 @@ describe("question script", () => {
     expect(voiceable(sc)).toBe(true);
     expect(speakable("5 * 2 = 10")).toBe("5 times 2 equals 10");
     expect(speakable("A 3 × 4 cm wound")).toBe("A 3 times 4 cm wound");
-    // a middle dot before words separates them: a pause
+    // a middle dot where a new label starts, in a passage with no "=": a pause
     expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening, First Visit");
-    expect(speakable("HR 110 · RR 24, MAP = 65")).toBe("HR 110, RR 24, MAP equals 65"); // an equation later changes nothing
-    // a middle dot before a number, or an x between numbers, could be either: not voiced at all
-    for (const t of ["Calculate 0.1 mg/kg · 70 kg.", "Dose = 0.1 mg/kg · 70 kg = 7 mg", "Temperature example: 36.8 °C · 98.2 °F", "A 3 x 4 cm wound", "2x3"]) {
-      expect(voiceable(speakable(t))).toBe(false);
+    expect(speakable("NGN Case Study · Deteriorating Client")).toBe("NGN Case Study, Deteriorating Client");
+    expect(speakable("pH 7.35–7.45 · PaCO₂ 35–45")).toBe("pH 7.35–7.45, P A C O 2 35–45");
+    expect(speakable("0730 · Client reports dizziness.")).toBe("0730, Client reports dizziness.");
+    // any other middle dot, or an x between numbers, could be multiplication: not voiced at all
+    for (const t of ["Calculate 0.1 mg/kg · 70 kg.", "Dose = 0.1 mg/kg · 70 kg = 7 mg", "Temperature example: 36.8 °C · 98.2 °F",
+      "Dose = 2 mg/mL · volume in mL", "Dose = 2 mg/mL · Volume", "Give 2 mg/mL · volume", "0.5 – 2.0 ng/mL · hold dose if pulse < 60/min",
+      "HR 110 · RR 24, MAP = 65", "A 3 x 4 cm wound", "2x3"]) {
+      expect(voiceable(speakable(t)), t).toBe(false);
     }
     expect(voiceable(speakable("Take 2x daily"))).toBe(true);
     // the check accepts the same calculation however it is written, and nothing else
@@ -87,6 +91,33 @@ describe("question script", () => {
     expect(voiceCheck(sc, "Dose equals 0.1 mg/kg, 70 kg equals 7 mg").pass).toBe(false); // the multiplication dropped
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg plus 70 kg = 7 mg").pass).toBe(false);
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg x 70 kg = 70 mg").pass).toBe(false);
+  });
+
+  it("queues only the parts that can be voiced when a voiceable part is asked for", async () => {
+    const row = { ...ROW, id: 8, stem: "What is the dose?", options: ["0.1 mg/kg · 70 kg", "0.2 mg/kg · 70 kg", "0.3 mg/kg · 70 kg"], rationale: "Use the ordered dose." };
+    const readItem = async () => row;
+    const { storage, files } = fakeStorage();
+    const stem = questionSegments(row).find((x) => x.id === "stem");
+    const r = await speak({ ...base({ apiKey: "", readItem, ref: { kind: "question", id: 8, part: "question" }, seg: stem.id, text: stem.text }), storage });
+    expect(r.status).toBe(202);
+    const queued = [...files.keys()].filter((k) => k.startsWith("queue/")).map((k) => JSON.parse(files.get(k).toString()).text);
+    expect(queued).toContain(stem.text);
+    expect(queued.every((t) => voiceable(t))).toBe(true);
+    expect(queued.some((t) => t.includes("·"))).toBe(false);
+  });
+
+  it("the voice job drops an unvoiceable queue entry without paying or counting it as a refusal", async () => {
+    const { storage, files } = fakeStorage();
+    for (const [i, text] of ["0.1 milligrams per kilogram · 70 kg.", "0.2 milligrams per kilogram · 70 kg.", "0.3 milligrams per kilogram · 70 kg."].entries()) {
+      files.set(passagePaths(text).queue, Buffer.from(JSON.stringify({ text, voice: "marin", ref: { kind: "question", id: 8, part: "question" }, seg: `opt${i}` })));
+    }
+    const f = fakeOpenAI();
+    const r = await drainQueue({ storage, apiKey: "k", fetchImpl: f, log: () => {} });
+    expect(f).not.toHaveBeenCalled();
+    expect(r.service).toBeFalsy();
+    expect(r.errors).toEqual([]);
+    expect(r.skipped).toBe(3);
+    expect([...files.keys()].filter((k) => k.startsWith("queue/"))).toEqual([]);
   });
 
   it("an unsure part is shown, never voiced, queued or paid for", async () => {
