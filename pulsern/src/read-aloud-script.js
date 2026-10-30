@@ -45,6 +45,19 @@ const SPOKEN = [
   [/°F\b/g, " degrees Fahrenheit"],
   [/°C\b/g, " degrees Celsius"],
   [/\s*→\s*/g, ", then "],
+  /* A slash is said, never left for the voice to guess: after a number and
+     a unit it is "per" ("12 breaths/min"); between words it is "slash"
+     ("creatinine/eGFR"), the one reading that adds no meaning ("and" and
+     "or" would). "and/or" is said as it is meant. Numbers either side of a
+     slash ("120/80", "5/10") are left to the voice. */
+  [/\band\/or\b/gi, "and or"],
+  [/(\d\s*[A-Za-z]+)\s*\/\s*(?=[A-Za-z])/g, "$1 per "],
+  [/([A-Za-z][\w⁺⁻₀-₉-]*)\s*\/\s*(?=[A-Za-z])/g, "$1 slash "],
+  [/\bper (?:min|mins)\b/g, "per minute"],
+  [/\bper (?:hr|hrs|h)\b/g, "per hour"],
+  [/\bper (?:sec|secs)\b/g, "per second"],
+  // A range of ordinals ("85th–94th percentile") is said with "to".
+  [/(\d+(?:st|nd|rd|th))\s*[–—-]\s*(?=\d+(?:st|nd|rd|th)\b)/g, "$1 to "],
   [/\s*=\s*/g, " equals "],
   [/≥/g, " at least "],
   [/≤/g, " at most "],
@@ -89,7 +102,7 @@ const seg = (id, text) => ({ id, text: speakable(text) });
 /* Long parts (a long rationale) are voiced in pieces of at most PART_MAX
    characters, split at sentence ends. The pieces share the part's id
    before "~", so the screen keeps the same element highlighted. */
-export const PART_MAX = 900;
+export const PART_MAX = 450;
 export const partOf = (id) => String(id ?? "").split("~")[0];
 function pieces(text) {
   if (text.length <= PART_MAX) return [text];

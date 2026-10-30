@@ -135,6 +135,39 @@ describe("question script", () => {
     expect([...files.keys()].filter((k) => k.startsWith("usage/") || k.startsWith("queue"))).toEqual([]);
   });
 
+  it("accepts a correct reading however the transcriber writes it, and still rejects a changed one (from the voice job's failure log)", () => {
+    // [as written, a correct transcript, a wrong transcript]
+    const cases = [
+      ["Give a dose of heparin 3,500 units.", "Give a dose of heparin 3500 units.", "Give a dose of heparin 35,000 units."],
+      ["The nurse must deliver 1,500 drops.", "The nurse must deliver 1500 drops.", "The nurse must deliver 150 drops."],
+      ["Pain is rated 5/10 and worsening.", "Pain is rated 5 out of 10 and worsening.", "Pain is rated 5 out of 100 and worsening."],
+      ["Check creatinine/eGFR and potassium.", "Check creatinine slash eGFR and potassium.", "Check creatinine eGFR and potassium."],
+      ["Use the PHQ-2/PHQ-9 screens.", "Use the PHQ-2/PHQ-9 screens.", "Use the PHQ-2 PHQ-9 screens."],
+      ["BMI 85th–94th percentile for age.", "BMI 85th to 94th percentile for age.", "BMI 85th to 95th percentile for age."],
+      ["Caring for a postoperative client.", "Caring for a post-operative client.", "Caring for a preoperative client."],
+      ["This may result in a sub therapeutic dose.", "This may result in a subtherapeutic dose.", "This may result in a supratherapeutic dose."],
+      ["Respirations 12 breaths/min.", "Respirations 12 breaths per minute.", "Respirations 12 breaths per hour."],
+      ["Blame and guilt, drop-down 1.", "Blame and guilt, dropdown 1.", "Blame and guilt, drop 1."],
+    ];
+    for (const [written, right, wrong] of cases) {
+      const script = speakable(written);
+      expect(voiceCheck(script, right).pass, `${written} / ${right}`).toBe(true);
+      expect(voiceCheck(script, wrong).pass, `${written} / ${wrong}`).toBe(false);
+    }
+    // a slash is said in words, so the voice never has to guess at it
+    expect(speakable("Check creatinine/eGFR.")).toBe("Check creatinine slash eGFR.");
+    expect(speakable("Respirations 12 breaths/min.")).toBe("Respirations 12 breaths per minute.");
+    expect(speakable("Take it daily and/or as needed.")).toBe("Take it daily and or as needed.");
+    expect(speakable("BMI 85th–94th percentile.")).toBe("BMI 85th to 94th percentile.");
+    // only the closed list of compounds folds: "a febrile" is not "afebrile", "re-signed" is not "resigned"
+    expect(voiceCheck("The client is afebrile.", "The client is a febrile.").pass).toBe(false);
+    expect(voiceCheck("The form was re-signed.", "The form was resigned.").pass).toBe(false);
+  });
+
+  it("voices a long part in shorter pieces, where the voice is less likely to skip words", () => {
+    expect(PART_MAX).toBeLessThanOrEqual(450);
+  });
+
   it("spells out units and dosing shorthand, and nothing else", () => {
     expect(speakable("Give 20 mEq/L q4h PRN; PaCO2 48 mm Hg; K⁺ 6.1 → recheck")).toBe("Give 20 milliequivalents per liter every 4 hours as needed; P A C O 2 48 millimeters of mercury; potassium 6.1, then recheck");
     expect(speakable("Metoprolol 25 mg PO")).toBe("Metoprolol 25 mg PO");

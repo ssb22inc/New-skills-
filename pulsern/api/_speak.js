@@ -95,6 +95,32 @@ const UNIT_CANON = [
   [/\bmilliliters?\b|\bmillilitres?\b/gi, ' ml '],
   [/\bmilliequivalents?\b/gi, ' meq '],
 ];
+/* How a correct reading may be WRITTEN by the transcriber, folded the same
+   way on both sides (learned from the voice job's failure log): a
+   thousands separator ("3,500" / "3500"), a score said "out of" ("5/10"),
+   a slash said as "slash" or "per" (the script says it in words, see
+   src/read-aloud-script.js), an ordinal range said with "to", and a
+   closed list of compounds that mean the same open or closed
+   ("post-operative" / "postoperative"). Nothing else is folded: a dropped
+   slash, a changed number or a different prefix still fails. */
+const COMPOUNDS = new Set([
+  'postoperative', 'preoperative', 'intraoperative', 'perioperative', 'postpartum', 'antepartum', 'intrapartum',
+  'prenatal', 'postnatal', 'antenatal', 'subtherapeutic', 'supratherapeutic', 'subcutaneous', 'sublingual',
+  'dropdown', 'nonpharmacologic', 'noninvasive',
+]);
+const SPELLING_CANON = [
+  [/\b(\d{1,3})((?:,\d{3})+)\b/g, (m) => m.replace(/,/g, '')],
+  [/(\d+)\s+out\s+of\s+(\d+)/gi, '$1/$2'],
+  [/\band\s*\/\s*or\b/gi, 'and or'],
+  [/(\d\s*[A-Za-z]+)\s*\/\s*(?=[A-Za-z])/g, '$1 per '],
+  [/\s+slash\s+/gi, ' / '],
+  [/\bper\s+(?:mins?|minutes?)\b/gi, 'per minute'],
+  [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
+  [/\bper\s+(?:secs?|seconds?)\b/gi, 'per second'],
+  [/(\d+(?:st|nd|rd|th))\s*(?:[–—-]|\bto\b)\s*(?=\d+(?:st|nd|rd|th)\b)/gi, '$1 to '],
+  [/\b(post|pre|intra|peri|ante|sub|supra|non|drop)[\s-]+(operative|partum|natal|therapeutic|cutaneous|lingual|pharmacologic|invasive|down)\b/gi,
+    (m, a, b) => (COMPOUNDS.has(`${a}${b}`.toLowerCase()) ? `${a}${b}` : m)],
+];
 /* Calculation signs, the same way on both sides: a transcriber may write
    "×", "x", "*" or "times", "=" or "equals". */
 const MATH_CANON = [
@@ -106,6 +132,7 @@ const MATH_CANON = [
 ];
 export function canonUnits(text) {
   let t = String(text ?? '');
+  for (const [re, to] of SPELLING_CANON) t = t.replace(re, to);
   for (const [re, to] of MATH_CANON) t = t.replace(re, to);
   for (const [re, to] of UNIT_CANON) t = t.replace(re, to);
   return t.replace(/\s+/g, ' ').trim();
@@ -478,7 +505,7 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
-export const CHECK_VERSION = 1;
+export const CHECK_VERSION = 2; // 2: the spellings in SPELLING_CANON
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */
 export function checkFailure(check) {
