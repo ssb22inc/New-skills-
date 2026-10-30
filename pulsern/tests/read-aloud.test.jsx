@@ -381,6 +381,11 @@ describe("question script", () => {
     expect(speakable("Calculate (2 mg/kg)(70 kg).")).toBe("Calculate (2 milligrams per kilogram)(70 kg).");
     expect(speakable("Use (D/H)Q.")).toBe("Use (D slash H)Q.");
     expect(speakable("Use (D/H) × Q.")).toBe("Use (D slash H) times Q.");
+    expect(speakable("Calculate (2 mg/kg) (70 kg).")).toBe("Calculate (2 milligrams per kilogram) (70 kg).");
+    expect(speakable("Use (D/H) (Q).")).toBe("Use (D slash H) (Q).");
+    expect(speakable("Give (weight) (dose) now.")).toBe("Give (weight) (dose) now.");
+    expect(speakable("Use [D/H] (Q).")).toBe("Use [D slash H] (Q).");
+    for (const t of ["Give (2 mg) x (70 kg).", "Give (2 mg) X 70 kg.", "(70 kg) x 2 mg"]) expect(speakable(t), t).toContain("(");
     for (const t of ["Weight(kg) 70", "Dose (mg) = 70", "The rate (per hour) is 5", "Total (5) 3", "Give 2 (3 mL)"]) expect(speakable(t), t).toContain("(");
     // a pain score only after "pain" or "rated"; any other pair of numbers stays as written
     expect(speakable("Pain rated 7/10; BP 120/80; seen 7/10/2026; Apgar 7/9.")).toBe("Pain rated 7 out of 10; BP 120/80; seen 7/10/2026; Apgar 7/9.");

@@ -141,11 +141,12 @@ export function speakable(text) {
      group ("(D/H)Q", ")(") is never one;
    - nothing in it that can be arithmetic: no sign, no slash, no word for
      an operation;
-   - no number, sign or word for an operation right before or after it.
+   - no number, sign, word for an operation or other bracket right before
+     or after it, even across a space ("(2 mg/kg) (70 kg)").
    Anything else keeps its brackets exactly as written. */
-const MATH_SIGN = /[+×*÷=^<>≤≥≠−–/]|\d\s*[-x]\s*\d|\s-\s|\b(?:plus|minus|times|divided|multiplied|equals?|over|per)\b/i;
-const MATH_BEFORE = /(?:[-+×*÷=^/−–\d]|\b(?:plus|minus|times|divided\s+by|multiplied\s+by|equals?|over|of|per))\s*$/i;
-const MATH_AFTER = /^\s*(?:[-+×*÷=^/−–²³\d]|(?:plus|minus|times|divided|multiplied|equals?|over|per)\b)/i;
+const MATH_SIGN = /[+×*÷=^<>≤≥≠−–·∙/]|\d\s*[-x]\s*\d|\s-\s|\b(?:plus|minus|times|divided|multiplied|equals?|over|per)\b/i;
+const MATH_BEFORE = /(?:[-+×*÷=^/−–·∙\d)\]]|\b(?:x|plus|minus|times|divided\s+by|multiplied\s+by|equals?|over|of|per))\s*$/i;
+const MATH_AFTER = /^\s*(?:[-+×*÷=^/−–·∙²³\d(\[]|(?:x|plus|minus|times|divided|multiplied|equals?|over|per)\b)/i;
 const aside = (inner, before, after) =>
   /(?:^|\s)$/.test(before) && /^(?:[\s,.;:?!]|$)/.test(after)
   && !MATH_SIGN.test(inner) && !MATH_BEFORE.test(before) && !MATH_AFTER.test(after);
