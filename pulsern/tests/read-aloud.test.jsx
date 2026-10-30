@@ -1409,6 +1409,16 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(reads).toBeLessThanOrEqual(4); // stopped at the time limit, not at the end of the bank
     expect(f).not.toHaveBeenCalled();
     expect(JSON.parse(files.get("prewarm/cursor.json").toString()).done).toBeFalsy(); // its place is kept for the next run
+    // and each short run carries on from where the last one stopped, inside the group, until the scan moves on
+    const seen = new Set();
+    bucket.download = async (path) => { if (/^marin\/.*\.json$/.test(path)) { seen.add(path); t += 60000; } return download(path); };
+    for (let run = 0; run < 40; run++) {
+      const c = JSON.parse(files.get("prewarm/cursor.json").toString());
+      if (c.kind !== "verdicts") break;
+      await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1000, now: () => t, until: t + 3 * 60000 });
+    }
+    expect(JSON.parse(files.get("prewarm/cursor.json").toString()).kind).not.toBe("verdicts"); // left the result lines behind
+    expect(seen.size).toBeGreaterThanOrEqual(verdictPassages().length - 4); // reading new passages each run, not the same ones
   });
 
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {

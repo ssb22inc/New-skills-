@@ -244,8 +244,14 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
     const { error } = await put(bucket, "prewarm/cursor.json", { ...cursor, check: CHECK_VERSION });
     if (error) throw new Error(`could not save the cursor: ${error.message ?? error}`);
   };
-  const voice = async (texts, label) => {
-    for (const text of texts) {
+  /* Voice a group of passages (the result lines, or one bank item),
+     starting at `from`. cursor.at is where the next run resumes if this one
+     stops part-way through the group, so a short run never re-reads the
+     same passages again and again; it is dropped once the group is done. */
+  const voice = async (texts, label, from = 0) => {
+    for (let i = from; i < texts.length; i++) {
+      const text = texts[i];
+      cursor = { ...cursor, at: i };
       // The run's time is checked before every passage, cached ones included.
       if (now() >= until) return "max";
       let decided;
@@ -300,7 +306,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   while (cursor.kind) {
     if (now() >= until) { out.stopped = "max"; await save(); break; }
     if (cursor.kind === "verdicts") {
-      const stop = await voice(verdictPassages(), "result line");
+      const stop = await voice(verdictPassages(), "result line", cursor.at ?? 0);
       if (stop) { out.stopped = stop; await save(); break; } // keeps the attempt counts
       cursor = { kind: "question", afterId: 0, attempts: cursor.attempts }; await save(); continue;
     }
@@ -315,7 +321,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
     }
     let stop = null;
     for (const row of rows) {
-      stop = await voice(itemPassages(cursor.kind, row), `${cursor.kind} ${row.id}`);
+      stop = await voice(itemPassages(cursor.kind, row), `${cursor.kind} ${row.id}`, cursor.at ?? 0);
       if (stop) break;
       cursor = { kind: cursor.kind, afterId: row.id, attempts: cursor.attempts }; // an item counts as done only when all its passages are decided
     }
