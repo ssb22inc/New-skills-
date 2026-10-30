@@ -84,6 +84,9 @@ const UNIT_CANON = [
   [/\bunits?\s*(?:\/|per)\s*(?:hours?|hr|h)\b/gi, ' unitsperhr '],
   [/\b(?:drops?|gtt)\s*(?:\/|per)\s*(?:minutes?|min)\b/gi, ' gttpermin '],
   [/\b(?:millimeters?|millimetres?)\s+of\s+mercury\b|\bmm\s?hg\b/gi, ' mmhg '],
+  [/\bcentimet(?:er|re)s?\b/gi, ' cm '],
+  [/\bmillimet(?:er|re)s?\b/gi, ' mm '],
+  [/\bby\s+mouth\b/gi, ' po '],
   [/\s*°\s*c\b|\bdegrees?\s+(?:celsius|c)\b/gi, ' degc '],
   [/\s*°\s*f\b|\bdegrees?\s+(?:fahrenheit|f)\b/gi, ' degf '],
   [/\bs\s*p\s*o\s*(?:2|two|₂)\b|\bspo2\b/gi, ' spo2 '],
@@ -103,11 +106,26 @@ const UNIT_CANON = [
    closed list of compounds that mean the same open or closed
    ("post-operative" / "postoperative"). Nothing else is folded: a dropped
    slash, a changed number or a different prefix still fails. */
+/* Words written open or closed: joined ONLY when the joined word is in
+   this closed list of compounds that mean the same either way. A prefix
+   alone proves nothing: "pre-sent" is not "present", "re-signed" is not
+   "resigned", "a febrile" is not "afebrile". */
 const COMPOUNDS = new Set([
   'postoperative', 'preoperative', 'intraoperative', 'perioperative', 'postpartum', 'antepartum', 'intrapartum',
-  'prenatal', 'postnatal', 'antenatal', 'subtherapeutic', 'supratherapeutic', 'subcutaneous', 'sublingual',
-  'dropdown', 'nonpharmacologic', 'noninvasive',
+  'prenatal', 'postnatal', 'antenatal', 'perinatal', 'postanesthesia', 'preanesthesia', 'postmenopausal', 'premenopausal',
+  'subtherapeutic', 'supratherapeutic', 'subcutaneous', 'sublingual', 'intravenous', 'intramuscular', 'intradermal',
+  'nonclinical', 'nonpharmacologic', 'nonpharmacological', 'noninvasive', 'nonverbal', 'nonurgent', 'nonsteroidal',
+  'nonadherent', 'nonadherence', 'noncompliant', 'noncompliance', 'nonreactive', 'nonstress', 'nonblanchable',
+  'antiinflammatory', 'multidisciplinary', 'interdisciplinary', 'interprofessional', 'preexisting', 'prediabetes',
+  'dropdown', 'healthcare', 'readback', 'cosignature', 'readministered',
 ]);
+/* Only the exact splits of the listed compounds are matched, so a pair
+   that is not one ("Read post-operative") never uses up a word another
+   compound needs. */
+const COMPOUND_PREFIXES = ['non', 'post', 'pre', 'anti', 'inter', 'intra', 'multi', 'peri', 'ante', 'sub', 'supra', 'drop', 'health', 'read', 'co', 're'];
+const COMPOUND_SPLITS = new RegExp(`\\b(?:${[...COMPOUNDS].flatMap((c) => COMPOUND_PREFIXES
+  .filter((p) => c.startsWith(p) && c.length - p.length >= 2)
+  .map((p) => `${p}[\\s-]+${c.slice(p.length)}`)).join('|')})\\b`, 'gi');
 /* In this order: a number said in words just before a unit and a slash
    as digits ("twelve breaths/min"), and a spoken "slash" as "/", so that
    every spelling of a rate ("12 breaths per minute", "twelve breaths/
@@ -125,8 +143,16 @@ const SPELLING_CANON = [
   [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
   [/\bper\s+(?:secs?|seconds?)\b/gi, 'per second'],
   [/(\d+(?:st|nd|rd|th))\s*(?:[–—-]|\bto\b)\s*(?=\d+(?:st|nd|rd|th)\b)/gi, '$1 to '],
-  [/\b(post|pre|intra|peri|ante|sub|supra|non|drop)[\s-]+(operative|partum|natal|therapeutic|cutaneous|lingual|pharmacologic|invasive|down)\b/gi,
-    (m, a, b) => (COMPOUNDS.has(`${a}${b}`.toLowerCase()) ? `${a}${b}` : m)],
+  [COMPOUND_SPLITS, (m) => m.replace(/[\s-]+/g, '')],
+  // "÷" said in words; an ECG wave ("T wave", "T-Wave", "t waves")
+  [/\s*÷\s*/g, ' divided by '],
+  /* a receptor subtype only: alpha or beta, ONE space or hyphen, then 1 or
+     2 ("beta 1", "beta-1", "alpha-2"); a minus sign is never a separator
+     ("delta -1" keeps its sign) */
+  [/\b(alpha|beta)(?: |-)([12])(?!\d|\.\d)/gi, '$1$2'],
+  [/\b([PQRSTU])[\s-]+(waves?)\b/gi, (m, l, w) => `${l}${w}`.toLowerCase()],
+  // a count per cubic millimetre, written or said
+  [/\s*\/\s*mm(?:³|3)(?![A-Za-z0-9])|\bper\s+(?:mm(?:³|3)|cubic\s+mm)(?![A-Za-z0-9])/gi, ' per cubic millimeter'],
 ];
 /* Calculation signs, the same way on both sides: a transcriber may write
    "×", "x", "*" or "times", "=" or "equals". */
@@ -512,7 +538,7 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
-export const CHECK_VERSION = 2; // 2: the spellings in SPELLING_CANON
+export const CHECK_VERSION = 3; // 2: the spellings in SPELLING_CANON; 3: prefixes, ÷, Greek letters, waves, mm³, cm, by mouth
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */
 export function checkFailure(check) {

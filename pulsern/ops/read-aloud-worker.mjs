@@ -32,7 +32,7 @@
    or bank trouble) fails the workflow run, so it is noticed. */
 import { createClient } from "@supabase/supabase-js";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
 import { verdictText, itemParts, voiceable } from "../src/read-aloud-script.js";
 
@@ -225,6 +225,10 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   const got = await readJsonFile(bucket, "prewarm/cursor.json");
   if (got.error && !/not found/i.test(String(got.error.message ?? got.error))) { out.stopped = `cursor: ${got.error.message ?? got.error}`; out.failure = true; return out; }
   let cursor = got.value ?? { kind: KINDS[0], afterId: 0 };
+  /* A new version of the voice check starts the scan again from the top:
+     passed passages are skipped at once, and ones the older check turned
+     away are voiced again (readRecord). */
+  if ((cursor.check ?? 1) !== CHECK_VERSION) cursor = { kind: KINDS[0], afterId: 0 };
   if (cursor.done) {
     // A finished pass is repeated weekly, to pick up new bank items.
     if (now() - Date.parse(cursor.doneAt ?? 0) < RESCAN_DAYS * 86400000) { out.cursor = cursor; return out; }
@@ -232,7 +236,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   }
   let done = 0, refusedInARow = 0;
   const save = async () => {
-    const { error } = await put(bucket, "prewarm/cursor.json", cursor);
+    const { error } = await put(bucket, "prewarm/cursor.json", { ...cursor, check: CHECK_VERSION });
     if (error) throw new Error(`could not save the cursor: ${error.message ?? error}`);
   };
   const voice = async (texts, label) => {
