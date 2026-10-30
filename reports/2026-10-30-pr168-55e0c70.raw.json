@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "55e0c70b76e4d7985abfd7e03768bf87b0990539",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T13:57:00.927Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 50,
+      "title": "Surface-area expansion mistakes a fractional quantity for a denominator",
+      "problem": "The new slash rule runs without checking what precedes the slash. It rewrites a numeric fraction followed by square meters as \"per\", changing the quantity's meaning rather than merely expanding its notation. The audio gate cannot catch this because it checks the already-rewritten script.",
+      "failure_scenario": "An approved pediatric calculation stating \"A child's body surface area is 3/4 m².\" becomes \"A child's body surface area is 3 per 4 square meters.\" The displayed quantity is 0.75 square meters, while the narration describes a per-area expression. Audio faithfully reading that incorrect script can pass voiceCheck.",
+      "fix": "Restrict this expansion to an established denominator context, such as the trailing area denominator in \"mL/min/1.73 m²\". Preserve bare numeric fractions followed by area units. Add regression tests asserting that fractional BSA quantities remain unchanged while the intended eGFR notation still expands correctly.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 47033,
+    "completionTokens": 5878,
+    "reasoningTokens": 5568,
+    "costUsd": 0.176361
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One clinical-content blocker remains: the new surface-area rewrite can change a fractional area into a reciprocal-area expression before the audio accuracy gate checks it.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
