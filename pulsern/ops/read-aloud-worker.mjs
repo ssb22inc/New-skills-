@@ -416,7 +416,11 @@ export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch
     ...(pruned.error ? [`error: pruning: ${pruned.error}`] : []),
   ];
   const failed = !!(q.broken || q.operational || q.providerDown || q.service || w.failure || pruned.error);
-  return { lines, failed, queue: q, bank: w, pruned };
+  /* More to do right away: the run stopped at its own limit (the queue
+     used it all, or the bank scan reached it), not at today's budget, the
+     end of the work, or a failure. The workflow then starts the next run. */
+  const more = !failed && !q.budget && !w.budget && (w.stopped === "max" || !left);
+  return { lines, failed, more, queue: q, bank: w, pruned };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -427,8 +431,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const max = Math.max(1, Math.min(2000, Number(process.env.READ_ALOUD_MAX) || 200));
-  const { lines, failed } = await runJob({ storage: db.storage, db, apiKey: OPENAI_API_KEY, max });
-  console.log(lines.join("\n"));
+  const { lines, failed, more } = await runJob({ storage: db.storage, db, apiKey: OPENAI_API_KEY, max });
+  console.log(lines.join("\n") + (more ? "\nMore to do: starting the next run." : ""));
+  if (process.env.GITHUB_OUTPUT) {
+    const { appendFileSync } = await import("node:fs");
+    appendFileSync(process.env.GITHUB_OUTPUT, `more=${more ? "true" : "false"}\n`);
+  }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const { appendFileSync } = await import("node:fs");
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n\n") + "\n");
