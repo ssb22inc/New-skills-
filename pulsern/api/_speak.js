@@ -43,7 +43,7 @@
 // (ops/read-aloud-worker.mjs, every 15 minutes) voices and checks it; the
 // app reads it with the device voice until then (202).
 import { createHash, randomUUID } from 'node:crypto';
-import { scriptFor, itemParts, voiceable, RATE, PAIN_SCORE } from '../src/read-aloud-script.js';
+import { scriptFor, itemParts, voiceable, RATE } from '../src/read-aloud-script.js';
 import { audioCheck, speechTokens, QA_MODEL, QA_VERSION } from '../ops/narrate-lib.mjs';
 
 export const SPEAK_MAX = 1500; // above the script's PART_MAX (900): a part always fits
@@ -97,9 +97,7 @@ const UNIT_CANON = [
 ];
 /* How a correct reading may be WRITTEN by the transcriber, folded the same
    way on both sides (learned from the voice job's failure log): a
-   thousands separator ("3,500" / "3500"), a score said "out of 10" (only
-   where the words say it is a rating, PAIN_SCORE: a date near "pain" or
-   any other pair of numbers, an Apgar "7/9", must be heard exactly),
+   thousands separator ("3,500" / "3500"),
    a slash said as "slash" or "per" (the script says it in words, see
    src/read-aloud-script.js), an ordinal range said with "to", and a
    closed list of compounds that mean the same open or closed
@@ -112,7 +110,6 @@ const COMPOUNDS = new Set([
 ]);
 const SPELLING_CANON = [
   [/\b(\d{1,3})((?:,\d{3})+)\b/g, (m) => m.replace(/,/g, '')],
-  [PAIN_SCORE, '$1$2 out of 10'],
   [/\band\s*\/\s*or\b/gi, 'and or'],
   [RATE, '$1 per '],
   [/\s+slash\s+/gi, ' / '],

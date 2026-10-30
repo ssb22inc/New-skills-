@@ -140,7 +140,6 @@ describe("question script", () => {
     const cases = [
       ["Give a dose of heparin 3,500 units.", "Give a dose of heparin 3500 units.", "Give a dose of heparin 35,000 units."],
       ["The nurse must deliver 1,500 drops.", "The nurse must deliver 1500 drops.", "The nurse must deliver 150 drops."],
-      ["Pain is rated 5/10 and worsening.", "Pain is rated 5 out of 10 and worsening.", "Pain is rated 5 out of 100 and worsening."],
       ["Check creatinine/eGFR and potassium.", "Check creatinine slash eGFR and potassium.", "Check creatinine eGFR and potassium."],
       ["Use the PHQ-2/PHQ-9 screens.", "Use the PHQ-2/PHQ-9 screens.", "Use the PHQ-2 PHQ-9 screens."],
       ["BMI 85th–94th percentile for age.", "BMI 85th to 94th percentile for age.", "BMI 85th to 95th percentile for age."],
@@ -154,18 +153,13 @@ describe("question script", () => {
       expect(voiceCheck(script, right).pass, `${written} / ${right}`).toBe(true);
       expect(voiceCheck(script, wrong).pass, `${written} / ${wrong}`).toBe(false);
     }
-    // "out of" only for a pain score: any other pair of numbers must be heard exactly
-    expect(voiceCheck(speakable("She rates it 7/10 for pain."), "She rates it 7 out of 10 for pain.").pass).toBe(true);
-    expect(voiceCheck(speakable("Apgar scores at 1 and 5 minutes: 7/9."), "Apgar scores at 1 and 5 minutes: 7 out of 9.").pass).toBe(false);
-    expect(voiceCheck(speakable("Apgar scores at 1 and 5 minutes: 7/9."), "Apgar scores at 1 and 5 minutes: 7/9.").pass).toBe(true);
-    expect(speakable("Apgar 7/9 at 5 minutes.")).toContain("7/9");
-    // a date is never a pain score, however close to "pain" it is
-    for (const t of ["The client reports abdominal pain since 7/10.", "On 7/10 the client reported pain.", "Pain began 7/10/2026.", "Pain started on 7/10 and worsened."]) {
-      expect(speakable(t), t).toContain("7/10");
-      expect(voiceCheck(speakable(t), t.replace("7/10", "7 out of 10")).pass, t).toBe(false);
+    // two numbers with a slash are never reworded: a score, an Apgar pair and a date all stay as written
+    for (const t of ["Pain is rated 5/10 and worsening.", "Apgar scores at 1 and 5 minutes: 7/9.", "The client reports abdominal pain since 7/10.",
+      "Compare heart rates on 7/10 and 7/11.", "Pain began 7/10/2026."]) {
+      expect(speakable(t), t).toBe(t);
+      expect(voiceCheck(speakable(t), t).pass, t).toBe(true);
+      expect(voiceCheck(speakable(t), t.replace(/(\d+)\/(\d+)/, "$1 out of $2")).pass, t).toBe(false);
     }
-    expect(speakable("Pain started on 7/10 and is rated 6/10.")).toBe("Pain started on 7/10 and is rated 6 out of 10.");
-    expect(speakable("Pain score of 8/10.")).toBe("Pain score of 8 out of 10.");
     // "per" only after a whole number and a known unit: a lab name with a digit in it is not a rate
     expect(speakable("Check HbA1c/eAG.")).toBe("Check HbA1c slash eAG.");
     expect(voiceCheck(speakable("Check HbA1c/eAG."), "Check HbA1c per eAG.").pass).toBe(false);
