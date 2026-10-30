@@ -356,6 +356,7 @@ describe("question script", () => {
       ["Baseline HIV 4th generation antigen test.", "Baseline HIV fifth generation antigen test."],
       ["Prothrombin time 52 sec, reference 11.", "Prothrombin time 52 minutes, reference 11."],
       ["eGFR 45 mL/min/1.73 m² today.", "eGFR 45 mL per minute per 1.37 square meters today."],
+      ["Walk 2 m 2 times.", "Walk 2 square meters times."],
       ["Titrate by 2 mcg/hr.", "Titrate by 2 mg per hour."],
       ["Answer in tablet(s).", "Answer in capsules."],
       // an accent is folded only on a letter: a sign's overlay is kept (Sol, PR #168)
@@ -381,6 +382,10 @@ describe("question script", () => {
     expect(speakable("Calculate (2 mg/kg)(70 kg).")).toBe("Calculate (2 milligrams per kilogram)(70 kg).");
     expect(speakable("Use (D/H)Q.")).toBe("Use (D slash H)Q.");
     expect(speakable("Use (D/H) × Q.")).toBe("Use (D slash H) times Q.");
+    // per body surface area only after a unit; a fraction of a square meter stays as written (Sol, PR #168)
+    expect(speakable("eGFR 45 mL/min/1.73 m².")).toBe("eGFR 45 mL per minute per 1.73 square meters.");
+    expect(speakable("Give 100 mg/1.73 m2 daily.")).toBe("Give 100 mg per 1.73 square meters daily.");
+    for (const t of ["A child's body surface area is 3/4 m².", "BSA 1/2 m2.", "Area 0.5/1.73 m²."]) expect(speakable(t), t).toBe(t);
     expect(speakable("Calculate (2 mg/kg) (70 kg).")).toBe("Calculate (2 milligrams per kilogram) (70 kg).");
     // a passage with any sign of a formula keeps every bracket as written (Sol, PR #168)
     expect(speakable("VO2 = CO (CaO2-CvO2).")).toBe("VO2 equals CO (CaO2-CvO2).");

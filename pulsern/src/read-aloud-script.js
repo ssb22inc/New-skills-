@@ -46,8 +46,10 @@ const SPOKEN = [
   [/\bgtt\/min\b/g, "drops per minute"],
   [/\bmm ?Hg\b/g, "millimeters of mercury"],
   [/\/mm³/g, " per cubic millimeter"],
-  // per body surface area ("mL/min/1.73 m²")
-  [/\s*\/\s*(\d+(?:\.\d+)?)\s*m(?:²|2)(?![\w])/g, " per $1 square meters"],
+  /* per body surface area, only after a unit ("mL/min/1.73 m²", "mg/1.73
+     m²"): a number before the slash is a fraction ("3/4 m²" is 0.75 square
+     meters) and stays as written */
+  [/\b(min|mins|minute|minutes|hr|hour|day|mL|L|mg|mcg|g|units?)\s*\/\s*(\d+(?:\.\d+)?)\s*m(?:²|2)(?![\w])/g, "$1 per $2 square meters"],
   [/\bq(\d{1,2})h\b/gi, "every $1 hours"],
   [/\bPRN\b/g, "as needed"],
   [/\bNPO\b/g, "N P O"],

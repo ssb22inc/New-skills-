@@ -164,7 +164,7 @@ const SPELLING_CANON = [
   // an ordinal in words or digits ("fourth generation" / "4th generation"); "second" is also a unit of time and is left alone
   [/\b(?:first|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/gi, (w) => ORDINALS[w.toLowerCase()]],
   // body surface area ("1.73 m²", "1.73m2", "1.73 square meters")
-  [/(\d)\s*(?:m\s*(?:²|2)(?![\w])|square\s+met(?:er|re)s?\b|met(?:er|re)s?\s+squared\b)/gi, '$1 sqm'],
+  [/(\d)\s*(?:m(?:\s*²|2)(?![\w])|square\s+met(?:er|re)s?\b|met(?:er|re)s?\s+squared\b)/gi, '$1 sqm'],
   [new RegExp(`${QTY}\\s*(?:L|liters?|litres?)\\b`, 'gi'), '$1 liter'],
   /* the same word in the transcriber's other spelling (a closed list) */
   [/\bdistention\b/gi, 'distension'],
