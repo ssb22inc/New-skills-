@@ -377,6 +377,11 @@ describe("question script", () => {
       expect(speakable(t), t).toContain("(");
     }
     expect(speakable("Calculate the anion gap: 140 - (104 + 24).")).toBe("Calculate the anion gap: 140 - (104 + 24).");
+    // factors side by side multiply: a group touching another group, a word or a number keeps its brackets (Sol, PR #168)
+    expect(speakable("Calculate (2 mg/kg)(70 kg).")).toBe("Calculate (2 milligrams per kilogram)(70 kg).");
+    expect(speakable("Use (D/H)Q.")).toBe("Use (D slash H)Q.");
+    expect(speakable("Use (D/H) × Q.")).toBe("Use (D slash H) times Q.");
+    for (const t of ["Weight(kg) 70", "Dose (mg) = 70", "The rate (per hour) is 5", "Total (5) 3", "Give 2 (3 mL)"]) expect(speakable(t), t).toContain("(");
     // a pain score only after "pain" or "rated"; any other pair of numbers stays as written
     expect(speakable("Pain rated 7/10; BP 120/80; seen 7/10/2026; Apgar 7/9.")).toBe("Pain rated 7 out of 10; BP 120/80; seen 7/10/2026; Apgar 7/9.");
     expect(speakable("Pain 12/10?")).toBe("Pain 12/10?");

@@ -133,14 +133,22 @@ export function speakable(text) {
    of things counted out ("tablet(s)") is said as the plural; any other
    "(s)" is left alone, since it can be seconds ("time(s)"). A part that
    is wholly in brackets is left as it is. */
-/* Brackets that group arithmetic are never an aside: "140 - (104 + 24)"
-   without them is another sum. A group is read as a pause only when no
-   sign of arithmetic is inside it or right before or after it; otherwise
-   the brackets stay as written. */
-const MATH_SIGN = /[+×*÷=^<>≤≥≠−–]|\d\s*[-/x]\s*\d|\s-\s|\b(?:plus|minus|times|divided|multiplied|equals?|over)\b/i;
-const MATH_WORD_EDGE = /\b(?:plus|minus|times|divided\s+by|multiplied\s+by|equals?|over|of)\s*$/i;
+/* Brackets that group arithmetic are never an aside: "140 - (104 + 24)",
+   "(2 mg/kg)(70 kg)" or "(D/H) × Q" without them is another calculation.
+   A group is read as a pause only when it plainly stands apart in prose:
+   - a space (or the start) before it, and a space, punctuation mark or
+     the end after it, so a group touching a word, a number or another
+     group ("(D/H)Q", ")(") is never one;
+   - nothing in it that can be arithmetic: no sign, no slash, no word for
+     an operation;
+   - no number, sign or word for an operation right before or after it.
+   Anything else keeps its brackets exactly as written. */
+const MATH_SIGN = /[+×*÷=^<>≤≥≠−–/]|\d\s*[-x]\s*\d|\s-\s|\b(?:plus|minus|times|divided|multiplied|equals?|over|per)\b/i;
+const MATH_BEFORE = /(?:[-+×*÷=^/−–\d]|\b(?:plus|minus|times|divided\s+by|multiplied\s+by|equals?|over|of|per))\s*$/i;
+const MATH_AFTER = /^\s*(?:[-+×*÷=^/−–²³\d]|(?:plus|minus|times|divided|multiplied|equals?|over|per)\b)/i;
 const aside = (inner, before, after) =>
-  !MATH_SIGN.test(inner) && !/[-+×*÷=^/−–]\s*$/.test(before) && !MATH_WORD_EDGE.test(before) && !/^\s*(?:[-+×*÷=^/−–²³]|(?:plus|minus|times|divided|multiplied|equals?)\b)/i.test(after) && !/^\s*\d/.test(after) && !/\d\s*$/.test(before.replace(/\s+$/, "").slice(-1));
+  /(?:^|\s)$/.test(before) && /^(?:[\s,.;:?!]|$)/.test(after)
+  && !MATH_SIGN.test(inner) && !MATH_BEFORE.test(before) && !MATH_AFTER.test(after);
 const COUNTED = "tablet|capsule|dose|drop|puff|vial|patch|spray|syringe|ampule|bag|suppositor(?:y|ie)";
 function asides(text) {
   const t = text.trim().replace(new RegExp(`\\b(${COUNTED})\\(s\\)`, "gi"), "$1s");
@@ -148,8 +156,9 @@ function asides(text) {
   if (/^\([^()]*\)[.!?]?$/.test(t)) return t;
   return t
     .replace(/(\s*)\(([^()]*)\)/g, (m, space, inner, at) => {
-      if (!aside(inner, t.slice(0, at), t.slice(at + m.length))) return m;
-      const lead = /[,.;:?!]\s*$/.test(t.slice(0, at)) ? " " : ", ";
+      const before = t.slice(0, at) + space;
+      if (!aside(inner, before, t.slice(at + m.length))) return m;
+      const lead = /[,.;:?!]\s*$/.test(before) ? " " : ", ";
       return inner.trim() ? `${lead}${inner.trim()},` : "";
     })
     .replace(/^,\s*/, "")
