@@ -256,12 +256,21 @@ describe("question script", () => {
       ["The nurse reviews the 0700 hand off report.", "The nurse reviews the 0700 handoff report."],
       ["Late decelerations reflect utero-placental insufficiency.", "Late decelerations reflect uteroplacental insufficiency."],
       ["Take it PO daily.", "Take it orally daily."],
+      // the number in words, the unit in full or short
+      ["Observe for 30 minutes after administration.", "Observe for thirty minutes after administration."],
+      ["Divide by 300 min.", "Divide by three hundred minutes."],
+      ["Report a 6 lb weight loss.", "Report a six pound weight loss."],
+      ["Report 6 pounds lost.", "Report six pounds lost."],
+      ["Give 15 drops.", "Give fifteen drops."],
+      ["The drop factor is 15 gtt/mL.", "The drop factor is fifteen drops per mL."],
     ];
     for (const [w, h] of pass) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(true);
     const fail = [
       ["Heart rate is below 60/min in this client.", "Heart rate is below 16 per minute in this client."],
       ["Heart rate is below 60/min in this client.", "Heart rate is below 60 per hour in this client."],
       ["Report a 6 lb weight loss.", "Report a 6 kg weight loss."],
+      ["Observe for 30 minutes after administration.", "Observe for thirteen minutes after administration."],
+      ["Give 15 drops.", "Give fifty drops."],
       ["A client with a stage III pressure injury.", "A client with a stage 2 pressure injury."],
       ["pH below 7.35 and CO₂ is high.", "pH below 7.35 and CO is high."],
       ["Level of 8/10 and rising.", "Level of 8 out of 10 and rising."], // two numbers with a slash are never reworded

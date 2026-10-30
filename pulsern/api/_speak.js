@@ -143,7 +143,11 @@ const SPELLING_CANON = [
   [/\s+slash\s+/gi, ' / '],
   // a count per unit of time with no unit before the slash ("118/min")
   [/(\b\d+(?:\.\d+)?)\s*\/\s*(?=(?:mins?|minutes?|hrs?|hours?|h|days?|wk|weeks?|secs?|seconds?)\b)/gi, '$1 per '],
-  // after a number: a short unit and its word ("300 min" / "300 minutes", "6 lb" / "6 pounds", "15 gtt" / "15 drops")
+  /* after a number: a short unit and its word ("300 min" / "300 minutes",
+     "6 lb" / "6 pounds", "15 gtt" / "15 drops"). A number said in words
+     ("thirty minutes") needs no rule here: the word check reads number
+     words as digits and a plural as its singular (speechTokens), so
+     "30 minute" and "thirty minutes" already compare equal. */
   [/\b(\d+(?:\.\d+)?)\s*(?:mins?|minutes?)\b/gi, '$1 minute'],
   [/\b(\d+(?:\.\d+)?)\s*(?:lbs?|pounds?)\b/gi, '$1 pound'],
   [/\b(\d+(?:\.\d+)?)\s*(?:gtts?|drops?)\b/gi, '$1 drop'],
