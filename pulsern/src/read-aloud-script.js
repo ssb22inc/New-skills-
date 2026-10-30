@@ -19,9 +19,11 @@ import { ngnExt } from "./ngn.js";
 
 /* A rate: a whole number token (not the "1" in "HbA1c"), a known unit,
    then a slash and a known unit of time, amount or body weight. */
-const RATE_UNITS = "breaths?|beats?|drops?|gtts?|units?|mg|mcg|g|mL|ml|L|mEq|mmol|IU|doses?|tablets?|caps?|puffs?|times|cells|kcal|calories|mm|cm|oz|lb|kg";
-const RATE_PER = "min|mins|minute|hr|hrs|hour|h|day|days|d|week|wk|sec|secs|second|kg|dose|L|dL|mL|m2";
-export const RATE = new RegExp(`(\\b\\d+(?:\\.\\d+)?\\s*(?:${RATE_UNITS}))\\s*\\/\\s*(?=(?:${RATE_PER})\\b)`, "g");
+/* Abbreviated or spelled out ("mg" or "milligrams"), so a transcriber's
+   spelling of the same rate is recognised too. */
+export const RATE_UNITS = "breaths?|beats?|drops?|gtts?|units?|international units?|mg|milligrams?|mcg|micrograms?|g|grams?|mL|ml|milliliters?|millilitres?|L|liters?|litres?|mEq|milliequivalents?|mmol|millimoles?|IU|doses?|tablets?|caps?|capsules?|puffs?|times|cells|kcal|calories|mm|cm|oz|ounces?|lb|pounds?|kg|kilograms?";
+const RATE_PER = "min|mins|minutes?|hr|hrs|hours?|h|days?|d|weeks?|wk|sec|secs|seconds?|kg|kilograms?|dose|L|liters?|litres?|dL|deciliters?|mL|milliliters?|m2";
+export const RATE = new RegExp(`(\\b\\d+(?:\\.\\d+)?\\s*(?:${RATE_UNITS}))\\s*\\/\\s*(?=(?:${RATE_PER})\\b)`, "gi");
 
 /* Spoken forms for the clinical shorthand a voice is most likely to misread.
    Conservative on purpose: units and dosing frequencies only, whole tokens

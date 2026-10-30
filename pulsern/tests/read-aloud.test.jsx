@@ -164,6 +164,17 @@ describe("question script", () => {
     expect(speakable("Check HbA1c/eAG.")).toBe("Check HbA1c slash eAG.");
     expect(voiceCheck(speakable("Check HbA1c/eAG."), "Check HbA1c per eAG.").pass).toBe(false);
     expect(speakable("Infuse 5 units/hr.")).toBe("Infuse 5 units per hour.");
+    // a rate matches however it is spelled: units in full or short, the number in words or digits, "/" or "slash"
+    for (const [written, heard] of [["Give 5 milligrams/minute.", "Give 5 mg/minute."], ["Give 5 mg/min.", "Give five milligrams per minute."],
+      ["Respirations 12 breaths/min.", "Respirations twelve breaths/min."], ["Respirations 12 breaths/min.", "Respirations twelve breaths slash min."]]) {
+      expect(voiceCheck(speakable(written), heard).pass, `${written} / ${heard}`).toBe(true);
+    }
+    // and a changed value, unit or time still fails
+    for (const [written, heard] of [["Respirations 12 breaths/min.", "Respirations twenty-one breaths/min."], ["Respirations 12 breaths/min.", "Respirations twelve breaths per hour."], ["Give 5 mg/min.", "Give 5 mcg/min."]]) {
+      expect(voiceCheck(speakable(written), heard).pass, `${written} / ${heard}`).toBe(false);
+    }
+    // only the number before a rate is read from words: the rest of the passage is untouched ("35-45" keeps its range)
+    expect(voiceCheck(speakable("Range 35-45 mm Hg."), "Range 35 to 45 millimeters of mercury.").pass).toBe(true);
     // a slash is said in words, so the voice never has to guess at it
     expect(speakable("Check creatinine/eGFR.")).toBe("Check creatinine slash eGFR.");
     expect(speakable("Respirations 12 breaths/min.")).toBe("Respirations 12 breaths per minute.");

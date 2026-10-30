@@ -43,8 +43,8 @@
 // (ops/read-aloud-worker.mjs, every 15 minutes) voices and checks it; the
 // app reads it with the device voice until then (202).
 import { createHash, randomUUID } from 'node:crypto';
-import { scriptFor, itemParts, voiceable, RATE } from '../src/read-aloud-script.js';
-import { audioCheck, speechTokens, QA_MODEL, QA_VERSION } from '../ops/narrate-lib.mjs';
+import { scriptFor, itemParts, voiceable, RATE, RATE_UNITS } from '../src/read-aloud-script.js';
+import { audioCheck, speechTokens, wordsToNumbers, QA_MODEL, QA_VERSION } from '../ops/narrate-lib.mjs';
 
 export const SPEAK_MAX = 1500; // above the script's PART_MAX (900): a part always fits
 export const BUCKET = 'read-aloud';
@@ -108,11 +108,19 @@ const COMPOUNDS = new Set([
   'prenatal', 'postnatal', 'antenatal', 'subtherapeutic', 'supratherapeutic', 'subcutaneous', 'sublingual',
   'dropdown', 'nonpharmacologic', 'noninvasive',
 ]);
+/* In this order: a number said in words just before a unit and a slash
+   as digits ("twelve breaths/min"), and a spoken "slash" as "/", so that
+   every spelling of a rate ("12 breaths per minute", "twelve breaths/
+   min", "5 milligrams/minute") reaches RATE in one form. Only that span
+   is converted: the rest of the text is left to the word check. */
+const NUM_WORD = 'zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred';
+const RATE_IN_WORDS = new RegExp(`\\b(?:${NUM_WORD})(?:[\\s-]+(?:${NUM_WORD}|and))*(?=\\s+(?:${RATE_UNITS})\\s*(?:\\/|\\s+slash\\s+))`, 'gi');
 const SPELLING_CANON = [
+  [RATE_IN_WORDS, (m) => wordsToNumbers(m).trim()],
   [/\b(\d{1,3})((?:,\d{3})+)\b/g, (m) => m.replace(/,/g, '')],
   [/\band\s*\/\s*or\b/gi, 'and or'],
-  [RATE, '$1 per '],
   [/\s+slash\s+/gi, ' / '],
+  [RATE, '$1 per '],
   [/\bper\s+(?:mins?|minutes?)\b/gi, 'per minute'],
   [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
   [/\bper\s+(?:secs?|seconds?)\b/gi, 'per second'],
