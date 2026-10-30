@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "17745a40c7c93ee152570fd6d0bc627aea57d0ab",
+    "head": "308ca8c7d64a55a0e6795ad1dfcfedb81b002bd5",
+    "pr": "163"
+  },
+  "reviewedAt": "2026-10-30T04:31:40.386Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 30,
+      "title": "Rating regex converts dates following the noun \"rates\" into scores",
+      "problem": "PAIN_SCORE treats every occurrence of \"rates\" as a rating verb and allows arbitrary intervening words, including temporal phrases. Consequently, speakable(\"Compare heart rates on 7/10 and 7/11.\") returns \"Compare heart rates on 7 out of 10 and 7/11.\" This changes the clinical content rather than merely spelling it out. Because voiceCheck checks against this already-altered script, correctly synthesized but incorrect content can pass the gate and reach students.",
+      "failure_scenario": "A question, chart narrative, or flashcard compares heart or respiratory rates on two dates. The first date is announced as a score out of ten. The added date tests miss this because none includes \"rates\" or \"rated\" before the date.",
+      "fix": "Restrict the rating-verb branch to explicit rating constructions rather than arbitrary text following \"rates\" or \"rated\"; exclude temporal constructions such as \"on\" and \"since\". Also recognize whitespace before a continuing date slash. Add regression tests asserting that date-bearing rates/rated sentences remain unchanged and cannot pass as \"out of 10\" transcripts.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 33189,
+    "completionTokens": 4306,
+    "reasoningTokens": 3956,
+    "costUsd": 0.126031
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One blocking defect: the new score normalization can turn a clinical date into a rating, and the audio gate will validate the altered script.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
