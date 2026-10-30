@@ -15,7 +15,7 @@ import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
-import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS } from "../ops/read-aloud-worker.mjs";
+import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE } from "../ops/read-aloud-worker.mjs";
 import { passagePaths } from "../api/_speak.js";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
@@ -540,7 +540,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     }
     const r = await pruneUsage({ storage, now });
     expect(r).toEqual({ days: 2, removed: 4 });
-    expect([...files.keys()].sort()).toEqual(["usage/2026-10-29/all/00000", "usage/2026-10-29/u-abc/00000"]);
+    expect([...files.keys()].filter((k) => k.startsWith("usage/")).sort()).toEqual(["usage/2026-10-29/all/00000", "usage/2026-10-29/u-abc/00000"]);
   });
 
   it("pays for every synthesis from the spending budget, so a transcription outage cannot run past it", async () => {
@@ -1324,6 +1324,35 @@ describe("server voice: daily budgets", () => {
       expect(files.has(live.path)).toBe(true);
       const next = await claimPassage(storage, Q1.text, () => t);
       expect(next.path).toMatch(/\/000000000003$/);
+    });
+
+    it("bounds claim cleanup per run however large the library, and still reaches every folder", async () => {
+      const { storage, files } = fakeStorage();
+      const t = Date.UTC(2026, 9, 29, 16);
+      // 1,000 voiced passages, each with its one finished claim
+      for (let i = 0; i < 1000; i++) {
+        files.set(`claims/marin-p${String(i).padStart(4, "0")}/000000000001`, Buffer.from(`${t - 5 * 86400000} x`));
+        files.set(`claims/marin-p${String(i).padStart(4, "0")}/000000000001.done`, Buffer.from("1"));
+      }
+      // and one, near the end, with an older claim to remove
+      const deep = "claims/marin-p0950";
+      files.set(`${deep}/000000000002`, Buffer.from(`${t - 2 * 86400000} y`));
+      // count every storage call a run makes
+      let n = 0;
+      const counted = { ...storage, from: (b) => { const bk = storage.from(b); return Object.fromEntries(Object.entries(bk).map(([k, f]) => [k, (...a) => { n++; return f(...a); }])); } };
+      const perRun = [];
+      for (let run = 0; run < 6 && files.has(`${deep}/000000000001`); run++) {
+        n = 0;
+        await pruneUsage({ storage: counted, now: t });
+        perRun.push(n);
+      }
+      expect(files.has(`${deep}/000000000001`)).toBe(false); // reached, and cleaned
+      expect(files.has(`${deep}/000000000001.done`)).toBe(false);
+      expect(files.has(`${deep}/000000000002`)).toBe(true); // the newest stays
+      expect(files.has("claims/marin-p0000/000000000001")).toBe(true); // a lone newest claim stays
+      // a fixed bound per run: cursor, one folder page, one listing per folder, a few reads and removals
+      for (const calls of perRun) expect(calls).toBeLessThanOrEqual(CLAIM_PRUNE.folders * 2 + 10);
+      expect(Math.max(...perRun)).toBeLessThan(CLAIM_PRUNE.folders + 10); // single-claim folders are never read
     });
 
     it("the voice job leaves a passage being voiced live for its next run", async () => {

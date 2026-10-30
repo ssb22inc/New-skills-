@@ -340,15 +340,36 @@ export async function pruneUsage({ storage, now = Date.now(), keepDays = 7 }) {
       }
     }
   }
-  /* Old passage claims: every number below a folder's newest, with its
-     finished marker, once the newest is a day old (long past any lease).
-     The newest is kept, so a folder's numbers never start again. */
+  removed += await pruneClaims({ bucket, now });
+  return { days: days.length, removed };
+}
+
+/* Old passage claims: every number below a folder's newest, with its
+   finished marker, once the newest is a day old (long past any lease). The
+   newest is kept, so a folder's numbers never start again.
+   Every voiced passage keeps a folder, so the folders are visited a fixed
+   number per run (CLAIM_PRUNE.folders), in name order from a saved cursor,
+   wrapping round: each run's cost is bounded whatever the size of the
+   library. Most folders hold one claim and cost one listing; only a
+   folder with older numbers has its newest claim read. */
+export const CLAIM_PRUNE = { folders: 200 };
+const CLAIM_CURSOR = "prune/claims-cursor.json";
+export async function pruneClaims({ bucket, now }) {
+  const got = await readJsonFile(bucket, CLAIM_CURSOR);
+  if (got.error && !/not found/i.test(String(got.error.message ?? got.error))) throw new Error(`Could not read the claims cursor: ${got.error.message ?? got.error}`);
+  const offset = Number.isInteger(got.value?.offset) && got.value.offset >= 0 ? got.value.offset : 0;
+  const { data, error } = await bucket.list(CLAIMS_DIR, { limit: CLAIM_PRUNE.folders, offset, sortBy: { column: "name", order: "asc" } });
+  if (error && !/not found/i.test(String(error.message ?? error))) throw new Error(`Could not list ${CLAIMS_DIR}: ${error.message ?? error}`);
+  const folders = data ?? [];
   const stale = [];
-  for (const folder of await listAll(bucket, CLAIMS_DIR)) {
+  for (const folder of folders) {
     const dir = `${CLAIMS_DIR}/${folder.name}`;
-    const names = (await listAll(bucket, dir)).map((f) => f.name);
-    const top = Math.max(0, ...names.map(claimNumber).filter(Number.isFinite));
-    if (!top) continue;
+    const { data: inside, error: listError } = await bucket.list(dir, { limit: 1000 });
+    if (listError) throw new Error(`Could not list ${dir}: ${listError.message ?? listError}`);
+    const names = (inside ?? []).map((f) => f.name);
+    const numbers = names.map((n) => claimNumber(n.replace(/\.done$/, ""))).filter(Number.isFinite);
+    const top = Math.max(0, ...numbers);
+    if (!numbers.some((n) => n < top)) continue; // nothing older than the newest
     const newest = await readClaimFile(bucket, `${dir}/${claimName(top)}`);
     if (newest.error) throw new Error(`Could not read a claim: ${newest.error.message ?? newest.error}`);
     if (newest.missing || now - newest.since <= 86400000) continue;
@@ -358,11 +379,14 @@ export async function pruneUsage({ storage, now = Date.now(), keepDays = 7 }) {
     }
   }
   for (let i = 0; i < stale.length; i += 1000) {
-    const { error } = await bucket.remove(stale.slice(i, i + 1000));
-    if (error) throw new Error(`Could not remove old claims: ${error.message ?? error}`);
-    removed += Math.min(1000, stale.length - i);
+    const { error: rmError } = await bucket.remove(stale.slice(i, i + 1000));
+    if (rmError) throw new Error(`Could not remove old claims: ${rmError.message ?? rmError}`);
   }
-  return { days: days.length, removed };
+  // Folders are never removed (each keeps its newest claim), so offsets stay put.
+  const next = folders.length < CLAIM_PRUNE.folders ? 0 : offset + folders.length;
+  const { error: saveError } = await put(bucket, CLAIM_CURSOR, { offset: next });
+  if (saveError) throw new Error(`Could not save the claims cursor: ${saveError.message ?? saveError}`);
+  return stale.length;
 }
 
 /* One scheduled run: the queue, then the bank with what is left, then
