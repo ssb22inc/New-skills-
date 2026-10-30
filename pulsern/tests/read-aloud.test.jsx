@@ -329,6 +329,8 @@ describe("question script", () => {
   it("accepts the fifth round from the failure log, and still rejects a skipped or changed word", () => {
     const pass = [
       ["Stage of grief (Kübler-Ross) and denial.", "Stage of grief, Kubler-Ross, and denial."],
+      ["Suspect Guillain-Barré syndrome.", "Suspect Guillain-Barre syndrome."],
+      ["Ménière's disease causes vertigo.", "Meniere's disease causes vertigo."],
       ["Baseline HIV 4th generation antigen test.", "Baseline HIV fourth generation antigen test."],
       ["Prothrombin time 52 sec, reference 11.", "Prothrombin time 52 seconds, reference 11."],
       ["eGFR 45 mL/min/1.73 m² today.", "eGFR 45 mL per minute per 1.73 square meters today."],
@@ -362,6 +364,9 @@ describe("question script", () => {
       // an accent is folded only on a letter: a sign's overlay is kept (Sol, PR #168)
       ["A negative test ≠ absence of infection.", "A negative test equals absence of infection."],
       ["A negative test ≠ absence of infection.", "A negative test = absence of infection."],
+      // only a closed list of accented names is folded: a mark can be notation (Sol, PR #168)
+      ["Use ȳ, not y.", "Use y, not y."],
+      ["Measure V̇ at rest.", "Measure V at rest."],
     ];
     for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
   });

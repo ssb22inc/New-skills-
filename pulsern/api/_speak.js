@@ -202,10 +202,16 @@ const MATH_CANON = [
   [/\s*=\s*/g, ' equals '],
   [/\bequal\b/gi, 'equals'],
 ];
+/* Names and words a transcriber may write with or without their accents,
+   a closed list ("Kübler" / "Kubler"). No other mark is ever removed: a
+   mark can be notation ("ȳ" is a mean, "V̇" a flow, "≠" not equal). */
+const ACCENTED = [
+  [/\bKübler\b/gi, 'Kubler'], [/\bBarré(?![A-Za-z])/gi, 'Barre'], [/\bMénière'?s?\b/gi, (w) => w.replace(/é/gi, 'e').replace(/è/gi, 'e')],
+  [/\bSjögren'?s?\b/gi, (w) => w.replace(/ö/gi, 'o')], [/\bHürthle\b/gi, 'Hurthle'], [/\bcafé(?![A-Za-z])/gi, 'cafe'], [/\bnaïve\b/gi, 'naive'],
+];
 export function canonUnits(text) {
-  /* letters with accents as the plain letters ("Kübler" / "Kubler"); only
-     marks on a LETTER go, so a sign's overlay stays ("≠" is not "=") */
-  let t = String(text ?? '').normalize('NFD').replace(/(\p{L})[\u0300-\u036f]+/gu, '$1').normalize('NFC');
+  let t = String(text ?? '').normalize('NFC');
+  for (const [re, to] of ACCENTED) t = t.replace(re, to);
   for (const [re, to] of SPELLING_CANON) t = t.replace(re, to);
   for (const [re, to] of MATH_CANON) t = t.replace(re, to);
   for (const [re, to] of UNIT_CANON) t = t.replace(re, to);
