@@ -1,0 +1,63 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "17ad538b82f2b55ae2903b9a76ecc51a5af3e0a0",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T11:52:01.690Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 207,
+      "title": "Accent removal turns 'not equal' into 'equals'",
+      "problem": "NFD decomposes the mathematical symbol '≠' into '=' plus U+0338 COMBINING LONG SOLIDUS OVERLAY. Removing all U+0300–U+036F characters deletes that negation, and MATH_CANON subsequently converts the remaining '=' to 'equals'. The script and a clinically reversed transcript therefore compare identically.",
+      "failure_scenario": "For the script 'A negative test ≠ absence of infection.', voiceCheck accepts the incorrect transcript 'A negative test equals absence of infection.' Both canonicalize to exactly the same text, allowing the wrong audio to be saved and played.",
+      "fix": "Restrict accent folding to diacritics attached to letters, preserving mathematical overlays and negated operators. Add a regression asserting that '≠' cannot pass against 'equals', including through speakable and voiceCheck.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 76,
+      "title": "Pain-score matching also rewrites dates after heart rate",
+      "problem": "The alternative 'rated?s?' matches 'rate' and 'rates', not just pain-rating language. Consequently, the rule interprets dates immediately following a heart-rate label as pain scores.",
+      "failure_scenario": "speakable('Compare heart rates 7/10 and 7/11.') produces 'Compare heart rates 7 out of 10 and 7/11.' A chart date is turned into a score, and the audio gate checks this already-corrupted script rather than the approved source.",
+      "fix": "Remove the unrestricted 'rate'/'rates' alternatives and require pain-specific context for score conversion. Add date-preservation tests with dates immediately following 'heart rate', 'heart rates', and 'respiratory rate'.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 130,
+      "title": "Blanket '(s)' pluralization removes seconds from chart labels",
+      "problem": "The plural-marker replacement applies after any letter. Attached '(s)' can instead identify seconds in a lab or calculation label, so this transformation can delete a clinically meaningful unit.",
+      "failure_scenario": "An approved chart entry 'Prothrombin time(s): 52' becomes 'Prothrombin times: 52'. The student hears a pluralized label with no seconds unit, and the audio gate cannot detect the omission because it receives the transformed text.",
+      "fix": "Limit optional-plural expansion to a closed list of supported count nouns such as tablet and capsule. Preserve or explicitly expand seconds in time labels, and add a script-generation regression for 'Prothrombin time(s): 52'.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 40896,
+    "completionTokens": 6728,
+    "reasoningTokens": 6015,
+    "costUsd": 0.1695185
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. Three new normalization rules can alter clinical meaning before the audio accuracy gate checks it; the added tests do not cover these cases.",
+  "counts": {
+    "blocker": 3,
+    "major": 0,
+    "minor": 0
+  }
+}
