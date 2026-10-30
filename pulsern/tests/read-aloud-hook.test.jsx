@@ -218,6 +218,21 @@ describe("useReadAloud, mounted", () => {
     expect(env.played).toEqual(["https://signed.example/2/stem", "https://signed.example/2/opt1"]);
   });
 
+  it("shows a one-part card whose voice failed the check on screen, instead of 'try again later'", async () => {
+    const card = [{ id: "card-front", text: "Potassium 2.9 milliequivalents per liter." }];
+    await render({ segments: card, itemKey: "c:4", itemRef: { kind: "card", id: 4, part: "front" } });
+    await tap(() => reader.play());
+    await flush();
+    await answerAll((p) => p.reply(422, { error: "Voice check failed" }));
+    await flush();
+    expect(reader.status).toBe("playing");
+    expect(reader.active).toBe("card-front");
+    expect(reader.silent).toBe(true);
+    expect(env.played).toEqual([]);
+    await gap(2500);
+    expect(reader.status).toBe("idle");
+  });
+
   it("does not start the old item's audio when its answer arrives after the item changed", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap(() => reader.play());

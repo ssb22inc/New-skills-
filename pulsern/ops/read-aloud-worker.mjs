@@ -32,7 +32,7 @@
    or bank trouble) fails the workflow run, so it is noticed. */
 import { createClient } from "@supabase/supabase-js";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
 import { verdictText, itemParts } from "../src/read-aloud-script.js";
 
@@ -340,16 +340,21 @@ export async function pruneUsage({ storage, now = Date.now(), keepDays = 7 }) {
       }
     }
   }
-  /* Passage claims left by requests that died (rare): a day after they
-     were taken, long past any lease, they are removed. */
+  /* Old passage claims: every number below a folder's newest, with its
+     finished marker, once the newest is a day old (long past any lease).
+     The newest is kept, so a folder's numbers never start again. */
   const stale = [];
   for (const folder of await listAll(bucket, CLAIMS_DIR)) {
-    for (const f of await listAll(bucket, `${CLAIMS_DIR}/${folder.name}`)) {
-      if (!Number.isFinite(claimNumber(f.name))) continue;
-      const path = `${CLAIMS_DIR}/${folder.name}/${f.name}`;
-      const held = await readClaimFile(bucket, path);
-      if (held.error) throw new Error(`Could not read a claim: ${held.error.message ?? held.error}`);
-      if (!held.missing && !(now - held.since <= 86400000)) stale.push(path);
+    const dir = `${CLAIMS_DIR}/${folder.name}`;
+    const names = (await listAll(bucket, dir)).map((f) => f.name);
+    const top = Math.max(0, ...names.map(claimNumber).filter(Number.isFinite));
+    if (!top) continue;
+    const newest = await readClaimFile(bucket, `${dir}/${claimName(top)}`);
+    if (newest.error) throw new Error(`Could not read a claim: ${newest.error.message ?? newest.error}`);
+    if (newest.missing || now - newest.since <= 86400000) continue;
+    for (const n of names) {
+      const num = claimNumber(n.replace(/\.done$/, ""));
+      if (Number.isFinite(num) && num < top) stale.push(`${dir}/${n}`);
     }
   }
   for (let i = 0; i < stale.length; i += 1000) {

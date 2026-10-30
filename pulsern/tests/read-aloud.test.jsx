@@ -185,7 +185,8 @@ describe("the controls", () => {
     for (const status of [0, 401, 429, 503, 400]) expect(planReading(segs, [{ url: "u1" }, { status }, { url: "u3" }])).toEqual({ kind: "unavailable" });
     // a real failure outranks "being prepared"
     expect(planReading(segs, [{ status: 202 }, { status: 429 }, { status: 202 }])).toEqual({ kind: "unavailable" });
-    expect(planReading(segs, [{ status: 422 }, { status: 422 }, { status: 422 }])).toEqual({ kind: "unavailable" });
+    // every part refused for good: read on screen, part by part, not "try again later"
+    expect(planReading(segs, [{ status: 422 }, { status: 422 }, { status: 422 }])).toEqual({ kind: "play", steps: segs.map((s) => ({ id: s.id, silent: true, text: s.text })) });
   });
 
   it("gives a part shown on screen time to be read", () => {
@@ -1243,7 +1244,11 @@ describe("server voice: daily budgets", () => {
       const f = fakeOpenAI();
       expect((await speak({ ...base(), storage, fetchImpl: f, now: t })).status).toBe(200);
       expect(speechCalls(f)).toBe(1);
-      expect([...files.keys()].filter((k) => k.startsWith("claims/"))).toEqual([dead.path]); // the live one released; the dead one's file waits for pruning
+      // the dead claim, and the one that took over from it, marked finished
+      const claims = [...files.keys()].filter((k) => k.startsWith("claims/")).sort();
+      expect(claims).toHaveLength(3);
+      expect(claims[0]).toBe(dead.path);
+      expect(claims[2]).toMatch(/\/000000000002\.done$/);
     });
 
     it("ends all paid work inside the lease, so a holder is never taken over while it is still working", async () => {
@@ -1273,36 +1278,52 @@ describe("server voice: daily budgets", () => {
       } finally { Object.assign(CALL, saved); }
     });
 
-    it("never removes a claim that has passed to someone else, however the release and the takeover interleave", async () => {
-      const { storage, files } = fakeStorage();
+    it("never lets two callers hold a passage, however a release and a takeover interleave", async () => {
+      const { storage } = fakeStorage();
       let t = Date.UTC(2026, 9, 29, 16);
-      const first = await claimPassage(storage, Q1.text, () => t);
+      // a storage view whose next claim upload waits until the test lets it go
+      const gate = { hold: null };
+      const paused = { ...storage, from: (b) => { const bk = storage.from(b); return { ...bk, upload: async (p, body, o) => { if (gate.hold && /^claims\/.*\/\d+$/.test(p)) { const h = gate.hold; gate.hold = null; await h; } return bk.upload(p, body, o); } }; } };
+      const a = await claimPassage(storage, Q1.text, () => t);
+      expect(a.state).toBe("mine");
       t += PASSAGE_LEASE_MS + 1000;
-      // two callers race to take over the lapsed claim: exactly one wins
-      const [b, c] = await Promise.all([claimPassage(storage, Q1.text, () => t), claimPassage(storage, Q1.text, () => t)]);
-      expect([b.state, c.state].sort()).toEqual(["busy", "mine"]);
-      const second = b.state === "mine" ? b : c;
-      expect(second.path).not.toBe(first.path);
-      // the first holder's release lands after the takeover
-      await releasePassage(storage, first);
-      expect(files.has(second.path)).toBe(true);
-      expect((await claimPassage(storage, Q1.text, () => t + 1000)).state).toBe("busy"); // a third caller still waits
-      // and a release racing a fresh claim removes only its own file
-      const [, third] = await Promise.all([releasePassage(storage, second), claimPassage(storage, Q1.text, () => t + 2000)]);
-      expect(["mine", "busy"]).toContain(third.state);
-      if (third.state === "mine") expect(files.has(third.path)).toBe(true);
-      await releasePassage(storage, third);
-      expect([...files.keys()].filter((k) => k.startsWith("claims/"))).toEqual([]);
+      // B reads A's lapsed claim, then pauses just before taking the next number
+      let go; gate.hold = new Promise((r) => { go = r; });
+      const bp = claimPassage(paused, Q1.text, () => t);
+      await new Promise((r) => setTimeout(r, 0));
+      // A's late release lands, and C takes the passage
+      await releasePassage(storage, a);
+      const c = await claimPassage(storage, Q1.text, () => t);
+      expect(c.state).toBe("mine");
+      // B resumes: the number it meant to take is gone
+      go();
+      expect((await bp).state).toBe("busy");
+      // while C holds it, everyone else waits; once C finishes, one caller gets the next number
+      expect((await claimPassage(storage, Q1.text, () => t + 1000)).state).toBe("busy");
+      await releasePassage(storage, c);
+      const [d, e] = await Promise.all([claimPassage(storage, Q1.text, () => t + 2000), claimPassage(storage, Q1.text, () => t + 2000)]);
+      expect([d.state, e.state].sort()).toEqual(["busy", "mine"]);
+      // and two callers racing to take over a lapsed claim: exactly one wins
+      t += 3 * PASSAGE_LEASE_MS;
+      const [f, g] = await Promise.all([claimPassage(storage, Q1.text, () => t), claimPassage(storage, Q1.text, () => t)]);
+      expect([f.state, g.state].sort()).toEqual(["busy", "mine"]);
     });
 
-    it("the voice job removes claims left by requests that died, a day later, and nothing newer", async () => {
+    it("the voice job removes old claims a day later, keeping each passage's newest so numbers never restart", async () => {
       const { storage, files } = fakeStorage();
       const t = Date.UTC(2026, 9, 29, 16);
-      const dead = await claimPassage(storage, Q1.text, () => t - 2 * 86400000);
+      const old1 = await claimPassage(storage, Q1.text, () => t - 3 * 86400000);
+      await releasePassage(storage, old1);
+      const old2 = await claimPassage(storage, Q1.text, () => t - 2 * 86400000);
+      await releasePassage(storage, old2);
       const live = await claimPassage(storage, "Sodium 138 milliequivalents per liter.", () => t);
       await pruneUsage({ storage, now: t });
-      expect(files.has(dead.path)).toBe(false);
+      expect(files.has(old1.path)).toBe(false);
+      expect(files.has(`${old1.path}.done`)).toBe(false);
+      expect(files.has(old2.path)).toBe(true);
       expect(files.has(live.path)).toBe(true);
+      const next = await claimPassage(storage, Q1.text, () => t);
+      expect(next.path).toMatch(/\/000000000003$/);
     });
 
     it("the voice job leaves a passage being voiced live for its next run", async () => {

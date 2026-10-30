@@ -248,13 +248,17 @@ async function claimOutcome(bucket, marker, timeOf) {
 
 /* One synthesis per passage at a time, live or scheduled. A passage's
    claims are numbered files in its own folder, each created once (storage
-   refuses a second upload to the same name) and never changed:
-     claims/<voice>-<key>/<n>   "<taken at> <holder>"
-   The highest number is the current claim. A caller takes the next number
-   when there is no claim or the current one's lease has run out, so only
-   one caller can win any takeover. A holder releases by removing ITS OWN
-   numbered file and nothing else: whatever happens around it, a release
-   can never remove someone else's claim.
+   refuses a second upload to the same name) and never changed or removed
+   while it is the newest:
+     claims/<voice>-<key>/<n>        "<taken at> <holder>"
+     claims/<voice>-<key>/<n>.done   its holder has finished
+   The highest number is the current claim, and the numbers only ever go
+   up. A caller may take number n+1 only when claim n is finished or its
+   lease has run out; storage lets exactly one caller create n+1, and a
+   caller that read an older state finds n+1 (or anything after it) already
+   taken and gets "busy". Since no number is ever made twice, a caller
+   that paused at any point can never hold a claim beside a newer one.
+   A holder releases by marking ITS OWN number finished.
    The lease lets a later caller take over from a request that died
    part-way. A live holder never reaches it: all its paid work ends by
    `deadline` (makeChecked stops starting calls and aborts any call still
@@ -268,7 +272,7 @@ export const PASSAGE_WAIT = { tries: 50, ms: 500 };
 export const CLAIMS_DIR = 'claims';
 const claimDir = (text, tts) => `${CLAIMS_DIR}/${tts.voice}-${passagePaths(text, tts).key}`;
 export const claimNumber = (name) => (/^\d{1,12}$/.test(name) ? Number(name) : NaN);
-const claimName = (n) => String(n).padStart(12, '0');
+export const claimName = (n) => String(n).padStart(12, '0');
 export async function readClaimFile(bucket, path) {
   const { data, error } = await bucket.download(path);
   if (error) return isMissing(error) ? { missing: true } : { error };
@@ -278,30 +282,31 @@ export async function readClaimFile(bucket, path) {
 export async function claimPassage(storage, text, timeOf = () => Date.now(), tts = TTS) {
   const bucket = storage.from(BUCKET);
   const dir = claimDir(text, tts);
-  const owner = randomUUID();
-  for (let tries = 0; tries < 5; tries++) {
-    const { data, error } = await bucket.list(dir, { limit: 1000 });
+  const names = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await bucket.list(dir, { limit: 1000, offset });
     if (error) return { state: 'error' };
-    const top = Math.max(0, ...(data ?? []).map((e) => claimNumber(e.name)).filter(Number.isFinite));
-    if (top > 0) {
-      const held = await readClaimFile(bucket, `${dir}/${claimName(top)}`);
-      if (held.error) return { state: 'error' };
-      if (held.missing) continue; // released just now: look again
-      if (Number.isFinite(held.since) && timeOf() - held.since <= PASSAGE_LEASE_MS) return { state: 'busy' };
-    }
-    const at = timeOf();
-    const path = `${dir}/${claimName(top + 1)}`;
-    const made = await createOnce(storage, path, `${at} ${owner}`);
-    if (made === 'created') return { state: 'mine', path, owner, deadline: at + PASSAGE_WORK_MS };
-    return { state: made === 'exists' ? 'busy' : 'error' };
+    names.push(...(data ?? []).map((e) => e.name));
+    if (!data || data.length < 1000) break;
   }
-  return { state: 'busy' };
+  const top = Math.max(0, ...names.map(claimNumber).filter(Number.isFinite));
+  if (top > 0 && !names.includes(`${claimName(top)}.done`)) {
+    const held = await readClaimFile(bucket, `${dir}/${claimName(top)}`);
+    if (held.error) return { state: 'error' };
+    if (!held.missing && Number.isFinite(held.since) && timeOf() - held.since <= PASSAGE_LEASE_MS) return { state: 'busy' };
+  }
+  const at = timeOf();
+  const owner = randomUUID();
+  const path = `${dir}/${claimName(top + 1)}`;
+  const made = await createOnce(storage, path, `${at} ${owner}`);
+  if (made === 'created') return { state: 'mine', path, owner, deadline: at + PASSAGE_WORK_MS };
+  return { state: made === 'exists' ? 'busy' : 'error' };
 }
 export async function releasePassage(storage, claim) {
   if (claim?.state !== 'mine') return true;
-  const { error } = await storage.from(BUCKET).remove([claim.path]);
-  if (error) console.error('[read-aloud] release', error.message ?? error);
-  return !error;
+  const done = await createOnce(storage, `${claim.path}.done`);
+  if (done === 'error') console.error('[read-aloud] release failed; the claim lapses with its lease');
+  return done !== 'error';
 }
 
 /* "ok": a slot is held. "full": the cap is reached (or the slots are too
