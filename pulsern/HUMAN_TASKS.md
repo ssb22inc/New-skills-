@@ -170,42 +170,19 @@ Claude Code executes everything else. These run in parallel with the build.
   matcher. If you already created a `pulsern-bank-read` environment or a
   reader account, you can delete them.
 
-## Read-aloud voice (added 2026-10-29)
+## Read-aloud voice (added 2026-10-29, device voice from 2026-10-30)
 
 - H23 · **Nothing to do.** The 🔊 Listen buttons (practice questions, the
   Today round, Review misses, case studies, flashcards; never readiness
-  exams) use the OpenAI key already stored in the GitHub `pulsern-paid`
-  environment. No key goes on the web server.
-
-  How it works:
-  - Students only ever hear AI audio that passed the accuracy check. The
-    audio is transcribed back and must match the bank text word for word,
-    including every number, unit and dosing frequency. There is no
-    fallback to an unchecked device voice.
-  - The job "pulsern-read-aloud"
-    (https://github.com/ssb22inc/New-skills-/actions/workflows/pulsern-read-aloud.yml)
-    runs every 15 minutes and voices the bank ahead of demand: every
-    practice question with its explanation, every case study and every
-    flashcard, resuming where it stopped. Items students have asked for
-    go first.
-  - If a student presses Listen before an item is voiced, the app says
-    "being prepared" and moves that item to the front. A part that cannot
-    be voiced accurately is highlighted with "read this part on screen".
-  - The server reads each item with the student's own access: approved
-    content, a current pass, never exam items. It can say nothing else.
-
-  Limits and cost:
-  - Daily caps (calendar day, Eastern time): 300 new items sent to the
-    voice job per student (each item's parts together), 4,000 items
-    app-wide, and 4,000 paid syntheses app-wide (live and scheduled
-    together). They are set in one place, `LIMITS`
-    in `pulsern/api/_speak.js`, so a change goes through a reviewed pull
-    request. At a cap, work waits for the next day; nothing extra is
-    spent.
-  - At the cap the app-wide spend is roughly $8–10 a day (`gpt-4o-mini-tts`
-    plus the `gpt-4o-transcribe` check). It stops once the bank is
-    voiced; after that, only new items and weekly re-checks are voiced.
-    Saved audio is reused free. Usage: https://platform.openai.com/usage.
-  - Each run's summary (voiced, failed the check, refused, budget, errors)
-    is on the job's run page. A provider outage or storage trouble marks
-    the run as failed so it is noticed.
+  exams) use each student's own device voice (the browser's built-in
+  speech). There is no server voice, no key and no cost; reading starts at
+  once and works offline. How natural it sounds depends on the device: the
+  app picks the best English voice the device offers.
+  - A part whose signs could be read two ways (a middle dot "·", or an "x"
+    between numbers) is highlighted with "read this part on screen"
+    instead of being spoken.
+  - Optional tidy-up: from the AI-voice version (29–30 Oct), about 200
+    audio files remain in the private Supabase storage bucket
+    `read-aloud`. Nothing uses them any more; you can delete the bucket
+    in Supabase → Storage. The OpenAI key in the `pulsern-paid`
+    environment stays: the diagram narration job still uses it.

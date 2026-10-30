@@ -192,12 +192,9 @@ export function cardSegments(card, flipped) {
   return finish([flipped ? seg("card-back", `Answer. ${card.back}`) : seg("card-front", card.front)]);
 }
 
-/* ---------- one script source for the screen AND the voice server ----------
-   The server (api/_speak.js) rebuilds the words from the bank row with the
-   same functions and only voices a segment whose text matches exactly, so
-   it can only ever say what the item on screen says. */
+/* ---------- the explanation, after answering ---------- */
 
-/* A result as the screen shows it. Anything else is refused. */
+/* A result as the screen shows it. Anything else is not read. */
 export function validResult(r) {
   return !!r && typeof r.correct === "boolean" && Number.isInteger(r.max) && r.max >= 1 && r.max <= 50 &&
     Number.isInteger(r.points) && r.points >= 0 && r.points <= r.max && (!r.correct || r.points === r.max);
@@ -218,50 +215,4 @@ export function questionFeedbackSegments(q, result) {
 export function caseFeedbackSegments(step, result) {
   if (!step || !validResult(result)) return [];
   return feedbackSegments({ verdict: verdictText(result), rationale: step.rationale });
-}
-
-/* ref: what is being read. { kind: "question", part: "question" | "feedback", result? }
-   { kind: "case", part: "intro" | "step" | "feedback", step?, result? }
-   { kind: "card", part: "front" | "back" } */
-export function scriptFor(ref, item) {
-  if (!ref || !item) return [];
-  if (ref.kind === "question") {
-    if (ref.part === "question") return questionSegments(item, ngnExt(item));
-    if (ref.part === "feedback") return questionFeedbackSegments(item, ref.result);
-  }
-  if (ref.kind === "case") {
-    const step = Number.isInteger(ref.step) ? item.steps?.[ref.step] : null;
-    if (ref.part === "intro") return caseIntroSegments(item);
-    if (ref.part === "step") return caseStepSegments(step);
-    if (ref.part === "feedback") return caseFeedbackSegments(step, ref.result);
-  }
-  if (ref.kind === "card" && (ref.part === "front" || ref.part === "back")) return cardSegments(item, ref.part === "back");
-  return [];
-}
-
-/* Every voiceable part of one bank item, each with the reference it is
-   read under: a question and its explanation; a case's introduction, every
-   step and every step's explanation; both sides of a card. Used to queue a
-   whole item at once and to voice the bank ahead of demand. (The result
-   line of an explanation is shared text, voiced once for everyone.) */
-const ANY_WRONG = { correct: false, points: 0, max: 1 };
-export function itemParts(kind, row) {
-  if (!row || !Number.isInteger(row.id)) return [];
-  const out = [];
-  const add = (ref, segs) => segs.forEach((x) => out.push({ ref, seg: x.id, text: x.text }));
-  const base = { kind, id: row.id };
-  if (kind === "question") {
-    add({ ...base, part: "question" }, scriptFor({ kind, part: "question" }, row));
-    add({ ...base, part: "feedback", result: ANY_WRONG }, questionFeedbackSegments(row, ANY_WRONG));
-  } else if (kind === "case") {
-    add({ ...base, part: "intro" }, scriptFor({ kind, part: "intro" }, row));
-    (row.steps ?? []).forEach((step, i) => {
-      add({ ...base, part: "step", step: i }, scriptFor({ kind, part: "step", step: i }, row));
-      add({ ...base, part: "feedback", step: i, result: ANY_WRONG }, caseFeedbackSegments(step, ANY_WRONG));
-    });
-  } else if (kind === "card") {
-    add({ ...base, part: "front" }, scriptFor({ kind, part: "front" }, row));
-    add({ ...base, part: "back" }, scriptFor({ kind, part: "back" }, row));
-  }
-  return out.filter((x) => voiceable(x.text));
 }
