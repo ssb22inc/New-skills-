@@ -1,0 +1,42 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "1f571355af7fef3e6e4687e5caaedf2a49222230",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-30T00:32:08.462Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/browser/read-aloud.html",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 125593,
+    "completionTokens": 14086,
+    "reasoningTokens": 13984,
+    "costUsd": 0.454841
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defect established from the supplied change. The shown paths check student access and exact bank text before serving or queueing audio, keep readiness exams excluded, and test rejection and playback-cancellation behavior. I could not execute the tests or independently verify the unchanged audioCheck/speechTokens implementation or production RLS policies, so this is not a complete certification of the accuracy or entitlement gates.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
