@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "17745a40c7c93ee152570fd6d0bc627aea57d0ab",
+    "head": "184452f09a8a9387241812c7a0cf87c09419486a",
+    "pr": "163"
+  },
+  "reviewedAt": "2026-10-30T04:40:39.233Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 114,
+      "title": "Rate normalization depends on number and unit spelling",
+      "problem": "RATE runs before unit-name and number-word normalization, but recognizes only digits and abbreviated units. Equivalent rate expressions can therefore reach the exact-word checker with different separators. For example, speakable('Give 5 milligrams/minute.') produces 'Give 5 milligrams slash minute.'; canonUnits turns that into 'Give 5 mg / minute.', while the equivalent transcript 'Give 5 mg/minute.' becomes 'Give 5 mg per minute.'. The added tests cover only rate spellings that already match RATE.",
+      "failure_scenario": "An accurate reading is transcribed using an abbreviated unit instead of its expanded name, or with number words—for example, 'Respirations twelve breaths/min.' for 'Respirations 12 breaths per minute.'. Under the documented exact-word comparison, the retained slash differs from 'per', so both accurate takes can be rejected and a failed record cached, unnecessarily disabling the checked voice for that passage.",
+      "fix": "Normalize equivalent numeric and unit spellings before canonicalizing rate separators, including slashes reconstructed from the word 'slash'. Add regression tests for expanded versus abbreviated units and digit versus number-word rates, while retaining rejection tests for changed values and frequencies.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 32363,
+    "completionTokens": 7938,
+    "reasoningTokens": 7572,
+    "costUsd": 0.160286
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One read-aloud regression found: rate normalization can reject accurate audio when the transcriber changes number or unit spelling. This was a static review; the downstream audioCheck implementation was not supplied.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
