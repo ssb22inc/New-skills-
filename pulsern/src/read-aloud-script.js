@@ -134,9 +134,11 @@ export function speakable(text) {
    "(s)" is left alone, since it can be seconds ("time(s)"). A part that
    is wholly in brackets is left as it is. */
 /* Brackets that group arithmetic are never an aside: "140 - (104 + 24)",
-   "VO2 = CO (CaO2-CvO2)",
+   "VO2 = CO (CaO2-CvO2)", "HR (EDV-ESV)",
    "(2 mg/kg)(70 kg)" or "(D/H) × Q" without them is another calculation.
-   A group is read as a pause only when it plainly stands apart in prose:
+   A group is read as a pause only when it plainly stands apart in prose
+   and holds a plain label (PROSE_LABEL) after a lowercase word, a
+   punctuation mark or the start:
    - a space (or the start) before it, and a space, punctuation mark or
      the end after it, so a group touching a word, a number or another
      group ("(D/H)Q", ")(") is never one;
@@ -147,12 +149,17 @@ export function speakable(text) {
    Anything else keeps its brackets exactly as written. */
 /* Any sign of a formula ANYWHERE in the passage ("VO2 = CO (CaO2-CvO2)"):
    then no bracket in it is touched. */
-const FORMULA = /[=+×*÷^<>≤≥≠−·∙]|\d\s*[-x/]\s*\d|\s-\s|[A-Za-z]\w*\d\w*\s*-\s*\w|\w\s*-\s*[A-Za-z]\w*\d|\b(?:plus|minus|times|divided\s+by|multiplied\s+by|equals?)\b/i;
+const FORMULA = /[=+×*÷^<>≤≥≠−·∙₀-₉⁰-⁹]|\b[A-Z][A-Za-z]*\s*-\s*[A-Z]{2}|\d\s*[-x/]\s*\d|\s-\s|[A-Za-z]\w*\d\w*\s*-\s*\w|\w\s*-\s*[A-Za-z]\w*\d|\b(?:plus|minus|times|divided\s+by|multiplied\s+by|equals?)\b/i;
 const MATH_SIGN = /[+×*÷=^<>≤≥≠−–·∙/]|\d\s*[-x]\s*\d|\s-\s|\w*\d\w*\s*-\s*\w|\w\s*-\s*\w*\d|\b(?:plus|minus|times|divided|multiplied|equals?|over|per)\b/i;
 const MATH_BEFORE = /(?:[-+×*÷=^/−–·∙\d)\]]|\b(?:x|plus|minus|times|divided\s+by|multiplied\s+by|equals?|over|of|per))\s*$/i;
 const MATH_AFTER = /^\s*(?:[-+×*÷=^/−–·∙²³\d(\[]|(?:x|plus|minus|times|divided|multiplied|equals?|over|per)\b)/i;
+/* What an aside may hold: words, numbers and light punctuation only. No
+   hyphen, minus, slash or sub- or superscript: those can be a formula
+   ("CaO₂-CvO₂", "EDV-ESV"). */
+const PROSE_LABEL = /^[A-Za-z0-9 ,.%:'’—]+$/;
 const aside = (inner, before, after) =>
-  /(?:^|\s)$/.test(before) && /^(?:[\s,.;:?!]|$)/.test(after)
+  PROSE_LABEL.test(inner.trim()) && /(?:^|[,.;:?!]|\b[a-z]+)\s*$/.test(before)
+  && /(?:^|\s)$/.test(before) && /^(?:[\s,.;:?!]|$)/.test(after)
   && !MATH_SIGN.test(inner) && !MATH_BEFORE.test(before) && !MATH_AFTER.test(after);
 const COUNTED = "tablet|capsule|dose|drop|puff|vial|patch|spray|syringe|ampule|bag|suppositor(?:y|ie)";
 function asides(text) {

@@ -369,7 +369,7 @@ describe("question script", () => {
     expect(speakable("Intervention required (Row 3 — Indicated).")).toBe("Intervention required, Row 3 — Indicated.");
     expect(speakable("Give 2,500 units (0.5 mL) now.")).toBe("Give 2,500 units, 0.5 mL, now.");
     expect(speakable("(Option 1) Pap smear yearly.")).toBe("Option 1, Pap smear yearly.");
-    expect(speakable("Incorrect (0): allergies (e.g., cetirizine) do not.")).toBe("Incorrect, 0: allergies, e.g., cetirizine, do not.");
+    expect(speakable("Incorrect (0): allergies (e.g., cetirizine) do not.")).toBe("Incorrect (0): allergies, e.g., cetirizine, do not."); // after a capitalised word a group stays
     expect(speakable("Answer in tablet(s).")).toBe("Answer in tablets.");
     expect(speakable("(Stay with the client.)")).toBe("(Stay with the client.)"); // a part wholly in brackets is left as it is
     // brackets that group arithmetic stay: without them it is another sum (Sol, PR #168)
@@ -384,6 +384,11 @@ describe("question script", () => {
     expect(speakable("Calculate (2 mg/kg) (70 kg).")).toBe("Calculate (2 milligrams per kilogram) (70 kg).");
     // a passage with any sign of a formula keeps every bracket as written (Sol, PR #168)
     expect(speakable("VO2 = CO (CaO2-CvO2).")).toBe("VO2 equals CO (CaO2-CvO2).");
+    // only a plain label after a lowercase word is an aside: subscripted or letter-only formulas keep their brackets (Sol, PR #168)
+    expect(speakable("Oxygen use is CO (CaO₂-CvO₂).")).toBe("Oxygen use is CO (CaO₂-CvO₂).");
+    expect(speakable("Stroke work is HR (EDV-ESV).")).toBe("Stroke work is HR (EDV-ESV).");
+    expect(speakable("Output is HR (SV) here.")).toBe("Output is HR (SV) here.");
+    expect(speakable("Use the ratio (a-b) now.")).toBe("Use the ratio (a-b) now.");
     for (const t of ["Oxygen use is CO (CaO2-CvO2).", "Use CO (Ca - Cv) here.", "MAP is DBP plus (pulse pressure) today.", "Give (dose) then 2 + 2 (check)."]) expect(speakable(t), t).toContain("(");
     expect(speakable("Use (D/H) (Q).")).toBe("Use (D slash H) (Q).");
     expect(speakable("Give (weight) (dose) now.")).toBe("Give (weight) (dose) now.");
