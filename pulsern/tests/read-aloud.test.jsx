@@ -358,6 +358,9 @@ describe("question script", () => {
       ["eGFR 45 mL/min/1.73 m² today.", "eGFR 45 mL per minute per 1.37 square meters today."],
       ["Titrate by 2 mcg/hr.", "Titrate by 2 mg per hour."],
       ["Answer in tablet(s).", "Answer in capsules."],
+      // an accent is folded only on a letter: a sign's overlay is kept (Sol, PR #168)
+      ["A negative test ≠ absence of infection.", "A negative test equals absence of infection."],
+      ["A negative test ≠ absence of infection.", "A negative test = absence of infection."],
     ];
     for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
   });
@@ -372,6 +375,12 @@ describe("question script", () => {
     // a pain score only after "pain" or "rated"; any other pair of numbers stays as written
     expect(speakable("Pain rated 7/10; BP 120/80; seen 7/10/2026; Apgar 7/9.")).toBe("Pain rated 7 out of 10; BP 120/80; seen 7/10/2026; Apgar 7/9.");
     expect(speakable("Pain 12/10?")).toBe("Pain 12/10?");
+    // only after the word "pain": a date after a rate is never a score (Sol, PR #168)
+    for (const t of ["Compare heart rates 7/10 and 7/11.", "Heart rate 7/10.", "Respiratory rate 7/10 recheck.", "Rated 7/10 by the charge nurse.", "Rates 5/10 reviewed."]) expect(speakable(t), t).toBe(t);
+    expect(speakable("She rates her pain 4/10.")).toBe("She rates her pain 4 out of 10.");
+    // "(s)" is a plural only on things counted out; elsewhere it can be seconds, and the passage keeps its brackets
+    expect(speakable("Prothrombin time(s): 52 (normal 11).")).toBe("Prothrombin time(s): 52 (normal 11).");
+    expect(speakable("Give 2 capsule(s).")).toBe("Give 2 capsules.");
     expect(speakable("Titrate to 75 mg/dL/hr; 1000 calorie/day; HbA1c/eAG.")).toBe("Titrate to 75 milligrams per deciliter per hour; 1000 calorie per day; HbA1c slash eAG.");
   });
 

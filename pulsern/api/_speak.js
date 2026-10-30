@@ -203,8 +203,9 @@ const MATH_CANON = [
   [/\bequal\b/gi, 'equals'],
 ];
 export function canonUnits(text) {
-  // letters with accents as the plain letters ("Kübler" / "Kubler")
-  let t = String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  /* letters with accents as the plain letters ("Kübler" / "Kubler"); only
+     marks on a LETTER go, so a sign's overlay stays ("≠" is not "=") */
+  let t = String(text ?? '').normalize('NFD').replace(/(\p{L})[\u0300-\u036f]+/gu, '$1').normalize('NFC');
   for (const [re, to] of SPELLING_CANON) t = t.replace(re, to);
   for (const [re, to] of MATH_CANON) t = t.replace(re, to);
   for (const [re, to] of UNIT_CANON) t = t.replace(re, to);

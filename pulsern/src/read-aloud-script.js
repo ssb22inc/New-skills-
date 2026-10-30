@@ -71,10 +71,11 @@ const SPOKEN = [
      the check must hear them exactly: no rule can tell a score from a
      date, so none is guessed. */
   [/\band\/or\b/gi, "and or"],
-  /* A pain score: a number out of 10 right after "pain" or "rated" ("pain
+  /* A pain score: a number out of 10 right after the word "pain" ("pain
      rated 7/10", "pain 6/10", "rates her pain 4/10"), said the way a nurse
-     says it. Only there: elsewhere two numbers with a slash stay as written. */
-  [/\b(pain(?:\s+(?:level|score|rating|intensity))?(?:\s+(?:is|was|of|rated|rating))*|rated?s?(?:\s+(?:at|as))?)\s+(10|\d)\s*\/\s*10(?![\d\/]|\.\d)/gi, "$1 $2 out of 10"],
+     says it. Only there: after any other word ("heart rates 7/10") two
+     numbers with a slash stay as written, since a date reads the same. */
+  [/\b(pain(?:\s+(?:level|score|rating|intensity))?(?:\s+(?:is|was|of|rated|rating))*)\s+(10|\d)\s*\/\s*10(?![\d\/]|\.\d)/gi, "$1 $2 out of 10"],
   /* A unit per unit of time or weight with no number before it
      ("mcg/hr", "calories/day", "mg/dL/hr"): "per", as with a number. */
   [/\b(mg|mcg|units?|mL|kcal|calories?|mEq|mmol|g|L|gtts?|drops?|deciliter)\s*\/\s*(?=(?:min|minutes?|hr|hours?|h|day|kg|dose)\b)/g, "$1 per "],
@@ -124,11 +125,14 @@ export function speakable(text) {
 /* Brackets are read as a pause, not left for the voice: voices skip a
    bracketed aside, above all at the end of a passage ("... (Row 3 —
    Indicated)", "(Option 4)": the voice job's failure log). The words
-   stay; only the brackets become commas. A plural marker ("tablet(s)")
-   is said as the plural, and a part that is wholly in brackets is left
-   as it is. */
+   stay; only the brackets become commas. A plural marker on a closed list
+   of things counted out ("tablet(s)") is said as the plural; any other
+   "(s)" is left alone, since it can be seconds ("time(s)"). A part that
+   is wholly in brackets is left as it is. */
+const COUNTED = "tablet|capsule|dose|drop|puff|vial|patch|spray|syringe|ampule|bag|suppositor(?:y|ie)";
 function asides(text) {
-  const t = text.trim().replace(/([A-Za-z])\(s\)/g, "$1s");
+  const t = text.trim().replace(new RegExp(`\\b(${COUNTED})\\(s\\)`, "gi"), "$1s");
+  if (/\w\(s\)/.test(t)) return t;
   if (/^\([^()]*\)[.!?]?$/.test(t)) return t;
   return t
     .replace(/\s*\(([^()]*)\)/g, (m, inner) => (inner.trim() ? `, ${inner.trim()},` : ""))
