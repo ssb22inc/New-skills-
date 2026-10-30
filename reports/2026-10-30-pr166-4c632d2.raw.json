@@ -1,0 +1,34 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "195d24b0f8ddbd365cb1a370a2d76b681dc13653",
+    "head": "4c632d2fb5afb43672a0e5c2f6dd9382c261ab96",
+    "pr": "166"
+  },
+  "reviewedAt": "2026-10-30T07:59:39.340Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 63345,
+    "completionTokens": 4723,
+    "reasoningTokens": 4660,
+    "costUsd": 0.205591
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes. The normalization additions preserve the relevant clinical distinctions, and the worker's resume and chaining logic has meaningful regression coverage. Tests were reviewed but not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
