@@ -6,7 +6,7 @@
     "head": "86dd7fc8a9350b19b4a2b30e39710903a3ae06b4",
     "pr": "168"
   },
-  "reviewedAt": "2026-10-30T12:22:58.046Z",
+  "reviewedAt": "2026-10-30T13:14:15.514Z",
   "filesReviewed": [
     "pulsern/api/_speak.js",
     "pulsern/public/product/product-screenshots.json",
@@ -14,8 +14,30 @@
     "pulsern/tests/read-aloud.test.jsx"
   ],
   "skipped": [],
-  "findings": [],
-  "usage": null,
-  "error": "The review could not be completed: openai/gpt-6.1-sol: 402 out of credits — This request requires more credits, or fewer max_tokens. You requested up to 64000 tokens, but can only afford 34126. To increase, visit https://openrouter.ai/settings/credits and add more credits\n  Add credits at https://openrouter.ai/settings/credits, then re-run.",
-  "verdict": "FAIL"
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 150,
+      "title": "Preserve implicitly multiplied groups instead of treating them as asides",
+      "problem": "The aside predicate recognizes explicit arithmetic signs and adjacent digits, but not adjacent parenthesized factors. Consequently, speakable(\"Calculate (2 mg/kg)(70 kg).\") becomes \"Calculate, 2 milligrams per kilogram, 70 kg.\" Both grouping marks—and the implicit multiplication they express—are lost. The audio gate compares against this already-altered script, so it cannot detect the loss.",
+      "failure_scenario": "An approved dosage-calculation stem or rationale uses juxtaposed factors for dimensional analysis. A student listening to it hears two separate quantities rather than the multiplication needed to obtain the dose, even when the generated audio passes voiceCheck.",
+      "fix": "Preserve parentheses when adjacent groups or other factors indicate implicit multiplication, and conservatively retain ambiguous formula notation. Add exact-output regression tests for juxtaposed dose factors such as \"Calculate (2 mg/kg)(70 kg).\" and algebraic forms such as \"Use (D/H)Q.\"",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 45348,
+    "completionTokens": 4744,
+    "reasoningTokens": 4435,
+    "costUsd": 0.1608085
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One blocking defect: the new bracket normalization can erase implicit multiplication from dose calculations before the audio accuracy gate checks them.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
 }
