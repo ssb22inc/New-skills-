@@ -1347,10 +1347,35 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(setup.failed).toBe(true);
     expect(setup.setup).toBe(true);
     expect(setup.more).toBe(false);
+    // an account error while voicing the bank, after some work: never chain
+    let m = 0;
+    const revoked = vi.fn(async (url, init) => (++m > 6 ? { ok: false, status: 401 } : ok(url, init)));
+    const account = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: revoked, max: 50, log: () => {} });
+    expect(account.progress).toBe(true);
+    expect(account.setup).toBe(true);
+    expect(account.more).toBe(false);
     // and refusals alone are never progress
     const refused = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 400 })), max: 50, log: () => {} });
     expect(refused.progress).toBe(false);
     expect(refused.more).toBe(false);
+  });
+
+  it("stops starting passages when the run's time is up, and carries on in the next run", async () => {
+    let t = Date.UTC(2026, 9, 30, 8);
+    const clock = () => t;
+    const slow = fakeOpenAI();
+    const ticking = vi.fn(async (url, init) => { t += 60000; return slow(url, init); }); // every call takes a minute
+    const r = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: ticking, max: 200, now: clock, until: t + 5 * 60000, log: () => {} });
+    expect(r.failed).toBe(false);
+    expect(r.bank.stopped).toBe("max");
+    expect(r.more).toBe(true);
+    expect(ticking.mock.calls.length).toBeLessThanOrEqual(8); // no passage started after the limit (one may be in flight)
+    // the queue alone running out of time also carries on
+    const busy = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage: busy.storage });
+    const q = await runJob({ storage: busy.storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 200, now: clock, until: t - 1, log: () => {} });
+    expect(q.queue.timeUp).toBe(true);
+    expect(q.more).toBe(true);
   });
 
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
@@ -1831,6 +1856,10 @@ describe("the voice job workflow", () => {
   it("starts the next run itself only while the worker says there is more, on main, with no more than it needs", () => {
     expect(wf).toContain("if: always() && steps.voice.outputs.more == 'true'");
     expect(wf).toMatch(/if \[ "\$AFTER_FAILURE" = "true" \]; then sleep 600; fi/);
+    // the worker stops starting passages in time for the pause and the next run to fit in the job
+    const minutes = Number(/READ_ALOUD_MINUTES: "(\d+)"/.exec(wf)?.[1]);
+    const timeout = Number(/timeout-minutes: (\d+)/.exec(wf)?.[1]);
+    expect(minutes + 10 + 5).toBeLessThanOrEqual(timeout);
     expect(wf).toContain('gh workflow run pulsern-read-aloud.yml --ref main');
     expect(wf).toMatch(/permissions:\s*\n\s*contents: read\s*\n\s*actions: write/);
     expect(wf).not.toMatch(/contents: write|id-token|pull-requests: write/);

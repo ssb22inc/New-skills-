@@ -44,7 +44,9 @@ jobs:
       contents: read
       actions: write # only to start the next run while work remains
     environment: pulsern-paid
-    timeout-minutes: 40
+    # 25 minutes of voicing (READ_ALOUD_MINUTES), a passage in flight, the
+    # 10-minute pause after a failed run, and starting the next run.
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: pulsern
@@ -63,6 +65,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           READ_ALOUD_MAX: ${{ inputs.max || '200' }}
+          READ_ALOUD_MINUTES: "25"
         run: node ops/read-aloud-worker.mjs
       - name: Carry on while work remains
         # also after a failed run that still got work done (a brief blip),
