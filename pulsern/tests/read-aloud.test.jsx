@@ -198,8 +198,11 @@ describe("question script", () => {
       ["25,000 units ÷ 500 mL", "25,000 units divided by 500 mL"],
       ["Metoprolol succinate is a beta-1 selective blocker.", "Metoprolol succinate is a beta1 selective blocker."],
       ["Hyperkalemia causes peaked T-waves.", "Hyperkalemia causes peaked T waves."],
-      ["Time and notation T.O. provider name.", "Time and notation TO provider name."],
       ["ANC 320 cells/mm³.", "ANC 320 cells per cubic millimeter."],
+      ["ANC 320 cells/mm³.", "ANC 320 cells/mm³."],
+      ["ANC 320 cells/mm³.", "ANC 320 cells/mm3."],
+      ["ANC 320 cells/mm³.", "ANC 320 cells per mm³."],
+      ["ANC 320 cells/mm³", "ANC 320 cells/mm³"],
       ["A wound 3–4 cm (1.5 inches) wide.", "A wound 3 to 4 centimeters (1.5 inches) wide."],
       ["Metoprolol 25 mg PO daily.", "Metoprolol 25 mg by mouth daily."],
     ];
@@ -211,6 +214,10 @@ describe("question script", () => {
       ["Metoprolol 25 mg PO daily.", "Metoprolol 25 mg IV daily."],
       ["Returned from post anesthesia care.", "Returned from preanesthesia care."],
       ["ANC 320 cells/mm³.", "ANC 230 cells per cubic millimeter."],
+      ["ANC 320 cells/mm³.", "ANC 320 cells/mm²."],
+      // an abbreviation that is also a word must be heard as its letters, never as the word
+      ["Move the client to the O.R.", "Move the client to the or."],
+      ["Time and notation T.O. provider name.", "Time and notation to provider name."],
     ];
     for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
   });

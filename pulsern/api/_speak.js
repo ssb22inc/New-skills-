@@ -141,10 +141,8 @@ const SPELLING_CANON = [
   [/\s*÷\s*/g, ' divided by '],
   [/\b(alpha|beta|gamma|delta|kappa)[\s-]+(\d)\b/gi, '$1$2'],
   [/\b([A-Za-z])[\s-]+(waves?)\b/g, '$1$2'],
-  // a dotted abbreviation ("T.O.", "p.r.n.") as its letters
-  [/\b((?:[A-Za-z]\.){2,})(?![A-Za-z])/g, (m) => m.replace(/\./g, '')],
   // a count per cubic millimetre, written or said
-  [/\s*\/\s*mm(?:³|3)\b|\bper\s+(?:mm(?:³|3)|cubic\s+mm)\b/gi, ' per cubic millimeter'],
+  [/\s*\/\s*mm(?:³|3)(?![A-Za-z0-9])|\bper\s+(?:mm(?:³|3)|cubic\s+mm)(?![A-Za-z0-9])/gi, ' per cubic millimeter'],
 ];
 /* Calculation signs, the same way on both sides: a transcriber may write
    "×", "x", "*" or "times", "=" or "equals". */
@@ -530,7 +528,7 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
-export const CHECK_VERSION = 3; // 2: the spellings in SPELLING_CANON; 3: prefixes, ÷, Greek letters, waves, dotted abbreviations, mm³, cm, by mouth
+export const CHECK_VERSION = 3; // 2: the spellings in SPELLING_CANON; 3: prefixes, ÷, Greek letters, waves, mm³, cm, by mouth
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */
 export function checkFailure(check) {
