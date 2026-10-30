@@ -1,0 +1,54 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "74cd592a0771492c742ef9551d134cf6162c72b0",
+    "head": "b54e79b0fa8c64202698463dbc172be7ca7efeb0",
+    "pr": "165"
+  },
+  "reviewedAt": "2026-10-30T05:57:41.159Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 122,
+      "title": "Rejected compound candidates consume the next valid prefix",
+      "problem": "COMPOUND_PARTS consumes both words even when their concatenation is not allowed. For \"Read post-operative orders.\", it first matches \"Read post\", leaves that rejected candidate unchanged, and resumes after \"post\". Consequently, it never normalizes \"post-operative\". This regresses an equivalence supported by the previous regex.",
+      "failure_scenario": "An uncached option or rationale says \"Read post-operative instructions to the client.\" and the transcription writes the same reading as \"Read postoperative instructions to the client.\" The canonical strings remain different, so the documented exact-word check rejects correct audio. Two such takes produce a cached failure instead of checked read-aloud audio.",
+      "fix": "Match only valid compound splits, or scan word boundaries without consuming the second word when a candidate is rejected. Add a regression test comparing \"Read post-operative instructions.\" with \"Read postoperative instructions.\" through voiceCheck.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 146,
+      "title": "Sentence-final receptor subtypes are excluded from normalization",
+      "problem": "The negative lookahead rejects every period after the subtype number, not just a decimal point followed by another digit. Thus \"beta-1 selective\" is normalized, but \"beta-1.\" and \"beta 1.\" are not normalized to \"beta1.\". Ordinary sentence punctuation disables the newly supported equivalence.",
+      "failure_scenario": "A receptor-identification question has an option \"Beta-1\". questionSegments appends a period, producing \"Beta-1.\". If the transcriber writes \"Beta1.\", the canonical strings differ and correct audio can fail both takes and receive a cached failed verdict. The added tests cover receptor names only before another word, so they miss this boundary.",
+      "fix": "Exclude following digits and actual decimal continuations, rather than all periods—for example, use a lookahead equivalent to (?!\\d|\\.\\d). Test sentence-final and parenthesized subtype labels, while retaining rejection of changed subtype numbers and decimal values.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 46172,
+    "completionTokens": 9330,
+    "reasoningTokens": 8749,
+    "costUsd": 0.2087285
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Found two defects in the new normalization rules that can reject correctly spoken passages and cache failed verdicts under check version 3. No clinical-gate bypass was identified. Static review only; tests were not executed, and the imported audioCheck implementation was not supplied.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
