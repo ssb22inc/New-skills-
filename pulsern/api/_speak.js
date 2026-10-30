@@ -86,7 +86,8 @@ const UNIT_CANON = [
   [/\b(?:millimeters?|millimetres?)\s+of\s+mercury\b|\bmm\s?hg\b/gi, ' mmhg '],
   [/\bcentimet(?:er|re)s?\b/gi, ' cm '],
   [/\bmillimet(?:er|re)s?\b/gi, ' mm '],
-  [/\bby\s+mouth\b/gi, ' po '],
+  [/\bby\s+mouth\b|\borally\b/gi, ' po '],
+  [/\b(?:nanograms?|ng)\s*(?:\/|per)\s*(?:milliliters?|millilitres?|ml)\b/gi, ' ngperml '],
   [/\s*°\s*c\b|\bdegrees?\s+(?:celsius|c)\b/gi, ' degc '],
   [/\s*°\s*f\b|\bdegrees?\s+(?:fahrenheit|f)\b/gi, ' degf '],
   [/\bs\s*p\s*o\s*(?:2|two|₂)\b|\bspo2\b/gi, ' spo2 '],
@@ -118,11 +119,13 @@ const COMPOUNDS = new Set([
   'nonadherent', 'nonadherence', 'noncompliant', 'noncompliance', 'nonreactive', 'nonstress', 'nonblanchable',
   'antiinflammatory', 'multidisciplinary', 'interdisciplinary', 'interprofessional', 'preexisting', 'prediabetes',
   'dropdown', 'healthcare', 'readback', 'cosignature', 'readministered',
+  'nontherapeutic', 'nonessential', 'nonslip', 'recheck', 'rechecking', 'reevaluate', 'reevaluation', 'reassess', 'reassessment',
+  'prehydration', 'handoff', 'counterpressure', 'fingerstick', 'uteroplacental',
 ]);
 /* Only the exact splits of the listed compounds are matched, so a pair
    that is not one ("Read post-operative") never uses up a word another
    compound needs. */
-const COMPOUND_PREFIXES = ['non', 'post', 'pre', 'anti', 'inter', 'intra', 'multi', 'peri', 'ante', 'sub', 'supra', 'drop', 'health', 'read', 'co', 're'];
+const COMPOUND_PREFIXES = ['non', 'post', 'pre', 'anti', 'inter', 'intra', 'multi', 'peri', 'ante', 'sub', 'supra', 'drop', 'health', 'read', 'co', 're', 'hand', 'counter', 'finger', 'utero'];
 const COMPOUND_SPLITS = new RegExp(`\\b(?:${[...COMPOUNDS].flatMap((c) => COMPOUND_PREFIXES
   .filter((p) => c.startsWith(p) && c.length - p.length >= 2)
   .map((p) => `${p}[\\s-]+${c.slice(p.length)}`)).join('|')})\\b`, 'gi');
@@ -132,12 +135,33 @@ const COMPOUND_SPLITS = new RegExp(`\\b(?:${[...COMPOUNDS].flatMap((c) => COMPOU
    min", "5 milligrams/minute") reaches RATE in one form. Only that span
    is converted: the rest of the text is left to the word check. */
 const NUM_WORD = 'zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred';
+/* A quantity before a unit: digits ("30") or a number in words ("thirty",
+   "three hundred"), so a unit rule treats both spellings alike. */
+const QTY = `(\\b\\d+(?:\\.\\d+)?|\\b(?:${NUM_WORD})(?:[\\s-]+(?:${NUM_WORD}|and))*)`;
 const RATE_IN_WORDS = new RegExp(`\\b(?:${NUM_WORD})(?:[\\s-]+(?:${NUM_WORD}|and))*(?=\\s+(?:${RATE_UNITS})\\s*(?:\\/|\\s+slash\\s+))`, 'gi');
 const SPELLING_CANON = [
   [RATE_IN_WORDS, (m) => wordsToNumbers(m).trim()],
   [/\b(\d{1,3})((?:,\d{3})+)\b/g, (m) => m.replace(/,/g, '')],
   [/\band\s*\/\s*or\b/gi, 'and or'],
   [/\s+slash\s+/gi, ' / '],
+  // a count per unit of time with no unit before the slash ("118/min")
+  [/(\b\d+(?:\.\d+)?)\s*\/\s*(?=(?:mins?|minutes?|hrs?|hours?|h|days?|wk|weeks?|secs?|seconds?)\b)/gi, '$1 per '],
+  /* after a number: a short unit and its word ("300 min" / "300 minutes",
+     "6 lb" / "6 pounds", "15 gtt" / "15 drops"). A number said in words
+     ("thirty minutes") needs no rule here: the word check reads number
+     words as digits and a plural as its singular (speechTokens), so
+     "30 minute" and "thirty minutes" already compare equal. */
+  [new RegExp(`${QTY}\\s*(?:mins?|minutes?)\\b`, 'gi'), '$1 minute'],
+  [new RegExp(`${QTY}\\s*(?:lbs?|pounds?)\\b`, 'gi'), '$1 pound'],
+  [new RegExp(`${QTY}\\s*(?:gtts?|drops?)\\b`, 'gi'), '$1 drop'],
+  /* subscript digits as digits ("CO₂" / "CO2"). A Roman numeral is never
+     read as a number: "stage IV antibiotics" is intravenous, not stage 4. */
+  [/[₀-₉]/g, (d) => String(d.charCodeAt(0) - 0x2080)],
+  /* "e.g." and "i.e." as the words they stand for. Only the DOTTED forms
+     (and a bare lower-case "eg") are read this way: an undotted "IE" is
+     infective endocarditis, never "that is". */
+  [/\b[eE]\.\s?[gG]\.?(?=[\s,;:)]|$)|\beg\b/g, 'for example'],
+  [/\b[iI]\.\s?[eE]\.?(?=[\s,;:)]|$)/g, 'that is'],
   [RATE, '$1 per '],
   [/\bper\s+(?:mins?|minutes?)\b/gi, 'per minute'],
   [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
@@ -260,10 +284,24 @@ export function quotaDay(now, tz = QUOTA_TZ) {
    once (upsert off: a second create of the same name fails), so each paid
    call holds a distinct slot below the limit, however many requests run at
    once. Any storage error refuses the call (fail closed). */
+/* A brief storage blip (a timeout, a 5xx) is tried again, twice, before
+   it counts as storage trouble: one slow call must not stop a whole run.
+   An answer (the slot exists, it is not found) is never retried. */
+export const STORAGE_RETRY = { tries: 3, ms: [1000, 3000] };
+const transient = (error) => !!error && !/exist|duplicate|409|not.?found|404/i.test(`${error.message ?? ''} ${error.statusCode ?? ''} ${error.error ?? ''}`);
+export async function retried(call) {
+  let out;
+  for (let i = 0; i < STORAGE_RETRY.tries; i++) {
+    out = await call();
+    if (!transient(out?.error)) return out;
+    if (i < STORAGE_RETRY.tries - 1) await new Promise((r) => setTimeout(r, STORAGE_RETRY.ms[i] ?? 3000));
+  }
+  return out;
+}
 async function countSlots(bucket, dir) {
   let n = 0;
   for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await bucket.list(dir, { limit: 1000, offset });
+    const { data, error } = await retried(() => bucket.list(dir, { limit: 1000, offset }));
     if (error) { console.error('[read-aloud] storage list', dir.split('/')[0], error.message ?? error); return null; }
     n += (data ?? []).length;
     if (!data || data.length < 1000) return n;
@@ -384,7 +422,7 @@ async function claimSlot(storage, dir, limit) {
   }
   let created = false;
   for (let tries = 0; tries < 25 && n < limit; tries++, n++) {
-    const slot = () => bucket.upload(`${dir}/${String(n).padStart(5, '0')}`, '1', { contentType: 'text/plain', upsert: false });
+    const slot = () => retried(() => bucket.upload(`${dir}/${String(n).padStart(5, '0')}`, '1', { contentType: 'text/plain', upsert: false }));
     let { error } = await slot();
     // First use: listing a bucket that does not exist yet can come back
     // empty rather than as an error, so the write is where it shows.
@@ -425,7 +463,7 @@ export async function reserve(storage, userId, { now = Date.now(), limits = LIMI
 export class StorageReadError extends Error {}
 const isMissing = (error) => /not.?found|does not exist|404/i.test(`${error?.message ?? ''} ${error?.statusCode ?? ''} ${error?.error ?? ''}`);
 async function readJson(bucket, path) {
-  const { data, error } = await bucket.download(path);
+  const { data, error } = await retried(() => bucket.download(path));
   if (error) {
     if (isMissing(error)) return null;
     console.error('[read-aloud] storage read', path.split('/')[0], error.message ?? error);
@@ -538,7 +576,7 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
-export const CHECK_VERSION = 3; // 2: the spellings in SPELLING_CANON; 3: prefixes, ÷, Greek letters, waves, mm³, cm, by mouth
+export const CHECK_VERSION = 4; // 2: the spellings in SPELLING_CANON; 3: compounds, ÷, receptor subtypes, waves, mm³, cm, by mouth; 4: count per time, ng/mL, min/lb/gtt after a number, subscripts, stage numbers, e.g./i.e., more compounds
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */
 export function checkFailure(check) {

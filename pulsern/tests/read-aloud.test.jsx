@@ -16,7 +16,7 @@ import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, should
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE } from "../ops/read-aloud-worker.mjs";
-import { passagePaths, CHECK_VERSION, checkFailure, readRecord } from "../api/_speak.js";
+import { passagePaths, CHECK_VERSION, checkFailure, readRecord, STORAGE_RETRY } from "../api/_speak.js";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -237,6 +237,56 @@ describe("question script", () => {
     for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
   });
 
+  it("accepts the third round of spellings from the failure log, and still rejects a changed value", () => {
+    const pass = [
+      ["Heart rate is below 60/min in this client.", "Heart rate is below 60 per minute in this client."],
+      ["Respiratory rate of 6/min and shallow.", "Respiratory rate of 6/minute and shallow."],
+      ["Digoxin level 0.5–2.0 ng/mL.", "Digoxin level 0.5 to 2.0 nanograms per milliliter."],
+      ["Divide by 300 min equals 9000.", "Divide by 300 minutes equals 9000."],
+      ["Report a 6 lb weight loss.", "Report a 6 pound weight loss."],
+      ["The drop factor is 15 gtt/mL.", "The drop factor is 15 drops per mL."],
+      ["pH below 7.35 and CO₂ is high.", "pH below 7.35 and CO2 is high."],
+      ["Observe for 30 min after administration.", "Observe for thirty min after administration."],
+      ["Report a 6 lb weight loss.", "Report a six lb weight loss."],
+      ["The drop factor is 15 gtt/mL.", "The drop factor is fifteen gtt per mL."],
+      ["Unless specifically required (e.g., during feeding).", "Unless specifically required (eg, during feeding)."],
+      ["Unless specifically required, e.g. during feeding.", "Unless specifically required, for example during feeding."],
+      ["Give it with food, i.e. at meals.", "Give it with food, that is at meals."],
+      ["Give it with food (i.e., at meals).", "Give it with food (i.e., at meals)."],
+      ["Option 0 uses non therapeutic phrases.", "Option 0 uses nontherapeutic phrases."],
+      ["Before re checking the level.", "Before rechecking the level."],
+      ["The nurse reviews the 0700 hand off report.", "The nurse reviews the 0700 handoff report."],
+      ["Late decelerations reflect utero-placental insufficiency.", "Late decelerations reflect uteroplacental insufficiency."],
+      ["Take it PO daily.", "Take it orally daily."],
+      // the number in words, the unit in full or short
+      ["Observe for 30 minutes after administration.", "Observe for thirty minutes after administration."],
+      ["Divide by 300 min.", "Divide by three hundred minutes."],
+      ["Report a 6 lb weight loss.", "Report a six pound weight loss."],
+      ["Report 6 pounds lost.", "Report six pounds lost."],
+      ["Give 15 drops.", "Give fifteen drops."],
+      ["The drop factor is 15 gtt/mL.", "The drop factor is fifteen drops per mL."],
+    ];
+    for (const [w, h] of pass) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(true);
+    const fail = [
+      ["Heart rate is below 60/min in this client.", "Heart rate is below 16 per minute in this client."],
+      ["Heart rate is below 60/min in this client.", "Heart rate is below 60 per hour in this client."],
+      ["Report a 6 lb weight loss.", "Report a 6 kg weight loss."],
+      ["Observe for 30 minutes after administration.", "Observe for thirteen minutes after administration."],
+      ["Give 15 drops.", "Give fifty drops."],
+      ["A client with a stage III pressure injury.", "A client with a stage 2 pressure injury."],
+      // a Roman numeral is never read as a number: here IV is intravenous
+      ["At this stage IV antibiotics are indicated.", "At this stage four antibiotics are indicated."],
+      ["Observe for 30 min after administration.", "Observe for thirteen min after administration."],
+      ["pH below 7.35 and CO₂ is high.", "pH below 7.35 and CO is high."],
+      ["Level of 8/10 and rising.", "Level of 8 out of 10 and rising."], // two numbers with a slash are never reworded
+      ["Digoxin level 2.0 ng/mL.", "Digoxin level 2.0 micrograms per milliliter."],
+      ["The nurse assesses a client with IE for embolic complications.", "The nurse assesses a client with that is for embolic complications."], // IE is infective endocarditis
+      ["A client with IE.", "A client with i.e."],
+    ];
+    for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
+    expect(speakable("Heart rate 118/min.")).toBe("Heart rate 118 per minute.");
+  });
+
   it("voices a long part in shorter pieces, where the voice is less likely to skip words", () => {
     expect(PART_MAX).toBeLessThanOrEqual(450);
   });
@@ -365,6 +415,8 @@ function fakeStorage({ missingBucket = false, failCounters = false, failDownload
   };
   return { calls, files, storage: { from: (b) => { expect(b).toBe(BUCKET); return bucket; }, createBucket: async (name, opts) => { calls.createBucket.push([name, opts]); bucketExists = true; return { error: null }; } } };
 }
+// Storage retries wait real seconds in production; here they wait 1 ms.
+STORAGE_RETRY.ms = [1, 1];
 const ROW = { id: 7, type: "mc", stem: "Which value is the priority?", options: ["Potassium 2.9 mEq/L", "Sodium 138 mEq/L"], answer: 0, rationale: "Low potassium risks dysrhythmias." };
 const REF = { kind: "question", id: 7, part: "question" };
 /* OpenAI fake: speech returns bytes; transcription returns what was "heard"
@@ -1014,7 +1066,22 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     const lines = [];
     await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(["Something else entirely."]), max: 3, log: (l) => lines.push(l) });
     expect(lines.length).toBeGreaterThan(0);
-    expect(lines[0]).toMatch(/^failed the check twice: (result line|question \d+|case \d+|card \d+): expected "/);
+    expect(lines[0]).toMatch(/^failed the check twice: (result lines|question \d+|case \d+|card \d+): expected "/);
+  });
+
+  it("tries a budget counter again after a brief storage blip, instead of stopping the run", async () => {
+    const saved = { ...STORAGE_RETRY };
+    STORAGE_RETRY.ms = [1, 1];
+    try {
+      const { storage } = fakeStorage();
+      const bucket = storage.from(BUCKET);
+      const upload = bucket.upload;
+      let blips = 1;
+      bucket.upload = async (path, body, opts) => (path.startsWith("usage/") && blips-- > 0 ? { error: { message: "The connection to the database timed out", statusCode: "544" } } : upload(path, body, opts));
+      const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 2 });
+      expect(r.failure).toBe(false);
+      expect(r.voiced).toBeGreaterThan(0);
+    } finally { Object.assign(STORAGE_RETRY, saved); }
   });
 
   it("starts the scan again from the top when the voice check changes, so passages it turned away are voiced again", async () => {
@@ -1260,10 +1327,142 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect((await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000, log: () => {} })).more).toBe(false);
     // today's budget spent: stop until tomorrow
     expect((await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 50, limits: { user: 300, admission: 300, spend: 0 }, log: () => {} })).more).toBe(false);
-    // a failed run (the provider is down): stop, so an outage never loops
+    // a failed run that got nothing done (the provider is down): stop, so an outage never loops
     const down = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 503 })), max: 50, log: () => {} });
     expect(down.failed).toBe(true);
+    expect(down.progress).toBe(false);
     expect(down.more).toBe(false);
+    // a failed run that still got work done (a brief blip): carry on, after the workflow's pause
+    const ok = fakeOpenAI();
+    let calls = 0;
+    const flaky = vi.fn(async (url, init) => (++calls > 6 ? { ok: false, status: 503 } : ok(url, init)));
+    const blip = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: flaky, max: 50, log: () => {} });
+    expect(blip.failed).toBe(true);
+    expect(blip.progress).toBe(true);
+    expect(blip.more).toBe(true);
+    // the provider refuses every request after some work (a setup problem): never chain, whatever came before
+    let n = 0;
+    const refusing = vi.fn(async (url, init) => (++n > 6 ? { ok: false, status: 400 } : ok(url, init)));
+    const setup = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: refusing, max: 50, log: () => {} });
+    expect(setup.failed).toBe(true);
+    expect(setup.setup).toBe(true);
+    expect(setup.more).toBe(false);
+    // an account error while voicing the bank, after some work: never chain
+    let m = 0;
+    const revoked = vi.fn(async (url, init) => (++m > 6 ? { ok: false, status: 401 } : ok(url, init)));
+    const account = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: revoked, max: 50, log: () => {} });
+    expect(account.progress).toBe(true);
+    expect(account.setup).toBe(true);
+    expect(account.more).toBe(false);
+    // a storage failure that throws after some work (the cursor cannot be saved): the work still counts, carry on
+    const cursorFails = fakeStorage();
+    const cb = cursorFails.storage.from(BUCKET);
+    const up = cb.upload;
+    let voicedSoFar = 0;
+    cb.upload = async (path, body, opts) => {
+      if (path.endsWith(".mp3")) voicedSoFar++;
+      if (path === "prewarm/cursor.json" && voicedSoFar > 0) return { error: { message: "Internal server error", statusCode: "500" } };
+      return up(path, body, opts);
+    };
+    const thrown = await runJob({ storage: cursorFails.storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 50, log: () => {} });
+    expect(thrown.failed).toBe(true);
+    expect(thrown.progress).toBe(true);
+    expect(thrown.more).toBe(true);
+    // and refusals alone are never progress
+    const refused = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 400 })), max: 50, log: () => {} });
+    expect(refused.progress).toBe(false);
+    expect(refused.more).toBe(false);
+  });
+
+  it("stops starting passages when the run's time is up, and carries on in the next run", async () => {
+    let t = Date.UTC(2026, 9, 30, 8);
+    const clock = () => t;
+    const slow = fakeOpenAI();
+    const ticking = vi.fn(async (url, init) => { t += 60000; return slow(url, init); }); // every call takes a minute
+    const r = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: ticking, max: 200, now: clock, until: t + 5 * 60000, log: () => {} });
+    expect(r.failed).toBe(false);
+    expect(r.bank.stopped).toBe("max");
+    expect(r.more).toBe(true);
+    expect(ticking.mock.calls.length).toBeLessThanOrEqual(8); // no passage started after the limit (one may be in flight)
+    // the queue alone running out of time also carries on
+    const busy = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage: busy.storage });
+    const q = await runJob({ storage: busy.storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 200, now: clock, until: t - 1, log: () => {} });
+    expect(q.queue.timeUp).toBe(true);
+    expect(q.more).toBe(true);
+  });
+
+  it("rides out a brief storage blip on any read: records, the queue, the cursor", async () => {
+    const { storage } = fakeStorage();
+    const bucket = storage.from(BUCKET);
+    const download = bucket.download;
+    const blipped = new Set();
+    // the first read of every path times out once
+    bucket.download = async (path) => (blipped.has(path) ? download(path) : (blipped.add(path), { data: null, error: { message: "The connection to the database timed out", statusCode: "544" } }));
+    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 5 });
+    expect(r.failure).toBe(false);
+    expect(r.stopped).toBe("max");
+    expect(r.voiced).toBeGreaterThan(0);
+  });
+
+  it("checks the time before every passage, cached ones included, and keeps its place", async () => {
+    const { storage, files } = fakeStorage();
+    // voice the whole bank once
+    await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000 });
+    // a new check version: the scan starts again over a bank that is all cached, and every record read takes a minute
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "verdicts", afterId: 0, check: CHECK_VERSION - 1 })));
+    let t = Date.UTC(2026, 9, 30, 8);
+    const bucket = storage.from(BUCKET);
+    const download = bucket.download;
+    let reads = 0;
+    bucket.download = async (path) => { if (/^marin\/.*\.json$/.test(path)) { reads++; t += 60000; } return download(path); };
+    const f = fakeOpenAI();
+    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1000, now: () => t, until: t + 3 * 60000 });
+    expect(r.stopped).toBe("max");
+    expect(reads).toBeLessThanOrEqual(4); // stopped at the time limit, not at the end of the bank
+    expect(f).not.toHaveBeenCalled();
+    expect(JSON.parse(files.get("prewarm/cursor.json").toString()).done).toBeFalsy(); // its place is kept for the next run
+    // and each short run carries on from where the last one stopped, inside the group, until the scan moves on
+    const seen = new Set();
+    bucket.download = async (path) => { if (/^marin\/.*\.json$/.test(path)) { seen.add(path); t += 60000; } return download(path); };
+    for (let run = 0; run < 40; run++) {
+      const c = JSON.parse(files.get("prewarm/cursor.json").toString());
+      if (c.kind !== "verdicts") break;
+      await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1000, now: () => t, until: t + 3 * 60000 });
+    }
+    expect(JSON.parse(files.get("prewarm/cursor.json").toString()).kind).not.toBe("verdicts"); // left the result lines behind
+    expect(seen.size).toBeGreaterThanOrEqual(verdictPassages().length - 4); // reading new passages each run, not the same ones
+  });
+
+  it("resumes inside an item only if it is the same item with the same passage there; otherwise starts that item from the top", async () => {
+    const groupKeyOf = (texts) => createHash("sha256").update(texts.map((t) => passagePaths(t).key).join("\n")).digest("hex").slice(0, 32);
+    const Q = (id, n) => ({ ...ROW, id, stem: `Stem of ${id}?`, options: Array.from({ length: n }, (_, k) => `Option ${id}.${k} words`), rationale: `Why ${id}.` });
+    const bank = (questions) => ({ questions, case_studies: [], flashcards: [] });
+    const voicedTexts = (f) => f.mock.calls.filter(([u]) => u.endsWith("/audio/speech")).map(([, i]) => JSON.parse(i.body).input);
+    // the result lines are already done; question 100 was stopped at its 5th passage
+    for (const [label, mutate, expectFirst] of [
+      ["withdrawn", (qs) => qs.filter((q) => q.id !== 100), "Stem of 101?"],
+      ["edited", (qs) => qs.map((q) => (q.id === 100 ? { ...q, options: q.options.map((o) => `${o} (revised)`) } : q)), "Stem of 100?"],
+      // only a passage BEFORE the saved one changes; the saved passage itself is the same
+      ["stem edited", (qs) => qs.map((q) => (q.id === 100 ? { ...q, stem: "Revised stem of 100?" } : q)), "Revised stem of 100?"],
+    ]) {
+      const { storage, files } = fakeStorage();
+      const questions = [Q(100, 6), Q(101, 3)];
+      const stopAt = itemPassages("question", questions[0])[4];
+      files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(itemPassages("question", questions[0])), check: CHECK_VERSION })));
+      const f = fakeOpenAI();
+      await prewarmBank({ storage, db: fakeDb(bank(mutate(questions))), apiKey: "k", fetchImpl: f, max: 1000 });
+      expect(voicedTexts(f)[0], label).toBe(expectFirst); // from the top of that item: nothing skipped
+      expect(voicedTexts(f), label).toEqual(expect.arrayContaining(itemPassages("question", questions[1])));
+    }
+    // the same item, unchanged: carries on at the saved passage
+    const { storage, files } = fakeStorage();
+    const q = Q(100, 6);
+    const parts = itemPassages("question", q);
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(parts), check: CHECK_VERSION })));
+    const f = fakeOpenAI();
+    await prewarmBank({ storage, db: fakeDb(bank([q])), apiKey: "k", fetchImpl: f, max: 1000 });
+    expect(voicedTexts(f)[0]).toBe(parts[4]);
   });
 
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
@@ -1742,7 +1941,12 @@ describe("the voice job workflow", () => {
     expect(wf).toContain("cancel-in-progress: false");
   });
   it("starts the next run itself only while the worker says there is more, on main, with no more than it needs", () => {
-    expect(wf).toContain("if: steps.voice.outputs.more == 'true'");
+    expect(wf).toContain("if: always() && steps.voice.outputs.more == 'true'");
+    expect(wf).toMatch(/if \[ "\$AFTER_FAILURE" = "true" \]; then sleep 600; fi/);
+    // the worker stops starting passages in time for the pause and the next run to fit in the job
+    const minutes = Number(/READ_ALOUD_MINUTES: "(\d+)"/.exec(wf)?.[1]);
+    const timeout = Number(/timeout-minutes: (\d+)/.exec(wf)?.[1]);
+    expect(minutes + 10 + 5).toBeLessThanOrEqual(timeout);
     expect(wf).toContain('gh workflow run pulsern-read-aloud.yml --ref main');
     expect(wf).toMatch(/permissions:\s*\n\s*contents: read\s*\n\s*actions: write/);
     expect(wf).not.toMatch(/contents: write|id-token|pull-requests: write/);

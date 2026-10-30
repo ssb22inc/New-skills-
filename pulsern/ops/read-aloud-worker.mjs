@@ -30,9 +30,10 @@
      times per passage, and three in a row end the run (provider down).
    Any operational failure (provider down, account or setup error, storage
    or bank trouble) fails the workflow run, so it is noticed. */
+import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, retried, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
 import { verdictText, itemParts, voiceable } from "../src/read-aloud-script.js";
 
@@ -68,7 +69,7 @@ async function voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, dea
 }
 
 async function readJsonFile(bucket, path, maxBytes = Infinity) {
-  const { data, error } = await bucket.download(path);
+  const { data, error } = await retried(() => bucket.download(path));
   if (error) return { error };
   if (Number(data.size) > maxBytes) return { tooBig: true };
   const text = await data.text();
@@ -79,7 +80,7 @@ const put = (bucket, path, value) => bucket.upload(path, JSON.stringify(value), 
 
 /* One page of a lane, oldest first. */
 async function lanePage(bucket, dir, offset) {
-  const { data, error } = await bucket.list(dir, { limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } });
+  const { data, error } = await retried(() => bucket.list(dir, { limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } }));
   if (error) {
     if (/not found/i.test(String(error.message ?? error))) return { entries: [], last: true };
     throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
@@ -90,7 +91,10 @@ async function lanePage(bucket, dir, offset) {
 /* Two lanes: every fresh request (queue/) before any retry
    (queue-retry/), each oldest first. Entries are read one at a time, so a
    long queue never sits in memory. */
-export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log }) {
+/* onChecked: called for every passage that got a verdict (voiced, or
+   failed the check), so the caller knows work was done even if a later
+   step throws. */
+export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, onChecked = () => {} }) {
   const bucket = storage.from(BUCKET);
   const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
   let inARow = 0, refusedInARow = 0, done = 0;
@@ -115,6 +119,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
     const before = new Set(page.entries.map((e) => `${lane}/${e.name}`));
     for (const f of page.entries) {
       if (done >= max) return out;
+      if (now() >= until) { out.timeUp = true; return out; } // the run's time is up: the rest waits for the next run
       const path = `${lane}/${f.name}`;
       if (touched.has(path)) continue;
       // Oversized entries are not ours: dropped unread.
@@ -183,6 +188,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
       inARow = 0;
       await drop(path);
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
+      if (v.result === "voiced" || v.result === "failed") onChecked();
       if (v.result === "voiced") out.voiced++;
       else if (v.result === "rejected") {
         out.rejected++; log(`provider refused: ${job.ref.kind} ${job.ref.id} ${job.seg} (${v.error})`);
@@ -218,7 +224,7 @@ export const BANK_QUERIES = {
   card: (db) => db.from("flashcards").select("id, front, back").eq("approved", true),
 };
 
-export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50, log = () => {} }) {
+export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50, log = () => {}, until = Infinity, onChecked = () => {} }) {
   const bucket = storage.from(BUCKET);
   // stopped: null (all done), "max" or "budget" (normal), or an operational failure (failed: true)
   const out = { voiced: 0, failed: 0, rejected: 0, spent: 0, budget: false, stopped: null, failure: false, cursor: null };
@@ -239,18 +245,36 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
     const { error } = await put(bucket, "prewarm/cursor.json", { ...cursor, check: CHECK_VERSION });
     if (error) throw new Error(`could not save the cursor: ${error.message ?? error}`);
   };
+  /* Voice a group of passages (the result lines, or one bank item). If a
+     run stops part-way through a group, the cursor keeps where: the group
+     (atItem), the index (at) and a fingerprint of the whole ordered group
+     (atKey). The next run resumes there only if the same group is still
+     exactly the same; if the item was withdrawn or any of its passages
+     edited, it starts the group from the top (cached passages are skipped
+     at once), so nothing is ever skipped unvoiced. The position is dropped
+     once the group is done. */
+  const groupKey = (texts) => createHash("sha256").update(texts.map((t) => passagePaths(t).key).join("\n")).digest("hex").slice(0, 32);
+  const resumeAt = (texts, label) => {
+    const i = cursor.at;
+    return cursor.atItem === label && Number.isInteger(i) && i >= 0 && i < texts.length && cursor.atKey === groupKey(texts) ? i : 0;
+  };
   const voice = async (texts, label) => {
-    for (const text of texts) {
+    const key = groupKey(texts);
+    for (let i = resumeAt(texts, label); i < texts.length; i++) {
+      const text = texts[i];
+      cursor = { ...cursor, at: i, atItem: label, atKey: key };
+      // The run's time is checked before every passage, cached ones included.
+      if (now() >= until) return "max";
       let decided;
       try { decided = await readRecord(storage, text, TTS, now()); } catch (e) { out.failure = true; return `storage: ${e.message}`; }
       if (decided) continue;
       // Waiting in the queue (fresh or retry): the queue owns it and its attempt count.
       const paths = passagePaths(text);
-      const waiting = await Promise.all([paths.queue, paths.retry].map((p) => bucket.download(p)));
+      const waiting = await Promise.all([paths.queue, paths.retry].map((p) => retried(() => bucket.download(p))));
       if (waiting.some((w) => !w.error)) continue;
       const unreadable = waiting.find((w) => w.error && !/not.?found|404/i.test(`${w.error.message ?? ""} ${w.error.statusCode ?? ""}`));
       if (unreadable) { out.failure = true; return `storage: could not read the queue (${unreadable.error.message ?? unreadable.error})`; }
-      if (done >= max) return "max";
+      if (done >= max || now() >= until) return "max"; // the run's limit, in passages or in time
       done++;
       const v = await voiceOne({ storage, apiKey, fetchImpl, text, now, limits });
       out.spent += v.spent;
@@ -258,7 +282,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       if (v.result === "busy") return "busy"; // being voiced elsewhere: this item again next run
       if (v.result === "budget") { out.budget = true; return "budget"; }
       if (v.result === "storage") { out.failure = true; return `storage: ${v.error}`; }
-      if (v.result === "service") { out.failure = true; return `provider: ${v.error}`; }
+      if (v.result === "service") { out.failure = true; out.service = v.error; return `provider: ${v.error}`; }
       if (v.result === "transient") {
         /* Bounded like queued work: the attempts live in the cursor, and at
            MAX_ATTEMPTS the passage gets a give-up record (reconsidered
@@ -283,6 +307,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       }
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
       out[v.result]++;
+      if (v.result === "voiced" || v.result === "failed") onChecked();
       if (v.result === "failed") log(`failed the check twice: ${label}: ${v.why}`);
       if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.failure = true; return `provider: ${refusedInARow} refusals in a row (${v.error})`; }
     }
@@ -290,8 +315,9 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   };
 
   while (cursor.kind) {
+    if (now() >= until) { out.stopped = "max"; await save(); break; }
     if (cursor.kind === "verdicts") {
-      const stop = await voice(verdictPassages(), "result line");
+      const stop = await voice(verdictPassages(), "result lines");
       if (stop) { out.stopped = stop; await save(); break; } // keeps the attempt counts
       cursor = { kind: "question", afterId: 0, attempts: cursor.attempts }; await save(); continue;
     }
@@ -399,16 +425,17 @@ export async function pruneClaims({ bucket, now }) {
    pruning. failed: true for any operational failure, which fails the
    workflow run. Caps always come from LIMITS (api/_speak.js), the same
    values the route uses. */
-export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log }) {
-  let q;
-  try { q = await drainQueue({ storage, apiKey, fetchImpl, max, now, limits, log }); }
+export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity }) {
+  let q, checked = 0;
+  const onChecked = () => { checked++; };
+  try { q = await drainQueue({ storage, apiKey, fetchImpl, max, now, limits, log, until, onChecked }); }
   catch (e) { q = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, errors: [String(e?.message ?? e)], broken: true }; }
   const left = Math.max(0, max - (q.voiced + q.failed + q.rejected + q.retried));
   // The bank waits for a clean queue run: after any operational failure the
   // provider or storage is suspect, and nothing more is spent this run.
-  const skip = q.budget || q.providerDown || q.service || q.broken || q.operational || !left;
+  const skip = q.budget || q.providerDown || q.service || q.broken || q.operational || q.timeUp || !left;
   let w;
-  try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, apiKey, fetchImpl, max: left, now, limits, log }); }
+  try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, apiKey, fetchImpl, max: left, now, limits, log, until, onChecked }); }
   catch (e) { w = { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: String(e?.message ?? e), failure: true }; }
   const pruned = await pruneUsage({ storage, now: now() }).catch((e) => ({ error: String(e?.message ?? e) }));
   const lines = [
@@ -423,8 +450,16 @@ export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch
   /* More to do right away: the run stopped at its own limit (the queue
      used it all, or the bank scan reached it), not at today's budget, the
      end of the work, or a failure. The workflow then starts the next run. */
-  const more = !failed && !q.budget && !w.budget && (w.stopped === "max" || !left);
-  return { lines, failed, more, queue: q, bank: w, pruned };
+  /* After a failure the job carries on only if this run still got work
+     done (passages voiced and checked: a brief blip, not an outage), and
+     the workflow waits before it starts the next run. A provider refusal
+     is not progress, and a setup problem (the repeated-refusal breaker,
+     or an account or setup error) never chains, whatever came before. */
+  // Counted as it happened, so work done before a step threw still counts.
+  const progress = checked > 0;
+  const setup = !!q.service || !!w.service || /refusals in a row/.test(String(w.stopped ?? ""));
+  const more = !setup && !q.budget && !w.budget && (failed ? progress : (w.stopped === "max" || !left || !!q.timeUp));
+  return { lines, failed, more, progress, setup, queue: q, bank: w, pruned };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -435,7 +470,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const max = Math.max(1, Math.min(2000, Number(process.env.READ_ALOUD_MAX) || 200));
-  const { lines, failed, more } = await runJob({ storage: db.storage, db, apiKey: OPENAI_API_KEY, max });
+  /* No new passage is started after READ_ALOUD_MINUTES, so the job keeps
+     time for its pause and for starting the next run (pulsern-read-aloud.yml). */
+  const until = Date.now() + Math.max(1, Math.min(30, Number(process.env.READ_ALOUD_MINUTES) || 25)) * 60000;
+  const { lines, failed, more } = await runJob({ storage: db.storage, db, apiKey: OPENAI_API_KEY, max, until });
   console.log(lines.join("\n") + (more ? "\nMore to do: starting the next run." : ""));
   if (process.env.GITHUB_OUTPUT) {
     const { appendFileSync } = await import("node:fs");
