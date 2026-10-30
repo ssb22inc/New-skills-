@@ -1,0 +1,32 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "eb44c039d0e9232c397f80129224801cc4edbf2e",
+    "head": "71070ea4ca8a849d126b42c96c073ff01c3b767c",
+    "pr": "167"
+  },
+  "reviewedAt": "2026-10-30T10:16:53.403Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 40650,
+    "completionTokens": 3078,
+    "reasoningTokens": 3015,
+    "costUsd": 0.1324035
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes. Reviewed the normalization rules, concentration narration, calculation-instruction splitting, and regression assertions. Tests were reviewed but could not be executed in this review.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
