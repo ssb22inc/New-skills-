@@ -1,0 +1,54 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "74cd592a0771492c742ef9551d134cf6162c72b0",
+    "head": "678619ccf622dc0af2fb410d7821a0e0eb1f6e08",
+    "pr": "165"
+  },
+  "reviewedAt": "2026-10-30T05:25:07.809Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 145,
+      "title": "Dotted abbreviations can pass when spoken as unrelated words",
+      "problem": "Removing every period turns clinical abbreviations such as \"O.R.\" and \"T.O.\" into ordinary words for the case-insensitive transcript comparison. This loses the distinction between saying the abbreviation's letters and incorrectly saying \"or\" or \"to\". Neither abbreviation is protected by the separate clinical-unit comparison.",
+      "failure_scenario": "For a script such as \"Move the client to the O.R.\", audio transcribed as \"Move the client to the or.\" becomes equivalent after normalization and can be saved as checked audio, despite failing to communicate the operating-room destination. The added positive T.O./TO test does not test this incorrect-pronunciation case. This conclusion depends on audioCheck's case-insensitive comparison; its implementation was not included in the supplied files.",
+      "fix": "Do not apply blanket dot removal to abbreviations that collide with ordinary words. Expand them into unambiguous spoken words or separate letter tokens before synthesis, and require that reading during verification. Add negative tests for O.R. versus \"or\" and T.O. versus \"to\".",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 147,
+      "title": "The word boundary prevents matching /mm³",
+      "problem": "The boundary after mm(?:³|3) does not match \"mm³.\" or \"mm³\" at end of input: JavaScript treats superscript ³ as a non-word character, so there is no word boundary between it and punctuation or end of input. Consequently, the newly supported /mm³ transcript spelling is still rejected.",
+      "failure_scenario": "The script produced from \"ANC 320 cells/mm³.\" is \"ANC 320 cells per cubic millimeter.\" If the transcriber returns \"ANC 320 cells/mm³.\", the new rule leaves that transcript unchanged and the word check fails. Two such takes produce a terminal failed record. The added test passes for the wrong reason for this branch: speakable() expands /mm³ on the script side, while its transcript already spells out \"per cubic millimeter\", so the new regex is never exercised.",
+      "fix": "Replace the trailing word boundary with an explicit end-of-token assertion that works after both 3 and ³, such as a suitable negative lookahead for letters and digits. Test transcripts containing literal /mm³ and \"per mm³\" before punctuation and at end of input, alongside /mm3 and changed-dimension rejection cases.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 45576,
+    "completionTokens": 5305,
+    "reasoningTokens": 4660,
+    "costUsd": 0.1669885
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The new abbreviation normalization can admit a clinically incorrect reading, and the cubic-millimeter normalization misses the superscript form it claims to support.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
