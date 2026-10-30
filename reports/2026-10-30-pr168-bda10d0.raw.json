@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "bda10d08023c349d7fb31101c81c707fd0aafc44",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T14:05:43.170Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 209,
+      "title": "Preserve meaningful mathematical marks on letters",
+      "problem": "The normalization removes every combining mark in U+0300–U+036F attached to a letter, not just spelling accents. This includes macrons, overbars, circumflexes and dots used in mathematical and physiological notation. For example, precomposed \"ȳ\" decomposes to \"y\" plus a macron and is then reduced to plain \"y\", collapsing a sample mean and an individual observation.",
+      "failure_scenario": "For a statistics explanation containing \"Use ȳ, not y.\", a transcript saying \"Use y, not y.\" becomes identical to the script after canonUnits. voiceCheck therefore passes the changed reading, and saveChecked can publish that audio. Likewise, the new folding erases the dot in flow-rate notation such as V̇.",
+      "fix": "Restrict accent equivalence to an explicit set of natural-language spellings or eponyms instead of stripping arbitrary marks from letters. Preserve mathematical diacritics, or refuse to voice unsupported notation. Add negative voiceCheck tests for precomposed \"ȳ\" versus \"y\" and combining-mark notation such as \"V̇\" versus \"V\".",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 47363,
+    "completionTokens": 8473,
+    "reasoningTokens": 8121,
+    "costUsd": 0.203136
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The changes are mostly coherent, but the new accent normalization also erases meaningful mathematical notation. That allows an incorrect reading to pass the audio accuracy gate.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
