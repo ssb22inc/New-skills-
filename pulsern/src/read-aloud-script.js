@@ -51,8 +51,11 @@ const SPOKEN = [
   [/\bq(\d{1,2})h\b/gi, "every $1 hours"],
   [/\bPRN\b/g, "as needed"],
   [/\bNPO\b/g, "N P O"],
-  // a route the voice tends to drop when it is two letters
-  [/\bPO\b/g, "by mouth"],
+  /* a route the voice tends to drop when it is two letters; only as a
+     token of its own: "PO₂", "PO₄³⁻" and "PO2" are not the route (a
+     subscript is not a word character to \b, so letters and numbers of
+     every kind are excluded on both sides) */
+  [/(^|[^\p{L}\p{N}\p{M}])PO(?![\p{L}\p{N}\p{M}⁺⁻])/gu, "$1by mouth"],
   [/\bSpO₂|\bSpO2\b/g, "S P O 2"],
   [/\bPaCO₂|\bPaCO2\b/g, "P A C O 2"],
   [/\bPaO₂|\bPaO2\b/g, "P A O 2"],
@@ -146,7 +149,8 @@ function asides(text) {
   return t
     .replace(/(\s*)\(([^()]*)\)/g, (m, space, inner, at) => {
       if (!aside(inner, t.slice(0, at), t.slice(at + m.length))) return m;
-      return inner.trim() ? `, ${inner.trim()},` : "";
+      const lead = /[,.;:?!]\s*$/.test(t.slice(0, at)) ? " " : ", ";
+      return inner.trim() ? `${lead}${inner.trim()},` : "";
     })
     .replace(/^,\s*/, "")
     .replace(/,\s*(?=[,.;:?!]|$)/g, "");
@@ -164,7 +168,7 @@ const INSTRUCTION = {
 
 /* The last sentence of a calculation stem when it only says how to record
    the answer, with or without brackets. */
-const CALC_CLOSING = /(?<=^|[.?!:]["'”’)]?)\s*\(?\s*((?:Record|Round)\b[^.?!()]*)\.?\s*\)?\s*$/;
+const CALC_CLOSING = /(^|[.?!:]["'”’)]?)\s*\(?\s*((?:Record|Round)\b[^.?!()]*)\.?\s*\)?\s*$/;
 
 const seg = (id, text) => ({ id, text: speakable(text) });
 
@@ -177,7 +181,7 @@ function pieces(text) {
   if (text.length <= PART_MAX) return [text];
   const out = [];
   let cur = "";
-  for (const sentence of text.split(/(?<=[.?!;:])\s+(?=\S)/)) {
+  for (const sentence of text.replace(/([.?!;:])\s+(?=\S)/g, "$1\u0000").split("\u0000")) {
     if (cur && (cur + " " + sentence).length > PART_MAX) { out.push(cur); cur = ""; }
     // a single sentence longer than the limit is cut at word boundaries
     let rest = sentence;
@@ -213,7 +217,8 @@ export function questionSegments(q, ext = q) {
      the whole number.", "Round to the nearest tenth."): voices skip it the
      same way, so it is read as the item's instruction instead. */
   const closing = type === "calc" ? stem.match(CALC_CLOSING) : null;
-  if (closing && stem.slice(0, closing.index).trim()) stem = stem.slice(0, closing.index).trim();
+  const cut = closing ? closing.index + closing[1].length : 0;
+  if (closing && stem.slice(0, cut).trim()) stem = stem.slice(0, cut).trim();
   if (type === "cloze") {
     out.push(seg("stem", stem.replace(/\{(\d+)\}/g, (_, n) => ` blank ${Number(n) + 1} `)));
   } else {
@@ -244,7 +249,7 @@ export function questionSegments(q, ext = q) {
   } else if (type === "cloze" && Array.isArray(ext.dropdowns)) {
     ext.dropdowns.forEach((opts, i) => out.push(seg(`gap${i}`, `Blank ${i + 1}: ${(opts ?? []).join(", or ")}.`)));
   } else if (type === "calc") {
-    const how = closing && stem !== stemText ? sentence(closing[1]) : INSTRUCTION.calc;
+    const how = closing && stem !== stemText ? sentence(closing[2]) : INSTRUCTION.calc;
     out.push(seg("instruction", `${how}${ext.unit ? ` Answer in ${ext.unit}.` : ""}`));
   }
   return finish(out);

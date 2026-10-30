@@ -413,6 +413,9 @@ describe("question script", () => {
     expect(speakable("Give 20 mEq/L q4h PRN; PaCO2 48 mm Hg; K⁺ 6.1 → recheck")).toBe("Give 20 milliequivalents per liter every 4 hours as needed; P A C O 2 48 millimeters of mercury; potassium 6.1, then recheck");
     expect(speakable("Metoprolol 25 mg PO")).toBe("Metoprolol 25 mg by mouth");
     expect(speakable("PO2 and POC testing")).toBe("PO2 and POC testing"); // the route only, as a whole word
+    // a subscript or superscript is part of the symbol: oxygen and phosphate are never "by mouth" (Sol, PR #168)
+    for (const t of ["PO₂ 60", "PO₄³⁻ level", "HPO₄²⁻", "PO⁻", "pPO", "PO²"]) expect(speakable(t), t).not.toContain("by mouth");
+    expect(speakable("Give 25 mg PO daily; (PO) or PO/IV.")).toBe("Give 25 mg by mouth daily; by mouth, or by mouth slash IV.");
   });
 });
 
@@ -2031,6 +2034,11 @@ describe("the app's voice client", () => {
 });
 
 describe("one script for the screen and the server", () => {
+  it("uses no lookbehind in the app's script: Safari before 16.4 cannot parse it, and the whole app would fail to load", () => {
+    const src = readFileSync(new URL("../src/read-aloud-script.js", import.meta.url), "utf8");
+    expect(src).not.toMatch(/\(\?<[=!]/);
+  });
+
   it("builds the same words from a bank row as the screen shows", () => {
     expect(scriptFor(REF, ROW)).toEqual(questionSegments(ROW));
     const result = { correct: false, points: 0, max: 1 };
