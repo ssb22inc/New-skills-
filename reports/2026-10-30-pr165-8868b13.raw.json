@@ -1,0 +1,33 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "74cd592a0771492c742ef9551d134cf6162c72b0",
+    "head": "8868b134b87bda5ad50f557acdea03f7cbfb1615",
+    "pr": "165"
+  },
+  "reviewedAt": "2026-10-30T06:05:28.204Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 46564,
+    "completionTokens": 4925,
+    "reasoningTokens": 4877,
+    "costUsd": 0.1656585
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes. Tests were reviewed statically but could not be executed in this review.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
