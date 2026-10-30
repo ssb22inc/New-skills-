@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "e659f4d9f529814b201a503463ff66c6b19bfb23",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T12:12:23.472Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 55,
+      "title": "PO route expansion also matches subscripted oxygen and phosphate symbols",
+      "problem": "JavaScript's \\b treats subscript digits as non-word characters, so /\\bPO\\b/g matches the PO in PO₂ and PO₄³⁻. These are chemical/lab symbols, not oral-administration routes. The audio gate cannot catch this transformation because it checks the transcript against the already-modified script.",
+      "failure_scenario": "An approved item containing \"PO₂ 60 mm Hg\" produces the script \"by mouth₂ 60 millimeters of mercury\". A student can therefore hear oral-route wording instead of the oxygen partial-pressure label. The added PO2/POC test does not cover the subscripted forms.",
+      "fix": "Use token boundaries that exclude adjacent Unicode letters and numbers, including subscript/superscript digits, rather than \\b alone. Add regression tests preserving PO₂ and PO₄³⁻ while still expanding a standalone route such as \"25 mg PO daily\".",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 42284,
+    "completionTokens": 4358,
+    "reasoningTokens": 4045,
+    "costUsd": 0.1492885
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not release: the new PO expansion can corrupt clinical symbols before the audio accuracy check runs. One blocking defect found in the supplied changes.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
