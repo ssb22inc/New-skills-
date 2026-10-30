@@ -249,6 +249,8 @@ describe("question script", () => {
       ["A client with a stage III pressure injury.", "A client with a stage 3 pressure injury."],
       ["Unless specifically required (e.g., during feeding).", "Unless specifically required (eg, during feeding)."],
       ["Unless specifically required, e.g. during feeding.", "Unless specifically required, for example during feeding."],
+      ["Give it with food, i.e. at meals.", "Give it with food, that is at meals."],
+      ["Give it with food (i.e., at meals).", "Give it with food (i.e., at meals)."],
       ["Option 0 uses non therapeutic phrases.", "Option 0 uses nontherapeutic phrases."],
       ["Before re checking the level.", "Before rechecking the level."],
       ["The nurse reviews the 0700 hand off report.", "The nurse reviews the 0700 handoff report."],
@@ -264,6 +266,8 @@ describe("question script", () => {
       ["pH below 7.35 and CO₂ is high.", "pH below 7.35 and CO is high."],
       ["Level of 8/10 and rising.", "Level of 8 out of 10 and rising."], // two numbers with a slash are never reworded
       ["Digoxin level 2.0 ng/mL.", "Digoxin level 2.0 micrograms per milliliter."],
+      ["The nurse assesses a client with IE for embolic complications.", "The nurse assesses a client with that is for embolic complications."], // IE is infective endocarditis
+      ["A client with IE.", "A client with i.e."],
     ];
     for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
     expect(speakable("Heart rate 118/min.")).toBe("Heart rate 118 per minute.");

@@ -150,9 +150,11 @@ const SPELLING_CANON = [
   // subscript digits as digits ("CO₂" / "CO2"); a Roman stage number ("stage III" / "stage 3")
   [/[₀-₉]/g, (d) => String(d.charCodeAt(0) - 0x2080)],
   [/\bstage\s+(IV|I{1,3})\b/gi, (m, r) => `stage ${{ i: 1, ii: 2, iii: 3, iv: 4 }[r.toLowerCase()]}`],
-  // "e.g." and "i.e." however written or said
-  [/\be\.?\s?g\.?(?=[\s,;:)]|$)|\bfor example\b/gi, 'eg'],
-  [/\bi\.?\s?e\.?(?=[\s,;:)]|$)|\bthat is\b/gi, 'ie'],
+  /* "e.g." and "i.e." as the words they stand for. Only the DOTTED forms
+     (and a bare lower-case "eg") are read this way: an undotted "IE" is
+     infective endocarditis, never "that is". */
+  [/\b[eE]\.\s?[gG]\.?(?=[\s,;:)]|$)|\beg\b/g, 'for example'],
+  [/\b[iI]\.\s?[eE]\.?(?=[\s,;:)]|$)/g, 'that is'],
   [RATE, '$1 per '],
   [/\bper\s+(?:mins?|minutes?)\b/gi, 'per minute'],
   [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
