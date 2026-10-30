@@ -1,0 +1,63 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "3051122a16f2942af91239df1f6a212052dd253c",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-30T00:24:27.574Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/browser/read-aloud.html",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 69,
+      "title": "Middle-dot normalization silently changes formulas containing variables",
+      "problem": "A middle dot before a word is always converted into a comma, although it can represent multiplication by a named quantity. For example, \"Dose = 2 mg/mL · volume in mL\" becomes \"Dose equals 2 mg/mL, volume in mL\". The resulting script is considered voiceable, and the accuracy check compares the transcription against this already-altered script rather than the original formula.",
+      "failure_scenario": "An approved dosage-calculation item or rationale contains multiplication by \"weight\", \"volume\", or another named variable. Listen omits the multiplication operator, and audio faithfully reading that incorrect formula can pass the gate and reach students.",
+      "fix": "Treat middle dots before named quantities as ambiguous too. Only convert a dot into a layout pause when its use as a separator is explicitly established; otherwise leave the passage unvoiced. Add a regression test covering a formula with a variable after the dot.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 619,
+      "title": "Whole-item queueing reintroduces segments marked unvoiceable",
+      "problem": "Although itemParts() excludes unvoiceable passages, the work list prepends every segment from parts and filters only for text length and duplication. Consequently, requesting a voiceable stem queues ambiguous sibling options that the client deliberately skips. The worker classifies each as a permanent rejection, and three consecutive such segments trigger its provider-setup failure handling.",
+      "failure_scenario": "A student listens to a question whose stem is voiceable but whose three calculation options contain expressions such as \"0.1 mg/kg · 70 kg\". Those options enter the queue, produce three local \"not voiceable\" rejections, and stop and fail the scheduled job despite a healthy provider, delaying unrelated queued work. The existing unsure-part test only requests the ambiguous segment directly, so it misses this path.",
+      "fix": "Filter the complete merged work list with voiceable() before storing entries. Add a whole-item test that requests a voiceable stem with ambiguous sibling options and verifies those options are not queued and cannot trigger a service failure.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 124683,
+    "completionTokens": 11973,
+    "reasoningTokens": 11394,
+    "costUsd": 0.431436
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge yet. The script normalizer can remove a clinically meaningful multiplication operator, and whole-item queueing can turn intentionally unvoiceable segments into false provider failures.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
