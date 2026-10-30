@@ -17,6 +17,15 @@
 
 import { ngnExt } from "./ngn.js";
 
+/* A rate: a whole number token (not the "1" in "HbA1c"), a known unit,
+   then a slash and a known unit of time, amount or body weight. */
+const RATE_UNITS = "breaths?|beats?|drops?|gtts?|units?|mg|mcg|g|mL|ml|L|mEq|mmol|IU|doses?|tablets?|caps?|puffs?|times|cells|kcal|calories|mm|cm|oz|lb|kg";
+const RATE_PER = "min|mins|minute|hr|hrs|hour|h|day|days|d|week|wk|sec|secs|second|kg|dose|L|dL|mL|m2";
+export const RATE = new RegExp(`(\\b\\d+(?:\\.\\d+)?\\s*(?:${RATE_UNITS}))\\s*\\/\\s*(?=(?:${RATE_PER})\\b)`, "g");
+/* A pain score out of 10, in the same sentence as "pain". */
+export const PAIN_BEFORE = /(\bpain\b[^.;!?]{0,60}?)\b(\d{1,2})\s*\/\s*10\b/gi;
+export const PAIN_AFTER = /\b(\d{1,2})\s*\/\s*10\b(?=[^.;!?]{0,40}\bpain\b)/gi;
+
 /* Spoken forms for the clinical shorthand a voice is most likely to misread.
    Conservative on purpose: units and dosing frequencies only, whole tokens
    only, never a guess at a drug or a diagnosis. */
@@ -45,13 +54,17 @@ const SPOKEN = [
   [/°F\b/g, " degrees Fahrenheit"],
   [/°C\b/g, " degrees Celsius"],
   [/\s*→\s*/g, ", then "],
-  /* A slash is said, never left for the voice to guess: after a number and
-     a unit it is "per" ("12 breaths/min"); between words it is "slash"
-     ("creatinine/eGFR"), the one reading that adds no meaning ("and" and
-     "or" would). "and/or" is said as it is meant. Numbers either side of a
-     slash ("120/80", "5/10") are left to the voice. */
+  /* A slash is said, never left for the voice to guess: after a number
+     and a known unit it is "per" ("12 breaths/min"); between anything else
+     it is "slash" ("creatinine/eGFR", "HbA1c/eAG"), the one reading that
+     adds no meaning ("and", "or" and "per" would). "and/or" is said as it
+     is meant. A pain score is said "out of 10"; any other pair of numbers
+     ("120/80", Apgar "7/9") is left to the voice, and the check must hear
+     it exactly. */
   [/\band\/or\b/gi, "and or"],
-  [/(\d\s*[A-Za-z]+)\s*\/\s*(?=[A-Za-z])/g, "$1 per "],
+  [RATE, "$1 per "],
+  [PAIN_BEFORE, "$1$2 out of 10"],
+  [PAIN_AFTER, "$1 out of 10"],
   [/([A-Za-z][\w⁺⁻₀-₉-]*)\s*\/\s*(?=[A-Za-z])/g, "$1 slash "],
   [/\bper (?:min|mins)\b/g, "per minute"],
   [/\bper (?:hr|hrs|h)\b/g, "per hour"],

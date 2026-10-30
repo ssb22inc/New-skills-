@@ -154,6 +154,15 @@ describe("question script", () => {
       expect(voiceCheck(script, right).pass, `${written} / ${right}`).toBe(true);
       expect(voiceCheck(script, wrong).pass, `${written} / ${wrong}`).toBe(false);
     }
+    // "out of" only for a pain score: any other pair of numbers must be heard exactly
+    expect(voiceCheck(speakable("She rates it 7/10 for pain."), "She rates it 7 out of 10 for pain.").pass).toBe(true);
+    expect(voiceCheck(speakable("Apgar scores at 1 and 5 minutes: 7/9."), "Apgar scores at 1 and 5 minutes: 7 out of 9.").pass).toBe(false);
+    expect(voiceCheck(speakable("Apgar scores at 1 and 5 minutes: 7/9."), "Apgar scores at 1 and 5 minutes: 7/9.").pass).toBe(true);
+    expect(speakable("Apgar 7/9 at 5 minutes.")).toContain("7/9");
+    // "per" only after a whole number and a known unit: a lab name with a digit in it is not a rate
+    expect(speakable("Check HbA1c/eAG.")).toBe("Check HbA1c slash eAG.");
+    expect(voiceCheck(speakable("Check HbA1c/eAG."), "Check HbA1c per eAG.").pass).toBe(false);
+    expect(speakable("Infuse 5 units/hr.")).toBe("Infuse 5 units per hour.");
     // a slash is said in words, so the voice never has to guess at it
     expect(speakable("Check creatinine/eGFR.")).toBe("Check creatinine slash eGFR.");
     expect(speakable("Respirations 12 breaths/min.")).toBe("Respirations 12 breaths per minute.");
