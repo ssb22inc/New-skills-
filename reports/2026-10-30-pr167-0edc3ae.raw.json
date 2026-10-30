@@ -1,0 +1,35 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "eb44c039d0e9232c397f80129224801cc4edbf2e",
+    "head": "0edc3ae54433f20f7ea5933c7dd97a79c8302d5a",
+    "pr": "167"
+  },
+  "reviewedAt": "2026-10-30T10:25:09.814Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/ops/seo-content-policy.mjs",
+    "pulsern/public/content-provenance.json",
+    "pulsern/public/learn/nclex-testing-accommodations/index.html",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 59259,
+    "completionTokens": 3398,
+    "reasoningTokens": 3334,
+    "costUsd": 0.182126
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes. This was a static review: I could not execute the tests or independently verify Pearson VUE's claimed October 30, 2026 source revision.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
