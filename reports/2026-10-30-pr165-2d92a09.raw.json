@@ -1,0 +1,44 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "74cd592a0771492c742ef9551d134cf6162c72b0",
+    "head": "2d92a09d7ab109d791c2cfe93107888854e5b32c",
+    "pr": "165"
+  },
+  "reviewedAt": "2026-10-30T05:42:20.988Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 117,
+      "title": "Arbitrary prefix joining can turn different words into an exact match",
+      "problem": "PREFIX_JOIN assumes every listed prefix followed by any four-letter-or-longer word is equivalent to its concatenated spelling. That is false: \"pre-sent\" becomes \"present\", although those words have different pronunciations and meanings. Both canonical strings then match exactly, defeating the word-for-word audio check.",
+      "failure_scenario": "For script \"The nurse reviews the pre-sent medication list.\" and transcript \"The nurse reviews the present medication list.\", canonUnits produces the same string on both sides. voiceCheck therefore accepts the changed word, and the resulting audio can be saved and served as checked content.",
+      "fix": "Use a closed allowlist of verified equivalent compounds instead of joining arbitrary words after these prefixes. Add a regression asserting that pre-sent/present fails while the intended new compound spellings still pass.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 45742,
+    "completionTokens": 3819,
+    "reasoningTokens": 3529,
+    "costUsd": 0.1525435
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The instruction split and versioned scan restart appear sound. However, the broader prefix normalization introduces an accuracy-gate bypass that can accept a genuinely changed spoken word.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
