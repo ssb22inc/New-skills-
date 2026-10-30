@@ -84,6 +84,9 @@ const UNIT_CANON = [
   [/\bunits?\s*(?:\/|per)\s*(?:hours?|hr|h)\b/gi, ' unitsperhr '],
   [/\b(?:drops?|gtt)\s*(?:\/|per)\s*(?:minutes?|min)\b/gi, ' gttpermin '],
   [/\b(?:millimeters?|millimetres?)\s+of\s+mercury\b|\bmm\s?hg\b/gi, ' mmhg '],
+  [/\bcentimet(?:er|re)s?\b/gi, ' cm '],
+  [/\bmillimet(?:er|re)s?\b/gi, ' mm '],
+  [/\bby\s+mouth\b/gi, ' po '],
   [/\s*°\s*c\b|\bdegrees?\s+(?:celsius|c)\b/gi, ' degc '],
   [/\s*°\s*f\b|\bdegrees?\s+(?:fahrenheit|f)\b/gi, ' degf '],
   [/\bs\s*p\s*o\s*(?:2|two|₂)\b|\bspo2\b/gi, ' spo2 '],
@@ -103,10 +106,16 @@ const UNIT_CANON = [
    closed list of compounds that mean the same open or closed
    ("post-operative" / "postoperative"). Nothing else is folded: a dropped
    slash, a changed number or a different prefix still fails. */
+/* Words written open or closed. A clinical prefix (non, post, pre, anti,
+   inter, intra, multi, peri, ante, sub, supra, hyper, hypo, semi, trans)
+   before a word of four letters or more is joined on both sides: such a
+   pair means the same either way. "re" and "co" are NOT prefixes here:
+   "re-signed" is not "resigned"; their compounds, like any other, must be
+   in the closed list below. A lone "a" is never joined ("a febrile" is not
+   "afebrile"). */
+const PREFIX_JOIN = /\b(non|post|pre|anti|inter|intra|multi|peri|ante|sub|supra|hyper|hypo|semi|trans)[\s-]+([a-z]{4,})\b/gi;
 const COMPOUNDS = new Set([
-  'postoperative', 'preoperative', 'intraoperative', 'perioperative', 'postpartum', 'antepartum', 'intrapartum',
-  'prenatal', 'postnatal', 'antenatal', 'subtherapeutic', 'supratherapeutic', 'subcutaneous', 'sublingual',
-  'dropdown', 'nonpharmacologic', 'noninvasive',
+  'dropdown', 'healthcare', 'readback', 'cosignature', 'readministered',
 ]);
 /* In this order: a number said in words just before a unit and a slash
    as digits ("twelve breaths/min"), and a spoken "slash" as "/", so that
@@ -125,8 +134,17 @@ const SPELLING_CANON = [
   [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
   [/\bper\s+(?:secs?|seconds?)\b/gi, 'per second'],
   [/(\d+(?:st|nd|rd|th))\s*(?:[–—-]|\bto\b)\s*(?=\d+(?:st|nd|rd|th)\b)/gi, '$1 to '],
-  [/\b(post|pre|intra|peri|ante|sub|supra|non|drop)[\s-]+(operative|partum|natal|therapeutic|cutaneous|lingual|pharmacologic|invasive|down)\b/gi,
+  [PREFIX_JOIN, '$1$2'],
+  [/\b(drop|health|read|co|re)[\s-]+(down|care|back|signature|administered)\b/gi,
     (m, a, b) => (COMPOUNDS.has(`${a}${b}`.toLowerCase()) ? `${a}${b}` : m)],
+  // "÷" said in words; a Greek letter and its number ("beta 1", "beta-1"); a lettered wave ("T wave", "T-wave")
+  [/\s*÷\s*/g, ' divided by '],
+  [/\b(alpha|beta|gamma|delta|kappa)[\s-]+(\d)\b/gi, '$1$2'],
+  [/\b([A-Za-z])[\s-]+(waves?)\b/g, '$1$2'],
+  // a dotted abbreviation ("T.O.", "p.r.n.") as its letters
+  [/\b((?:[A-Za-z]\.){2,})(?![A-Za-z])/g, (m) => m.replace(/\./g, '')],
+  // a count per cubic millimetre, written or said
+  [/\s*\/\s*mm(?:³|3)\b|\bper\s+(?:mm(?:³|3)|cubic\s+mm)\b/gi, ' per cubic millimeter'],
 ];
 /* Calculation signs, the same way on both sides: a transcriber may write
    "×", "x", "*" or "times", "=" or "equals". */
@@ -512,7 +530,7 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
-export const CHECK_VERSION = 2; // 2: the spellings in SPELLING_CANON
+export const CHECK_VERSION = 3; // 2: the spellings in SPELLING_CANON; 3: prefixes, ÷, Greek letters, waves, dotted abbreviations, mm³, cm, by mouth
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */
 export function checkFailure(check) {

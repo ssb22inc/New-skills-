@@ -62,6 +62,7 @@ const SPOKEN = [
      the check must hear them exactly: no rule can tell a score from a
      date, so none is guessed. */
   [/\band\/or\b/gi, "and or"],
+  [/\s*÷\s*/g, " divided by "],
   [RATE, "$1 per "],
   [/([A-Za-z][\w⁺⁻₀-₉-]*)\s*\/\s*(?=[A-Za-z])/g, "$1 slash "],
   [/\bper (?:min|mins)\b/g, "per minute"],
@@ -143,18 +144,25 @@ export function questionSegments(q, ext = q) {
   if (!q) return [];
   const out = [];
   const type = q.type ?? "mc";
+  /* A stem that ENDS with how to answer ("... Select all that apply.")
+     is read without it, and the instruction is read as its own short
+     part: voices tend to skip that closing line (the voice job's failure
+     log), and a short part is read reliably. */
+  const tail = ["mc", "sata", "order"].includes(type) && Array.isArray(q.options) ? INSTRUCTION[type] : null;
+  const trailing = tail ? new RegExp(`\\s*\\(?${tail.replace(/\.$/, "").replace(/\s+/g, "\\s+")}\\.?\\)?\\s*$`, "i") : null;
+  const stemText = String(q.stem ?? "");
+  const stem = trailing && trailing.test(stemText) && stemText.replace(trailing, "").trim() ? stemText.replace(trailing, "").trim() : stemText;
   if (type === "cloze") {
-    const stem = String(q.stem ?? "").replace(/\{(\d+)\}/g, (_, n) => ` blank ${Number(n) + 1} `);
-    out.push(seg("stem", stem));
+    out.push(seg("stem", stem.replace(/\{(\d+)\}/g, (_, n) => ` blank ${Number(n) + 1} `)));
   } else {
-    out.push(seg("stem", q.stem));
+    out.push(seg("stem", stem));
   }
   if (Array.isArray(ext.exhibit)) {
     ext.exhibit.forEach((tab, i) => { if (tab?.content) out.push(seg(`exhibit${i}`, `${sentence(tab.label ?? "Exhibit")} ${tab.content}`)); });
   }
   /* Many stems already end with the instruction ("Select all that
      apply."); say it once. */
-  const said = (t) => String(q.stem ?? "").toLowerCase().includes(t.toLowerCase().replace(/\.$/, ""));
+  const said = (t) => stem.toLowerCase().includes(t.toLowerCase().replace(/\.$/, ""));
   const instruct = (t) => { if (!said(t)) out.push(seg("instruction", t)); };
   if (["mc", "sata", "order"].includes(type) && Array.isArray(q.options)) {
     instruct(INSTRUCTION[type]);

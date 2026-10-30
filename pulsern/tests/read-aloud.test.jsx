@@ -52,10 +52,11 @@ describe("question script", () => {
     expect(hl.map((s) => s.id)).toEqual(["stem", "instruction", "tok0", "tok1"]);
   });
 
-  it("says the instruction once when the stem already gives it", () => {
+  it("says the instruction once, as its own short part when the stem ends with it", () => {
     const segs = questionSegments({ type: "sata", stem: "Which findings need follow-up? Select all that apply.", options: ["Glucose 38 mg/dL", "Temp 36.8 °C"] });
-    expect(segs.map((s) => s.id)).toEqual(["stem", "opt0", "opt1"]);
-    expect(segs[2].text).toBe("Temp 36.8 degrees Celsius.");
+    expect(segs.map((s) => [s.id, s.text])).toEqual([["stem", "Which findings need follow-up?"], ["instruction", "Select all that apply."], ["opt0", "Glucose 38 milligrams per deciliter."], ["opt1", "Temp 36.8 degrees Celsius."]]);
+    // an instruction inside the stem is left where it is, and not said twice
+    expect(questionSegments({ type: "sata", stem: "Select all that apply: which findings?", options: ["A", "B"] }).map((s) => s.id)).toEqual(["stem", "opt0", "opt1"]);
     expect(voiceable(speakable("Newborn Screening · First Visit"))).toBe(false); // a middle dot is never guessed at
     const quoted = questionSegments({ type: "mc", stem: "Which response is best?", options: ["\"Tell me more.\"", "(Stay with the client.)", "Call the provider"] });
     expect(quoted.slice(2).map((s) => s.text)).toEqual(["\"Tell me more.\"", "(Stay with the client.)", "Call the provider."]);
@@ -183,6 +184,35 @@ describe("question script", () => {
     // only the closed list of compounds folds: "a febrile" is not "afebrile", "re-signed" is not "resigned"
     expect(voiceCheck("The client is afebrile.", "The client is a febrile.").pass).toBe(false);
     expect(voiceCheck("The form was re-signed.", "The form was resigned.").pass).toBe(false);
+  });
+
+  it("accepts the second round of spellings from the failure log, and still rejects a changed word", () => {
+    const pass = [
+      ["UAPs may perform non-clinical routine tasks.", "UAPs may perform nonclinical routine tasks."],
+      ["Returned from post anesthesia care.", "Returned from postanesthesia care."],
+      ["The most evidence-based non pharmacological intervention.", "The most evidence-based nonpharmacological intervention."],
+      ["It can be safely re administered at a slower rate.", "It can be safely readministered at a slower rate."],
+      ["Flag for provider co-signature within 24 hours.", "Flag for provider cosignature within 24 hours."],
+      ["This is a read-back requirement.", "This is a readback requirement."],
+      ["Required for health care workers.", "Required for healthcare workers."],
+      ["25,000 units ÷ 500 mL", "25,000 units divided by 500 mL"],
+      ["Metoprolol succinate is a beta-1 selective blocker.", "Metoprolol succinate is a beta1 selective blocker."],
+      ["Hyperkalemia causes peaked T-waves.", "Hyperkalemia causes peaked T waves."],
+      ["Time and notation T.O. provider name.", "Time and notation TO provider name."],
+      ["ANC 320 cells/mm³.", "ANC 320 cells per cubic millimeter."],
+      ["A wound 3–4 cm (1.5 inches) wide.", "A wound 3 to 4 centimeters (1.5 inches) wide."],
+      ["Metoprolol 25 mg PO daily.", "Metoprolol 25 mg by mouth daily."],
+    ];
+    for (const [w, h] of pass) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(true);
+    const fail = [
+      ["The form was re-signed.", "The form was resigned."], // "re" is not a joining prefix
+      ["The client is afebrile.", "The client is a febrile."],
+      ["Metoprolol succinate is a beta-1 selective blocker.", "Metoprolol succinate is a beta2 selective blocker."],
+      ["Metoprolol 25 mg PO daily.", "Metoprolol 25 mg IV daily."],
+      ["Returned from post anesthesia care.", "Returned from preanesthesia care."],
+      ["ANC 320 cells/mm³.", "ANC 230 cells per cubic millimeter."],
+    ];
+    for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
   });
 
   it("voices a long part in shorter pieces, where the voice is less likely to skip words", () => {
@@ -963,6 +993,20 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(["Something else entirely."]), max: 3, log: (l) => lines.push(l) });
     expect(lines.length).toBeGreaterThan(0);
     expect(lines[0]).toMatch(/^failed the check twice: (result line|question \d+|case \d+|card \d+): expected "/);
+  });
+
+  it("starts the scan again from the top when the voice check changes, so passages it turned away are voiced again", async () => {
+    const { storage, files } = fakeStorage();
+    // a scan part-way through the cards under an older check
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "card", afterId: 4, check: CHECK_VERSION - 1 })));
+    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1 });
+    expect(r.cursor.kind).toBe("verdicts"); // back at the top
+    expect(JSON.parse(files.get("prewarm/cursor.json").toString()).check).toBe(CHECK_VERSION);
+    // under the current check, a finished scan stays finished until the weekly rescan
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ done: true, doneAt: new Date().toISOString(), check: CHECK_VERSION })));
+    const f = fakeOpenAI();
+    await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 10 });
+    expect(f).not.toHaveBeenCalled();
   });
 
   it("voices the result lines, then every question, case and card, and remembers where it got to", async () => {
