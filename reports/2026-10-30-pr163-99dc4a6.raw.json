@@ -1,0 +1,32 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "17745a40c7c93ee152570fd6d0bc627aea57d0ab",
+    "head": "99dc4a6ea9f87f1cf027099845e8fa5073ea2d6f",
+    "pr": "163"
+  },
+  "reviewedAt": "2026-10-30T04:51:13.308Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 33442,
+    "completionTokens": 4474,
+    "reasoningTokens": 4405,
+    "costUsd": 0.1283435
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "Static review found no concrete, actionable defect in the supplied changes. The added tests check both accepted transcription variants and clinically significant mismatches. I could not execute the tests or verify behavior inside the unchanged narration library and worker.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
