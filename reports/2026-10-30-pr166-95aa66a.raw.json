@@ -1,0 +1,45 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "195d24b0f8ddbd365cb1a370a2d76b681dc13653",
+    "head": "95aa66a63bb7d09d04a9b1ee980a6d20dbf7adae",
+    "pr": "166"
+  },
+  "reviewedAt": "2026-10-30T07:43:11.440Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 323,
+      "title": "The saved passage offset is not bound to a bank item",
+      "problem": "cursor.at identifies a passage within the unfinished item, but the cursor stores only afterId for the last completed item. On resumption, that offset is applied unconditionally to the first currently approved row after afterId. If the unfinished item is withdrawn or its passages change, the offset can skip passages that have never been checked or voiced, and the scan subsequently marks the item complete.",
+      "failure_scenario": "A run stops at passage 5 of question 100, leaving afterId=99 and at=5. The review console withdraws question 100 before the next run. The next query starts with question 101, but its first five passages are skipped. If it has five or fewer passages, the entire question is marked complete without voicing anything. Those passages receive no prewarming until a later rescan, unless a student separately queues them.",
+      "fix": "Persist the unfinished item's ID alongside the passage offset and reuse the offset only for that same item. Also bind it to the passage sequence, or resume by a passage key, so edits cannot silently invalidate the offset. Reset to the start when the item or sequence changes; cached records will avoid duplicate synthesis. Add a test that pauses within an item, withdraws or edits it, then resumes.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 60358,
+    "completionTokens": 5555,
+    "reasoningTokens": 5178,
+    "costUsd": 0.2064435
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Found one resumability defect in the new prewarm cursor. The other reviewed changes have no identified defects. Review was static; tests were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
