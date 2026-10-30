@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "4c1c1be1650d02412170fbdc6342d0d06f142a87",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T13:24:27.961Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 160,
+      "title": "Whitespace-separated arithmetic factors are mistaken for prose asides",
+      "problem": "The arithmetic guards protect touching parenthetical groups, but not groups separated by whitespace. For the second group in `(2 mg/kg) (70 kg)`, the preceding non-whitespace character is `)`, which MATH_BEFORE does not recognize. Its parentheses are therefore replaced with commas, losing the implicit multiplication.",
+      "failure_scenario": "`speakable(\"Calculate (2 mg/kg) (70 kg).\")` produces `Calculate (2 milligrams per kilogram), 70 kg.` instead of preserving the product that calculates a 140 mg dose. The audio gate checks this already-altered script, so it cannot catch the transformation before students hear it. The existing test covers only the version without an intervening space.",
+      "fix": "Preserve arithmetic groups when the neighboring non-whitespace character is another group's closing or opening parenthesis, or conservatively preserve the entire arithmetic expression. Add exact-output regression tests for whitespace-separated factors, including `(2 mg/kg) (70 kg)` and `(D/H) (Q)`.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 45779,
+    "completionTokens": 6455,
+    "reasoningTokens": 6126,
+    "costUsd": 0.178996
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One blocker remains: the new aside conversion can turn a valid dosage-calculation product into a comma-separated list. The other changes have no identified defects.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
