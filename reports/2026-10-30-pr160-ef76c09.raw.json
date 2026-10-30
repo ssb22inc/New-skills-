@@ -1,0 +1,59 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "ef76c09f2098891ce1fe49d437d38318e3f8a3a4",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-30T00:48:29.086Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/index.html",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/browser/read-aloud.html",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx",
+    "pulsern/tests/seo-guardian.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 544,
+      "title": "A new Listen request cannot promote a passage out of the retry backlog",
+      "problem": "The early waiting check returns 202 for entries in either queue lane without changing their priority. The later whole-item enqueue loop also skips existing retry entries. Consequently, pressing Listen does not move an outstanding item ahead of background work as documented in HUMAN_TASKS.md and read-aloud.jsx: drainQueue always processes every fresh entry before any retry.",
+      "failure_scenario": "A transient provider failure puts a question segment in queue-retry. Fresh requests keep filling the worker's per-run allowance. The student repeatedly presses Listen, but that segment remains behind all fresh work across subsequent runs. Because playback requires every segment to be decided, even an otherwise fully voiced question cannot play. A shared segment such as \"Choose one answer.\" can hold up multiple questions this way.",
+      "fix": "On an explicit Listen request, promote the item's outstanding retry entries to the fresh demand lane while preserving their attempt counts and give-up state, removing the retry copies only after the promoted entries are saved. Add a test with a retry entry, enough fresh work to exhaust a run, and a subsequent Listen request that verifies the requested item receives demand priority.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 150880,
+    "completionTokens": 12767,
+    "reasoningTokens": 12405,
+    "costUsd": 0.5048685
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One queue-priority defect prevents Listen requests from receiving the priority the change documents. The supplied images introduce no evident clinical error. This was a static review; I could not run the tests/build or verify the deployed database schema.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
