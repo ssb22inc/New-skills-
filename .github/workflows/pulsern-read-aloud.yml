@@ -6,6 +6,12 @@ name: pulsern-read-aloud
 # "read-aloud" bucket; this job synthesises each queued passage, transcribes
 # it back, and saves the audio only if it passes the word-for-word check.
 #
+# Runs every 15 minutes, and also carries itself on: a run that stops at
+# its per-run limit with work left starts the next run (GitHub allows a
+# workflow to dispatch itself with its own token), so the bank keeps being
+# voiced even when GitHub delays or drops a scheduled run. It stops chaining
+# when the work is done, today's budget is spent, or a run fails.
+#
 # Runs the DEFAULT branch's code only, in the pulsern-paid environment
 # (OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Spend is bounded:
 # only bank-checked passages are queued, the route caps new passages per
@@ -13,7 +19,7 @@ name: pulsern-read-aloud
 
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "4,19,34,49 * * * *"
   workflow_dispatch:
     inputs:
       max:
@@ -30,8 +36,11 @@ concurrency:
 
 jobs:
   voice:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write # only to start the next run while work remains
     environment: pulsern-paid
     timeout-minutes: 40
     defaults:
@@ -46,9 +55,16 @@ jobs:
           node-version: 22
       - run: npm ci
       - name: Voice and check queued passages
+        id: voice
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           READ_ALOUD_MAX: ${{ inputs.max || '200' }}
         run: node ops/read-aloud-worker.mjs
+      - name: Carry on while work remains
+        if: steps.voice.outputs.more == 'true'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pulsern-read-aloud.yml --ref main --repo "$GITHUB_REPOSITORY"

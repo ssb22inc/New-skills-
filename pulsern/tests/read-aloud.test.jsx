@@ -1183,6 +1183,23 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(r.lines.join("\n")).toMatch(/pruning: Could not list usage/);
   });
 
+  it("asks for the next run only when it stopped at its own limit with work left", async () => {
+    // the bank scan reached the run's limit: carry on
+    expect((await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 2, log: () => {} })).more).toBe(true);
+    // the queue alone used the whole run: carry on
+    const busy = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage: busy.storage });
+    expect((await runJob({ storage: busy.storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1, log: () => {} })).more).toBe(true);
+    // everything done: stop
+    expect((await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 1000, log: () => {} })).more).toBe(false);
+    // today's budget spent: stop until tomorrow
+    expect((await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 50, limits: { user: 300, admission: 300, spend: 0 }, log: () => {} })).more).toBe(false);
+    // a failed run (the provider is down): stop, so an outage never loops
+    const down = await runJob({ storage: fakeStorage().storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: vi.fn(async () => ({ ok: false, status: 503 })), max: 50, log: () => {} });
+    expect(down.failed).toBe(true);
+    expect(down.more).toBe(false);
+  });
+
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
     const { storage } = fakeStorage();
     expect((await runJob({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 2, log: () => {} })).failed).toBe(false);
@@ -1647,7 +1664,7 @@ describe("one script for the screen and the server", () => {
 describe("the voice job workflow", () => {
   const wf = readFileSync(new URL("../../.github/workflows/pulsern-read-aloud.yml", import.meta.url), "utf8");
   it("runs only the default branch's code, in the paid environment, never on pull requests", () => {
-    expect(wf).toContain("if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)");
+    expect(wf).toContain("if: github.ref == 'refs/heads/main'");
     expect(wf).toContain("environment: pulsern-paid");
     expect(wf).not.toMatch(/pull_request/);
     expect(wf).toContain("persist-credentials: false");
@@ -1657,6 +1674,12 @@ describe("the voice job workflow", () => {
     expect(wf).toContain("node ops/read-aloud-worker.mjs");
     expect(wf).toContain("READ_ALOUD_MAX");
     expect(wf).toContain("cancel-in-progress: false");
+  });
+  it("starts the next run itself only while the worker says there is more, on main, with no more than it needs", () => {
+    expect(wf).toContain("if: steps.voice.outputs.more == 'true'");
+    expect(wf).toContain('gh workflow run pulsern-read-aloud.yml --ref main');
+    expect(wf).toMatch(/permissions:\s*\n\s*contents: read\s*\n\s*actions: write/);
+    expect(wf).not.toMatch(/contents: write|id-token|pull-requests: write/);
   });
 });
 
