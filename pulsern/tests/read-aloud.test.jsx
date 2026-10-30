@@ -198,6 +198,10 @@ describe("question script", () => {
       ["25,000 units ÷ 500 mL", "25,000 units divided by 500 mL"],
       ["Metoprolol succinate is a beta-1 selective blocker.", "Metoprolol succinate is a beta1 selective blocker."],
       ["Clonidine is an alpha 2 agonist.", "Clonidine is an alpha-2 agonist."],
+      ["Read post-operative instructions to the client.", "Read postoperative instructions to the client."], // a rejected pair never uses up the next word
+      ["Pre post-operative check.", "Pre postoperative check."],
+      ["Which receptor does metoprolol block? Beta-1.", "Which receptor does metoprolol block? Beta1."], // at the end of a sentence
+      ["The receptor (beta 1) is blocked.", "The receptor (beta1) is blocked."],
       ["Hyperkalemia causes peaked T-waves.", "Hyperkalemia causes peaked T waves."],
       ["Hyperkalemia causes peaked T waves.", "Hyperkalemia causes peaked T Waves."],
       ["Hyperkalemia causes peaked T-waves.", "Hyperkalemia causes peaked t-Waves."],
@@ -216,6 +220,8 @@ describe("question script", () => {
       ["The nurse reviews the pre-sent medication list.", "The nurse reviews the present medication list."],
       ["The client is afebrile.", "The client is a febrile."],
       ["Metoprolol succinate is a beta-1 selective blocker.", "Metoprolol succinate is a beta2 selective blocker."],
+      ["Which receptor does metoprolol block? Beta-1.", "Which receptor does metoprolol block? Beta2."],
+      ["Give beta 1.5 units.", "Give beta1.5 units."], // a decimal is not a subtype
       // a sign is never a separator
       ["Potassium delta -1 milliequivalents per liter.", "Potassium delta 1 milliequivalents per liter."],
       ["Change beta -1 from baseline.", "Change beta 1 from baseline."],

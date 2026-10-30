@@ -119,7 +119,13 @@ const COMPOUNDS = new Set([
   'antiinflammatory', 'multidisciplinary', 'interdisciplinary', 'interprofessional', 'preexisting', 'prediabetes',
   'dropdown', 'healthcare', 'readback', 'cosignature', 'readministered',
 ]);
-const COMPOUND_PARTS = /\b(non|post|pre|anti|inter|intra|multi|peri|ante|sub|supra|drop|health|read|co|re)[\s-]+([a-z]{2,})\b/gi;
+/* Only the exact splits of the listed compounds are matched, so a pair
+   that is not one ("Read post-operative") never uses up a word another
+   compound needs. */
+const COMPOUND_PREFIXES = ['non', 'post', 'pre', 'anti', 'inter', 'intra', 'multi', 'peri', 'ante', 'sub', 'supra', 'drop', 'health', 'read', 'co', 're'];
+const COMPOUND_SPLITS = new RegExp(`\\b(?:${[...COMPOUNDS].flatMap((c) => COMPOUND_PREFIXES
+  .filter((p) => c.startsWith(p) && c.length - p.length >= 2)
+  .map((p) => `${p}[\\s-]+${c.slice(p.length)}`)).join('|')})\\b`, 'gi');
 /* In this order: a number said in words just before a unit and a slash
    as digits ("twelve breaths/min"), and a spoken "slash" as "/", so that
    every spelling of a rate ("12 breaths per minute", "twelve breaths/
@@ -137,13 +143,13 @@ const SPELLING_CANON = [
   [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
   [/\bper\s+(?:secs?|seconds?)\b/gi, 'per second'],
   [/(\d+(?:st|nd|rd|th))\s*(?:[–—-]|\bto\b)\s*(?=\d+(?:st|nd|rd|th)\b)/gi, '$1 to '],
-  [COMPOUND_PARTS, (m, a, b) => (COMPOUNDS.has(`${a}${b}`.toLowerCase()) ? `${a}${b}` : m)],
+  [COMPOUND_SPLITS, (m) => m.replace(/[\s-]+/g, '')],
   // "÷" said in words; an ECG wave ("T wave", "T-Wave", "t waves")
   [/\s*÷\s*/g, ' divided by '],
   /* a receptor subtype only: alpha or beta, ONE space or hyphen, then 1 or
      2 ("beta 1", "beta-1", "alpha-2"); a minus sign is never a separator
      ("delta -1" keeps its sign) */
-  [/\b(alpha|beta)(?: |-)([12])(?![\d.])/gi, '$1$2'],
+  [/\b(alpha|beta)(?: |-)([12])(?!\d|\.\d)/gi, '$1$2'],
   [/\b([PQRSTU])[\s-]+(waves?)\b/gi, (m, l, w) => `${l}${w}`.toLowerCase()],
   // a count per cubic millimetre, written or said
   [/\s*\/\s*mm(?:³|3)(?![A-Za-z0-9])|\bper\s+(?:mm(?:³|3)|cubic\s+mm)(?![A-Za-z0-9])/gi, ' per cubic millimeter'],
