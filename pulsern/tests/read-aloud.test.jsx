@@ -1066,7 +1066,7 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     const lines = [];
     await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(["Something else entirely."]), max: 3, log: (l) => lines.push(l) });
     expect(lines.length).toBeGreaterThan(0);
-    expect(lines[0]).toMatch(/^failed the check twice: (result line|question \d+|case \d+|card \d+): expected "/);
+    expect(lines[0]).toMatch(/^failed the check twice: (result lines|question \d+|case \d+|card \d+): expected "/);
   });
 
   it("tries a budget counter again after a brief storage blip, instead of stopping the run", async () => {
@@ -1419,6 +1419,34 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     }
     expect(JSON.parse(files.get("prewarm/cursor.json").toString()).kind).not.toBe("verdicts"); // left the result lines behind
     expect(seen.size).toBeGreaterThanOrEqual(verdictPassages().length - 4); // reading new passages each run, not the same ones
+  });
+
+  it("resumes inside an item only if it is the same item with the same passage there; otherwise starts that item from the top", async () => {
+    const Q = (id, n) => ({ ...ROW, id, stem: `Stem of ${id}?`, options: Array.from({ length: n }, (_, k) => `Option ${id}.${k} words`), rationale: `Why ${id}.` });
+    const bank = (questions) => ({ questions, case_studies: [], flashcards: [] });
+    const voicedTexts = (f) => f.mock.calls.filter(([u]) => u.endsWith("/audio/speech")).map(([, i]) => JSON.parse(i.body).input);
+    // the result lines are already done; question 100 was stopped at its 5th passage
+    for (const [label, mutate, expectFirst] of [
+      ["withdrawn", (qs) => qs.filter((q) => q.id !== 100), "Stem of 101?"],
+      ["edited", (qs) => qs.map((q) => (q.id === 100 ? { ...q, options: q.options.map((o) => `${o} (revised)`) } : q)), "Stem of 100?"],
+    ]) {
+      const { storage, files } = fakeStorage();
+      const questions = [Q(100, 6), Q(101, 3)];
+      const stopAt = itemPassages("question", questions[0])[4];
+      files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: passagePaths(stopAt).key, check: CHECK_VERSION })));
+      const f = fakeOpenAI();
+      await prewarmBank({ storage, db: fakeDb(bank(mutate(questions))), apiKey: "k", fetchImpl: f, max: 1000 });
+      expect(voicedTexts(f)[0], label).toBe(expectFirst); // from the top of that item: nothing skipped
+      expect(voicedTexts(f), label).toEqual(expect.arrayContaining(itemPassages("question", questions[1])));
+    }
+    // the same item, unchanged: carries on at the saved passage
+    const { storage, files } = fakeStorage();
+    const q = Q(100, 6);
+    const parts = itemPassages("question", q);
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: passagePaths(parts[4]).key, check: CHECK_VERSION })));
+    const f = fakeOpenAI();
+    await prewarmBank({ storage, db: fakeDb(bank([q])), apiKey: "k", fetchImpl: f, max: 1000 });
+    expect(voicedTexts(f)[0]).toBe(parts[4]);
   });
 
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {

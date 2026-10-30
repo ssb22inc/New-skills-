@@ -244,14 +244,21 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
     const { error } = await put(bucket, "prewarm/cursor.json", { ...cursor, check: CHECK_VERSION });
     if (error) throw new Error(`could not save the cursor: ${error.message ?? error}`);
   };
-  /* Voice a group of passages (the result lines, or one bank item),
-     starting at `from`. cursor.at is where the next run resumes if this one
-     stops part-way through the group, so a short run never re-reads the
-     same passages again and again; it is dropped once the group is done. */
-  const voice = async (texts, label, from = 0) => {
-    for (let i = from; i < texts.length; i++) {
+  /* Voice a group of passages (the result lines, or one bank item). If a
+     run stops part-way through a group, the cursor keeps where: the group
+     (atItem), the index (at) and the key of that very passage (atKey). The
+     next run resumes there only if the same group still has that passage
+     at that index; if the item was withdrawn or edited it starts the group
+     from the top (cached passages are skipped at once), so nothing is ever
+     skipped unvoiced. The position is dropped once the group is done. */
+  const resumeAt = (texts, label) => {
+    const i = cursor.at;
+    return cursor.atItem === label && Number.isInteger(i) && i >= 0 && i < texts.length && passagePaths(texts[i]).key === cursor.atKey ? i : 0;
+  };
+  const voice = async (texts, label) => {
+    for (let i = resumeAt(texts, label); i < texts.length; i++) {
       const text = texts[i];
-      cursor = { ...cursor, at: i };
+      cursor = { ...cursor, at: i, atItem: label, atKey: passagePaths(text).key };
       // The run's time is checked before every passage, cached ones included.
       if (now() >= until) return "max";
       let decided;
@@ -306,7 +313,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   while (cursor.kind) {
     if (now() >= until) { out.stopped = "max"; await save(); break; }
     if (cursor.kind === "verdicts") {
-      const stop = await voice(verdictPassages(), "result line", cursor.at ?? 0);
+      const stop = await voice(verdictPassages(), "result lines");
       if (stop) { out.stopped = stop; await save(); break; } // keeps the attempt counts
       cursor = { kind: "question", afterId: 0, attempts: cursor.attempts }; await save(); continue;
     }
@@ -321,7 +328,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
     }
     let stop = null;
     for (const row of rows) {
-      stop = await voice(itemPassages(cursor.kind, row), `${cursor.kind} ${row.id}`, cursor.at ?? 0);
+      stop = await voice(itemPassages(cursor.kind, row), `${cursor.kind} ${row.id}`);
       if (stop) break;
       cursor = { kind: cursor.kind, afterId: row.id, attempts: cursor.attempts }; // an item counts as done only when all its passages are decided
     }
