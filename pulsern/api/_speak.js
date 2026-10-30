@@ -556,12 +556,31 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
     return { status: 422, body: { error: 'Voice check failed', similarity: record.similarity } };
   }
 
+  const overBudget = { status: 429, body: { error: 'Daily voice limit reached' } };
+  const unavailable = { status: 503, body: { error: 'Voice unavailable' } };
+  // Every part of the item that can be voiced, the asked-for parts first.
+  const seen = new Set();
+  const work = [...parts.map((x) => ({ ref, seg: x.id, text: x.text })), ...itemParts(ref.kind, { ...item, id: ref.id })]
+    .filter((x) => x.text && x.text.length <= SPEAK_MAX && voiceable(x.text) && !seen.has(x.text) && seen.add(x.text));
+
+  /* A student is waiting to hear this item: any of its parts held in the
+     retry lane (after an outage) moves to the fresh lane, which the voice
+     job serves first, with its attempt count and give-up state as they
+     were. The retry copy is removed only once the fresh one is saved. */
+  if (!apiKey) {
+    for (const p of work) {
+      const paths = passagePaths(p.text, tts);
+      const held = await readJson(bucket, paths.retry);
+      if (!held) continue;
+      if (!(await readJson(bucket, paths.queue)) && !(await put(storage, paths.queue, JSON.stringify(held), 'application/json'))) return unavailable;
+      const { error } = await bucket.remove([paths.retry]);
+      if (error) return unavailable;
+    }
+  }
+
   // Already waiting for the voice job: nothing more to spend.
   const waiting = async (paths) => (await readJson(bucket, paths.queue)) || (await readJson(bucket, paths.retry));
   if (!apiKey && await waiting({ queue, retry })) return queuedReply(storage, t0, limits);
-
-  const overBudget = { status: 429, body: { error: 'Daily voice limit reached' } };
-  const unavailable = { status: 503, body: { error: 'Voice unavailable' } };
 
   if (!apiKey) {
     /* The whole item is queued at once, under ONE claim per item per day:
@@ -614,9 +633,6 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
     /* Every part of the item (its explanation, the card's other side,
        every case step), plus the exact part asked for (an explanation's
        result line can differ from the generic one). */
-    const seen = new Set();
-    const work = [...parts.map((x) => ({ ref, seg: x.id, text: x.text })), ...itemParts(ref.kind, { ...item, id: ref.id })]
-      .filter((x) => x.text && x.text.length <= SPEAK_MAX && voiceable(x.text) && !seen.has(x.text) && seen.add(x.text));
     for (const p of work) {
       const paths = passagePaths(p.text, tts);
       if (await readRecord(storage, p.text, tts, t0)) continue;

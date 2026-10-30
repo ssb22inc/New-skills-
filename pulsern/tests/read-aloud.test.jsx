@@ -773,6 +773,33 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(down.mock.calls.filter(([u]) => u.endsWith("/audio/speech"))).toHaveLength(3); // nothing after the third
   });
 
+  it("a Listen request moves the item's parts out of the retry lane, ahead of other work, keeping their attempts", async () => {
+    const { storage, files } = fakeStorage();
+    // older retries from the same outage, ahead of ours in the retry lane
+    for (let i = 0; i < 3; i++) {
+      const t = `Card ${8000 + i}.`;
+      files.set(passagePaths(t).retry, Buffer.from(JSON.stringify({ text: t, voice: "marin", ref: { kind: "card", id: 8000 + i, part: "front" }, seg: "card-front", attempts: 1 })));
+    }
+    // the asked-for passage failed in that outage and waits in the retry lane too
+    const text = "Potassium 2.9 milliequivalents per liter.";
+    const p = passagePaths(text);
+    files.set(p.retry, Buffer.from(JSON.stringify({ text, voice: "marin", ref: { kind: "card", id: 4, part: "front" }, seg: "card-front", attempts: 2 })));
+    // and other students' fresh work
+    for (let i = 0; i < 3; i++) {
+      const t = `Card ${7000 + i}.`;
+      files.set(passagePaths(t).queue, Buffer.from(JSON.stringify({ text: t, voice: "marin", ref: { kind: "card", id: 7000 + i, part: "front" }, seg: "card-front" })));
+    }
+    const r = await speak({ ...base({ apiKey: "" }), storage });
+    expect(r.status).toBe(202);
+    expect(files.has(p.retry)).toBe(false);
+    const moved = JSON.parse(files.get(p.queue).toString());
+    expect(moved.attempts).toBe(2); // its history kept
+    // a run with room for the fresh lane only reaches it, ahead of every retry
+    const f = fakeOpenAI();
+    await drainQueue({ storage, apiKey: "k", fetchImpl: f, max: 4, log: () => {} });
+    expect(f.mock.calls.filter((c) => c[0].endsWith("/audio/speech")).map((c) => JSON.parse(c[1].body).input)).toContain(text);
+  });
+
   it("reaches fresh work behind more than a page of removable entries, before any retry", async () => {
     const { storage, files } = fakeStorage();
     // 1,100 finished entries (records exist) at the front of the fresh lane
