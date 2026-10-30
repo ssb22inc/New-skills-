@@ -1,0 +1,45 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "195d24b0f8ddbd365cb1a370a2d76b681dc13653",
+    "head": "63c51911d794fe07cbd64370a96c5810de1db45a",
+    "pr": "166"
+  },
+  "reviewedAt": "2026-10-30T07:34:13.888Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 250,
+      "title": "Deadline exits do not save progress within a passage group",
+      "problem": "Returning \"max\" here saves only the current kind and previous completed item ID, not the position within `texts`. The next run rereads the same cached passages from the beginning. If the remaining run time is consistently shorter than that rescan, the cursor never advances. `runJob` nevertheless returns `more: true`, and cached reads consume no spending slots to stop the chain.",
+      "failure_scenario": "Start with all 47 verdict passages cached and allow enough time for only three record reads per run—the state already constructed by the new cached-scan test. Every run reads those same three records, saves a cursor still pointing at `verdicts`, and dispatches another run without reaching the questions. This can also occur within a bank item when storage is slow or queue processing leaves little time. The test checks only that `done` is falsy, so it passes without proving that any resumable position was kept.",
+      "fix": "Persist a resumable position within the current passage group, including verdicts, and resume after the cached passages already visited. Add a regression that invokes multiple deadline-limited runs against the same storage and verifies that successive runs advance through distinct passages and eventually leave the group.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 59618,
+    "completionTokens": 7101,
+    "reasoningTokens": 6732,
+    "costUsd": 0.2200535
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The new time limit can prevent the bank scan from ever advancing while still requesting successive workflow runs. The added cached-scan test does not detect this resumability defect.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
