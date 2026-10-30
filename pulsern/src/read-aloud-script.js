@@ -17,6 +17,14 @@
 
 import { ngnExt } from "./ngn.js";
 
+/* A rate: a whole number token (not the "1" in "HbA1c"), a known unit,
+   then a slash and a known unit of time, amount or body weight. */
+/* Abbreviated or spelled out ("mg" or "milligrams"), so a transcriber's
+   spelling of the same rate is recognised too. */
+export const RATE_UNITS = "breaths?|beats?|drops?|gtts?|units?|international units?|mg|milligrams?|mcg|micrograms?|g|grams?|mL|ml|milliliters?|millilitres?|L|liters?|litres?|mEq|milliequivalents?|mmol|millimoles?|IU|doses?|tablets?|caps?|capsules?|puffs?|times|cells|kcal|calories|mm|cm|oz|ounces?|lb|pounds?|kg|kilograms?";
+const RATE_PER = "min|mins|minutes?|hr|hrs|hours?|h|days?|d|weeks?|wk|sec|secs|seconds?|kg|kilograms?|dose|L|liters?|litres?|dL|deciliters?|mL|milliliters?|m2";
+export const RATE = new RegExp(`(\\b\\d+(?:\\.\\d+)?\\s*(?:${RATE_UNITS}))\\s*\\/\\s*(?=(?:${RATE_PER})\\b)`, "gi");
+
 /* Spoken forms for the clinical shorthand a voice is most likely to misread.
    Conservative on purpose: units and dosing frequencies only, whole tokens
    only, never a guess at a drug or a diagnosis. */
@@ -45,6 +53,22 @@ const SPOKEN = [
   [/°F\b/g, " degrees Fahrenheit"],
   [/°C\b/g, " degrees Celsius"],
   [/\s*→\s*/g, ", then "],
+  /* A slash is said, never left for the voice to guess: after a number
+     and a known unit it is "per" ("12 breaths/min"); between anything else
+     it is "slash" ("creatinine/eGFR", "HbA1c/eAG"), the one reading that
+     adds no meaning ("and", "or" and "per" would). "and/or" is said as it
+     is meant. Two numbers with a slash between them ("120/80", a pain
+     score "5/10", an Apgar "7/9", a date "7/10") are left as written, and
+     the check must hear them exactly: no rule can tell a score from a
+     date, so none is guessed. */
+  [/\band\/or\b/gi, "and or"],
+  [RATE, "$1 per "],
+  [/([A-Za-z][\w⁺⁻₀-₉-]*)\s*\/\s*(?=[A-Za-z])/g, "$1 slash "],
+  [/\bper (?:min|mins)\b/g, "per minute"],
+  [/\bper (?:hr|hrs|h)\b/g, "per hour"],
+  [/\bper (?:sec|secs)\b/g, "per second"],
+  // A range of ordinals ("85th–94th percentile") is said with "to".
+  [/(\d+(?:st|nd|rd|th))\s*[–—-]\s*(?=\d+(?:st|nd|rd|th)\b)/g, "$1 to "],
   [/\s*=\s*/g, " equals "],
   [/≥/g, " at least "],
   [/≤/g, " at most "],
@@ -89,7 +113,7 @@ const seg = (id, text) => ({ id, text: speakable(text) });
 /* Long parts (a long rationale) are voiced in pieces of at most PART_MAX
    characters, split at sentence ends. The pieces share the part's id
    before "~", so the screen keeps the same element highlighted. */
-export const PART_MAX = 900;
+export const PART_MAX = 450;
 export const partOf = (id) => String(id ?? "").split("~")[0];
 function pieces(text) {
   if (text.length <= PART_MAX) return [text];
