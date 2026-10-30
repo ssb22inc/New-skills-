@@ -1,0 +1,53 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "195d24b0f8ddbd365cb1a370a2d76b681dc13653",
+    "head": "d7ce16f87f1c971cea66f4ccfe41b23b0ce09785",
+    "pr": "166"
+  },
+  "reviewedAt": "2026-10-30T06:58:40.336Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 158,
+      "title": "Stage normalization can erase an intravenous route",
+      "problem": "The unconditional `stage IV` replacement treats IV as a stage number even when it introduces intravenous therapy. It runs before both audioCheck and clinicalUnits, so the route disappears before either accuracy check can protect it.",
+      "failure_scenario": "For the exam rationale `At this stage IV antibiotics are indicated.`, a transcript saying `At this stage four antibiotics are indicated.` is normalized to the same tokens. The incorrect audio can pass and be published even though it replaces the intravenous route with a count of four antibiotics.",
+      "fix": "Require an unambiguous staging context before converting IV to 4; do not infer staging solely from the preceding word `stage`. Add a negative regression test for this IV-antibiotic example and retain positive tests for explicit pressure-injury staging.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 153,
+      "title": "Unit aliases are rewritten differently for digit and number-word transcripts",
+      "problem": "The new min/lb/gtt rewrites require digits, but number-word conversion occurs later in the word check. Thus `30 min` becomes `30 minute`, while `thirty min` retains `min`. The added tests exercise number words with expanded units, not number words with these abbreviations. I could not inspect the imported speechTokens implementation to verify whether it independently repairs these aliases; the documented number/plural normalization does not.",
+      "failure_scenario": "A passage `Observe for 30 min after administration.` with the correct transcript `Observe for thirty min after administration.` now reaches the word check with `minute` on one side and `min` on the other. Without an additional alias in speechTokens, it is falsely rejected and, after two takes, cached as failed under check version 4. The same asymmetry affects `6 lb` versus `six lb`.",
+      "fix": "Normalize numeric spans before applying these unit rewrites, or otherwise apply the aliases equally after digit and number-word quantities. Add positive tests using `thirty min`, `six lb`, and `fifteen gtt per mL` against their digit forms.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 34188,
+    "completionTokens": 5224,
+    "reasoningTokens": 4640,
+    "costUsd": 0.1377085
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to release. The new stage-number normalization can approve an incorrect reading that loses an IV route. The digit-only unit rewrites also introduce an asymmetric normalization concern. Review was static; tests were not run.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
