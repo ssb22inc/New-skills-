@@ -109,6 +109,70 @@ describe("AI endpoints require a signed-in user", () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 
+  it("turns an anonymous read-aloud call away before the voice provider", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    try {
+      const res = await call(aiHandler, { method: "POST", headers: {}, body: { action: "speak", ref: { kind: "question", id: 7, part: "question" }, seg: "stem", text: "Which value is the priority?" } });
+      expect(res.code).toBe(401);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally { delete process.env.OPENAI_API_KEY; }
+  });
+
+  /* A realistic deployment: storage, and a bank read as the student. */
+  function realisticSupabase(row) {
+    const files = new Map();
+    const bucket = {
+      download: async (path) => (files.has(path) ? { data: { text: async () => files.get(path) }, error: null } : { data: null, error: { message: "Object not found" } }),
+      upload: async (path, body, opts = {}) => (opts.upsert === false && files.has(path) ? { error: { message: "The resource already exists" } } : (files.set(path, String(body)), { error: null })),
+      list: async (dir) => ({ data: [...files.keys()].filter((k) => k.startsWith(`${dir}/`)).map((k) => ({ name: k.slice(dir.length + 1) })), error: null }),
+      createSignedUrl: async (path) => ({ data: { signedUrl: `https://signed.example/${path}` }, error: null }),
+    };
+    const storage = { from: () => bucket, createBucket: async () => ({ error: null }) };
+    const asStudent = [];
+    const chain = { select: () => chain, eq: () => chain, is: () => chain, maybeSingle: async () => ({ data: row, error: null }) };
+    createClient.mockImplementation((url, key, opts) => {
+      if (opts?.global?.headers?.Authorization) asStudent.push(opts.global.headers.Authorization);
+      return { auth: { getUser }, from: () => chain, storage };
+    });
+    return { files, asStudent };
+  }
+  const ROW = { id: 7, type: "mc", stem: "Which value is the priority?", options: ["Potassium 2.9", "Sodium 138"], answer: 0, rationale: "R." };
+  const SPEAK = { action: "speak", ref: { kind: "question", id: 7, part: "question" }, seg: "stem", text: "Which value is the priority?" };
+
+  it("queues a signed-in read-aloud call when the server holds no voice key, without calling OpenAI", async () => {
+    signedIn();
+    delete process.env.OPENAI_API_KEY;
+    process.env.VITE_SUPABASE_ANON_KEY = "anon";
+    try {
+      const { files, asStudent } = realisticSupabase(ROW);
+      const res = await call(aiHandler, { method: "POST", headers: { authorization: "Bearer student-token" }, body: SPEAK });
+      expect(res.code).toBe(202);
+      expect(res.body).toEqual({ queued: true });
+      expect([...files.keys()].some((k) => k.startsWith("queue/"))).toBe(true);
+      expect(asStudent).toEqual(["Bearer student-token"]); // the bank was read as the student
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally { delete process.env.VITE_SUPABASE_ANON_KEY; createClient.mockImplementation(() => ({ auth: { getUser }, from })); }
+  });
+
+  it("refuses a read-aloud call whose words are not the item's", async () => {
+    signedIn();
+    process.env.VITE_SUPABASE_ANON_KEY = "anon";
+    try {
+      const { files } = realisticSupabase(ROW);
+      const res = await call(aiHandler, { method: "POST", headers: { authorization: "Bearer t" }, body: { ...SPEAK, text: "Something else." } });
+      expect(res.code).toBe(409);
+      expect([...files.keys()]).toEqual([]);
+    } finally { delete process.env.VITE_SUPABASE_ANON_KEY; createClient.mockImplementation(() => ({ auth: { getUser }, from })); }
+  });
+
+  it("answers 503 when the server cannot reach storage or the bank", async () => {
+    signedIn();
+    delete process.env.VITE_SUPABASE_ANON_KEY; delete process.env.SUPABASE_ANON_KEY;
+    const res = await call(aiHandler, { method: "POST", headers: { authorization: "Bearer t" }, body: SPEAK });
+    expect(res.code).toBe(503);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("turns an empty anonymous call away with 401, not a prompt error", async () => {
     const res = await call(aiHandler, { method: "POST", headers: {}, body: {} });
     expect(res.code).toBe(401);
