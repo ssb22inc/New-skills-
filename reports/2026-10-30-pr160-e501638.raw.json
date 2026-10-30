@@ -1,0 +1,59 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "e50163822fb5030edf4d5331edfa063f4ceadfac",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-30T00:57:50.603Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/index.html",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/browser/read-aloud.html",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx",
+    "pulsern/tests/seo-guardian.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 73,
+      "title": "Capitalized variables cause multiplication signs to be silently removed",
+      "problem": "SEPARATED assumes a middle dot followed by a capital letter is a layout separator whenever the passage has no equals sign. Mathematical variables satisfy that rule too. For example, speakable(\"Calculate MAP using (SBP + 2 · DBP) / 3.\") changes the multiplication dot into a comma. voiceable() then accepts the altered passage because the dot is gone. The subsequent transcription check compares against this altered script, not the approved source, so it cannot catch the missing multiplication.",
+      "failure_scenario": "An approved question, rationale, or flashcard contains a clinical calculation expressed with a middle dot and a capitalized variable, without '='. Listen can read a pause instead of multiplication while displaying the original formula, and the audio can pass QA.",
+      "fix": "Do not infer that a middle dot is punctuation solely from capitalization. Preserve ambiguous dots so voiceable() refuses the passage, or restrict separator conversion to explicitly recognized non-mathematical contexts. Add regression tests for formulas such as '(SBP + 2 · DBP) / 3' and '2 mg/mL · Volume in mL', verifying that multiplication is either spoken explicitly or the passage is not voiced.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 151807,
+    "completionTokens": 7632,
+    "reasoningTokens": 7250,
+    "costUsd": 0.455836
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The read-aloud normalization can remove multiplication from clinical formulas before the accuracy check, allowing the check to approve altered content. No new clinical errors were identified in the changed screenshots. Review was source-based; tests were not executed.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
