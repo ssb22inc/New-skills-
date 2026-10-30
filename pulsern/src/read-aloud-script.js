@@ -139,7 +139,7 @@ export function speakable(text) {
    "VO2 = CO (CaO2-CvO2)", "HR (EDV-ESV)",
    "(2 mg/kg)(70 kg)" or "(D/H) × Q" without them is another calculation.
    A group is read as a pause only when it plainly stands apart in prose
-   and holds a plain label (PROSE_LABEL) after a lowercase word, a
+   and holds a label from a closed list (PROSE_LABEL) after a word, a
    punctuation mark or the start:
    - a space (or the start) before it, and a space, punctuation mark or
      the end after it, so a group touching a word, a number or another
@@ -158,9 +158,17 @@ const MATH_AFTER = /^\s*(?:[-+×*÷=^/−–·∙²³\d(\[]|(?:x|plus|minus|time
 /* What an aside may hold: words, numbers and light punctuation only. No
    hyphen, minus, slash or sub- or superscript: those can be a formula
    ("CaO₂-CvO₂", "EDV-ESV"). */
-const PROSE_LABEL = /^[A-Za-z0-9 ,.%:'’—]+$/;
+/* Only these are read as a pause: an answer-key label ("option 3", "Row 3
+   — Indicated", "index 0 of dropdown 1", "dropdown 0, option B", "token
+   5") or an "e.g." / "i.e." aside. Any other bracket, words included
+   ("tidal volume (respiratory rate)" can be a product), stays as written. */
+const KEY_WORD = "option|row|index|token|dropdown|parameter|action|step|choice|blank|condition";
+const VERDICT = "indicated|contraindicated|not indicated|non-essential|nonessential|recommended|not recommended|correct|incorrect|anticipated|not anticipated|effective|ineffective|appropriate|inappropriate|requires further assessment";
+const KEY_LABEL = new RegExp(`^(?:${KEY_WORD})\\s+[A-Za-z0-9]{1,2}(?:\\s+of\\s+(?:${KEY_WORD})\\s+[A-Za-z0-9]{1,2})?(?:\\s*,\\s*(?:${KEY_WORD})\\s+[A-Za-z0-9]{1,2})*(?:\\s*(?:—|,|:)\\s*(?:${VERDICT}))?$`, "i");
+const EXAMPLE = /^(?:e\.g\.|i\.e\.),?\s+[A-Za-z0-9 ,.%'’]+$/i;
+const PROSE_LABEL = { test: (inner) => KEY_LABEL.test(inner) || EXAMPLE.test(inner) };
 const aside = (inner, before, after) =>
-  PROSE_LABEL.test(inner.trim()) && /(?:^|[,.;:?!]|\b[a-z]+)\s*$/.test(before)
+  PROSE_LABEL.test(inner.trim()) && /(?:^|[,.;:?!]|\b[A-Za-z]+)\s*$/.test(before)
   && /(?:^|\s)$/.test(before) && /^(?:[\s,.;:?!]|$)/.test(after)
   && !MATH_SIGN.test(inner) && !MATH_BEFORE.test(before) && !MATH_AFTER.test(after);
 const COUNTED = "tablet|capsule|dose|drop|puff|vial|patch|spray|syringe|ampule|bag|suppositor(?:y|ie)";

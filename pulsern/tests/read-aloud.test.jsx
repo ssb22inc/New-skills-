@@ -373,7 +373,7 @@ describe("question script", () => {
 
   it("reads brackets as a pause, keeping every word in them", () => {
     expect(speakable("Intervention required (Row 3 — Indicated).")).toBe("Intervention required, Row 3 — Indicated.");
-    expect(speakable("Give 2,500 units (0.5 mL) now.")).toBe("Give 2,500 units, 0.5 mL, now.");
+    expect(speakable("Give 2,500 units (0.5 mL) now.")).toBe("Give 2,500 units (0.5 mL) now."); // not an answer-key label: left as written
     expect(speakable("(Option 1) Pap smear yearly.")).toBe("Option 1, Pap smear yearly.");
     expect(speakable("Incorrect (0): allergies (e.g., cetirizine) do not.")).toBe("Incorrect (0): allergies, e.g., cetirizine, do not."); // after a capitalised word a group stays
     expect(speakable("Answer in tablet(s).")).toBe("Answer in tablets.");
@@ -397,6 +397,12 @@ describe("question script", () => {
     // only a plain label after a lowercase word is an aside: subscripted or letter-only formulas keep their brackets (Sol, PR #168)
     expect(speakable("Oxygen use is CO (CaO₂-CvO₂).")).toBe("Oxygen use is CO (CaO₂-CvO₂).");
     expect(speakable("Stroke work is HR (EDV-ESV).")).toBe("Stroke work is HR (EDV-ESV).");
+    // only answer-key labels and e.g./i.e. asides: named factors side by side can be a product (Sol, PR #168)
+    expect(speakable("For minute ventilation, use tidal volume (respiratory rate).")).toBe("For minute ventilation, use tidal volume (respiratory rate).");
+    expect(speakable("Hand hygiene (dropdown 0, option 0) is first.")).toBe("Hand hygiene, dropdown 0, option 0, is first.");
+    expect(speakable("Regardless (index 0 of dropdown 1) violates policy.")).toBe("Regardless, index 0 of dropdown 1, violates policy.");
+    expect(speakable("Placement (row 2, Indicated). Next.")).toBe("Placement, row 2, Indicated. Next.");
+    for (const t of ["Lab (MRSA) result.", "Weight (kg) today.", "Rate (per hour) today.", "Use (option) here."]) expect(speakable(t), t).toBe(t);
     expect(speakable("Output is HR (SV) here.")).toBe("Output is HR (SV) here.");
     expect(speakable("Use the ratio (a-b) now.")).toBe("Use the ratio (a-b) now.");
     for (const t of ["Oxygen use is CO (CaO2-CvO2).", "Use CO (Ca - Cv) here.", "MAP is DBP plus (pulse pressure) today.", "Give (dose) then 2 + 2 (check)."]) expect(speakable(t), t).toContain("(");
@@ -443,7 +449,7 @@ describe("question script", () => {
     expect(speakable("PO2 and POC testing")).toBe("PO2 and POC testing"); // the route only, as a whole word
     // a subscript or superscript is part of the symbol: oxygen and phosphate are never "by mouth" (Sol, PR #168)
     for (const t of ["PO₂ 60", "PO₄³⁻ level", "HPO₄²⁻", "PO⁻", "pPO", "PO²"]) expect(speakable(t), t).not.toContain("by mouth");
-    expect(speakable("Give 25 mg PO daily; (PO) or PO/IV.")).toBe("Give 25 mg by mouth daily; by mouth, or by mouth slash IV.");
+    expect(speakable("Give 25 mg PO daily; (PO) or PO/IV.")).toBe("Give 25 mg by mouth daily; (by mouth) or by mouth slash IV.");
   });
 });
 
