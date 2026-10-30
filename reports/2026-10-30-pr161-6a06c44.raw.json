@@ -1,0 +1,72 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "a71331eae785f13f2ee1ff87882eb13db4064720",
+    "head": "6a06c44b9dbf229d4303c86ea794b30d5eb7cc67",
+    "pr": "161"
+  },
+  "reviewedAt": "2026-10-30T03:13:29.383Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/browser/speech-fake.js",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 132,
+      "title": "Clinical audio now reaches students without the existing accuracy check",
+      "problem": "Every voiceable passage is sent directly to speech synthesis. The previous synthesize/transcribe/word-for-word check has been deleted, and voiceable() only rejects certain ambiguous symbols; it cannot detect a changed number, unit, drug name or negation in the emitted audio. The replacement tests record the utterance's input text, not what the student hears.",
+      "failure_scenario": "A device voice misreads a decimal or clinical abbreviation and reports an ordinary end event. The student hears the incorrect clinical content, and the reader advances normally. Previously, a transcript mismatch prevented that audio from being played. I could not verify any selected device voice's actual pronunciation from the supplied tests.",
+      "fix": "Retain the checked-audio path, or provide an equivalent verification gate for the actual spoken output before playback. Do not treat correct SpeechSynthesisUtterance input as proof of correct clinical audio.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 985,
+      "title": "The offline read-aloud claim is false for preferred online voices",
+      "problem": "The support context promises that read aloud works offline, but voice selection ignores SpeechSynthesisVoice.localService and explicitly favors online voices. The new unit test even expects Microsoft Aria Online (Natural) over a local voice. Browser-provided speech synthesis is not necessarily on-device synthesis.",
+      "failure_scenario": "Edge offers local Microsoft David and Microsoft Aria Online (Natural). pickVoice() selects Aria. When the student loses connectivity, synthesis can fail even though a local voice exists, with no retry using it. While connected, the passage may also be sent to the voice provider, contrary to the implementation's 'sends nothing anywhere' documentation.",
+      "fix": "For an offline/on-device guarantee, select an available English voice with localService === true and handle the absence of one honestly. Otherwise remove the offline and no-transmission claims and document the network dependency. Test local and remote voice metadata and offline fallback.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 123,
+      "title": "The watchdog advances without stopping an unfinished utterance",
+      "problem": "The watchdog calls done(), resolving the utterance as successfully spoken, but never cancels it or reports an error. If the engine is stalled or still speaking, subsequent chunks are queued behind it while highlighting advances. Eventually run.current becomes null, so Stop and item-change cleanup can no longer cancel the outstanding speech.",
+      "failure_scenario": "An utterance remains active beyond the estimated timeout without an end/error event. The hook advances through the remaining parts and eventually displays idle while speech remains active or queued. If the engine recovers after the student moves on, it can read the previous item's passages over the new screen.",
+      "fix": "On watchdog expiry, cancel synthesis and reject with a speech error rather than resolving successfully. Keep cancellation ownership until outstanding speech is stopped. Add a hook test where the engine never emits an end/error event and verify that timeout cancels it, reports failure, and queues no later passages.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 103451,
+    "completionTokens": 4956,
+    "reasoningTokens": 4142,
+    "costUsd": 0.308186
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The replacement removes the clinical-audio accuracy check, selects network-backed voices despite an offline claim, and treats speech timeouts as successful completion. This review is based on the supplied changes; tests and actual device pronunciations were not executed.",
+  "counts": {
+    "blocker": 2,
+    "major": 1,
+    "minor": 0
+  }
+}
