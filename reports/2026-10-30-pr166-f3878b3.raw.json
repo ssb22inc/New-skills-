@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "195d24b0f8ddbd365cb1a370a2d76b681dc13653",
+    "head": "f3878b36b8b93dd76e0544af989700ff2d265404",
+    "pr": "166"
+  },
+  "reviewedAt": "2026-10-30T06:42:35.018Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 155,
+      "title": "Preserve the clinical abbreviation IE instead of equating it with 'that is'",
+      "problem": "The case-insensitive regex permits both dots to be absent, so it matches bare uppercase IE (infective endocarditis). It canonicalizes that diagnosis abbreviation and the spoken phrase 'that is' to the same token. An incorrectly expanded diagnosis can therefore pass the exact-word audio gate.",
+      "failure_scenario": "For the script 'The nurse assesses a client with IE for embolic complications.', a transcript of 'The nurse assesses a client with that is for embolic complications.' produces exactly the same canonical text and clinical-unit sequence. voiceCheck accepts the take even though the diagnosis abbreviation was spoken incorrectly.",
+      "fix": "Distinguish explicit i.e. notation from the undotted clinical acronym IE; do not apply this equivalence indiscriminately with case-insensitive optional punctuation. Add a negative regression test showing that IE versus 'that is' fails, alongside positive tests for supported i.e. spellings.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 33708,
+    "completionTokens": 5204,
+    "reasoningTokens": 4889,
+    "costUsd": 0.1363085
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The new i.e. normalization introduces a false acceptance in the audio accuracy gate. The other supplied changes have no identified defects. Review was static; tests were not run.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
