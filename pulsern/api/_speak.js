@@ -124,6 +124,7 @@ const COMPOUNDS = new Set([
   'prehydration', 'handoff', 'counterpressure', 'fingerstick', 'uteroplacental',
   'nonjudgmental', 'nonsmoking', 'nonoperative', 'nonimmune', 'postsurgical', 'recontamination', 'microaspiration', 'microabrasion',
   'semipermeable', 'underdose', 'overdose', 'overdosing', 'oversedation', 'timeframe', 'timeout', 'standalone', 'followup',
+  'noncomplex', 'nonhemolytic', 'postoperatively',
 ]);
 /* Only the exact splits of the listed compounds are matched, so a pair
    that is not one ("Read post-operative") never uses up a word another
@@ -142,6 +143,7 @@ const NUM_WORD = 'zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|t
    "three hundred"), so a unit rule treats both spellings alike. */
 const QTY = `(\\b\\d+(?:\\.\\d+)?|\\b(?:${NUM_WORD})(?:[\\s-]+(?:${NUM_WORD}|and))*)`;
 const RATE_IN_WORDS = new RegExp(`\\b(?:${NUM_WORD})(?:[\\s-]+(?:${NUM_WORD}|and))*(?=\\s+(?:${RATE_UNITS})\\s*(?:\\/|\\s+slash\\s+))`, 'gi');
+const ORDINALS = { first: '1st', third: '3rd', fourth: '4th', fifth: '5th', sixth: '6th', seventh: '7th', eighth: '8th', ninth: '9th', tenth: '10th' };
 const SPELLING_CANON = [
   [RATE_IN_WORDS, (m) => wordsToNumbers(m).trim()],
   [/\b(\d{1,3})((?:,\d{3})+)\b/g, (m) => m.replace(/,/g, '')],
@@ -158,6 +160,11 @@ const SPELLING_CANON = [
   [new RegExp(`${QTY}\\s*(?:lbs?|pounds?)\\b`, 'gi'), '$1 pound'],
   [new RegExp(`${QTY}\\s*(?:gtts?|drops?)\\b`, 'gi'), '$1 drop'],
   [new RegExp(`${QTY}\\s*(?:hrs?|hours?)\\b`, 'gi'), '$1 hour'],
+  [new RegExp(`${QTY}\\s*(?:secs?|seconds?)\\b`, 'gi'), '$1 second'],
+  // an ordinal in words or digits ("fourth generation" / "4th generation"); "second" is also a unit of time and is left alone
+  [/\b(?:first|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/gi, (w) => ORDINALS[w.toLowerCase()]],
+  // body surface area ("1.73 m²", "1.73m2", "1.73 square meters")
+  [/(\d)\s*(?:m(?:\s*²|2)(?![\w])|square\s+met(?:er|re)s?\b|met(?:er|re)s?\s+squared\b)/gi, '$1 sqm'],
   [new RegExp(`${QTY}\\s*(?:L|liters?|litres?)\\b`, 'gi'), '$1 liter'],
   /* the same word in the transcriber's other spelling (a closed list) */
   [/\bdistention\b/gi, 'distension'],
@@ -195,8 +202,16 @@ const MATH_CANON = [
   [/\s*=\s*/g, ' equals '],
   [/\bequal\b/gi, 'equals'],
 ];
+/* Names and words a transcriber may write with or without their accents,
+   a closed list ("Kübler" / "Kubler"). No other mark is ever removed: a
+   mark can be notation ("ȳ" is a mean, "V̇" a flow, "≠" not equal). */
+const ACCENTED = [
+  [/\bKübler\b/gi, 'Kubler'], [/\bBarré(?![A-Za-z])/gi, 'Barre'], [/\bMénière'?s?\b/gi, (w) => w.replace(/é/gi, 'e').replace(/è/gi, 'e')],
+  [/\bSjögren'?s?\b/gi, (w) => w.replace(/ö/gi, 'o')], [/\bHürthle\b/gi, 'Hurthle'], [/\bcafé(?![A-Za-z])/gi, 'cafe'], [/\bnaïve\b/gi, 'naive'],
+];
 export function canonUnits(text) {
-  let t = String(text ?? '');
+  let t = String(text ?? '').normalize('NFC');
+  for (const [re, to] of ACCENTED) t = t.replace(re, to);
   for (const [re, to] of SPELLING_CANON) t = t.replace(re, to);
   for (const [re, to] of MATH_CANON) t = t.replace(re, to);
   for (const [re, to] of UNIT_CANON) t = t.replace(re, to);
@@ -588,7 +603,7 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
-export const CHECK_VERSION = 5; // 2: the spellings in SPELLING_CANON; 3: compounds, ÷, receptor subtypes, waves, mm³, cm, by mouth; 4: count per time, ng/mL, min/lb/gtt after a number, subscripts, stage numbers, e.g./i.e., more compounds; 5: hour/liter after a number, deciliter, two spellings, more compounds
+export const CHECK_VERSION = 6; // 2: the spellings in SPELLING_CANON; 3: compounds, ÷, receptor subtypes, waves, mm³, cm, by mouth; 4: count per time, ng/mL, min/lb/gtt after a number, subscripts, stage numbers, e.g./i.e., more compounds; 5: hour/liter after a number, deciliter, two spellings, more compounds; 6: seconds, ordinals, body surface area, accents, more compounds (and new scripts: brackets, pain scores, PO, unit per time)
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */
 export function checkFailure(check) {

@@ -154,9 +154,9 @@ describe("question script", () => {
       expect(voiceCheck(script, right).pass, `${written} / ${right}`).toBe(true);
       expect(voiceCheck(script, wrong).pass, `${written} / ${wrong}`).toBe(false);
     }
-    // two numbers with a slash are never reworded: a score, an Apgar pair and a date all stay as written
-    for (const t of ["Pain is rated 5/10 and worsening.", "Apgar scores at 1 and 5 minutes: 7/9.", "The client reports abdominal pain since 7/10.",
-      "Compare heart rates on 7/10 and 7/11.", "Pain began 7/10/2026."]) {
+    // two numbers with a slash are never reworded (a pain score right after "pain" or "rated" is said by the script, see below): an Apgar pair and a date stay as written
+    for (const t of ["Apgar scores at 1 and 5 minutes: 7/9.", "The client reports abdominal pain since 7/10.",
+      "Compare heart rates on 7/10 and 7/11.", "Pain began 7/10/2026.", "Pain at 7/10 visit.", "Pain rated 7/10/2026."]) {
       expect(speakable(t), t).toBe(t);
       expect(voiceCheck(speakable(t), t).pass, t).toBe(true);
       expect(voiceCheck(speakable(t), t.replace(/(\d+)\/(\d+)/, "$1 out of $2")).pass, t).toBe(false);
@@ -278,7 +278,7 @@ describe("question script", () => {
       ["At this stage IV antibiotics are indicated.", "At this stage four antibiotics are indicated."],
       ["Observe for 30 min after administration.", "Observe for thirteen min after administration."],
       ["pH below 7.35 and CO₂ is high.", "pH below 7.35 and CO is high."],
-      ["Level of 8/10 and rising.", "Level of 8 out of 10 and rising."], // two numbers with a slash are never reworded
+      ["Apgar 7/9 at five minutes.", "Apgar 7 out of 9 at five minutes."], // two numbers with a slash are never reworded by the check
       ["Digoxin level 2.0 ng/mL.", "Digoxin level 2.0 micrograms per milliliter."],
       ["The nurse assesses a client with IE for embolic complications.", "The nurse assesses a client with that is for embolic complications."], // IE is infective endocarditis
       ["A client with IE.", "A client with i.e."],
@@ -322,8 +322,105 @@ describe("question script", () => {
     ];
     for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
     // two numbers with a slash, or an amount per weight or per time, are not a volume
-    expect(speakable("Pain 5/10; 2 mg/kg; 1,200 units/hr; 2 mg/mL; 400 mg/250 mL")).toBe("Pain 5/10; 2 milligrams per kilogram; 1,200 units per hour; 2 mg per mL; 400 mg in 250 mL");
+    expect(speakable("Pain 5/10; 2 mg/kg; 1,200 units/hr; 2 mg/mL; 400 mg/250 mL")).toBe("Pain 5 out of 10; 2 milligrams per kilogram; 1,200 units per hour; 2 mg per mL; 400 mg in 250 mL");
     expect(speakable("1500 mg/250 mL")).toBe("1500 mg in 250 mL");
+  });
+
+  it("accepts the fifth round from the failure log, and still rejects a skipped or changed word", () => {
+    const pass = [
+      ["Stage of grief (Kübler-Ross) and denial.", "Stage of grief, Kubler-Ross, and denial."],
+      ["Suspect Guillain-Barré syndrome.", "Suspect Guillain-Barre syndrome."],
+      ["Ménière's disease causes vertigo.", "Meniere's disease causes vertigo."],
+      ["Baseline HIV 4th generation antigen test.", "Baseline HIV fourth generation antigen test."],
+      ["Prothrombin time 52 sec, reference 11.", "Prothrombin time 52 seconds, reference 11."],
+      ["eGFR 45 mL/min/1.73 m² today.", "eGFR 45 mL per minute per 1.73 square meters today."],
+      ["eGFR 45 mL/min/1.73 m² today.", "eGFR 45 mL per minute per 1.73 m² today."],
+      ["Pain rated 7/10 and rising.", "Pain rated 7 out of 10 and rising."],
+      ["She rates her pain 4/10.", "She rates her pain 4 out of 10."],
+      ["Give 25 mg PO daily.", "Give 25 mg by mouth daily."],
+      ["Intervention required (Row 3 — Indicated).", "Intervention required, row 3, indicated."],
+      ["Answer in tablet(s).", "Answer in tablets."],
+      ["Titrate by 2 mcg/hr.", "Titrate by 2 mcg per hour."],
+      ["Increase the dose in mcg/hr.", "Increase the dose in mcg per hour."],
+      ["A 500 to 1000 calorie/day deficit.", "A 500 to 1000 calorie per day deficit."],
+      ["A routine non-complex task.", "A routine noncomplex task."],
+      ["Suggests a febrile non-hemolytic reaction.", "Suggests a febrile nonhemolytic reaction."],
+      ["For a client post operatively.", "For a client postoperatively."],
+    ];
+    for (const [w, h] of pass) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(true);
+    const fail = [
+      ["Intervention required (Row 3 — Indicated).", "Intervention required."], // a skipped aside is still a skipped word
+      ["Intervention required (Row 3 — Indicated).", "Intervention required, row 3, contraindicated."],
+      ["Pain rated 7/10 and rising.", "Pain rated 1 out of 10 and rising."],
+      ["Pain rated 7/10 and rising.", "Pain rated 7 out of 100 and rising."],
+      ["Give 25 mg PO daily.", "Give 25 mg IV daily."],
+      ["Give 25 mg PO daily.", "Give 25 mg daily."],
+      ["Baseline HIV 4th generation antigen test.", "Baseline HIV fifth generation antigen test."],
+      ["Prothrombin time 52 sec, reference 11.", "Prothrombin time 52 minutes, reference 11."],
+      ["eGFR 45 mL/min/1.73 m² today.", "eGFR 45 mL per minute per 1.37 square meters today."],
+      ["Walk 2 m 2 times.", "Walk 2 square meters times."],
+      ["Titrate by 2 mcg/hr.", "Titrate by 2 mg per hour."],
+      ["Answer in tablet(s).", "Answer in capsules."],
+      // an accent is folded only on a letter: a sign's overlay is kept (Sol, PR #168)
+      ["A negative test ≠ absence of infection.", "A negative test equals absence of infection."],
+      ["A negative test ≠ absence of infection.", "A negative test = absence of infection."],
+      // only a closed list of accented names is folded: a mark can be notation (Sol, PR #168)
+      ["Use ȳ, not y.", "Use y, not y."],
+      ["Measure V̇ at rest.", "Measure V at rest."],
+    ];
+    for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
+  });
+
+  it("reads brackets as a pause, keeping every word in them", () => {
+    expect(speakable("Intervention required (Row 3 — Indicated).")).toBe("Intervention required, Row 3 — Indicated.");
+    expect(speakable("Give 2,500 units (0.5 mL) now.")).toBe("Give 2,500 units (0.5 mL) now."); // not an answer-key label: left as written
+    expect(speakable("(Option 1) Pap smear yearly.")).toBe("Option 1, Pap smear yearly.");
+    expect(speakable("Incorrect (0): allergies (e.g., cetirizine) do not.")).toBe("Incorrect (0): allergies, e.g., cetirizine, do not."); // after a capitalised word a group stays
+    expect(speakable("Answer in tablet(s).")).toBe("Answer in tablets.");
+    expect(speakable("(Stay with the client.)")).toBe("(Stay with the client.)"); // a part wholly in brackets is left as it is
+    // brackets that group arithmetic stay: without them it is another sum (Sol, PR #168)
+    for (const t of ["Calculate the anion gap: 140 - (104 + 24).", "(104 + 24) - 140", "Anion gap equals 140 minus (104 plus 24).", "Divide by (2 x 3).", "Total 2 (3)", "MAP = (SBP + 2 × DBP) ÷ 3"]) {
+      expect(speakable(t), t).toContain("(");
+    }
+    expect(speakable("Calculate the anion gap: 140 - (104 + 24).")).toBe("Calculate the anion gap: 140 - (104 + 24).");
+    // factors side by side multiply: a group touching another group, a word or a number keeps its brackets (Sol, PR #168)
+    expect(speakable("Calculate (2 mg/kg)(70 kg).")).toBe("Calculate (2 milligrams per kilogram)(70 kg).");
+    expect(speakable("Use (D/H)Q.")).toBe("Use (D slash H)Q.");
+    expect(speakable("Use (D/H) × Q.")).toBe("Use (D slash H) times Q.");
+    // per body surface area only after a unit; a fraction of a square meter stays as written (Sol, PR #168)
+    expect(speakable("eGFR 45 mL/min/1.73 m².")).toBe("eGFR 45 mL per minute per 1.73 square meters.");
+    expect(speakable("Give 100 mg/1.73 m2 daily.")).toBe("Give 100 mg per 1.73 square meters daily.");
+    for (const t of ["A child's body surface area is 3/4 m².", "BSA 1/2 m2.", "Area 0.5/1.73 m²."]) expect(speakable(t), t).toBe(t);
+    expect(speakable("Calculate (2 mg/kg) (70 kg).")).toBe("Calculate (2 milligrams per kilogram) (70 kg).");
+    // a passage with any sign of a formula keeps every bracket as written (Sol, PR #168)
+    expect(speakable("VO2 = CO (CaO2-CvO2).")).toBe("VO2 equals CO (CaO2-CvO2).");
+    // only a plain label after a lowercase word is an aside: subscripted or letter-only formulas keep their brackets (Sol, PR #168)
+    expect(speakable("Oxygen use is CO (CaO₂-CvO₂).")).toBe("Oxygen use is CO (CaO₂-CvO₂).");
+    expect(speakable("Stroke work is HR (EDV-ESV).")).toBe("Stroke work is HR (EDV-ESV).");
+    // only answer-key labels and e.g./i.e. asides: named factors side by side can be a product (Sol, PR #168)
+    expect(speakable("For minute ventilation, use tidal volume (respiratory rate).")).toBe("For minute ventilation, use tidal volume (respiratory rate).");
+    expect(speakable("Hand hygiene (dropdown 0, option 0) is first.")).toBe("Hand hygiene, dropdown 0, option 0, is first.");
+    expect(speakable("Regardless (index 0 of dropdown 1) violates policy.")).toBe("Regardless, index 0 of dropdown 1, violates policy.");
+    expect(speakable("Placement (row 2, Indicated). Next.")).toBe("Placement, row 2, Indicated. Next.");
+    for (const t of ["Lab (MRSA) result.", "Weight (kg) today.", "Rate (per hour) today.", "Use (option) here."]) expect(speakable(t), t).toBe(t);
+    expect(speakable("Output is HR (SV) here.")).toBe("Output is HR (SV) here.");
+    expect(speakable("Use the ratio (a-b) now.")).toBe("Use the ratio (a-b) now.");
+    for (const t of ["Oxygen use is CO (CaO2-CvO2).", "Use CO (Ca - Cv) here.", "MAP is DBP plus (pulse pressure) today.", "Give (dose) then 2 + 2 (check)."]) expect(speakable(t), t).toContain("(");
+    expect(speakable("Use (D/H) (Q).")).toBe("Use (D slash H) (Q).");
+    expect(speakable("Give (weight) (dose) now.")).toBe("Give (weight) (dose) now.");
+    expect(speakable("Use [D/H] (Q).")).toBe("Use [D slash H] (Q).");
+    for (const t of ["Give (2 mg) x (70 kg).", "Give (2 mg) X 70 kg.", "(70 kg) x 2 mg"]) expect(speakable(t), t).toContain("(");
+    for (const t of ["Weight(kg) 70", "Dose (mg) = 70", "The rate (per hour) is 5", "Total (5) 3", "Give 2 (3 mL)"]) expect(speakable(t), t).toContain("(");
+    // a pain score only after "pain" or "rated"; any other pair of numbers stays as written
+    expect(speakable("Pain rated 7/10; BP 120/80; seen 7/10/2026; Apgar 7/9.")).toBe("Pain rated 7 out of 10; BP 120/80; seen 7/10/2026; Apgar 7/9.");
+    expect(speakable("Pain 12/10?")).toBe("Pain 12/10?");
+    // only after the word "pain": a date after a rate is never a score (Sol, PR #168)
+    for (const t of ["Compare heart rates 7/10 and 7/11.", "Heart rate 7/10.", "Respiratory rate 7/10 recheck.", "Rated 7/10 by the charge nurse.", "Rates 5/10 reviewed."]) expect(speakable(t), t).toBe(t);
+    expect(speakable("She rates her pain 4/10.")).toBe("She rates her pain 4 out of 10.");
+    // "(s)" is a plural only on things counted out; elsewhere it can be seconds, and the passage keeps its brackets
+    expect(speakable("Prothrombin time(s): 52 (normal 11).")).toBe("Prothrombin time(s): 52 (normal 11).");
+    expect(speakable("Give 2 capsule(s).")).toBe("Give 2 capsules.");
+    expect(speakable("Titrate to 75 mg/dL/hr; 1000 calorie/day; HbA1c/eAG.")).toBe("Titrate to 75 milligrams per deciliter per hour; 1000 calorie per day; HbA1c slash eAG.");
   });
 
   it("reads a calculation's closing line (how to record the answer) as its own short part", () => {
@@ -348,7 +445,11 @@ describe("question script", () => {
 
   it("spells out units and dosing shorthand, and nothing else", () => {
     expect(speakable("Give 20 mEq/L q4h PRN; PaCO2 48 mm Hg; K⁺ 6.1 → recheck")).toBe("Give 20 milliequivalents per liter every 4 hours as needed; P A C O 2 48 millimeters of mercury; potassium 6.1, then recheck");
-    expect(speakable("Metoprolol 25 mg PO")).toBe("Metoprolol 25 mg PO");
+    expect(speakable("Metoprolol 25 mg PO")).toBe("Metoprolol 25 mg by mouth");
+    expect(speakable("PO2 and POC testing")).toBe("PO2 and POC testing"); // the route only, as a whole word
+    // a subscript or superscript is part of the symbol: oxygen and phosphate are never "by mouth" (Sol, PR #168)
+    for (const t of ["PO₂ 60", "PO₄³⁻ level", "HPO₄²⁻", "PO⁻", "pPO", "PO²"]) expect(speakable(t), t).not.toContain("by mouth");
+    expect(speakable("Give 25 mg PO daily; (PO) or PO/IV.")).toBe("Give 25 mg by mouth daily; (by mouth) or by mouth slash IV.");
   });
 });
 
@@ -1967,6 +2068,11 @@ describe("the app's voice client", () => {
 });
 
 describe("one script for the screen and the server", () => {
+  it("uses no lookbehind in the app's script: Safari before 16.4 cannot parse it, and the whole app would fail to load", () => {
+    const src = readFileSync(new URL("../src/read-aloud-script.js", import.meta.url), "utf8");
+    expect(src).not.toMatch(/\(\?<[=!]/);
+  });
+
   it("builds the same words from a bank row as the screen shows", () => {
     expect(scriptFor(REF, ROW)).toEqual(questionSegments(ROW));
     const result = { correct: false, points: 0, max: 1 };

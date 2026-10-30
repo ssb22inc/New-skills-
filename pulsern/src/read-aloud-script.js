@@ -46,9 +46,18 @@ const SPOKEN = [
   [/\bgtt\/min\b/g, "drops per minute"],
   [/\bmm ?Hg\b/g, "millimeters of mercury"],
   [/\/mm³/g, " per cubic millimeter"],
+  /* per body surface area, only after a unit ("mL/min/1.73 m²", "mg/1.73
+     m²"): a number before the slash is a fraction ("3/4 m²" is 0.75 square
+     meters) and stays as written */
+  [/\b(min|mins|minute|minutes|hr|hour|day|mL|L|mg|mcg|g|units?)\s*\/\s*(\d+(?:\.\d+)?)\s*m(?:²|2)(?![\w])/g, "$1 per $2 square meters"],
   [/\bq(\d{1,2})h\b/gi, "every $1 hours"],
   [/\bPRN\b/g, "as needed"],
   [/\bNPO\b/g, "N P O"],
+  /* a route the voice tends to drop when it is two letters; only as a
+     token of its own: "PO₂", "PO₄³⁻" and "PO2" are not the route (a
+     subscript is not a word character to \b, so letters and numbers of
+     every kind are excluded on both sides) */
+  [/(^|[^\p{L}\p{N}\p{M}])PO(?![\p{L}\p{N}\p{M}⁺⁻])/gu, "$1by mouth"],
   [/\bSpO₂|\bSpO2\b/g, "S P O 2"],
   [/\bPaCO₂|\bPaCO2\b/g, "P A C O 2"],
   [/\bPaO₂|\bPaO2\b/g, "P A O 2"],
@@ -67,6 +76,14 @@ const SPOKEN = [
      the check must hear them exactly: no rule can tell a score from a
      date, so none is guessed. */
   [/\band\/or\b/gi, "and or"],
+  /* A pain score: a number out of 10 right after the word "pain" ("pain
+     rated 7/10", "pain 6/10", "rates her pain 4/10"), said the way a nurse
+     says it. Only there: after any other word ("heart rates 7/10") two
+     numbers with a slash stay as written, since a date reads the same. */
+  [/\b(pain(?:\s+(?:level|score|rating|intensity))?(?:\s+(?:is|was|of|rated|rating))*)\s+(10|\d)\s*\/\s*10(?![\d\/]|\.\d)/gi, "$1 $2 out of 10"],
+  /* A unit per unit of time or weight with no number before it
+     ("mcg/hr", "calories/day", "mg/dL/hr"): "per", as with a number. */
+  [/\b(mg|mcg|units?|mL|kcal|calories?|mEq|mmol|g|L|gtts?|drops?|deciliter)\s*\/\s*(?=(?:min|minutes?|hr|hours?|h|day|kg|dose)\b)/g, "$1 per "],
   [/\s*÷\s*/g, " divided by "],
   /* An amount in a volume ("400 mg/250 mL", "25,000 units/500 mL") is
      said with "in", the way it is read at the bedside; "per" or "over"
@@ -105,9 +122,69 @@ const operators = (text) => text
 /* Text for the voice: clinical shorthand spelled out, symbols the screen
    uses for layout removed, whitespace tidied. */
 export function speakable(text) {
-  let s = operators(String(text ?? ""));
+  // brackets first, while the signs of arithmetic are still signs
+  let s = operators(asides(String(text ?? "").replace(/[☐☑●○▲△✨📋🧮]/g, "")));
   for (const [re, to] of SPOKEN) s = s.replace(re, to);
-  return s.replace(/[☐☑●○▲△✨📋🧮]/g, "").replace(/\s+/g, " ").trim();
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/* Brackets are read as a pause, not left for the voice: voices skip a
+   bracketed aside, above all at the end of a passage ("... (Row 3 —
+   Indicated)", "(Option 4)": the voice job's failure log). The words
+   stay; only the brackets become commas. A plural marker on a closed list
+   of things counted out ("tablet(s)") is said as the plural; any other
+   "(s)" is left alone, since it can be seconds ("time(s)"). A part that
+   is wholly in brackets is left as it is. */
+/* Brackets that group arithmetic are never an aside: "140 - (104 + 24)",
+   "VO2 = CO (CaO2-CvO2)", "HR (EDV-ESV)",
+   "(2 mg/kg)(70 kg)" or "(D/H) × Q" without them is another calculation.
+   A group is read as a pause only when it plainly stands apart in prose
+   and holds a label from a closed list (PROSE_LABEL) after a word, a
+   punctuation mark or the start:
+   - a space (or the start) before it, and a space, punctuation mark or
+     the end after it, so a group touching a word, a number or another
+     group ("(D/H)Q", ")(") is never one;
+   - nothing in it that can be arithmetic: no sign, no slash, no word for
+     an operation;
+   - no number, sign, word for an operation or other bracket right before
+     or after it, even across a space ("(2 mg/kg) (70 kg)").
+   Anything else keeps its brackets exactly as written. */
+/* Any sign of a formula ANYWHERE in the passage ("VO2 = CO (CaO2-CvO2)"):
+   then no bracket in it is touched. */
+const FORMULA = /[=+×*÷^<>≤≥≠−·∙₀-₉⁰-⁹]|\b[A-Z][A-Za-z]*\s*-\s*[A-Z]{2}|\d\s*[-x/]\s*\d|\s-\s|[A-Za-z]\w*\d\w*\s*-\s*\w|\w\s*-\s*[A-Za-z]\w*\d|\b(?:plus|minus|times|divided\s+by|multiplied\s+by|equals?)\b/i;
+const MATH_SIGN = /[+×*÷=^<>≤≥≠−–·∙/]|\d\s*[-x]\s*\d|\s-\s|\w*\d\w*\s*-\s*\w|\w\s*-\s*\w*\d|\b(?:plus|minus|times|divided|multiplied|equals?|over|per)\b/i;
+const MATH_BEFORE = /(?:[-+×*÷=^/−–·∙\d)\]]|\b(?:x|plus|minus|times|divided\s+by|multiplied\s+by|equals?|over|of|per))\s*$/i;
+const MATH_AFTER = /^\s*(?:[-+×*÷=^/−–·∙²³\d(\[]|(?:x|plus|minus|times|divided|multiplied|equals?|over|per)\b)/i;
+/* What an aside may hold: words, numbers and light punctuation only. No
+   hyphen, minus, slash or sub- or superscript: those can be a formula
+   ("CaO₂-CvO₂", "EDV-ESV"). */
+/* Only these are read as a pause: an answer-key label ("option 3", "Row 3
+   — Indicated", "index 0 of dropdown 1", "dropdown 0, option B", "token
+   5") or an "e.g." / "i.e." aside. Any other bracket, words included
+   ("tidal volume (respiratory rate)" can be a product), stays as written. */
+const KEY_WORD = "option|row|index|token|dropdown|parameter|action|step|choice|blank|condition";
+const VERDICT = "indicated|contraindicated|not indicated|non-essential|nonessential|recommended|not recommended|correct|incorrect|anticipated|not anticipated|effective|ineffective|appropriate|inappropriate|requires further assessment";
+const KEY_LABEL = new RegExp(`^(?:${KEY_WORD})\\s+[A-Za-z0-9]{1,2}(?:\\s+of\\s+(?:${KEY_WORD})\\s+[A-Za-z0-9]{1,2})?(?:\\s*,\\s*(?:${KEY_WORD})\\s+[A-Za-z0-9]{1,2})*(?:\\s*(?:—|,|:)\\s*(?:${VERDICT}))?$`, "i");
+const EXAMPLE = /^(?:e\.g\.|i\.e\.),?\s+[A-Za-z0-9 ,.%'’]+$/i;
+const PROSE_LABEL = { test: (inner) => KEY_LABEL.test(inner) || EXAMPLE.test(inner) };
+const aside = (inner, before, after) =>
+  PROSE_LABEL.test(inner.trim()) && /(?:^|[,.;:?!]|\b[A-Za-z]+)\s*$/.test(before)
+  && /(?:^|\s)$/.test(before) && /^(?:[\s,.;:?!]|$)/.test(after)
+  && !MATH_SIGN.test(inner) && !MATH_BEFORE.test(before) && !MATH_AFTER.test(after);
+const COUNTED = "tablet|capsule|dose|drop|puff|vial|patch|spray|syringe|ampule|bag|suppositor(?:y|ie)";
+function asides(text) {
+  const t = text.trim().replace(new RegExp(`\\b(${COUNTED})\\(s\\)`, "gi"), "$1s");
+  if (/\w\(s\)/.test(t) || FORMULA.test(t)) return t;
+  if (/^\([^()]*\)[.!?]?$/.test(t)) return t;
+  return t
+    .replace(/(\s*)\(([^()]*)\)/g, (m, space, inner, at) => {
+      const before = t.slice(0, at) + space;
+      if (!aside(inner, before, t.slice(at + m.length))) return m;
+      const lead = /[,.;:?!]\s*$/.test(before) ? " " : ", ";
+      return inner.trim() ? `${lead}${inner.trim()},` : "";
+    })
+    .replace(/^,\s*/, "")
+    .replace(/,\s*(?=[,.;:?!]|$)/g, "");
 }
 
 /* Where an item takes its answer: these instructions are what the screen
@@ -122,7 +199,7 @@ const INSTRUCTION = {
 
 /* The last sentence of a calculation stem when it only says how to record
    the answer, with or without brackets. */
-const CALC_CLOSING = /(?<=^|[.?!:]["'”’)]?)\s*\(?\s*((?:Record|Round)\b[^.?!()]*)\.?\s*\)?\s*$/;
+const CALC_CLOSING = /(^|[.?!:]["'”’)]?)\s*\(?\s*((?:Record|Round)\b[^.?!()]*)\.?\s*\)?\s*$/;
 
 const seg = (id, text) => ({ id, text: speakable(text) });
 
@@ -135,7 +212,7 @@ function pieces(text) {
   if (text.length <= PART_MAX) return [text];
   const out = [];
   let cur = "";
-  for (const sentence of text.split(/(?<=[.?!;:])\s+(?=\S)/)) {
+  for (const sentence of text.replace(/([.?!;:])\s+(?=\S)/g, "$1\u0000").split("\u0000")) {
     if (cur && (cur + " " + sentence).length > PART_MAX) { out.push(cur); cur = ""; }
     // a single sentence longer than the limit is cut at word boundaries
     let rest = sentence;
@@ -171,7 +248,8 @@ export function questionSegments(q, ext = q) {
      the whole number.", "Round to the nearest tenth."): voices skip it the
      same way, so it is read as the item's instruction instead. */
   const closing = type === "calc" ? stem.match(CALC_CLOSING) : null;
-  if (closing && stem.slice(0, closing.index).trim()) stem = stem.slice(0, closing.index).trim();
+  const cut = closing ? closing.index + closing[1].length : 0;
+  if (closing && stem.slice(0, cut).trim()) stem = stem.slice(0, cut).trim();
   if (type === "cloze") {
     out.push(seg("stem", stem.replace(/\{(\d+)\}/g, (_, n) => ` blank ${Number(n) + 1} `)));
   } else {
@@ -202,7 +280,7 @@ export function questionSegments(q, ext = q) {
   } else if (type === "cloze" && Array.isArray(ext.dropdowns)) {
     ext.dropdowns.forEach((opts, i) => out.push(seg(`gap${i}`, `Blank ${i + 1}: ${(opts ?? []).join(", or ")}.`)));
   } else if (type === "calc") {
-    const how = closing && stem !== stemText ? sentence(closing[1]) : INSTRUCTION.calc;
+    const how = closing && stem !== stemText ? sentence(closing[2]) : INSTRUCTION.calc;
     out.push(seg("instruction", `${how}${ext.unit ? ` Answer in ${ext.unit}.` : ""}`));
   }
   return finish(out);
