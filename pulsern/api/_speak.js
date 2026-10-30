@@ -471,14 +471,30 @@ export const passagePaths = (text, tts = TTS) => {
 /* Save a checked take: the audio only if it passed, and always the record
    (a failed record stops the passage being asked for again under this QA
    version). */
+/* The read-aloud check's own version (on top of the narration check's
+   QA_VERSION, which the diagrams share). A passage that FAILED under an
+   older version is voiced again, so when the check learns to accept a
+   correct reading it used to reject (a spelling of a number or unit, say),
+   the passages it wrongly turned away get another chance. Passed audio is
+   kept: it passed a check at least as strict. Records written before this
+   field existed count as version 1. */
+export const CHECK_VERSION = 1;
+/* Why a take failed the check, for the job's log: the first word that
+   differed (or the unit that did), with a few words around it. */
+export function checkFailure(check) {
+  const m = check?.unitMismatch ?? check?.mismatch;
+  if (!m) return `similarity ${Number(check?.similarity ?? 0).toFixed(3)}`;
+  const near = m.context ? ` near "${String(m.context).slice(0, 80)}"` : '';
+  return `expected "${m.expected}", heard "${m.heard}"${near} (similarity ${Number(check.similarity ?? 0).toFixed(3)})`;
+}
 export async function saveChecked(storage, text, best, { now = Date.now(), tts = TTS } = {}) {
   const { mp3, rec } = passagePaths(text, tts);
   const pass = best.check.pass === true;
   if (pass && !(await put(storage, mp3, best.audio, 'audio/mpeg'))) return false;
   return put(storage, rec, JSON.stringify({
-    qa: QA_VERSION, pass, qaModel: QA_MODEL, model: tts.model, voice: tts.voice,
+    qa: QA_VERSION, check: CHECK_VERSION, pass, qaModel: QA_MODEL, model: tts.model, voice: tts.voice,
     textSha: sha256(text), audioSha: pass ? sha256(best.audio) : null, similarity: best.check.similarity,
-    mismatch: pass ? null : best.check.mismatch ?? null,
+    mismatch: pass ? null : best.check.mismatch ?? null, unitMismatch: pass ? null : best.check.unitMismatch ?? null,
     transcript: best.transcript, take: best.take, checkedAt: new Date(now).toISOString(),
   }), 'application/json');
 }
@@ -497,6 +513,8 @@ export async function readRecord(storage, text, tts = TTS, now = Date.now()) {
   if (!(r?.qa === QA_VERSION && r.textSha === sha256(text))) return null;
   // A provider refusal (not a failed check) expires, so the passage is tried again.
   if (r.reason && now - Date.parse(r.checkedAt ?? 0) > REJECTION_DAYS * 86400000) return null;
+  // A failed check from an older version of the check is tried again.
+  if (r.pass === false && !r.reason && (r.check ?? 1) !== CHECK_VERSION) return null;
   return r;
 }
 
