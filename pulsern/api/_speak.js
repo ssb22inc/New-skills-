@@ -106,17 +106,20 @@ const UNIT_CANON = [
    closed list of compounds that mean the same open or closed
    ("post-operative" / "postoperative"). Nothing else is folded: a dropped
    slash, a changed number or a different prefix still fails. */
-/* Words written open or closed. A clinical prefix (non, post, pre, anti,
-   inter, intra, multi, peri, ante, sub, supra, hyper, hypo, semi, trans)
-   before a word of four letters or more is joined on both sides: such a
-   pair means the same either way. "re" and "co" are NOT prefixes here:
-   "re-signed" is not "resigned"; their compounds, like any other, must be
-   in the closed list below. A lone "a" is never joined ("a febrile" is not
-   "afebrile"). */
-const PREFIX_JOIN = /\b(non|post|pre|anti|inter|intra|multi|peri|ante|sub|supra|hyper|hypo|semi|trans)[\s-]+([a-z]{4,})\b/gi;
+/* Words written open or closed: joined ONLY when the joined word is in
+   this closed list of compounds that mean the same either way. A prefix
+   alone proves nothing: "pre-sent" is not "present", "re-signed" is not
+   "resigned", "a febrile" is not "afebrile". */
 const COMPOUNDS = new Set([
+  'postoperative', 'preoperative', 'intraoperative', 'perioperative', 'postpartum', 'antepartum', 'intrapartum',
+  'prenatal', 'postnatal', 'antenatal', 'perinatal', 'postanesthesia', 'preanesthesia', 'postmenopausal', 'premenopausal',
+  'subtherapeutic', 'supratherapeutic', 'subcutaneous', 'sublingual', 'intravenous', 'intramuscular', 'intradermal',
+  'nonclinical', 'nonpharmacologic', 'nonpharmacological', 'noninvasive', 'nonverbal', 'nonurgent', 'nonsteroidal',
+  'nonadherent', 'nonadherence', 'noncompliant', 'noncompliance', 'nonreactive', 'nonstress', 'nonblanchable',
+  'antiinflammatory', 'multidisciplinary', 'interdisciplinary', 'interprofessional', 'preexisting', 'prediabetes',
   'dropdown', 'healthcare', 'readback', 'cosignature', 'readministered',
 ]);
+const COMPOUND_PARTS = /\b(non|post|pre|anti|inter|intra|multi|peri|ante|sub|supra|drop|health|read|co|re)[\s-]+([a-z]{2,})\b/gi;
 /* In this order: a number said in words just before a unit and a slash
    as digits ("twelve breaths/min"), and a spoken "slash" as "/", so that
    every spelling of a rate ("12 breaths per minute", "twelve breaths/
@@ -134,9 +137,7 @@ const SPELLING_CANON = [
   [/\bper\s+(?:hrs?|hours?|h)\b/gi, 'per hour'],
   [/\bper\s+(?:secs?|seconds?)\b/gi, 'per second'],
   [/(\d+(?:st|nd|rd|th))\s*(?:[–—-]|\bto\b)\s*(?=\d+(?:st|nd|rd|th)\b)/gi, '$1 to '],
-  [PREFIX_JOIN, '$1$2'],
-  [/\b(drop|health|read|co|re)[\s-]+(down|care|back|signature|administered)\b/gi,
-    (m, a, b) => (COMPOUNDS.has(`${a}${b}`.toLowerCase()) ? `${a}${b}` : m)],
+  [COMPOUND_PARTS, (m, a, b) => (COMPOUNDS.has(`${a}${b}`.toLowerCase()) ? `${a}${b}` : m)],
   // "÷" said in words; a Greek letter and its number ("beta 1", "beta-1"); an ECG wave ("T wave", "T-Wave", "t waves")
   [/\s*÷\s*/g, ' divided by '],
   [/\b(alpha|beta|gamma|delta|kappa)[\s-]+(\d)\b/gi, '$1$2'],

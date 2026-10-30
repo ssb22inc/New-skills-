@@ -211,7 +211,8 @@ describe("question script", () => {
     ];
     for (const [w, h] of pass) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(true);
     const fail = [
-      ["The form was re-signed.", "The form was resigned."], // "re" is not a joining prefix
+      ["The form was re-signed.", "The form was resigned."], // only listed compounds join
+      ["The nurse reviews the pre-sent medication list.", "The nurse reviews the present medication list."],
       ["The client is afebrile.", "The client is a febrile."],
       ["Metoprolol succinate is a beta-1 selective blocker.", "Metoprolol succinate is a beta2 selective blocker."],
       ["Metoprolol 25 mg PO daily.", "Metoprolol 25 mg IV daily."],
