@@ -197,6 +197,7 @@ describe("question script", () => {
       ["Required for health care workers.", "Required for healthcare workers."],
       ["25,000 units ÷ 500 mL", "25,000 units divided by 500 mL"],
       ["Metoprolol succinate is a beta-1 selective blocker.", "Metoprolol succinate is a beta1 selective blocker."],
+      ["Clonidine is an alpha 2 agonist.", "Clonidine is an alpha-2 agonist."],
       ["Hyperkalemia causes peaked T-waves.", "Hyperkalemia causes peaked T waves."],
       ["Hyperkalemia causes peaked T waves.", "Hyperkalemia causes peaked T Waves."],
       ["Hyperkalemia causes peaked T-waves.", "Hyperkalemia causes peaked t-Waves."],
@@ -215,6 +216,9 @@ describe("question script", () => {
       ["The nurse reviews the pre-sent medication list.", "The nurse reviews the present medication list."],
       ["The client is afebrile.", "The client is a febrile."],
       ["Metoprolol succinate is a beta-1 selective blocker.", "Metoprolol succinate is a beta2 selective blocker."],
+      // a sign is never a separator
+      ["Potassium delta -1 milliequivalents per liter.", "Potassium delta 1 milliequivalents per liter."],
+      ["Change beta -1 from baseline.", "Change beta 1 from baseline."],
       ["Metoprolol 25 mg PO daily.", "Metoprolol 25 mg IV daily."],
       ["Returned from post anesthesia care.", "Returned from preanesthesia care."],
       ["ANC 320 cells/mm³.", "ANC 230 cells per cubic millimeter."],

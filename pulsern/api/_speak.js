@@ -138,9 +138,12 @@ const SPELLING_CANON = [
   [/\bper\s+(?:secs?|seconds?)\b/gi, 'per second'],
   [/(\d+(?:st|nd|rd|th))\s*(?:[–—-]|\bto\b)\s*(?=\d+(?:st|nd|rd|th)\b)/gi, '$1 to '],
   [COMPOUND_PARTS, (m, a, b) => (COMPOUNDS.has(`${a}${b}`.toLowerCase()) ? `${a}${b}` : m)],
-  // "÷" said in words; a Greek letter and its number ("beta 1", "beta-1"); an ECG wave ("T wave", "T-Wave", "t waves")
+  // "÷" said in words; an ECG wave ("T wave", "T-Wave", "t waves")
   [/\s*÷\s*/g, ' divided by '],
-  [/\b(alpha|beta|gamma|delta|kappa)[\s-]+(\d)\b/gi, '$1$2'],
+  /* a receptor subtype only: alpha or beta, ONE space or hyphen, then 1 or
+     2 ("beta 1", "beta-1", "alpha-2"); a minus sign is never a separator
+     ("delta -1" keeps its sign) */
+  [/\b(alpha|beta)(?: |-)([12])(?![\d.])/gi, '$1$2'],
   [/\b([PQRSTU])[\s-]+(waves?)\b/gi, (m, l, w) => `${l}${w}`.toLowerCase()],
   // a count per cubic millimetre, written or said
   [/\s*\/\s*mm(?:³|3)(?![A-Za-z0-9])|\bper\s+(?:mm(?:³|3)|cubic\s+mm)(?![A-Za-z0-9])/gi, ' per cubic millimeter'],
