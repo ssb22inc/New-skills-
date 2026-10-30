@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "9dfd0d752ae8e5a97dc05836cad1fe364242bab3",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T13:46:02.590Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud-script.js",
+      "line": 150,
+      "title": "Formula protection misses subscripted variables and removes their grouping",
+      "problem": "FORMULA and MATH_SIGN recognize unspaced algebraic subtraction only through ASCII-digit patterns. Unicode-subscripted variables bypass those guards, allowing asides() to replace mathematical parentheses with commas. Pure-letter expressions such as HR (EDV-ESV) have the same problem.",
+      "failure_scenario": "speakable(\"Oxygen use is CO (CaO₂-CvO₂).\") returns \"Oxygen use is CO, CaO₂-CvO₂.\" The parentheses expressing multiplication by the oxygen-content difference have been replaced with a prose pause. This is the subscripted version of an existing test case, but that test uses ASCII digits. The audio gate compares against the already-altered script, so it cannot catch this change to the clinical formula.",
+      "fix": "Preserve parentheses whenever a group could be algebraic, including Unicode-subscripted variables and pure-letter subtraction. Leave ambiguous groups untouched rather than classifying them as prose. Add exact-output regressions for both CO (CaO₂-CvO₂) and HR (EDV-ESV).",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 46498,
+    "completionTokens": 5843,
+    "reasoningTokens": 5509,
+    "costUsd": 0.1746735
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes: the new aside conversion can remove mathematical grouping from clinical formulas. One blocking defect found.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
