@@ -5,7 +5,7 @@
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
-  "sourceSetSha256": "f9e0e241606868df3ff6d93b0d0f924e99a440e569c9f13645c723422d89f464",
+  "sourceSetSha256": "4382229825af2940cb55799b63c2b0026cbbb12d677fe05ed137177b9ff155b0",
   "sourceFiles": {
     "src/App.jsx": "566dae6dc713219648e4bc26911828bd2bb27f2e3c26c01393ef09f442eb79d2",
     "src/ability-engine.js": "a4a3c018359cf2128407cf31c3059f4bd2fcde84138aacb68c7614d963e3f462",
@@ -50,7 +50,7 @@
     "src/profile.jsx": "a591ba28a52907123769b698c5560b28f73678a2e0d1d283f953b3f83198502f",
     "src/question-review.js": "c034a3b50ca9fdd6e10049cd5502bda62b20742c1f3739d76a4738daa265e47a",
     "src/read-all.js": "c280a3dfbd7d0c4734415975ba444fbf219dbf8511888290234122d4963991d5",
-    "src/read-aloud-script.js": "c83cb5d058420dec9348dd57500b44c3018444af66370c5589031fa95143365b",
+    "src/read-aloud-script.js": "935e66ee3ce2b0b70b1cb01fef64f23530009ddbf43dc6df74b9638bd1a6bd39",
     "src/read-aloud.jsx": "a625cc9679fdc511b6d0f305cb9003d18b1479c21f0f355f9037be709afe3660",
     "src/selftest.js": "461ffde7017551ffade6a55e9648b313ac433eef7a2c80268146421ce54d4d47",
     "src/srs.js": "2da1dc8efc41b14a6361f6410529ebdb293f5dd819d5699d8997328b6f5abb34",

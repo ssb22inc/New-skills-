@@ -372,6 +372,11 @@ describe("question script", () => {
     expect(speakable("Incorrect (0): allergies (e.g., cetirizine) do not.")).toBe("Incorrect, 0: allergies, e.g., cetirizine, do not.");
     expect(speakable("Answer in tablet(s).")).toBe("Answer in tablets.");
     expect(speakable("(Stay with the client.)")).toBe("(Stay with the client.)"); // a part wholly in brackets is left as it is
+    // brackets that group arithmetic stay: without them it is another sum (Sol, PR #168)
+    for (const t of ["Calculate the anion gap: 140 - (104 + 24).", "(104 + 24) - 140", "Anion gap equals 140 minus (104 plus 24).", "Divide by (2 x 3).", "Total 2 (3)", "MAP = (SBP + 2 × DBP) ÷ 3"]) {
+      expect(speakable(t), t).toContain("(");
+    }
+    expect(speakable("Calculate the anion gap: 140 - (104 + 24).")).toBe("Calculate the anion gap: 140 - (104 + 24).");
     // a pain score only after "pain" or "rated"; any other pair of numbers stays as written
     expect(speakable("Pain rated 7/10; BP 120/80; seen 7/10/2026; Apgar 7/9.")).toBe("Pain rated 7 out of 10; BP 120/80; seen 7/10/2026; Apgar 7/9.");
     expect(speakable("Pain 12/10?")).toBe("Pain 12/10?");

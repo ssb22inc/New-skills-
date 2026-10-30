@@ -117,9 +117,10 @@ const operators = (text) => text
 /* Text for the voice: clinical shorthand spelled out, symbols the screen
    uses for layout removed, whitespace tidied. */
 export function speakable(text) {
-  let s = operators(String(text ?? ""));
+  // brackets first, while the signs of arithmetic are still signs
+  let s = operators(asides(String(text ?? "").replace(/[☐☑●○▲△✨📋🧮]/g, "")));
   for (const [re, to] of SPOKEN) s = s.replace(re, to);
-  return asides(s.replace(/[☐☑●○▲△✨📋🧮]/g, "")).replace(/\s+/g, " ").trim();
+  return s.replace(/\s+/g, " ").trim();
 }
 
 /* Brackets are read as a pause, not left for the voice: voices skip a
@@ -129,13 +130,24 @@ export function speakable(text) {
    of things counted out ("tablet(s)") is said as the plural; any other
    "(s)" is left alone, since it can be seconds ("time(s)"). A part that
    is wholly in brackets is left as it is. */
+/* Brackets that group arithmetic are never an aside: "140 - (104 + 24)"
+   without them is another sum. A group is read as a pause only when no
+   sign of arithmetic is inside it or right before or after it; otherwise
+   the brackets stay as written. */
+const MATH_SIGN = /[+×*÷=^<>≤≥≠−–]|\d\s*[-/x]\s*\d|\s-\s|\b(?:plus|minus|times|divided|multiplied|equals?|over)\b/i;
+const MATH_WORD_EDGE = /\b(?:plus|minus|times|divided\s+by|multiplied\s+by|equals?|over|of)\s*$/i;
+const aside = (inner, before, after) =>
+  !MATH_SIGN.test(inner) && !/[-+×*÷=^/−–]\s*$/.test(before) && !MATH_WORD_EDGE.test(before) && !/^\s*(?:[-+×*÷=^/−–²³]|(?:plus|minus|times|divided|multiplied|equals?)\b)/i.test(after) && !/^\s*\d/.test(after) && !/\d\s*$/.test(before.replace(/\s+$/, "").slice(-1));
 const COUNTED = "tablet|capsule|dose|drop|puff|vial|patch|spray|syringe|ampule|bag|suppositor(?:y|ie)";
 function asides(text) {
   const t = text.trim().replace(new RegExp(`\\b(${COUNTED})\\(s\\)`, "gi"), "$1s");
   if (/\w\(s\)/.test(t)) return t;
   if (/^\([^()]*\)[.!?]?$/.test(t)) return t;
   return t
-    .replace(/\s*\(([^()]*)\)/g, (m, inner) => (inner.trim() ? `, ${inner.trim()},` : ""))
+    .replace(/(\s*)\(([^()]*)\)/g, (m, space, inner, at) => {
+      if (!aside(inner, t.slice(0, at), t.slice(at + m.length))) return m;
+      return inner.trim() ? `, ${inner.trim()},` : "";
+    })
     .replace(/^,\s*/, "")
     .replace(/,\s*(?=[,.;:?!]|$)/g, "");
 }
