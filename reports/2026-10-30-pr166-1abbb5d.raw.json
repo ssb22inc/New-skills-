@@ -1,0 +1,43 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "195d24b0f8ddbd365cb1a370a2d76b681dc13653",
+    "head": "1abbb5d13f1d496d9ac53fc4381ec70ceaacc018",
+    "pr": "166"
+  },
+  "reviewedAt": "2026-10-30T06:50:27.626Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 147,
+      "title": "Digit-only unit folding rejects correctly spoken number words",
+      "problem": "The new minute, pound and drop replacements singularize units only when preceded by digits, before audioCheck performs its documented number-word normalization. For example, canonUnits changes \"30 minutes\" to \"30 minute\" but leaves \"thirty minutes\" unchanged. After number normalization, the exact-word check compares \"30 minute\" with \"30 minutes\" and rejects an otherwise correct reading. Previously, the plural unit remained identical on both sides.",
+      "failure_scenario": "A script says \"Observe for 30 minutes after administration.\" and the transcriber returns \"Observe for thirty minutes after administration.\" Correct audio fails the check. If both takes receive that transcription, the passage is recorded as failed under CHECK_VERSION 4 and subsequent requests cannot use the checked voice. The same issue affects \"6 pounds\" versus \"six pounds\" and \"15 drops\" versus \"fifteen drops\".",
+      "fix": "Make these bounded unit normalizations independent of whether the preceding number is written in digits or words. Add regression tests pairing digit-valued scripts with spelled-number transcripts for minutes, pounds and drops, while retaining changed-value and changed-unit rejection tests.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 33910,
+    "completionTokens": 4787,
+    "reasoningTokens": 4425,
+    "costUsd": 0.1326435
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One likely read-aloud regression needs correction. The added tests use digits on both sides and miss mixed digit/number-word readings. I could not execute the tests or inspect the imported audioCheck implementation, so confidence is medium.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
