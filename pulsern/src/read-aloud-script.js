@@ -46,9 +46,13 @@ const SPOKEN = [
   [/\bgtt\/min\b/g, "drops per minute"],
   [/\bmm ?Hg\b/g, "millimeters of mercury"],
   [/\/mm³/g, " per cubic millimeter"],
+  // per body surface area ("mL/min/1.73 m²")
+  [/\s*\/\s*(\d+(?:\.\d+)?)\s*m(?:²|2)(?![\w])/g, " per $1 square meters"],
   [/\bq(\d{1,2})h\b/gi, "every $1 hours"],
   [/\bPRN\b/g, "as needed"],
   [/\bNPO\b/g, "N P O"],
+  // a route the voice tends to drop when it is two letters
+  [/\bPO\b/g, "by mouth"],
   [/\bSpO₂|\bSpO2\b/g, "S P O 2"],
   [/\bPaCO₂|\bPaCO2\b/g, "P A C O 2"],
   [/\bPaO₂|\bPaO2\b/g, "P A O 2"],
@@ -67,6 +71,13 @@ const SPOKEN = [
      the check must hear them exactly: no rule can tell a score from a
      date, so none is guessed. */
   [/\band\/or\b/gi, "and or"],
+  /* A pain score: a number out of 10 right after "pain" or "rated" ("pain
+     rated 7/10", "pain 6/10", "rates her pain 4/10"), said the way a nurse
+     says it. Only there: elsewhere two numbers with a slash stay as written. */
+  [/\b(pain(?:\s+(?:level|score|rating|intensity))?(?:\s+(?:is|was|of|rated|rating))*|rated?s?(?:\s+(?:at|as))?)\s+(10|\d)\s*\/\s*10(?![\d\/]|\.\d)/gi, "$1 $2 out of 10"],
+  /* A unit per unit of time or weight with no number before it
+     ("mcg/hr", "calories/day", "mg/dL/hr"): "per", as with a number. */
+  [/\b(mg|mcg|units?|mL|kcal|calories?|mEq|mmol|g|L|gtts?|drops?|deciliter)\s*\/\s*(?=(?:min|minutes?|hr|hours?|h|day|kg|dose)\b)/g, "$1 per "],
   [/\s*÷\s*/g, " divided by "],
   /* An amount in a volume ("400 mg/250 mL", "25,000 units/500 mL") is
      said with "in", the way it is read at the bedside; "per" or "over"
@@ -107,7 +118,22 @@ const operators = (text) => text
 export function speakable(text) {
   let s = operators(String(text ?? ""));
   for (const [re, to] of SPOKEN) s = s.replace(re, to);
-  return s.replace(/[☐☑●○▲△✨📋🧮]/g, "").replace(/\s+/g, " ").trim();
+  return asides(s.replace(/[☐☑●○▲△✨📋🧮]/g, "")).replace(/\s+/g, " ").trim();
+}
+
+/* Brackets are read as a pause, not left for the voice: voices skip a
+   bracketed aside, above all at the end of a passage ("... (Row 3 —
+   Indicated)", "(Option 4)": the voice job's failure log). The words
+   stay; only the brackets become commas. A plural marker ("tablet(s)")
+   is said as the plural, and a part that is wholly in brackets is left
+   as it is. */
+function asides(text) {
+  const t = text.trim().replace(/([A-Za-z])\(s\)/g, "$1s");
+  if (/^\([^()]*\)[.!?]?$/.test(t)) return t;
+  return t
+    .replace(/\s*\(([^()]*)\)/g, (m, inner) => (inner.trim() ? `, ${inner.trim()},` : ""))
+    .replace(/^,\s*/, "")
+    .replace(/,\s*(?=[,.;:?!]|$)/g, "");
 }
 
 /* Where an item takes its answer: these instructions are what the screen
