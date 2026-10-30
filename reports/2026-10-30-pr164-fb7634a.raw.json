@@ -1,0 +1,31 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "1a5946a12ea1816fa04ad7a639f431eae4944b49",
+    "head": "fb7634a494fc241927f0e0b7f2404f4ac2661924",
+    "pr": "164"
+  },
+  "reviewedAt": "2026-10-30T05:01:07.485Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 15575,
+    "completionTokens": 3141,
+    "reasoningTokens": 3081,
+    "costUsd": 0.070346
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes. The continuation logic and workflow wiring are consistent. Tests were reviewed but not executed; the repository setting needed to confirm that main is the default branch was not provided.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
