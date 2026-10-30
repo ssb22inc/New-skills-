@@ -5,7 +5,7 @@
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
-  "sourceSetSha256": "7bb9f37cfe6e806173faf2f11f29610abe9482e255182042333f4e004d246aa9",
+  "sourceSetSha256": "947858f7fd0e9d2b3461eab8b489f071939205843c4b3c6df15e23eb2fd68fb2",
   "sourceFiles": {
     "src/App.jsx": "566dae6dc713219648e4bc26911828bd2bb27f2e3c26c01393ef09f442eb79d2",
     "src/ability-engine.js": "a4a3c018359cf2128407cf31c3059f4bd2fcde84138aacb68c7614d963e3f462",
@@ -41,7 +41,7 @@
     "src/grading-note.js": "cdec544ffaa7d21550d2b21b56fea4baac1d1680e0c14712e2258d47d18335ee",
     "src/install.jsx": "28d7fc3707578a9d078e7ac69007d3839f6f006c5a51e337dada804def195559",
     "src/labs.js": "8d7cab0c115b5b002e9833343c4cfb18454cca4e47ea242564219bb41a137604",
-    "src/landing.jsx": "28a108f993f3a5d9e6d443cded75c7e3119a1a183e80832bd2ab0a53e2874709",
+    "src/landing.jsx": "717dbcc2f5339cb028aba2f78371c3578f9b3e6e4c73915683aec34eaebc05bd",
     "src/main.jsx": "efb8ec0a8a024cf8d27f7f1113f7840f097be89775fd081998d75cb98bff38eb",
     "src/ngn-samples.js": "3c2ef292fc49892dd677168452fb6299ba33f9d47ec93a03f2a61a83bb85ba5d",
     "src/ngn.js": "3ae09fe98c92cd1fa0ad45d55a87b2ec0380df48d060ff22a34bbc7ffb60b836",
@@ -65,7 +65,7 @@
       "bytes": 58189,
       "width": 720,
       "height": 620,
-      "alt": "PulseRN adaptive NCLEX practice screen with a psychosocial integrity question on therapeutic communication and four answer choices",
+      "alt": "PulseRN adaptive NCLEX practice screen with a management of care prioritization question and four answer choices",
       "caption": "Authentic adaptive NCLEX practice with answer-first review."
     },
     {

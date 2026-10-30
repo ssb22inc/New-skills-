@@ -172,7 +172,7 @@ export default function LandingPage({ onSignIn, onStart }) {
             <p className="land-note" style={{ marginTop: 12 }}><a href="/app/">Open the study app</a> to install PulseRN from your browser.</p>
           </div>
           <figure className="land-product">
-            <img className="land-product-image" src="/product/pulsern-adaptive-practice.png" width="720" height="620" fetchpriority="high" alt="PulseRN adaptive NCLEX practice screen with a psychosocial integrity question on therapeutic communication and four answer choices" />
+            <img className="land-product-image" src="/product/pulsern-adaptive-practice.png" width="720" height="620" fetchpriority="high" alt="PulseRN adaptive NCLEX practice screen with a management of care prioritization question and four answer choices" />
             <figcaption className="land-product-caption">Authentic adaptive NCLEX practice with answer-first review. Built-in demonstration content; no learner data.</figcaption>
           </figure>
         </section>
