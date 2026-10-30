@@ -22,9 +22,12 @@ import { ngnExt } from "./ngn.js";
 const RATE_UNITS = "breaths?|beats?|drops?|gtts?|units?|mg|mcg|g|mL|ml|L|mEq|mmol|IU|doses?|tablets?|caps?|puffs?|times|cells|kcal|calories|mm|cm|oz|lb|kg";
 const RATE_PER = "min|mins|minute|hr|hrs|hour|h|day|days|d|week|wk|sec|secs|second|kg|dose|L|dL|mL|m2";
 export const RATE = new RegExp(`(\\b\\d+(?:\\.\\d+)?\\s*(?:${RATE_UNITS}))\\s*\\/\\s*(?=(?:${RATE_PER})\\b)`, "g");
-/* A pain score out of 10, in the same sentence as "pain". */
-export const PAIN_BEFORE = /(\bpain\b[^.;!?]{0,60}?)\b(\d{1,2})\s*\/\s*10\b/gi;
-export const PAIN_AFTER = /\b(\d{1,2})\s*\/\s*10\b(?=[^.;!?]{0,40}\bpain\b)/gi;
+/* A score out of 10, only where the words say it is a rating: a rating
+   verb ("rates it 7/10", "rated her pain 5/10") or a pain label directly
+   before it ("pain 7/10", "pain score of 7/10", "pain: 7/10"). Never a
+   date: nothing else near "pain" counts ("pain since 7/10"), and a slash
+   or digit after the 10 ("7/10/2026") rules it out. */
+export const PAIN_SCORE = /(\brat(?:es|ed|ing)\b[^.;!?\/\d]{0,30}?|\bpain(?:\s+(?:score|level|rating|intensity))?(?:\s+(?:of|at|is|was))?\s*:?\s*)\b(\d{1,2})\s*\/\s*10\b(?![\/\d])/gi;
 
 /* Spoken forms for the clinical shorthand a voice is most likely to misread.
    Conservative on purpose: units and dosing frequencies only, whole tokens
@@ -63,8 +66,7 @@ const SPOKEN = [
      it exactly. */
   [/\band\/or\b/gi, "and or"],
   [RATE, "$1 per "],
-  [PAIN_BEFORE, "$1$2 out of 10"],
-  [PAIN_AFTER, "$1 out of 10"],
+  [PAIN_SCORE, "$1$2 out of 10"],
   [/([A-Za-z][\w⁺⁻₀-₉-]*)\s*\/\s*(?=[A-Za-z])/g, "$1 slash "],
   [/\bper (?:min|mins)\b/g, "per minute"],
   [/\bper (?:hr|hrs|h)\b/g, "per hour"],

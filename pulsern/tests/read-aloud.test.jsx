@@ -159,6 +159,13 @@ describe("question script", () => {
     expect(voiceCheck(speakable("Apgar scores at 1 and 5 minutes: 7/9."), "Apgar scores at 1 and 5 minutes: 7 out of 9.").pass).toBe(false);
     expect(voiceCheck(speakable("Apgar scores at 1 and 5 minutes: 7/9."), "Apgar scores at 1 and 5 minutes: 7/9.").pass).toBe(true);
     expect(speakable("Apgar 7/9 at 5 minutes.")).toContain("7/9");
+    // a date is never a pain score, however close to "pain" it is
+    for (const t of ["The client reports abdominal pain since 7/10.", "On 7/10 the client reported pain.", "Pain began 7/10/2026.", "Pain started on 7/10 and worsened."]) {
+      expect(speakable(t), t).toContain("7/10");
+      expect(voiceCheck(speakable(t), t.replace("7/10", "7 out of 10")).pass, t).toBe(false);
+    }
+    expect(speakable("Pain started on 7/10 and is rated 6/10.")).toBe("Pain started on 7/10 and is rated 6 out of 10.");
+    expect(speakable("Pain score of 8/10.")).toBe("Pain score of 8 out of 10.");
     // "per" only after a whole number and a known unit: a lab name with a digit in it is not a rate
     expect(speakable("Check HbA1c/eAG.")).toBe("Check HbA1c slash eAG.");
     expect(voiceCheck(speakable("Check HbA1c/eAG."), "Check HbA1c per eAG.").pass).toBe(false);
