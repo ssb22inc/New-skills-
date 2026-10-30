@@ -1391,14 +1391,14 @@
           "title": "Pearson VUE — Comfort Aid List",
           "publisher": "Pearson VUE",
           "url": "https://www.pearsonvue.com/us/en/test-takers/accommodations/comfort-aid-list.html",
-          "sourceUpdated": "2024-07-01",
-          "accessedAt": "2026-08-31",
+          "sourceUpdated": "2026-10-30",
+          "accessedAt": "2026-10-30",
           "locator": "Items not requiring pre-approval; visual-inspection rule; medical-device qualifications; testing-channel qualifications",
           "expectedMarkers": [
             "do not require pre-approval",
             "visual inspection",
             "formal accommodation approval",
-            "Last update: July 1, 2024"
+            "Last update: October 30, 2026"
           ]
         },
         {
