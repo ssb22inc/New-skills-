@@ -1,0 +1,53 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "0f976f3ec073fc124bdca4f2768b11b6576e9890",
+    "head": "21057c571512be676d9dc4f1b5750dca7891ad4d",
+    "pr": "160"
+  },
+  "reviewedAt": "2026-10-30T00:07:07.727Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/src/App.jsx",
+    "pulsern/src/exhibit-tabs.jsx",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/ai-auth.test.js",
+    "pulsern/tests/read-aloud-hook.test.jsx",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 347,
+      "title": "Bound claim pruning instead of scanning every cached passage on every run",
+      "problem": "pruneUsage lists every passage-claim folder and then serially lists its contents and downloads its newest claim. Every voiced passage permanently retains its newest claim, so even passages with nothing eligible for deletion incur two storage requests every 15-minute run. Cleanup therefore grows with the entire warmed library, not with the amount of obsolete work.",
+      "failure_scenario": "Once the library contains 25,000 distinct voiced passages, pruning alone requires more than 50,000 sequential storage requests. At an average 50 ms per request, that exceeds the workflow's 40-minute timeout before accounting for synthesis or other work. Runs are then killed during cleanup, and concurrency prevents subsequent scheduled runs from serving students while the previous scan continues. The timing estimate is not benchmarked, but the unbounded serial scan is directly visible in the code.",
+      "fix": "Give pruning a bounded batch size and persist a cleanup cursor across runs, or maintain an index of claim folders that actually have obsolete generations. Do not download every permanent newest claim on every invocation. Add a large-library test that asserts a fixed upper bound on cleanup storage calls per run.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 139260,
+    "completionTokens": 8465,
+    "reasoningTokens": 8094,
+    "costUsd": 0.4327985
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The supplied code preserves authentication and bank-text matching, and the playback tests exercise meaningful failure paths. I found one operational defect that will undermine the scheduled voice service as the bank warms. I could not run the tests or independently inspect the imported narration-check implementation.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
