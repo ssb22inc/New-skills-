@@ -287,6 +287,61 @@ describe("question script", () => {
     expect(speakable("Heart rate 118/min.")).toBe("Heart rate 118 per minute.");
   });
 
+  it("accepts the fourth round of spellings from the failure log, and still rejects a changed value", () => {
+    const pass = [
+      ["Divide 250 mL by 1.5 hr.", "Divide 250 mL by 1.5 hours."],
+      ["Apply oxygen by mask at 15 L/min.", "Apply oxygen by mask at 15 liters per minute."],
+      ["A lead level of 118 mcg/dL.", "A lead level of 118 mcg per deciliter."],
+      ["Nausea, vomiting or distension.", "Nausea, vomiting or distention."],
+      ["Small serosanguineous drainage.", "Small serosanguinous drainage."],
+      ["Provide a non-judgmental, supportive presence.", "Provide a nonjudgmental, supportive presence."],
+      ["Prevent re-contamination during transfer.", "Prevent recontamination during transfer."],
+      ["Performing a time-out before the procedure.", "Performing a timeout before the procedure."],
+      ["Within the time frame defined by policy.", "Within the timeframe defined by policy."],
+      ["Only 325 mg, an under dose.", "Only 325 mg, an underdose."],
+      ["Recommended as a standalone safety measure.", "Recommended as a stand-alone safety measure."],
+      ["A transparent semi-permeable dressing.", "A transparent semipermeable dressing."],
+      ["Requires immediate follow-up.", "Requires immediate followup."],
+      // said with "in", heard with "in"
+      ["Heparin 25,000 units/500 mL.", "Heparin 25,000 units in 500 mL."],
+      ["Dopamine 400 mg/250 mL D5W.", "Dopamine 400 mg in 250 mL D5W."],
+    ];
+    for (const [w, h] of pass) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(true);
+    const fail = [
+      ["Divide 250 mL by 1.5 hr.", "Divide 250 mL by 15 hours."],
+      ["Divide 250 mL by 1.5 hr.", "Divide 250 mL by 1.5 minutes."],
+      ["Apply oxygen by mask at 15 L/min.", "Apply oxygen by mask at 50 liters per minute."],
+      ["Apply oxygen at 2 L.", "Apply oxygen at 2 mL."],
+      ["A lead level of 118 mcg/dL.", "A lead level of 118 mg per deciliter."],
+      ["Dopamine 400 mg/250 mL D5W.", "Dopamine 400 mg in 500 mL D5W."],
+      ["Dopamine 400 mg/250 mL D5W.", "Dopamine 400 mg per 250 mL D5W."], // the script says "in": another word is not it
+      ["Small serosanguineous drainage.", "Small sanguineous drainage."],
+      ["Only 325 mg, an under dose.", "Only 325 mg, an overdose."],
+      ["Recommended as a standalone safety measure.", "Recommended as a stand safety measure."],
+      ["Before the sub-therapeutic dose.", "Before the supratherapeutic dose."],
+    ];
+    for (const [w, h] of fail) expect(voiceCheck(speakable(w), h).pass, `${w} / ${h}`).toBe(false);
+    // two numbers with a slash, or an amount per weight or per time, are not a volume
+    expect(speakable("Pain 5/10; 2 mg/kg; 1,200 units/hr; 2 mg/mL; 400 mg/250 mL")).toBe("Pain 5/10; 2 milligrams per kilogram; 1,200 units per hour; 2 mg per mL; 400 mg in 250 mL");
+    expect(speakable("1500 mg/250 mL")).toBe("1500 mg in 250 mL");
+  });
+
+  it("reads a calculation's closing line (how to record the answer) as its own short part", () => {
+    const parts = (stem) => questionSegments({ type: "calc", stem }, { unit: "mL/hr" }).map((s) => [s.id, s.text]);
+    expect(parts("Calculate the infusion rate in mL/hr. Record the whole number.")).toEqual([
+      ["stem", "Calculate the infusion rate in milliliters per hour."],
+      ["instruction", "Record the whole number. Answer in milliliters per hour."],
+    ]);
+    expect(parts("How many mL per hour? (Record the whole number.)")[1][1]).toBe("Record the whole number. Answer in milliliters per hour.");
+    expect(parts("How many mL? Round to the nearest tenth")[1][1]).toBe("Round to the nearest tenth. Answer in milliliters per hour.");
+    // a stem that is only the closing line, or a "record" that is not the closing line, stays where it is
+    expect(parts("Record the whole number.")).toEqual([["stem", "Record the whole number."], ["instruction", "Enter a number. Answer in milliliters per hour."]]);
+    expect(parts("Record the intake. How many mL in total?")[0][1]).toBe("Record the intake. How many mL in total?");
+    expect(parts("The nurse records 300 mL. Round up?")[0][1]).toBe("The nurse records 300 mL. Round up?");
+    // only a calculation
+    expect(questionSegments({ type: "mc", stem: "Which is right? Record the whole number.", options: ["A"] })[0].text).toBe("Which is right? Record the whole number.");
+  });
+
   it("voices a long part in shorter pieces, where the voice is less likely to skip words", () => {
     expect(PART_MAX).toBeLessThanOrEqual(450);
   });
@@ -732,6 +787,10 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(checkFailure({ similarity: 0.95, mismatch: { expected: "a", heard: "(nothing)", context: "give a dose" } })).toBe('expected "a", heard "(nothing)" near "give a dose" (similarity 0.950)');
     expect(checkFailure({ similarity: 0.99, mismatch: null, unitMismatch: { expected: "mg", heard: "mcg" } })).toBe('expected "mg", heard "mcg" (similarity 0.990)');
     expect(checkFailure({ similarity: 0.81, mismatch: null })).toBe("similarity 0.810");
+    // what was heard around the same place, for the next round of fixes
+    const failed = voiceCheck("Calculate the rate. Record the whole number.", "Calculate the rate. The whole number.");
+    expect(checkFailure(failed)).toBe('expected "record", heard "whole" near "calculate rate record whole number" (heard "calculate rate whole number") (similarity ' + failed.similarity.toFixed(3) + ")");
+    expect(checkFailure(voiceCheck("Give 5 mg.", "Give 5 mcg."))).toBe('expected "mg", heard "mcg" near "mg" (heard "mcg") (similarity 0.900)'); // the units around it
   });
 
   it("keeps a passage queued when the provider fails, and stops the run", async () => {

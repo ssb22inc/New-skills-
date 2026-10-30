@@ -25,6 +25,10 @@ export const RATE_UNITS = "breaths?|beats?|drops?|gtts?|units?|international uni
 const RATE_PER = "min|mins|minutes?|hr|hrs|hours?|h|days?|d|weeks?|wk|sec|secs|seconds?|kg|kilograms?|dose|L|liters?|litres?|dL|deciliters?|mL|milliliters?|m2";
 export const RATE = new RegExp(`(\\b\\d+(?:\\.\\d+)?\\s*(?:${RATE_UNITS}))\\s*\\/\\s*(?=(?:${RATE_PER})\\b)`, "gi");
 
+/* An amount, a slash, then a number and a volume. */
+const AMOUNT_UNITS = "mg|milligrams?|mcg|micrograms?|g|grams?|units?|international units?|IU|mEq|milliequivalents?|mmol|millimoles?";
+export const CONCENTRATION = new RegExp(`(\\b\\d+(?:,\\d{3})*(?:\\.\\d+)?\\s*(?:${AMOUNT_UNITS}))\\s*\\/\\s*(?=\\d+(?:,\\d{3})*(?:\\.\\d+)?\\s*(?:mL|ml|milliliters?|millilitres?|L|liters?|litres?)\\b)`, "gi");
+
 /* Spoken forms for the clinical shorthand a voice is most likely to misread.
    Conservative on purpose: units and dosing frequencies only, whole tokens
    only, never a guess at a drug or a diagnosis. */
@@ -64,6 +68,10 @@ const SPOKEN = [
      date, so none is guessed. */
   [/\band\/or\b/gi, "and or"],
   [/\s*÷\s*/g, " divided by "],
+  /* An amount in a volume ("400 mg/250 mL", "25,000 units/500 mL") is
+     said with "in", the way it is read at the bedside; "per" or "over"
+     would be guessed. */
+  [CONCENTRATION, "$1 in "],
   [RATE, "$1 per "],
   // a count per unit of time with no unit before the slash ("118/min", "60/min")
   [/(\b\d+(?:\.\d+)?)\s*\/\s*(?=(?:min|mins|minute|hr|hrs|hour|h|day|wk|week|sec)\b)/g, "$1 per "],
@@ -112,6 +120,10 @@ const INSTRUCTION = {
   highlight: "Choose each finding that applies.",
 };
 
+/* The last sentence of a calculation stem when it only says how to record
+   the answer, with or without brackets. */
+const CALC_CLOSING = /(?<=^|[.?!:]["'”’)]?)\s*\(?\s*((?:Record|Round)\b[^.?!()]*)\.?\s*\)?\s*$/;
+
 const seg = (id, text) => ({ id, text: speakable(text) });
 
 /* Long parts (a long rationale) are voiced in pieces of at most PART_MAX
@@ -154,7 +166,12 @@ export function questionSegments(q, ext = q) {
   const tail = ["mc", "sata", "order"].includes(type) && Array.isArray(q.options) ? INSTRUCTION[type] : null;
   const trailing = tail ? new RegExp(`\\s*\\(?${tail.replace(/\.$/, "").replace(/\s+/g, "\\s+")}\\.?\\)?\\s*$`, "i") : null;
   const stemText = String(q.stem ?? "");
-  const stem = trailing && trailing.test(stemText) && stemText.replace(trailing, "").trim() ? stemText.replace(trailing, "").trim() : stemText;
+  let stem = trailing && trailing.test(stemText) && stemText.replace(trailing, "").trim() ? stemText.replace(trailing, "").trim() : stemText;
+  /* A calculation's closing line says how to record the answer ("Record
+     the whole number.", "Round to the nearest tenth."): voices skip it the
+     same way, so it is read as the item's instruction instead. */
+  const closing = type === "calc" ? stem.match(CALC_CLOSING) : null;
+  if (closing && stem.slice(0, closing.index).trim()) stem = stem.slice(0, closing.index).trim();
   if (type === "cloze") {
     out.push(seg("stem", stem.replace(/\{(\d+)\}/g, (_, n) => ` blank ${Number(n) + 1} `)));
   } else {
@@ -185,7 +202,8 @@ export function questionSegments(q, ext = q) {
   } else if (type === "cloze" && Array.isArray(ext.dropdowns)) {
     ext.dropdowns.forEach((opts, i) => out.push(seg(`gap${i}`, `Blank ${i + 1}: ${(opts ?? []).join(", or ")}.`)));
   } else if (type === "calc") {
-    out.push(seg("instruction", `${INSTRUCTION.calc}${ext.unit ? ` Answer in ${ext.unit}.` : ""}`));
+    const how = closing && stem !== stemText ? sentence(closing[1]) : INSTRUCTION.calc;
+    out.push(seg("instruction", `${how}${ext.unit ? ` Answer in ${ext.unit}.` : ""}`));
   }
   return finish(out);
 }
