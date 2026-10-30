@@ -1,0 +1,55 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "195d24b0f8ddbd365cb1a370a2d76b681dc13653",
+    "head": "b1874dca55301b4181f4a4fc046001bf1eab3998",
+    "pr": "166"
+  },
+  "reviewedAt": "2026-10-30T07:17:11.346Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/api/_speak.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 432,
+      "title": "Bank-side account errors incorrectly trigger another run",
+      "problem": "The setup check recognizes account errors from the queue through q.service, but not from prewarmBank. Bank-side 401, 403, and 404 responses become w.failure=true with a stopped message such as \"provider: speech 401\". If any passages were completed earlier, progress is true and the failed run chains despite the explicit promise that account/setup failures never chain.",
+      "failure_scenario": "Several passages are voiced successfully, then a bank synthesis receives HTTP 401. runJob returns setup=false and more=true, causing another paid-environment workflow dispatch after the pause instead of stopping for the account problem.",
+      "fix": "Return an explicit service/setup indicator from prewarmBank and include it in runJob's setup calculation. Add a regression test with successful passages followed by a bank-side 401 or 403, asserting more=false.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": ".github/workflows/pulsern-read-aloud.yml",
+      "line": 76,
+      "title": "The recovery pause can consume the remaining job timeout",
+      "problem": "The new 10-minute sleep runs inside the existing 40-minute job timeout. No worker runtime limit reserves those ten minutes, so a failed worker that finishes after roughly 30 minutes can report more=true but have its continuation step killed before dispatching the next run.",
+      "failure_scenario": "The serial voice worker completes passages for 32 minutes, then encounters a storage failure and exits with progress=true and more=true. The continuation sleeps for ten minutes, but GitHub terminates the job at minute 40 before the gh command runs. The intended recovery is lost.",
+      "fix": "Reserve execution time for the backoff and dispatch by bounding the worker's runtime and adjusting the job timeout, or implement the delayed continuation outside the expiring job. Verify a late failure with progress still reaches dispatch.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 53224,
+    "completionTokens": 5922,
+    "reasoningTokens": 5414,
+    "costUsd": 0.1922785
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Two defects remain in the new failure-recovery path. No concrete clinical-content error was identified in the supplied normalization changes.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
