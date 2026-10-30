@@ -1,0 +1,32 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "4200cad1e17f86f3e4b4a71ad8815d8973fd73a0",
+    "head": "20cd0c8ff064712a537a083cb0955f61033eef14",
+    "pr": "168"
+  },
+  "reviewedAt": "2026-10-30T15:19:00.577Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/src/read-aloud-script.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 48703,
+    "completionTokens": 5904,
+    "reasoningTokens": 5837,
+    "costUsd": 0.180796
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes by inspection. The new normalization rules preserve the relevant clinical distinctions, and the tests include meaningful rejection cases. I could not execute the tests or build from the supplied material.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
