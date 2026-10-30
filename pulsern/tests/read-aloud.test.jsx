@@ -1392,6 +1392,19 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     expect(q.more).toBe(true);
   });
 
+  it("rides out a brief storage blip on any read: records, the queue, the cursor", async () => {
+    const { storage } = fakeStorage();
+    const bucket = storage.from(BUCKET);
+    const download = bucket.download;
+    const blipped = new Set();
+    // the first read of every path times out once
+    bucket.download = async (path) => (blipped.has(path) ? download(path) : (blipped.add(path), { data: null, error: { message: "The connection to the database timed out", statusCode: "544" } }));
+    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: fakeOpenAI(), max: 5 });
+    expect(r.failure).toBe(false);
+    expect(r.stopped).toBe("max");
+    expect(r.voiced).toBeGreaterThan(0);
+  });
+
   it("checks the time before every passage, cached ones included, and keeps its place", async () => {
     const { storage, files } = fakeStorage();
     // voice the whole bank once
@@ -1422,6 +1435,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
   });
 
   it("resumes inside an item only if it is the same item with the same passage there; otherwise starts that item from the top", async () => {
+    const groupKeyOf = (texts) => createHash("sha256").update(texts.map((t) => passagePaths(t).key).join("\n")).digest("hex").slice(0, 32);
     const Q = (id, n) => ({ ...ROW, id, stem: `Stem of ${id}?`, options: Array.from({ length: n }, (_, k) => `Option ${id}.${k} words`), rationale: `Why ${id}.` });
     const bank = (questions) => ({ questions, case_studies: [], flashcards: [] });
     const voicedTexts = (f) => f.mock.calls.filter(([u]) => u.endsWith("/audio/speech")).map(([, i]) => JSON.parse(i.body).input);
@@ -1429,11 +1443,13 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     for (const [label, mutate, expectFirst] of [
       ["withdrawn", (qs) => qs.filter((q) => q.id !== 100), "Stem of 101?"],
       ["edited", (qs) => qs.map((q) => (q.id === 100 ? { ...q, options: q.options.map((o) => `${o} (revised)`) } : q)), "Stem of 100?"],
+      // only a passage BEFORE the saved one changes; the saved passage itself is the same
+      ["stem edited", (qs) => qs.map((q) => (q.id === 100 ? { ...q, stem: "Revised stem of 100?" } : q)), "Revised stem of 100?"],
     ]) {
       const { storage, files } = fakeStorage();
       const questions = [Q(100, 6), Q(101, 3)];
       const stopAt = itemPassages("question", questions[0])[4];
-      files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: passagePaths(stopAt).key, check: CHECK_VERSION })));
+      files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(itemPassages("question", questions[0])), check: CHECK_VERSION })));
       const f = fakeOpenAI();
       await prewarmBank({ storage, db: fakeDb(bank(mutate(questions))), apiKey: "k", fetchImpl: f, max: 1000 });
       expect(voicedTexts(f)[0], label).toBe(expectFirst); // from the top of that item: nothing skipped
@@ -1443,7 +1459,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     const { storage, files } = fakeStorage();
     const q = Q(100, 6);
     const parts = itemPassages("question", q);
-    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: passagePaths(parts[4]).key, check: CHECK_VERSION })));
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(parts), check: CHECK_VERSION })));
     const f = fakeOpenAI();
     await prewarmBank({ storage, db: fakeDb(bank([q])), apiKey: "k", fetchImpl: f, max: 1000 });
     expect(voicedTexts(f)[0]).toBe(parts[4]);

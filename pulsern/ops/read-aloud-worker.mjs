@@ -30,9 +30,10 @@
      times per passage, and three in a row end the run (provider down).
    Any operational failure (provider down, account or setup error, storage
    or bank trouble) fails the workflow run, so it is noticed. */
+import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, retried, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
 } from "../api/_speak.js";
 import { verdictText, itemParts, voiceable } from "../src/read-aloud-script.js";
 
@@ -68,7 +69,7 @@ async function voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, dea
 }
 
 async function readJsonFile(bucket, path, maxBytes = Infinity) {
-  const { data, error } = await bucket.download(path);
+  const { data, error } = await retried(() => bucket.download(path));
   if (error) return { error };
   if (Number(data.size) > maxBytes) return { tooBig: true };
   const text = await data.text();
@@ -79,7 +80,7 @@ const put = (bucket, path, value) => bucket.upload(path, JSON.stringify(value), 
 
 /* One page of a lane, oldest first. */
 async function lanePage(bucket, dir, offset) {
-  const { data, error } = await bucket.list(dir, { limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } });
+  const { data, error } = await retried(() => bucket.list(dir, { limit: 1000, offset, sortBy: { column: "created_at", order: "asc" } }));
   if (error) {
     if (/not found/i.test(String(error.message ?? error))) return { entries: [], last: true };
     throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
@@ -246,19 +247,22 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
   };
   /* Voice a group of passages (the result lines, or one bank item). If a
      run stops part-way through a group, the cursor keeps where: the group
-     (atItem), the index (at) and the key of that very passage (atKey). The
-     next run resumes there only if the same group still has that passage
-     at that index; if the item was withdrawn or edited it starts the group
-     from the top (cached passages are skipped at once), so nothing is ever
-     skipped unvoiced. The position is dropped once the group is done. */
+     (atItem), the index (at) and a fingerprint of the whole ordered group
+     (atKey). The next run resumes there only if the same group is still
+     exactly the same; if the item was withdrawn or any of its passages
+     edited, it starts the group from the top (cached passages are skipped
+     at once), so nothing is ever skipped unvoiced. The position is dropped
+     once the group is done. */
+  const groupKey = (texts) => createHash("sha256").update(texts.map((t) => passagePaths(t).key).join("\n")).digest("hex").slice(0, 32);
   const resumeAt = (texts, label) => {
     const i = cursor.at;
-    return cursor.atItem === label && Number.isInteger(i) && i >= 0 && i < texts.length && passagePaths(texts[i]).key === cursor.atKey ? i : 0;
+    return cursor.atItem === label && Number.isInteger(i) && i >= 0 && i < texts.length && cursor.atKey === groupKey(texts) ? i : 0;
   };
   const voice = async (texts, label) => {
+    const key = groupKey(texts);
     for (let i = resumeAt(texts, label); i < texts.length; i++) {
       const text = texts[i];
-      cursor = { ...cursor, at: i, atItem: label, atKey: passagePaths(text).key };
+      cursor = { ...cursor, at: i, atItem: label, atKey: key };
       // The run's time is checked before every passage, cached ones included.
       if (now() >= until) return "max";
       let decided;
@@ -266,7 +270,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       if (decided) continue;
       // Waiting in the queue (fresh or retry): the queue owns it and its attempt count.
       const paths = passagePaths(text);
-      const waiting = await Promise.all([paths.queue, paths.retry].map((p) => bucket.download(p)));
+      const waiting = await Promise.all([paths.queue, paths.retry].map((p) => retried(() => bucket.download(p))));
       if (waiting.some((w) => !w.error)) continue;
       const unreadable = waiting.find((w) => w.error && !/not.?found|404/i.test(`${w.error.message ?? ""} ${w.error.statusCode ?? ""}`));
       if (unreadable) { out.failure = true; return `storage: could not read the queue (${unreadable.error.message ?? unreadable.error})`; }

@@ -289,7 +289,7 @@ export function quotaDay(now, tz = QUOTA_TZ) {
    An answer (the slot exists, it is not found) is never retried. */
 export const STORAGE_RETRY = { tries: 3, ms: [1000, 3000] };
 const transient = (error) => !!error && !/exist|duplicate|409|not.?found|404/i.test(`${error.message ?? ''} ${error.statusCode ?? ''} ${error.error ?? ''}`);
-async function retried(call) {
+export async function retried(call) {
   let out;
   for (let i = 0; i < STORAGE_RETRY.tries; i++) {
     out = await call();
@@ -463,7 +463,7 @@ export async function reserve(storage, userId, { now = Date.now(), limits = LIMI
 export class StorageReadError extends Error {}
 const isMissing = (error) => /not.?found|does not exist|404/i.test(`${error?.message ?? ''} ${error?.statusCode ?? ''} ${error?.error ?? ''}`);
 async function readJson(bucket, path) {
-  const { data, error } = await bucket.download(path);
+  const { data, error } = await retried(() => bucket.download(path));
   if (error) {
     if (isMissing(error)) return null;
     console.error('[read-aloud] storage read', path.split('/')[0], error.message ?? error);
