@@ -548,7 +548,7 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
         body: JSON.stringify({ model: tts.model, voice: tts.voice, input: text, instructions: tts.instructions, response_format: 'mp3' }),
       });
       spent++;
-      if (!r.ok) { error = `speech ${r.status}`; status = r.status; break; }
+      if (!r.ok) { error = `speech ${r.status}${await providerCode(r)}`; status = r.status; break; }
       const audio = Buffer.from(await r.arrayBuffer());
       if (!audio.length) { error = 'empty audio'; break; }
       /* No prompt for the transcriber: hinting the script would bias it
@@ -558,7 +558,7 @@ export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, 
       form.append('language', 'en');
       form.append('file', new Blob([audio], { type: 'audio/mpeg' }), 'clip.mp3');
       const t = await openai('/audio/transcriptions', { method: 'POST', body: form });
-      if (!t.ok) { error = `transcription ${t.status}`; status = t.status; break; }
+      if (!t.ok) { error = `transcription ${t.status}${await providerCode(t)}`; status = t.status; break; }
       const transcript = String((await t.json())?.text ?? '');
       const check = voiceCheck(text, transcript);
       best = { audio, transcript, check, take };
@@ -603,6 +603,17 @@ export const passagePaths = (text, tts = TTS) => {
    the passages it wrongly turned away get another chance. Passed audio is
    kept: it passed a check at least as strict. Records written before this
    field existed count as version 1. */
+/* The provider's own error code ("insufficient_quota", "rate_limit_exceeded",
+   "billing_hard_limit_reached"), so a log says WHY a call was refused: a
+   429 can be an empty balance, a spending limit or a short rate limit.
+   Only a plain code is kept; the message and anything else are dropped. */
+export async function providerCode(response) {
+  try {
+    const e = (await response.json())?.error;
+    const code = e?.code ?? e?.type;
+    return typeof code === 'string' && /^[a-z_]{1,60}$/.test(code) ? ` ${code}` : '';
+  } catch { return ''; }
+}
 export const CHECK_VERSION = 6; // 2: the spellings in SPELLING_CANON; 3: compounds, ÷, receptor subtypes, waves, mm³, cm, by mouth; 4: count per time, ng/mL, min/lb/gtt after a number, subscripts, stage numbers, e.g./i.e., more compounds; 5: hour/liter after a number, deciliter, two spellings, more compounds; 6: seconds, ordinals, body surface area, accents, more compounds (and new scripts: brackets, pain scores, PO, unit per time)
 /* Why a take failed the check, for the job's log: the first word that
    differed (or the unit that did), with a few words around it. */

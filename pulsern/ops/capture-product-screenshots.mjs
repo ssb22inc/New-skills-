@@ -8,6 +8,9 @@ import { chromium } from "playwright";
 import react from "@vitejs/plugin-react";
 import { createServer } from "vite";
 
+/* The fixed moment every capture is taken at (UTC). */
+export const CAPTURE_TIME = "2026-10-30T12:00:00Z";
+
 const OUTPUT = path.resolve(process.argv[2] || "reports/seo/product-screenshots");
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -76,7 +79,11 @@ export async function captureProductScreenshots() {
   try {
     await server.listen();
     browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage({ viewport: { width: 720, height: 1000 }, deviceScaleFactor: 1 });
+    /* Deterministic: the same chance, the same time zone and the same day
+       on every run. The app picks the day's items from the local date, so
+       a running clock gave a different question on a different day. */
+    const page = await browser.newPage({ viewport: { width: 720, height: 1000 }, deviceScaleFactor: 1, timezoneId: "UTC" });
+    await page.clock.setFixedTime(new Date(CAPTURE_TIME));
     await page.addInitScript(() => { Math.random = () => 0.125; });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("http://127.0.0.1:4174/ops/product-screenshot.html", { waitUntil: "networkidle" });

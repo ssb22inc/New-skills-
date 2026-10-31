@@ -1036,3 +1036,12 @@ describe("SEO guardian", () => {
     expect(fail.provenanceFindings.map((item) => item.code)).toEqual(expect.arrayContaining(["RN_VERIFICATION", "DIGEST_BINDING", "RN_REVIEW", "CLAIM_PROVENANCE"]));
   });
 });
+
+describe("product screenshot capture", () => {
+  it("freezes the clock and time zone, so the same app gives the same screenshots on any day", async () => {
+    const src = await fs.readFile(new URL("../ops/capture-product-screenshots.mjs", import.meta.url), "utf8");
+    expect(src).toMatch(/timezoneId:\s*"UTC"/);
+    expect(src).toMatch(/page\.clock\.setFixedTime\(new Date\(CAPTURE_TIME\)\)/);
+    expect(src).toMatch(/export const CAPTURE_TIME = "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"/);
+  });
+});
