@@ -1,0 +1,32 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b4814a8cf35e975686045adfffd3801a9fa3685c",
+    "head": "2af0dd32ed6eaf9171434eb406e8f6d3faf4266c",
+    "pr": "169"
+  },
+  "reviewedAt": "2026-10-31T03:48:59.378Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/tests/read-aloud.test.jsx",
+    "pulsern/tests/seo-guardian.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 25596,
+    "completionTokens": 738,
+    "reasoningTokens": 668,
+    "costUsd": 0.0713685
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes. The provider-error parsing preserves existing failure handling, and the screenshot clock configuration is consistent with deterministic capture. Tests were reviewed statically; I could not run the suite or screenshot harness.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
