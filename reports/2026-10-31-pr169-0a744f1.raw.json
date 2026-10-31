@@ -1,0 +1,30 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b4814a8cf35e975686045adfffd3801a9fa3685c",
+    "head": "0a744f1e6bb511a62a5a741e610e22e58a23d3df",
+    "pr": "169"
+  },
+  "reviewedAt": "2026-10-31T03:40:05.924Z",
+  "filesReviewed": [
+    "pulsern/api/_speak.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 21686,
+    "completionTokens": 474,
+    "reasoningTokens": 399,
+    "costUsd": 0.0589535
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied diff. Error-code extraction handles malformed responses without changing the existing error classification or audio approval gate. The added tests meaningfully exercise accepted codes, unsafe values, and JSON parsing failures. Tests were reviewed but not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
