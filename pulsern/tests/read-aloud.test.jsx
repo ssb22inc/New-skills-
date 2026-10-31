@@ -16,7 +16,7 @@ import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, should
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE } from "../ops/read-aloud-worker.mjs";
-import { passagePaths, CHECK_VERSION, checkFailure, readRecord, STORAGE_RETRY } from "../api/_speak.js";
+import { passagePaths, CHECK_VERSION, checkFailure, readRecord, STORAGE_RETRY, providerCode } from "../api/_speak.js";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -884,10 +884,16 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(await readRecord(storage, "Refused by the provider.")).toMatchObject({ reason: "speech 400" });
   });
 
-  it("describes a failed take in a line a person can act on", () => {
+  it("describes a failed take in a line a person can act on", async () => {
     expect(checkFailure({ similarity: 0.95, mismatch: { expected: "a", heard: "(nothing)", context: "give a dose" } })).toBe('expected "a", heard "(nothing)" near "give a dose" (similarity 0.950)');
     expect(checkFailure({ similarity: 0.99, mismatch: null, unitMismatch: { expected: "mg", heard: "mcg" } })).toBe('expected "mg", heard "mcg" (similarity 0.990)');
     expect(checkFailure({ similarity: 0.81, mismatch: null })).toBe("similarity 0.810");
+    // the provider's own reason for a refusal, and nothing else from its reply
+    const reply = (body) => ({ json: async () => body });
+    expect(await providerCode(reply({ error: { code: "insufficient_quota", message: "You exceeded your current quota", type: "insufficient_quota" } }))).toBe(" insufficient_quota");
+    expect(await providerCode(reply({ error: { type: "rate_limit_exceeded" } }))).toBe(" rate_limit_exceeded");
+    expect(await providerCode(reply({ error: { code: "sk-abc123 leaked?" } }))).toBe("");
+    expect(await providerCode({ json: async () => { throw new Error("not json"); } })).toBe("");
     // what was heard around the same place, for the next round of fixes
     const failed = voiceCheck("Calculate the rate. Record the whole number.", "Calculate the rate. The whole number.");
     expect(checkFailure(failed)).toBe('expected "record", heard "whole" near "calculate rate record whole number" (heard "calculate rate whole number") (similarity ' + failed.similarity.toFixed(3) + ")");
