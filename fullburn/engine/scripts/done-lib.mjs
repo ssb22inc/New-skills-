@@ -269,7 +269,7 @@ export function reportPath(target, phase, tree) {
  * incomplete". */
 export const PHASE0_REQUIREMENTS = Object.freeze([
   { id: "AC1-contract", what: "AC1 hello-world call goes through llm(), the only call path (contract half)", command: ["vitest", "run", "engine/test/gateway.test.ts"] },
-  { id: "AC1-live", what: "AC1 the call round-trips through the REAL AI Gateway and appears in the REAL Langfuse project", command: null, why: "needs H2 (Gateway) and H5 (Langfuse) provisioned — ledger L1" },
+  { id: "AC1-live", what: "AC1 the call round-trips through the REAL AI Gateway and appears in the REAL Langfuse project", command: null, why: "measured by the attested live check (fullburn-live.yml) at this tree — see liveRequirementCondition" },
   { id: "AC2", what: "AC2 rebinding a role frontier → open-source passes its evals and serves with zero code change", command: ["vitest", "run", "engine/test/eval-rebind.test.ts", "config/test/models.test.ts"] },
   { id: "AC3", what: "AC3 the Grade Registry computes and publishes a grade from seeded data", command: ["vitest", "run", "engine/test/grade-registry.test.ts"] },
   { id: "AC4-gate", what: "AC4 the adversary-report gate refuses a missing, stale or FAIL report (CLI executed against a real repo)", command: ["vitest", "run", "engine/test/integration/gate-cli.test.ts"] },
@@ -281,9 +281,33 @@ export const PHASE0_REQUIREMENTS = Object.freeze([
   { id: "D-vault-live", what: "deliverable: the deployed Worker holds its KEK as a secret binding, its sealed records in a Durable Object CipherStore (compare-and-swap; Workers KV has none — X7-12), and runs rotateDue on a cron trigger", command: null, why: "H7 — the KEK, the Durable Object store and the cron trigger are infrastructure, not observable from the sandbox" },
   { id: "D-adversary", what: "deliverable: CLAUDE.md + adversary agent installed and discoverable", command: ["vitest", "run", "engine/test/invariants/invariants.test.ts", "-t", "discovery mirror"] },
   { id: "D-ci", what: "deliverable: CI pipeline — every workflow SHA-pinned, permission-declared, scope-filtered inside the job", command: ["vitest", "run", "engine/test/invariants/invariants.test.ts", "-t", "workflow hygiene"] },
-  { id: "D-warehouse", what: "deliverable: ClickHouse Cloud + Airbyte provisioned", command: null, why: "H3/H4 — infrastructure, not observable from the sandbox" },
+  { id: "D-warehouse", what: "deliverable: ClickHouse Cloud + Airbyte provisioned", command: null, why: "measured by the attested live check (fullburn-live.yml) at this tree — see liveRequirementCondition" },
   { id: "D-name", what: "deliverable: fullburn.ai registered; trademark check completed", command: null, why: "human/legal action outside the repository" },
 ]);
+
+/** THE REQUIREMENTS THE SANDBOX CANNOT REACH BUT THE LIVE CHECK CAN
+ * (2026-10-23). Each names the live checks that must have PASSED for it. */
+export const LIVE_BACKED = Object.freeze({
+  "AC1-live": Object.freeze(["gateway-hello-world", "langfuse-trace"]),
+  "D-warehouse": Object.freeze(["clickhouse-query", "airbyte-token"]),
+});
+
+/** A live-backed requirement PASSES only on a live report run at THIS tree,
+ * whose verdict is PASS, whose own rows for this requirement PASS, and whose
+ * exact bytes are attested by fullburn-live.yml on main. Anything less is a
+ * FAIL that says which part is missing. A report from an older tree measured
+ * other code, so it does not count. */
+export function liveRequirementCondition(id, { file, live, tree, provenance }) {
+  const needed = LIVE_BACKED[id];
+  if (!needed) return { status: "FAIL", observed: `${id} is not a live-backed requirement` };
+  if (!file || !live) return { status: "FAIL", observed: `no live check report at this tree (${String(tree).slice(0, 12)}) — dispatch fullburn-live.yml from main` };
+  if (live.tree !== tree) return { status: "FAIL", observed: `${file} measured tree ${String(live.tree).slice(0, 12)}, not this tree ${String(tree).slice(0, 12)}` };
+  if (!provenance?.ok) return { status: "FAIL", observed: `${file}: ${provenance?.reason ?? "attestation not checked"}` };
+  if (live.verdict !== "PASS") return { status: "FAIL", observed: `${file}: the live check's verdict is ${live.verdict}` };
+  const bad = needed.filter((c) => !live.rows.some((r) => r.id === c && r.status === "PASS"));
+  if (bad.length > 0) return { status: "FAIL", observed: `${file}: ${bad.join(", ")} did not pass` };
+  return { status: "PASS", observed: `${file}: ${needed.join(" + ")} PASS at this tree; ${provenance.reason}` };
+}
 
 /** ENGINE (DONE.md §2.2): every bullet beyond the phases, each with the reason
  * it is not yet measurable here. None of these has a command today. */

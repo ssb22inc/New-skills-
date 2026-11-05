@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
 import { attestationsFromApi, attestationsFromGhVerify, dssePae } from "../scripts/attestation.mjs";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { REVIEW_SIGNER_WORKFLOW, checkAdversaryReport, checkReportProvenance } from "../scripts/gate-lib.mjs";
+import { LIVE_SIGNER_WORKFLOW, REVIEW_SIGNER_WORKFLOW, checkAdversaryReport, checkReportProvenance } from "../scripts/gate-lib.mjs";
 
 /** X5-02 (GPT-6 Astra, 2026-10-06): a PASS opens the adversary gate only if its
  * exact bytes carry an attestation signed by this repository's review
@@ -115,5 +115,16 @@ describe("the review workflow runs main's reviewer against the target as data", 
     expect(wf, "the reviewer does not refuse a non-main ref").toMatch(/if: github\.ref != 'refs\/heads\/main'\n\s+run: \|\n.*\n\s+exit 1/);
     expect(wf).toMatch(/node trusted\/fullburn\/engine\/scripts\/cross-family-read\.mjs --target "\$RUNNER_TEMP\/target"/);
     expect(wf, "the reviewer installs packages").not.toMatch(/\bnpm (?:ci|install|i)\b/);
+  });
+});
+
+/** 2026-10-23: the live check's reports are attested by fullburn-live.yml and
+ * read by the completion checker. Each signer opens only its own door. */
+describe("report provenance names its signer workflow", () => {
+  const att = (signer: string) => ({ signatureVerified: true, chainVerified: true, signerUri: `https://github.com/${REPO}/${signer}@refs/heads/main`, subjectDigests: [DIGEST] });
+  it("a live report needs the live workflow, and a review needs the review workflow", () => {
+    expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att(LIVE_SIGNER_WORKFLOW)], repo: REPO, signerWorkflow: LIVE_SIGNER_WORKFLOW }).ok).toBe(true);
+    expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att(REVIEW_SIGNER_WORKFLOW)], repo: REPO, signerWorkflow: LIVE_SIGNER_WORKFLOW }).ok, "a review signature passed as a live one").toBe(false);
+    expect(checkReportProvenance({ fileSha256: DIGEST, attestations: [att(LIVE_SIGNER_WORKFLOW)], repo: REPO }).ok, "a live signature opened the review gate").toBe(false);
   });
 });
