@@ -1,0 +1,74 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9ccff01052bee2cc97d20200adc7a3c5e6b4530f",
+    "head": "fdd57753d9dd29ed3ac873b8aee1d74506aea56e",
+    "pr": "170"
+  },
+  "reviewedAt": "2026-11-21T01:59:52.304Z",
+  "filesReviewed": [
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 140,
+      "title": "Unchecked device speech bypasses the audio-accuracy gate",
+      "problem": "Queued passages and passages rejected by the accuracy check now go directly to deviceSpeak without any verification of the audio actually delivered. Approved source text does not establish that a different speech engine pronounces its numbers, units, and clinical terms correctly. This removes the existing checked-audio guarantee and conflicts with the standing accuracy gate for all student-facing content. The updated tests record utterance input text, not spoken output, so they cannot establish that this replacement is accurate.",
+      "failure_scenario": "A clinically significant passage receives 422 because its audio failed verification, or has never been verified at all. Listen nevertheless delivers an unchecked rendering from the device. A dropped or mispronounced value in that rendering reaches the student without any gate capable of detecting it.",
+      "fix": "Keep unverified or rejected passages screen-only unless the replacement audio also passes the required accuracy gate. Do not treat the \"Device voice\" label or equality of utterance input text as approval of the resulting audio.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 369,
+      "title": "Later segments can wait indefinitely instead of using the fallback",
+      "problem": "Only the starting segment has a bounded wait. Every later segment awaits tasks[i] without a deadline. Having the preceding segment's playback time available does not guarantee that its request has completed.",
+      "failure_scenario": "The stem request succeeds, but an option request remains pending during a network stall. After the stem finishes, playback waits indefinitely for that option instead of reading it with the device voice. The same failure occurs after the first segment falls back at 900 ms while the remaining requests stay pending. Existing tests answer every outstanding request before advancing playback, so they miss this path.",
+      "fix": "Apply a bounded readiness decision to every segment, falling back when its request is still unresolved. Add a browser test that leaves a later request unresolved after the preceding segment ends and verifies that reading advances.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 324,
+      "title": "Stopping an idle reader cancels another reader's device speech",
+      "problem": "halt always calls the global speechSynthesis.cancel(), even when this hook has no run or does not own the active speech. Each reader invokes halt on mount, key changes, and unmount. An unrelated reader can therefore cancel the current owner's utterance. The canceled owner's deviceSpeak resolves \"aborted\", and playFrom returns without resetting its playing state or advancing.",
+      "failure_scenario": "Reader A is speaking through the device voice. Reader B mounts, switches to \"off\", or unmounts while idle. B's halt cancels A's utterance, leaving A silent while its bar still reports playing. The harness mounts only one reader at a time, so its cancellation tests cannot catch this.",
+      "fix": "Associate device utterances with their owning run and cancel them only through that owner's abort signal or an explicit ownership transfer. An idle reader's cleanup must not cancel global speech. Add a simultaneous-two-reader regression test.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 122,
+      "title": "Prefetched audio blobs are never released",
+      "problem": "Every successfully prefetched clip creates an object URL retained in the module-level warmed map. There is no eviction or URL.revokeObjectURL call. Prefetch runs for every viewed item even when Listen is never pressed, and refreshed signed URLs retain additional copies of the same passage.",
+      "failure_scenario": "During a long practice or case-study session, navigating through items continually downloads and retains their audio for the lifetime of the SPA. Returning after signed-link expiry adds duplicate blobs. Audio resources grow without bound and can exhaust a memory-constrained student's browser.",
+      "fix": "Use a bounded audio cache with eviction and revoke object URLs when evicted. Release unused clips after item changes or retain only a limited recent working set, and test that eviction revokes the corresponding URLs.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 40012,
+    "completionTokens": 6191,
+    "reasoningTokens": 5178,
+    "costUsd": 0.1619385
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to merge. The fallback removes the existing audio-accuracy gate, and playback can hang on later segments or be canceled by an unrelated idle reader. The new audio prefetch cache also retains downloaded clips indefinitely.",
+  "counts": {
+    "blocker": 1,
+    "major": 3,
+    "minor": 0
+  }
+}
