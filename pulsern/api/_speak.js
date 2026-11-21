@@ -707,7 +707,7 @@ export const passagePaths = (text, tts = TTS) => {
   const key = speechKey(text, tts);
   /* queue: fresh requests; retry: ones that hit an outage, served after
      every fresh request (ops/read-aloud-worker.mjs). */
-  return { key, mp3: `${tts.voice}/${key}.mp3`, rec: `${tts.voice}/${key}.json`, queue: `queue/${tts.voice}-${key}.json`, retry: `queue-retry/${tts.voice}-${key}.json` };
+  return { key, mp3: `${tts.voice}/${key}.mp3`, rec: `${tts.voice}/${key}.json`, queue: `queue/${tts.voice}-${key}.json`, retry: `queue-retry/${tts.voice}-${key}.json`, revoice: `queue-revoice/${tts.voice}-${key}.json` };
 };
 
 /* Save a checked take: the audio only if it passed, and always the record

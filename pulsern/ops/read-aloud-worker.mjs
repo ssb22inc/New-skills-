@@ -111,7 +111,7 @@ export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, ma
     return !error;
   };
 
-  for (const lane of ["queue", "queue-retry"]) {
+  for (const lane of ["queue", "queue-retry", "queue-revoice"]) {
     /* Paged as far as the run gets. The next page starts after the entries
        that are still in the lane (removed ones shift the rest up), so no
        entry is skipped and undeletable entries never hide later work. */
@@ -132,7 +132,8 @@ export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, ma
       const ref = canonicalRef(raw?.ref);
       const paths = raw && typeof raw.text === "string" ? passagePaths(raw.text) : null;
       // A passage that is never voiced (voiceable) is not work: dropped, not refused.
-      if (got.malformed || got.tooBig || !raw || raw.voice !== TTS.voice || !ref || !validRequest(ref, raw.seg, raw.text) || !voiceable(raw.text) || (lane === "queue" ? paths.queue : paths.retry) !== path) {
+      const lanePath = lane === "queue" ? paths?.queue : lane === "queue-retry" ? paths?.retry : paths?.revoice;
+      if (got.malformed || got.tooBig || !raw || raw.voice !== TTS.voice || !ref || !validRequest(ref, raw.seg, raw.text) || !voiceable(raw.text) || lanePath !== path) {
         await drop(path); out.skipped++; continue;
       }
       // Only the known fields are kept.
@@ -492,9 +493,10 @@ async function listFileNames(bucket, dir) {
 }
 /* A pending marin request is rewritten onto the Joanna queue only when
    its words are still exactly a part of that approved, non-exam item. */
-async function migrateLegacyLane(bucket, db, lane) {
+async function migrateLegacyLane(bucket, db, lane, { only = null } = {}) {
   let moved = 0;
   for (const name of await listFileNames(bucket, lane)) {
+    if (only && `${lane}/${name}` !== only) continue;
     if (!name.endsWith(".json")) continue;
     const path = `${lane}/${name}`;
     const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
@@ -530,46 +532,83 @@ async function migrateLegacyLane(bucket, db, lane) {
   }
   return moved;
 }
-export async function queueLegacyMarin({ storage, db, log = () => {}, page = 200 }) {
+export async function queueLegacyMarin({ storage, db, log = () => {}, page = 50, max = 200, until = Infinity, now = () => Date.now() }) {
   await ensureBucket(storage);
   const bucket = storage.from(BUCKET);
   const got = await readJsonFile(bucket, REVOICE_MARKER);
   if (got.error && !/not.?found|404/i.test(String(got.error.message ?? got.error))) throw new Error(`could not read the revoice marker: ${got.error.message ?? got.error}`);
-  if (got.value?.done) return { queued: 0, already: true };
-  const moved = (await migrateLegacyLane(bucket, db, "queue")) + (await migrateLegacyLane(bucket, db, "queue-retry"));
-  const legacy = new Set((await listFileNames(bucket, MARIN_TTS.voice)).filter((n) => n.endsWith(".mp3")).map((n) => n.slice(0, -4)));
-  let queued = 0, matched = 0;
-  for (const kind of ["question", "case", "card"]) {
-    let afterId = 0;
-    for (;;) {
-      const { data: rows, error } = await BANK_QUERIES[kind](db).gt("id", afterId).order("id").limit(page);
-      if (error) throw new Error(`bank: ${error.message ?? error}`);
-      if (!rows?.length) break;
-      for (const row of rows) {
-        afterId = row.id;
-        for (const part of itemParts(kind, row)) {
-          const text = part.text;
-          if (!text || text.length > SPEAK_MAX || !voiceable(text)) continue;
-          if (!legacy.has(speechKey(text, MARIN_TTS))) continue;
-          matched++;
-          const decided = await readRecord(storage, text, TTS);
-          if (decided) continue;
-          const paths = passagePaths(text, TTS);
-          const waiting = await Promise.all([paths.queue, paths.retry].map((p) => retried(() => bucket.download(p))));
-          if (waiting.some((w) => !w.error)) continue;
-          const entry = { text, voice: TTS.voice, ref: part.ref, seg: part.seg, requestedAt: new Date().toISOString(), legacy: "marin" };
-          if (JSON.stringify(entry).length > QUEUE_ENTRY_MAX) continue;
-          const { error: up } = await put(bucket, paths.queue, entry);
-          if (up) throw new Error(`could not queue a legacy clip: ${up.message ?? up}`);
-          queued++;
-        }
+  if (got.value?.done) return { queued: 0, moved: 0, already: true, done: true };
+  const state = got.value?.phase ? got.value : { phase: "pending", lane: "queue", afterName: "", kind: "question", afterId: 0 };
+  const save = async () => {
+    const { error } = await put(bucket, REVOICE_MARKER, state);
+    if (error) throw new Error(`could not save the revoice marker: ${error.message ?? error}`);
+  };
+  const room = () => now() < until && (state.movedThisRun ?? 0) < max;
+  state.movedThisRun = 0;
+  let moved = 0;
+  if (state.phase === "pending") {
+    const lanes = ["queue", "queue-retry"];
+    let lane = lanes.includes(state.lane) ? state.lane : "queue";
+    while (room()) {
+      const names = (await listFileNames(bucket, lane)).filter((n) => n.endsWith(".json")).sort();
+      const rest = names.filter((n) => n > (state.afterName ?? ""));
+      if (!rest.length) {
+        const i = lanes.indexOf(lane);
+        if (i === lanes.length - 1) { state.phase = "bank"; state.afterName = ""; break; }
+        lane = lanes[i + 1];
+        state.lane = lane;
+        state.afterName = "";
+        continue;
       }
+      const name = rest[0];
+      const before = moved;
+      moved += await migrateLegacyLane(bucket, db, lane, { only: `${lane}/${name}` });
+      state.afterName = name;
+      state.movedThisRun += 1;
+      if (moved === before) state.movedThisRun += 0;
+      if (!room()) { await save(); log(`Legacy migration paused after ${moved} pending requests.`); return { queued: 0, moved, done: false, already: false }; }
     }
+    await save();
   }
-  const { error: mark } = await put(bucket, REVOICE_MARKER, { done: true, queued, matched, files: legacy.size, at: new Date().toISOString() });
-  if (mark) throw new Error(`could not save the revoice marker: ${mark.message ?? mark}`);
-  log(`Queued ${queued} passages that already had a marin clip (${matched} matched, ${legacy.size} files) and moved ${moved} pending requests.`);
-  return { queued, matched, moved, files: legacy.size, already: false };
+  const legacy = new Set((await listFileNames(bucket, MARIN_TTS.voice)).filter((n) => n.endsWith(".mp3")).map((n) => n.slice(0, -4)));
+  let queued = 0;
+  const kinds = ["question", "case", "card"];
+  let kind = kinds.includes(state.kind) ? state.kind : "question";
+  while (kind && room()) {
+    const { data: rows, error } = await BANK_QUERIES[kind](db).gt("id", state.afterId ?? 0).order("id").limit(page);
+    if (error) throw new Error(`bank: ${error.message ?? error}`);
+    if (!rows?.length) {
+      kind = kinds[kinds.indexOf(kind) + 1];
+      state.kind = kind;
+      state.afterId = 0;
+      continue;
+    }
+    for (const row of rows) {
+      if (!room()) break;
+      for (const part of itemParts(kind, row)) {
+        const text = part.text;
+        if (!text || text.length > SPEAK_MAX || !voiceable(text) || !legacy.has(speechKey(text, MARIN_TTS))) continue;
+        const decided = await readRecord(storage, text, TTS);
+        if (decided) continue;
+        const paths = passagePaths(text, TTS);
+        const waiting = await Promise.all([paths.queue, paths.retry, paths.revoice].map((p) => retried(() => bucket.download(p))));
+        if (waiting.some((w) => !w.error)) continue;
+        const entry = { text, voice: TTS.voice, ref: part.ref, seg: part.seg, requestedAt: new Date(now()).toISOString(), legacy: "marin" };
+        if (JSON.stringify(entry).length > QUEUE_ENTRY_MAX) continue;
+        const { error: up } = await put(bucket, paths.revoice, entry);
+        if (up) throw new Error(`could not queue a legacy clip: ${up.message ?? up}`);
+        queued++;
+        state.movedThisRun++;
+      }
+      state.afterId = row.id;
+    }
+    await save();
+  }
+  if (!kind) state.done = true;
+  delete state.movedThisRun;
+  await save();
+  log(state.done ? `Legacy revoice finished. Queued ${queued} this run, moved ${moved} pending requests.` : `Legacy revoice paused. Queued ${queued} this run.`);
+  return { queued, moved, done: !!state.done, already: false };
 }
 
 export function awsReady(env = process.env) {
@@ -605,22 +644,25 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const polly = createPolly();
   const limits = readAloudLimits();
-  let legacy;
-  try { legacy = await queueLegacyMarin({ storage: db.storage, db }); }
+  const max = Math.max(1, Math.min(2000, Number(process.env.READ_ALOUD_MAX) || 200));
+  /* No new passage is started after READ_ALOUD_MINUTES, so the job keeps
+     time for its pause and for starting the next run (pulsern-read-aloud.yml).
+     The legacy scan shares that clock and only does a slice, so a long
+     bank cannot use the whole run before a student request is voiced. */
+  const until = Date.now() + Math.max(1, Math.min(30, Number(process.env.READ_ALOUD_MINUTES) || 25)) * 60000;
+  let legacy = { done: true, queued: 0 };
+  try { legacy = await queueLegacyMarin({ storage: db.storage, db, until, max: Math.min(max, 50) }); }
   catch (e) {
     console.error(`Could not queue the existing marin clips: ${e?.message ?? e}`);
     process.exit(1);
   }
-  console.log(legacy.already ? "Marin clips were already queued for Joanna." : `Queued ${legacy.queued} marin passages for Joanna.`);
-  const max = Math.max(1, Math.min(2000, Number(process.env.READ_ALOUD_MAX) || 200));
-  /* No new passage is started after READ_ALOUD_MINUTES, so the job keeps
-     time for its pause and for starting the next run (pulsern-read-aloud.yml). */
-  const until = Date.now() + Math.max(1, Math.min(30, Number(process.env.READ_ALOUD_MINUTES) || 25)) * 60000;
+  console.log(legacy.already ? "Marin clips were already queued for Joanna." : `Legacy revoice ${legacy.done ? "finished" : "paused"} (${legacy.queued} queued this slice).`);
   const { lines, failed, more } = await runJob({ storage: db.storage, db, polly, max, until, limits });
-  console.log(lines.join("\n") + (more ? "\nMore to do: starting the next run." : ""));
+  const keepGoing = more || legacy.done === false;
+  console.log(lines.join("\n") + (keepGoing ? "\nMore to do: starting the next run." : ""));
   if (process.env.GITHUB_OUTPUT) {
     const { appendFileSync } = await import("node:fs");
-    appendFileSync(process.env.GITHUB_OUTPUT, `more=${more ? "true" : "false"}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `more=${keepGoing ? "true" : "false"}\n`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const { appendFileSync } = await import("node:fs");

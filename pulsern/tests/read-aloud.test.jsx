@@ -722,6 +722,24 @@ describe("server voice: the accuracy gate", () => {
     expect((await speak({ ...base(), storage, fetchImpl: fakeOpenAI() })).status).toBe(200);
   });
 
+  it("voices a new student request before an older bulk revoice", async () => {
+    const { storage, files } = fakeStorage();
+    const student = "Sodium 138 milliequivalents per liter.";
+    const old = "Potassium 2.9 milliequivalents per liter.";
+    files.set(passagePaths(old).revoice, Buffer.from(JSON.stringify({ text: old, voice: "Joanna", ref: Q1.ref, seg: "card-front", requestedAt: "2020-01-01T00:00:00.000Z", legacy: "marin" })));
+    await speak({ ...base({ apiKey: "", ...Q2, text: student }), storage });
+    const seen = [];
+    const r = await drainQueue({
+      storage,
+      polly: { send: async (cmd) => { seen.push(cmd.input?.Text ?? cmd.input?.text ?? ""); return { AudioStream: new Uint8Array([1]) }; } },
+      max: 1,
+      log: () => {},
+    });
+    expect(r.voiced).toBe(1);
+    expect(seen.some((t) => t.includes("Sodium 138"))).toBe(true);
+    expect(seen.some((t) => t.includes("Potassium 2.9"))).toBe(false);
+  });
+
   it("keeps a queued passage when Polly throttles with HTTP 400, and does not reject it", async () => {
     const { storage, files } = fakeStorage();
     await speak({ ...base({ apiKey: "" }), storage });
