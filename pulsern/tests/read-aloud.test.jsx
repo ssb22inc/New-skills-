@@ -16,7 +16,7 @@ import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, should
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, MARIN_TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE, queueLegacyMarin } from "../ops/read-aloud-worker.mjs";
-import { passagePaths, CHECK_VERSION, checkFailure, readRecord, STORAGE_RETRY, providerCode, makeChecked } from "../api/_speak.js";
+import { passagePaths, CHECK_VERSION, checkFailure, readRecord, STORAGE_RETRY, providerCode, makeChecked, reserveSpeechCost } from "../api/_speak.js";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
 
@@ -865,6 +865,54 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect((await speak({ ...base({ apiKey: "", text: "Anything." }), storage })).status).toBe(409);
     expect((await speak({ ...base({ apiKey: "", readItem: async () => null }), storage })).status).toBe(404);
     expect([...files.keys()]).toEqual([]);
+  });
+
+  it("stops the next Polly call when the character budget is used and passage slots remain", async () => {
+    const { storage } = fakeStorage();
+    const rows = ["Alpha dose one.", "Beta dose two.", "Gamma dose three."].map((front, i) => ({ id: 210 + i, front, back: "" }));
+    const readItem = async (kind, id) => (kind === "card" ? rows.find((r) => r.id === id) : null);
+    for (const row of rows) {
+      const text = itemParts("card", row).find((p) => p.ref.part === "front").text;
+      await speak({ userId: "u1", readItem, apiKey: "", ref: { kind: "card", id: row.id, part: "front" }, seg: "card-front", text, storage });
+    }
+    let sends = 0;
+    const r = await drainQueue({
+      storage,
+      polly: { send: async () => { sends++; return { AudioStream: new Uint8Array([1, 2, 3]) }; } },
+      limits: { user: 300, admission: 20, spend: 20, chars: 200 },
+      now: () => Date.UTC(2026, 9, 29, 16),
+      log: () => {},
+    });
+    expect(sends).toBe(2);
+    expect(r).toMatchObject({ voiced: 2, budget: true });
+  });
+
+  it("does not call Polly when the character counter cannot be written", async () => {
+    const { storage } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const real = storage.from(BUCKET);
+    const broken = { ...storage, from: () => ({ ...real, upload: async (p, b, o) => (p.includes("/chars/") ? { error: { message: "Internal error" } } : real.upload(p, b, o)) }) };
+    let sends = 0;
+    const r = await drainQueue({
+      storage: broken,
+      polly: { send: async () => { sends++; return { AudioStream: new Uint8Array([1]) }; } },
+      limits: { user: 300, admission: 10, spend: 10, chars: 1000 },
+      log: () => {},
+    });
+    expect(sends).toBe(0);
+    expect(r.operational).toBe(true);
+  });
+
+  it("does not let two reservations together pass a one-slot character cap", async () => {
+    const { storage } = fakeStorage();
+    const now = Date.UTC(2026, 9, 29, 16);
+    const limits = { user: 10, admission: 10, spend: 10, chars: 100 };
+    const out = await Promise.all([
+      reserveSpeechCost(storage, 80, { now, limits }),
+      reserveSpeechCost(storage, 80, { now, limits }),
+    ]);
+    expect(out.filter((x) => x === "ok")).toHaveLength(1);
+    expect(out.filter((x) => x === "full")).toHaveLength(1);
   });
 
   it("says the voice waits until tomorrow when the dollar cap is used and passage slots remain", async () => {
