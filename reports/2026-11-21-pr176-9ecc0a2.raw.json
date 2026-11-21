@@ -1,0 +1,18 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "41fad18b9d6ef03257a78fff9781ad81eed120b6",
+    "head": "9ecc0a2c832f3a9db63fba8ed4bb5fb4fda144a9",
+    "pr": "176"
+  },
+  "reviewedAt": "2026-11-21T14:24:09.272Z",
+  "filesReviewed": [
+    "pulsern/src/App.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": null,
+  "error": "The review could not be completed: openai/gpt-6.1-sol: 402 out of credits — This request requires more credits, or fewer max_tokens. You requested up to 64000 tokens, but can only afford 45838. To increase, visit https://openrouter.ai/settings/credits and add more credits\n  Add credits at https://openrouter.ai/settings/credits, then re-run.",
+  "verdict": "FAIL"
+}
