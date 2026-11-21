@@ -605,15 +605,21 @@ async function audioBytes(stream, signal) {
 /* Account and setup errors are named first. Some of them arrive as HTTP
    400 (a bad or unsigned key). Those must stop the run, not be saved as
    "this passage cannot be spoken." */
+const POLLY_THROTTLE = new Set(['ThrottlingException', 'TooManyRequestsException', 'LimitExceededException', 'ProvisionedThroughputExceededException']);
 const POLLY_SERVICE = new Set(['AccessDeniedException', 'UnrecognizedClientException', 'InvalidSignatureException', 'IncompleteSignatureException', 'ExpiredTokenException', 'CredentialsError', 'CredentialsProviderError', 'NotFoundException']);
 const POLLY_PERMANENT = new Set(['InvalidSsmlException', 'TextLengthExceededException', 'InvalidSampleRateException']);
 function pollyFailure(e) {
   const name = String(e?.name ?? '');
   const status = e?.$metadata?.httpStatusCode ?? 0;
+  /* ThrottlingException is often HTTP 400. Named first, so a rate limit
+     is retried later and is not saved as "this passage cannot be spoken." */
+  if (POLLY_THROTTLE.has(name) || status === 429) {
+    return { error: `speech ${status || 429} ${name || 'throttled'}`.trim(), errorKind: 'transient', spent: 0 };
+  }
   if (POLLY_SERVICE.has(name) || status === 401 || status === 403 || status === 404) {
     return { error: `speech ${status || 403} ${name || 'denied'}`.trim(), errorKind: 'service', spent: 0 };
   }
-  if (POLLY_PERMANENT.has(name) || status === 400 || status === 422) {
+  if (POLLY_PERMANENT.has(name)) {
     return { error: `speech ${status || 400} ${name || 'rejected'}`.trim(), errorKind: 'permanent', spent: 0 };
   }
   return { error: `speech ${status || 503} ${name || e?.message || 'failed'}`.trim(), errorKind: 'transient', spent: 0 };

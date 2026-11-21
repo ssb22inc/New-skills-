@@ -572,6 +572,10 @@ export function createPolly(env = process.env) {
   return new PollyClient({
     region: env.AWS_REGION || "us-east-1",
     credentials: { accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY },
+    /* One HTTP attempt per send. A lost response is retried by the job,
+       which reserves another budget slot. The SDK's own retries would
+       spend again without that reservation. */
+    maxAttempts: 1,
   });
 }
 

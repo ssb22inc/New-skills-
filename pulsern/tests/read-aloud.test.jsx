@@ -722,6 +722,18 @@ describe("server voice: the accuracy gate", () => {
     expect((await speak({ ...base(), storage, fetchImpl: fakeOpenAI() })).status).toBe(200);
   });
 
+  it("keeps a queued passage when Polly throttles with HTTP 400, and does not reject it", async () => {
+    const { storage, files } = fakeStorage();
+    await speak({ ...base({ apiKey: "" }), storage });
+    const err = new Error("Rate exceeded");
+    err.name = "ThrottlingException";
+    err.$metadata = { httpStatusCode: 400 };
+    const r = await drainQueue({ storage, polly: { send: async () => { throw err; } }, log: () => {} });
+    expect(r).toMatchObject({ voiced: 0, rejected: 0, retried: 1 });
+    expect([...files.keys()].filter((k) => k.startsWith("Joanna/") && k.endsWith(".json"))).toEqual([]);
+    expect([...files.keys()].filter((k) => k.startsWith("queue-retry/"))).toHaveLength(1);
+  });
+
   it("keeps a queued passage for the next run when Polly fails", async () => {
     const { storage, files } = fakeStorage();
     await speak({ ...base({ apiKey: "" }), storage });
