@@ -903,6 +903,19 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect(r.operational).toBe(true);
   });
 
+  it("reserves a long passage with one look through the character counter", async () => {
+    const { storage, files } = fakeStorage();
+    const now = Date.UTC(2026, 9, 29, 16);
+    const day = quotaDay(now);
+    for (let i = 0; i < 2500; i++) files.set(`usage/${day}/chars/${String(i).padStart(5, "0")}`, Buffer.from("1"));
+    const real = storage.from(BUCKET);
+    let lists = 0;
+    const wrapped = { ...storage, from: () => ({ ...real, list: async (dir, opts) => { if (String(dir).endsWith("/chars")) lists++; return real.list(dir, opts); } }) };
+    const out = await reserveSpeechCost(wrapped, 900, { now, limits: { spend: 100, chars: 2_500_000 } });
+    expect(out).toBe("ok");
+    expect(lists).toBe(3);
+  });
+
   it("does not let two reservations together pass a one-slot character cap", async () => {
     const { storage } = fakeStorage();
     const now = Date.UTC(2026, 9, 29, 16);
@@ -1386,6 +1399,23 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     expect(files.has(passagePaths(text, MARIN_TTS).retry)).toBe(false);
     const kept = JSON.parse(files.get(passagePaths(text).retry).toString());
     expect(kept).toMatchObject({ voice: "Joanna", attempts: 2, text });
+  });
+
+  it("does not mark the migration done when a legacy request cannot be read", async () => {
+    const text = "Potassium 2.9 milliequivalents per liter.";
+    const { storage, files } = fakeStorage();
+    const path = passagePaths(text, MARIN_TTS).retry;
+    files.set(path, Buffer.from(JSON.stringify({ text, voice: "marin", ref: Q1.ref, seg: "card-front", attempts: 1 })));
+    const db = fakeDb({ questions: [], case_studies: [], flashcards: [{ id: 4, front: "Potassium 2.9 mEq/L.", back: "" }] });
+    const real = storage.from(BUCKET);
+    const download = real.download;
+    const broken = { ...storage, from: () => ({ ...real, download: async (p) => (p === path ? { data: null, error: { message: "Internal server error", statusCode: "500" } } : download(p)) }) };
+    await expect(queueLegacyMarin({ storage: broken, db, log: () => {} })).rejects.toThrow(/legacy request/);
+    expect([...files.keys()].some((k) => k.endsWith("polly-revoice.json"))).toBe(false);
+    expect(files.has(path)).toBe(true);
+    const again = await queueLegacyMarin({ storage, db, log: () => {} });
+    expect(again.moved).toBe(1);
+    expect(files.has(passagePaths(text).retry)).toBe(true);
   });
 
   it("voices the result lines, then every question, case and card, and remembers where it got to", async () => {

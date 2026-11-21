@@ -498,7 +498,15 @@ async function migrateLegacyLane(bucket, db, lane) {
     if (!name.endsWith(".json")) continue;
     const path = `${lane}/${name}`;
     const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
-    if (got.error || got.tooBig || got.malformed || !got.value || got.value.voice === TTS.voice) continue;
+    /* A missing file was removed by another run. Any other read failure
+       stops the migration: the done marker must not be written while a
+       request is still unreadable, or the next run would delete it for
+       having the old voice. */
+    if (got.error) {
+      if (/not.?found|404/i.test(`${got.error.message ?? ""} ${got.error.statusCode ?? ""}`)) continue;
+      throw new Error(`could not read a legacy request: ${got.error.message ?? got.error}`);
+    }
+    if (got.tooBig || got.malformed || !got.value || got.value.voice === TTS.voice) continue;
     if (got.value.voice !== MARIN_TTS.voice) continue;
     const raw = got.value;
     const ref = canonicalRef(raw.ref);

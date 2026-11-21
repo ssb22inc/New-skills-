@@ -507,6 +507,36 @@ async function claimSlot(storage, dir, limit) {
   }
   return 'full';
 }
+/* Several character slots from one listing. claimSlot lists the whole
+   directory every time; a 900-character passage would do that nine times
+   before it was allowed to speak. Here the directory is listed once, then
+   the slots are created. A reservation that cannot be finished is taken
+   back, so a race does not spend characters for a clip that was not made. */
+async function claimSlots(storage, dir, limit, count) {
+  const bucket = storage.from(BUCKET);
+  let n = await countSlots(bucket, dir);
+  if (n == null) {
+    await storage.createBucket(BUCKET, { public: false });
+    n = await countSlots(bucket, dir);
+    if (n == null) return 'error';
+  }
+  const made = [];
+  let guard = 0;
+  while (made.length < count && n < limit && guard < count + 40) {
+    const path = `${dir}/${String(n).padStart(5, '0')}`;
+    const { error } = await retried(() => bucket.upload(path, '1', { contentType: 'text/plain', upsert: false }));
+    if (!error) { made.push(path); n++; continue; }
+    if (/exist|duplicate|409/i.test(`${error.message ?? ''} ${error.statusCode ?? ''} ${error.error ?? ''}`)) { n++; guard++; continue; }
+    if (made.length) await bucket.remove(made);
+    console.error('[read-aloud] budget slots', error.message ?? error);
+    return 'error';
+  }
+  if (made.length < count) {
+    if (made.length) await bucket.remove(made);
+    return 'full';
+  }
+  return 'ok';
+}
 /* The voice job's paid calls (ops/read-aloud-worker.mjs): one slot per
    synthesis, on the day the call is made. Queueing a passage (admission,
    above) and paying for it (spend, here) are counted apart, so a retried
@@ -522,11 +552,7 @@ export async function reserveSpeechCost(storage, billedChars, { now = Date.now()
   const unit = 100;
   const units = Math.max(1, Math.ceil(Math.max(0, billedChars) / unit));
   const cap = Math.max(1, Math.floor(limits.chars / unit));
-  for (let i = 0; i < units; i++) {
-    const slot = await claimSlot(storage, `usage/${quotaDay(now)}/chars`, cap);
-    if (slot !== 'ok') return slot;
-  }
-  return 'ok';
+  return claimSlots(storage, `usage/${quotaDay(now)}/chars`, cap, units);
 }
 /* A student's request: their own daily count, then the app-wide one
    (admission for a queued passage; spend for a live synthesis). */
