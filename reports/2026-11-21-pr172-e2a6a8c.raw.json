@@ -1,0 +1,51 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "e390534b09f8259c6c0bd0d6251ba19ab8df030d",
+    "head": "e2a6a8ccd15e2b063372f70fa52a20bcd8f55193",
+    "pr": "172"
+  },
+  "reviewedAt": "2026-11-21T05:31:41.631Z",
+  "filesReviewed": [
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 580,
+      "title": "Preserve unmigrated requests when the migration pauses",
+      "problem": "When migrateLegacyLane runs out of time, queueLegacyMarin returns with old Marin requests still in queue/ or queue-retry/. The entry point immediately calls runJob anyway. drainQueue treats raw.voice !== TTS.voice as invalid and deletes those remaining requests, including their retry state.",
+      "failure_scenario": "A sufficiently large legacy queue consumes the migration's one-third time slice before every request is converted. During the remaining speaking time, drainQueue encounters and deletes the unconverted requests. Pending passages without an existing Marin MP3 are not recovered by the subsequent old-clip scan.",
+      "fix": "Prevent queue draining from deleting Marin entries while pending-request migration is incomplete. Either preserve those entries explicitly during draining or finish that migration phase before handing the affected lanes to drainQueue. Add a test that pauses with unmigrated requests remaining, runs the speaking phase, and verifies that those requests survive and migrate on the next run.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 626,
+      "title": "Flush buffered uploads before committing the scan cursor",
+      "problem": "The page cursor is persisted while up to 24 queue entries remain only in batch. Those entries are uploaded later by flush(). If that upload fails or the process terminates after savePlace, the next invocation resumes after their rows and never retries them.",
+      "failure_scenario": "The last flashcard page produces fewer than 25 queue entries. savePlace records the last flashcard ID, then the final flush fails to upload an entry. On restart, the query starts after that ID, finds no more rows, and writes the completion marker even though that passage was never queued.",
+      "fix": "Successfully flush every page's buffered entries before saving a cursor that advances beyond those rows. Leave the previous committed cursor intact on any upload failure. Add a failure-injection test that restarts after a partial or failed batch upload and verifies that every eligible passage is eventually queued before the completion marker is written.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 25503,
+    "completionTokens": 6089,
+    "reasoningTokens": 5533,
+    "costUsd": 0.124646
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not safe to merge. The sliced migration can delete unmigrated student requests, and its cursor can advance past unsuccessful uploads. The added tests cover neither recovery path.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
