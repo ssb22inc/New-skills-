@@ -1,0 +1,34 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9ccff01052bee2cc97d20200adc7a3c5e6b4530f",
+    "head": "7ac3be9ca5582da6ba8a7783c81735bfd2a40283",
+    "pr": "170"
+  },
+  "reviewedAt": "2026-11-21T02:31:46.121Z",
+  "filesReviewed": [
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 56797,
+    "completionTokens": 7521,
+    "reasoningTokens": 7447,
+    "costUsd": 0.217201
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects found in the supplied changes. Partial playback continues to use only checked server audio, with unavailable parts shown rather than spoken. The tests cover delayed responses, playback failures, cancellation, and browser blocking. Tests were reviewed, not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
