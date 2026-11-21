@@ -236,7 +236,10 @@ export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetc
   /* A new version of the voice check starts the scan again from the top:
      passed passages are skipped at once, and ones the older check turned
      away are voiced again (readRecord). */
-  if ((cursor.check ?? 1) !== CHECK_VERSION) cursor = { kind: KINDS[0], afterId: 0 };
+  /* A new check, or a new voice, starts again from the top. Passed
+     passages are skipped at once. A cursor with no voice is the marin
+     scan, so the change to Joanna does not leave its place behind. */
+  if ((cursor.check ?? 1) !== CHECK_VERSION || cursor.voice !== TTS.voice) cursor = { kind: KINDS[0], afterId: 0, voice: TTS.voice };
   if (cursor.done) {
     // A finished pass is repeated weekly, to pick up new bank items.
     if (now() - Date.parse(cursor.doneAt ?? 0) < RESCAN_DAYS * 86400000) { out.cursor = cursor; return out; }
@@ -244,7 +247,7 @@ export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetc
   }
   let done = 0, refusedInARow = 0;
   const save = async () => {
-    const { error } = await put(bucket, "prewarm/cursor.json", { ...cursor, check: CHECK_VERSION });
+    const { error } = await put(bucket, "prewarm/cursor.json", { ...cursor, check: CHECK_VERSION, voice: TTS.voice });
     if (error) throw new Error(`could not save the cursor: ${error.message ?? error}`);
   };
   /* Voice a group of passages (the result lines, or one bank item). If a
@@ -468,24 +471,65 @@ export async function runJob({ storage, db, polly, apiKey, max = 200, fetchImpl 
    new voice replaces them before the rest of the bank. Exam rows are not
    in BANK_QUERIES. A missing marin folder is an empty list, not an error. */
 const REVOICE_MARKER = "prewarm/polly-revoice.json";
-async function listMp3Keys(bucket, dir) {
-  const keys = [];
+async function ensureBucket(storage) {
+  const { error } = await storage.createBucket(BUCKET, { public: false });
+  if (!error) return;
+  const msg = `${error.message ?? ""} ${error.statusCode ?? ""} ${error.error ?? ""}`;
+  if (/exist|duplicate|409/i.test(msg)) return;
+  throw new Error(`could not create the voice bucket: ${error.message ?? error}`);
+}
+async function listFileNames(bucket, dir) {
+  const names = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await retried(() => bucket.list(dir, { limit: 1000, offset }));
     if (error) {
-      if (/not.?found|404/i.test(String(error.message ?? error))) return keys;
+      if (/not.?found|404/i.test(String(error.message ?? error))) return names;
       throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
     }
-    for (const e of data ?? []) if (typeof e.name === "string" && e.name.endsWith(".mp3")) keys.push(e.name.slice(0, -4));
-    if (!data || data.length < 1000) return keys;
+    for (const e of data ?? []) if (typeof e.name === "string" && e.id !== null && e.id !== undefined) names.push(e.name);
+    if (!data || data.length < 1000) return names;
   }
 }
+/* A pending marin request is rewritten onto the Joanna queue only when
+   its words are still exactly a part of that approved, non-exam item. */
+async function migrateLegacyLane(bucket, db, lane) {
+  let moved = 0;
+  for (const name of await listFileNames(bucket, lane)) {
+    if (!name.endsWith(".json")) continue;
+    const path = `${lane}/${name}`;
+    const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
+    if (got.error || got.tooBig || got.malformed || !got.value || got.value.voice === TTS.voice) continue;
+    if (got.value.voice !== MARIN_TTS.voice) continue;
+    const raw = got.value;
+    const ref = canonicalRef(raw.ref);
+    const drop = async () => { const { error } = await bucket.remove([path]); if (error) throw new Error(`could not drop ${path}: ${error.message ?? error}`); };
+    if (!ref || !validRequest(ref, raw.seg, raw.text) || !voiceable(raw.text)) { await drop(); continue; }
+    const built = BANK_QUERIES[ref.kind](db).eq("id", ref.id);
+    const { data, error } = typeof built.maybeSingle === "function" ? await built.maybeSingle() : await built;
+    if (error) throw new Error(`bank: ${error.message ?? error}`);
+    const row = Array.isArray(data) ? data.find((r) => r.id === ref.id) : data;
+    if (!row || !itemParts(ref.kind, row).some((p) => p.text === raw.text)) { await drop(); continue; }
+    const paths = passagePaths(raw.text, TTS);
+    const dest = lane === "queue-retry" ? paths.retry : paths.queue;
+    const entry = { text: raw.text, voice: TTS.voice, ref, seg: raw.seg, requestedAt: raw.requestedAt ?? new Date().toISOString(), legacy: "marin" };
+    if (Number.isInteger(raw.attempts)) entry.attempts = raw.attempts;
+    if (typeof raw.giveUp === "string") entry.giveUp = raw.giveUp;
+    if (JSON.stringify(entry).length > QUEUE_ENTRY_MAX) { await drop(); continue; }
+    const { error: up } = await put(bucket, dest, entry);
+    if (up) throw new Error(`could not move a legacy request: ${up.message ?? up}`);
+    if (dest !== path) await drop();
+    moved++;
+  }
+  return moved;
+}
 export async function queueLegacyMarin({ storage, db, log = () => {}, page = 200 }) {
+  await ensureBucket(storage);
   const bucket = storage.from(BUCKET);
   const got = await readJsonFile(bucket, REVOICE_MARKER);
   if (got.error && !/not.?found|404/i.test(String(got.error.message ?? got.error))) throw new Error(`could not read the revoice marker: ${got.error.message ?? got.error}`);
   if (got.value?.done) return { queued: 0, already: true };
-  const legacy = new Set(await listMp3Keys(bucket, MARIN_TTS.voice));
+  const moved = (await migrateLegacyLane(bucket, db, "queue")) + (await migrateLegacyLane(bucket, db, "queue-retry"));
+  const legacy = new Set((await listFileNames(bucket, MARIN_TTS.voice)).filter((n) => n.endsWith(".mp3")).map((n) => n.slice(0, -4)));
   let queued = 0, matched = 0;
   for (const kind of ["question", "case", "card"]) {
     let afterId = 0;
@@ -516,8 +560,8 @@ export async function queueLegacyMarin({ storage, db, log = () => {}, page = 200
   }
   const { error: mark } = await put(bucket, REVOICE_MARKER, { done: true, queued, matched, files: legacy.size, at: new Date().toISOString() });
   if (mark) throw new Error(`could not save the revoice marker: ${mark.message ?? mark}`);
-  log(`Queued ${queued} passages that already had a marin clip (${matched} matched, ${legacy.size} files).`);
-  return { queued, matched, files: legacy.size, already: false };
+  log(`Queued ${queued} passages that already had a marin clip (${matched} matched, ${legacy.size} files) and moved ${moved} pending requests.`);
+  return { queued, matched, moved, files: legacy.size, already: false };
 }
 
 export function awsReady(env = process.env) {

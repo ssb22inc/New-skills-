@@ -13,9 +13,9 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts, voiceable } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES, createWarmCache } from "../src/read-aloud.jsx";
-import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
+import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, MARIN_TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
-import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE } from "../ops/read-aloud-worker.mjs";
+import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE, queueLegacyMarin } from "../ops/read-aloud-worker.mjs";
 import { passagePaths, CHECK_VERSION, checkFailure, readRecord, STORAGE_RETRY, providerCode, makeChecked } from "../api/_speak.js";
 
 const MC = { id: 1, type: "mc", stem: "A client on furosemide reports leg cramps. Which value is the priority?", options: ["Sodium 138 mEq/L", "Potassium 2.9 mEq/L", "Glucose 110 mg/dL", "Calcium 9.2 mg/dL"], answer: 1, rationale: "Hypokalemia is the priority." };
@@ -855,6 +855,17 @@ describe("server voice without a key: the queue and the voice job", () => {
     expect([...files.keys()]).toEqual([]);
   });
 
+  it("says the voice waits until tomorrow when the dollar cap is used and passage slots remain", async () => {
+    const { storage, files } = fakeStorage();
+    const now = Date.UTC(2026, 9, 29, 16);
+    const day = quotaDay(now);
+    const limits = { user: 300, admission: 10, spend: 10, chars: 200 };
+    files.set(`usage/${day}/chars/00000`, Buffer.from("1"));
+    files.set(`usage/${day}/chars/00001`, Buffer.from("1"));
+    const out = await speak({ ...base({ apiKey: "" }), storage, limits, now });
+    expect(out).toEqual({ status: 202, body: { queued: true, after: "tomorrow" } });
+  });
+
   it("holds the queue to the daily budgets", async () => {
     const { storage, files } = fakeStorage();
     const limits = { user: 1, admission: 100, spend: 100 };
@@ -1244,6 +1255,7 @@ function fakeDb(tables) {
         order: () => chain,
         limit: (n) => ((f.limit = n), chain),
         then: (resolve) => resolve({ data: (tables[table] ?? []).filter((r) => r.id > (f.gt ?? 0)).slice(0, f.limit), error: null }),
+        maybeSingle: async () => ({ data: (tables[table] ?? []).find((r) => r.id === f.eq.find(([c]) => c === "id")?.[1]) ?? null, error: null }),
       };
       return chain;
     },
@@ -1288,10 +1300,32 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     expect(r.cursor.kind).toBe("verdicts"); // back at the top
     expect(JSON.parse(files.get("prewarm/cursor.json").toString()).check).toBe(CHECK_VERSION);
     // under the current check, a finished scan stays finished until the weekly rescan
-    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ done: true, doneAt: new Date().toISOString(), check: CHECK_VERSION })));
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ done: true, doneAt: new Date().toISOString(), check: CHECK_VERSION, voice: TTS.voice })));
     const f = fakeOpenAI();
     await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 10 });
     expect(f).not.toHaveBeenCalled();
+  });
+
+  it("starts again from the top when the saved cursor belongs to the old voice", async () => {
+    const { storage, files } = fakeStorage();
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ done: true, doneAt: new Date().toISOString(), check: CHECK_VERSION, voice: "marin" })));
+    const f = fakeOpenAI();
+    const r = await prewarmBank({ storage, db: fakeDb(BANK), apiKey: "k", fetchImpl: f, max: 1 });
+    expect(r.cursor.kind).toBe("verdicts");
+    expect(f).toHaveBeenCalled();
+    expect(JSON.parse(files.get("prewarm/cursor.json").toString()).voice).toBe(TTS.voice);
+  });
+
+  it("moves a pending marin request onto Joanna when those words are still in the bank, and creates the bucket first", async () => {
+    const text = "Potassium 2.9 milliequivalents per liter.";
+    const { storage, files, calls } = fakeStorage({ missingBucket: true });
+    files.set(passagePaths(text, MARIN_TTS).retry, Buffer.from(JSON.stringify({ text, voice: "marin", ref: Q1.ref, seg: "card-front", attempts: 2 })));
+    const r = await queueLegacyMarin({ storage, db: fakeDb({ questions: [], case_studies: [], flashcards: [{ id: 4, front: "Potassium 2.9 mEq/L.", back: "" }] }), log: () => {} });
+    expect(calls.createBucket.length).toBeGreaterThan(0);
+    expect(r.moved).toBe(1);
+    expect(files.has(passagePaths(text, MARIN_TTS).retry)).toBe(false);
+    const kept = JSON.parse(files.get(passagePaths(text).retry).toString());
+    expect(kept).toMatchObject({ voice: "Joanna", attempts: 2, text });
   });
 
   it("voices the result lines, then every question, case and card, and remembers where it got to", async () => {
@@ -1643,7 +1677,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
       const { storage, files } = fakeStorage();
       const questions = [Q(100, 6), Q(101, 3)];
       const stopAt = itemPassages("question", questions[0])[4];
-      files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(itemPassages("question", questions[0])), check: CHECK_VERSION })));
+      files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(itemPassages("question", questions[0])), check: CHECK_VERSION, voice: TTS.voice })));
       const f = fakeOpenAI();
       await prewarmBank({ storage, db: fakeDb(bank(mutate(questions))), apiKey: "k", fetchImpl: f, max: 1000 });
       expect(voicedTexts(f)[0], label).toBe(expectFirst); // from the top of that item: nothing skipped
@@ -1653,7 +1687,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     const { storage, files } = fakeStorage();
     const q = Q(100, 6);
     const parts = itemPassages("question", q);
-    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(parts), check: CHECK_VERSION })));
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(parts), check: CHECK_VERSION, voice: TTS.voice })));
     const f = fakeOpenAI();
     await prewarmBank({ storage, db: fakeDb(bank([q])), apiKey: "k", fetchImpl: f, max: 1000 });
     expect(voicedTexts(f)[0]).toBe(parts[4]);

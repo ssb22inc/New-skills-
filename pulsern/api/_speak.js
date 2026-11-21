@@ -744,8 +744,16 @@ export async function readRecord(storage, text, tts = TTS, now = Date.now()) {
    spending is used up, the item waits for the next day, and the app says
    so instead of promising it soon. */
 async function queuedReply(storage, t0, limits) {
-  const spent = await countSlots(storage.from(BUCKET), `usage/${quotaDay(t0)}/spend`);
-  return { status: 202, body: spent != null && spent >= limits.spend ? { queued: true, after: 'tomorrow' } : { queued: true } };
+  const day = quotaDay(t0);
+  const bucket = storage.from(BUCKET);
+  const spent = await countSlots(bucket, `usage/${day}/spend`);
+  /* The dollar cap is counted in 100-character slots. The route uses the
+     same default as the job when the caller did not pass one. */
+  const chars = limits?.chars ?? readAloudLimits().chars;
+  const usedChars = await countSlots(bucket, `usage/${day}/chars`);
+  const charSlots = Math.max(1, Math.floor(chars / 100));
+  const over = (spent != null && spent >= limits.spend) || (usedChars != null && usedChars >= charSlots);
+  return { status: 202, body: over ? { queued: true, after: 'tomorrow' } : { queued: true } };
 }
 
 /* Returns { status, body } for the route to send.
