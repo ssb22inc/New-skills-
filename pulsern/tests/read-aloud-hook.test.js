@@ -276,6 +276,16 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(bar.text).toContain(bar.notes.unavailable);
   });
 
+  it("does not speak a part the bank has already refused", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await answer({ stem: [409, { error: "Text does not match the item" }], "*": [200, "url"] });
+    await tap("play");
+    await gap(300);
+    const s = await state();
+    expect(s.spoken.some((t) => t.startsWith("Which value"))).toBe(false);
+    expect(s.played).toContain("https://signed.example/1/opt0");
+  });
+
   it("does not read a part the bank refused, and shows it instead", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");

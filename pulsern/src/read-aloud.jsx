@@ -442,7 +442,6 @@ export function useReadAloud(segments, key, ref = null) {
       r.ctrl.abort();
       if (r.audio) { r.audio.onended = null; r.audio.onerror = null; r.audio.pause(); }
     }
-    if (player && !player.paused) { try { player.pause(); } catch { /* already quiet */ } }
     clips.release();
   }, []);
 
@@ -479,12 +478,23 @@ export function useReadAloud(segments, key, ref = null) {
        any wait, so Android Chrome accepts it. Later parts use the AI clip
        once it is ready. A part that must stay on screen is skipped. */
     primeDeviceVoice();
-    const first = segs.slice(start).find((s) => voiceable(s.text));
-    const known = first ? voice.peek(itemRef, first.id, first.text) : null;
+    /* The first part we may read. A cached refusal (gone, mismatched, or
+       the check failed) is not a missing clip: it stays on screen, and the
+       device voice starts at the next part that can be read. A cached clip
+       plays as audio, so it is not a device lead either. */
+    const refused = (o) => !!(o && (o.unvoiceable || o.status === 404 || o.status === 409 || o.status === 422));
+    let first = null;
+    for (const s of segs.slice(start)) {
+      if (!voiceable(s.text)) continue;
+      const known = voice.peek(itemRef, s.id, s.text);
+      if (refused(known)) continue;
+      if (!known?.url) first = s;
+      break;
+    }
     const speechCtrl = new AbortController();
     signal.addEventListener("abort", () => speechCtrl.abort(), { once: true });
     let lead = null;
-    if (first && !known?.url) {
+    if (first) {
       const at = segs.findIndex((s) => s.id === first.id);
       tasks[at]?.then((o) => {
         if (o && (o.status === 404 || o.status === 409 || o.status === 422 || o.unvoiceable)) speechCtrl.abort();
