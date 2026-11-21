@@ -261,7 +261,13 @@ import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard } from "./srs.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
-import { updateMissSchedule, reviewPools, todayPool } from "./question-review.js";
+import { updateMissSchedule, reviewPools, sessionPool } from "./question-review.js";
+import {
+  emptyNav, appendQuestion, saveDraft, markAnswered, canGoBack, goBack, present,
+  forward, fallbackSkip, jumpToSkipped, skippedCount, currentEntry, nextUnvisited,
+  heldIds, checkpointAfter,
+} from "./question-nav.js";
+import { QuestionNav } from "./question-nav.jsx";
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
 import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
@@ -1331,13 +1337,21 @@ function Ecg() {
 
 /* ================= QBANK ================= */
 
-function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false }) {
+function blankAnswer(q) {
+  if (q?.type === "bowtie") return { sel: { actions: [], condition: null, parameters: [] }, order: [] };
+  if (q?.type === "calc") return { sel: "", order: [] };
+  return { sel: [], order: [] };
+}
+
+export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
   const [sel, setSel] = useState([]);
   const [order, setOrder] = useState([]);
   const [phase, setPhase] = useState("pick"); // pick | answering | feedback | break | done
+  const [nav, setNav] = useState(() => emptyNav()); // this sitting: back, next, and skips
+  const justScored = useRef(false);
   const [wasCorrect, setWasCorrect] = useState(false);
   const [credit, setCredit] = useState({ points: 0, max: 1 }); // NCSBN partial credit for the last answer
   const [nextReview, setNextReview] = useState(null); // review date the last answer scheduled, if any
@@ -1364,16 +1378,47 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
      on demand, due ones first. */
   const focused = questions.filter(inFocus);
   const { due: duePool, review: reviewPool } = reviewPools(focused, log, missSchedule, todayStr());
-  const reviewNext = (exclude) => {
-    const due = duePool.filter((x) => x.id !== exclude);
-    return due.length ? due : reviewPool.filter((x) => x.id !== exclude);
-  };
-  // Today round: due reviews first, then new questions and unscheduled misses.
-  const autoPool = (exclude) => todayPool(focused, log, missSchedule, freshPool, todayStr()).filter((x) => x.id !== exclude);
 
-  const pickFrom = (basePool) => {
-    if (!basePool.length) { setPhase("done"); return; }
-    let pool = basePool;
+  const reveal = (navState, knownQ) => {
+    const view = present(navState);
+    const question = knownQ ?? (view ? questions.find((x) => x.id === view.id) : null);
+    justScored.current = false;
+    if (!view || !question) { setNav(navState); setQ(null); setPhase("done"); return; }
+    setNav(navState);
+    setQ(question);
+    if (view.mode === "review") {
+      setSel(view.sel);
+      setOrder(view.order ?? []);
+      setWasCorrect(!!view.wasCorrect);
+      setCredit(view.credit ?? { points: 0, max: 1 });
+      setNextReview(view.nextReview ?? null);
+      setPhase("feedback");
+      return;
+    }
+    const blank = blankAnswer(question);
+    setSel(view.sel === undefined || view.sel === null ? blank.sel : view.sel);
+    setOrder(view.order ?? []);
+    setWasCorrect(false);
+    setCredit({ points: 0, max: 1 });
+    setNextReview(null);
+    setPhase("answering");
+  };
+
+  const pickFrom = (navState, poolMode) => {
+    const trail = navState ?? emptyNav();
+    const which = poolMode ?? (auto ? "today" : (mode === "review" ? "review" : "new"));
+    /* Held questions are dropped inside sessionPool, before a due-only
+       pool can hide everything else. */
+    let pool = sessionPool(focused, {
+      log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail),
+    });
+    if (!pool.length) {
+      const fb = fallbackSkip(trail);
+      if (fb) { reveal(fb); return; }
+      setNav(trail);
+      setPhase("done");
+      return;
+    }
     if (preferMc) {
       const mc = pool.filter((x) => x.type === "mc");
       if (mc.length) pool = mc;
@@ -1382,7 +1427,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
        Weaker categories by the ability engine's theta are chosen more often,
        never the previous category when another is available (interleaving),
        and no category is starved. Seeded, so the same state gives the same pick. */
-    const rand = seededRandom(seedFrom(`${todayStr()}|${log.length}|${sessionN}|${pool.length}|${lastCat ?? ""}`));
+    const rand = seededRandom(seedFrom(`${todayStr()}|${log.length}|${sessionN}|${pool.length}|${lastCat ?? ""}|${trail.entries.length}`));
     const cat = pickCategory({
       available: pool.map((x) => x.cat),
       ability,
@@ -1398,41 +1443,57 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
       Math.abs(itemRating(b, calibration) - pickTargetRating(ability, b.cat)));
     const pick = pool[Math.floor(rand() * Math.min(3, pool.length))];
     setLastCat(pick.cat);
-    setQ(pick);
-    setSel(pick.type === "bowtie" ? { actions: [], condition: null, parameters: [] } : pick.type === "calc" ? "" : []);
-    setOrder([]); setPhase("answering");
+    reveal(appendQuestion(trail, pick.id), pick);
   };
 
-  const nextQuestion = () => {
-    if (auto) return pickFrom(autoPool(q?.id));
-    return pickFrom(mode === "review" ? reviewNext(q?.id) : freshPool);
+  /* Next on an unanswered question skips it: no log line, no schedule,
+     no ability change. An answered question just moves. */
+  const continueFrom = (fromNav, { fromBreak = false } = {}) => {
+    const leaving = currentEntry(fromNav);
+    const atEnd = fromNav.index >= fromNav.entries.length - 1;
+    const gate = checkpointAfter(sessionN, {
+      auto,
+      fromBreak,
+      atEnd,
+      answered: leaving?.status === "answered",
+      roundLimit: auto ? (autoLimit ?? 8) : null,
+    });
+    if (gate === "done") { onDone?.(); return; }
+    if (gate === "break") { setPhase("break"); return; }
+    const moved = forward(fromNav, { skipIfOpen: true });
+    if (moved.effect.type !== "need-question") { reveal(moved.nav); return; }
+    pickFrom(moved.nav);
   };
 
   const submit = () => {
+    if (currentEntry(nav)?.status === "answered") return;
     // NCSBN-style partial credit (ngn.js); the engine gets full credit as "correct".
     const c = scoreItem(q, q.type === "order" ? order : sel);
     const ok = isFullCredit(c);
+    const review = updateMissSchedule(missSchedule, q.id, ok)[q.id]?.due ?? null;
+    const marked = markAnswered(nav, { sel, order, wasCorrect: ok, credit: c, nextReview: review });
     setCredit(c);
     setWasCorrect(ok);
-    setNextReview(updateMissSchedule(missSchedule, q.id, ok)[q.id]?.due ?? null);
-    record(q, ok);
-    setSessionN((n) => n + 1);
-    setDiffTarget((d) => Math.max(1, Math.min(3, d + (ok ? 1 : -1))));
+    setNextReview(review);
+    /* recorded is the only door into stats. A skip never reaches it, and
+       neither does a second look at an answer already saved. */
+    if (marked.recorded) {
+      record(q, ok);
+      setSessionN((n) => n + 1);
+      setDiffTarget((d) => Math.max(1, Math.min(3, d + (ok ? 1 : -1))));
+    }
+    justScored.current = true;
+    setNav(marked.nav);
     setPhase("feedback");
   };
 
-  const advance = () => {
-    const roundLimit = auto ? (autoLimit ?? 8) : null;
-    if (roundLimit != null && sessionN >= roundLimit) { onDone?.(); return; }
-    if (sessionN > 0 && sessionN % 8 === 0) setPhase("break");
-    else nextQuestion();
-  };
+  const endSession = () => { setPhase("pick"); setNav(emptyNav()); setQ(null); setSel([]); setOrder([]); };
 
   // autopilot: start immediately: due reviews first, then new questions
   useEffect(() => {
     if (auto && phase === "pick") {
-      const pool = autoPool(null);
-      if (pool.length) pickFrom(pool); else onDone?.();
+      const pool = sessionPool(focused, { log, schedule: missSchedule, fresh: freshPool, mode: "today", held: [] });
+      if (pool.length) pickFrom(emptyNav(), "today"); else onDone?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto]);
@@ -1450,8 +1511,10 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
   /* Bank items (they carry a calibration) can use the AI voice; built-in
      ones use the device voice. */
   const inBank = q && calibration[q.id] !== undefined;
-  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${q.id}:${sessionN}` : "off", inBank ? { kind: "question", id: q.id, part: "question" } : null);
-  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${q.id}:${sessionN}` : "off", inBank ? { kind: "question", id: q.id, part: "feedback", result } : null);
+  /* The key changes when the student moves, which stops whatever is
+     playing and, with "Read each new one" on, reads the question now shown. */
+  const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${q.id}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "question" } : null);
+  const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${q.id}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "feedback", result } : null);
 
   const TYPE_CHIPS =[["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
@@ -1492,8 +1555,8 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
 
         <p className="small mono">{freshPool.length} new · {reviewPool.length} to review ({duePool.length} due today) · difficulty target {diffTarget}/3</p>
         <div className="row">
-          <button className="btn" onClick={() => { setMode("new"); pickFrom(freshPool); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
-          <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(reviewNext(null)); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
+          <button className="btn" onClick={() => { setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
+          <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(emptyNav(), "review"); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
         {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
 
@@ -1508,15 +1571,15 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
       <h2 className="h2">Block complete: 8 questions</h2>
       <p className="small">Distributed practice beats marathons: the same study minutes spread across days retain dramatically more than one long push. If you stop here, review again within 24 hours, then at 3 and 7 days. Your flashcard queue, your missed-question reviews, and your day streak track that schedule for real.</p>
       <div className="row">
-        <button className="btn ghost" onClick={nextQuestion}>One more block →</button>
-        <button className="btn" onClick={() => setPhase("pick")}>End session</button>
+        <button className="btn ghost" onClick={() => continueFrom(nav, { fromBreak: true })}>One more block →</button>
+        <button className="btn" onClick={endSession}>End session</button>
       </div>
     </section>
   );
 
   if (phase === "done" || !q) return (
     <section className="card"><h2 className="h2">{mode === "review" ? "Review pool cleared" : "No new questions left"}</h2><p className="small">{mode === "review" ? "Every missed question has been re-answered correctly, and nothing else is due. Each one returns on its next review date. Corrected errors are some of the strongest memories you'll form." : "You've seen the whole bank. Switch to Review misses to close remaining gaps."}</p>
-      <button className="btn" onClick={() => setPhase("pick")}>Back to session menu</button></section>
+      <button className="btn" onClick={endSession}>Back to session menu</button></section>
   );
 
   const ext = ngnExt(q); // NGN payloads: rows/columns/actions/conditions/parameters/dropdowns
@@ -1561,6 +1624,23 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
     matrix: "MATRIX", bowtie: "BOW-TIE", cloze: "CLOZE (DROPDOWNS)", calc: "DOSAGE CALC", highlight: "HIGHLIGHT",
   };
 
+  const draftedNav = () => (phase === "answering" ? saveDraft(nav, { sel, order }) : nav);
+  const onBack = () => {
+    const from = draftedNav();
+    if (!canGoBack(from)) return;
+    reveal(goBack(from));
+  };
+  const onReviewSkipped = () => {
+    const from = draftedNav();
+    const jumped = jumpToSkipped(from);
+    if (jumped.index === from.index) { setNav(from); return; }
+    reveal(jumped);
+  };
+  const onMove = () => continueFrom(draftedNav());
+  const atEnd = nav.index >= 0 && nav.index === nav.entries.length - 1;
+  const finishing = autoLimit != null && currentEntry(nav)?.status === "answered" && atEnd && sessionN >= autoLimit;
+  const locked = phase !== "answering";
+
   return (
     <div className="stack">
       <section className="card">
@@ -1604,7 +1684,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
                 if (q.answer.includes(i)) cls += " right";
                 else if (sel.includes(i)) cls += " wrong";
               }
-              return <button key={i} className={cls} onClick={() => toggleSel(i)}>{t}</button>;
+              return <button key={i} type="button" className={cls} disabled={locked} onClick={() => toggleSel(i)}>{t}</button>;
             })}
           </div>
         )}
@@ -1628,7 +1708,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
                     else if (sel[ri] === ci) cls += " wrong";
                   }
                   return (
-                    <button key={ci} className={cls} onClick={() => setMatrixRow(ri, ci)} aria-label={`${r}: ${c}`}>
+                    <button key={ci} type="button" className={cls} disabled={locked} onClick={() => setMatrixRow(ri, ci)} aria-label={`${r}: ${c}`}>
                       {sel[ri] === ci ? "●" : "○"}
                     </button>
                   );
@@ -1654,7 +1734,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
                     if (col.keyed.includes(i)) cls += " right";
                     else if (col.picked.includes(i)) cls += " wrong";
                   }
-                  return <button key={i} className={cls} onClick={() => toggleBowtie(col.slot, i, col.cap)}>{it}</button>;
+                  return <button key={i} type="button" className={cls} disabled={locked} onClick={() => toggleBowtie(col.slot, i, col.cap)}>{it}</button>;
                 })}
               </div>
             ))}
@@ -1693,7 +1773,7 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
                 if (correct) cls += " right";
                 else if (sel.includes(i)) cls += " wrong";
               }
-              return <button key={i} className={cls} onClick={() => toggleSel(i)}>{q.type === "sata" ? (sel.includes(i) ? "☑ " : "☐ ") : ""}{opt}</button>;
+              return <button key={i} type="button" className={cls} disabled={locked} onClick={() => toggleSel(i)}>{q.type === "sata" ? (sel.includes(i) ? "☑ " : "☐ ") : ""}{opt}</button>;
             }
             const pos = order.indexOf(i);
             if (pos !== -1) cls += " picked";
@@ -1702,11 +1782,14 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
 
               else if (order.indexOf(i) !== -1) cls += " wrong";
             }
-            return <button key={i} className={cls} onClick={() => toggleOrder(i)}>{pos !== -1 ? <span className="ord mono">{pos + 1}</span> : <span className="ord mono dim">·</span>}{opt}</button>;
+            return <button key={i} type="button" className={cls} disabled={locked} onClick={() => toggleOrder(i)}>{pos !== -1 ? <span className="ord mono">{pos + 1}</span> : <span className="ord mono dim">·</span>}{opt}</button>;
           })}
         </div>
         )}
 
+        {phase === "answering" && currentEntry(nav)?.status === "skipped" && (
+          <p className="small tip">Skipped. It stays out of your score until you answer it.</p>
+        )}
         {phase === "answering" && (
           <div className="row">
             <button className="btn" disabled={!canSubmit} onClick={submit}>Check answer</button>
@@ -1748,51 +1831,116 @@ function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, 
             <ConceptExplainers key={`dx${q.id}`} q={q} />
             <TutorExplain key={q.id} q={q} wasCorrect={wasCorrect} provider={provider} isBank={calibration[q.id] !== undefined} />
             <ReportIssue key={`r${q.id}`} itemId={calibration[q.id] !== undefined ? q.id : null} label="question" />
-            <button className="btn" onClick={advance}>{autoLimit != null && sessionN >= autoLimit ? "Continue to Today →" : "Next question →"}</button>
+            {nav.index < nav.entries.length - 1 && !justScored.current && (
+              <p className="small tip">Answered earlier. This result is not scored again.</p>
+            )}
           </div>
         )}
+        <QuestionNav
+          canBack={canGoBack(nav)}
+          skipped={skippedCount(nav)}
+          onBack={onBack}
+          onSkip={onMove}
+          onNext={onMove}
+          onReview={onReviewSkipped}
+          nextLabel={finishing ? "Continue" : "Next"}
+          nextAria={finishing ? "Continue to Today" : "Next question"}
+          skipAria={currentEntry(nav)?.status === "answered" ? "Leave this answer and move on" : "Skip this question without scoring it"}
+        />
       </section>
     </div>
   );
 }
 /* ================= CASE STUDY ================= */
 
-function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
+export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
   const [caseIdx, setCaseIdx] = useState(null); // null = case picker
   const [catFilter, setCatFilter] = useState([]);
   const [step, setStep] = useState(-1);
   const [sel, setSel] = useState([]);
   const [phase, setPhase] = useState("read");
-  const [stepScores, setStepScores] = useState([]); // NCSBN partial credit per step: [{ points, max }]
+  const [stepScores, setStepScores] = useState({}); // step index -> { points, max }; skips are absent
   const [credit, setCredit] = useState({ points: 0, max: 1 });
   const [ok, setOk] = useState(false);
+  const [nav, setNav] = useState(() => emptyNav());
+  const justScored = useRef(false);
   const cs = caseIdx == null ? null : cases[caseIdx];
   /* Bank cases carry a dbId; locally-bundled ones don't, so fall back to the
      title, which carries a unique index in migration 005. */
   const caseKey = cs ? (cs.dbId ?? cs.title) : null;
+  const scoreRows = cs ? cs.steps.map((_, i) => stepScores[i]).filter(Boolean) : [];
+  const total = sumScores(scoreRows);
 
-  const openCase = (i) => { setCaseIdx(i); setStep(-1); setPhase("read"); setStepScores([]); setSel([]); };
-  const total = sumScores(stepScores);
-  const start = () => { setStep(0); setPhase("answering"); setSel([]); };
+  const showCase = (navState) => {
+    const view = present(navState);
+    justScored.current = false;
+    setNav(navState);
+    if (!view) { setStep(-1); setPhase("read"); return; }
+    setStep(view.id);
+    if (view.mode === "review") {
+      setSel(view.sel ?? []);
+      setOk(!!view.wasCorrect);
+      setCredit(view.credit ?? { points: 0, max: 1 });
+      setPhase("feedback");
+      return;
+    }
+    setSel(view.sel ?? []);
+    setPhase("answering");
+  };
+
+  const openCase = (i) => {
+    setCaseIdx(i); setStep(-1); setPhase("read"); setStepScores({}); setSel([]); setNav(emptyNav());
+  };
+  const start = () => showCase(appendQuestion(emptyNav(), 0));
   const s = cs?.steps[step];
   // pseudo-ids stay outside the shared question-bank id space
   const stepId = cs ? (cs.dbId ? 50000 + cs.dbId * 10 + step : 100 + caseIdx * 10 + step) : 0;
 
   const submit = () => {
+    if (currentEntry(nav)?.status === "answered") return;
     // NCSBN-style partial credit: mc 0/1, select-all +/- with a floor of 0.
     const c = scoreCaseStep(s, sel);
     const correct = isFullCredit(c); // engine/XP outcome = full credit, so calibration is unchanged
+    const marked = markAnswered(nav, { sel, order: [], wasCorrect: correct, credit: c, nextReview: null });
     setOk(correct);
     setCredit(c);
-    setStepScores((a) => [...a, c]);
-    record({ id: stepId, cat: cs.cat, diff: 3 }, correct, { schedule: false });
+    if (marked.recorded) {
+      setStepScores((m) => ({ ...m, [step]: c }));
+      record({ id: stepId, cat: cs.cat, diff: 3 }, correct, { schedule: false });
+    }
+    justScored.current = true;
+    setNav(marked.nav);
     setPhase("feedback");
   };
 
-  const next = () => {
-    if (step + 1 < cs.steps.length) { setStep(step + 1); setSel([]); setPhase("answering"); }
-    else setPhase("done");
+  const moveCase = (fromNav) => {
+    const moved = forward(fromNav, { skipIfOpen: true });
+    if (moved.effect.type === "restore" || moved.effect.type === "requeue") { showCase(moved.nav); return; }
+    const id = nextUnvisited(moved.nav, cs.steps.map((_, i) => i));
+    if (id != null) { showCase(appendQuestion(moved.nav, id)); return; }
+    const fb = fallbackSkip(moved.nav);
+    if (fb) { showCase(fb); return; }
+    setNav(moved.nav);
+    setPhase("done");
   };
+  const draftedCase = () => (phase === "answering" ? saveDraft(nav, { sel, order: [] }) : nav);
+  const onCaseBack = () => {
+    const from = draftedCase();
+    if (!canGoBack(from)) return;
+    showCase(goBack(from));
+  };
+  const onCaseReview = () => {
+    const from = draftedCase();
+    const jumped = jumpToSkipped(from);
+    if (jumped.index === from.index) { setNav(from); return; }
+    showCase(jumped);
+  };
+  const onCaseMove = () => moveCase(draftedCase());
+  const caseUnvisited = cs ? nextUnvisited(nav, cs.steps.map((_, i) => i)) : null;
+  const caseFinishing = currentEntry(nav)?.status === "answered"
+    && nav.index === nav.entries.length - 1
+    && caseUnvisited == null
+    && !fallbackSkip(nav);
 
   /* Read aloud: the chart once, each step's question, each step's result. */
   const introSegs = useMemo(() => (cs && step === -1 ? caseIntroSegments(cs) : []), [cs, step]);
@@ -1877,7 +2025,7 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
                 if (corr) cls += " right"; else if (sel.includes(i)) cls += " wrong";
               }
               return (
-                <button key={i} className={cls} onClick={() => {
+                <button key={i} type="button" className={cls} disabled={phase !== "answering"} onClick={() => {
                   if (phase !== "answering") return;
                   if (s.type === "mc") setSel([i]);
                   else setSel((x) => x.includes(i) ? x.filter((y) => y !== i) : [...x, i]);
@@ -1885,6 +2033,9 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
               );
             })}
           </div>
+          {phase === "answering" && currentEntry(nav)?.status === "skipped" && (
+            <p className="small tip">Skipped. It stays out of your score until you answer it.</p>
+          )}
           {phase === "answering" && <button className="btn" disabled={!sel.length} onClick={submit}>Check answer</button>}
           {phase === "feedback" && (
             <div className={ok ? "feedback ok" : "feedback no"}>
@@ -1895,16 +2046,30 @@ function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
               <ReadAloudBar reader={caseFbReader} label="Listen to the explanation" />
               <p className={ra(caseFbReader, "rationale", "rationale")}><strong>Rationale.</strong> {s.rationale}</p>
               <TutorExplain key={`${caseIdx}-${step}`} q={{ ...s, id: 100 + caseIdx * 10 + step }} wasCorrect={ok} provider={provider} isBank={false} />
-              <button className="btn" onClick={next}>{step + 1 < cs.steps.length ? "Next step →" : "Finish case"}</button>
+              {nav.index < nav.entries.length - 1 && !justScored.current && (
+                <p className="small tip">Answered earlier. This result is not scored again.</p>
+              )}
             </div>
           )}
+          <QuestionNav
+            canBack={canGoBack(nav)}
+            skipped={skippedCount(nav)}
+            onBack={onCaseBack}
+            onSkip={onCaseMove}
+            onNext={onCaseMove}
+            onReview={onCaseReview}
+            nextLabel={caseFinishing ? "Finish" : "Next"}
+            nextAria={caseFinishing ? "Finish case" : "Next step"}
+            skipAria={currentEntry(nav)?.status === "answered" ? "Leave this answer and move on" : "Skip this question without scoring it"}
+          />
         </section>
       )}
 
       {phase === "done" && (
         <section className="card">
           <h2 className="h2">Case complete: {total.points}/{total.max} points</h2>
-          <p className="small mono">{stepScores.map((c, i) => `Step ${i + 1}: ${c.points}/${c.max}`).join(" · ")}</p>
+          <p className="small mono">{cs.steps.map((_, i) => stepScores[i] ? `Step ${i + 1}: ${stepScores[i].points}/${stepScores[i].max}` : null).filter(Boolean).join(" · ") || "No steps scored"}</p>
+          {skippedCount(nav) > 0 && <p className="small">{skippedCount(nav)} skipped. Skipped steps were not scored.</p>}
           <p className="small">{isFullCredit(total) ? "Flawless clinical judgment. You recognized cues, prioritized the hypothesis, and took the right actions." : "Review the rationales above. NGN cases reward recognizing the pattern across findings, not any single number."}</p>
           <button className="btn" onClick={() => setCaseIdx(null)}>Back to all cases</button>
         </section>
@@ -2342,7 +2507,7 @@ Explain it DIFFERENTLY from the textbook rationale: plain, everyday language a t
    - Generous spacing & chunking to protect working memory
 */
 
-function Style() {
+export function Style() {
   return (
     <style>{`
       .app{
@@ -2413,6 +2578,15 @@ function Style() {
       .btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
       .plan{display:flex;flex-wrap:wrap;gap:8px}
       .row{display:flex;gap:8px;flex-wrap:wrap}
+      /* Back / Next / Skip. Sticky so a long stem on a phone does not
+         bury the controls under the tab bar. 48px targets, three across. */
+      .q-nav-wrap{position:sticky;bottom:calc(62px + env(safe-area-inset-bottom));z-index:4;background:var(--card);padding:8px 0 2px;margin-top:12px;border-top:1px solid var(--line)}
+      .q-skipped{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+      .q-skipped-count{margin:0}
+      .q-skipped .btn{margin-top:0;min-height:48px;padding:10px 12px;font-size:14px}
+      .q-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+      .q-nav .btn{margin-top:0;min-height:48px;padding:12px 4px;font-size:16px}
+      .opt:disabled,.hl-token:disabled,.mx-cell:disabled{cursor:default}
       .bar{height:8px;background:var(--bar-bg);border-radius:99px;overflow:hidden;margin:8px 0 4px}
       .bar-fill{height:100%;background:var(--teal);border-radius:99px;transition:width .4s}
       .bar-fill.low{background:var(--coral)}
