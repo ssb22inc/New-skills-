@@ -76,6 +76,22 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.elements).toBe(1);
   });
 
+  it("keeps loading, then plays the clip, when this device has no voice and the audio is slow", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await strict({ speechFail: true });
+    await tap("play");
+    await gap(1100);
+    let s = await state();
+    expect(s.played).toEqual([]);
+    expect(s.status).toBe("loading");
+    await answer(ALL_READY);
+    s = await state();
+    expect(s.played).toEqual(["https://signed.example/1/stem"]);
+    expect(s.status).toBe("playing");
+    expect(s.source).toBe("ai");
+    expect(s.note).toBe(null);
+  });
+
   it("plays every passage on a strict-autoplay browser after one tap, even when the voice was not cached", async () => {
     await strict({ strict: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });

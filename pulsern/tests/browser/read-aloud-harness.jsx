@@ -13,7 +13,7 @@ import * as mod from "../../src/read-aloud.jsx";
 import { ExhibitTabs } from "../../src/exhibit-tabs.jsx";
 
 const SILENT_PREFIX = "data:audio/wav";
-const env = { gesture: false, strict: false, refuseUnlock: false, played: [], elements: [], spoken: [] };
+const env = { gesture: false, strict: false, refuseUnlock: false, speechFail: false, played: [], elements: [], spoken: [] };
 
 /* The number of samples in a base64 WAV data URL (its data chunk length). */
 function wavSamples(url) {
@@ -52,11 +52,13 @@ const speechMock = {
     u?.onerror?.({ error: "canceled" });
   },
   speak(u) {
+    if (env.speechFail) { u.onerror?.({ error: "synthesis-failed" }); return; }
     this.speaking = true;
     currentUtterance = u;
     env.spoken.push(u.text);
     u.onstart?.();
   },
+  getVoices() { return []; },
   pause() {},
   resume() {},
 };

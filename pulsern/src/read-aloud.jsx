@@ -285,6 +285,14 @@ export function unlockPlayer() {
 let synthProvider = () => globalThis.speechSynthesis;
 export function setSpeechSynth(provider) { synthProvider = typeof provider === "function" ? provider : () => provider; }
 const currentSynth = () => { try { return synthProvider(); } catch { return null; } };
+/* Chrome's voice list is empty until it has loaded. With no voice, falling
+   back early would hide a clip that is still on its way. */
+function voicesReady() {
+  try {
+    const list = currentSynth()?.getVoices?.();
+    return Array.isArray(list) && list.length > 0;
+  } catch { return false; }
+}
 
 function stopDeviceVoice() {
   try { currentSynth()?.cancel(); } catch { /* no device voice here */ }
@@ -364,7 +372,13 @@ export function useReadAloud(segments, key, ref = null) {
             wait(FIRST_BUDGET_MS, signal).then(() => ({ slow: true })),
           ]);
           if (signal.aborted || run.current !== me) return;
-          outcome = raced.slow ? (voice.peek(itemRef, segs[i].id, segs[i].text) || { status: 0 }) : raced.outcome;
+          /* No device voice: keep the loading state until this part's clip
+             comes back, instead of announcing "read this on screen" while
+             the audio is in flight. */
+          outcome = raced.slow && !voicesReady()
+            ? await tasks[i]
+            : raced.slow ? (voice.peek(itemRef, segs[i].id, segs[i].text) || { status: 0 }) : raced.outcome;
+          if (signal.aborted || run.current !== me) return;
         } else {
           outcome = await tasks[i];
           if (signal.aborted || run.current !== me) return;
@@ -378,23 +392,24 @@ export function useReadAloud(segments, key, ref = null) {
       setNote(step.silent ? "silent" : stepNote);
       setStatus("playing");
 
+      const playUrl = (url) => new Promise((resolve, reject) => {
+        const audio = unlockPlayer();
+        if (!audio) { reject(new Error("NO_AUDIO")); return; }
+        audio.src = url;
+        audio.playbackRate = prefsRef.current.rate;
+        audio.preservesPitch = true;
+        me.audio = audio;
+        audio.onended = resolve;
+        audio.onerror = () => reject(new Error("PLAYBACK"));
+        signal.addEventListener("abort", resolve, { once: true });
+        const started = audio.play();
+        if (started?.then) started.then(() => { audio.dataset.unlocked = "1"; }, reject);
+        else audio.dataset.unlocked = "1";
+      });
+
       if (step.silent) {
         await wait(readingMs(step.text, prefsRef.current.rate), signal);
       } else if (step.url) {
-        const playUrl = (url) => new Promise((resolve, reject) => {
-          const audio = unlockPlayer();
-          if (!audio) { reject(new Error("NO_AUDIO")); return; }
-          audio.src = url;
-          audio.playbackRate = prefsRef.current.rate;
-          audio.preservesPitch = true;
-          me.audio = audio;
-          audio.onended = resolve;
-          audio.onerror = () => reject(new Error("PLAYBACK"));
-          signal.addEventListener("abort", resolve, { once: true });
-          const started = audio.play();
-          if (started?.then) started.then(() => { audio.dataset.unlocked = "1"; }, reject);
-          else audio.dataset.unlocked = "1";
-        });
         try {
           await playUrl(clipSrc(step.url));
         } catch (e) {
@@ -426,8 +441,20 @@ export function useReadAloud(segments, key, ref = null) {
         if (signal.aborted || run.current !== me || why === "aborted") return;
         if (why === "blocked") { run.current = null; setActive(null); setStatus("blocked"); return; }
         if (why === "unsupported" || why === "error") {
-          setSilent(true); setSource("screen"); setNote("silent");
-          await wait(readingMs(step.text, prefsRef.current.rate), signal);
+          const late = voice.peek(itemRef, segs[i].id, segs[i].text) || await tasks[i];
+          if (late?.url && !signal.aborted && run.current === me) {
+            setSource("ai"); setSilent(false); setNote(null);
+            try { await playUrl(clipSrc(late.url)); }
+            catch (e3) {
+              if (signal.aborted || run.current !== me) return;
+              if (e3?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
+              setSilent(true); setSource("screen"); setNote("silent");
+              await wait(readingMs(step.text, prefsRef.current.rate), signal);
+            }
+          } else {
+            setSilent(true); setSource("screen"); setNote("silent");
+            await wait(readingMs(step.text, prefsRef.current.rate), signal);
+          }
         }
       }
       if (!signal.aborted && run.current === me && i < segs.length - 1) await wait(GAP_MS, signal);
@@ -519,7 +546,7 @@ export function ReadAloudBar({ reader, label = "Listen", hint }) {
     : status === "unavailable" ? "unavailable"
     : null;
   const note = shown ? NOTES[shown] : null;
-  const voiceLabel = source === "device" ? "Device voice" : "AI voice";
+  const voiceLabel = source === "device" ? "Device voice" : source === "screen" ? "On screen" : "AI voice";
   return (
     <div className="ra-bar" role="group" aria-label="Read aloud">
       <button type="button" className="btn ra-main" onClick={main.on} aria-label={main.aria} aria-pressed={status === "playing"}>{main.text}</button>
