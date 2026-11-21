@@ -1,0 +1,41 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "e390534b09f8259c6c0bd0d6251ba19ab8df030d",
+    "head": "10d6fdf32312175a9239226fb5990ae9e7e457da",
+    "pr": "172"
+  },
+  "reviewedAt": "2026-11-21T05:35:00.616Z",
+  "filesReviewed": [
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 690,
+      "title": "Unfinished migration overrides budget and failure circuit breakers",
+      "problem": "`keepGoing = more || legacy.done === false` emits `more=true` whenever migration is unfinished, even when `runJob()` deliberately returns `more=false` because the daily budget is exhausted, provider credentials are invalid, repeated refusals indicate a setup problem, or an operational failure made no progress. This contradicts the worker's documented continuation policy.",
+      "failure_scenario": "The migration pauses after its time slice, then Polly returns 401. `runJob()` reports a setup failure and disables continuation, but the CLI writes `more=true` to GITHUB_OUTPUT anyway. A workflow honoring that output is instructed to relaunch against the same broken configuration. Exhausting the daily speech budget during an unfinished migration similarly requests immediate follow-up runs despite there being no capacity to voice anything.",
+      "fix": "Combine unfinished-migration work with the normal work-remaining condition before applying the existing setup, budget, and failure/progress guards. Return the necessary state from `runJob()` or move the combined continuation decision into it. Add tests for unfinished migration alongside budget exhaustion, setup failure, and failure without progress, as well as the healthy continuation case.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 27387,
+    "completionTokens": 2655,
+    "reasoningTokens": 2300,
+    "costUsd": 0.095016
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The resumable migration has one orchestration defect: its continuation flag overrides the worker's budget and provider-failure stop conditions. The added tests do not cover this combination.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
