@@ -115,12 +115,12 @@ export const WARM_MAX = 8;
 export function createWarmCache({ max = WARM_MAX, revoke = (objectUrl) => { try { URL.revokeObjectURL(objectUrl); } catch { /* already gone */ } } } = {}) {
   const map = new Map(); // signed url -> object url, or null while downloading
   const gen = new Map();
-  const playing = new Set();
+  let playing = "";
   function evict() {
     for (const key of [...map.keys()]) {
       if (map.size <= max) break;
       const value = map.get(key);
-      if (typeof value === "string" && playing.has(value)) continue;
+      if (typeof value === "string" && value === playing) continue;
       gen.set(key, (gen.get(key) || 0) + 1);
       map.delete(key);
       if (typeof value === "string") revoke(value);
@@ -151,7 +151,9 @@ export function createWarmCache({ max = WARM_MAX, revoke = (objectUrl) => { try 
       map.set(url, value);
       return value;
     },
-    hold(objectUrl) { if (objectUrl) playing.add(objectUrl); },
+    /* Only the clip in the player is protected, and only until release. */
+    hold(objectUrl) { playing = objectUrl || ""; evict(); },
+    release() { playing = ""; evict(); },
     size() { return [...map.values()].filter((value) => typeof value === "string").length; },
   };
 }
@@ -233,17 +235,17 @@ export function silentWav(ms = 100) {
 }
 export const SILENT = silentWav();
 let player = null;
-export function unlockPlayer() {
+export function unlockPlayer({ gesture = false } = {}) {
   if (typeof Audio === "undefined") return null;
   if (!player) { player = new Audio(); player.dataset.readAloud = "1"; player.preload = "auto"; }
-  /* Prime once, while src is still empty. A later part must not be put back
-     to silence: that happens if the first play() was interrupted and the
-     unlocked flag never landed, and a strict browser would then refuse it. */
-  if (!player.dataset.unlocked && !player.src) {
-    player.src = SILENT;
-    const p = player.play();
-    if (p?.then) p.then(() => { player.dataset.unlocked = "1"; }, () => {});
-  }
+  if (player.dataset.unlocked) return player;
+  /* A Listen tap retries the unlock even if an earlier attempt failed and
+     left a src behind. Playback of a real passage does not, so it is not
+     put back to silence. */
+  if (!gesture && player.src) return player;
+  player.src = SILENT;
+  const p = player.play();
+  if (p?.then) p.then(() => { player.dataset.unlocked = "1"; }, () => {});
   return player;
 }
 
@@ -278,6 +280,7 @@ export function useReadAloud(segments, key, ref = null) {
       r.ctrl.abort();
       if (r.audio) { r.audio.onended = null; r.audio.onerror = null; r.audio.pause(); }
     }
+    clips.release();
   }, []);
 
   const playFrom = React.useCallback(async (start) => {
@@ -377,11 +380,11 @@ export function useReadAloud(segments, key, ref = null) {
 
   /* Listen and Resume are taps: unlock the shared player inside them,
      before any waiting, so the audio that follows is allowed. */
-  const play = React.useCallback(() => { unlockPlayer(); return playFrom(0); }, [playFrom]);
+  const play = React.useCallback(() => { unlockPlayer({ gesture: true }); return playFrom(0); }, [playFrom]);
   /* Pause stops at the current part; resume repeats that part from its
      start, so no sentence is heard in two halves. */
   const pause = React.useCallback(() => { halt(); setStatus("paused"); }, [halt]);
-  const resume = React.useCallback(() => { unlockPlayer(); return playFrom(resumeAt.current); }, [playFrom]);
+  const resume = React.useCallback(() => { unlockPlayer({ gesture: true }); return playFrom(resumeAt.current); }, [playFrom]);
   const stop = React.useCallback(() => { halt(); resumeAt.current = 0; setActive(null); setSilent(false); setSource(null); setNote(null); setStatus("idle"); }, [halt]);
   stopRef.current = stop;
 

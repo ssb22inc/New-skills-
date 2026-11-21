@@ -116,6 +116,19 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.emptySamples).toBe(0); // an empty WAV (no samples) is what a decoder may refuse
   });
 
+  it("retries the unlock on the next item when the first tap was refused and the clip is not cached yet", async () => {
+    await strict({ strict: true, refuseUnlock: true });
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await answer(ALL_READY);
+    expect((await state()).status).toBe("blocked");
+    await strict({ refuseUnlock: false });
+    await render({ segments: SEGS, itemKey: "q:2", itemRef: REF(2) });
+    await tap("play"); // the clip is still in flight; this tap has to unlock
+    await answer(ALL_READY);
+    expect((await state()).played).toContain("https://signed.example/2/stem");
+  });
+
   it("asks for one more tap when the browser holds the sound back, and then plays", async () => {
     await strict({ strict: true, refuseUnlock: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });

@@ -563,6 +563,20 @@ describe("the controls", () => {
     expect(cache.finish("e", late, "blob-e")).toBe("stale");
   });
 
+  it("protects only the clip in the player, and warms another after it is released", () => {
+    const revoked = [];
+    const cache = createWarmCache({ max: 1, revoke: (objectUrl) => revoked.push(objectUrl) });
+    const a = cache.start("a");
+    expect(cache.finish("a", a, "blob-a")).toBe("kept");
+    cache.hold("blob-a");
+    expect(cache.start("b")).toBe(0); // the playing clip fills the only slot
+    cache.release();
+    const b = cache.start("b");
+    expect(cache.finish("b", b, "blob-b")).toBe("kept");
+    expect(revoked).toContain("blob-a");
+    expect(cache.size()).toBe(1);
+  });
+
   it("gives a part shown on screen time to be read", () => {
     expect(readingMs("one two")).toBe(2000);
     expect(readingMs(Array(30).fill("w").join(" "))).toBe(10000);
