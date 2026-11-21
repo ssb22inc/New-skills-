@@ -1,0 +1,55 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9ccff01052bee2cc97d20200adc7a3c5e6b4530f",
+    "head": "4a8f875782fd50f6d2f208ce73998ea086035f5b",
+    "pr": "170"
+  },
+  "reviewedAt": "2026-11-21T02:15:42.041Z",
+  "filesReviewed": [
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/tests/browser/read-aloud-harness.jsx",
+      "line": 16,
+      "title": "The no-device-speech assertion observes an array that nothing writes",
+      "problem": "The harness initializes env.spoken to [] and exposes it through state(), but never instruments speechSynthesis.speak or otherwise records device speech. Consequently, the new expect(s.spoken ?? []).toEqual([]) assertion always passes, regardless of whether unchecked device speech occurs. The separate source-text check only detects literal API names in read-aloud.jsx; it does not make this browser assertion effective.",
+      "failure_scenario": "An unavailable-audio fallback calls device speech through an imported helper. Students hear unchecked clinical text, but FakeAudio records nothing, env.spoken remains empty, and the browser safety assertion still passes. The source-text check also misses the helper implementation.",
+      "fix": "Instrument the actual Web Speech entry points in the harness to record or reject every speak call, and assert against that observation. Verify the guard by deliberately invoking device speech and confirming the test fails.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 122,
+      "title": "Prefetched audio blobs are retained for the entire app session",
+      "problem": "Every successful warmClip download creates an object URL and retains it in the module-global warmed map. Nothing evicts entries or calls URL.revokeObjectURL. Because warming now runs whenever an item appears, this retains all downloaded audio even when students never press Listen. Renewed signed URLs can also retain additional copies of the same clip.",
+      "failure_scenario": "During a long QBank or flashcard session, each viewed item's clips remain backed by retained Blobs after the student moves on. Memory consumption grows with the total audio downloaded rather than the current working set, potentially exhausting a mobile tab's memory and interrupting the session.",
+      "fix": "Use a bounded audio cache with eviction and URL.revokeObjectURL, protecting any clip currently playing. Ensure late downloads cannot repopulate evicted entries indefinitely, and add coverage for successful blob warming and eviction.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 52636,
+    "completionTokens": 5733,
+    "reasoningTokens": 5178,
+    "costUsd": 0.1889185
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The checked-audio-only policy remains intact in the supplied production code, but the new audio prefetching leaks retained audio data, and a browser safety assertion cannot detect the unchecked speech it claims to guard against. These should be fixed before release.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
