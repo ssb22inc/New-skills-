@@ -1,0 +1,88 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "05e4b04d35faa656d31749f8baa652d07900d3cd",
+    "head": "9c78aa635e3384a76f0fd1bf702d439fd6ae3ff8",
+    "pr": "171"
+  },
+  "reviewedAt": "2026-11-21T03:44:53.642Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/tests/polly-voice.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 646,
+      "title": "Every nonempty audio response now automatically passes clinical QA",
+      "problem": "makeChecked returns pass: true and similarity: 1 without examining the audio, and saveChecked persists that fabricated verdict for student playback. An audio hash binds bytes to a record; it does not establish that those bytes say the approved text. Switching speech providers does not justify removing the accuracy gate for newly generated clinical audio.",
+      "failure_scenario": "A synthesis misreads potassium 2.9 as 9.2, drops a negation, or changes a medication unit. Any nonempty response is saved as passing and subsequently served to students without further review. The revised tests explicitly accept playback while removing the previous wrong-number rejection assertions.",
+      "fix": "Restore independent verification of the actual audio before publication, including word, number, negation, unit and frequency checks. Failed or unverifiable clips must remain screen-only. Restore end-to-end tests that supply incorrect spoken content and assert that no playable clip is published.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 621,
+      "title": "Production Polly requests do not obey the passage deadline",
+      "problem": "The Polly SDK send call receives no abort signal, and reading AudioStream is also unbounded. CALL.ms is applied only to the fetchImpl branch used by tests. Consequently, the production implementation does not uphold the lease's guarantee that paid work finishes before takeover.",
+      "failure_scenario": "Polly or its response stream stalls beyond PASSAGE_LEASE_MS. Another worker can acquire the expired passage claim and start another synthesis while the original holder is still working. A stalled call can also consume the workflow timeout without saving progress or emitting continuation outputs. The existing abort test still passes because it exercises only the test-only fetch branch.",
+      "fix": "Apply a deadline-bound abort signal to the SDK request and bound response-stream consumption, including SDK retries. Recalculate remaining time after budget reservation. Test these guarantees through a polly.send fake, including a stalled request and a stalled AudioStream.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 596,
+      "title": "AWS authentication errors with HTTP 400 are recorded as bad passages",
+      "problem": "pollyFailure checks the blanket status === 400 condition before checking named account errors. AWS UnrecognizedClientException commonly carries HTTP 400, so the later service-error classification for that exception is unreachable in that case.",
+      "failure_scenario": "An invalid AWS access key produces UnrecognizedClientException with HTTP 400. The worker saves seven-day rejection records for valid passages and deletes their queue entries. After three such refusals it stops, but subsequent scheduled runs repeat the damage on more passages. Correcting the credentials does not immediately restore the already rejected passages.",
+      "fix": "Classify named authentication/setup errors before generic status handling, and distinguish AWS throttling/transient exceptions from passage-validation failures. Add tests using actual SDK-shaped exceptions with both name and $metadata.httpStatusCode.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 516,
+      "title": "The new startup migration fails before first-use bucket creation",
+      "problem": "queueLegacyMarin tolerates a missing bucket while reading, but writes its completion marker through the worker's upload-only put helper. It never creates the bucket. The CLI runs this migration before runJob, where budget reservation could otherwise create the private bucket.",
+      "failure_scenario": "AWS and Supabase credentials are configured, but the read-aloud bucket does not yet exist. The migration finds no legacy clips, then its marker upload fails with Bucket not found. Every scheduled run exits before voicing anything until a separate Listen request happens to create the bucket.",
+      "fix": "Ensure the private bucket exists before migration writes, handling an already-existing bucket safely, or use a storage-writing helper with the existing first-use creation behavior. Add a startup test with missingBucket enabled.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/tests/polly-voice.test.js",
+      "line": 24,
+      "title": "The dollar-cap test never exercises dollar-cap enforcement",
+      "problem": "The test checks only that configuration converts dollars into a character allowance. The new reserveSpeechCost enforcement is not exercised: the worker tests pass limits without chars, which deliberately bypasses that branch. Removing character reservations entirely would leave the supplied tests green.",
+      "failure_scenario": "A regression stops reserving character slots while retaining the 15,000-passage cap. Long passages can then exceed the advertised $40 daily ceiling, yet the test named caps a day by the dollar env continues to pass.",
+      "fix": "Exercise the worker with limits containing a character budget and a Polly SDK fake. Assert that actual synthesis stops at the character allowance, oversized remaining work stays queued, storage failures fail closed, and concurrent reservations cannot exceed the allowance.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 90139,
+    "completionTokens": 9719,
+    "reasoningTokens": 8516,
+    "costUsd": 0.322536
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. Audio is now marked as verified without an accuracy check, and the production Polly path has timeout and error-classification defects. First-use startup and dollar-cap test coverage also need fixes.",
+  "counts": {
+    "blocker": 1,
+    "major": 4,
+    "minor": 0
+  }
+}
