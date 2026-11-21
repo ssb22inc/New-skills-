@@ -96,7 +96,7 @@ async function lanePage(bucket, dir, offset) {
 /* onChecked: called for every passage that got a verdict (voiced, or
    failed the check), so the caller knows work was done even if a later
    step throws. */
-export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, onChecked = () => {} }) {
+export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, onChecked = () => {}, preserveLegacy = false }) {
   const bucket = storage.from(BUCKET);
   const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, chars: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
   let inARow = 0, refusedInARow = 0, done = 0;
@@ -129,6 +129,10 @@ export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, ma
       const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
       if (got.error) { out.operational = true; out.errors.push(`${f.name}: could not read (${got.error.message ?? got.error})`); continue; }
       const raw = got.value;
+      /* The revoice walk has not finished. A marin request still in the
+         queue is waiting for the next slice; deleting it here would drop
+         a student's ask that has no saved clip to recover it from. */
+      if (preserveLegacy && raw?.voice === MARIN_TTS.voice) continue;
       const ref = canonicalRef(raw?.ref);
       const paths = raw && typeof raw.text === "string" ? passagePaths(raw.text) : null;
       // A passage that is never voiced (voiceable) is not work: dropped, not refused.
@@ -431,10 +435,10 @@ export async function pruneClaims({ bucket, now }) {
    pruning. failed: true for any operational failure, which fails the
    workflow run. Caps always come from LIMITS (api/_speak.js), the same
    values the route uses. */
-export async function runJob({ storage, db, polly, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity }) {
+export async function runJob({ storage, db, polly, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, preserveLegacy = false }) {
   let q, checked = 0;
   const onChecked = () => { checked++; };
-  try { q = await drainQueue({ storage, polly, apiKey, fetchImpl, max, now, limits, log, until, onChecked }); }
+  try { q = await drainQueue({ storage, polly, apiKey, fetchImpl, max, now, limits, log, until, onChecked, preserveLegacy }); }
   catch (e) { q = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, errors: [String(e?.message ?? e)], broken: true }; }
   const left = Math.max(0, max - (q.voiced + q.failed + q.rejected + q.retried));
   // The bank waits for a clean queue run: after any operational failure the
@@ -620,11 +624,13 @@ export async function queueLegacyMarin({ storage, db, log = () => {}, page = 200
         if (queued % 100 === 0) log(`Requeued ${queued} marin passages.`);
         if (batch.length >= 25) await flush();
       }
+      /* The place moves past this row only after its passages are stored.
+         A failed flush leaves the place where it was. */
+      await flush();
       place.afterId = row.id;
+      await savePlace();
     }
-    await savePlace();
   }
-  await flush();
   if (paused || kind) {
     await savePlace();
     log(`Requeued ${queued} marin passages this slice; the walk is not finished, so clips already queued will be voiced now.`);
@@ -680,7 +686,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
   console.log(legacy.already ? "Marin clips were already queued for Joanna." : `Requeue ${legacy.done ? "finished" : "paused"} (${legacy.queued} added this slice). Speaking what is already queued.`);
-  const { lines, failed, more } = await runJob({ storage: db.storage, db, polly, max, until, limits });
+  const { lines, failed, more } = await runJob({ storage: db.storage, db, polly, max, until, limits, preserveLegacy: legacy.done === false });
   const keepGoing = more || legacy.done === false;
   console.log(lines.join("\n") + (keepGoing ? "\nMore to do: starting the next run." : ""));
   if (process.env.GITHUB_OUTPUT) {

@@ -1423,6 +1423,41 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     expect(queued).toBe(r.queued);
   });
 
+  it("does not move the revoice place past a row whose upload failed", async () => {
+    const { storage, files } = fakeStorage();
+    const row = { id: 4, type: "mc", stem: "Stem.", options: ["A"], answer: 0, rationale: "Because." };
+    const part = itemParts("question", row)[0];
+    files.set(`marin/${speechKey(part.text, MARIN_TTS)}.mp3`, Buffer.from("old"));
+    const real = storage.from(BUCKET);
+    const broken = { ...storage, from: () => ({ ...real, upload: async (p, b, o) => (p.startsWith("queue/Joanna-") ? { error: { message: "storage full" } } : real.upload(p, b, o)) }) };
+    const db = fakeDb({ questions: [row], case_studies: [], flashcards: [] });
+    await expect(queueLegacyMarin({ storage: broken, db, log: () => {} })).rejects.toThrow(/queue a legacy clip/);
+    const place = files.has("prewarm/polly-revoice-at.json") ? JSON.parse(files.get("prewarm/polly-revoice-at.json").toString()) : { afterId: 0 };
+    expect(place.afterId ?? 0).toBeLessThan(row.id);
+    expect(files.has("prewarm/polly-revoice.json")).toBe(false);
+    const again = await queueLegacyMarin({ storage, db, log: () => {} });
+    expect(again.done).toBe(true);
+    expect(files.has(passagePaths(part.text).queue)).toBe(true);
+  });
+
+  it("keeps an unmigrated marin request when the slice ends and the voice job runs", async () => {
+    const { storage, files } = fakeStorage();
+    const text = "Potassium 2.9 milliequivalents per liter.";
+    const path = `queue/marin-held.json`;
+    files.set(path, Buffer.from(JSON.stringify({ text, voice: "marin", ref: Q1.ref, seg: "card-front" })));
+    const r = await queueLegacyMarin({
+      storage,
+      db: fakeDb({ questions: [], case_studies: [], flashcards: [{ id: 4, front: "Potassium 2.9 mEq/L.", back: "" }] }),
+      until: 1,
+      now: () => 5,
+      log: () => {},
+    });
+    expect(r.done).toBe(false);
+    expect(files.has(path)).toBe(true);
+    await drainQueue({ storage, preserveLegacy: true, fetchImpl: fakeOpenAI(), log: () => {} });
+    expect(files.has(path)).toBe(true);
+  });
+
   it("does not upload a marin passage that is already in the Joanna queue", async () => {
     const { storage, files } = fakeStorage();
     const row = { id: 4, type: "mc", stem: "Stem.", options: ["A"], answer: 0, rationale: "Because." };
