@@ -183,12 +183,13 @@ export function nextUnvisited(nav, ids) {
   return null;
 }
 
-/* Practice blocks pause every 8 answers. The Today round ends at its
-   limit instead, and a skip never reaches either (answered is false).
-   fromBreak is the "one more block" button, which must not pause again. */
+/* Practice blocks pause every 8 answers. The Today round ends once that
+   many answers are in, including when the question on screen was skipped
+   after an earlier one was answered. A skip with the limit still unmet
+   does not end it. fromBreak is "one more block", which must not pause again. */
 export function checkpointAfter(sessionN, { auto = false, fromBreak = false, atEnd = false, answered = false, roundLimit = null } = {}) {
+  if (atEnd && roundLimit != null && sessionN >= roundLimit) return "done";
   if (!answered || !atEnd) return null;
-  if (roundLimit != null && sessionN >= roundLimit) return "done";
   if (!auto && !fromBreak && sessionN > 0 && sessionN % 8 === 0) return "break";
   return null;
 }

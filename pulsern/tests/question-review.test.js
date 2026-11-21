@@ -1,6 +1,6 @@
 /* Missed questions come back on a real LOCAL calendar date. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool } from "../src/question-review.js";
+import { updateMissSchedule, deriveMissSchedule, reviewPools, todayPool, sessionPool } from "../src/question-review.js";
 import { migrateBlob } from "../src/state.js";
 
 const CATS = [
@@ -119,5 +119,20 @@ describe("Today round and Review Misses pools", () => {
   it("a due date arriving on the next local day brings the miss back", () => {
     vi.setSystemTime(new Date(2026, 9, 17, 0, 5, 0)); // just after local midnight
     expect(todayPool(bank, log, schedule, fresh).map((x) => x.id)).toContain(2);
+  });
+
+  it("drops a skipped due review before the due-only shortcut, so new questions remain", () => {
+    const pool = sessionPool(bank, { log, schedule, fresh, mode: "today", held: [1, 3] });
+    expect(pool.map((x) => x.id)).toEqual([4, 5]);
+  });
+
+  it("still serves another due review ahead of new questions", () => {
+    const pool = sessionPool(bank, { log, schedule, fresh, mode: "today", held: [1] });
+    expect(pool.map((x) => x.id)).toEqual([3]);
+  });
+
+  it("Review misses reaches a miss that is not due once the due ones are held", () => {
+    const pool = sessionPool(bank, { log, schedule, fresh, mode: "review", held: [1, 3] });
+    expect(pool.map((x) => x.id)).toEqual([2]);
   });
 });

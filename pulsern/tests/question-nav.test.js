@@ -186,8 +186,10 @@ describe("back, next, and skip", () => {
     expect(heldIds(nav)).toEqual([0, 1]);
   });
 
-  it("ends a round on answers only, never on a skip", () => {
-    expect(checkpointAfter(8, { answered: false, atEnd: true, roundLimit: 8, auto: true })).toBeNull();
+  it("ends the Today round once the answer limit is met, even if the question on screen was skipped", () => {
+    expect(checkpointAfter(0, { answered: false, atEnd: true, roundLimit: 1, auto: true })).toBeNull();
+    expect(checkpointAfter(1, { answered: false, atEnd: true, roundLimit: 1, auto: true })).toBe("done");
+    expect(checkpointAfter(1, { answered: false, atEnd: false, roundLimit: 1, auto: true })).toBeNull();
     expect(checkpointAfter(8, { answered: true, atEnd: true, roundLimit: 8, auto: true })).toBe("done");
     expect(checkpointAfter(1, { answered: true, atEnd: true, roundLimit: 1, auto: true })).toBe("done");
     expect(checkpointAfter(8, { answered: true, atEnd: true, auto: false })).toBe("break");

@@ -69,3 +69,21 @@ export function todayPool(questions, log, schedule, freshPool, today = todayStr(
   const waiting = (q) => !!schedule?.[q.id] && !isDue(schedule, q.id, today);
   return [...misses.filter((q) => !waiting(q)), ...freshPool];
 }
+
+/* The questions a sitting may draw next. Ids already opened this sitting
+   (including a skip) are removed BEFORE the due-only shortcut. Skipping the
+   only due review must fall through to other misses and new questions,
+   and Review misses must still reach a miss that is not due yet. */
+export function sessionPool(questions, { log, schedule, fresh, mode, held = [], today = todayStr() } = {}) {
+  const skip = new Set(held);
+  const visible = (questions ?? []).filter((q) => q && !skip.has(q.id));
+  if (mode === "review") {
+    const { due, review } = reviewPools(visible, log, schedule, today);
+    return due.length ? due : review;
+  }
+  if (mode === "today") {
+    const visibleFresh = (fresh ?? []).filter((q) => q && !skip.has(q.id));
+    return todayPool(visible, log, schedule, visibleFresh, today);
+  }
+  return (fresh ?? []).filter((q) => q && !skip.has(q.id));
+}

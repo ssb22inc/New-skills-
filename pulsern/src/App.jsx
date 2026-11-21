@@ -261,7 +261,7 @@ import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard } from "./srs.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
-import { updateMissSchedule, reviewPools, todayPool } from "./question-review.js";
+import { updateMissSchedule, reviewPools, sessionPool } from "./question-review.js";
 import {
   emptyNav, appendQuestion, saveDraft, markAnswered, canGoBack, goBack, present,
   forward, fallbackSkip, jumpToSkipped, skippedCount, currentEntry, nextUnvisited,
@@ -1378,12 +1378,6 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
      on demand, due ones first. */
   const focused = questions.filter(inFocus);
   const { due: duePool, review: reviewPool } = reviewPools(focused, log, missSchedule, todayStr());
-  const reviewNext = (exclude) => {
-    const due = duePool.filter((x) => x.id !== exclude);
-    return due.length ? due : reviewPool.filter((x) => x.id !== exclude);
-  };
-  // Today round: due reviews first, then new questions and unscheduled misses.
-  const autoPool = (exclude) => todayPool(focused, log, missSchedule, freshPool, todayStr()).filter((x) => x.id !== exclude);
 
   const reveal = (navState, knownQ) => {
     const view = present(navState);
@@ -1410,10 +1404,14 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     setPhase("answering");
   };
 
-  const pickFrom = (basePool, navState = null) => {
-    const trail = navState ?? nav;
-    const exclude = new Set(heldIds(trail));
-    let pool = (basePool ?? []).filter((x) => !exclude.has(x.id));
+  const pickFrom = (navState, poolMode) => {
+    const trail = navState ?? emptyNav();
+    const which = poolMode ?? (auto ? "today" : (mode === "review" ? "review" : "new"));
+    /* Held questions are dropped inside sessionPool, before a due-only
+       pool can hide everything else. */
+    let pool = sessionPool(focused, {
+      log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail),
+    });
     if (!pool.length) {
       const fb = fallbackSkip(trail);
       if (fb) { reveal(fb); return; }
@@ -1448,8 +1446,6 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     reveal(appendQuestion(trail, pick.id), pick);
   };
 
-  const basePool = () => (auto ? autoPool(null) : (mode === "review" ? reviewNext(null) : freshPool));
-
   /* Next on an unanswered question skips it: no log line, no schedule,
      no ability change. An answered question just moves. */
   const continueFrom = (fromNav, { fromBreak = false } = {}) => {
@@ -1466,7 +1462,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     if (gate === "break") { setPhase("break"); return; }
     const moved = forward(fromNav, { skipIfOpen: true });
     if (moved.effect.type !== "need-question") { reveal(moved.nav); return; }
-    pickFrom(basePool(), moved.nav);
+    pickFrom(moved.nav);
   };
 
   const submit = () => {
@@ -1496,8 +1492,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   // autopilot: start immediately: due reviews first, then new questions
   useEffect(() => {
     if (auto && phase === "pick") {
-      const pool = autoPool(null);
-      if (pool.length) pickFrom(pool, emptyNav()); else onDone?.();
+      const pool = sessionPool(focused, { log, schedule: missSchedule, fresh: freshPool, mode: "today", held: [] });
+      if (pool.length) pickFrom(emptyNav(), "today"); else onDone?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto]);
@@ -1559,8 +1555,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
 
         <p className="small mono">{freshPool.length} new · {reviewPool.length} to review ({duePool.length} due today) · difficulty target {diffTarget}/3</p>
         <div className="row">
-          <button className="btn" onClick={() => { setMode("new"); pickFrom(freshPool); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
-          <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(reviewNext(null)); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
+          <button className="btn" onClick={() => { setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
+          <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(emptyNav(), "review"); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
         {addQuestions && isOwner && <Generator provider={provider} addQuestions={addQuestions} log={log} questions={questions} lowOnNew={freshPool.length < 5} />}
 
