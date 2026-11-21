@@ -6,6 +6,7 @@
  * the newest attested live check, the newest `done` report and the phase. It
  * makes no AI call and reads no service at request time — the Worker it
  * ships in imports no engine module that can (asserted on the bundle). */
+import { parseLiveReport as parseLive } from "./live-lib.mjs";
 
 /** Plain-English names for the live checks, in display order. */
 export const LIVE_CHECK_NAMES = Object.freeze({
@@ -16,22 +17,11 @@ export const LIVE_CHECK_NAMES = Object.freeze({
   "airbyte-token": "Airbyte: data connectors can sign in",
 });
 
-/** A live check report → its verdict, tree, start time and rows. Only rows
- * whose id is a known check are kept, so a malformed report cannot inject
- * a row. Returns null for anything that is not a live check report. */
+/** A live check report → the shared parse (live-lib), with plain-English
+ * names for the page. */
 export function parseLiveReport(md) {
-  const text = String(md ?? "");
-  if (!/^# LIVE CHECK phase\d+$/m.test(text)) return null;
-  const verdict = /^Verdict: (PASS|FAIL)$/m.exec(text)?.[1] ?? null;
-  const tree = /^verified-tree: ([0-9a-f]{40})$/m.exec(text)?.[1] ?? null;
-  const started = /Started (\d{4}-\d{2}-\d{2}T[\d:.]+Z)/.exec(text)?.[1] ?? null;
-  if (!verdict || !tree) return null;
-  const rows = [];
-  for (const line of text.split("\n")) {
-    const m = /^\| ([a-z-]+) \| .*? \| (PASS|FAIL) \| (.*) \|$/.exec(line);
-    if (m && Object.hasOwn(LIVE_CHECK_NAMES, m[1])) rows.push({ id: m[1], name: LIVE_CHECK_NAMES[m[1]], status: m[2], observed: m[3].replace(/\\\|/g, "|") });
-  }
-  return { verdict, tree, started, rows };
+  const p = parseLive(md);
+  return p && { ...p, rows: p.rows.map((r) => ({ ...r, name: LIVE_CHECK_NAMES[r.id] ?? r.id })) };
 }
 
 /** The newest live report among file names: timestamped names
@@ -77,7 +67,6 @@ export const LEFT_BEFORE_LAUNCH = Object.freeze([
   Object.freeze({ who: "you", what: "Approve the starting 'A-grade' thresholds Fullburn grades itself against." }),
   Object.freeze({ who: "you", what: "Register fullburn.ai and complete the formal trademark check." }),
   Object.freeze({ who: "Claude", what: "Deploy the encrypted vault (keys stored in a Cloudflare Durable Object, rotated on a schedule)." }),
-  Object.freeze({ who: "Claude", what: "Teach the completion check to read the signed live-check report, so live results count toward 'done'." }),
   Object.freeze({ who: "the reviewer", what: "A clean pass from the independent AI reviewer (GPT-6 Luna) on the finished Phase 0 code." }),
 ]);
 

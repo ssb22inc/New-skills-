@@ -261,8 +261,27 @@ describe("what the scan reads, and what it does with what it finds (runner audit
 
     /** WHAT THE SCAN ACTUALLY OPENS, not what a filename predicate says about
      * it. This is the half that makes SKIP_DIRS reachable by this test. */
-    const visited = new Set<string>();
-    for (const abs of walk(repoRoot) as Iterable<string>) visited.add(relative(repoRoot, abs));
+    /** ONE NAMED CONCURRENT WRITER (measured 2026-10-24, CI shuffle stage):
+     * the lint integration test plants `engine/test/zz-lint-plant-<pid>-*.ts`
+     * for a few hundred milliseconds, and a walk that lists it and then stats
+     * it after removal throws ENOENT. Only that file pattern is retried, and
+     * at most three times; any other path the walk cannot stat still fails
+     * this test, because a skip clause is how this check once hid files. */
+    const walkOnce = () => {
+      const seen = new Set<string>();
+      for (const abs of walk(repoRoot) as Iterable<string>) seen.add(relative(repoRoot, abs));
+      return seen;
+    };
+    let visited = new Set<string>();
+    for (let attempt = 1; ; attempt++) {
+      try {
+        visited = walkOnce();
+        break;
+      } catch (e) {
+        const path = String((e as { path?: unknown }).path ?? "");
+        if (attempt >= 3 || (e as { code?: unknown }).code !== "ENOENT" || !/\/engine\/test\/zz-lint-plant-\d+-\w+\.ts$/.test(path)) throw e;
+      }
+    }
     expect(visited.size, "the walk visited nothing — this test would pass vacuously").toBeGreaterThan(100);
 
     const { unread, unreadable } = auditReadCoverage(tracked, visited, (f) => readBytes(`${repoRoot}/${f}`));

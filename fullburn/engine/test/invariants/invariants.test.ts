@@ -1526,6 +1526,8 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
     // @ts-expect-error — plain .mjs module, typed loosely on purpose
     const previewLib = await import("../../scripts/preview-lib.mjs");
     const demo = await import("../../src/preview/demo-engine.ts");
+    // @ts-expect-error — plain .mjs module, typed loosely on purpose
+    const liveLib = await import("../../scripts/live-lib.mjs");
 
     const clients = Object.keys(CAPS_TABLE);
     const ledgerSrc = readFileSync(new URL("../../src/spend-ledger.ts", import.meta.url), "utf8");
@@ -1950,6 +1952,21 @@ describe("§10.2 standing invariants — enumerated checklist", () => {
           utcMeter.settle(utcMeter.reserve("pulsern", 1));
           const utcDayDiffers = utc !== local && localMidnightUtc !== instant;
           return spentOnClientDay && utcDayDiffers && utcLed.committedMicros("pulsern", "day") === 1_000_000;
+        },
+      },
+      {
+        row: "L81",
+        claim: "AC1-live and D-warehouse pass only on an attested PASS live report at this tree whose own checks passed; a report at another tree is never picked",
+        holds: () => {
+          const tree = "e".repeat(40);
+          const rows = ["gateway-hello-world", "langfuse-trace", "clickhouse-query", "airbyte-token"].map((id) => ({ id, status: "PASS" }));
+          const ok = { file: "f", live: { verdict: "PASS", tree, rows }, tree, provenance: { ok: true, reason: "r" } };
+          return (
+            doneLib.liveRequirementCondition("AC1-live", ok).status === "PASS" &&
+            doneLib.liveRequirementCondition("AC1-live", { ...ok, provenance: { ok: false, reason: "x" } }).status === "FAIL" &&
+            doneLib.liveRequirementCondition("D-warehouse", { ...ok, live: { ...ok.live, tree: "f".repeat(40) } }).status === "FAIL" &&
+            liveLib.pickLiveReportForTree([`LIVE_CHECK_phase0_${"f".repeat(12)}_20261023T000000Z.md`], tree) === null
+          );
         },
       },
       {
@@ -2429,9 +2446,10 @@ const RUNNER_BINDINGS: readonly RunnerBinding[] = [
     // DONE.md §3 — the completion checker. Every verdict it reaches is a
     // done-lib decision; the gate parsers it consults are gate-lib's.
     runner: "engine/scripts/done.mjs",
-    decisions: ["./done-lib.mjs", "./gate-lib.mjs", "./mutate-lib.mjs"],
+    decisions: ["./done-lib.mjs", "./gate-lib.mjs", "./mutate-lib.mjs", "./live-lib.mjs"],
     provenBy: [
       "engine/test/done-lib.test.ts",
+      "engine/test/live-lib.test.ts",
       "engine/test/gates.test.ts",
       "engine/test/locks-r7.test.ts",
       "engine/test/integration/done-cli.test.ts",

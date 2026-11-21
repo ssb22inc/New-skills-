@@ -1,3 +1,4 @@
+import { get as httpGet } from "node:http";
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
@@ -104,6 +105,23 @@ function freePort(): Promise<number> {
   });
 }
 
+function getJson(url: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    httpGet(url, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (d: string) => (body += d));
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch (e) {
+          reject(e as Error);
+        }
+      });
+    }).on("error", reject);
+  });
+}
+
 async function runUnderWorkerd(bundle: string, date: string, flags: string[]): Promise<{ ok: boolean; out?: unknown; traced?: string[]; error?: string }> {
   const dir = mkdtempSync(join(tmpdir(), "workerd-"));
   const port = await freePort();
@@ -130,8 +148,9 @@ const w :Workerd.Worker = (
     try {
       for (let i = 0; i < 100; i++) {
         try {
-          const r = await fetch(`http://127.0.0.1:${port}/`);
-          return (await r.json()) as { ok: boolean };
+          // node:http, not the global fetch: in the shared-registry stages
+          // an earlier file's live-eval stub IS the global fetch (2026-10-23).
+          return (await getJson(`http://127.0.0.1:${port}/`)) as { ok: boolean };
         } catch {
           await new Promise((r) => setTimeout(r, 100));
         }

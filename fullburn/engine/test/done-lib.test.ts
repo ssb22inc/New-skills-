@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — plain .mjs module, typed loosely on purpose
-import { ENGINE_REQUIREMENTS, META_CANARY_NAMES, PHASE0_REQUIREMENTS, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, reviewerRoundCondition, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
+import { ENGINE_REQUIREMENTS, LIVE_BACKED, META_CANARY_NAMES, PHASE0_REQUIREMENTS, liveRequirementCondition, canaryIsStale, class2Condition, splitReportsByFamily, completionSentence, automatedGateAck, reviewerRoundCondition, isNonClaudeFamily, lintCondition, metaVerdict, mutateCondition, parseArgs, parseMutate, parseOwed, parseVitest, preflightRefusals, renderReport, reportPath, reviewerFamily, verdict } from "../scripts/done-lib.mjs";
 
 /** THE COMPLETION CHECKER'S DECISIONS, DRIVEN (DONE.md §3).
  *
@@ -249,5 +249,34 @@ describe("the vault deliverable names the store the code requires (X7-12)", () =
     expect(`${req!.what} ${req!.why}`).not.toMatch(/\bin KV\b|KV namespace/);
     const { readFileSync } = await import("node:fs");
     expect(readFileSync(new URL("../src/vault-crypto.ts", import.meta.url), "utf8")).toMatch(/production CipherStore must be a Durable Object/);
+  });
+});
+
+describe("live-backed requirements (2026-10-23): AC1-live and D-warehouse read the attested live report", () => {
+  const tree = "c".repeat(40);
+  const rows = ["cloudflare-token", "gateway-hello-world", "langfuse-trace", "clickhouse-query", "airbyte-token"].map((id) => ({ id, status: "PASS", observed: "" }));
+  const ok = { file: "reports/L.md", live: { verdict: "PASS", tree, rows }, tree, provenance: { ok: true, reason: "attested by fullburn-live.yml" } };
+
+  it("passes only with a PASS report at this tree whose bytes are attested", () => {
+    expect(liveRequirementCondition("AC1-live", ok).status).toBe("PASS");
+    expect(liveRequirementCondition("D-warehouse", ok).status).toBe("PASS");
+    const fails: [string, object][] = [
+      ["another tree", { ...ok, live: { ...ok.live, tree: "d".repeat(40) } }],
+      ["unattested", { ...ok, provenance: { ok: false, reason: "no attestation" } }],
+      ["not checked", { ...ok, provenance: null }],
+      ["FAIL verdict", { ...ok, live: { ...ok.live, verdict: "FAIL" } }],
+      ["no report", { ...ok, file: null, live: null }],
+    ];
+    for (const [why, ev] of fails) expect(liveRequirementCondition("AC1-live", ev).status, why).toBe("FAIL");
+  });
+
+  it("each requirement needs ITS OWN checks to have passed", () => {
+    const noTrace = { ...ok, live: { ...ok.live, rows: rows.map((r) => (r.id === "langfuse-trace" ? { ...r, status: "FAIL" } : r)) } };
+    expect(liveRequirementCondition("AC1-live", noTrace).status).toBe("FAIL");
+    expect(liveRequirementCondition("D-warehouse", noTrace).status).toBe("PASS");
+    const noAirbyte = { ...ok, live: { ...ok.live, rows: rows.filter((r) => r.id !== "airbyte-token") } };
+    expect(liveRequirementCondition("D-warehouse", noAirbyte).observed).toContain("airbyte-token did not pass");
+    expect(liveRequirementCondition("D-name", ok).status).toBe("FAIL");
+    expect(Object.keys(LIVE_BACKED).sort()).toEqual(["AC1-live", "D-warehouse"]);
   });
 });
