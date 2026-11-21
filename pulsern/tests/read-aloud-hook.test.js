@@ -271,6 +271,58 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(bar.text).toContain(bar.notes.unavailable);
   });
 
+  it("does not read a part the bank refused, and shows it instead", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await answer({ opt0: [409, { error: "Text does not match the item" }], stem: [404, { error: "Not available" }], "*": [200, "url"] });
+    await gap(400);
+    const s = await state();
+    expect(s.spoken).toEqual([]);
+    expect(s.played).toEqual([]);
+    expect(s.silent).toBe(true);
+    expect(s.source).toBe("screen");
+    expect(s.active).toBe("stem");
+  });
+
+  it("stops a device reading when a later sentence fails, instead of skipping it", async () => {
+    const text = "First finding is clear. Second finding is the dose. Third finding is the plan.";
+    await strict({ failUtterance: 2 });
+    await render({ segments: [{ id: "stem", text }], itemKey: "q:9", itemRef: REF(9) });
+    await tap("play");
+    await answer({ "*": [202, { queued: true }] });
+    await gap(400);
+    const s = await state();
+    expect(s.spoken).toEqual(["First finding is clear."]);
+    expect(s.source).toBe("screen");
+    expect(s.silent).toBe(true);
+  });
+
+  it("cancels a device utterance that never finishes, so it cannot keep speaking", async () => {
+    await strict({ speechHang: true });
+    await render({ segments: [SEGS[0]], itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await answer({ "*": [202, { queued: true }] });
+    expect((await state()).source).toBe("device");
+    await gap(8000);
+    const s = await state();
+    expect(s.spoken).toEqual(["Which value is the priority?"]);
+    expect(s.status).toBe("idle");
+    expect(s.source).toBe(null);
+  }, 15_000);
+
+  it("asks for a new item even when the previous item's voice requests never answered", async () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, text: `Part ${i} of the first item.` }));
+    await render({ segments: many, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    expect((await pending()).map((b) => b.ref.id)).toEqual([1, 1, 1, 1, 1, 1]);
+    await render({ segments: SEGS, itemKey: "q:2", itemRef: REF(2) });
+    await tap("play");
+    await gap(100);
+    const bodies = await pending();
+    expect(bodies.map((b) => b.ref.id)).toContain(2);
+    expect(bodies.some((b) => b.ref.id === 1)).toBe(false);
+  });
+
   it("on a device with no voice of its own, shows a part refused by the check without voicing it, then plays the rest", async () => {
     await strict({ noDeviceVoice: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });

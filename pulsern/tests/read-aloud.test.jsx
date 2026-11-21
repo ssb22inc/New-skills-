@@ -2322,6 +2322,39 @@ describe("the app's voice client", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("frees a slot when the student moves on, and when a request never answers", async () => {
+    const hanging = (url, init) => new Promise((resolve, reject) => {
+      const stop = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      if (init?.signal?.aborted) { stop(); return; }
+      init?.signal?.addEventListener("abort", stop, { once: true });
+    });
+    const fetchImpl = vi.fn(hanging);
+    const v = makeVoiceClient({ fetchImpl, now: () => 0, token: async () => "t", fetchMs: 40 });
+    const old = { kind: "question", id: 1, part: "question" };
+    const stalled = [];
+    for (let i = 0; i < 6; i++) stalled.push(v.url(old, `s${i}`, `words ${i}`).catch((e) => e.status));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fetchImpl).toHaveBeenCalledTimes(6);
+    const neu = { kind: "case", id: 2, part: "intro" };
+    let nextFetch;
+    const moved = new Promise((resolve) => { nextFetch = resolve; });
+    fetchImpl.mockImplementation((url, init) => new Promise((resolve, reject) => {
+      if (init?.signal?.aborted) { reject(new Error("aborted")); return; }
+      nextFetch(() => resolve({ ok: true, status: 200, json: async () => ({ url: "https://signed.example/case" }) }));
+    }));
+    const next = v.url(neu, "intro", "The case begins.");
+    const finish = await moved;
+    finish();
+    expect(fetchImpl).toHaveBeenCalledTimes(7);
+    await expect(next).resolves.toBe("https://signed.example/case");
+    expect(await Promise.all(stalled)).toEqual([0, 0, 0, 0, 0, 0]);
+    fetchImpl.mockImplementation(hanging);
+    const slow = v.url(neu, "step", "Next.").catch((e) => e.status);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(await slow).toBe(0);
+    expect(fetchImpl).toHaveBeenCalledTimes(8);
+  });
+
   it("sends the item reference, part and words, never anything else", async () => {
     const fetchImpl = okUrl();
     await makeVoiceClient({ fetchImpl, now: () => 0, token: async () => "t" }).url(REF, "opt0", "x");

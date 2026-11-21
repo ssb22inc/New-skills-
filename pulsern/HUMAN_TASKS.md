@@ -184,11 +184,12 @@ Claude Code executes everything else. These run in parallel with the build.
     reads the normalised bank text as written (units and lab values spelled
     out). There is no second transcription pass.
   - If that audio is not ready within a few seconds (still queued, the
-    day's limit, Polly refused it, or the request is slow), the device's
-    own voice reads that part from the same spelled-out words, and the bar
-    says "Device voice". A part whose signs could be read two ways is
-    shown on screen instead of guessed. The parts that already have a
-    clip still play as the AI voice.
+    day's limit, or the request is slow), the device's own voice reads
+    that part from the same spelled-out words, and the bar says "Device
+    voice". A part the bank refuses (the item is gone, or the words no
+    longer match) stays on screen, as does a part whose signs could be
+    read two ways. The parts that already have a clip still play as the
+    AI voice.
   - The job "pulsern-read-aloud"
     (https://github.com/ssb22inc/New-skills-/actions/workflows/pulsern-read-aloud.yml)
     runs every 15 minutes and voices the bank ahead of demand: every

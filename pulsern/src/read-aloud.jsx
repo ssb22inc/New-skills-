@@ -20,10 +20,10 @@
    never silent: a part whose AI voice is not ready in time (still being
    made, over the daily limit, or the service is down) is read with the
    device's own voice, from the same words the AI voice reads (units and
-   doses already spelled out), and the bar says so. Only a part whose
-   signs could be read two ways (voiceable() is false) is shown on screen
-   instead of guessed. Only bank items carry a voice; built-in sample
-   items show no button.
+   doses already spelled out), and the bar says so. A part the bank
+   refuses — the item is gone, the words no longer match, or the part
+   must be read on screen — is shown, never spoken by the device. Only
+   bank items carry a voice; built-in sample items show no button.
 
    Not used in readiness exams (src/exam.jsx): they stay exam conditions. */
 import React from "react";
@@ -73,20 +73,26 @@ async function accessToken() {
 export const URL_TTL_MS = 50 * 60 * 1000;
 const NEGATIVE_TTL_MS = 60 * 1000;
 const REMEMBER_MISS = new Set([202, 422, 404, 409, 429]);
+/* A request may not hold one of the shared slots forever. This matches
+   the voice route's own limit, so a live synthesis can finish and a
+   stalled connection still gives the slot back. */
+export const VOICE_FETCH_MS = 60_000;
 
-export function makeVoiceClient({ fetchImpl = (...a) => fetch(...a), now = () => Date.now(), token = accessToken } = {}) {
+export function makeVoiceClient({ fetchImpl = (...a) => fetch(...a), now = () => Date.now(), token = accessToken, fetchMs = VOICE_FETCH_MS } = {}) {
   const cache = new Map(); // [ref, seg, text] -> { at, ttl, p, settled }
   /* At most MAX_IN_FLIGHT requests out at once. Waiting requests for the
      item asked about most recently go first, so moving on to a new item
-     never waits behind the parts of the one left behind. */
+     never waits behind the parts of the one left behind. Leaving an item
+     cancels the requests it still has out. */
   let inFlight = 0, latest = "";
   const waiters = [];
-  const gate = (item) => (inFlight < MAX_IN_FLIGHT ? (inFlight++, Promise.resolve()) : new Promise((resolve) => waiters.push({ item, resolve })));
+  const jobs = new Set();
   const release = () => {
     const at = waiters.findIndex((w) => w.item === latest);
     const next = waiters.splice(at >= 0 ? at : 0, 1)[0];
     if (next) next.resolve(); else inFlight--;
   };
+  const missed = () => Object.assign(new Error("VOICE"), { status: 0 });
   return {
     /* What we already know, or null while the request is still out. */
     peek(ref, seg, text) {
@@ -100,18 +106,51 @@ export function makeVoiceClient({ fetchImpl = (...a) => fetch(...a), now = () =>
       if (!fresh && hit && now() - hit.at < hit.ttl) return hit.p;
       const item = JSON.stringify(ref);
       latest = item;
+      for (const job of jobs) if (job.item !== item) job.abort();
       const p = (async () => {
-        await gate(item);
-        let r, data;
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), fetchMs);
+        const job = { item, abort: () => ac.abort() };
+        jobs.add(job);
+        let held = false, r, data;
         try {
-          const t = await token();
+          await new Promise((resolve, reject) => {
+            const giveUp = () => reject(missed());
+            const take = () => { held = true; if (ac.signal.aborted) giveUp(); else resolve(); };
+            if (ac.signal.aborted) { giveUp(); return; }
+            if (inFlight < MAX_IN_FLIGHT) { inFlight++; take(); return; }
+            const waiter = { item, resolve: take };
+            waiters.push(waiter);
+            ac.signal.addEventListener("abort", () => {
+              const at = waiters.indexOf(waiter);
+              if (at >= 0) waiters.splice(at, 1);
+              giveUp();
+            }, { once: true });
+          });
+          const t = await new Promise((resolve, reject) => {
+            if (ac.signal.aborted) { reject(missed()); return; }
+            const onAbort = () => reject(missed());
+            ac.signal.addEventListener("abort", onAbort, { once: true });
+            Promise.resolve(token()).then(
+              (v) => { ac.signal.removeEventListener("abort", onAbort); resolve(v); },
+              (e) => { ac.signal.removeEventListener("abort", onAbort); reject(e); },
+            );
+          });
           r = await fetchImpl("/api/ai", {
             method: "POST",
             headers: { "Content-Type": "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}) },
             body: JSON.stringify({ action: "speak", ref, seg, text, token: t }),
+            signal: ac.signal,
           });
           data = await r.json().catch(() => ({}));
-        } finally { release(); }
+        } catch (e) {
+          if (e?.status) throw e;
+          throw missed();
+        } finally {
+          clearTimeout(timer);
+          jobs.delete(job);
+          if (held) release();
+        }
         if (!r.ok || r.status !== 200 || typeof data.url !== "string") {
           const e = new Error(data.error || "VOICE");
           e.status = r.status;
@@ -202,10 +241,11 @@ function warmClip(url) {
 }
 const clipSrc = (url) => clips.get(url);
 
-/* What to do with one part. Only a checked clip is played. Everything
-   else is shown, never spoken: a part still being prepared, one the check
-   refused, one the student cannot read, or a request that did not answer.
-   One part not ready does not silence the parts that are. */
+/* What to do with one part. A checked clip is played. A part the bank
+   refuses (gone, words that no longer match, or not safe to guess) is
+   shown and never spoken. Anything else with no clip yet is read with
+   the device's voice. One part not ready does not silence the parts
+   that are. */
 function silentNote(o) {
   if (o.unvoiceable || o.status === 422 || o.status === 404 || o.status === 409) return "silent";
   if (o.after === "tomorrow") return "preparing-tomorrow";
@@ -322,26 +362,51 @@ export function deviceSpeak(text, rate = 1, signal) {
   const chunks = speechChunks(text);
   if (!chunks.length) return Promise.resolve(false);
   return new Promise((resolve) => {
-    let done = false, spoke = false, i = 0, watchdog = null;
-    const finish = (ok) => { if (done) return; done = true; clearTimeout(watchdog); signal?.removeEventListener("abort", onAbort); resolve(ok); };
-    const onAbort = () => { try { s.cancel(); } catch { /* already quiet */ } finish(true); };
+    let done = false, i = 0, watchdog = null, current = 0;
+    const finish = (ok, cancel) => {
+      if (done) return;
+      done = true;
+      current++;
+      clearTimeout(watchdog);
+      signal?.removeEventListener("abort", onAbort);
+      if (cancel) { try { s.cancel(); } catch { /* already quiet */ } }
+      resolve(ok);
+    };
+    const onAbort = () => finish(true, true);
     signal?.addEventListener("abort", onAbort, { once: true });
     const voice = englishVoice(s);
     const next = () => {
       if (done) return;
-      if (i >= chunks.length) { finish(true); return; }
+      if (i >= chunks.length) { finish(true, false); return; }
       const chunk = chunks[i++];
+      const mine = ++current;
+      let started = false;
       const u = new window.SpeechSynthesisUtterance(chunk);
       u.lang = voice?.lang || "en-US";
       try { if (voice) u.voice = voice; } catch { /* the language is enough */ }
       u.rate = rate;
-      u.onstart = () => { spoke = true; };
-      u.onend = () => { clearTimeout(watchdog); next(); };
-      u.onerror = (e) => { clearTimeout(watchdog); if (e?.error === "interrupted" || e?.error === "canceled") { finish(true); return; } if (!spoke) finish(false); else next(); };
-      /* Some engines never fire onend: move on after a generous reading time. */
+      const live = () => !done && mine === current;
+      u.onstart = () => { if (live()) started = true; };
+      u.onend = () => { if (!live()) return; clearTimeout(watchdog); next(); };
+      u.onerror = (e) => {
+        if (!live()) return;
+        clearTimeout(watchdog);
+        if (e?.error === "interrupted" || e?.error === "canceled") { finish(true, false); return; }
+        finish(false, true);
+      };
+      /* Some engines never fire onend. Cancel that utterance before moving
+         on, and do not treat a chunk that never started as spoken. */
       clearTimeout(watchdog);
-      watchdog = setTimeout(() => { spoke = true; next(); }, readingMs(chunk, rate) * 2 + 3000);
-      try { s.speak(u); } catch { finish(false); }
+      watchdog = setTimeout(() => {
+        if (!live()) return;
+        const heard = started;
+        current++;
+        clearTimeout(watchdog);
+        try { s.cancel(); } catch { /* already quiet */ }
+        if (!heard) finish(false, false);
+        else next();
+      }, readingMs(chunk, rate) * 2 + 3000);
+      try { s.speak(u); } catch { finish(false, true); }
     };
     try { if (s.speaking || s.pending) s.cancel(); s.resume?.(); } catch { /* fine */ }
     next();
@@ -474,7 +539,15 @@ export function useReadAloud(segments, key, ref = null) {
       });
 
       if (step.silent) {
-        await readOnDevice(step.text, step.note || null);
+        /* "silent" is a bank refusal (gone, mismatched, or not safe to
+           guess). Those words stay on screen. Every other miss is a clip
+           that is not ready, which the device reads. */
+        if (step.note === "silent") {
+          setSilent(true); setSource("screen"); setNote("silent");
+          await wait(readingMs(step.text, prefsRef.current.rate), signal);
+        } else {
+          await readOnDevice(step.text, step.note || null);
+        }
       } else if (step.url) {
         try {
           await playUrl(clipSrc(step.url));
