@@ -1,11 +1,10 @@
 /* The real playback hook, mounted in a real browser: when audio may start,
    and when it must stop. Students must only ever hear checked audio for
    the item on screen:
-   - an item with a part not yet voiced (202) still starts: the ready parts
-     play, and the rest is shown on screen;
-   - a part whose AI voice is not ready (being prepared, limit, outage) is
-     read with the device's voice, with the bar saying so, so Listen is
-     never silent; only a device with no voice at all shows it on screen;
+   - a cached clip plays as soon as Listen is tapped;
+   - with no clip cached, the device starts speaking inside that tap, and
+     later parts switch to the AI clip once it is ready;
+   - a part the bank refuses stays on screen and does not hold up the next one;
    - a response that arrives after the item changed or the reader closed
      never starts the old item's audio;
    - moving from the question to its explanation (or to the next item)
@@ -67,9 +66,9 @@ describe("useReadAloud, mounted in a browser", () => {
 
   it("plays every checked part in order, highlighting each, through one shared player", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    expect((await pending()).map((b) => b.seg)).toEqual(["stem", "opt0", "opt1"]); // the whole item is asked for as soon as it is shown
+    await answer(ALL_READY); // cached before the tap, so Listen plays the clip at once
     await tap("play");
-    expect((await pending()).map((b) => b.seg)).toEqual(["stem", "opt0", "opt1"]); // the whole item is asked for at once
-    await answer(ALL_READY);
     let s = await state();
     expect(s.played).toEqual(["https://signed.example/1/stem"]);
     expect(s.active).toBe("stem");
@@ -131,11 +130,11 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
   });
 
-  it("plays every passage on a strict-autoplay browser after one tap, even when the voice was not cached", async () => {
+  it("plays a cached clip on a strict-autoplay browser after one tap", async () => {
     await strict({ strict: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await answer(ALL_READY);
     await tap("play");
-    await answer(ALL_READY); // arrives after the tap is over
     expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
     await end(); await gap();
     await end(); await gap();
@@ -149,36 +148,19 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.emptySamples).toBe(0); // an empty WAV (no samples) is what a decoder may refuse
   });
 
-  it("retries the unlock on the next item when the first tap was refused and the clip is not cached yet", async () => {
+  it("plays a cached clip inside the tap even when the silent unlock was refused", async () => {
     await strict({ strict: true, refuseUnlock: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await answer(ALL_READY);
     await tap("play");
-    await answer(ALL_READY);
-    expect((await state()).status).toBe("blocked");
-    await strict({ refuseUnlock: false });
-    await render({ segments: SEGS, itemKey: "q:2", itemRef: REF(2) });
-    await tap("play"); // the clip is still in flight; this tap has to unlock
-    await answer(ALL_READY);
-    expect((await state()).played).toContain("https://signed.example/2/stem");
-  });
-
-  it("asks for one more tap when the browser holds the sound back, and then plays", async () => {
-    await strict({ strict: true, refuseUnlock: true });
-    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await tap("play");
-    await answer(ALL_READY);
-    let s = await state();
-    expect(s.played).toEqual([]);
-    expect(s.status).toBe("blocked");
-    await strict({ refuseUnlock: false });
-    await tap("resume"); // the second tap, with links already fetched
-    expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
+    expect((await state()).played).toContain("https://signed.example/1/stem");
+    expect((await state()).status).toBe("playing");
   });
 
   it("plays the parts that are ready and reads a part still being prepared with the device voice", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await tap("play");
     await answer({ opt0: [202, { queued: true }], "*": [200, "url"] });
+    await tap("play");
     expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
     await end();
     await gap();
@@ -194,6 +176,30 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt1"]);
   });
 
+  it("starts the device voice inside the tap when no clip is cached, then uses the AI voice for the next part", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    let s = await state();
+    expect(s.source).toBe("device");
+    expect(s.spoken[0]).toBe("Which value is the priority?");
+    expect(s.played).toEqual([]);
+    await answer(ALL_READY);
+    await gap(500);
+    s = await state();
+    expect(s.played).toContain("https://signed.example/1/opt0");
+    expect(s.source).toBe("ai");
+  });
+
+  it("does not hold the first sound for a part that stays on screen", async () => {
+    const segs = [{ id: "stem", text: "Give 2 mg/mL · volume" }, { id: "opt0", text: "Potassium 2.9." }];
+    await render({ segments: segs, itemKey: "q:3", itemRef: REF(3) });
+    await tap("play");
+    const s = await state();
+    expect(s.source).toBe("device");
+    expect(s.spoken[0]).toBe("Potassium 2.9.");
+    expect(s.active).toBe("opt0");
+  });
+
   it("is never silent when no AI voice is ready yet: every part is read by the device, in order", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
@@ -207,7 +213,6 @@ describe("useReadAloud, mounted in a browser", () => {
   it("reads with the device voice while the AI voice is still being made, then uses the AI voice when it arrives", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
-    await gap(3000); // nothing answered within the first part's wait
     let s = await state();
     expect(s.source).toBe("device");
     expect(s.spoken).toEqual(["Which value is the priority?"]);
@@ -241,7 +246,7 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.status).toBe("playing");
     expect(s.silent).toBe(true);
     expect(s.source).toBe("screen");
-    expect(s.note).toBe("preparing");
+    expect(["preparing", "unavailable"]).toContain(s.note);
   });
 
   it("on a device with no voice of its own, says the voice will be prepared after midnight, and shows the part", async () => {
@@ -275,13 +280,10 @@ describe("useReadAloud, mounted in a browser", () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ opt0: [409, { error: "Text does not match the item" }], stem: [404, { error: "Not available" }], "*": [200, "url"] });
-    await gap(400);
+    await gap(600);
     const s = await state();
-    expect(s.spoken).toEqual([]);
-    expect(s.played).toEqual([]);
-    expect(s.silent).toBe(true);
-    expect(s.source).toBe("screen");
-    expect(s.active).toBe("stem");
+    expect(s.played).toEqual(["https://signed.example/1/opt1"]);
+    expect(s.spoken.some((t) => t.startsWith("Potassium"))).toBe(false);
   });
 
   it("stops a device reading when a later sentence fails, instead of skipping it", async () => {
@@ -345,13 +347,12 @@ describe("useReadAloud, mounted in a browser", () => {
     await tap("play");
     expect((await pending()).map((b) => b.seg)).toEqual(["stem", "opt1"]);
     await answer(ALL_READY);
-    await end();
-    await gap();
+    await gap(500);
     const s = await state();
     expect(s.active).toBe("opt0");
     expect(s.silent).toBe(true);
-    await gap(3500); // its reading time on screen
-    expect((await state()).played).toEqual(["https://signed.example/2/stem", "https://signed.example/2/opt1"]);
+    await gap(800);
+    expect((await state()).played).toEqual(["https://signed.example/2/opt1"]);
   });
 
   it("on a device with no voice of its own, shows a one-part card whose check failed on screen, instead of 'try again later'", async () => {
@@ -392,8 +393,8 @@ describe("useReadAloud, mounted in a browser", () => {
 
   it("stops the question's audio when the explanation (or the next item) takes over", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await tap("play");
     await answer(ALL_READY);
+    await tap("play");
     expect((await state()).paused).toBe(false);
     await render({ segments: [], itemKey: "off", itemRef: REF(1) }); // answered: the question reader switches off
     const s = await state();

@@ -119,11 +119,25 @@ const operators = (text) => text
   .replace(/\s*×\s*/g, " times ")
   .replace(/(\d)\s*\*\s*(?=\d)/g, "$1 times ");
 
+/* A middle dot between two words is a title or list separator
+   ("Newborn Screening · First Visit"), said as a pause. A dot beside a
+   number or a dosing unit can be multiplication ("2 mg/mL · Volume",
+   "2 · DBP") and is left as written, so voiceable() still refuses it. */
+const DOSE_TOKEN = new RegExp(`^(?:${RATE_UNITS}|${AMOUNT_UNITS})$`, "i");
+export function separatorDots(text) {
+  return String(text ?? "").replace(/(\S+)\s*[·∙]\s*(\S+)/g, (all, left, right) => {
+    const leftWord = left.split(/[^A-Za-z]+/).filter(Boolean).pop() ?? "";
+    const rightWord = right.split(/[^A-Za-z]+/).filter(Boolean)[0] ?? "";
+    if (/\d/.test(left) || /\d/.test(right) || DOSE_TOKEN.test(leftWord) || DOSE_TOKEN.test(rightWord)) return all;
+    return `${left}. ${right}`;
+  });
+}
+
 /* Text for the voice: clinical shorthand spelled out, symbols the screen
    uses for layout removed, whitespace tidied. */
 export function speakable(text) {
   // brackets first, while the signs of arithmetic are still signs
-  let s = operators(asides(String(text ?? "").replace(/[☐☑●○▲△✨📋🧮]/g, "")));
+  let s = operators(asides(separatorDots(String(text ?? "")).replace(/[☐☑●○▲△✨📋🧮]/g, "")));
   for (const [re, to] of SPOKEN) s = s.replace(re, to);
   return s.replace(/\s+/g, " ").trim();
 }
@@ -395,4 +409,10 @@ export function itemParts(kind, row) {
     add({ ...base, part: "back" }, scriptFor({ kind, part: "back" }, row));
   }
   return out.filter((x) => voiceable(x.text));
+}
+
+/* True when the item has at least one passage the voice can read. An item
+   with none would stay silent: the bank check counts those. */
+export function hasSpeakablePassage(kind, row) {
+  return itemParts(kind, row).some((p) => p.text);
 }

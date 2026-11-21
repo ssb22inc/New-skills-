@@ -183,13 +183,13 @@ Claude Code executes everything else. These run in parallel with the build.
   - Saved audio plays when a passage is already in the new voice. Polly
     reads the normalised bank text as written (units and lab values spelled
     out). There is no second transcription pass.
-  - If that audio is not ready within a few seconds (still queued, the
-    day's limit, or the request is slow), the device's own voice reads
-    that part from the same spelled-out words, and the bar says "Device
-    voice". A part the bank refuses (the item is gone, or the words no
-    longer match) stays on screen, as does a part whose signs could be
-    read two ways. The parts that already have a clip still play as the
-    AI voice.
+  - Listen starts in the tap. A cached clip plays at once. With no clip
+    cached, the device's own voice starts immediately, from the same
+    spelled-out words, and the bar says "Device voice"; later parts switch
+    to the AI clip once it is ready. A part the bank refuses (the item is
+    gone, or the words no longer match) stays on screen and does not delay
+    the next part. A middle dot between two ordinary words is read as a
+    pause; a dot beside a number or a dose stays on screen.
   - The job "pulsern-read-aloud"
     (https://github.com/ssb22inc/New-skills-/actions/workflows/pulsern-read-aloud.yml)
     runs every 15 minutes and voices the bank ahead of demand: every
