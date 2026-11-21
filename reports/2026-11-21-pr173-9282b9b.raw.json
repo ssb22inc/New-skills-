@@ -1,0 +1,26 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "958378d36d747f6e751f2491b9526f1d1d7bc0a1",
+    "head": "9282b9b1ab68796dcf42690d186bfcba4070ce55",
+    "pr": "173"
+  },
+  "reviewedAt": "2026-11-21T13:12:47.361Z",
+  "filesReviewed": [
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx",
+    "pulsern/vercel.json"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": null,
+  "error": "The review could not be completed: openai/gpt-6.1-sol: 402 out of credits — This request requires more credits, or fewer max_tokens. You requested up to 64000 tokens, but can only afford 45838. To increase, visit https://openrouter.ai/settings/credits and add more credits\n  Add credits at https://openrouter.ai/settings/credits, then re-run.",
+  "verdict": "FAIL"
+}
