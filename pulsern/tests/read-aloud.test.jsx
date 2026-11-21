@@ -12,7 +12,7 @@ import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts, voiceable } from "../src/read-aloud-script.js";
-import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
+import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES, speechChunks } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE } from "../ops/read-aloud-worker.mjs";
@@ -514,19 +514,38 @@ describe("the controls", () => {
     expect(RATES).toEqual([0.8, 1, 1.25]);
   });
 
-  it("reads only checked AI audio: the whole item, or nothing", () => {
+  it("plays checked audio, and reads anything not ready with the device voice", () => {
     const segs = [{ id: "stem", text: "S." }, { id: "opt0", text: "A." }, { id: "opt1", text: "B." }];
-    expect(planReading(segs, [{ url: "u1" }, { url: "u2" }, { url: "u3" }])).toEqual({ kind: "play", steps: [{ id: "stem", url: "u1" }, { id: "opt0", url: "u2" }, { id: "opt1", url: "u3" }] });
-    // one part still being voiced: nothing plays (never half a question)
-    expect(planReading(segs, [{ url: "u1" }, { status: 202 }, { url: "u3" }])).toEqual({ kind: "preparing" });
-    // a part that failed the check is shown, not voiced, and the rest plays
-    expect(planReading(segs, [{ url: "u1" }, { status: 422 }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A." });
-    // signed out, offline, over the limit, or nothing voiceable
-    for (const status of [0, 401, 429, 503, 400]) expect(planReading(segs, [{ url: "u1" }, { status }, { url: "u3" }])).toEqual({ kind: "unavailable" });
-    // a real failure outranks "being prepared"
-    expect(planReading(segs, [{ status: 202 }, { status: 429 }, { status: 202 }])).toEqual({ kind: "unavailable" });
-    // every part refused for good: read on screen, part by part, not "try again later"
-    expect(planReading(segs, [{ status: 422 }, { status: 422 }, { status: 422 }])).toEqual({ kind: "play", steps: segs.map((s) => ({ id: s.id, silent: true, text: s.text })) });
+    expect(planReading(segs, [{ url: "u1" }, { url: "u2" }, { url: "u3" }])).toEqual({ kind: "play", note: null, steps: [{ id: "stem", url: "u1" }, { id: "opt0", url: "u2" }, { id: "opt1", url: "u3" }] });
+    // one part still being voiced: the ready parts play, that part uses the device voice
+    const mixed = planReading(segs, [{ url: "u1" }, { status: 202 }, { url: "u3" }]);
+    expect(mixed.note).toBe("device");
+    expect(mixed.steps[1]).toEqual({ id: "opt0", device: true, text: "A.", status: 202, after: undefined });
+    expect(mixed.steps[0]).toEqual({ id: "stem", url: "u1" });
+    // a sign with two readings is shown, never guessed by either voice
+    expect(planReading(segs, [{ url: "u1" }, { status: 422, unvoiceable: true }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A." });
+    // a part the check refused is read by the device, from the words on screen
+    expect(planReading(segs, [{ url: "u1" }, { status: 422 }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", device: true, text: "A.", status: 422, after: undefined });
+    // signed out, offline, or over the limit: the device reads, the item is not silenced
+    for (const status of [0, 401, 429, 503, 400]) {
+      const plan = planReading(segs, [{ url: "u1" }, { status }, { url: "u3" }]);
+      expect(plan.kind).toBe("play");
+      expect(plan.steps[0]).toEqual({ id: "stem", url: "u1" });
+      expect(plan.steps[1].device).toBe(true);
+      expect(plan.note).toBe("deviceDown");
+    }
+    // words that are not the item's are shown, not spoken
+    expect(planReading(segs, [{ url: "u1" }, { status: 409 }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A." });
+    expect(planReading(segs, [{ status: 202, after: "tomorrow" }, { status: 202, after: "tomorrow" }, { status: 202, after: "tomorrow" }]).note).toBe("deviceTomorrow");
+    // every part refused by the check: the device reads each one
+    expect(planReading(segs, [{ status: 422 }, { status: 422 }, { status: 422 }]).steps.every((s) => s.device)).toBe(true);
+  });
+
+  it("keeps a decimal inside one spoken chunk", () => {
+    expect(speechChunks("Potassium 2.9 milliequivalents per liter.")).toEqual(["Potassium 2.9 milliequivalents per liter."]);
+    const long = Array.from({ length: 40 }, (_, i) => `word${i}`).join(" ");
+    for (const chunk of speechChunks(long)) expect(chunk.length).toBeLessThanOrEqual(180);
+    expect(speechChunks(long).join(" ")).toBe(long);
   });
 
   it("gives a part shown on screen time to be read", () => {
@@ -1030,7 +1049,7 @@ describe("server voice without a key: the queue and the voice job", () => {
     const r = await drainQueue({ storage, apiKey: "k", fetchImpl: picky, now: () => now, log: () => {} });
     expect(r).toMatchObject({ rejected: 1, voiced: 1 });
     expect([...files.keys()].filter((k) => /^queue(-retry)?\//.test(k))).toEqual([]);
-    expect((await speak({ ...base({ apiKey: "" }), storage })).status).toBe(422); // never paid for again
+    expect((await speak({ ...base({ apiKey: "", now }), storage })).status).toBe(422); // never paid for again, read on the day it was refused
   });
 
   it("retries an outage on later runs, then gives up after the attempt limit", async () => {
@@ -2057,6 +2076,15 @@ describe("the app's voice client", () => {
     const v = makeVoiceClient({ fetchImpl, now: () => 0, token: async () => "t" });
     const a = await v.url(REF, "opt0", "x");
     expect(await v.url(REF, "opt0", "x", { fresh: true })).not.toBe(a);
+  });
+
+  it("remembers a part that is not voiced yet, so the next Listen does not ask again", async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 202, json: async () => ({ queued: true }) }));
+    const v = makeVoiceClient({ fetchImpl, now: () => 0, token: async () => "t" });
+    await expect(v.url(REF, "stem", "S.")).rejects.toThrow();
+    expect(v.peek(REF, "stem", "S.")).toEqual({ status: 202, after: undefined });
+    await expect(v.url(REF, "stem", "S.")).rejects.toThrow();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("sends the item reference, part and words, never anything else", async () => {
