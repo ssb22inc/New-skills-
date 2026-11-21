@@ -1,0 +1,68 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "05e4b04d35faa656d31749f8baa652d07900d3cd",
+    "head": "1c2135a2613ef037c1cae6ca6cb32fedfcea9913",
+    "pr": "171"
+  },
+  "reviewedAt": "2026-11-21T04:30:27.717Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/tests/polly-voice.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 699,
+      "title": "Nonempty audio is declared accurate without checking what it says",
+      "problem": "makeChecked now assigns pass: true and similarity: 1 to every nonempty provider response. saveChecked persists that fabricated verdict, and speak serves the clip as verified. Changing TTS providers does not establish that the resulting waveform preserves every clinical value, unit, negation and word. The retained voiceCheck tests no longer protect the production publication path, and the previous wrong-number rejection tests were removed.",
+      "failure_scenario": "For the approved script 'Potassium 2.9 milliequivalents per liter.', a truncated clip or a clip that reads a different value is saved with a perfect passing record and played to students. Nothing now examines the audio before publication.",
+      "fix": "Restore an independent audio accuracy gate before setting pass or saving playable audio. Retain Polly synthesis if desired, but transcribe or independently review its actual output and reject mismatched or incomplete clips. Add an end-to-end negative test proving that changed numbers, units and negations cannot produce a playable clip.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 609,
+      "title": "The unbounded legacy scan can prevent the voice worker from ever running",
+      "problem": "queueLegacyMarin runs before runJob and before the READ_ALOUD_MINUTES deadline is established. It scans the entire bank and performs record and queue downloads for every matching passage, but saves no scan cursor; its only completion marker is written at the end. A workflow timeout therefore restarts the mandatory scan from the beginning rather than allowing queued passages to be voiced.",
+      "failure_scenario": "With 15,000 matching legacy passages and roughly 100 ms per storage round trip, the two sequential read phases per passage alone exceed the workflow's 45-minute timeout, even after earlier runs have queued those passages. Every scheduled run times out in migration before reaching runJob, leaving both migrated clips and student requests unvoiced. The current production clip count and latency could not be verified.",
+      "fix": "Make migration incremental and resumable with a persisted cursor and a bounded time or item allowance. Drain student requests even while migration remains incomplete, and include migration time in the overall run deadline.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 562,
+      "title": "Bulk revoicing occupies the student-request priority queue",
+      "problem": "Every previously saved Marin passage is inserted into queue/, the same oldest-first lane used for student demand. The legacy flag is ignored by drainQueue. A later Listen request neither promotes an already queued legacy passage nor moves a new request ahead of this unsolicited backlog, contradicting the documented student-first behavior.",
+      "failure_scenario": "The migration inserts thousands of legacy passages, then a student presses Listen on an unvoiced item. Their request is processed only after the older migration entries, potentially after those entries exhaust the day's budget, even though prewarming is supposed to yield to student requests.",
+      "fix": "Keep bulk revoicing in a lower-priority lane than explicit student requests, or implement priority and promotion that drainQueue actually honors. Add a test with an older bulk-revoice backlog and a newer student request, asserting that the student request is synthesized first.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 98408,
+    "completionTokens": 8901,
+    "reasoningTokens": 8051,
+    "costUsd": 0.3350285
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge as written. The change replaces the audio accuracy gate with an unconditional pass and introduces migration paths that can stall voicing or put student requests behind bulk work. This review is based on the supplied changes; tests and live Polly output were not independently verified.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
