@@ -1,0 +1,74 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9ccff01052bee2cc97d20200adc7a3c5e6b4530f",
+    "head": "0ce076bf1eaa5ef94902c734e4fd991f42fca91f",
+    "pr": "170"
+  },
+  "reviewedAt": "2026-11-21T02:04:22.006Z",
+  "filesReviewed": [
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 140,
+      "title": "Unchecked device speech bypasses the audio accuracy gate",
+      "problem": "Every outcome except an explicit text mismatch, missing item, or locally unvoiceable passage becomes device speech—including HTTP 422 indicating that the audio accuracy check failed. Nothing checks the audio produced by speechSynthesis. Passing approved text to another synthesizer does not establish that its audible numbers, units, negations, and frequencies are accurate. This removes the existing checked-audio safeguard and conflicts with the mandatory accuracy gate for all student-facing content.",
+      "failure_scenario": "A clinical passage returns 422 because its generated speech failed verification, or returns 202 because no checked recording exists. Listen nevertheless delivers a new, unverified rendition to the student. A synthesis error can reach the student without any accuracy gate detecting it; the new tests only inspect the text handed to the mocked synthesizer.",
+      "fix": "Keep unverified passages silent with the on-screen reading prompt. Only play synthesized audio after its actual output has passed the required accuracy gate; a device label is not a substitute for verification.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 384,
+      "title": "Later passages wait indefinitely instead of using the fallback",
+      "problem": "The response deadline applies only to the starting passage. Every later passage awaits tasks[i] without a timeout, even when device voices are ready. The time spent reading the preceding passage does not guarantee that the next request has completed.",
+      "failure_scenario": "The stem request succeeds, but an option request stalls. After the stem ends, playback waits indefinitely for that option instead of reading it with the device voice. The bar continues showing the preceding passage as playing. This contradicts the documented behavior that unavailable audio is read immediately.",
+      "fix": "Bound the wait for each passage, using its already elapsed request time, and choose the permitted fallback when that deadline expires. Add a browser test that releases the stem response while leaving an option request pending.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 333,
+      "title": "Stopping an idle reader cancels another reader's device speech",
+      "problem": "halt() calls the global speechSynthesis.cancel() even when this hook has no active run. Consequently, an idle reader's key change or unmount can cancel the device speech owned by another hook. The speaking hook receives \"aborted\" and returns without clearing its playing state or advancing.",
+      "failure_scenario": "Two read-aloud hooks are mounted and reader B is speaking through the device. Reader A is idle and its key changes or it unmounts. A's cleanup cancels B's utterance, leaving B highlighted and marked as playing although it will produce no more speech.",
+      "fix": "Cancel speech only through the owning run's AbortController. deviceSpeak already registers an abort handler, so an unrelated idle hook must not issue a global cancel. Test two mounted readers and change or unmount the idle one while the other speaks.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 217,
+      "title": "Explicit speech permission failures do not offer the required tap-to-start recovery",
+      "problem": "SpeechSynthesisErrorEvent can report \"not-allowed\" when browser autoplay policy prevents speech. The handler classifies that as a generic \"error\", not \"blocked\". The hook retries, then silently highlights the passage instead of showing its tap-to-start control.",
+      "failure_scenario": "A student returns with auto-read enabled before interacting with the page. The AI passage is queued, and the browser rejects device speech with \"not-allowed\". The reader retries the same forbidden operation, then displays \"Read this part on screen\" and eventually returns to idle. It never explains that a tap would enable speech.",
+      "fix": "Map the \"not-allowed\" speech error to \"blocked\" and preserve the current passage for a user-gesture retry. Extend the speech mock and tests to emit this permission error; the current strict-autoplay tests exercise only the Audio element.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 41632,
+    "completionTokens": 8186,
+    "reasoningTokens": 7170,
+    "costUsd": 0.1859385
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to ship. The device fallback bypasses the existing audio accuracy gate, and playback has defects involving delayed requests, multiple readers, and browser speech permissions. The supplied tests do not cover those failure paths.",
+  "counts": {
+    "blocker": 1,
+    "major": 3,
+    "minor": 0
+  }
+}
