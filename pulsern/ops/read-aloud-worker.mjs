@@ -13,9 +13,11 @@
       being prepared. Queued parts are voiced oldest first, retried parts
       after fresh ones.
    2. Then the bank. Spare capacity voices the bank ahead of demand:
-      every practice question with its explanation, every case study and
-      every flashcard, in id order, resuming where the last run stopped
-      (prewarm/cursor.json). Readiness-exam items are never voiced.
+      every case study, every flashcard, then every practice question with
+      its explanation, in id order, resuming where the last run stopped
+      (prewarm/cursor.json). Cases and cards come first: they are fewer
+      and had no voice at all, while practice was already partly voiced.
+      Readiness-exam items are never voiced.
 
    Failures never block progress or spend without bound:
    - every synthesis claims a spending slot for the day it is made; with
@@ -222,7 +224,12 @@ export function itemPassages(kind, row) {
   return [...new Set(itemParts(kind, row).map((p) => p.text))].filter((t) => t && t.length <= SPEAK_MAX);
 }
 
-const KINDS = ["verdicts", "question", "case", "card"];
+const KINDS = ["verdicts", "case", "card", "question"];
+/* The scan order's version. A cursor saved under the old order (questions
+   first) moves to the case studies, and keeps where the questions were,
+   so they resume there after the cards (nothing voiced is lost: a passage
+   with a record is skipped at once). */
+export const SCAN_ORDER = 2;
 const RESCAN_DAYS = 7;
 export const BANK_QUERIES = {
   question: (db) => db.from("questions").select("id, type, stem, options, extra, answer, rationale").eq("approved", true).is("exam_form", null),
@@ -244,6 +251,9 @@ export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetc
      passages are skipped at once. A cursor with no voice is the marin
      scan, so the change to Joanna does not leave its place behind. */
   if ((cursor.check ?? 1) !== CHECK_VERSION || cursor.voice !== TTS.voice) cursor = { kind: KINDS[0], afterId: 0, voice: TTS.voice };
+  else if (!cursor.done && cursor.order !== SCAN_ORDER && cursor.kind && cursor.kind !== "verdicts") {
+    cursor = { kind: "case", afterId: 0, attempts: cursor.attempts, questionsFrom: cursor.kind === "question" ? cursor.afterId : 0 };
+  }
   if (cursor.done) {
     // A finished pass is repeated weekly, to pick up new bank items.
     if (now() - Date.parse(cursor.doneAt ?? 0) < RESCAN_DAYS * 86400000) { out.cursor = cursor; return out; }
@@ -251,7 +261,7 @@ export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetc
   }
   let done = 0, refusedInARow = 0;
   const save = async () => {
-    const { error } = await put(bucket, "prewarm/cursor.json", { ...cursor, check: CHECK_VERSION, voice: TTS.voice });
+    const { error } = await put(bucket, "prewarm/cursor.json", { ...cursor, check: CHECK_VERSION, voice: TTS.voice, order: SCAN_ORDER });
     if (error) throw new Error(`could not save the cursor: ${error.message ?? error}`);
   };
   /* Voice a group of passages (the result lines, or one bank item). If a
@@ -329,13 +339,14 @@ export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetc
     if (cursor.kind === "verdicts") {
       const stop = await voice(verdictPassages(), "result lines");
       if (stop) { out.stopped = stop; await save(); break; } // keeps the attempt counts
-      cursor = { kind: "question", afterId: 0, attempts: cursor.attempts }; await save(); continue;
+      cursor = { kind: KINDS[1], afterId: 0, attempts: cursor.attempts }; await save(); continue;
     }
     const { data: rows, error } = await BANK_QUERIES[cursor.kind](db).gt("id", cursor.afterId).order("id").limit(page);
     if (error) { out.stopped = `bank: ${error.message ?? error}`; out.failure = true; break; }
     if (!rows?.length) {
       const next = KINDS[KINDS.indexOf(cursor.kind) + 1];
-      cursor = next ? { kind: next, afterId: 0, attempts: cursor.attempts } : { done: true, doneAt: new Date(now()).toISOString() };
+      const from = next === "question" ? Number(cursor.questionsFrom) || 0 : 0;
+      cursor = next ? { kind: next, afterId: from, attempts: cursor.attempts, ...(next !== "question" && cursor.questionsFrom ? { questionsFrom: cursor.questionsFrom } : {}) } : { done: true, doneAt: new Date(now()).toISOString() };
       await save();
       if (!next) break;
       continue;
@@ -344,7 +355,7 @@ export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetc
     for (const row of rows) {
       stop = await voice(itemPassages(cursor.kind, row), `${cursor.kind} ${row.id}`);
       if (stop) break;
-      cursor = { kind: cursor.kind, afterId: row.id, attempts: cursor.attempts }; // an item counts as done only when all its passages are decided
+      cursor = { kind: cursor.kind, afterId: row.id, attempts: cursor.attempts, ...(cursor.questionsFrom ? { questionsFrom: cursor.questionsFrom } : {}) }; // an item counts as done only when all its passages are decided
     }
     await save();
     if (stop) { out.stopped = stop; break; }

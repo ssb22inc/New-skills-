@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/ai.js": { "maxDuration": 60 }
+  },
   "redirects": [
     { "source": "/app", "destination": "/app/", "permanent": true }
   ],

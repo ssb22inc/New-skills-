@@ -42,20 +42,37 @@ class FakeAudio {
 }
 window.Audio = FakeAudio;
 
-/* Record every device-speech attempt. speechSynthesis itself cannot be
-   replaced (it is a getter), so the speak method is wrapped. */
+/* The device's voice, stood in for like a phone that has one: every
+   utterance is recorded (the silent one a Listen tap queues to unlock
+   speech is not), "starts" at once and "ends" after env.speechMs, unless
+   cancelled. env.noDeviceVoice behaves like a device with no voice at all
+   (the utterance fails before it starts). speechSynthesis itself cannot be
+   replaced (it is a getter), so its methods are. */
+let speakingNow = null, speechEpoch = 0, utteranceCount = 0;
 try {
   const synth = window.speechSynthesis;
-  const orig = synth.speak.bind(synth);
-  Object.defineProperty(synth, "speak", {
-    configurable: true,
-    writable: true,
-    value(utterance) {
-      env.spoken.push(String(utterance?.text ?? ""));
-      return orig(utterance);
-    },
+  const define = (name, value) => Object.defineProperty(synth, name, { configurable: true, writable: true, value });
+  define("speak", (utterance) => {
+    const text = String(utterance?.text ?? "");
+    const mine = speechEpoch;
+    utterance._timer = setTimeout(() => {
+      if (mine !== speechEpoch) return;
+      if (text && env.failUtterance && ++utteranceCount === env.failUtterance) { utterance.onerror?.({ error: "synthesis-failed" }); return; }
+      if (text) env.spoken.push(text);
+      if (env.noDeviceVoice) { utterance.onerror?.({ error: "synthesis-failed" }); return; }
+      speakingNow = utterance;
+      utterance.onstart?.({});
+      if (env.speechHang && text) return;
+      utterance._end = setTimeout(() => { if (speakingNow === utterance) speakingNow = null; utterance.onend?.({}); }, text ? (env.speechMs ?? 200) : 0);
+    }, 0);
   });
-} catch { /* the source guard still forbids the call */ }
+  define("cancel", () => {
+    speechEpoch++;
+    const u = speakingNow; speakingNow = null;
+    if (u) { clearTimeout(u._end); u.onerror?.({ error: "interrupted" }); }
+  });
+  define("getVoices", () => (env.noDeviceVoice ? [] : [{ lang: "en-US", localService: true, name: "Test voice" }]));
+} catch { /* not replaceable here */ }
 
 /* The voice route, answered by the test. A request for the audio file
    itself (warming a clip) is not a voice-route call. */
@@ -63,7 +80,17 @@ let pending = [];
 window.fetch = (url, init) => {
   if (!init?.body) return Promise.resolve({ ok: false, status: 404, blob: async () => new Blob() });
   const body = JSON.parse(init.body);
-  return new Promise((resolve) => pending.push({ body, reply: (status, data) => resolve({ ok: status >= 200 && status < 300, status, json: async () => data }) }));
+  return new Promise((resolve, reject) => {
+    const entry = { body, reply: (status, data) => resolve({ ok: status >= 200 && status < 300, status, json: async () => data }) };
+    const stop = () => {
+      const at = pending.indexOf(entry);
+      if (at >= 0) pending.splice(at, 1);
+      reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    };
+    if (init.signal?.aborted) { stop(); return; }
+    init.signal?.addEventListener("abort", stop, { once: true });
+    pending.push(entry);
+  });
 };
 const urlFor = (p) => `https://signed.example/${p.body.ref.id}/${p.body.seg}`;
 

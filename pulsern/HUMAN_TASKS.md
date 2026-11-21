@@ -183,10 +183,13 @@ Claude Code executes everything else. These run in parallel with the build.
   - Saved audio plays when a passage is already in the new voice. Polly
     reads the normalised bank text as written (units and lab values spelled
     out). There is no second transcription pass.
-  - If that audio is not ready (still queued, the day's limit, Polly
-    refused it, or the request is slow), that part is shown on screen and
-    the bar says so. The parts that already have a clip still play. The
-    device's own voice is never a stand-in: nothing unchecked is spoken.
+  - If that audio is not ready within a few seconds (still queued, the
+    day's limit, or the request is slow), the device's own voice reads
+    that part from the same spelled-out words, and the bar says "Device
+    voice". A part the bank refuses (the item is gone, or the words no
+    longer match) stays on screen, as does a part whose signs could be
+    read two ways. The parts that already have a clip still play as the
+    AI voice.
   - The job "pulsern-read-aloud"
     (https://github.com/ssb22inc/New-skills-/actions/workflows/pulsern-read-aloud.yml)
     runs every 15 minutes and voices the bank ahead of demand: every
@@ -196,7 +199,8 @@ Claude Code executes everything else. These run in parallel with the build.
     old OpenAI voice so they are spoken again in Joanna.
   - If the AWS secrets are missing, the job logs that voicing is paused
     and exits without failing in a loop. Until a clip is saved, that part
-    is read on screen.
+    is read with the device voice. The job voices case studies, then
+    flashcards, then the remaining practice questions.
   - Pressing Listen on an item that is not voiced yet moves that item to
     the front of the job.
   - The server reads each item with the student's own access: approved

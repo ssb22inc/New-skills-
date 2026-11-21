@@ -3,8 +3,9 @@
    the item on screen:
    - an item with a part not yet voiced (202) still starts: the ready parts
      play, and the rest is shown on screen;
-   - a voice the server cannot provide (limit, outage) is shown on screen,
-     with the bar saying so, and never spoken by the device;
+   - a part whose AI voice is not ready (being prepared, limit, outage) is
+     read with the device's voice, with the bar saying so, so Listen is
+     never silent; only a device with no voice at all shows it on screen;
    - a response that arrives after the item changed or the reader closed
      never starts the old item's audio;
    - moving from the question to its explanation (or to the next item)
@@ -81,7 +82,8 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.elements).toBe(1);
   });
 
-  it("shows a part whose audio never starts, then plays the next ready part", async () => {
+  it("on a device with no voice of its own, shows a part whose audio never starts, then plays the next ready part", async () => {
+    await strict({ noDeviceVoice: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await strict({ hangPlay: true });
     await tap("play");
@@ -96,7 +98,8 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/1/opt0"]);
   });
 
-  it("does not wait out a fresh link that never arrives", async () => {
+  it("on a device with no voice of its own, does not wait out a fresh link that never arrives", async () => {
+    await strict({ noDeviceVoice: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await strict({ failPlay: true });
     await tap("play");
@@ -110,7 +113,8 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/1/opt0"]);
   });
 
-  it("shows a later part whose audio never arrives, and does not play it when the answer comes late", async () => {
+  it("on a device with no voice of its own, shows a later part whose audio never arrives, and does not play it when the answer comes late", async () => {
+    await strict({ noDeviceVoice: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await T(() => window.T.hold());
@@ -171,7 +175,7 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
   });
 
-  it("plays the parts that are ready and shows a part still being prepared", async () => {
+  it("plays the parts that are ready and reads a part still being prepared with the device voice", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ opt0: [202, { queued: true }], "*": [200, "url"] });
@@ -180,18 +184,55 @@ describe("useReadAloud, mounted in a browser", () => {
     await gap();
     const s = await state();
     expect(s.active).toBe("opt0");
-    expect(s.silent).toBe(true);
-    expect(s.source).toBe("screen");
-    expect(s.note).toBe("preparing");
-    expect(s.spoken).toEqual([]);
+    expect(s.silent).toBe(false);
+    expect(s.source).toBe("device");
+    expect(s.spoken).toEqual(["Potassium 2.9."]); // the whole number, never cut at its decimal point
     const bar = await T(() => window.T.barText());
-    expect(bar.text).toContain(bar.notes.preparing);
-    expect(bar.text).not.toContain("Device voice");
-    await gap(2500);
+    expect(bar.text).toContain("Device voice");
+    expect(bar.text).toContain(bar.notes.device);
+    await gap(800);
     expect((await state()).played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt1"]);
   });
 
-  it("shows a part on screen when the voice is over the limit, and does not speak it", async () => {
+  it("is never silent when no AI voice is ready yet: every part is read by the device, in order", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await answer({ "*": [202, { queued: true }] });
+    await gap(1500);
+    const s = await state();
+    expect(s.played).toEqual([]);
+    expect(s.spoken).toEqual(["Which value is the priority?", "Potassium 2.9.", "Sodium 138."]);
+  });
+
+  it("reads with the device voice while the AI voice is still being made, then uses the AI voice when it arrives", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await gap(3000); // nothing answered within the first part's wait
+    let s = await state();
+    expect(s.source).toBe("device");
+    expect(s.spoken).toEqual(["Which value is the priority?"]);
+    await answer({ "*": [200, "url"] });
+    await gap(600);
+    s = await state();
+    expect(s.played).toEqual(["https://signed.example/1/opt0"]);
+    expect(s.source).toBe("ai");
+  });
+
+  it("stops the device voice on Stop", async () => {
+    await T(() => Object.assign(window.T.env, { speechMs: 5000 }));
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await answer({ "*": [202, { queued: true }] });
+    expect((await state()).source).toBe("device");
+    await tap("stop");
+    await gap(300);
+    const s = await state();
+    expect(s.status).toBe("idle");
+    expect(s.spoken).toEqual(["Which value is the priority?"]);
+  });
+
+  it("on a device with no voice of its own, shows a part on screen when the voice is over the limit, and does not speak it", async () => {
+    await strict({ noDeviceVoice: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ stem: [202, { queued: true }], "*": [429, { error: "Daily voice limit reached" }] });
@@ -203,7 +244,8 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.note).toBe("preparing");
   });
 
-  it("says the voice will be prepared after midnight, and shows the part", async () => {
+  it("on a device with no voice of its own, says the voice will be prepared after midnight, and shows the part", async () => {
+    await strict({ noDeviceVoice: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ "*": [202, { queued: true, after: "tomorrow" }] });
@@ -215,7 +257,8 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(bar.text).toContain(bar.notes["preparing-tomorrow"]);
   });
 
-  it("shows the part when the voice is unavailable, instead of speaking it", async () => {
+  it("on a device with no voice of its own, shows the part when the voice is unavailable, instead of speaking it", async () => {
+    await strict({ noDeviceVoice: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ "*": [429, { error: "Daily voice limit reached" }] });
@@ -228,7 +271,60 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(bar.text).toContain(bar.notes.unavailable);
   });
 
-  it("shows a part refused by the check without voicing it, then plays the rest", async () => {
+  it("does not read a part the bank refused, and shows it instead", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await answer({ opt0: [409, { error: "Text does not match the item" }], stem: [404, { error: "Not available" }], "*": [200, "url"] });
+    await gap(400);
+    const s = await state();
+    expect(s.spoken).toEqual([]);
+    expect(s.played).toEqual([]);
+    expect(s.silent).toBe(true);
+    expect(s.source).toBe("screen");
+    expect(s.active).toBe("stem");
+  });
+
+  it("stops a device reading when a later sentence fails, instead of skipping it", async () => {
+    const text = "First finding is clear. Second finding is the dose. Third finding is the plan.";
+    await strict({ failUtterance: 2 });
+    await render({ segments: [{ id: "stem", text }], itemKey: "q:9", itemRef: REF(9) });
+    await tap("play");
+    await answer({ "*": [202, { queued: true }] });
+    await gap(400);
+    const s = await state();
+    expect(s.spoken).toEqual(["First finding is clear."]);
+    expect(s.source).toBe("screen");
+    expect(s.silent).toBe(true);
+  });
+
+  it("cancels a device utterance that never finishes, so it cannot keep speaking", async () => {
+    await strict({ speechHang: true });
+    await render({ segments: [SEGS[0]], itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await answer({ "*": [202, { queued: true }] });
+    expect((await state()).source).toBe("device");
+    await gap(8000);
+    const s = await state();
+    expect(s.spoken).toEqual(["Which value is the priority?"]);
+    expect(s.status).toBe("idle");
+    expect(s.source).toBe(null);
+  }, 15_000);
+
+  it("asks for a new item even when the previous item's voice requests never answered", async () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, text: `Part ${i} of the first item.` }));
+    await render({ segments: many, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    expect((await pending()).map((b) => b.ref.id)).toEqual([1, 1, 1, 1, 1, 1]);
+    await render({ segments: SEGS, itemKey: "q:2", itemRef: REF(2) });
+    await tap("play");
+    await gap(100);
+    const bodies = await pending();
+    expect(bodies.map((b) => b.ref.id)).toContain(2);
+    expect(bodies.some((b) => b.ref.id === 1)).toBe(false);
+  });
+
+  it("on a device with no voice of its own, shows a part refused by the check without voicing it, then plays the rest", async () => {
+    await strict({ noDeviceVoice: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ opt0: [422, { error: "Voice check failed" }], "*": [200, "url"] });
@@ -258,7 +354,8 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/2/stem", "https://signed.example/2/opt1"]);
   });
 
-  it("shows a one-part card whose check failed on screen, instead of 'try again later'", async () => {
+  it("on a device with no voice of its own, shows a one-part card whose check failed on screen, instead of 'try again later'", async () => {
+    await strict({ noDeviceVoice: true });
     await render({ segments: [{ id: "card-front", text: "Potassium 2.9 milliequivalents per liter." }], itemKey: "c:4", itemRef: { kind: "card", id: 4, part: "front" } });
     await tap("play");
     await answer({ "*": [422, { error: "Voice check failed" }] });

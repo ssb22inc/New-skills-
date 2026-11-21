@@ -3,11 +3,27 @@
 // plus the signed-in user's Supabase access token, never a vendor secret.
 // Swap vendors by editing MODELS — nothing else changes.
 // { action: "speak", ref, seg, text } is the read-aloud voice instead
-// (api/_speak.js): same sign-in door. This server does not speak; it
-// queues the passage for the voice job, which uses Amazon Polly.
+// (api/_speak.js): same sign-in door. With PULSERN_POLLY_ACCESS_KEY_ID and
+// PULSERN_POLLY_SECRET_ACCESS_KEY set (a key that may only call Polly's
+// SynthesizeSpeech), a passage with no clip yet is spoken right away with
+// Amazon Polly Neural and saved for everyone; without them, or when Polly is
+// down, it is queued for the voice job as before. Either way the daily
+// dollar cap (READ_ALOUD_DAILY_USD, default $40) is shared with the job.
+// (Vercel reserves the AWS_* names, hence the PULSERN_POLLY_* ones.)
 import { createClient } from '@supabase/supabase-js';
+import { PollyClient } from '@aws-sdk/client-polly';
 import { tokenFromRequest, userFromRequest } from './_require-user.js';
-import { speak, bankReader } from './_speak.js';
+import { speak, bankReader, readAloudLimits } from './_speak.js';
+
+let pollyClient = null;
+export function livePolly(env = process.env) {
+  const accessKeyId = env.PULSERN_POLLY_ACCESS_KEY_ID, secretAccessKey = env.PULSERN_POLLY_SECRET_ACCESS_KEY;
+  if (!accessKeyId || !secretAccessKey) return null;
+  /* One HTTP attempt per send: a retry would spend again without a new
+     budget reservation (the same rule as the voice job). */
+  pollyClient ??= new PollyClient({ region: env.PULSERN_POLLY_REGION || 'us-east-1', credentials: { accessKeyId, secretAccessKey }, maxAttempts: 1 });
+  return pollyClient;
+}
 
 const MODELS = {
   claude:   'anthropic/claude-sonnet-4.6',
@@ -35,8 +51,10 @@ export default async function handler(req, res) {
       global: { headers: { Authorization: `Bearer ${tokenFromRequest(req)}` } },
     })) : null;
     const { ref, seg, text } = req.body;
-    // Daily caps come from LIMITS in api/_speak.js, shared with the voice job.
-    const out = await speak({ ref, seg, text, userId: user.id, readItem, storage });
+    // Daily caps come from LIMITS in api/_speak.js and the dollar cap from
+    // READ_ALOUD_DAILY_USD, both shared with the voice job.
+    const polly = livePolly();
+    const out = await speak({ ref, seg, text, userId: user.id, readItem, storage, polly, limits: readAloudLimits(process.env) });
     return res.status(out.status).json(out.body);
   }
 

@@ -50,7 +50,10 @@ export const TAKES = 1;
    Polly Neural is cheap enough for the rest of the bank: 15,000 passages
    a day. READ_ALOUD_DAILY_USD (default $40) is the dollar cap the job
    also enforces, at POLLY_USD_PER_MILLION characters. */
-export const LIMITS = Object.freeze({ user: 300, admission: 4000, spend: 15000 });
+/* user is per passage when the route speaks live (a case study alone has
+   30 or more parts), so it is set for a student working through several
+   cases a day; the app-wide dollar cap still bounds the total. */
+export const LIMITS = Object.freeze({ user: 1500, admission: 4000, spend: 15000 });
 /* Joanna: US English neural, the clearest of the neural voices for
    numbers, units and drug names in exam stems. Ruth and Danielle are
    warmer; they also reshape a value more often. Matthew is clear and
@@ -556,12 +559,15 @@ export async function reserveSpeechCost(storage, billedChars, { now = Date.now()
 }
 /* A student's request: their own daily count, then the app-wide one
    (admission for a queued passage; spend for a live synthesis). */
-export async function reserve(storage, userId, { now = Date.now(), limits = LIMITS, pool = 'admission' } = {}) {
+export async function reserve(storage, userId, { now = Date.now(), limits = LIMITS, pool = 'admission', billed = null } = {}) {
   const day = quotaDay(now);
   const user = `usage/${day}/u-${sha256(String(userId)).slice(0, 24)}`;
   const mine = await claimSlot(storage, user, limits.user);
   if (mine !== 'ok') return mine;
-  return pool === 'spend' ? reserveSpend(storage, { now, limits }) : claimSlot(storage, `usage/${day}/all`, limits.admission);
+  /* A live synthesis is paid from the same daily dollar cap as the voice
+     job (limits.chars, from READ_ALOUD_DAILY_USD) when billed is given. */
+  if (pool === 'spend') return billed == null ? reserveSpend(storage, { now, limits }) : reserveSpeechCost(storage, billed, { now, limits });
+  return claimSlot(storage, `usage/${day}/all`, limits.admission);
 }
 
 /* Small JSON files in the bucket. A missing file reads as null. */
@@ -850,11 +856,24 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
   const work = [...parts.map((x) => ({ ref, seg: x.id, text: x.text })), ...itemParts(ref.kind, { ...item, id: ref.id })]
     .filter((x) => x.text && x.text.length <= SPEAK_MAX && voiceable(x.text) && !seen.has(x.text) && seen.add(x.text));
 
-  /* A student is waiting to hear this item: any of its parts held in the
-     retry lane (after an outage) moves to the fresh lane, which the voice
-     job serves first, with its attempt count and give-up state as they
-     were. The retry copy is removed only once the fresh one is saved. */
-  if (!live) {
+  /* Live (a Polly client is set on the server): this passage is spoken
+     now and saved, so Listen plays it within a few seconds. If the voice
+     cannot be made right now (the provider or storage is down, or the
+     passage stayed busy), the item is queued for the voice job as before,
+     and the app reads it with the device's voice meanwhile. */
+  if (!live) return queueItem();
+  const spoken = await speakLive();
+  if (spoken.status >= 500) {
+    const queued = await queueItem();
+    if (queued.status === 202) return queued;
+  }
+  return spoken;
+
+  async function queueItem() {
+    /* A student is waiting to hear this item: any of its parts held in the
+       retry lane (after an outage) moves to the fresh lane, which the voice
+       job serves first, with its attempt count and give-up state as they
+       were. The retry copy is removed only once the fresh one is saved. */
     for (const p of work) {
       const paths = passagePaths(p.text, tts);
       const held = await readJson(bucket, paths.retry);
@@ -863,13 +882,11 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
       const { error } = await bucket.remove([paths.retry]);
       if (error) return unavailable;
     }
-  }
 
-  // Already waiting for the voice job: nothing more to spend.
-  const waiting = async (paths) => (await readJson(bucket, paths.queue)) || (await readJson(bucket, paths.retry));
-  if (!live && await waiting({ queue, retry })) return queuedReply(storage, t0, limits);
+    // Already waiting for the voice job: nothing more to spend.
+    const waiting = async (paths) => (await readJson(bucket, paths.queue)) || (await readJson(bucket, paths.retry));
+    if (await waiting({ queue, retry })) return queuedReply(storage, t0, limits);
 
-  if (!live) {
     /* The whole item is queued at once, under ONE claim per item per day:
        a 202 always means every part of the item is on its way, never a
        part admitted while its neighbours were refused. The first request
@@ -931,31 +948,35 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
     return queuedReply(storage, t0, limits);
   }
 
-  /* A live synthesis. One request voices a passage at a time: another
-     asking for the same words waits for that result instead of paying
-     again. */
-  const claim = await claimPassage(storage, text, timeOf, tts);
-  if (claim.state === 'error') return unavailable;
-  if (claim.state === 'busy') {
-    for (let i = 0; i < PASSAGE_WAIT.tries; i++) {
-      await new Promise((r) => setTimeout(r, PASSAGE_WAIT.ms));
-      const done = await readRecord(storage, text, tts, timeOf());
-      if (done?.pass === true) { const link = await signed(bucket, mp3); return link.url ? { status: 200, body: { url: link.url, cached: true } } : unavailable; }
-      if (done?.pass === false) return { status: 422, body: { error: 'Voice check failed' } };
+  async function speakLive() {
+    /* A live synthesis. One request voices a passage at a time: another
+       asking for the same words waits for that result instead of paying
+       again. */
+    const claim = await claimPassage(storage, text, timeOf, tts);
+    if (claim.state === 'error') return unavailable;
+    if (claim.state === 'busy') {
+      for (let i = 0; i < PASSAGE_WAIT.tries; i++) {
+        await new Promise((r) => setTimeout(r, PASSAGE_WAIT.ms));
+        const done = await readRecord(storage, text, tts, timeOf());
+        if (done?.pass === true) { const link = await signed(bucket, mp3); return link.url ? { status: 200, body: { url: link.url, cached: true } } : unavailable; }
+        if (done?.pass === false) return { status: 422, body: { error: 'Voice check failed' } };
+      }
+      return unavailable;
     }
-    return unavailable;
+    try {
+      // It may have been finished while this request was getting the claim.
+      const now2 = await readRecord(storage, text, tts, timeOf());
+      if (now2?.pass === true) { const link = await signed(bucket, mp3); if (link.url) return { status: 200, body: { url: link.url, cached: true } }; }
+      if (now2?.pass === false) return { status: 422, body: { error: 'Voice check failed' } };
+      return await synthesiseLive(claim);
+    } finally { await releasePassage(storage, claim); }
   }
-  try {
-    // It may have been finished while this request was getting the claim.
-    const now2 = await readRecord(storage, text, tts, timeOf());
-    if (now2?.pass === true) { const link = await signed(bucket, mp3); if (link.url) return { status: 200, body: { url: link.url, cached: true } }; }
-    if (now2?.pass === false) return { status: 422, body: { error: 'Voice check failed' } };
-    return await synthesiseLive();
-  } finally { await releasePassage(storage, claim); }
 
-  async function synthesiseLive() {
-    // Every take claims a spending slot on the day it is made.
-    const pay = () => reserve(storage, userId, { now: timeOf(), limits, pool: 'spend' });
+  async function synthesiseLive(claim) {
+    // Every take claims a spending slot on the day it is made, from the
+    // student's own count and the shared daily dollar cap.
+    const billed = pollyInput(text).billed ?? String(text).length;
+    const pay = () => reserve(storage, userId, { now: timeOf(), limits, pool: 'spend', billed });
     const { best, final, error, errorKind } = await makeChecked({ text, polly, fetchImpl, tts, beforeTake: pay, deadline: claim.deadline, timeOf });
     if (!final) {
       if (errorKind === 'budget') return overBudget;
