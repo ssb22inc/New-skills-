@@ -42,20 +42,32 @@ class FakeAudio {
 }
 window.Audio = FakeAudio;
 
-/* Record every device-speech attempt. speechSynthesis itself cannot be
-   replaced (it is a getter), so the speak method is wrapped. */
+/* The device's voice, stood in for like a phone that has one: every
+   utterance is recorded (the silent one a Listen tap queues to unlock
+   speech is not), "starts" at once and "ends" after env.speechMs, unless
+   cancelled. env.noDeviceVoice behaves like a device with no voice at all
+   (the utterance fails before it starts). speechSynthesis itself cannot be
+   replaced (it is a getter), so its methods are. */
+let speakingNow = null;
 try {
   const synth = window.speechSynthesis;
-  const orig = synth.speak.bind(synth);
-  Object.defineProperty(synth, "speak", {
-    configurable: true,
-    writable: true,
-    value(utterance) {
-      env.spoken.push(String(utterance?.text ?? ""));
-      return orig(utterance);
-    },
+  const define = (name, value) => Object.defineProperty(synth, name, { configurable: true, writable: true, value });
+  define("speak", (utterance) => {
+    const text = String(utterance?.text ?? "");
+    if (text) env.spoken.push(text);
+    setTimeout(() => {
+      if (env.noDeviceVoice) { utterance.onerror?.({ error: "synthesis-failed" }); return; }
+      speakingNow = utterance;
+      utterance.onstart?.({});
+      utterance._timer = setTimeout(() => { if (speakingNow === utterance) speakingNow = null; utterance.onend?.({}); }, text ? (env.speechMs ?? 200) : 0);
+    }, 0);
   });
-} catch { /* the source guard still forbids the call */ }
+  define("cancel", () => {
+    const u = speakingNow; speakingNow = null;
+    if (u) { clearTimeout(u._timer); u.onerror?.({ error: "interrupted" }); }
+  });
+  define("getVoices", () => (env.noDeviceVoice ? [] : [{ lang: "en-US", localService: true, name: "Test voice" }]));
+} catch { /* not replaceable here */ }
 
 /* The voice route, answered by the test. A request for the audio file
    itself (warming a clip) is not a voice-route call. */

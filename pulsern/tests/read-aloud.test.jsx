@@ -12,7 +12,7 @@ import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts, voiceable } from "../src/read-aloud-script.js";
-import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES, createWarmCache } from "../src/read-aloud.jsx";
+import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES, createWarmCache, speechChunks } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, MARIN_TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE, queueLegacyMarin } from "../ops/read-aloud-worker.mjs";
@@ -537,9 +537,19 @@ describe("the controls", () => {
     expect(planReading(segs, [{ status: 422 }, { status: 422 }, { status: 422 }]).steps.every((s) => s.silent && !s.url)).toBe(true);
   });
 
-  it("never speaks with the device voice", () => {
+  it("uses the device voice only as a last resort, and never for a part that could be read two ways", () => {
     const src = readFileSync(new URL("../src/read-aloud.jsx", import.meta.url), "utf8");
-    expect(src).not.toMatch(/speechSynthesis|SpeechSynthesisUtterance/);
+    // every device-speech call goes through readOnDevice, behind voiceable()
+    expect(src.match(/deviceSpeak\(/g)).toHaveLength(2); // its definition and its one caller
+    expect(src).toMatch(/if \(voiceable\(text\)\) \{\s*setSilent\(false\); setSource\("device"\)/);
+  });
+
+  it("reads the device voice sentence by sentence without splitting a number", () => {
+    expect(speechChunks("Potassium 2.9. Give 0.5 mg; ratio 1:2 now!")).toEqual(["Potassium 2.9.", "Give 0.5 mg;", "ratio 1:2 now!"]);
+    const long = speechChunks("word ".repeat(120));
+    expect(long.length).toBeGreaterThan(1);
+    expect(long.every((c) => c.length <= 220)).toBe(true);
+    expect(long.join(" ").split(" ").length).toBe(120);
   });
 
   it("keeps only a few warmed clips, and drops one that finished after it was evicted", () => {
@@ -713,11 +723,24 @@ describe("server voice: the accuracy gate", () => {
     expect([...files.keys()].filter((k) => k.endsWith(".mp3"))).toHaveLength(1);
   });
 
+  it("pays a live synthesis from the daily dollar cap the voice job shares, and speaks nothing over it", async () => {
+    const { storage, files } = fakeStorage();
+    const f = fakeOpenAI();
+    const now = Date.UTC(2026, 9, 29, 16);
+    files.set(`usage/${quotaDay(now)}/chars/00000`, Buffer.from("1")); // today's whole dollar cap already used
+    const over = await speak({ ...base(), storage, fetchImpl: f, now, limits: { user: 300, admission: 10, spend: 10, chars: 100 } });
+    expect(over.status).toBe(429);
+    expect(f.mock.calls.filter(([u]) => u.endsWith("/audio/speech"))).toHaveLength(0);
+    const ok = await speak({ ...base(), storage, fetchImpl: f, now, limits: { user: 300, admission: 10, spend: 10, chars: 100000 } });
+    expect(ok.status).toBe(200);
+    expect([...files.keys()].some((k) => /\/chars\//.test(k))).toBe(true); // counted in the shared character slots
+  });
+
   it("records nothing terminal when Polly fails, and voices the passage once it recovers", async () => {
     const flaky = vi.fn(async () => ({ ok: false, status: 500 }));
     const { storage, files } = fakeStorage();
     const out = await speak({ ...base(), storage, fetchImpl: flaky });
-    expect(out.status).toBe(502);
+    expect(out.status).toBe(202); // queued for the voice job; the app reads it with the device voice meanwhile
     expect([...files.keys()].filter((k) => k.startsWith("Joanna/"))).toEqual([]);
     expect((await speak({ ...base(), storage, fetchImpl: fakeOpenAI() })).status).toBe(200);
   });
@@ -1600,7 +1623,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     it(`records nothing when the provider answers ${status}, and voices the passage once the account works`, async () => {
       const { storage, files } = fakeStorage();
       const broken = vi.fn(async () => ({ ok: false, status }));
-      expect((await speak({ ...base(), storage, fetchImpl: broken })).status).toBe(503);
+      expect((await speak({ ...base(), storage, fetchImpl: broken })).status).toBe(202); // queued, not lost
       await speak({ ...base({ apiKey: "" }), storage });
       const r = await drainQueue({ storage, apiKey: "k", fetchImpl: broken, log: () => {} });
       expect(r.service).toBeTruthy();
@@ -1839,7 +1862,7 @@ describe("account and setup failures, shared spending, and the run's outcome", (
       const { storage, files } = fakeStorage();
       const questions = [Q(100, 6), Q(101, 3)];
       const stopAt = itemPassages("question", questions[0])[4];
-      files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(itemPassages("question", questions[0])), check: CHECK_VERSION, voice: TTS.voice })));
+      files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(itemPassages("question", questions[0])), check: CHECK_VERSION, voice: TTS.voice, order: 2 })));
       const f = fakeOpenAI();
       await prewarmBank({ storage, db: fakeDb(bank(mutate(questions))), apiKey: "k", fetchImpl: f, max: 1000 });
       expect(voicedTexts(f)[0], label).toBe(expectFirst); // from the top of that item: nothing skipped
@@ -1849,10 +1872,26 @@ describe("account and setup failures, shared spending, and the run's outcome", (
     const { storage, files } = fakeStorage();
     const q = Q(100, 6);
     const parts = itemPassages("question", q);
-    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(parts), check: CHECK_VERSION, voice: TTS.voice })));
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, at: 4, atItem: "question 100", atKey: groupKeyOf(parts), check: CHECK_VERSION, voice: TTS.voice, order: 2 })));
     const f = fakeOpenAI();
     await prewarmBank({ storage, db: fakeDb(bank([q])), apiKey: "k", fetchImpl: f, max: 1000 });
     expect(voicedTexts(f)[0]).toBe(parts[4]);
+  });
+
+  it("voices case studies and cards before the rest of the questions, then resumes the questions where they were", async () => {
+    const { storage, files } = fakeStorage();
+    const Q = (id) => ({ ...ROW, id, stem: `Stem of ${id}?`, options: [`Option ${id}.0 words`, `Option ${id}.1 words`], rationale: `Why ${id}.` });
+    const card = { id: 7, front: "Front of card seven.", back: "Back of card seven." };
+    const bank = { questions: [Q(50), Q(100), Q(101)], case_studies: [], flashcards: [card] };
+    // a cursor saved under the old order: questions first, stopped after question 99
+    files.set("prewarm/cursor.json", Buffer.from(JSON.stringify({ kind: "question", afterId: 99, check: CHECK_VERSION, voice: TTS.voice })));
+    const f = fakeOpenAI();
+    await prewarmBank({ storage, db: fakeDb(bank), apiKey: "k", fetchImpl: f, max: 1000 });
+    const voiced = f.mock.calls.filter(([u]) => u.endsWith("/audio/speech")).map(([, i]) => JSON.parse(i.body).input);
+    expect(voiced.slice(0, 2)).toEqual(itemPassages("card", card)); // the card first
+    expect(voiced).toEqual(expect.arrayContaining(itemPassages("question", Q(100))));
+    expect(voiced).not.toEqual(expect.arrayContaining([`Stem of 50?`])); // already past it: not walked again
+    expect(JSON.parse(files.get("prewarm/cursor.json").toString())).toMatchObject({ done: true });
   });
 
   it("passes the run when work simply stops at the run's limit or today's budget", async () => {
@@ -2091,7 +2130,7 @@ describe("server voice: daily budgets", () => {
         const hang = vi.fn((url, init) => { signal = init.signal; return new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true })); });
         const r = await speak({ ...base(), storage, fetchImpl: hang });
         expect(signal?.aborted).toBe(true);
-        expect(r.status).toBe(502);
+        expect(r.status).toBe(202); // the live call gave up; the passage is queued for the job
         expect(hang).toHaveBeenCalledTimes(1);
       } finally { Object.assign(CALL, saved); }
     });
