@@ -1401,6 +1401,43 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     expect(kept).toMatchObject({ voice: "Joanna", attempts: 2, text });
   });
 
+  it("stops requeueing after a third of the deadline and does not mark the walk done", async () => {
+    const { storage, files } = fakeStorage();
+    const rows = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, type: "mc", stem: `Stem number ${i} needs a voice.`, options: ["One", "Two"], answer: 0, rationale: `Because ${i}.` }));
+    for (const row of rows) for (const part of itemParts("question", row)) files.set(`marin/${speechKey(part.text, MARIN_TTS)}.mp3`, Buffer.from("old"));
+    let ticks = 0;
+    const start = 10_000;
+    const r = await queueLegacyMarin({
+      storage,
+      db: fakeDb({ questions: rows, case_studies: [], flashcards: [] }),
+      until: start + 300,
+      now: () => start + ticks++ * 25,
+      page: 4,
+      log: () => {},
+    });
+    expect(r.done).toBe(false);
+    expect(r.queued).toBeGreaterThan(0);
+    expect(files.has("prewarm/polly-revoice.json")).toBe(false);
+    expect(files.has("prewarm/polly-revoice-at.json")).toBe(true);
+    const queued = [...files.keys()].filter((k) => k.startsWith("queue/Joanna-")).length;
+    expect(queued).toBe(r.queued);
+  });
+
+  it("does not upload a marin passage that is already in the Joanna queue", async () => {
+    const { storage, files } = fakeStorage();
+    const row = { id: 4, type: "mc", stem: "Stem.", options: ["A"], answer: 0, rationale: "Because." };
+    const part = itemParts("question", row)[0];
+    files.set(`marin/${speechKey(part.text, MARIN_TTS)}.mp3`, Buffer.from("old"));
+    files.set(passagePaths(part.text).queue, Buffer.from(JSON.stringify({ text: part.text, voice: "Joanna" })));
+    const real = storage.from(BUCKET);
+    let writes = 0;
+    const wrapped = { ...storage, from: () => ({ ...real, upload: async (p, b, o) => { if (p.startsWith("queue/Joanna-")) writes++; return real.upload(p, b, o); } }) };
+    const r = await queueLegacyMarin({ storage: wrapped, db: fakeDb({ questions: [row], case_studies: [], flashcards: [] }), log: () => {} });
+    expect(r.done).toBe(true);
+    expect(writes).toBe(0);
+    expect(files.has("prewarm/polly-revoice.json")).toBe(true);
+  });
+
   it("does not mark the migration done when a legacy request cannot be read", async () => {
     const text = "Potassium 2.9 milliequivalents per liter.";
     const { storage, files } = fakeStorage();
