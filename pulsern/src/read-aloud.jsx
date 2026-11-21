@@ -17,10 +17,9 @@
    it is ready. The page asks for it as soon as the item is shown (the
    server speaks a missing passage on the spot when it can), and Listen
    starts the first ready part without waiting for the rest. Listen is
-   never silent: a part whose AI voice is not ready in time (still being
-   made, over the daily limit, or the service is down) is read with the
-   device's own voice, from the same words the AI voice reads (units and
-   doses already spelled out), and the bar says so. A part the bank
+   never silent: when no clip is cached, the device's own voice starts
+   inside the Listen tap, from the same spelled-out words, and later parts
+   switch to the AI clip once it is ready. A part the bank
    refuses — the item is gone, the words no longer match, or the part
    must be read on screen — is shown, never spoken by the device. Only
    bank items carry a voice; built-in sample items show no button.
@@ -36,10 +35,10 @@ const GAP_MS = 350; // a breath between parts: the stem, then each choice
 /* How long Listen waits for a part's checked audio before showing that
    part on screen and moving on. Applies to every part, not only the first. */
 export const FIRST_BUDGET_MS = 900;
-/* How long Listen waits for the FIRST part's AI voice when it is still
-   being made (a live synthesis takes a second or two). After that the
-   device's voice reads that part; the rest are usually ready by then. */
-export const FIRST_AI_WAIT_MS = 2500;
+/* How long a later part waits for an AI clip that is already on the way.
+   The first sound does not wait: with no clip cached, the device speaks
+   inside the Listen tap, and a ready clip plays at once. */
+export const LATER_AI_WAIT_MS = 400;
 /* Requests to the voice route at once, per page: a case study has 30 or
    more parts, and asking for all of them together only makes them race
    for the same daily counters. They go in reading order. */
@@ -344,15 +343,14 @@ function englishVoice(s) {
     return voices.find((v) => /^en[-_]US$/i.test(v.lang) && v.localService) || voices.find((v) => /^en[-_]US$/i.test(v.lang)) || voices.find((v) => /^en/i.test(v.lang)) || null;
   } catch { return null; }
 }
-/* Inside the Listen tap: some browsers (iOS Safari) let a page speak only
-   if its first utterance was started by a tap, so a silent one is queued
-   there. Also asks for the voice list, which some browsers load lazily. */
-let devicePrimed = false;
+/* Inside the Listen tap, before any wait. Android Chrome only speaks if
+   speak() runs in the tap itself, and its voice list is often empty until
+   getVoices() has been called from that same tap. An empty priming
+   utterance is not used: cancelling it drops the unlock. */
 export function primeDeviceVoice() {
   const s = synth();
-  if (!s || devicePrimed) return;
-  devicePrimed = true;
-  try { s.getVoices(); const u = new window.SpeechSynthesisUtterance(""); u.volume = 0; s.speak(u); } catch { /* no device voice */ }
+  if (!s) return;
+  try { s.getVoices(); s.resume?.(); } catch { /* the language on the utterance is enough */ }
 }
 /* Resolves true when the part was read (or the reading was stopped),
    false when this device has no voice to read it with. */
@@ -476,14 +474,67 @@ export function useReadAloud(segments, key, ref = null) {
       });
     };
     const tasks = segs.map((s) => ask(s));
+    /* No cached clip: speak the first readable part in this tap, before
+       any wait, so Android Chrome accepts it. Later parts use the AI clip
+       once it is ready. A part that must stay on screen is skipped. */
+    primeDeviceVoice();
+    /* The first part we may read. A cached refusal (gone, mismatched, or
+       the check failed) is not a missing clip: it stays on screen, and the
+       device voice starts at the next part that can be read. A cached clip
+       plays as audio, so it is not a device lead either. */
+    const refused = (o) => !!(o && (o.unvoiceable || o.status === 404 || o.status === 409 || o.status === 422));
+    let first = null;
+    for (const s of segs.slice(start)) {
+      if (!voiceable(s.text)) continue;
+      const known = voice.peek(itemRef, s.id, s.text);
+      if (refused(known)) continue;
+      if (!known?.url) first = s;
+      break;
+    }
+    const speechCtrl = new AbortController();
+    signal.addEventListener("abort", () => speechCtrl.abort(), { once: true });
+    let lead = null;
+    if (first) {
+      const at = segs.findIndex((s) => s.id === first.id);
+      tasks[at]?.then((o) => {
+        if (o && (o.status === 404 || o.status === 409 || o.status === 422 || o.unvoiceable)) speechCtrl.abort();
+      });
+      lead = { id: first.id, done: deviceSpeak(first.text, prefsRef.current.rate, speechCtrl.signal) };
+    }
+    let heard = false;
 
     for (let i = start; i < segs.length && !signal.aborted; i++) {
       resumeAt.current = i;
+      if (lead && segs[i].id === lead.id) {
+        setActive(segs[i].id); setSilent(false); setSource("device"); setNote(null); setStatus("playing");
+        const ok = await lead.done;
+        lead = null;
+        if (signal.aborted || run.current !== me) return;
+        const settled = voice.peek(itemRef, segs[i].id, segs[i].text);
+        if (settled && (settled.status === 404 || settled.status === 409 || settled.status === 422 || settled.unvoiceable)) {
+          setSilent(true); setSource("screen"); setNote("silent");
+          if (i === segs.length - 1) await wait(readingMs(segs[i].text, prefsRef.current.rate), signal);
+          else if (!signal.aborted && run.current === me) await wait(GAP_MS, signal);
+          continue;
+        }
+        if (ok) { heard = true; if (i < segs.length - 1) await wait(GAP_MS, signal); continue; }
+        const missed = voice.peek(itemRef, segs[i].id, segs[i].text) ?? (await Promise.race([
+          tasks[i],
+          wait(LATER_AI_WAIT_MS, signal).then(() => voice.peek(itemRef, segs[i].id, segs[i].text) || { status: 0 }),
+        ]));
+        if (missed?.url) { /* a clip arrived as the device gave up: play it below */ }
+        else {
+          const note = planReading([segs[i]], [missed || { status: 0 }]).steps[0].note || "unavailable";
+          setSilent(true); setSource("screen"); setNote(note);
+          if (i === segs.length - 1) await wait(readingMs(segs[i].text, prefsRef.current.rate), signal);
+          continue;
+        }
+      }
       let outcome = voice.peek(itemRef, segs[i].id, segs[i].text);
       if (!outcome) {
         const raced = await Promise.race([
           tasks[i].then((o) => ({ outcome: o })),
-          wait(i === start ? FIRST_AI_WAIT_MS : FIRST_BUDGET_MS, signal).then(() => ({ slow: true })),
+          wait(LATER_AI_WAIT_MS, signal).then(() => ({ slow: true })),
         ]);
         if (signal.aborted || run.current !== me) return;
         /* A part that has not answered yet is read with the device's voice,
@@ -544,13 +595,17 @@ export function useReadAloud(segments, key, ref = null) {
            that is not ready, which the device reads. */
         if (step.note === "silent") {
           setSilent(true); setSource("screen"); setNote("silent");
-          await wait(readingMs(step.text, prefsRef.current.rate), signal);
+          if (heard) await wait(300, signal);
+          else if (i === segs.length - 1) await wait(readingMs(segs[i].text, prefsRef.current.rate), signal);
         } else {
           await readOnDevice(step.text, step.note || null);
+          if (signal.aborted || run.current !== me) return;
+          heard = true;
         }
       } else if (step.url) {
         try {
           await playUrl(clipSrc(step.url));
+          heard = true;
         } catch (e) {
           if (signal.aborted || run.current !== me) return;
           if (e?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
@@ -575,7 +630,7 @@ export function useReadAloud(segments, key, ref = null) {
       } else {
         await wait(readingMs(step.text, prefsRef.current.rate), signal);
       }
-      if (!signal.aborted && run.current === me && i < segs.length - 1) await wait(GAP_MS, signal);
+      if (!signal.aborted && run.current === me && heard && i < segs.length - 1) await wait(GAP_MS, signal);
     }
     if (!signal.aborted && run.current === me) { run.current = null; resumeAt.current = 0; setActive(null); setSilent(false); setSource(null); setNote(null); setStatus("idle"); }
   }, [halt]);

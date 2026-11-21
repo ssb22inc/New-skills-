@@ -11,8 +11,9 @@ import { createHash } from "node:crypto";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
-import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts, voiceable } from "../src/read-aloud-script.js";
+import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts, voiceable, hasSpeakablePassage } from "../src/read-aloud-script.js";
 import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES, createWarmCache, speechChunks } from "../src/read-aloud.jsx";
+import { unspeakableItems } from "../ops/audit-speakable.mjs";
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, MARIN_TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE, queueLegacyMarin } from "../ops/read-aloud-worker.mjs";
@@ -57,7 +58,8 @@ describe("question script", () => {
     expect(segs.map((s) => [s.id, s.text])).toEqual([["stem", "Which findings need follow-up?"], ["instruction", "Select all that apply."], ["opt0", "Glucose 38 milligrams per deciliter."], ["opt1", "Temp 36.8 degrees Celsius."]]);
     // an instruction inside the stem is left where it is, and not said twice
     expect(questionSegments({ type: "sata", stem: "Select all that apply: which findings?", options: ["A", "B"] }).map((s) => s.id)).toEqual(["stem", "opt0", "opt1"]);
-    expect(voiceable(speakable("Newborn Screening · First Visit"))).toBe(false); // a middle dot is never guessed at
+    expect(speakable("Newborn Screening · First Visit")).toBe("Newborn Screening. First Visit"); // a title separator, not multiplication
+    expect(voiceable(speakable("Newborn Screening · First Visit"))).toBe(true);
     const quoted = questionSegments({ type: "mc", stem: "Which response is best?", options: ["\"Tell me more.\"", "(Stay with the client.)", "Call the provider"] });
     expect(quoted.slice(2).map((s) => s.text)).toEqual(["\"Tell me more.\"", "(Stay with the client.)", "Call the provider."]);
   });
@@ -78,11 +80,19 @@ describe("question script", () => {
     for (const t of ["Calculate 0.1 mg/kg · 70 kg.", "Dose = 0.1 mg/kg · 70 kg = 7 mg", "Temperature example: 36.8 °C · 98.2 °F",
       "Dose = 2 mg/mL · volume in mL", "Dose = 2 mg/mL · Volume", "2 mg/mL · Volume in mL", "Give 2 mg/mL · volume",
       "Calculate MAP using (SBP + 2 · DBP) / 3.", "0.5 – 2.0 ng/mL · hold dose if pulse < 60/min",
-      "HR 110 · RR 24, MAP = 65", "Newborn Screening · First Visit", "pH 7.35–7.45 · PaCO₂ 35–45", "A 3 x 4 cm wound", "2x3"]) {
+      "HR 110 · RR 24, MAP = 65", "pH 7.35–7.45 · PaCO₂ 35–45", "A 3 x 4 cm wound", "2x3"]) {
       expect(speakable(t)).toContain(/x/i.test(t) && !/[·]/.test(t) ? "x" : "·"); // the sign is kept as written
       expect(voiceable(speakable(t)), t).toBe(false);
     }
     expect(voiceable(speakable("Take 2x daily"))).toBe(true);
+    const titled = { id: 6, title: "Digoxin Toxicity · Elderly Client", intro: "Margaret is admitted.", vitals: [], labs: [], note: "", steps: [] };
+    expect(hasSpeakablePassage("case", titled)).toBe(true);
+    expect(caseIntroSegments(titled)[0].text).toBe("Digoxin Toxicity. Elderly Client.");
+    expect(hasSpeakablePassage("card", { id: 1, front: "2 · DBP", back: "2 · DBP" })).toBe(false);
+    expect(unspeakableItems("card", [
+      { id: 10, front: "Name the sign.", back: "A widened pulse pressure." },
+      { id: 11, front: "2 · DBP", back: "2 · DBP" },
+    ]).map((r) => r.id)).toEqual([11]);
     // the check accepts the same calculation however it is written, and nothing else
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg × 70 kg = 7 mg").pass).toBe(true);
     expect(voiceCheck(sc, "Dose = 0.1 mg/kg x 70 kg = 7 mg").pass).toBe(true);
@@ -540,7 +550,7 @@ describe("the controls", () => {
   it("uses the device voice only as a last resort, and never for a part that could be read two ways", () => {
     const src = readFileSync(new URL("../src/read-aloud.jsx", import.meta.url), "utf8");
     // every device-speech call goes through readOnDevice, behind voiceable()
-    expect(src.match(/deviceSpeak\(/g)).toHaveLength(2); // its definition and its one caller
+    expect(src.match(/deviceSpeak\(/g)).toHaveLength(3); // its definition, the Listen tap, and the later-part fallback
     expect(src).toMatch(/if \(voiceable\(text\)\) \{\s*setSilent\(false\); setSource\("device"\)/);
   });
 
