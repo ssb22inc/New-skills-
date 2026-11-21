@@ -59,6 +59,11 @@ const strict = (patch) => T((p) => Object.assign(window.T.env, p), patch);
 const ALL_READY = { "*": [200, "url"] };
 
 describe("useReadAloud, mounted in a browser", () => {
+  it("records a device-speech call, so an unchecked fallback cannot pass unnoticed", async () => {
+    await T(() => { window.speechSynthesis.speak(new SpeechSynthesisUtterance("unchecked dose")); });
+    expect((await state()).spoken).toContain("unchecked dose");
+  });
+
   it("plays every checked part in order, highlighting each, through one shared player", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
@@ -136,7 +141,7 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.silent).toBe(true);
     expect(s.source).toBe("screen");
     expect(s.note).toBe("preparing");
-    expect(s.spoken ?? []).toEqual([]);
+    expect(s.spoken).toEqual([]);
     const bar = await T(() => window.T.barText());
     expect(bar.text).toContain(bar.notes.preparing);
     expect(bar.text).not.toContain("Device voice");

@@ -108,20 +108,68 @@ export function makeVoiceClient({ fetchImpl = (...a) => fetch(...a), now = () =>
 }
 const voice = makeVoiceClient();
 
-/* A clip we have already downloaded, so Listen does not wait on the
-   network a second time. A failed download leaves the signed link, which
-   the audio element can still stream. */
-const warmed = new Map();
+/* A few clips kept in memory so Listen does not download them again.
+   Older ones are dropped, and a download that finishes after its clip was
+   dropped is not put back. The clip being played is kept. */
+export const WARM_MAX = 8;
+export function createWarmCache({ max = WARM_MAX, revoke = (objectUrl) => { try { URL.revokeObjectURL(objectUrl); } catch { /* already gone */ } } } = {}) {
+  const map = new Map(); // signed url -> object url, or null while downloading
+  const gen = new Map();
+  const playing = new Set();
+  function evict() {
+    for (const key of [...map.keys()]) {
+      if (map.size <= max) break;
+      const value = map.get(key);
+      if (typeof value === "string" && playing.has(value)) continue;
+      gen.set(key, (gen.get(key) || 0) + 1);
+      map.delete(key);
+      if (typeof value === "string") revoke(value);
+    }
+  }
+  return {
+    /* 0 means this url is already tracked. Otherwise the token for finish. */
+    start(url) {
+      if (!url || map.has(url)) return 0;
+      const token = (gen.get(url) || 0) + 1;
+      gen.set(url, token);
+      map.set(url, null);
+      evict();
+      return map.has(url) ? token : 0;
+    },
+    /* "kept", "stale" (caller must revoke), or "evicted" (already revoked). */
+    finish(url, token, objectUrl) {
+      if (!token || gen.get(url) !== token) return "stale";
+      map.delete(url);
+      map.set(url, objectUrl);
+      evict();
+      return map.get(url) === objectUrl ? "kept" : "evicted";
+    },
+    get(url) {
+      const value = map.get(url);
+      if (typeof value !== "string") return url;
+      map.delete(url);
+      map.set(url, value);
+      return value;
+    },
+    hold(objectUrl) { if (objectUrl) playing.add(objectUrl); },
+    size() { return [...map.values()].filter((value) => typeof value === "string").length; },
+  };
+}
+const clips = createWarmCache();
 function warmClip(url) {
-  if (!url || warmed.has(url) || typeof fetch !== "function") return;
-  warmed.set(url, null);
+  const token = clips.start(url);
+  if (!token || typeof fetch !== "function") return;
   fetch(url).then(async (r) => {
     if (!r?.ok || typeof r.blob !== "function") return;
     const b = await r.blob();
-    if (b?.size > 200 && typeof URL !== "undefined" && URL.createObjectURL) warmed.set(url, URL.createObjectURL(b));
+    if (!(b?.size > 200) || typeof URL === "undefined" || !URL.createObjectURL) return;
+    const objectUrl = URL.createObjectURL(b);
+    if (clips.finish(url, token, objectUrl) === "stale") {
+      try { URL.revokeObjectURL(objectUrl); } catch { /* already gone */ }
+    }
   }).catch(() => {});
 }
-const clipSrc = (url) => (typeof warmed.get(url) === "string" ? warmed.get(url) : url);
+const clipSrc = (url) => clips.get(url);
 
 /* What to do with one part. Only a checked clip is played. Everything
    else is shown, never spoken: a part still being prepared, one the check
@@ -293,6 +341,7 @@ export function useReadAloud(segments, key, ref = null) {
         audio.onended = resolve;
         audio.onerror = () => reject(new Error("PLAYBACK"));
         signal.addEventListener("abort", resolve, { once: true });
+        clips.hold(String(url).startsWith("blob:") ? url : "");
         const started = audio.play();
         if (started?.then) started.then(() => { audio.dataset.unlocked = "1"; }, reject);
         else audio.dataset.unlocked = "1";

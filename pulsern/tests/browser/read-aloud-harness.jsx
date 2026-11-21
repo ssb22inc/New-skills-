@@ -40,6 +40,21 @@ class FakeAudio {
 }
 window.Audio = FakeAudio;
 
+/* Record every device-speech attempt. speechSynthesis itself cannot be
+   replaced (it is a getter), so the speak method is wrapped. */
+try {
+  const synth = window.speechSynthesis;
+  const orig = synth.speak.bind(synth);
+  Object.defineProperty(synth, "speak", {
+    configurable: true,
+    writable: true,
+    value(utterance) {
+      env.spoken.push(String(utterance?.text ?? ""));
+      return orig(utterance);
+    },
+  });
+} catch { /* the source guard still forbids the call */ }
+
 /* The voice route, answered by the test. A request for the audio file
    itself (warming a clip) is not a voice-route call. */
 let pending = [];

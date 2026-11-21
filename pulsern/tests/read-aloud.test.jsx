@@ -12,7 +12,7 @@ import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts, voiceable } from "../src/read-aloud-script.js";
-import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
+import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES, createWarmCache } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE } from "../ops/read-aloud-worker.mjs";
@@ -540,6 +540,27 @@ describe("the controls", () => {
   it("never speaks with the device voice", () => {
     const src = readFileSync(new URL("../src/read-aloud.jsx", import.meta.url), "utf8");
     expect(src).not.toMatch(/speechSynthesis|SpeechSynthesisUtterance/);
+  });
+
+  it("keeps only a few warmed clips, and drops one that finished after it was evicted", () => {
+    const revoked = [];
+    const cache = createWarmCache({ max: 2, revoke: (objectUrl) => revoked.push(objectUrl) });
+    const a = cache.start("a");
+    expect(cache.finish("a", a, "blob-a")).toBe("kept");
+    const b = cache.start("b");
+    expect(cache.finish("b", b, "blob-b")).toBe("kept");
+    const c = cache.start("c");
+    expect(cache.finish("c", c, "blob-c")).toBe("kept");
+    expect(revoked).toEqual(["blob-a"]);
+    expect(cache.size()).toBe(2);
+    cache.hold("blob-c");
+    const d = cache.start("d");
+    expect(cache.finish("d", d, "blob-d")).toBe("kept");
+    expect(revoked).toContain("blob-b");
+    expect(revoked).not.toContain("blob-c");
+    const late = cache.start("e");
+    cache.start("f");
+    expect(cache.finish("e", late, "blob-e")).toBe("stale");
   });
 
   it("gives a part shown on screen time to be read", () => {
