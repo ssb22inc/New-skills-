@@ -581,23 +581,40 @@ async function signed(bucket, path) {
    client. `fetchImpl` is the test double (it is not used in production).
    No call runs longer than CALL.ms, and none runs past `deadline`. */
 export const CALL = { ms: 40000, min: 5000 };
-async function audioBytes(stream) {
-  if (!stream) return Buffer.alloc(0);
-  if (typeof stream.transformToByteArray === 'function') return Buffer.from(await stream.transformToByteArray());
-  if (Buffer.isBuffer(stream)) return stream;
-  if (stream instanceof Uint8Array) return Buffer.from(stream);
-  const chunks = [];
-  for await (const c of stream) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
-  return Buffer.concat(chunks);
+async function audioBytes(stream, signal) {
+  if (signal?.aborted) throw signal.reason ?? Object.assign(new Error('aborted'), { name: 'TimeoutError' });
+  const read = (async () => {
+    if (!stream) return Buffer.alloc(0);
+    if (typeof stream.transformToByteArray === 'function') return Buffer.from(await stream.transformToByteArray());
+    if (Buffer.isBuffer(stream)) return stream;
+    if (stream instanceof Uint8Array) return Buffer.from(stream);
+    const chunks = [];
+    for await (const c of stream) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+    return Buffer.concat(chunks);
+  })();
+  if (!signal) return read;
+  return Promise.race([
+    read,
+    new Promise((_, reject) => {
+      const fail = () => reject(signal.reason ?? Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
+      if (signal.aborted) fail();
+      else signal.addEventListener('abort', fail, { once: true });
+    }),
+  ]);
 }
+/* Account and setup errors are named first. Some of them arrive as HTTP
+   400 (a bad or unsigned key). Those must stop the run, not be saved as
+   "this passage cannot be spoken." */
+const POLLY_SERVICE = new Set(['AccessDeniedException', 'UnrecognizedClientException', 'InvalidSignatureException', 'IncompleteSignatureException', 'ExpiredTokenException', 'CredentialsError', 'CredentialsProviderError', 'NotFoundException']);
+const POLLY_PERMANENT = new Set(['InvalidSsmlException', 'TextLengthExceededException', 'InvalidSampleRateException']);
 function pollyFailure(e) {
   const name = String(e?.name ?? '');
   const status = e?.$metadata?.httpStatusCode ?? 0;
-  if (name === 'InvalidSsmlException' || name === 'TextLengthExceededException' || name === 'InvalidSampleRateException' || status === 400 || status === 422) {
-    return { error: `speech ${status || 400} ${name || 'rejected'}`.trim(), errorKind: 'permanent', spent: 0 };
-  }
-  if (name === 'AccessDeniedException' || name === 'UnrecognizedClientException' || name === 'InvalidSignatureException' || name === 'CredentialsError' || name === 'NotFoundException' || status === 401 || status === 403 || status === 404) {
+  if (POLLY_SERVICE.has(name) || status === 401 || status === 403 || status === 404) {
     return { error: `speech ${status || 403} ${name || 'denied'}`.trim(), errorKind: 'service', spent: 0 };
+  }
+  if (POLLY_PERMANENT.has(name) || status === 400 || status === 422) {
+    return { error: `speech ${status || 400} ${name || 'rejected'}`.trim(), errorKind: 'permanent', spent: 0 };
   }
   return { error: `speech ${status || 503} ${name || e?.message || 'failed'}`.trim(), errorKind: 'transient', spent: 0 };
 }
@@ -605,8 +622,6 @@ export async function makeChecked({ text, polly, fetchImpl, tts = TTS, beforeTak
   if (!voiceable(text)) return { best: null, spent: 0, error: 'not voiceable', errorKind: 'permanent', final: false };
   const input = pollyInput(text);
   if (input.error) return { best: null, spent: 0, error: input.error, errorKind: 'permanent', final: false };
-  const left = deadline - timeOf();
-  if (left < CALL.min) return { best: null, spent: 0, error: 'out of time for this passage', errorKind: 'transient', final: false };
   if (beforeTake) {
     const slot = await beforeTake();
     if (slot !== 'ok') {
@@ -614,6 +629,11 @@ export async function makeChecked({ text, polly, fetchImpl, tts = TTS, beforeTak
       return { best: null, spent: 0, error, errorKind: error === 'budget' ? 'budget' : 'storage', final: false };
     }
   }
+  /* The budget claim can use part of the lease. What is left, after that,
+     is the only time the request and its audio stream are allowed. */
+  const left = deadline - timeOf();
+  if (left < CALL.min) return { best: null, spent: 0, error: 'out of time for this passage', errorKind: 'transient', final: false };
+  const signal = AbortSignal.timeout(Math.min(CALL.ms, left));
   try {
     let audio;
     if (polly?.send) {
@@ -621,14 +641,14 @@ export async function makeChecked({ text, polly, fetchImpl, tts = TTS, beforeTak
       const out = await polly.send(new SynthesizeSpeechCommand({
         Engine: tts.engine, OutputFormat: tts.format, VoiceId: tts.voice, LanguageCode: tts.language,
         TextType: input.textType, Text: input.text,
-      }));
-      audio = await audioBytes(out?.AudioStream);
+      }), { abortSignal: signal });
+      audio = await audioBytes(out?.AudioStream, signal);
     } else if (fetchImpl) {
       /* Tests pass a fetch fake. Production always passes a Polly client. */
       const r = await fetchImpl('https://api.openai.com/v1/audio/speech', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: tts.model, voice: tts.voice, input: text, engine: tts.engine, format: tts.format, textType: input.textType }),
-        signal: AbortSignal.timeout(Math.min(CALL.ms, left)),
+        signal,
       });
       if (!r.ok) {
         const err = new Error(`speech ${r.status}`);
