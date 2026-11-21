@@ -10,19 +10,12 @@
 // (src/read-aloud-script.js) and must match the requested text exactly.
 // The spend is therefore bounded by the bank, not by what a caller types.
 //
-// The accuracy gate. The words themselves are bank content that already
-// passed the adversarial review; this gate proves the AUDIO says exactly
-// those words. Each new passage is synthesised, transcribed (by a separate
-// model, with no hint of the script), and passes only if EVERY word of the
-// transcript matches the script in order (ops/narrate-lib.mjs wordMismatch,
-// after normalising number words and spellings), the overall similarity is
-// at least 0.92, and every unit and dosing frequency matches exactly
-// (voiceCheck). One changed word fails: a drug, a diagnosis, a finding,
-// a side. Two takes. Only a passing take is saved, together with
-// a record that binds it to its text (sha256), its audio (sha256), the
-// transcript and the QA version; only audio with that record is ever
-// played. A passage that fails both takes is not voiced (422): the app
-// shows that part on screen. Nothing unchecked is ever spoken.
+// The words. The script is bank content that already passed review, then
+// the same normaliser the screen uses (units, lab values, dosing). Amazon
+// Polly Neural reads that text as written: it does not rewrite it, so
+// there is no second model and no retake. A record still binds the audio
+// to the text (sha256) and the voice. A passage Polly will not speak, or
+// one that is not ready yet, is shown on screen. Nothing else is spoken.
 //
 // Budgets (LIMITS, below: the one place they are set). Every queued
 // passage and every paid synthesis claims a numbered slot that storage
@@ -36,28 +29,44 @@
 // passages are paid questions, so they are only ever handed out as
 // short-lived signed links.
 //
-// The voice itself. If the server holds OPENAI_API_KEY, a new passage is
-// voiced and checked during the request. Otherwise (the normal setup: the
-// key lives only in the GitHub pulsern-paid environment) the checked
+// The voice itself. The web server holds no cloud credentials. A checked
 // request is queued in the private bucket and the voice job
-// (ops/read-aloud-worker.mjs, every 15 minutes) voices and checks it; the
-// app shows that part on screen until then (202). Nothing unchecked is spoken.
+// (ops/read-aloud-worker.mjs) speaks it with Amazon Polly Neural. The app
+// shows that part on screen until the clip is saved (202).
 import { createHash, randomUUID } from 'node:crypto';
 import { scriptFor, itemParts, voiceable, RATE, RATE_UNITS } from '../src/read-aloud-script.js';
-import { audioCheck, speechTokens, wordsToNumbers, QA_MODEL, QA_VERSION } from '../ops/narrate-lib.mjs';
+import { audioCheck, speechTokens, wordsToNumbers, QA_VERSION } from '../ops/narrate-lib.mjs';
 
 export const SPEAK_MAX = 1500; // above the script's PART_MAX (900): a part always fits
 export const BUCKET = 'read-aloud';
 export const SIGNED_SECONDS = 3600;
-export const TAKES = 2;
+export const TAKES = 1;
 /* The one place the daily caps are set, read by the route and the voice
    job alike (change them here, through a reviewed pull request):
    user      items one student may send to the voice job (each item's
              parts together), or passages voiced live, per day;
    admission items sent to the voice job per day, app-wide;
-   spend     paid syntheses per day, app-wide, live and scheduled together. */
-export const LIMITS = Object.freeze({ user: 300, admission: 4000, spend: 4000 });
+   spend     paid syntheses per day, app-wide, live and scheduled together.
+   Polly Neural is cheap enough for the rest of the bank: 15,000 passages
+   a day. READ_ALOUD_DAILY_USD (default $40) is the dollar cap the job
+   also enforces, at POLLY_USD_PER_MILLION characters. */
+export const LIMITS = Object.freeze({ user: 300, admission: 4000, spend: 15000 });
+/* Joanna: US English neural, the clearest of the neural voices for
+   numbers, units and drug names in exam stems. Ruth and Danielle are
+   warmer; they also reshape a value more often. Matthew is clear and
+   male, a bigger change from the tutor students already hear. */
 export const TTS = {
+  model: 'polly-neural',
+  voice: 'Joanna',
+  engine: 'neural',
+  format: 'mp3',
+  language: 'en-US',
+  instructions: 'polly neural en-US Joanna',
+};
+/* The voice the saved clips were made with. The key formula is unchanged,
+   so speechKey(text, MARIN_TTS) still names those files. The job queues
+   those passages once, in the new voice, and does not serve the old files. */
+export const MARIN_TTS = {
   model: 'gpt-4o-mini-tts',
   voice: 'marin',
   instructions: 'You are a warm, calm nursing tutor reading an exam-prep question to a student. ' +
@@ -65,6 +74,13 @@ export const TTS = {
     'Read every number, unit and lab value exactly as written; pause briefly at commas and full stops. ' +
     'Do not add or drop any words. Neutral tone: never hint which choice is right.',
 };
+/* Polly Neural, US English, standard voices: $16 per million characters.
+   SynthesizeSpeech bills the text, not the SSML tags, and refuses more
+   than 3,000 billed characters or 6,000 characters including the tags. */
+export const POLLY_USD_PER_MILLION = 16;
+export const POLLY_BILLED_MAX = 3000;
+export const POLLY_REQUEST_MAX = 6000;
+export const DEFAULT_DAILY_USD = 40;
 
 /* One spelling per unit and lab name, applied to BOTH the script and the
    transcript before the check, because a transcriber writes "mEq/L" for
@@ -250,6 +266,31 @@ export function voiceCheck(script, transcript) {
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 export const speechKey = (text, tts = TTS) =>
   sha256([tts.model, tts.voice, tts.instructions, `qa${QA_VERSION}`, text].join('\n')).slice(0, 40);
+
+/* Dollar cap for one Eastern day. Unset or unusable falls back to the
+   default; a positive READ_ALOUD_DAILY_USD overrides it. */
+export function dailyUsd(env = process.env) {
+  const n = Number(env.READ_ALOUD_DAILY_USD);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_DAILY_USD;
+}
+export function readAloudLimits(env = process.env, base = LIMITS) {
+  const usd = dailyUsd(env);
+  const chars = Math.floor((usd * 1_000_000) / POLLY_USD_PER_MILLION);
+  return { ...base, usd, chars };
+}
+const escapeXml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+/* What Polly is asked to read. The passage is already the normalised
+   script. A short break after a sentence keeps a long stem from running
+   on; the tags are not billed. Over the request limit, the plain text
+   is sent instead. */
+export function pollyInput(text) {
+  const spoken = String(text ?? '');
+  if (spoken.length > POLLY_BILLED_MAX) return { error: 'too long' };
+  const body = escapeXml(spoken).replace(/([.!?])(\s+)/g, '$1<break time="300ms"/>$2');
+  const ssml = `<speak>${body}</speak>`;
+  if (ssml.length > POLLY_REQUEST_MAX) return { text: spoken, textType: 'text', billed: spoken.length };
+  return { text: ssml, textType: 'ssml', billed: spoken.length };
+}
 
 const KINDS = { question: ['question', 'feedback'], case: ['intro', 'step', 'feedback'], card: ['front', 'back'] };
 /* The reference rebuilt from its known fields only: nothing a caller adds
@@ -466,12 +507,53 @@ async function claimSlot(storage, dir, limit) {
   }
   return 'full';
 }
+/* Several character slots from one listing. claimSlot lists the whole
+   directory every time; a 900-character passage would do that nine times
+   before it was allowed to speak. Here the directory is listed once, then
+   the slots are created. A reservation that cannot be finished is taken
+   back, so a race does not spend characters for a clip that was not made. */
+async function claimSlots(storage, dir, limit, count) {
+  const bucket = storage.from(BUCKET);
+  let n = await countSlots(bucket, dir);
+  if (n == null) {
+    await storage.createBucket(BUCKET, { public: false });
+    n = await countSlots(bucket, dir);
+    if (n == null) return 'error';
+  }
+  const made = [];
+  let guard = 0;
+  while (made.length < count && n < limit && guard < count + 40) {
+    const path = `${dir}/${String(n).padStart(5, '0')}`;
+    const { error } = await retried(() => bucket.upload(path, '1', { contentType: 'text/plain', upsert: false }));
+    if (!error) { made.push(path); n++; continue; }
+    if (/exist|duplicate|409/i.test(`${error.message ?? ''} ${error.statusCode ?? ''} ${error.error ?? ''}`)) { n++; guard++; continue; }
+    if (made.length) await bucket.remove(made);
+    console.error('[read-aloud] budget slots', error.message ?? error);
+    return 'error';
+  }
+  if (made.length < count) {
+    if (made.length) await bucket.remove(made);
+    return 'full';
+  }
+  return 'ok';
+}
 /* The voice job's paid calls (ops/read-aloud-worker.mjs): one slot per
    synthesis, on the day the call is made. Queueing a passage (admission,
    above) and paying for it (spend, here) are counted apart, so a retried
    or backlogged passage is always paid from the current day's budget. */
 export const reserveSpend = (storage, { now = Date.now(), limits = LIMITS } = {}) =>
   claimSlot(storage, `usage/${quotaDay(now)}/spend`, limits.spend);
+/* One passage slot, then one slot per 100 billed characters when a dollar
+   cap is set (limits.chars). Without limits.chars only the passage cap
+   applies, which is what the tests set by hand. */
+export async function reserveSpeechCost(storage, billedChars, { now = Date.now(), limits = LIMITS } = {}) {
+  const passage = await reserveSpend(storage, { now, limits });
+  if (passage !== 'ok' || !limits?.chars) return passage;
+  const unit = 100;
+  const units = Math.max(1, Math.ceil(Math.max(0, billedChars) / unit));
+  const cap = Math.max(1, Math.floor(limits.chars / unit));
+  return claimSlots(storage, `usage/${quotaDay(now)}/chars`, cap, units);
+}
 /* A student's request: their own daily count, then the app-wide one
    (admission for a queued passage; spend for a live synthesis). */
 export async function reserve(storage, userId, { now = Date.now(), limits = LIMITS, pool = 'admission' } = {}) {
@@ -520,70 +602,105 @@ async function signed(bucket, path) {
   return { error: true };
 }
 
-/* Synthesise and check one passage: up to TAKES takes, each transcribed
-   and held to voiceCheck. Returns the best take (passing if any did) and
-   how many syntheses were paid for. Shared by the live route and the
-   queue worker (ops/read-aloud-worker.mjs). */
-/* No provider call runs longer than CALL.ms, and none runs past `deadline`
-   (the passage claim's end of work): a call that would is not started, and
-   one still running then is aborted. Either is a transient failure. */
+/* Speak one passage with Polly Neural. One call, no transcription and no
+   retake: Polly reads the normalised text as given. `polly` is an AWS SDK
+   client. `fetchImpl` is the test double (it is not used in production).
+   No call runs longer than CALL.ms, and none runs past `deadline`. */
 export const CALL = { ms: 40000, min: 5000 };
-export async function makeChecked({ text, apiKey, fetchImpl = fetch, tts = TTS, beforeTake = null, deadline = Infinity, timeOf = () => Date.now() }) {
-  const openai = (path, init) => {
-    const left = deadline - timeOf();
-    if (left < CALL.min) throw new Error('out of time for this passage');
-    return fetchImpl(`https://api.openai.com/v1${path}`, { ...init, signal: AbortSignal.timeout(Math.min(CALL.ms, left)), headers: { ...(init.headers ?? {}), Authorization: `Bearer ${apiKey}` } });
-  };
-  let best = null, spent = 0, error = null, status = 0;
-  if (!voiceable(text)) return { best, spent, error: 'not voiceable', errorKind: 'permanent', final: false };
-  try {
-    for (let take = 1; take <= TAKES; take++) {
-      // Every take is a paid call: each needs its own budget slot first.
-      if (beforeTake) {
-        const slot = await beforeTake();
-        if (slot !== 'ok') { error = slot === 'error' ? 'budget counters unavailable' : 'budget'; break; }
-      }
-      const r = await openai('/audio/speech', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: tts.model, voice: tts.voice, input: text, instructions: tts.instructions, response_format: 'mp3' }),
-      });
-      spent++;
-      if (!r.ok) { error = `speech ${r.status}${await providerCode(r)}`; status = r.status; break; }
-      const audio = Buffer.from(await r.arrayBuffer());
-      if (!audio.length) { error = 'empty audio'; break; }
-      /* No prompt for the transcriber: hinting the script would bias it
-         toward hearing the script (as in the narration job). */
-      const form = new FormData();
-      form.append('model', QA_MODEL);
-      form.append('language', 'en');
-      form.append('file', new Blob([audio], { type: 'audio/mpeg' }), 'clip.mp3');
-      const t = await openai('/audio/transcriptions', { method: 'POST', body: form });
-      if (!t.ok) { error = `transcription ${t.status}${await providerCode(t)}`; status = t.status; break; }
-      const transcript = String((await t.json())?.text ?? '');
-      const check = voiceCheck(text, transcript);
-      best = { audio, transcript, check, take };
-      if (check.pass) break;
+async function audioBytes(stream, signal) {
+  if (signal?.aborted) throw signal.reason ?? Object.assign(new Error('aborted'), { name: 'TimeoutError' });
+  const read = (async () => {
+    if (!stream) return Buffer.alloc(0);
+    if (typeof stream.transformToByteArray === 'function') return Buffer.from(await stream.transformToByteArray());
+    if (Buffer.isBuffer(stream)) return stream;
+    if (stream instanceof Uint8Array) return Buffer.from(stream);
+    const chunks = [];
+    for await (const c of stream) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+    return Buffer.concat(chunks);
+  })();
+  if (!signal) return read;
+  return Promise.race([
+    read,
+    new Promise((_, reject) => {
+      const fail = () => reject(signal.reason ?? Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
+      if (signal.aborted) fail();
+      else signal.addEventListener('abort', fail, { once: true });
+    }),
+  ]);
+}
+/* Account and setup errors are named first. Some of them arrive as HTTP
+   400 (a bad or unsigned key). Those must stop the run, not be saved as
+   "this passage cannot be spoken." */
+const POLLY_THROTTLE = new Set(['ThrottlingException', 'TooManyRequestsException', 'LimitExceededException', 'ProvisionedThroughputExceededException']);
+const POLLY_SERVICE = new Set(['AccessDeniedException', 'UnrecognizedClientException', 'InvalidSignatureException', 'IncompleteSignatureException', 'ExpiredTokenException', 'CredentialsError', 'CredentialsProviderError', 'NotFoundException']);
+const POLLY_PERMANENT = new Set(['InvalidSsmlException', 'TextLengthExceededException', 'InvalidSampleRateException']);
+function pollyFailure(e) {
+  const name = String(e?.name ?? '');
+  const status = e?.$metadata?.httpStatusCode ?? 0;
+  /* ThrottlingException is often HTTP 400. Named first, so a rate limit
+     is retried later and is not saved as "this passage cannot be spoken." */
+  if (POLLY_THROTTLE.has(name) || status === 429) {
+    return { error: `speech ${status || 429} ${name || 'throttled'}`.trim(), errorKind: 'transient', spent: 0 };
+  }
+  if (POLLY_SERVICE.has(name) || status === 401 || status === 403 || status === 404) {
+    return { error: `speech ${status || 403} ${name || 'denied'}`.trim(), errorKind: 'service', spent: 0 };
+  }
+  if (POLLY_PERMANENT.has(name)) {
+    return { error: `speech ${status || 400} ${name || 'rejected'}`.trim(), errorKind: 'permanent', spent: 0 };
+  }
+  return { error: `speech ${status || 503} ${name || e?.message || 'failed'}`.trim(), errorKind: 'transient', spent: 0 };
+}
+export async function makeChecked({ text, polly, fetchImpl, tts = TTS, beforeTake = null, deadline = Infinity, timeOf = () => Date.now() }) {
+  if (!voiceable(text)) return { best: null, spent: 0, error: 'not voiceable', errorKind: 'permanent', final: false };
+  const input = pollyInput(text);
+  if (input.error) return { best: null, spent: 0, error: input.error, errorKind: 'permanent', final: false };
+  if (beforeTake) {
+    const slot = await beforeTake();
+    if (slot !== 'ok') {
+      const error = slot === 'error' ? 'budget counters unavailable' : 'budget';
+      return { best: null, spent: 0, error, errorKind: error === 'budget' ? 'budget' : 'storage', final: false };
     }
-  } catch (e) { error = String(e?.message ?? e); }
-  /* A verdict is final only if a take passed, or every take was completed
-     and checked. A provider error or a refused budget part-way through is
-     NOT a failed check: nothing terminal is recorded, so it is tried again. */
-  const final = !!best && (best.check.pass || (!error && best.take === TAKES));
-  /* Why it stopped short:
-     budget    no spending slot left today;
-     permanent the provider refused this passage itself (400 bad input,
-               413 too large, 422 unprocessable): retrying it will not help;
-     service   the account or setup is wrong (401, 403, 404): no passage is
-               to blame, so nothing is recorded and the run stops;
-     storage   the budget counters could not be read or written: nothing
-               is spent, nothing recorded, and the run fails;
-     transient anything else (rate limits, timeouts, 5xx): retry later. */
-  const errorKind = !error ? null : error === 'budget' ? 'budget'
-    : error === 'budget counters unavailable' ? 'storage'
-    : [400, 413, 422].includes(status) ? 'permanent'
-    : [401, 403, 404].includes(status) ? 'service' : 'transient';
-  if (error) console.error('[read-aloud] voice', error);
-  return { best, spent, error, errorKind, final };
+  }
+  /* The budget claim can use part of the lease. What is left, after that,
+     is the only time the request and its audio stream are allowed. */
+  const left = deadline - timeOf();
+  if (left < CALL.min) return { best: null, spent: 0, error: 'out of time for this passage', errorKind: 'transient', final: false };
+  const signal = AbortSignal.timeout(Math.min(CALL.ms, left));
+  try {
+    let audio;
+    if (polly?.send) {
+      const { SynthesizeSpeechCommand } = await import('@aws-sdk/client-polly');
+      const out = await polly.send(new SynthesizeSpeechCommand({
+        Engine: tts.engine, OutputFormat: tts.format, VoiceId: tts.voice, LanguageCode: tts.language,
+        TextType: input.textType, Text: input.text,
+      }), { abortSignal: signal });
+      audio = await audioBytes(out?.AudioStream, signal);
+    } else if (fetchImpl) {
+      /* Tests pass a fetch fake. Production always passes a Polly client. */
+      const r = await fetchImpl('https://api.openai.com/v1/audio/speech', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: tts.model, voice: tts.voice, input: text, engine: tts.engine, format: tts.format, textType: input.textType }),
+        signal,
+      });
+      if (!r.ok) {
+        const err = new Error(`speech ${r.status}`);
+        err.name = r.status === 400 || r.status === 422 ? 'InvalidSsmlException' : r.status === 401 || r.status === 403 ? 'AccessDeniedException' : r.status === 404 ? 'NotFoundException' : 'ServiceFailureException';
+        err.$metadata = { httpStatusCode: r.status };
+        throw err;
+      }
+      audio = Buffer.from(await r.arrayBuffer());
+    } else {
+      const err = new Error('no polly client');
+      err.name = 'CredentialsError';
+      throw err;
+    }
+    if (!audio?.length) return { best: null, spent: 1, error: 'empty audio', errorKind: 'transient', final: false };
+    return { best: { audio, transcript: null, check: { pass: true, similarity: 1 }, take: 1 }, spent: 1, error: null, errorKind: null, final: true };
+  } catch (e) {
+    const mapped = pollyFailure(e);
+    console.error('[read-aloud] voice', mapped.error);
+    return { best: null, spent: mapped.spent, ...mapped, final: false };
+  }
 }
 
 export const passagePaths = (text, tts = TTS) => {
@@ -629,7 +746,7 @@ export async function saveChecked(storage, text, best, { now = Date.now(), tts =
   const pass = best.check.pass === true;
   if (pass && !(await put(storage, mp3, best.audio, 'audio/mpeg'))) return false;
   return put(storage, rec, JSON.stringify({
-    qa: QA_VERSION, check: CHECK_VERSION, pass, qaModel: QA_MODEL, model: tts.model, voice: tts.voice,
+    qa: QA_VERSION, check: CHECK_VERSION, pass, qaModel: tts.model, model: tts.model, voice: tts.voice,
     textSha: sha256(text), audioSha: pass ? sha256(best.audio) : null, similarity: best.check.similarity,
     mismatch: pass ? null : best.check.mismatch ?? null, unitMismatch: pass ? null : best.check.unitMismatch ?? null,
     transcript: best.transcript, take: best.take, checkedAt: new Date(now).toISOString(),
@@ -659,27 +776,42 @@ export async function readRecord(storage, text, tts = TTS, now = Date.now()) {
    spending is used up, the item waits for the next day, and the app says
    so instead of promising it soon. */
 async function queuedReply(storage, t0, limits) {
-  const spent = await countSlots(storage.from(BUCKET), `usage/${quotaDay(t0)}/spend`);
-  return { status: 202, body: spent != null && spent >= limits.spend ? { queued: true, after: 'tomorrow' } : { queued: true } };
+  const day = quotaDay(t0);
+  const bucket = storage.from(BUCKET);
+  const spent = await countSlots(bucket, `usage/${day}/spend`);
+  /* The dollar cap is counted in 100-character slots. The route uses the
+     same default as the job when the caller did not pass one. */
+  const chars = limits?.chars ?? readAloudLimits().chars;
+  const usedChars = await countSlots(bucket, `usage/${day}/chars`);
+  const charSlots = Math.max(1, Math.floor(chars / 100));
+  const over = (spent != null && spent >= limits.spend) || (usedChars != null && usedChars >= charSlots);
+  return { status: 202, body: over ? { queued: true, after: 'tomorrow' } : { queued: true } };
 }
 
 /* Returns { status, body } for the route to send.
    200 { url }: checked audio to play.
    202 { queued }: no voice yet; the passage is queued for the voice job
      (ops/read-aloud-worker.mjs) and the app says it is being prepared.
-     Used when the server itself holds no OpenAI key. */
+     The web server does not speak: it queues. The voice job passes a
+     Polly client. */
 export async function speak(args) {
   try { return await speakUnguarded(args); } catch (e) {
     if (e instanceof StorageReadError) return { status: 503, body: { error: 'Voice unavailable' } };
     throw e;
   }
 }
-async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey, storage, fetchImpl = fetch, now, clock, limits = LIMITS, tts = TTS }) {
+async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey, polly, fetchImpl, storage, now, clock, limits = LIMITS, tts = TTS }) {
   /* The time is read when it is used: a take paid after midnight is
      charged to the new day. (now fixes it for tests; clock lets a test
      move it between takes.) */
   const timeOf = clock ?? (now === undefined ? () => Date.now() : () => now);
   const t0 = timeOf();
+  /* Live speech only when a Polly client (or the test double) is passed.
+     The web server passes neither, so a Listen with no clip is queued. */
+  /* The web server passes neither a Polly client nor a key, so it queues.
+     A test (or a future live caller) speaks only when it passes a client,
+     or a key together with the fetch double. */
+  const live = !!(polly || (apiKey && fetchImpl));
   // Only the known fields of the reference are used from here on.
   const ref = canonicalRef(rawRef);
   if (!ref || !validRequest(ref, seg, text)) return { status: 400, body: { error: 'Bad request' } };
@@ -722,7 +854,7 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
      retry lane (after an outage) moves to the fresh lane, which the voice
      job serves first, with its attempt count and give-up state as they
      were. The retry copy is removed only once the fresh one is saved. */
-  if (!apiKey) {
+  if (!live) {
     for (const p of work) {
       const paths = passagePaths(p.text, tts);
       const held = await readJson(bucket, paths.retry);
@@ -735,9 +867,9 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
 
   // Already waiting for the voice job: nothing more to spend.
   const waiting = async (paths) => (await readJson(bucket, paths.queue)) || (await readJson(bucket, paths.retry));
-  if (!apiKey && await waiting({ queue, retry })) return queuedReply(storage, t0, limits);
+  if (!live && await waiting({ queue, retry })) return queuedReply(storage, t0, limits);
 
-  if (!apiKey) {
+  if (!live) {
     /* The whole item is queued at once, under ONE claim per item per day:
        a 202 always means every part of the item is on its way, never a
        part admitted while its neighbours were refused. The first request
@@ -824,7 +956,7 @@ async function speakUnguarded({ ref: rawRef, seg, text, userId, readItem, apiKey
   async function synthesiseLive() {
     // Every take claims a spending slot on the day it is made.
     const pay = () => reserve(storage, userId, { now: timeOf(), limits, pool: 'spend' });
-    const { best, final, error, errorKind } = await makeChecked({ text, apiKey, fetchImpl, tts, beforeTake: pay, deadline: claim.deadline, timeOf });
+    const { best, final, error, errorKind } = await makeChecked({ text, polly, fetchImpl, tts, beforeTake: pay, deadline: claim.deadline, timeOf });
     if (!final) {
       if (errorKind === 'budget') return overBudget;
       if (errorKind === 'service' || errorKind === 'storage') return unavailable;

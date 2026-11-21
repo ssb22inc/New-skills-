@@ -172,42 +172,49 @@ Claude Code executes everything else. These run in parallel with the build.
 
 ## Read-aloud voice (added 2026-10-29)
 
-- H23 · **Nothing to do.** The 🔊 Listen buttons (practice questions, the
-  Today round, Review misses, case studies, flashcards; never readiness
-  exams) use the OpenAI key already stored in the GitHub `pulsern-paid`
-  environment. No key goes on the web server.
+- H23 · **Add three secrets to the GitHub environment `pulsern-paid`:**
+  `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION`
+  (`us-east-1` if you leave the region unset). The 🔊 Listen buttons
+  (practice questions, the Today round, Review misses, case studies,
+  flashcards; never readiness exams) do not put a key on the web server.
+  The voice job speaks with Amazon Polly Neural, voice Joanna, mp3.
 
   How it works:
-  - Checked AI audio is what plays when a passage is already saved. It was
-    transcribed back and had to match the bank text word for word,
-    including every number, unit and dosing frequency.
-  - If that audio is not ready (still queued, the day's limit, the check
+  - Saved audio plays when a passage is already in the new voice. Polly
+    reads the normalised bank text as written (units and lab values spelled
+    out). There is no second transcription pass.
+  - If that audio is not ready (still queued, the day's limit, Polly
     refused it, or the request is slow), that part is shown on screen and
-    the bar says so. The parts that already have a checked clip still play.
-    The device's own voice is never a stand-in: nothing unchecked is spoken.
+    the bar says so. The parts that already have a clip still play. The
+    device's own voice is never a stand-in: nothing unchecked is spoken.
   - The job "pulsern-read-aloud"
     (https://github.com/ssb22inc/New-skills-/actions/workflows/pulsern-read-aloud.yml)
     runs every 15 minutes and voices the bank ahead of demand: every
     practice question with its explanation, every case study and every
     flashcard, resuming where it stopped. Items students have asked for
-    go first. It can only save new clips while the OpenAI account has credit.
+    go first. The first run also queues the clips that were made with the
+    old OpenAI voice so they are spoken again in Joanna.
+  - If the AWS secrets are missing, the job logs that voicing is paused
+    and exits without failing in a loop. Until a clip is saved, that part
+    is read on screen.
   - Pressing Listen on an item that is not voiced yet moves that item to
-    the front of the job. Until the clip is saved, that part is read on screen.
+    the front of the job.
   - The server reads each item with the student's own access: approved
     content, a current pass, never exam items. It can say nothing else.
 
   Limits and cost:
   - Daily caps (calendar day, Eastern time): 300 new items sent to the
     voice job per student (each item's parts together), 4,000 items
-    app-wide, and 4,000 paid syntheses app-wide (live and scheduled
-    together). They are set in one place, `LIMITS`
-    in `pulsern/api/_speak.js`, so a change goes through a reviewed pull
-    request. At a cap, work waits for the next day; nothing extra is
-    spent.
-  - At the cap the app-wide spend is roughly $8–10 a day (`gpt-4o-mini-tts`
-    plus the `gpt-4o-transcribe` check). It stops once the bank is
-    voiced; after that, only new items and weekly re-checks are voiced.
-    Saved audio is reused free. Usage: https://platform.openai.com/usage.
-  - Each run's summary (voiced, failed the check, refused, budget, errors)
-    is on the job's run page. A provider outage or storage trouble marks
-    the run as failed so it is noticed.
+    app-wide, and 15,000 paid syntheses app-wide. A dollar cap,
+    `READ_ALOUD_DAILY_USD` (default $40, Polly Neural at $16 per million
+    characters), stops the job when the day's characters are used up.
+    They are set in `pulsern/api/_speak.js` and the workflow, so a change
+    goes through a reviewed pull request. At a cap, work waits for the
+    next day; nothing extra is spent.
+  - At the default dollar cap that is roughly 2.5 million characters,
+    about 13,000 passages. It stops once the bank is voiced; after that,
+    only new items and the weekly rescan are voiced. Saved audio is reused
+    free.
+  - Each run's summary (voiced, refused, budget, errors) is on the job's
+    run page. A provider outage or storage trouble marks the run as failed
+    so it is noticed. Missing AWS credentials do not.
