@@ -1,0 +1,45 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9ccff01052bee2cc97d20200adc7a3c5e6b4530f",
+    "head": "ed09557947435aace9e46f1730005c343456b2b5",
+    "pr": "170"
+  },
+  "reviewedAt": "2026-11-21T02:25:29.994Z",
+  "filesReviewed": [
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/src/read-aloud.jsx",
+    "pulsern/tests/browser/read-aloud-harness.jsx",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/read-aloud.jsx",
+      "line": 347,
+      "title": "The per-part deadline stops applying once a signed URL is available",
+      "problem": "FIRST_BUDGET_MS only bounds waiting for the initial voice API outcome. After a URL is obtained, playUrl waits indefinitely for playback to finish or fail, including when audio.play() remains pending because the media never loads. The fresh-link request after a playback error at line 360 is also awaited without a deadline. Both paths bypass the promised screen fallback and block subsequent ready parts.",
+      "failure_scenario": "The stem's signed URL is already cached, but its audio download stalls on a mobile connection. Listen sets the stem to playing and waits indefinitely, even though the choices have usable checked clips. Similarly, an audio error followed by a stalled fresh-link request prevents the reader from advancing.",
+      "fix": "Bound media startup and fresh-link recovery as well as the initial API lookup. If startup or recovery exceeds the budget, stop that attempt, show the part on screen, and continue. Do not apply the startup deadline to the duration of audio that has successfully started. Add browser-harness cases for unresolved media startup and an unresolved fresh-link request.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 55523,
+    "completionTokens": 6451,
+    "reasoningTokens": 6098,
+    "costUsd": 0.203316
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The checked-audio-only boundary is preserved, and no new clinical or scoring error is evident. However, the new bounded-wait behavior does not cover audio loading or playback-error recovery, so one stalled part can still prevent every later ready part from playing.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
