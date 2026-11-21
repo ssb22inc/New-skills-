@@ -1,0 +1,68 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "05e4b04d35faa656d31749f8baa652d07900d3cd",
+    "head": "97df76dd27cfd0251f17e0d6b063ea28054ef27b",
+    "pr": "171"
+  },
+  "reviewedAt": "2026-11-21T03:57:56.368Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/tests/polly-voice.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 667,
+      "title": "Nonempty audio is automatically certified as clinically accurate",
+      "problem": "makeChecked now assigns pass: true and similarity: 1 to any nonempty audio without inspecting what it says. saveChecked persists that fabricated verdict, and speak serves the clip to students. Reviewing the input text does not establish that the synthesized output preserves its numbers, units, drugs, or negations. This removes the existing accuracy safeguard. The updated tests explicitly accept one take even when the former misread-number fixture is supplied; the remaining voiceCheck tests exercise a function production synthesis no longer calls.",
+      "failure_scenario": "The script says \"Potassium 2.9 milliequivalents per liter\", but the returned clip reads a different value or drops a clinically significant word. The clip is saved as passing and reused for every student listening to that passage.",
+      "fix": "Restore an independent check of the actual synthesized audio before publication, including exact clinical-value and word checks. Do not manufacture a perfect similarity score. Restore an end-to-end test proving that incorrect audio is neither saved as passing nor served.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 616,
+      "title": "Polly throttling is saved as a seven-day passage rejection",
+      "problem": "Polly can return ThrottlingException with HTTP 400. Because that name is not classified before the catch-all status === 400 branch, it becomes a permanent passage failure. voiceClaimed then saves a rejection record and drainQueue removes the request. The existing HTTP 429 fetch-double tests do not cover Polly's HTTP 400 throttling behavior.",
+      "failure_scenario": "Polly exhausts its request-rate or concurrency allowance. After SDK retries are exhausted, otherwise valid passages receive HTTP 400 ThrottlingException and become unavailable until their seven-day rejection records expire, even after throttling clears.",
+      "fix": "Classify ThrottlingException as transient before handling HTTP 400. Prefer explicit passage-error names over treating every remaining 400 as permanent. Add a Polly-client test asserting that a 400 throttling response retains retryable work and creates no rejection record.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 572,
+      "title": "Automatic SDK retries bypass per-synthesis budget reservations",
+      "problem": "PollyClient retains the AWS SDK's automatic retry policy, while makeChecked invokes beforeTake only once per polly.send. Consequently, one passage and character reservation can authorize multiple SynthesizeSpeech requests. The fetch-based budget tests bypass the SDK and cannot detect this.",
+      "failure_scenario": "AWS accepts and synthesizes a passage, but its response is lost before the client receives it. The SDK resubmits the request automatically. Both accepted syntheses can be billed, while storage records only one passage's character cost, allowing actual spending to exceed the advertised daily cap.",
+      "fix": "Set maxAttempts: 1 and leave retries to the worker's existing separately budgeted retry mechanism, or reserve spending before every underlying SDK attempt. Add coverage that counts actual SDK request attempts against the corresponding budget reservations.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 95158,
+    "completionTokens": 9502,
+    "reasoningTokens": 8701,
+    "costUsd": 0.3329135
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Changes required. The switch removes the audio accuracy gate, misclassifies Polly throttling, and allows SDK retries outside the spending reservations. Review is based on the supplied files; tests were not executed.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
