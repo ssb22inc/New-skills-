@@ -1,0 +1,68 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "05e4b04d35faa656d31749f8baa652d07900d3cd",
+    "head": "9e041866d4a4507505beb9078e51b53f157d680c",
+    "pr": "171"
+  },
+  "reviewedAt": "2026-11-21T04:20:24.957Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-read-aloud.yml",
+    "pulsern/HUMAN_TASKS.md",
+    "pulsern/api/_speak.js",
+    "pulsern/api/ai.js",
+    "pulsern/ops/read-aloud-worker.mjs",
+    "pulsern/package-lock.json",
+    "pulsern/package.json",
+    "pulsern/tests/polly-voice.test.js",
+    "pulsern/tests/read-aloud.test.jsx"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/api/_speak.js",
+      "line": 672,
+      "title": "Every nonempty audio response is now certified accurate without verification",
+      "problem": "makeChecked unconditionally assigns pass: true and similarity: 1 to any nonempty response. Neither value measures the audio. saveChecked then publishes it, and speak serves it as passing audio. Approval of the source text does not verify the rendered clinical audio. This removes the existing accuracy safeguard and bypasses the project's all-content accuracy gate. The changed tests explicitly accept this behavior while retaining standalone voiceCheck tests that no longer protect publication.",
+      "failure_scenario": "A successful synthesis returns a clip that omits a negation, misreads a laboratory value, or ends before the passage finishes. It is permanently cached as accurate and played to students; no production check can reject it.",
+      "fix": "Restore independent verification of the actual rendered audio before creating a passing record. Leave unverifiable passages on screen. Add an end-to-end publication test showing that incorrect or incomplete audio cannot be saved or served, rather than only testing the unused comparison helper.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/ops/read-aloud-worker.mjs",
+      "line": 501,
+      "title": "A storage read failure leaves legacy requests to be deleted as invalid",
+      "problem": "migrateLegacyLane silently continues when a legacy queue entry cannot be downloaded. queueLegacyMarin can subsequently write its done marker despite that incomplete migration. drainQueue rejects entries whose voice is still marin and deletes them, so a temporarily unreadable request can be discarded instead of migrated.",
+      "failure_scenario": "A pending marin entry fails its three migration download attempts during a brief storage outage. Storage recovers before drainQueue reads it. The migration is already marked complete, and drainQueue removes the request because its voice is not Joanna. The student's requested work and retry history are lost; eventual bank prewarming does not preserve that request's priority.",
+      "fix": "Treat migration download errors as operational failures and do not write the completion marker while any entry remains unreadable. Keep malformed-entry handling separate from storage failures. Test a download that fails during migration and succeeds during subsequent processing.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/_speak.js",
+      "line": 525,
+      "title": "Character reservations repeatedly enumerate the entire daily counter",
+      "problem": "Each 100-character reservation calls claimSlot, which lists every existing character slot from offset zero. A long passage repeats that full enumeration up to nine times. This work happens inside the passage's 90-second work window, before makeChecked checks the remaining time. The new tests exercise tiny counters and cannot expose the production-scale behavior.",
+      "failure_scenario": "With 20,000 character slots already used—still below the default 25,000-slot cap—a 900-character passage requires at least 198 sequential storage operations just for its character reservation. At 500 ms per operation, that takes about 99 seconds. The reservation consumes quota, but synthesis then refuses to start because its deadline has expired. Repeated attempts can ultimately mark valid content rejected. Production storage latency could not be verified, so the timing risk is medium-confidence.",
+      "fix": "Use bounded-cost atomic quota accounting, such as a database transaction/RPC reserving the passage's complete character allowance, rather than rescanning a growing directory for every 100 characters. Add a high-occupancy test with simulated storage latency that verifies reservation finishes within the work deadline.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 96858,
+    "completionTokens": 6560,
+    "reasoningTokens": 5696,
+    "costUsd": 0.3077435
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Do not merge yet. The change removes the audio accuracy gate, can silently discard pending requests during migration, and introduces quota accounting that can exhaust a passage's deadline before synthesis begins. Review is based on the supplied files and diffs; tests were not executed.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
