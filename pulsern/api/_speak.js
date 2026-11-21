@@ -22,7 +22,7 @@
 // a record that binds it to its text (sha256), its audio (sha256), the
 // transcript and the QA version; only audio with that record is ever
 // played. A passage that fails both takes is not voiced (422): the app
-// reads that part with the device's own voice instead.
+// shows that part on screen. Nothing unchecked is ever spoken.
 //
 // Budgets (LIMITS, below: the one place they are set). Every queued
 // passage and every paid synthesis claims a numbered slot that storage
@@ -41,7 +41,7 @@
 // key lives only in the GitHub pulsern-paid environment) the checked
 // request is queued in the private bucket and the voice job
 // (ops/read-aloud-worker.mjs, every 15 minutes) voices and checks it; the
-// app reads it with the device voice until then (202).
+// app shows that part on screen until then (202). Nothing unchecked is spoken.
 import { createHash, randomUUID } from 'node:crypto';
 import { scriptFor, itemParts, voiceable, RATE, RATE_UNITS } from '../src/read-aloud-script.js';
 import { audioCheck, speechTokens, wordsToNumbers, QA_MODEL, QA_VERSION } from '../ops/narrate-lib.mjs';

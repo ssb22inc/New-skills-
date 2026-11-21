@@ -4,7 +4,7 @@
      never depends on the answer (listening must not give it away).
    - The explanation is a separate script, only built after answering.
    - The server voice is signed-in only, cached privately, and paid for once
-     per passage; without a key it says so and the app uses the device voice.
+     per passage; without a key it says so and that part is shown on screen.
    - Readiness exams have no read aloud. */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHash } from "node:crypto";
@@ -12,7 +12,7 @@ import React from "react";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { questionSegments, feedbackSegments, caseIntroSegments, caseStepSegments, cardSegments, speakable, scriptFor, validResult, partOf, PART_MAX, questionFeedbackSegments, caseFeedbackSegments, itemParts, voiceable } from "../src/read-aloud-script.js";
-import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES, speechChunks } from "../src/read-aloud.jsx";
+import { ReadAloudBar, ra, RATES, loadPrefs, makeVoiceClient, URL_TTL_MS, shouldAutoRead, planReading, readingMs, NOTES } from "../src/read-aloud.jsx";
 import { speak, speechKey, validRequest, canonicalRef, voiceCheck, clinicalUnits, quotaDay, QUOTA_TZ, SPEAK_MAX, QUEUE_ENTRY_MAX, BUCKET, TTS, SIGNED_SECONDS, LIMITS, REJECTION_DAYS, CLAIM_WAIT, CLAIM_LEASE_MS, PASSAGE_WAIT, PASSAGE_LEASE_MS, PASSAGE_WORK_MS, CALL, claimPassage, releasePassage } from "../api/_speak.js";
 import { QA_VERSION } from "../ops/narrate-lib.mjs";
 import { drainQueue, pruneUsage, prewarmBank, itemPassages, verdictPassages, runJob, MAX_ATTEMPTS, CLAIM_PRUNE } from "../ops/read-aloud-worker.mjs";
@@ -514,38 +514,32 @@ describe("the controls", () => {
     expect(RATES).toEqual([0.8, 1, 1.25]);
   });
 
-  it("plays checked audio, and reads anything not ready with the device voice", () => {
+  it("plays only checked audio, and shows anything not checked", () => {
     const segs = [{ id: "stem", text: "S." }, { id: "opt0", text: "A." }, { id: "opt1", text: "B." }];
     expect(planReading(segs, [{ url: "u1" }, { url: "u2" }, { url: "u3" }])).toEqual({ kind: "play", note: null, steps: [{ id: "stem", url: "u1" }, { id: "opt0", url: "u2" }, { id: "opt1", url: "u3" }] });
-    // one part still being voiced: the ready parts play, that part uses the device voice
+    // one part still being voiced: the ready parts play, that part is shown
     const mixed = planReading(segs, [{ url: "u1" }, { status: 202 }, { url: "u3" }]);
-    expect(mixed.note).toBe("device");
-    expect(mixed.steps[1]).toEqual({ id: "opt0", device: true, text: "A.", status: 202, after: undefined });
+    expect(mixed.note).toBe(null);
+    expect(mixed.steps[1]).toEqual({ id: "opt0", silent: true, text: "A.", note: "preparing" });
     expect(mixed.steps[0]).toEqual({ id: "stem", url: "u1" });
-    // a sign with two readings is shown, never guessed by either voice
-    expect(planReading(segs, [{ url: "u1" }, { status: 422, unvoiceable: true }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A." });
-    // a part the check refused is read by the device, from the words on screen
-    expect(planReading(segs, [{ url: "u1" }, { status: 422 }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", device: true, text: "A.", status: 422, after: undefined });
-    // signed out, offline, or over the limit: the device reads, the item is not silenced
+    // a sign with two readings, or a failed check, is shown and never spoken
+    expect(planReading(segs, [{ url: "u1" }, { status: 422, unvoiceable: true }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A.", note: "silent" });
+    expect(planReading(segs, [{ url: "u1" }, { status: 422 }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A.", note: "silent" });
+    // signed out, offline, or over the limit: that part is shown, the ready parts still play
     for (const status of [0, 401, 429, 503, 400]) {
       const plan = planReading(segs, [{ url: "u1" }, { status }, { url: "u3" }]);
       expect(plan.kind).toBe("play");
       expect(plan.steps[0]).toEqual({ id: "stem", url: "u1" });
-      expect(plan.steps[1].device).toBe(true);
-      expect(plan.note).toBe("deviceDown");
+      expect(plan.steps[1]).toMatchObject({ silent: true, note: "unavailable" });
     }
-    // words that are not the item's are shown, not spoken
-    expect(planReading(segs, [{ url: "u1" }, { status: 409 }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A." });
-    expect(planReading(segs, [{ status: 202, after: "tomorrow" }, { status: 202, after: "tomorrow" }, { status: 202, after: "tomorrow" }]).note).toBe("deviceTomorrow");
-    // every part refused by the check: the device reads each one
-    expect(planReading(segs, [{ status: 422 }, { status: 422 }, { status: 422 }]).steps.every((s) => s.device)).toBe(true);
+    expect(planReading(segs, [{ url: "u1" }, { status: 409 }, { url: "u3" }]).steps[1]).toEqual({ id: "opt0", silent: true, text: "A.", note: "silent" });
+    expect(planReading(segs, [{ status: 202, after: "tomorrow" }, { status: 202, after: "tomorrow" }, { status: 202, after: "tomorrow" }]).note).toBe("preparing-tomorrow");
+    expect(planReading(segs, [{ status: 422 }, { status: 422 }, { status: 422 }]).steps.every((s) => s.silent && !s.url)).toBe(true);
   });
 
-  it("keeps a decimal inside one spoken chunk", () => {
-    expect(speechChunks("Potassium 2.9 milliequivalents per liter.")).toEqual(["Potassium 2.9 milliequivalents per liter."]);
-    const long = Array.from({ length: 40 }, (_, i) => `word${i}`).join(" ");
-    for (const chunk of speechChunks(long)) expect(chunk.length).toBeLessThanOrEqual(180);
-    expect(speechChunks(long).join(" ")).toBe(long);
+  it("never speaks with the device voice", () => {
+    const src = readFileSync(new URL("../src/read-aloud.jsx", import.meta.url), "utf8");
+    expect(src).not.toMatch(/speechSynthesis|SpeechSynthesisUtterance/);
   });
 
   it("gives a part shown on screen time to be read", () => {

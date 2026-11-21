@@ -40,30 +40,6 @@ class FakeAudio {
 }
 window.Audio = FakeAudio;
 
-/* The device voice, recorded instead of spoken. A test ends the current
-   utterance the same way it ends an audio clip. */
-let currentUtterance = null;
-const speechMock = {
-  speaking: false,
-  cancel() {
-    this.speaking = false;
-    const u = currentUtterance;
-    currentUtterance = null;
-    u?.onerror?.({ error: "canceled" });
-  },
-  speak(u) {
-    if (env.speechFail) { u.onerror?.({ error: "synthesis-failed" }); return; }
-    this.speaking = true;
-    currentUtterance = u;
-    env.spoken.push(u.text);
-    u.onstart?.();
-  },
-  getVoices() { return []; },
-  pause() {},
-  resume() {},
-};
-mod.setSpeechSynth(() => speechMock);
-
 /* The voice route, answered by the test. A request for the audio file
    itself (warming a clip) is not a voice-route call. */
 let pending = [];
@@ -106,14 +82,19 @@ window.T = {
   held: [],
   hold() { this.held = pending.splice(0); },
   async releaseHeld() { for (const p of this.held.splice(0)) p.reply(200, { url: urlFor(p) }); await settle(); },
-  async end() { player().end(); await settle(); },
-  async endSpeech() {
-    const u = currentUtterance;
-    currentUtterance = null;
-    speechMock.speaking = false;
-    u?.onend?.();
+  /* Answer some of the held requests and keep the rest pending. */
+  async answerHeld(replies) {
+    const keep = [];
+    for (const p of this.held.splice(0)) {
+      const spec = replies[p.body.seg];
+      if (!spec) { keep.push(p); continue; }
+      const [status, data] = spec;
+      p.reply(status, data === "url" ? { url: urlFor(p) } : data);
+    }
+    this.held.push(...keep);
     await settle();
   },
+  async end() { player().end(); await settle(); },
   async gap(ms = 400) { await new Promise((r) => setTimeout(r, ms)); await settle(); },
   async unmount() { root.unmount(); await settle(); root = createRoot(document.getElementById("host")); },
   state: () => ({

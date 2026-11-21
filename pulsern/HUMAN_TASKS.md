@@ -181,21 +181,18 @@ Claude Code executes everything else. These run in parallel with the build.
   - Checked AI audio is what plays when a passage is already saved. It was
     transcribed back and had to match the bank text word for word,
     including every number, unit and dosing frequency.
-  - If that audio is not ready (still queued, the day's limit, or the
-    voice service has no credit), Listen does not stay silent. This
-    device's voice reads the same words, the bar says "Device voice", and
-    the AI clip is used the next time it is ready. A part whose signs
-    could be read two ways is still highlighted with "read this part on
-    screen" and is not guessed.
+  - If that audio is not ready (still queued, the day's limit, the check
+    refused it, or the request is slow), that part is shown on screen and
+    the bar says so. The parts that already have a checked clip still play.
+    The device's own voice is never a stand-in: nothing unchecked is spoken.
   - The job "pulsern-read-aloud"
     (https://github.com/ssb22inc/New-skills-/actions/workflows/pulsern-read-aloud.yml)
     runs every 15 minutes and voices the bank ahead of demand: every
     practice question with its explanation, every case study and every
     flashcard, resuming where it stopped. Items students have asked for
-    go first. It can only save new clips while the OpenAI account has
-    credit; an empty balance does not stop the device voice.
+    go first. It can only save new clips while the OpenAI account has credit.
   - Pressing Listen on an item that is not voiced yet moves that item to
-    the front of the job. The student hears it immediately from the device.
+    the front of the job. Until the clip is saved, that part is read on screen.
   - The server reads each item with the student's own access: approved
     content, a current pass, never exam items. It can say nothing else.
 

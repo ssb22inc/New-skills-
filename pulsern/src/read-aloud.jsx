@@ -13,13 +13,12 @@
    - Their choice: nothing plays until they press Listen. "Read each new
      one" keeps it hands-free once they turn it on.
 
-   The voice. Checked AI audio plays when this passage is already saved.
-   The page asks for it as soon as the item is shown, and Listen starts
-   the first part without waiting for the rest. Anything not ready yet
-   (still queued, over the limit, the voice service down) is read at once
-   by this device's own voice, from the same words on screen, and the bar
-   says so. A part whose signs could be read two ways is not guessed: it
-   is highlighted with "read this part on screen", and the rest still plays.
+   The voice. Only checked AI audio is ever played. The page asks for it
+   as soon as the item is shown, and Listen starts the first ready part
+   without waiting for the rest. A part that is not checked yet (still
+   queued, refused by the check, over the limit, or slow to answer) is
+   highlighted with a plain note, and the parts that are ready still play.
+   Nothing unchecked is spoken: the device's own voice is not a stand-in.
    Only bank items carry a voice; built-in sample items show no button.
 
    Not used in readiness exams (src/exam.jsx): they stay exam conditions. */
@@ -30,8 +29,8 @@ import { partOf, voiceable } from "./read-aloud-script.js";
 const PREFS_KEY = "pulsern.readAloud.v1";
 export const RATES = [0.8, 1, 1.25];
 const GAP_MS = 350; // a breath between parts: the stem, then each choice
-/* How long Listen waits for the first part's AI audio before this device
-   starts reading. Later parts have the whole previous part to arrive. */
+/* How long Listen waits for a part's checked audio before showing that
+   part on screen and moving on. Applies to every part, not only the first. */
 export const FIRST_BUDGET_MS = 900;
 
 export function loadPrefs() {
@@ -58,7 +57,7 @@ async function accessToken() {
 }
 /* Signed links last an hour on the server; reuse one for less than that.
    A definite "not ready" answer is remembered for a minute, so Listen can
-   start the device voice immediately instead of asking again. */
+   show that part on screen without asking again. */
 export const URL_TTL_MS = 50 * 60 * 1000;
 const NEGATIVE_TTL_MS = 60 * 1000;
 const REMEMBER_MISS = new Set([202, 422, 404, 409, 429]);
@@ -124,108 +123,28 @@ function warmClip(url) {
 }
 const clipSrc = (url) => (typeof warmed.get(url) === "string" ? warmed.get(url) : url);
 
-/* What to do with one part.
-   { url }                         checked AI audio
-   { device, text, status, after } this device reads the words on screen
-   { silent, text }                shown, not spoken (a sign with two
-                                   readings, or words that are not the item's)
-   The whole item is always a plan: one part not ready does not silence
-   the parts that are. */
+/* What to do with one part. Only a checked clip is played. Everything
+   else is shown, never spoken: a part still being prepared, one the check
+   refused, one the student cannot read, or a request that did not answer.
+   One part not ready does not silence the parts that are. */
+function silentNote(o) {
+  if (o.unvoiceable || o.status === 422 || o.status === 404 || o.status === 409) return "silent";
+  if (o.after === "tomorrow") return "preparing-tomorrow";
+  if (o.status === 202) return "preparing";
+  return "unavailable";
+}
 export function planReading(segments, outcomes) {
   const steps = segments.map((s, i) => {
     const o = outcomes[i] ?? {};
     if (o.url) return { id: s.id, url: o.url };
-    if (o.unvoiceable) return { id: s.id, silent: true, text: s.text };
-    if (o.status === 404 || o.status === 409) return { id: s.id, silent: true, text: s.text };
-    return { id: s.id, device: true, text: s.text, status: o.status ?? 0, after: o.after };
+    return { id: s.id, silent: true, text: s.text, note: silentNote(o) };
   });
-  const device = steps.filter((s) => s.device);
-  const note = !device.length ? null
-    : device.some((s) => s.after === "tomorrow") ? "deviceTomorrow"
-    : device.some((s) => s.status !== 202) ? "deviceDown"
-    : "device";
+  const note = steps.some((s) => s.url) ? null
+    : steps.some((s) => s.note === "unavailable") ? "unavailable"
+    : steps.some((s) => s.note === "preparing-tomorrow") ? "preparing-tomorrow"
+    : steps.some((s) => s.note === "preparing") ? "preparing"
+    : steps.length ? "silent" : null;
   return { kind: "play", steps, note };
-}
-
-/* The device voice reads a sentence at a time. A single long utterance
-   is cut off after about fifteen seconds on Chrome, including Android. */
-export function speechChunks(text, max = 180) {
-  const src = String(text ?? "").trim();
-  if (!src) return [];
-  /* Sentence ends only. A decimal point ("2.9", "0.5 mL") stays in the
-     sentence: splitting there would read the number as two sentences. */
-  const sentences = [];
-  let cur = "";
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i];
-    cur += ch;
-    if (".!?;".includes(ch)) {
-      const prev = src[i - 1] ?? "";
-      const next = src[i + 1];
-      const decimal = ch === "." && /\d/.test(prev) && /\d/.test(next ?? "");
-      if (!decimal && (next === undefined || /\s/.test(next))) {
-        sentences.push(cur.trim());
-        cur = "";
-        while (src[i + 1] === " ") i += 1;
-      }
-    }
-  }
-  if (cur.trim()) sentences.push(cur.trim());
-  const out = [];
-  let line = "";
-  const push = (s) => { const t = s.trim(); if (t) out.push(t); };
-  for (const sentence of sentences.length ? sentences : [src]) {
-    const words = sentence.split(/\s+/);
-    for (const w of words) {
-      if (line && (line + " " + w).length > max) { push(line); line = ""; }
-      line = line ? `${line} ${w}` : w;
-    }
-    if (line.length > max) { push(line); line = ""; }
-  }
-  push(line);
-  return out;
-}
-
-/* Speak `text` with the device voice. Resolves "done", "aborted",
-   "blocked" (the browser held the sound back), "unsupported", or "error".
-   The first utterance is started before this function awaits, so a call
-   made inside the Listen tap is still the student's gesture. */
-export function deviceSpeak(text, { rate = 1, signal, synth = currentSynth() } = {}) {
-  if (!synth || typeof synth.speak !== "function" || typeof SpeechSynthesisUtterance === "undefined") return Promise.resolve("unsupported");
-  if (signal?.aborted) return Promise.resolve("aborted");
-  const chunks = speechChunks(text);
-  if (!chunks.length) return Promise.resolve("done");
-  return new Promise((resolve) => {
-    let i = 0, settled = false, started = false, timer = 0;
-    const finish = (why) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
-      resolve(why);
-    };
-    const onAbort = () => { try { synth.cancel(); } catch { /* already stopped */ } finish("aborted"); };
-    signal?.addEventListener("abort", onAbort, { once: true });
-    const next = () => {
-      if (settled || signal?.aborted) return finish("aborted");
-      if (i >= chunks.length) return finish("done");
-      const u = new SpeechSynthesisUtterance(chunks[i]);
-      i += 1;
-      u.rate = rate;
-      u.onstart = () => { started = true; };
-      u.onend = () => next();
-      u.onerror = (e) => {
-        const err = e?.error || "";
-        if (err === "canceled" || err === "interrupted") finish("aborted");
-        else finish("error");
-      };
-      try { synth.speak(u); } catch { finish("error"); return; }
-      if (i === 1) {
-        timer = setTimeout(() => { if (!started) { try { synth.cancel(); } catch { /* ignore */ } finish("blocked"); } }, 800);
-      }
-    };
-    next();
-  });
 }
 
 /* How long a silent part stays highlighted: a calm reading pace (about
@@ -280,24 +199,6 @@ export function unlockPlayer() {
   return player;
 }
 
-/* The browser's speechSynthesis is a getter with no setter, so a test
-   cannot replace it. The harness installs its own through here. */
-let synthProvider = () => globalThis.speechSynthesis;
-export function setSpeechSynth(provider) { synthProvider = typeof provider === "function" ? provider : () => provider; }
-const currentSynth = () => { try { return synthProvider(); } catch { return null; } };
-/* Chrome's voice list is empty until it has loaded. With no voice, falling
-   back early would hide a clip that is still on its way. */
-function voicesReady() {
-  try {
-    const list = currentSynth()?.getVoices?.();
-    return Array.isArray(list) && list.length > 0;
-  } catch { return false; }
-}
-
-function stopDeviceVoice() {
-  try { currentSynth()?.cancel(); } catch { /* no device voice here */ }
-}
-
 /* ---------- the hook ---------- */
 /* segments: [{ id, text }]. key: changes when the item changes, which
    stops reading and, with "Read each new one" on, reads the new one.
@@ -309,7 +210,7 @@ export function useReadAloud(segments, key, ref = null) {
   const [status, setStatus] = React.useState("idle");
   const [active, setActive] = React.useState(null);
   const [silent, setSilent] = React.useState(false); // the active part is shown, not voiced
-  const [source, setSource] = React.useState(null); // "ai" | "device" | "screen"
+  const [source, setSource] = React.useState(null); // "ai" | "screen"
   const [note, setNote] = React.useState(null);
   const run = React.useRef(null);   // { ctrl, audio }
   const resumeAt = React.useRef(0);
@@ -329,7 +230,6 @@ export function useReadAloud(segments, key, ref = null) {
       r.ctrl.abort();
       if (r.audio) { r.audio.onended = null; r.audio.onerror = null; r.audio.pause(); }
     }
-    stopDeviceVoice();
   }, []);
 
   const playFrom = React.useCallback(async (start) => {
@@ -366,30 +266,21 @@ export function useReadAloud(segments, key, ref = null) {
       resumeAt.current = i;
       let outcome = voice.peek(itemRef, segs[i].id, segs[i].text);
       if (!outcome) {
-        if (i === start) {
-          const raced = await Promise.race([
-            tasks[i].then((o) => ({ outcome: o })),
-            wait(FIRST_BUDGET_MS, signal).then(() => ({ slow: true })),
-          ]);
-          if (signal.aborted || run.current !== me) return;
-          /* No device voice: keep the loading state until this part's clip
-             comes back, instead of announcing "read this on screen" while
-             the audio is in flight. */
-          outcome = raced.slow && !voicesReady()
-            ? await tasks[i]
-            : raced.slow ? (voice.peek(itemRef, segs[i].id, segs[i].text) || { status: 0 }) : raced.outcome;
-          if (signal.aborted || run.current !== me) return;
-        } else {
-          outcome = await tasks[i];
-          if (signal.aborted || run.current !== me) return;
-        }
+        const raced = await Promise.race([
+          tasks[i].then((o) => ({ outcome: o })),
+          wait(FIRST_BUDGET_MS, signal).then(() => ({ slow: true })),
+        ]);
+        if (signal.aborted || run.current !== me) return;
+        /* A part that has not answered yet is shown, not waited on. The
+           request keeps going and is ready the next time Listen is pressed. */
+        outcome = raced.slow ? (voice.peek(itemRef, segs[i].id, segs[i].text) || { status: 0 }) : raced.outcome;
+        if (signal.aborted || run.current !== me) return;
       }
       const step = planReading([segs[i]], [outcome]).steps[0];
-      const stepNote = step.device ? (step.after === "tomorrow" ? "deviceTomorrow" : step.status === 202 ? "device" : "deviceDown") : null;
       setActive(step.id);
       setSilent(!!step.silent);
-      setSource(step.url ? "ai" : step.device ? "device" : "screen");
-      setNote(step.silent ? "silent" : stepNote);
+      setSource(step.url ? "ai" : "screen");
+      setNote(step.note || null);
       setStatus("playing");
 
       const playUrl = (url) => new Promise((resolve, reject) => {
@@ -423,39 +314,12 @@ export function useReadAloud(segments, key, ref = null) {
           } catch (e2) {
             if (signal.aborted || run.current !== me) return;
             if (e2?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
-            setSource("device"); setNote("deviceDown");
-            const why = await deviceSpeak(segs[i].text, { rate: prefsRef.current.rate, signal });
-            if (why === "blocked") { run.current = null; setActive(null); setStatus("blocked"); return; }
-            if (why === "aborted") return;
-            if (why === "unsupported" || why === "error") { setSilent(true); setSource("screen"); setNote("silent"); await wait(readingMs(segs[i].text, prefsRef.current.rate), signal); }
+            setSilent(true); setSource("screen"); setNote("unavailable");
+            await wait(readingMs(segs[i].text, prefsRef.current.rate), signal);
           }
         }
       } else {
-        /* A first speak() on Chrome often fails before the voice list has
-           loaded (Android included). One short retry catches that. */
-        let why = await deviceSpeak(step.text, { rate: prefsRef.current.rate, signal });
-        if (why === "error" && !signal.aborted && run.current === me) {
-          await wait(300, signal);
-          if (!signal.aborted && run.current === me) why = await deviceSpeak(step.text, { rate: prefsRef.current.rate, signal });
-        }
-        if (signal.aborted || run.current !== me || why === "aborted") return;
-        if (why === "blocked") { run.current = null; setActive(null); setStatus("blocked"); return; }
-        if (why === "unsupported" || why === "error") {
-          const late = voice.peek(itemRef, segs[i].id, segs[i].text) || await tasks[i];
-          if (late?.url && !signal.aborted && run.current === me) {
-            setSource("ai"); setSilent(false); setNote(null);
-            try { await playUrl(clipSrc(late.url)); }
-            catch (e3) {
-              if (signal.aborted || run.current !== me) return;
-              if (e3?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
-              setSilent(true); setSource("screen"); setNote("silent");
-              await wait(readingMs(step.text, prefsRef.current.rate), signal);
-            }
-          } else {
-            setSilent(true); setSource("screen"); setNote("silent");
-            await wait(readingMs(step.text, prefsRef.current.rate), signal);
-          }
-        }
+        await wait(readingMs(step.text, prefsRef.current.rate), signal);
       }
       if (!signal.aborted && run.current === me && i < segs.length - 1) await wait(GAP_MS, signal);
     }
@@ -483,7 +347,6 @@ export function useReadAloud(segments, key, ref = null) {
     stop();
     const segs = segsRef.current, itemRef = refRef.current;
     if (itemRef && key !== "off") {
-      try { currentSynth()?.getVoices?.(); } catch { /* voices load asynchronously */ }
       for (const s of segs) {
         if (!voiceable(s.text)) continue;
         voice.url(itemRef, s.id, s.text).then((url) => warmClip(url), () => {});
@@ -500,19 +363,6 @@ export function useReadAloud(segments, key, ref = null) {
     return () => document.removeEventListener("play", onPlay, true);
   }, [stop]);
 
-  /* Chrome (including Android) stops the device voice after about fifteen
-     seconds unless it is nudged. The nudge is a no-op while it is idle. */
-  React.useEffect(() => {
-    if (source !== "device" || status !== "playing") return undefined;
-    const synth = currentSynth();
-    if (!synth?.pause || !synth?.resume) return undefined;
-    const id = setInterval(() => {
-      if (!synth.speaking) return;
-      try { synth.pause(); synth.resume(); } catch { /* ignore */ }
-    }, 10000);
-    return () => clearInterval(id);
-  }, [source, status]);
-
   return { status, active, silent, source, note, prefs, setPrefs, play, pause, resume, stop, available: !!ref, isOn: (id) => partOf(active) === id && status === "playing" };
 }
 
@@ -525,9 +375,6 @@ export const NOTES = {
   unavailable: "The voice isn't available right now. Please try again later.",
   silent: "Read this part on screen.",
   blocked: "Your browser held back the sound. Tap the button once more to start the voice.",
-  device: "Playing with this device's voice while the AI voice is prepared.",
-  deviceTomorrow: "Playing with this device's voice. Today's AI voice limit is reached, so the AI voice will be prepared after midnight (Eastern time).",
-  deviceDown: "The AI voice isn't available right now, so this device is reading.",
 };
 
 export function ReadAloudBar({ reader, label = "Listen", hint }) {
@@ -539,14 +386,13 @@ export function ReadAloudBar({ reader, label = "Listen", hint }) {
     : status === "loading" ? { text: "Getting the voice ready…", on: stop, aria: "Stop reading" }
     : { text: `🔊 ${label}`, on: play, aria: `${label}: read this aloud` };
   const nextRate = RATES[(RATES.indexOf(prefs.rate) + 1) % RATES.length];
-  const shown = status === "playing" && silent ? "silent"
-    : status === "playing" && source === "device" ? (NOTES[noteKey] ? noteKey : "device")
+  const shown = status === "playing" && silent ? (NOTES[noteKey] ? noteKey : "silent")
     : status === "blocked" ? "blocked"
     : status === "preparing" || status === "preparing-tomorrow" ? status
     : status === "unavailable" ? "unavailable"
     : null;
   const note = shown ? NOTES[shown] : null;
-  const voiceLabel = source === "device" ? "Device voice" : source === "screen" ? "On screen" : "AI voice";
+  const voiceLabel = source === "screen" ? "On screen" : "AI voice";
   return (
     <div className="ra-bar" role="group" aria-label="Read aloud">
       <button type="button" className="btn ra-main" onClick={main.on} aria-label={main.aria} aria-pressed={status === "playing"}>{main.text}</button>

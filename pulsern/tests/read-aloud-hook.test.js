@@ -2,14 +2,14 @@
    and when it must stop. Students must only ever hear checked audio for
    the item on screen:
    - an item with a part not yet voiced (202) still starts: the ready parts
-     play, and the rest is read by the device voice;
-   - a voice the server cannot provide (limit, outage) is read by the device
-     voice, with the bar saying so, instead of staying silent;
+     play, and the rest is shown on screen;
+   - a voice the server cannot provide (limit, outage) is shown on screen,
+     with the bar saying so, and never spoken by the device;
    - a response that arrives after the item changed or the reader closed
      never starts the old item's audio;
    - moving from the question to its explanation (or to the next item)
      stops what was playing;
-   - a part refused by the check is read by the device voice, and the rest plays;
+   - a part refused by the check is shown, not voiced, and the rest plays;
    - a part whose signs could be read two ways is shown, not guessed;
    - on a strict-autoplay browser, every passage still plays after one tap.
    The page (tests/browser/read-aloud-harness.jsx) runs the shipped hook,
@@ -76,20 +76,21 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.elements).toBe(1);
   });
 
-  it("keeps loading, then plays the clip, when this device has no voice and the audio is slow", async () => {
+  it("shows a later part whose audio never arrives, and does not play it when the answer comes late", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
-    await strict({ speechFail: true });
     await tap("play");
-    await gap(1100);
+    await T(() => window.T.hold());
+    await T((r) => window.T.answerHeld(r), { stem: [200, "url"] });
+    expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
+    await end();
+    await gap(1600); // the breath between parts, then the wait for the next one
     let s = await state();
-    expect(s.played).toEqual([]);
-    expect(s.status).toBe("loading");
-    await answer(ALL_READY);
-    s = await state();
+    expect(s.active).toBe("opt0");
+    expect(s.silent).toBe(true);
     expect(s.played).toEqual(["https://signed.example/1/stem"]);
-    expect(s.status).toBe("playing");
-    expect(s.source).toBe("ai");
-    expect(s.note).toBe(null);
+    await T(() => window.T.releaseHeld());
+    await gap(200);
+    expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
   });
 
   it("plays every passage on a strict-autoplay browser after one tap, even when the voice was not cached", async () => {
@@ -123,7 +124,7 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
   });
 
-  it("plays the parts that are ready and reads a part still being prepared with the device voice", async () => {
+  it("plays the parts that are ready and shows a part still being prepared", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ opt0: [202, { queued: true }], "*": [200, "url"] });
@@ -132,56 +133,55 @@ describe("useReadAloud, mounted in a browser", () => {
     await gap();
     const s = await state();
     expect(s.active).toBe("opt0");
-    expect(s.source).toBe("device");
-    expect(s.spoken).toEqual(["Potassium 2.9."]);
-    expect(s.note).toBe("device");
+    expect(s.silent).toBe(true);
+    expect(s.source).toBe("screen");
+    expect(s.note).toBe("preparing");
+    expect(s.spoken ?? []).toEqual([]);
     const bar = await T(() => window.T.barText());
-    expect(bar.text).toContain(bar.notes.device);
-    expect(bar.text).toContain("Device voice");
-    await T(() => window.T.endSpeech());
-    await gap();
+    expect(bar.text).toContain(bar.notes.preparing);
+    expect(bar.text).not.toContain("Device voice");
+    await gap(2500);
     expect((await state()).played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt1"]);
   });
 
-  it("reads with the device voice when some parts are queued and others are over the limit", async () => {
+  it("shows a part on screen when the voice is over the limit, and does not speak it", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ stem: [202, { queued: true }], "*": [429, { error: "Daily voice limit reached" }] });
     const s = await state();
     expect(s.played).toEqual([]);
     expect(s.status).toBe("playing");
-    expect(s.source).toBe("device");
-    expect(s.spoken[0]).toBe("Which value is the priority?");
-    expect(s.note).toBe("device");
+    expect(s.silent).toBe(true);
+    expect(s.source).toBe("screen");
+    expect(s.note).toBe("preparing");
   });
 
-  it("says the AI voice waits until tomorrow, and reads with this device now", async () => {
+  it("says the voice will be prepared after midnight, and shows the part", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ "*": [202, { queued: true, after: "tomorrow" }] });
     const s = await state();
     expect(s.played).toEqual([]);
     expect(s.status).toBe("playing");
-    expect(s.note).toBe("deviceTomorrow");
+    expect(s.note).toBe("preparing-tomorrow");
     const bar = await T(() => window.T.barText());
-    expect(bar.text).toContain(bar.notes.deviceTomorrow);
+    expect(bar.text).toContain(bar.notes["preparing-tomorrow"]);
   });
 
-  it("reads with the device voice when the AI voice is unavailable", async () => {
+  it("shows the part when the voice is unavailable, instead of speaking it", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ "*": [429, { error: "Daily voice limit reached" }] });
     const s = await state();
     expect(s.played).toEqual([]);
     expect(s.status).toBe("playing");
-    expect(s.source).toBe("device");
-    expect(s.note).toBe("deviceDown");
+    expect(s.silent).toBe(true);
+    expect(s.note).toBe("unavailable");
     const bar = await T(() => window.T.barText());
-    expect(bar.text).toContain(bar.notes.deviceDown);
-    expect(bar.text).not.toContain("Getting the voice ready");
+    expect(bar.text).toContain(bar.notes.unavailable);
   });
 
-  it("reads a part the check refused with the device voice, then plays the rest", async () => {
+  it("shows a part refused by the check without voicing it, then plays the rest", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ opt0: [422, { error: "Voice check failed" }], "*": [200, "url"] });
@@ -189,11 +189,10 @@ describe("useReadAloud, mounted in a browser", () => {
     await gap();
     const s = await state();
     expect(s.active).toBe("opt0");
-    expect(s.source).toBe("device");
-    expect(s.spoken).toEqual(["Potassium 2.9."]);
+    expect(s.silent).toBe(true);
+    expect(s.source).toBe("screen");
     expect(s.played).toEqual(["https://signed.example/1/stem"]);
-    await T(() => window.T.endSpeech());
-    await gap();
+    await gap(2500);
     expect((await state()).played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt1"]);
   });
 
@@ -212,20 +211,18 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/2/stem", "https://signed.example/2/opt1"]);
   });
 
-  it("reads a one-part card whose check failed with the device voice, instead of 'try again later'", async () => {
+  it("shows a one-part card whose check failed on screen, instead of 'try again later'", async () => {
     await render({ segments: [{ id: "card-front", text: "Potassium 2.9 milliequivalents per liter." }], itemKey: "c:4", itemRef: { kind: "card", id: 4, part: "front" } });
     await tap("play");
     await answer({ "*": [422, { error: "Voice check failed" }] });
     const s = await state();
     expect(s.status).toBe("playing");
     expect(s.active).toBe("card-front");
-    expect(s.source).toBe("device");
+    expect(s.silent).toBe(true);
     expect(s.played).toEqual([]);
-    expect(s.spoken).toEqual(["Potassium 2.9 milliequivalents per liter."]);
     const bar = await T(() => window.T.barText());
-    expect(bar.text).toContain("Device voice");
-    await T(() => window.T.endSpeech());
-    await gap();
+    expect(bar.text).toContain(bar.notes.silent);
+    await gap(2500);
     expect((await state()).status).toBe("idle");
   });
 
