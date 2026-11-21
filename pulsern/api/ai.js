@@ -3,7 +3,8 @@
 // plus the signed-in user's Supabase access token, never a vendor secret.
 // Swap vendors by editing MODELS — nothing else changes.
 // { action: "speak", ref, seg, text } is the read-aloud voice instead
-// (api/_speak.js): same sign-in door, its own vendor key (OPENAI_API_KEY).
+// (api/_speak.js): same sign-in door. This server does not speak; it
+// queues the passage for the voice job, which uses Amazon Polly.
 import { createClient } from '@supabase/supabase-js';
 import { tokenFromRequest, userFromRequest } from './_require-user.js';
 import { speak, bankReader } from './_speak.js';
@@ -35,7 +36,7 @@ export default async function handler(req, res) {
     })) : null;
     const { ref, seg, text } = req.body;
     // Daily caps come from LIMITS in api/_speak.js, shared with the voice job.
-    const out = await speak({ ref, seg, text, userId: user.id, readItem, apiKey: process.env.OPENAI_API_KEY, storage });
+    const out = await speak({ ref, seg, text, userId: user.id, readItem, storage });
     return res.status(out.status).json(out.body);
   }
 

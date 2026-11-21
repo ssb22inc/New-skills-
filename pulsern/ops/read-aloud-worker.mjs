@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /* The read-aloud voice job (.github/workflows/pulsern-read-aloud.yml).
    ------------------------------------------------------------------
-   The app's server holds no OpenAI key, and students only ever hear audio
-   that passed the word-for-word accuracy check. This job, which runs on
-   the default branch in the pulsern-paid environment (where the key lives),
-   makes that audio, with exactly the gate the live route uses (makeChecked:
-   synthesise, transcribe, voiceCheck, two takes):
+   The app's server holds no cloud key. This job, on the default branch in
+   the pulsern-paid environment, speaks each passage once with Amazon Polly
+   Neural (Joanna, mp3). The text is the bank script after the same
+   normaliser the screen uses. Polly does not rewrite it, so there is no
+   transcription and no retake. A part with no clip yet is shown on screen.
 
    1. The queue first. When a student presses Listen on something not yet
       voiced, the server checks the request against the bank and queues
@@ -32,8 +32,9 @@
    or bank trouble) fails the workflow run, so it is noticed. */
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { PollyClient } from "@aws-sdk/client-polly";
 import {
-  BUCKET, TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, retried, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, validRequest, reserveSpend, quotaDay,
+  BUCKET, TTS, MARIN_TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, retried, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, speechKey, validRequest, reserveSpeechCost, pollyInput, readAloudLimits, quotaDay,
 } from "../api/_speak.js";
 import { verdictText, itemParts, voiceable } from "../src/read-aloud-script.js";
 
@@ -43,17 +44,18 @@ const MAX_TRANSIENT_IN_A_ROW = 3;
 /* Voice one passage. result: "voiced" | "failed" | "rejected" | "budget" |
    "service" | "storage" | "transient" | "busy" (being voiced elsewhere
    right now: left for the next run) | "decided" (finished elsewhere). */
-async function voiceOne({ storage, apiKey, fetchImpl, text, now, limits }) {
+async function voiceOne({ storage, polly, fetchImpl, text, now, limits }) {
   const claim = await claimPassage(storage, text, now);
   if (claim.state === "busy") return { result: "busy", spent: 0 };
   if (claim.state === "error") return { result: "storage", spent: 0, error: "could not claim the passage" };
   try {
     if (await readRecord(storage, text, TTS, now())) return { result: "decided", spent: 0 };
-    return await voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, deadline: claim.deadline });
+    return await voiceClaimed({ storage, polly, fetchImpl, text, now, limits, deadline: claim.deadline });
   } finally { await releasePassage(storage, claim); }
 }
-async function voiceClaimed({ storage, apiKey, fetchImpl, text, now, limits, deadline }) {
-  const r = await makeChecked({ text, apiKey, fetchImpl, deadline, timeOf: now, beforeTake: () => reserveSpend(storage, { now: now(), limits }) });
+async function voiceClaimed({ storage, polly, fetchImpl, text, now, limits, deadline }) {
+  const billed = pollyInput(text).billed ?? String(text).length;
+  const r = await makeChecked({ text, polly, fetchImpl, deadline, timeOf: now, beforeTake: () => reserveSpeechCost(storage, billed, { now: now(), limits }) });
   if (!r.final) {
     if (r.errorKind === "budget") return { result: "budget", spent: r.spent };
     if (r.errorKind === "service") return { result: "service", spent: r.spent, error: r.error };
@@ -94,7 +96,7 @@ async function lanePage(bucket, dir, offset) {
 /* onChecked: called for every passage that got a verdict (voiced, or
    failed the check), so the caller knows work was done even if a later
    step throws. */
-export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, onChecked = () => {} }) {
+export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, onChecked = () => {} }) {
   const bucket = storage.from(BUCKET);
   const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
   let inARow = 0, refusedInARow = 0, done = 0;
@@ -149,7 +151,7 @@ export async function drainQueue({ storage, apiKey, fetchImpl = fetch, max = 200
         else { out.operational = true; out.errors.push(`${job.ref.kind} ${job.ref.id} ${job.seg}: could not save the give-up record`); }
         continue;
       }
-      const v = await voiceOne({ storage, apiKey, fetchImpl, text: job.text, now, limits });
+      const v = await voiceOne({ storage, polly, fetchImpl, text: job.text, now, limits });
       out.spent += v.spent;
       if (v.result === "busy") continue; // being voiced elsewhere: next run
       if (v.result === "decided") { await drop(path); out.skipped++; continue; }
@@ -224,7 +226,7 @@ export const BANK_QUERIES = {
   card: (db) => db.from("flashcards").select("id, front, back").eq("approved", true),
 };
 
-export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50, log = () => {}, until = Infinity, onChecked = () => {} }) {
+export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50, log = () => {}, until = Infinity, onChecked = () => {} }) {
   const bucket = storage.from(BUCKET);
   // stopped: null (all done), "max" or "budget" (normal), or an operational failure (failed: true)
   const out = { voiced: 0, failed: 0, rejected: 0, spent: 0, budget: false, stopped: null, failure: false, cursor: null };
@@ -276,7 +278,7 @@ export async function prewarmBank({ storage, db, apiKey, fetchImpl = fetch, max 
       if (unreadable) { out.failure = true; return `storage: could not read the queue (${unreadable.error.message ?? unreadable.error})`; }
       if (done >= max || now() >= until) return "max"; // the run's limit, in passages or in time
       done++;
-      const v = await voiceOne({ storage, apiKey, fetchImpl, text, now, limits });
+      const v = await voiceOne({ storage, polly, fetchImpl, text, now, limits });
       out.spent += v.spent;
       if (v.result === "decided") continue;
       if (v.result === "busy") return "busy"; // being voiced elsewhere: this item again next run
@@ -425,23 +427,23 @@ export async function pruneClaims({ bucket, now }) {
    pruning. failed: true for any operational failure, which fails the
    workflow run. Caps always come from LIMITS (api/_speak.js), the same
    values the route uses. */
-export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity }) {
+export async function runJob({ storage, db, polly, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity }) {
   let q, checked = 0;
   const onChecked = () => { checked++; };
-  try { q = await drainQueue({ storage, apiKey, fetchImpl, max, now, limits, log, until, onChecked }); }
+  try { q = await drainQueue({ storage, polly, apiKey, fetchImpl, max, now, limits, log, until, onChecked }); }
   catch (e) { q = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, errors: [String(e?.message ?? e)], broken: true }; }
   const left = Math.max(0, max - (q.voiced + q.failed + q.rejected + q.retried));
   // The bank waits for a clean queue run: after any operational failure the
   // provider or storage is suspect, and nothing more is spent this run.
   const skip = q.budget || q.providerDown || q.service || q.broken || q.operational || q.timeUp || !left;
   let w;
-  try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, apiKey, fetchImpl, max: left, now, limits, log, until, onChecked }); }
+  try { w = skip ? { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: "skipped", failure: false } : await prewarmBank({ storage, db, polly, apiKey, fetchImpl, max: left, now, limits, log, until, onChecked }); }
   catch (e) { w = { voiced: 0, failed: 0, rejected: 0, spent: 0, stopped: String(e?.message ?? e), failure: true }; }
   const pruned = await pruneUsage({ storage, now: now() }).catch((e) => ({ error: String(e?.message ?? e) }));
   const lines = [
     `Queue: ${q.queued} waiting · ${q.voiced} voiced and checked · ${q.failed} failed the check twice · ${q.rejected} refused or given up · ${q.retried} to retry · ${q.skipped} skipped`,
     `Bank: ${w.voiced} voiced and checked · ${w.failed} failed the check twice · ${w.rejected} refused${w.stopped ? ` · stopped: ${w.stopped}` : ""}${w.cursor ? ` · next: ${w.cursor.done ? "done" : `${w.cursor.kind} after ${w.cursor.afterId}`}` : ""}`,
-    `Syntheses paid: ${q.spent + w.spent} (cap ${limits.spend} a day)${q.budget || w.budget ? " · today's voice budget is used up; the rest wait" : ""} · old budget slots removed: ${pruned.removed ?? 0}`,
+    `Syntheses paid: ${q.spent + w.spent} (cap ${limits.spend} a day${limits.usd ? `, $${limits.usd} Polly` : ""})${q.budget || w.budget ? " · today's voice budget is used up; the rest wait" : ""} · old budget slots removed: ${pruned.removed ?? 0}`,
     ...(q.service ? [`error: provider account or setup: ${q.service}`] : []),
     ...q.errors.map((e) => `error: ${e}`),
     ...(pruned.error ? [`error: pruning: ${pruned.error}`] : []),
@@ -462,18 +464,103 @@ export async function runJob({ storage, db, apiKey, max = 200, fetchImpl = fetch
   return { lines, failed, more, progress, setup, queue: q, bank: w, pruned };
 }
 
+/* Passages that already have an OpenAI marin clip, queued once so the
+   new voice replaces them before the rest of the bank. Exam rows are not
+   in BANK_QUERIES. A missing marin folder is an empty list, not an error. */
+const REVOICE_MARKER = "prewarm/polly-revoice.json";
+async function listMp3Keys(bucket, dir) {
+  const keys = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await retried(() => bucket.list(dir, { limit: 1000, offset }));
+    if (error) {
+      if (/not.?found|404/i.test(String(error.message ?? error))) return keys;
+      throw new Error(`Could not list ${dir}: ${error.message ?? error}`);
+    }
+    for (const e of data ?? []) if (typeof e.name === "string" && e.name.endsWith(".mp3")) keys.push(e.name.slice(0, -4));
+    if (!data || data.length < 1000) return keys;
+  }
+}
+export async function queueLegacyMarin({ storage, db, log = () => {}, page = 200 }) {
+  const bucket = storage.from(BUCKET);
+  const got = await readJsonFile(bucket, REVOICE_MARKER);
+  if (got.error && !/not.?found|404/i.test(String(got.error.message ?? got.error))) throw new Error(`could not read the revoice marker: ${got.error.message ?? got.error}`);
+  if (got.value?.done) return { queued: 0, already: true };
+  const legacy = new Set(await listMp3Keys(bucket, MARIN_TTS.voice));
+  let queued = 0, matched = 0;
+  for (const kind of ["question", "case", "card"]) {
+    let afterId = 0;
+    for (;;) {
+      const { data: rows, error } = await BANK_QUERIES[kind](db).gt("id", afterId).order("id").limit(page);
+      if (error) throw new Error(`bank: ${error.message ?? error}`);
+      if (!rows?.length) break;
+      for (const row of rows) {
+        afterId = row.id;
+        for (const part of itemParts(kind, row)) {
+          const text = part.text;
+          if (!text || text.length > SPEAK_MAX || !voiceable(text)) continue;
+          if (!legacy.has(speechKey(text, MARIN_TTS))) continue;
+          matched++;
+          const decided = await readRecord(storage, text, TTS);
+          if (decided) continue;
+          const paths = passagePaths(text, TTS);
+          const waiting = await Promise.all([paths.queue, paths.retry].map((p) => retried(() => bucket.download(p))));
+          if (waiting.some((w) => !w.error)) continue;
+          const entry = { text, voice: TTS.voice, ref: part.ref, seg: part.seg, requestedAt: new Date().toISOString(), legacy: "marin" };
+          if (JSON.stringify(entry).length > QUEUE_ENTRY_MAX) continue;
+          const { error: up } = await put(bucket, paths.queue, entry);
+          if (up) throw new Error(`could not queue a legacy clip: ${up.message ?? up}`);
+          queued++;
+        }
+      }
+    }
+  }
+  const { error: mark } = await put(bucket, REVOICE_MARKER, { done: true, queued, matched, files: legacy.size, at: new Date().toISOString() });
+  if (mark) throw new Error(`could not save the revoice marker: ${mark.message ?? mark}`);
+  log(`Queued ${queued} passages that already had a marin clip (${matched} matched, ${legacy.size} files).`);
+  return { queued, matched, files: legacy.size, already: false };
+}
+
+export function awsReady(env = process.env) {
+  return !!(env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY);
+}
+export function createPolly(env = process.env) {
+  if (!awsReady(env)) return null;
+  return new PollyClient({
+    region: env.AWS_REGION || "us-east-1",
+    credentials: { accessKeyId: env.AWS_ACCESS_KEY_ID, secretAccessKey: env.AWS_SECRET_ACCESS_KEY },
+  });
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY } = process.env;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !OPENAI_API_KEY) {
-    console.error("Needs SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and OPENAI_API_KEY.");
+  if (!awsReady()) {
+    const line = "AWS credentials are not set (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY). Read-aloud voicing is paused. No clips were generated.";
+    console.log(line);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      const { appendFileSync } = await import("node:fs");
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, line + "\n");
+    }
+    process.exit(0);
+  }
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("Needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
     process.exit(1);
   }
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const polly = createPolly();
+  const limits = readAloudLimits();
+  let legacy;
+  try { legacy = await queueLegacyMarin({ storage: db.storage, db }); }
+  catch (e) {
+    console.error(`Could not queue the existing marin clips: ${e?.message ?? e}`);
+    process.exit(1);
+  }
+  console.log(legacy.already ? "Marin clips were already queued for Joanna." : `Queued ${legacy.queued} marin passages for Joanna.`);
   const max = Math.max(1, Math.min(2000, Number(process.env.READ_ALOUD_MAX) || 200));
   /* No new passage is started after READ_ALOUD_MINUTES, so the job keeps
      time for its pause and for starting the next run (pulsern-read-aloud.yml). */
   const until = Date.now() + Math.max(1, Math.min(30, Number(process.env.READ_ALOUD_MINUTES) || 25)) * 60000;
-  const { lines, failed, more } = await runJob({ storage: db.storage, db, apiKey: OPENAI_API_KEY, max, until });
+  const { lines, failed, more } = await runJob({ storage: db.storage, db, polly, max, until, limits });
   console.log(lines.join("\n") + (more ? "\nMore to do: starting the next run." : ""));
   if (process.env.GITHUB_OUTPUT) {
     const { appendFileSync } = await import("node:fs");

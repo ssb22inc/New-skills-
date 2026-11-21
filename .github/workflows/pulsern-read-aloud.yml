@@ -1,10 +1,9 @@
 name: pulsern-read-aloud
 
 # Voices the read-aloud passages students have asked for
-# (pulsern/ops/read-aloud-worker.mjs). The app's server holds no OpenAI key:
+# (pulsern/ops/read-aloud-worker.mjs). The app's server holds no cloud key:
 # it checks each request against the bank and queues it in the private
-# "read-aloud" bucket; this job synthesises each queued passage, transcribes
-# it back, and saves the audio only if it passes the word-for-word check.
+# "read-aloud" bucket; this job speaks each passage with Amazon Polly Neural.
 #
 # Runs every 15 minutes, and also carries itself on: a run that stops at
 # its per-run limit with work left starts the next run (GitHub allows a
@@ -15,7 +14,8 @@ name: pulsern-read-aloud
 # so a brief storage blip does not stall the bank and an outage never loops.
 #
 # Runs the DEFAULT branch's code only, in the pulsern-paid environment
-# (OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Spend is bounded:
+# (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION,
+# SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Spend is bounded:
 # only bank-checked passages are queued, the route caps new passages per
 # student and app-wide each day, and each run voices at most READ_ALOUD_MAX.
 
@@ -61,11 +61,14 @@ jobs:
       - name: Voice and check queued passages
         id: voice
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           READ_ALOUD_MAX: ${{ inputs.max || '200' }}
           READ_ALOUD_MINUTES: "25"
+          READ_ALOUD_DAILY_USD: "40"
         run: node ops/read-aloud-worker.mjs
       - name: Carry on while work remains
         # also after a failed run that still got work done (a brief blip),
