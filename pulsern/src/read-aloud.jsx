@@ -13,15 +13,12 @@
    - Their choice: nothing plays until they press Listen. "Read each new
      one" keeps it hands-free once they turn it on.
 
-   The voice: one natural AI voice, and only audio that passed the
-   word-for-word accuracy check (api/_speak.js). Nothing unchecked is ever
-   spoken: no device voice stands in.
-   - Every part ready: it plays.
-   - Any part not voiced yet: nothing plays; the whole item is moved up
-     the voice job's queue and the bar says it is being prepared.
-   - A part that could not be voiced accurately: it is highlighted for the
-     time it takes to read, with "read this part on screen", and the rest
-     plays.
+   The voice. Only checked AI audio is ever played. The page asks for it
+   as soon as the item is shown, and Listen starts the first ready part
+   without waiting for the rest. A part that is not checked yet (still
+   queued, refused by the check, over the limit, or slow to answer) is
+   highlighted with a plain note, and the parts that are ready still play.
+   Nothing unchecked is spoken: the device's own voice is not a stand-in.
    Only bank items carry a voice; built-in sample items show no button.
 
    Not used in readiness exams (src/exam.jsx): they stay exam conditions. */
@@ -32,6 +29,9 @@ import { partOf, voiceable } from "./read-aloud-script.js";
 const PREFS_KEY = "pulsern.readAloud.v1";
 export const RATES = [0.8, 1, 1.25];
 const GAP_MS = 350; // a breath between parts: the stem, then each choice
+/* How long Listen waits for a part's checked audio before showing that
+   part on screen and moving on. Applies to every part, not only the first. */
+export const FIRST_BUDGET_MS = 900;
 
 export function loadPrefs() {
   try {
@@ -55,16 +55,26 @@ const prefsStore = {
 async function accessToken() {
   try { const { data: { session } } = await supabase.auth.getSession(); return session?.access_token || ""; } catch { return ""; }
 }
-/* Signed links last an hour on the server; reuse one for less than that. */
+/* Signed links last an hour on the server; reuse one for less than that.
+   A definite "not ready" answer is remembered for a minute, so Listen can
+   show that part on screen without asking again. */
 export const URL_TTL_MS = 50 * 60 * 1000;
+const NEGATIVE_TTL_MS = 60 * 1000;
+const REMEMBER_MISS = new Set([202, 422, 404, 409, 429]);
 
 export function makeVoiceClient({ fetchImpl = (...a) => fetch(...a), now = () => Date.now(), token = accessToken } = {}) {
-  const cache = new Map(); // [ref, seg, text] -> { at, p }
+  const cache = new Map(); // [ref, seg, text] -> { at, ttl, p, settled }
   return {
+    /* What we already know, or null while the request is still out. */
+    peek(ref, seg, text) {
+      const hit = cache.get(JSON.stringify([ref, seg, text]));
+      if (!hit || now() - hit.at >= hit.ttl) return null;
+      return hit.settled ?? null;
+    },
     url(ref, seg, text, { fresh = false } = {}) {
       const k = JSON.stringify([ref, seg, text]);
       const hit = cache.get(k);
-      if (!fresh && hit && now() - hit.at < URL_TTL_MS) return hit.p;
+      if (!fresh && hit && now() - hit.at < hit.ttl) return hit.p;
       const p = (async () => {
         const t = await token();
         const r = await fetchImpl("/api/ai", {
@@ -73,44 +83,118 @@ export function makeVoiceClient({ fetchImpl = (...a) => fetch(...a), now = () =>
           body: JSON.stringify({ action: "speak", ref, seg, text, token: t }),
         });
         const data = await r.json().catch(() => ({}));
-        if (!r.ok || r.status !== 200 || typeof data.url !== "string") { const e = new Error(data.error || "VOICE"); e.status = r.status; e.after = data.after; throw e; }
+        if (!r.ok || r.status !== 200 || typeof data.url !== "string") {
+          const e = new Error(data.error || "VOICE");
+          e.status = r.status;
+          e.after = data.after;
+          throw e;
+        }
         return data.url;
       })();
-      cache.set(k, { at: now(), p });
-      p.catch(() => { if (cache.get(k)?.p === p) cache.delete(k); });
+      const entry = { at: now(), ttl: URL_TTL_MS, p, settled: null };
+      cache.set(k, entry);
+      p.then(
+        (url) => { entry.settled = { url }; },
+        (e) => {
+          const status = e?.status ?? 0;
+          entry.settled = { status, after: e?.after };
+          if (REMEMBER_MISS.has(status)) { entry.ttl = NEGATIVE_TTL_MS; entry.at = now(); }
+          else if (cache.get(k)?.p === p) cache.delete(k);
+        },
+      );
       return p;
     },
   };
 }
 const voice = makeVoiceClient();
 
-/* What to do with an item, from what the server said about each part:
-   { kind: "play", steps: [{ id, url } | { id, silent: true }] }
-   { kind: "preparing" }   some part is not voiced yet (202)
-   { kind: "unavailable" } signed out, offline, over the daily limit, no
-                           voice service
-   An item whose every part was refused by the check is played as steps
-   that are all silent: shown on screen, part by part. */
-/* Failures that mean the item cannot be voiced now, whatever else came back. */
-const UNAVAILABLE = (status) => !status || status === 401 || status === 429 || status === 503 || status >= 500;
+/* A few clips kept in memory so Listen does not download them again.
+   Older ones are dropped, and a download that finishes after its clip was
+   dropped is not put back. The clip being played is kept. */
+export const WARM_MAX = 8;
+export function createWarmCache({ max = WARM_MAX, revoke = (objectUrl) => { try { URL.revokeObjectURL(objectUrl); } catch { /* already gone */ } } } = {}) {
+  const map = new Map(); // signed url -> object url, or null while downloading
+  const gen = new Map();
+  let playing = "";
+  function evict() {
+    for (const key of [...map.keys()]) {
+      if (map.size <= max) break;
+      const value = map.get(key);
+      if (typeof value === "string" && value === playing) continue;
+      gen.set(key, (gen.get(key) || 0) + 1);
+      map.delete(key);
+      if (typeof value === "string") revoke(value);
+    }
+  }
+  return {
+    /* 0 means this url is already tracked. Otherwise the token for finish. */
+    start(url) {
+      if (!url || map.has(url)) return 0;
+      const token = (gen.get(url) || 0) + 1;
+      gen.set(url, token);
+      map.set(url, null);
+      evict();
+      return map.has(url) ? token : 0;
+    },
+    /* "kept", "stale" (caller must revoke), or "evicted" (already revoked). */
+    finish(url, token, objectUrl) {
+      if (!token || gen.get(url) !== token) return "stale";
+      map.delete(url);
+      map.set(url, objectUrl);
+      evict();
+      return map.get(url) === objectUrl ? "kept" : "evicted";
+    },
+    get(url) {
+      const value = map.get(url);
+      if (typeof value !== "string") return url;
+      map.delete(url);
+      map.set(url, value);
+      return value;
+    },
+    /* Only the clip in the player is protected, and only until release. */
+    hold(objectUrl) { playing = objectUrl || ""; evict(); },
+    release() { playing = ""; evict(); },
+    size() { return [...map.values()].filter((value) => typeof value === "string").length; },
+  };
+}
+const clips = createWarmCache();
+function warmClip(url) {
+  const token = clips.start(url);
+  if (!token || typeof fetch !== "function") return;
+  fetch(url).then(async (r) => {
+    if (!r?.ok || typeof r.blob !== "function") return;
+    const b = await r.blob();
+    if (!(b?.size > 200) || typeof URL === "undefined" || !URL.createObjectURL) return;
+    const objectUrl = URL.createObjectURL(b);
+    if (clips.finish(url, token, objectUrl) === "stale") {
+      try { URL.revokeObjectURL(objectUrl); } catch { /* already gone */ }
+    }
+  }).catch(() => {});
+}
+const clipSrc = (url) => clips.get(url);
+
+/* What to do with one part. Only a checked clip is played. Everything
+   else is shown, never spoken: a part still being prepared, one the check
+   refused, one the student cannot read, or a request that did not answer.
+   One part not ready does not silence the parts that are. */
+function silentNote(o) {
+  if (o.unvoiceable || o.status === 422 || o.status === 404 || o.status === 409) return "silent";
+  if (o.after === "tomorrow") return "preparing-tomorrow";
+  if (o.status === 202) return "preparing";
+  return "unavailable";
+}
 export function planReading(segments, outcomes) {
-  // A real failure is reported before "being prepared", which is only
-  // promised when every part is either ready, decided, or on its way.
-  if (outcomes.some((o) => !o.url && UNAVAILABLE(o.status))) return { kind: "unavailable" };
-  if (outcomes.some((o) => o.status === 202)) return { kind: outcomes.some((o) => o.status === 202 && o.after === "tomorrow") ? "preparing-tomorrow" : "preparing" };
   const steps = segments.map((s, i) => {
-    const o = outcomes[i];
+    const o = outcomes[i] ?? {};
     if (o.url) return { id: s.id, url: o.url };
-    // Checked and refused (422), or no longer readable (404/409): show it, do not voice it.
-    if ([422, 404, 409].includes(o.status)) return { id: s.id, silent: true, text: s.text };
-    return null;
+    return { id: s.id, silent: true, text: s.text, note: silentNote(o) };
   });
-  /* Every part decided: play it, even when no part has a voice (a card
-     side whose voice failed the check). The reader then highlights each
-     part in turn with "Read this part on screen", which a retry would not
-     change; it is not a passing outage. */
-  if (steps.some((x) => x === null)) return { kind: "unavailable" };
-  return { kind: "play", steps };
+  const note = steps.some((s) => s.url) ? null
+    : steps.some((s) => s.note === "unavailable") ? "unavailable"
+    : steps.some((s) => s.note === "preparing-tomorrow") ? "preparing-tomorrow"
+    : steps.some((s) => s.note === "preparing") ? "preparing"
+    : steps.length ? "silent" : null;
+  return { kind: "play", steps, note };
 }
 
 /* How long a silent part stays highlighted: a calm reading pace (about
@@ -118,8 +202,9 @@ export function planReading(segments, outcomes) {
 export const readingMs = (text, rate = 1) => Math.max(2000, Math.round((String(text).split(/\s+/).length / (3 * rate)) * 1000));
 
 const wait = (ms, signal) => new Promise((resolve) => {
+  if (signal?.aborted) { resolve(); return; }
   const t = setTimeout(resolve, ms);
-  signal.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
+  signal?.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
 });
 
 /* A reader starts by itself only when it is switched on (a real key, not
@@ -150,14 +235,17 @@ export function silentWav(ms = 100) {
 }
 export const SILENT = silentWav();
 let player = null;
-export function unlockPlayer() {
+export function unlockPlayer({ gesture = false } = {}) {
   if (typeof Audio === "undefined") return null;
   if (!player) { player = new Audio(); player.dataset.readAloud = "1"; player.preload = "auto"; }
-  if (!player.dataset.unlocked) {
-    player.src = SILENT;
-    const p = player.play();
-    if (p?.then) p.then(() => { player.dataset.unlocked = "1"; }, () => {});
-  }
+  if (player.dataset.unlocked) return player;
+  /* A Listen tap retries the unlock even if an earlier attempt failed and
+     left a src behind. Playback of a real passage does not, so it is not
+     put back to silence. */
+  if (!gesture && player.src) return player;
+  player.src = SILENT;
+  const p = player.play();
+  if (p?.then) p.then(() => { player.dataset.unlocked = "1"; }, () => {});
   return player;
 }
 
@@ -168,10 +256,12 @@ export function unlockPlayer() {
    that are not in the bank, which have no voice. */
 export function useReadAloud(segments, key, ref = null) {
   const prefs = React.useSyncExternalStore(prefsStore.subscribe, prefsStore.get, prefsStore.get);
-  // idle | loading | playing | paused | preparing | preparing-tomorrow | unavailable | blocked
+  // idle | loading | playing | paused | blocked
   const [status, setStatus] = React.useState("idle");
   const [active, setActive] = React.useState(null);
   const [silent, setSilent] = React.useState(false); // the active part is shown, not voiced
+  const [source, setSource] = React.useState(null); // "ai" | "screen"
+  const [note, setNote] = React.useState(null);
   const run = React.useRef(null);   // { ctrl, audio }
   const resumeAt = React.useRef(0);
   const segsRef = React.useRef(segments);
@@ -186,7 +276,11 @@ export function useReadAloud(segments, key, ref = null) {
   const halt = React.useCallback(() => {
     const r = run.current;
     run.current = null;
-    if (r) { r.ctrl.abort(); r.audio?.pause(); }
+    if (r) {
+      r.ctrl.abort();
+      if (r.audio) { r.audio.onended = null; r.audio.onerror = null; r.audio.pause(); }
+    }
+    clips.release();
   }, []);
 
   const playFrom = React.useCallback(async (start) => {
@@ -200,66 +294,118 @@ export function useReadAloud(segments, key, ref = null) {
     run.current = me;
     const { signal } = ctrl;
     /* One voice at a time: a diagram's narration stops while this reads. */
-    document.querySelectorAll("audio").forEach((a) => { if (!a.paused) a.pause(); });
-    setStatus("loading"); setSilent(false);
+    document.querySelectorAll("audio").forEach((a) => { if (!a.paused && a !== player) a.pause(); });
+    setStatus("loading"); setSilent(false); setSource(null);
 
-    /* Ask for every part at once: either the whole item is ready, or the
-       whole item goes to the voice job together (never half a question). */
-    const ask = (s, fresh = false) => !voiceable(s.text) ? Promise.resolve({ status: 422 }) : voice.url(itemRef, s.id, s.text, { fresh }).then((url) => ({ url }), (e) => ({ status: e?.status ?? 0, after: e?.after }));
-    const outcomes = await Promise.all(segs.map((s) => ask(s)));
-    if (signal.aborted) return;
-    const plan = planReading(segs, outcomes);
-    if (plan.kind !== "play") { run.current = null; setActive(null); setStatus(plan.kind); return; }
+    const ask = (s, fresh = false) => {
+      if (!voiceable(s.text)) return Promise.resolve({ status: 422, unvoiceable: true });
+      const once = (retry) => voice.url(itemRef, s.id, s.text, { fresh: retry }).then(
+        (url) => ({ url }),
+        (e) => ({ status: e?.status ?? 0, after: e?.after, failed: true }),
+      );
+      return once(fresh).then((o) => {
+        if (o.url) { warmClip(o.url); return o; }
+        // One more try for a dropped connection or a 5xx. A queued part (202)
+        // and a refused part are already an answer.
+        if (o.failed && (o.status === 0 || o.status >= 500)) return once(true).then((o2) => (o2.url ? (warmClip(o2.url), o2) : { status: o2.status ?? 0, after: o2.after }));
+        return { status: o.status, after: o.after };
+      });
+    };
+    const tasks = segs.map((s) => ask(s));
 
-    for (let i = start; i < plan.steps.length && !signal.aborted; i++) {
+    for (let i = start; i < segs.length && !signal.aborted; i++) {
       resumeAt.current = i;
-      const step = plan.steps[i];
-      setActive(step.id); setStatus("playing"); setSilent(!!step.silent);
+      let outcome = voice.peek(itemRef, segs[i].id, segs[i].text);
+      if (!outcome) {
+        const raced = await Promise.race([
+          tasks[i].then((o) => ({ outcome: o })),
+          wait(FIRST_BUDGET_MS, signal).then(() => ({ slow: true })),
+        ]);
+        if (signal.aborted || run.current !== me) return;
+        /* A part that has not answered yet is shown, not waited on. The
+           request keeps going and is ready the next time Listen is pressed. */
+        outcome = raced.slow ? (voice.peek(itemRef, segs[i].id, segs[i].text) || { status: 0 }) : raced.outcome;
+        if (signal.aborted || run.current !== me) return;
+      }
+      const step = planReading([segs[i]], [outcome]).steps[0];
+      setActive(step.id);
+      setSilent(!!step.silent);
+      setSource(step.url ? "ai" : "screen");
+      setNote(step.note || null);
+      setStatus("playing");
+
+      const showPart = () => {
+        setSilent(true); setSource("screen"); setNote("unavailable");
+        return wait(readingMs(segs[i].text, prefsRef.current.rate), signal);
+      };
+      /* The budget covers getting the sound started, not how long a clip
+         that has already started is allowed to play. */
+      const playUrl = (url) => new Promise((resolve, reject) => {
+        const audio = unlockPlayer();
+        if (!audio) { reject(new Error("NO_AUDIO")); return; }
+        audio.src = url;
+        audio.playbackRate = prefsRef.current.rate;
+        audio.preservesPitch = true;
+        me.audio = audio;
+        let began = false;
+        const begin = () => { if (began) return; began = true; clearTimeout(timer); audio.dataset.unlocked = "1"; };
+        const timer = setTimeout(() => {
+          if (began) return;
+          audio.onended = null; audio.onerror = null;
+          try { audio.pause(); } catch { /* already stopped */ }
+          reject(Object.assign(new Error("slow media"), { code: "SLOW" }));
+        }, FIRST_BUDGET_MS);
+        audio.onended = () => { begin(); resolve(); };
+        audio.onerror = () => { begin(); reject(new Error("PLAYBACK")); };
+        signal.addEventListener("abort", () => { begin(); resolve(); }, { once: true });
+        clips.hold(String(url).startsWith("blob:") ? url : "");
+        const started = audio.play();
+        if (started?.then) started.then(begin, (err) => { if (!began) { began = true; clearTimeout(timer); } reject(err); });
+        else begin();
+      });
+
       if (step.silent) {
         await wait(readingMs(step.text, prefsRef.current.rate), signal);
-      } else {
-        const playUrl = (url) => new Promise((resolve, reject) => {
-          const audio = unlockPlayer();
-          if (!audio) { reject(new Error("NO_AUDIO")); return; }
-          audio.src = url;
-          audio.playbackRate = prefsRef.current.rate;
-          audio.preservesPitch = true;
-          me.audio = audio;
-          audio.onended = resolve; audio.onerror = () => reject(new Error("PLAYBACK"));
-          signal.addEventListener("abort", resolve, { once: true });
-          audio.play().catch(reject);
-        });
+      } else if (step.url) {
         try {
-          await playUrl(step.url);
+          await playUrl(clipSrc(step.url));
         } catch (e) {
-          if (signal.aborted) return;
-          /* The browser would not start sound without a tap (auto-read on
-             some phones): wait for the student to press Listen. */
+          if (signal.aborted || run.current !== me) return;
           if (e?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
-          /* The link may have expired while the page stayed open: ask once
-             for a fresh one. */
-          const again = await ask(segs[i], true);
-          if (signal.aborted) return;
-          try { if (!again.url) throw new Error("NO_URL"); await playUrl(again.url); } catch (e2) {
-            if (signal.aborted) return;
-            if (e2?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
-            run.current = null; setActive(null); setStatus("unavailable"); return;
+          if (e?.code === "SLOW") { await showPart(); }
+          else {
+            const raced = await Promise.race([
+              ask(segs[i], true).then((o) => ({ outcome: o })),
+              wait(FIRST_BUDGET_MS, signal).then(() => ({ slow: true })),
+            ]);
+            if (signal.aborted || run.current !== me) return;
+            if (raced.slow || !raced.outcome?.url) { await showPart(); }
+            else {
+              try { await playUrl(raced.outcome.url); }
+              catch (e2) {
+                if (signal.aborted || run.current !== me) return;
+                if (e2?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
+                await showPart();
+              }
+            }
           }
         }
+      } else {
+        await wait(readingMs(step.text, prefsRef.current.rate), signal);
       }
-      if (!signal.aborted && i < plan.steps.length - 1) await wait(GAP_MS, signal);
+      if (!signal.aborted && run.current === me && i < segs.length - 1) await wait(GAP_MS, signal);
     }
-    if (!signal.aborted && run.current === me) { run.current = null; resumeAt.current = 0; setActive(null); setSilent(false); setStatus("idle"); }
+    if (!signal.aborted && run.current === me) { run.current = null; resumeAt.current = 0; setActive(null); setSilent(false); setSource(null); setNote(null); setStatus("idle"); }
   }, [halt]);
 
   /* Listen and Resume are taps: unlock the shared player inside them,
      before any waiting, so the audio that follows is allowed. */
-  const play = React.useCallback(() => { unlockPlayer(); return playFrom(0); }, [playFrom]);
+  const play = React.useCallback(() => { unlockPlayer({ gesture: true }); return playFrom(0); }, [playFrom]);
   /* Pause stops at the current part; resume repeats that part from its
      start, so no sentence is heard in two halves. */
   const pause = React.useCallback(() => { halt(); setStatus("paused"); }, [halt]);
-  const resume = React.useCallback(() => { unlockPlayer(); return playFrom(resumeAt.current); }, [playFrom]);
-  const stop = React.useCallback(() => { halt(); resumeAt.current = 0; setActive(null); setSilent(false); setStatus("idle"); }, [halt]);
+  const resume = React.useCallback(() => { unlockPlayer({ gesture: true }); return playFrom(resumeAt.current); }, [playFrom]);
+  const stop = React.useCallback(() => { halt(); resumeAt.current = 0; setActive(null); setSilent(false); setSource(null); setNote(null); setStatus("idle"); }, [halt]);
   stopRef.current = stop;
 
   const setPrefs = React.useCallback((patch) => {
@@ -267,10 +413,18 @@ export function useReadAloud(segments, key, ref = null) {
     if (patch.rate && run.current?.audio) run.current.audio.playbackRate = patch.rate;
   }, []);
 
-  /* A new item: stop, and read it if the student asked for every one. */
+  /* A new item: stop, warm whatever is already voiced, and read it if the
+     student asked for every one. */
   React.useEffect(() => {
     stop();
-    if (shouldAutoRead(key, prefsRef.current.auto, segsRef.current.length)) playFrom(0);
+    const segs = segsRef.current, itemRef = refRef.current;
+    if (itemRef && key !== "off") {
+      for (const s of segs) {
+        if (!voiceable(s.text)) continue;
+        voice.url(itemRef, s.id, s.text).then((url) => warmClip(url), () => {});
+      }
+    }
+    if (shouldAutoRead(key, prefsRef.current.auto, segs.length)) playFrom(0);
     return () => { halt(); if (speaking?.owner === self.current) speaking = null; };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -281,7 +435,7 @@ export function useReadAloud(segments, key, ref = null) {
     return () => document.removeEventListener("play", onPlay, true);
   }, [stop]);
 
-  return { status, active, silent, prefs, setPrefs, play, pause, resume, stop, available: !!ref, isOn: (id) => partOf(active) === id && status === "playing" };
+  return { status, active, silent, source, note, prefs, setPrefs, play, pause, resume, stop, available: !!ref, isOn: (id) => partOf(active) === id && status === "playing" };
 }
 
 /* Highlight helper: adds the follow-along class to whatever is being read. */
@@ -297,15 +451,20 @@ export const NOTES = {
 
 export function ReadAloudBar({ reader, label = "Listen", hint }) {
   if (!reader?.available) return null;
-  const { status, prefs, setPrefs, play, pause, resume, stop, silent } = reader;
+  const { status, prefs, setPrefs, play, pause, resume, stop, silent, source, note: noteKey } = reader;
   const main = status === "playing" ? { text: "⏸ Pause", on: pause, aria: "Pause reading" }
     : status === "paused" ? { text: "▶ Resume", on: resume, aria: "Resume reading" }
     : status === "blocked" ? { text: "🔊 Tap to start the voice", on: resume, aria: "Start the voice" }
     : status === "loading" ? { text: "Getting the voice ready…", on: stop, aria: "Stop reading" }
     : { text: `🔊 ${label}`, on: play, aria: `${label}: read this aloud` };
   const nextRate = RATES[(RATES.indexOf(prefs.rate) + 1) % RATES.length];
-  const note = status === "preparing" || status === "preparing-tomorrow" ? NOTES[status] : status === "unavailable" ? NOTES.unavailable
-    : status === "blocked" ? NOTES.blocked : status === "playing" && silent ? NOTES.silent : null;
+  const shown = status === "playing" && silent ? (NOTES[noteKey] ? noteKey : "silent")
+    : status === "blocked" ? "blocked"
+    : status === "preparing" || status === "preparing-tomorrow" ? status
+    : status === "unavailable" ? "unavailable"
+    : null;
+  const note = shown ? NOTES[shown] : null;
+  const voiceLabel = source === "screen" ? "On screen" : "AI voice";
   return (
     <div className="ra-bar" role="group" aria-label="Read aloud">
       <button type="button" className="btn ra-main" onClick={main.on} aria-label={main.aria} aria-pressed={status === "playing"}>{main.text}</button>
@@ -316,7 +475,7 @@ export function ReadAloudBar({ reader, label = "Listen", hint }) {
       <button type="button" className={prefs.auto ? "ra-chip mono on" : "ra-chip mono"} onClick={() => setPrefs({ auto: !prefs.auto })} aria-pressed={prefs.auto}>
         {prefs.auto ? "✓ " : ""}{hint ?? "Read each new one"}
       </button>
-      {(status === "playing" || status === "paused") && <span className="ra-src small">AI voice</span>}
+      {(status === "playing" || status === "paused") && <span className="ra-src small">{voiceLabel}</span>}
       {note && <p className="ra-note small" role="status">{note}</p>}
     </div>
   );

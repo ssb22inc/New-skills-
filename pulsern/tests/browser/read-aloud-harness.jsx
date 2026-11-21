@@ -13,7 +13,7 @@ import * as mod from "../../src/read-aloud.jsx";
 import { ExhibitTabs } from "../../src/exhibit-tabs.jsx";
 
 const SILENT_PREFIX = "data:audio/wav";
-const env = { gesture: false, strict: false, refuseUnlock: false, played: [], elements: [] };
+const env = { gesture: false, strict: false, refuseUnlock: false, speechFail: false, played: [], elements: [], spoken: [] };
 
 /* The number of samples in a base64 WAV data URL (its data chunk length). */
 function wavSamples(url) {
@@ -28,6 +28,8 @@ class FakeAudio {
   play() {
     // Like a real decoder: a WAV with no samples cannot be played.
     if (String(this.src).startsWith(SILENT_PREFIX) && wavSamples(this.src) === 0) return Promise.reject(Object.assign(new Error("no samples"), { name: "NotSupportedError" }));
+    if (env.hangPlay && !String(this.src).startsWith(SILENT_PREFIX)) return new Promise(() => {});
+    if (env.failPlay && !String(this.src).startsWith(SILENT_PREFIX)) return Promise.reject(new Error("media"));
     if (env.strict && env.refuseUnlock && String(this.src).startsWith(SILENT_PREFIX)) return Promise.reject(Object.assign(new Error("not allowed"), { name: "NotAllowedError" }));
     if (env.strict && !this.unlocked && !env.gesture) return Promise.reject(Object.assign(new Error("not allowed"), { name: "NotAllowedError" }));
     this.unlocked = true;
@@ -40,9 +42,26 @@ class FakeAudio {
 }
 window.Audio = FakeAudio;
 
-/* The voice route, answered by the test. */
+/* Record every device-speech attempt. speechSynthesis itself cannot be
+   replaced (it is a getter), so the speak method is wrapped. */
+try {
+  const synth = window.speechSynthesis;
+  const orig = synth.speak.bind(synth);
+  Object.defineProperty(synth, "speak", {
+    configurable: true,
+    writable: true,
+    value(utterance) {
+      env.spoken.push(String(utterance?.text ?? ""));
+      return orig(utterance);
+    },
+  });
+} catch { /* the source guard still forbids the call */ }
+
+/* The voice route, answered by the test. A request for the audio file
+   itself (warming a clip) is not a voice-route call. */
 let pending = [];
 window.fetch = (url, init) => {
+  if (!init?.body) return Promise.resolve({ ok: false, status: 404, blob: async () => new Blob() });
   const body = JSON.parse(init.body);
   return new Promise((resolve) => pending.push({ body, reply: (status, data) => resolve({ ok: status >= 200 && status < 300, status, json: async () => data }) }));
 };
@@ -80,12 +99,24 @@ window.T = {
   held: [],
   hold() { this.held = pending.splice(0); },
   async releaseHeld() { for (const p of this.held.splice(0)) p.reply(200, { url: urlFor(p) }); await settle(); },
+  /* Answer some of the held requests and keep the rest pending. */
+  async answerHeld(replies) {
+    const keep = [];
+    for (const p of this.held.splice(0)) {
+      const spec = replies[p.body.seg];
+      if (!spec) { keep.push(p); continue; }
+      const [status, data] = spec;
+      p.reply(status, data === "url" ? { url: urlFor(p) } : data);
+    }
+    this.held.push(...keep);
+    await settle();
+  },
   async end() { player().end(); await settle(); },
   async gap(ms = 400) { await new Promise((r) => setTimeout(r, ms)); await settle(); },
   async unmount() { root.unmount(); await settle(); root = createRoot(document.getElementById("host")); },
   state: () => ({
-    status: reader?.status, active: reader?.active, silent: reader?.silent, available: reader?.available, prefs: reader?.prefs,
-    played: [...env.played], elements: env.elements.length, paused: player()?.paused ?? null,
+    status: reader?.status, active: reader?.active, silent: reader?.silent, source: reader?.source, note: reader?.note, available: reader?.available, prefs: reader?.prefs,
+    played: [...env.played], spoken: [...env.spoken], elements: env.elements.length, paused: player()?.paused ?? null,
   }),
   silent: () => ({ prefix: mod.SILENT.slice(0, 22), samples: wavSamples(mod.SILENT), emptySamples: wavSamples("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=") }),
   /* The bar a student sees for the reader as it is now. */

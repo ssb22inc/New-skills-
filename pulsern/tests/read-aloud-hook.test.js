@@ -1,12 +1,16 @@
 /* The real playback hook, mounted in a real browser: when audio may start,
    and when it must stop. Students must only ever hear checked audio for
    the item on screen:
-   - an item with any part not yet voiced (202) or refused never starts;
+   - an item with a part not yet voiced (202) still starts: the ready parts
+     play, and the rest is shown on screen;
+   - a voice the server cannot provide (limit, outage) is shown on screen,
+     with the bar saying so, and never spoken by the device;
    - a response that arrives after the item changed or the reader closed
      never starts the old item's audio;
    - moving from the question to its explanation (or to the next item)
      stops what was playing;
    - a part refused by the check is shown, not voiced, and the rest plays;
+   - a part whose signs could be read two ways is shown, not guessed;
    - on a strict-autoplay browser, every passage still plays after one tap.
    The page (tests/browser/read-aloud-harness.jsx) runs the shipped hook,
    served by Vite, with only the voice route and the audio element stood
@@ -55,6 +59,11 @@ const strict = (patch) => T((p) => Object.assign(window.T.env, p), patch);
 const ALL_READY = { "*": [200, "url"] };
 
 describe("useReadAloud, mounted in a browser", () => {
+  it("records a device-speech call, so an unchecked fallback cannot pass unnoticed", async () => {
+    await T(() => { window.speechSynthesis.speak(new SpeechSynthesisUtterance("unchecked dose")); });
+    expect((await state()).spoken).toContain("unchecked dose");
+  });
+
   it("plays every checked part in order, highlighting each, through one shared player", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
@@ -70,6 +79,52 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt0"]);
     expect(s.active).toBe("opt0");
     expect(s.elements).toBe(1);
+  });
+
+  it("shows a part whose audio never starts, then plays the next ready part", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await strict({ hangPlay: true });
+    await tap("play");
+    await answer(ALL_READY);
+    await gap(1200);
+    let s = await state();
+    expect(s.active).toBe("stem");
+    expect(s.silent).toBe(true);
+    expect(s.played).toEqual([]);
+    await strict({ hangPlay: false });
+    await gap(2500);
+    expect((await state()).played).toEqual(["https://signed.example/1/opt0"]);
+  });
+
+  it("does not wait out a fresh link that never arrives", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await strict({ failPlay: true });
+    await tap("play");
+    await answer(ALL_READY);
+    await gap(1200);
+    let s = await state();
+    expect(s.silent).toBe(true);
+    expect(s.played).toEqual([]);
+    await strict({ failPlay: false });
+    await gap(2500);
+    expect((await state()).played).toEqual(["https://signed.example/1/opt0"]);
+  });
+
+  it("shows a later part whose audio never arrives, and does not play it when the answer comes late", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await T(() => window.T.hold());
+    await T((r) => window.T.answerHeld(r), { stem: [200, "url"] });
+    expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
+    await end();
+    await gap(1600); // the breath between parts, then the wait for the next one
+    let s = await state();
+    expect(s.active).toBe("opt0");
+    expect(s.silent).toBe(true);
+    expect(s.played).toEqual(["https://signed.example/1/stem"]);
+    await T(() => window.T.releaseHeld());
+    await gap(200);
+    expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
   });
 
   it("plays every passage on a strict-autoplay browser after one tap, even when the voice was not cached", async () => {
@@ -90,6 +145,19 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.emptySamples).toBe(0); // an empty WAV (no samples) is what a decoder may refuse
   });
 
+  it("retries the unlock on the next item when the first tap was refused and the clip is not cached yet", async () => {
+    await strict({ strict: true, refuseUnlock: true });
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await tap("play");
+    await answer(ALL_READY);
+    expect((await state()).status).toBe("blocked");
+    await strict({ refuseUnlock: false });
+    await render({ segments: SEGS, itemKey: "q:2", itemRef: REF(2) });
+    await tap("play"); // the clip is still in flight; this tap has to unlock
+    await answer(ALL_READY);
+    expect((await state()).played).toContain("https://signed.example/2/stem");
+  });
+
   it("asks for one more tap when the browser holds the sound back, and then plays", async () => {
     await strict({ strict: true, refuseUnlock: true });
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
@@ -103,42 +171,61 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
   });
 
-  it("never starts audio when any part is still being prepared", async () => {
+  it("plays the parts that are ready and shows a part still being prepared", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ opt0: [202, { queued: true }], "*": [200, "url"] });
+    expect((await state()).played).toEqual(["https://signed.example/1/stem"]);
+    await end();
+    await gap();
     const s = await state();
-    expect(s.played).toEqual([]);
-    expect(s.status).toBe("preparing");
+    expect(s.active).toBe("opt0");
+    expect(s.silent).toBe(true);
+    expect(s.source).toBe("screen");
+    expect(s.note).toBe("preparing");
+    expect(s.spoken).toEqual([]);
+    const bar = await T(() => window.T.barText());
+    expect(bar.text).toContain(bar.notes.preparing);
+    expect(bar.text).not.toContain("Device voice");
+    await gap(2500);
+    expect((await state()).played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt1"]);
   });
 
-  it("reports the real failure, not 'being prepared', when some parts were queued and others refused", async () => {
+  it("shows a part on screen when the voice is over the limit, and does not speak it", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ stem: [202, { queued: true }], "*": [429, { error: "Daily voice limit reached" }] });
     const s = await state();
     expect(s.played).toEqual([]);
-    expect(s.status).toBe("unavailable");
+    expect(s.status).toBe("playing");
+    expect(s.silent).toBe(true);
+    expect(s.source).toBe("screen");
+    expect(s.note).toBe("preparing");
   });
 
-  it("says the voice will be prepared after midnight when today's budget is spent", async () => {
+  it("says the voice will be prepared after midnight, and shows the part", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ "*": [202, { queued: true, after: "tomorrow" }] });
     const s = await state();
     expect(s.played).toEqual([]);
-    expect(s.status).toBe("preparing-tomorrow");
+    expect(s.status).toBe("playing");
+    expect(s.note).toBe("preparing-tomorrow");
     const bar = await T(() => window.T.barText());
     expect(bar.text).toContain(bar.notes["preparing-tomorrow"]);
   });
 
-  it("never starts audio when the voice is unavailable", async () => {
+  it("shows the part when the voice is unavailable, instead of speaking it", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
     await answer({ "*": [429, { error: "Daily voice limit reached" }] });
     const s = await state();
     expect(s.played).toEqual([]);
-    expect(s.status).toBe("unavailable");
+    expect(s.status).toBe("playing");
+    expect(s.silent).toBe(true);
+    expect(s.note).toBe("unavailable");
+    const bar = await T(() => window.T.barText());
+    expect(bar.text).toContain(bar.notes.unavailable);
   });
 
   it("shows a part refused by the check without voicing it, then plays the rest", async () => {
@@ -150,7 +237,8 @@ describe("useReadAloud, mounted in a browser", () => {
     const s = await state();
     expect(s.active).toBe("opt0");
     expect(s.silent).toBe(true);
-    expect(s.played).toEqual(["https://signed.example/1/stem"]); // nothing voiced for the refused part
+    expect(s.source).toBe("screen");
+    expect(s.played).toEqual(["https://signed.example/1/stem"]);
     await gap(2500);
     expect((await state()).played).toEqual(["https://signed.example/1/stem", "https://signed.example/1/opt1"]);
   });
@@ -170,7 +258,7 @@ describe("useReadAloud, mounted in a browser", () => {
     expect((await state()).played).toEqual(["https://signed.example/2/stem", "https://signed.example/2/opt1"]);
   });
 
-  it("shows a one-part card whose voice failed the check on screen, instead of 'try again later'", async () => {
+  it("shows a one-part card whose check failed on screen, instead of 'try again later'", async () => {
     await render({ segments: [{ id: "card-front", text: "Potassium 2.9 milliequivalents per liter." }], itemKey: "c:4", itemRef: { kind: "card", id: 4, part: "front" } });
     await tap("play");
     await answer({ "*": [422, { error: "Voice check failed" }] });
@@ -221,12 +309,16 @@ describe("useReadAloud, mounted in a browser", () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await T(() => window.T.setPrefs({ auto: true }));
     expect((await state()).prefs.auto).toBe(true);
-    // switched off, with something it could read: it must not start
+    expect((await state()).status).toBe("idle"); // turning it on does not start the item already showing
+    const warmed = (await pending()).length;
+    // switched off, with something it could read: it must not start, and it asks for nothing new
     await render({ segments: SEGS, itemKey: "off", itemRef: REF(1) });
-    expect(await pending()).toEqual([]);
+    expect((await state()).played).toEqual([]);
+    expect((await state()).status).toBe("idle");
+    expect(await pending()).toHaveLength(warmed);
     // a new item: it starts by itself
     await render({ segments: SEGS, itemKey: "q:2", itemRef: REF(2) });
-    expect((await pending()).map((b) => b.ref.id)).toEqual([2, 2, 2]);
+    expect((await pending()).filter((b) => b.ref.id === 2).map((b) => b.ref.id)).toEqual([2, 2, 2]);
   });
 
   it("has no voice at all for an item outside the bank", async () => {
