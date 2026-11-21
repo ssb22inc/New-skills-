@@ -1401,6 +1401,78 @@ describe("the voice job: voicing the bank ahead of demand", () => {
     expect(kept).toMatchObject({ voice: "Joanna", attempts: 2, text });
   });
 
+  it("stops requeueing after a third of the deadline and does not mark the walk done", async () => {
+    const { storage, files } = fakeStorage();
+    const rows = Array.from({ length: 12 }, (_, i) => ({ id: i + 1, type: "mc", stem: `Stem number ${i} needs a voice.`, options: ["One", "Two"], answer: 0, rationale: `Because ${i}.` }));
+    for (const row of rows) for (const part of itemParts("question", row)) files.set(`marin/${speechKey(part.text, MARIN_TTS)}.mp3`, Buffer.from("old"));
+    let ticks = 0;
+    const start = 10_000;
+    const r = await queueLegacyMarin({
+      storage,
+      db: fakeDb({ questions: rows, case_studies: [], flashcards: [] }),
+      until: start + 300,
+      now: () => start + ticks++ * 25,
+      page: 4,
+      log: () => {},
+    });
+    expect(r.done).toBe(false);
+    expect(r.queued).toBeGreaterThan(0);
+    expect(files.has("prewarm/polly-revoice.json")).toBe(false);
+    expect(files.has("prewarm/polly-revoice-at.json")).toBe(true);
+    const queued = [...files.keys()].filter((k) => k.startsWith("queue/Joanna-")).length;
+    expect(queued).toBe(r.queued);
+  });
+
+  it("does not move the revoice place past a row whose upload failed", async () => {
+    const { storage, files } = fakeStorage();
+    const row = { id: 4, type: "mc", stem: "Stem.", options: ["A"], answer: 0, rationale: "Because." };
+    const part = itemParts("question", row)[0];
+    files.set(`marin/${speechKey(part.text, MARIN_TTS)}.mp3`, Buffer.from("old"));
+    const real = storage.from(BUCKET);
+    const broken = { ...storage, from: () => ({ ...real, upload: async (p, b, o) => (p.startsWith("queue/Joanna-") ? { error: { message: "storage full" } } : real.upload(p, b, o)) }) };
+    const db = fakeDb({ questions: [row], case_studies: [], flashcards: [] });
+    await expect(queueLegacyMarin({ storage: broken, db, log: () => {} })).rejects.toThrow(/queue a legacy clip/);
+    const place = files.has("prewarm/polly-revoice-at.json") ? JSON.parse(files.get("prewarm/polly-revoice-at.json").toString()) : { afterId: 0 };
+    expect(place.afterId ?? 0).toBeLessThan(row.id);
+    expect(files.has("prewarm/polly-revoice.json")).toBe(false);
+    const again = await queueLegacyMarin({ storage, db, log: () => {} });
+    expect(again.done).toBe(true);
+    expect(files.has(passagePaths(part.text).queue)).toBe(true);
+  });
+
+  it("keeps an unmigrated marin request when the slice ends and the voice job runs", async () => {
+    const { storage, files } = fakeStorage();
+    const text = "Potassium 2.9 milliequivalents per liter.";
+    const path = `queue/marin-held.json`;
+    files.set(path, Buffer.from(JSON.stringify({ text, voice: "marin", ref: Q1.ref, seg: "card-front" })));
+    const r = await queueLegacyMarin({
+      storage,
+      db: fakeDb({ questions: [], case_studies: [], flashcards: [{ id: 4, front: "Potassium 2.9 mEq/L.", back: "" }] }),
+      until: 1,
+      now: () => 5,
+      log: () => {},
+    });
+    expect(r.done).toBe(false);
+    expect(files.has(path)).toBe(true);
+    await drainQueue({ storage, preserveLegacy: true, fetchImpl: fakeOpenAI(), log: () => {} });
+    expect(files.has(path)).toBe(true);
+  });
+
+  it("does not upload a marin passage that is already in the Joanna queue", async () => {
+    const { storage, files } = fakeStorage();
+    const row = { id: 4, type: "mc", stem: "Stem.", options: ["A"], answer: 0, rationale: "Because." };
+    const part = itemParts("question", row)[0];
+    files.set(`marin/${speechKey(part.text, MARIN_TTS)}.mp3`, Buffer.from("old"));
+    files.set(passagePaths(part.text).queue, Buffer.from(JSON.stringify({ text: part.text, voice: "Joanna" })));
+    const real = storage.from(BUCKET);
+    let writes = 0;
+    const wrapped = { ...storage, from: () => ({ ...real, upload: async (p, b, o) => { if (p.startsWith("queue/Joanna-")) writes++; return real.upload(p, b, o); } }) };
+    const r = await queueLegacyMarin({ storage: wrapped, db: fakeDb({ questions: [row], case_studies: [], flashcards: [] }), log: () => {} });
+    expect(r.done).toBe(true);
+    expect(writes).toBe(0);
+    expect(files.has("prewarm/polly-revoice.json")).toBe(true);
+  });
+
   it("does not mark the migration done when a legacy request cannot be read", async () => {
     const text = "Potassium 2.9 milliequivalents per liter.";
     const { storage, files } = fakeStorage();

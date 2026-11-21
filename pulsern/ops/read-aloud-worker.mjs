@@ -34,7 +34,7 @@ import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { PollyClient } from "@aws-sdk/client-polly";
 import {
-  BUCKET, TTS, MARIN_TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, retried, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, speechKey, validRequest, reserveSpeechCost, pollyInput, readAloudLimits, quotaDay,
+  BUCKET, TTS, MARIN_TTS, LIMITS, SPEAK_MAX, QUEUE_ENTRY_MAX, canonicalRef, checkFailure, CHECK_VERSION, retried, claimPassage, releasePassage, CLAIMS_DIR, claimNumber, claimName, readClaimFile, makeChecked, saveChecked, saveRejected, readRecord, passagePaths, speechKey, validRequest,   reserveSpeechCost, pollyInput, readAloudLimits, quotaDay, POLLY_USD_PER_MILLION,
 } from "../api/_speak.js";
 import { verdictText, itemParts, voiceable } from "../src/read-aloud-script.js";
 
@@ -67,7 +67,7 @@ async function voiceClaimed({ storage, polly, fetchImpl, text, now, limits, dead
     return { result: "transient", spent: r.spent, error: r.error ?? "no audio" };
   }
   if (!(await saveChecked(storage, text, r.best, { now: now() }))) return { result: "transient", spent: r.spent, error: "could not save" };
-  return { result: r.best.check.pass ? "voiced" : "failed", spent: r.spent, similarity: r.best.check.similarity, why: r.best.check.pass ? null : checkFailure(r.best.check) };
+  return { result: r.best.check.pass ? "voiced" : "failed", spent: r.spent, chars: r.best.check.pass ? billed : 0, similarity: r.best.check.similarity, why: r.best.check.pass ? null : checkFailure(r.best.check) };
 }
 
 async function readJsonFile(bucket, path, maxBytes = Infinity) {
@@ -96,9 +96,9 @@ async function lanePage(bucket, dir, offset) {
 /* onChecked: called for every passage that got a verdict (voiced, or
    failed the check), so the caller knows work was done even if a later
    step throws. */
-export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, onChecked = () => {} }) {
+export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, max = 200, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, onChecked = () => {}, preserveLegacy = false }) {
   const bucket = storage.from(BUCKET);
-  const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
+  const out = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, chars: 0, budget: false, providerDown: false, service: null, operational: false, errors: [] };
   let inARow = 0, refusedInARow = 0, done = 0;
   const touched = new Set(); // moved or rewritten this run: next run's work
   /* Every delete is checked: a failure is storage trouble (the run fails),
@@ -129,6 +129,10 @@ export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, ma
       const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
       if (got.error) { out.operational = true; out.errors.push(`${f.name}: could not read (${got.error.message ?? got.error})`); continue; }
       const raw = got.value;
+      /* The revoice walk has not finished. A marin request still in the
+         queue is waiting for the next slice; deleting it here would drop
+         a student's ask that has no saved clip to recover it from. */
+      if (preserveLegacy && raw?.voice === MARIN_TTS.voice) continue;
       const ref = canonicalRef(raw?.ref);
       const paths = raw && typeof raw.text === "string" ? passagePaths(raw.text) : null;
       // A passage that is never voiced (voiceable) is not work: dropped, not refused.
@@ -191,7 +195,7 @@ export async function drainQueue({ storage, polly, apiKey, fetchImpl = fetch, ma
       await drop(path);
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
       if (v.result === "voiced" || v.result === "failed") onChecked();
-      if (v.result === "voiced") out.voiced++;
+      if (v.result === "voiced") { out.voiced++; out.chars += v.chars ?? 0; if (out.voiced % 20 === 0) log(`Voiced ${out.voiced} clips · ${out.chars} characters · $${((out.chars / 1_000_000) * POLLY_USD_PER_MILLION).toFixed(2)}`); }
       else if (v.result === "rejected") {
         out.rejected++; log(`provider refused: ${job.ref.kind} ${job.ref.id} ${job.seg} (${v.error})`);
         if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.service = `${refusedInARow} refusals in a row (${v.error})`; return out; }
@@ -229,7 +233,7 @@ export const BANK_QUERIES = {
 export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetch, max = 100, now = () => Date.now(), limits = LIMITS, page = 50, log = () => {}, until = Infinity, onChecked = () => {} }) {
   const bucket = storage.from(BUCKET);
   // stopped: null (all done), "max" or "budget" (normal), or an operational failure (failed: true)
-  const out = { voiced: 0, failed: 0, rejected: 0, spent: 0, budget: false, stopped: null, failure: false, cursor: null };
+  const out = { voiced: 0, failed: 0, rejected: 0, spent: 0, chars: 0, budget: false, stopped: null, failure: false, cursor: null };
   const got = await readJsonFile(bucket, "prewarm/cursor.json");
   if (got.error && !/not found/i.test(String(got.error.message ?? got.error))) { out.stopped = `cursor: ${got.error.message ?? got.error}`; out.failure = true; return out; }
   let cursor = got.value ?? { kind: KINDS[0], afterId: 0 };
@@ -312,6 +316,7 @@ export async function prewarmBank({ storage, db, polly, apiKey, fetchImpl = fetc
       }
       refusedInARow = v.result === "rejected" ? refusedInARow + 1 : 0;
       out[v.result]++;
+      if (v.result === "voiced") out.chars += v.chars ?? 0;
       if (v.result === "voiced" || v.result === "failed") onChecked();
       if (v.result === "failed") log(`failed the check twice: ${label}: ${v.why}`);
       if (refusedInARow >= MAX_TRANSIENT_IN_A_ROW) { out.failure = true; return `provider: ${refusedInARow} refusals in a row (${v.error})`; }
@@ -430,10 +435,10 @@ export async function pruneClaims({ bucket, now }) {
    pruning. failed: true for any operational failure, which fails the
    workflow run. Caps always come from LIMITS (api/_speak.js), the same
    values the route uses. */
-export async function runJob({ storage, db, polly, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity }) {
+export async function runJob({ storage, db, polly, apiKey, max = 200, fetchImpl = fetch, now = () => Date.now(), limits = LIMITS, log = console.log, until = Infinity, preserveLegacy = false }) {
   let q, checked = 0;
   const onChecked = () => { checked++; };
-  try { q = await drainQueue({ storage, polly, apiKey, fetchImpl, max, now, limits, log, until, onChecked }); }
+  try { q = await drainQueue({ storage, polly, apiKey, fetchImpl, max, now, limits, log, until, onChecked, preserveLegacy }); }
   catch (e) { q = { queued: 0, voiced: 0, failed: 0, rejected: 0, retried: 0, skipped: 0, spent: 0, budget: false, providerDown: false, service: null, errors: [String(e?.message ?? e)], broken: true }; }
   const left = Math.max(0, max - (q.voiced + q.failed + q.rejected + q.retried));
   // The bank waits for a clean queue run: after any operational failure the
@@ -447,6 +452,7 @@ export async function runJob({ storage, db, polly, apiKey, max = 200, fetchImpl 
     `Queue: ${q.queued} waiting · ${q.voiced} voiced and checked · ${q.failed} failed the check twice · ${q.rejected} refused or given up · ${q.retried} to retry · ${q.skipped} skipped`,
     `Bank: ${w.voiced} voiced and checked · ${w.failed} failed the check twice · ${w.rejected} refused${w.stopped ? ` · stopped: ${w.stopped}` : ""}${w.cursor ? ` · next: ${w.cursor.done ? "done" : `${w.cursor.kind} after ${w.cursor.afterId}`}` : ""}`,
     `Syntheses paid: ${q.spent + w.spent} (cap ${limits.spend} a day${limits.usd ? `, $${limits.usd} Polly` : ""})${q.budget || w.budget ? " · today's voice budget is used up; the rest wait" : ""} · old budget slots removed: ${pruned.removed ?? 0}`,
+    `Voiced ${q.voiced + (w.voiced ?? 0)} clips · ${(q.chars ?? 0) + (w.chars ?? 0)} characters · $${(((q.chars ?? 0) + (w.chars ?? 0)) / 1_000_000 * POLLY_USD_PER_MILLION).toFixed(2)}`,
     ...(q.service ? [`error: provider account or setup: ${q.service}`] : []),
     ...q.errors.map((e) => `error: ${e}`),
     ...(pruned.error ? [`error: pruning: ${pruned.error}`] : []),
@@ -492,9 +498,11 @@ async function listFileNames(bucket, dir) {
 }
 /* A pending marin request is rewritten onto the Joanna queue only when
    its words are still exactly a part of that approved, non-exam item. */
-async function migrateLegacyLane(bucket, db, lane) {
+async function migrateLegacyLane(bucket, db, lane, room = () => true) {
   let moved = 0;
+  let finished = true;
   for (const name of await listFileNames(bucket, lane)) {
+    if (!room()) { finished = false; break; }
     if (!name.endsWith(".json")) continue;
     const path = `${lane}/${name}`;
     const got = await readJsonFile(bucket, path, QUEUE_ENTRY_MAX);
@@ -528,48 +536,110 @@ async function migrateLegacyLane(bucket, db, lane) {
     if (dest !== path) await drop();
     moved++;
   }
-  return moved;
+  return { moved, finished };
 }
-export async function queueLegacyMarin({ storage, db, log = () => {}, page = 200 }) {
+const REVOICE_AT = "prewarm/polly-revoice-at.json";
+const queuedKey = (name) => {
+  const prefix = `${TTS.voice}-`;
+  return name.startsWith(prefix) && name.endsWith(".json") ? name.slice(prefix.length, -".json".length) : null;
+};
+/* One listing of the Joanna queue, not a download per passage. */
+async function queuedJoannaKeys(bucket) {
+  const keys = new Set();
+  for (const dir of ["queue", "queue-retry"]) {
+    for (const name of await listFileNames(bucket, dir)) {
+      const key = queuedKey(name);
+      if (key) keys.add(key);
+    }
+  }
+  return keys;
+}
+export async function queueLegacyMarin({ storage, db, log = () => {}, page = 200, until = Infinity, now = () => Date.now() }) {
   await ensureBucket(storage);
   const bucket = storage.from(BUCKET);
   const got = await readJsonFile(bucket, REVOICE_MARKER);
   if (got.error && !/not.?found|404/i.test(String(got.error.message ?? got.error))) throw new Error(`could not read the revoice marker: ${got.error.message ?? got.error}`);
-  if (got.value?.done) return { queued: 0, already: true };
-  const moved = (await migrateLegacyLane(bucket, db, "queue")) + (await migrateLegacyLane(bucket, db, "queue-retry"));
-  const legacy = new Set((await listFileNames(bucket, MARIN_TTS.voice)).filter((n) => n.endsWith(".mp3")).map((n) => n.slice(0, -4)));
-  let queued = 0, matched = 0;
-  for (const kind of ["question", "case", "card"]) {
-    let afterId = 0;
-    for (;;) {
-      const { data: rows, error } = await BANK_QUERIES[kind](db).gt("id", afterId).order("id").limit(page);
-      if (error) throw new Error(`bank: ${error.message ?? error}`);
-      if (!rows?.length) break;
-      for (const row of rows) {
-        afterId = row.id;
-        for (const part of itemParts(kind, row)) {
-          const text = part.text;
-          if (!text || text.length > SPEAK_MAX || !voiceable(text)) continue;
-          if (!legacy.has(speechKey(text, MARIN_TTS))) continue;
-          matched++;
-          const decided = await readRecord(storage, text, TTS);
-          if (decided) continue;
-          const paths = passagePaths(text, TTS);
-          const waiting = await Promise.all([paths.queue, paths.retry].map((p) => retried(() => bucket.download(p))));
-          if (waiting.some((w) => !w.error)) continue;
-          const entry = { text, voice: TTS.voice, ref: part.ref, seg: part.seg, requestedAt: new Date().toISOString(), legacy: "marin" };
-          if (JSON.stringify(entry).length > QUEUE_ENTRY_MAX) continue;
-          const { error: up } = await put(bucket, paths.queue, entry);
-          if (up) throw new Error(`could not queue a legacy clip: ${up.message ?? up}`);
-          queued++;
-        }
+  if (got.value?.done) return { queued: 0, moved: 0, already: true, done: true };
+  /* The caller passes the run's deadline. Requeueing may use about a third
+     of it; the rest is for speaking the clips already waiting. */
+  const started = now();
+  const budget = Number.isFinite(until) ? Math.max(0, until - started) : Infinity;
+  const stopAt = Number.isFinite(budget) ? started + Math.floor(budget / 3) : Infinity;
+  const room = () => now() < stopAt;
+  const atFile = await readJsonFile(bucket, REVOICE_AT);
+  if (atFile.error && !/not.?found|404/i.test(String(atFile.error.message ?? atFile.error))) throw new Error(`could not read the revoice place: ${atFile.error.message ?? atFile.error}`);
+  const place = { kind: "question", afterId: 0, ...(atFile.value ?? {}) };
+  const savePlace = async () => {
+    const { error } = await put(bucket, REVOICE_AT, place);
+    if (error) throw new Error(`could not save the revoice place: ${error.message ?? error}`);
+  };
+  let moved = 0;
+  if (place.pending !== "done") {
+    for (const lane of ["queue", "queue-retry"]) {
+      const step = await migrateLegacyLane(bucket, db, lane, room);
+      moved += step.moved;
+      if (!step.finished) {
+        log(`Requeued ${moved} pending marin requests; pausing so clips can be voiced.`);
+        return { queued: 0, moved, done: false, already: false };
       }
     }
+    place.pending = "done";
+    await savePlace();
   }
-  const { error: mark } = await put(bucket, REVOICE_MARKER, { done: true, queued, matched, files: legacy.size, at: new Date().toISOString() });
+  const legacy = new Set((await listFileNames(bucket, MARIN_TTS.voice)).filter((n) => n.endsWith(".mp3")).map((n) => n.slice(0, -4)));
+  const have = await queuedJoannaKeys(bucket);
+  const kinds = ["question", "case", "card"];
+  let kind = kinds.includes(place.kind) ? place.kind : "question";
+  let queued = 0;
+  const batch = [];
+  const flush = async () => {
+    if (!batch.length) return;
+    const group = batch.splice(0, batch.length);
+    const results = await Promise.all(group.map((e) => put(bucket, e.path, e.entry)));
+    const bad = results.find((r) => r?.error);
+    if (bad?.error) throw new Error(`could not queue a legacy clip: ${bad.error.message ?? bad.error}`);
+  };
+  let paused = false;
+  while (kind && !paused) {
+    const { data: rows, error } = await BANK_QUERIES[kind](db).gt("id", place.afterId ?? 0).order("id").limit(page);
+    if (error) throw new Error(`bank: ${error.message ?? error}`);
+    if (!rows?.length) {
+      kind = kinds[kinds.indexOf(kind) + 1];
+      place.kind = kind;
+      place.afterId = 0;
+      continue;
+    }
+    for (const row of rows) {
+      if (!room()) { paused = true; break; }
+      for (const part of itemParts(kind, row)) {
+        const text = part.text;
+        if (!text || text.length > SPEAK_MAX || !voiceable(text) || !legacy.has(speechKey(text, MARIN_TTS))) continue;
+        const paths = passagePaths(text, TTS);
+        if (have.has(paths.key)) continue;
+        const entry = { text, voice: TTS.voice, ref: part.ref, seg: part.seg, requestedAt: new Date(now()).toISOString(), legacy: "marin" };
+        if (JSON.stringify(entry).length > QUEUE_ENTRY_MAX) continue;
+        batch.push({ path: paths.queue, entry });
+        have.add(paths.key);
+        queued++;
+        if (queued % 100 === 0) log(`Requeued ${queued} marin passages.`);
+        if (batch.length >= 25) await flush();
+      }
+      /* The place moves past this row only after its passages are stored.
+         A failed flush leaves the place where it was. */
+      await flush();
+      place.afterId = row.id;
+      await savePlace();
+    }
+  }
+  if (paused || kind) {
+    await savePlace();
+    log(`Requeued ${queued} marin passages this slice; the walk is not finished, so clips already queued will be voiced now.`);
+    return { queued, moved, done: false, already: false };
+  }
+  const { error: mark } = await put(bucket, REVOICE_MARKER, { done: true, queued, moved, files: legacy.size, at: new Date(now()).toISOString() });
   if (mark) throw new Error(`could not save the revoice marker: ${mark.message ?? mark}`);
-  log(`Queued ${queued} passages that already had a marin clip (${matched} matched, ${legacy.size} files) and moved ${moved} pending requests.`);
-  return { queued, matched, moved, files: legacy.size, already: false };
+  log(`Requeued ${queued} marin passages. The walk is finished (${legacy.size} old clips).`);
+  return { queued, moved, done: true, already: false, files: legacy.size };
 }
 
 export function awsReady(env = process.env) {
@@ -605,22 +675,23 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const polly = createPolly();
   const limits = readAloudLimits();
-  let legacy;
-  try { legacy = await queueLegacyMarin({ storage: db.storage, db }); }
+  const max = Math.max(1, Math.min(2000, Number(process.env.READ_ALOUD_MAX) || 200));
+  /* The deadline is fixed before the old-clip walk. That walk may use
+     about a third of it, then this run speaks what is already queued. */
+  const until = Date.now() + Math.max(1, Math.min(30, Number(process.env.READ_ALOUD_MINUTES) || 25)) * 60000;
+  let legacy = { done: true, queued: 0 };
+  try { legacy = await queueLegacyMarin({ storage: db.storage, db, until }); }
   catch (e) {
     console.error(`Could not queue the existing marin clips: ${e?.message ?? e}`);
     process.exit(1);
   }
-  console.log(legacy.already ? "Marin clips were already queued for Joanna." : `Queued ${legacy.queued} marin passages for Joanna.`);
-  const max = Math.max(1, Math.min(2000, Number(process.env.READ_ALOUD_MAX) || 200));
-  /* No new passage is started after READ_ALOUD_MINUTES, so the job keeps
-     time for its pause and for starting the next run (pulsern-read-aloud.yml). */
-  const until = Date.now() + Math.max(1, Math.min(30, Number(process.env.READ_ALOUD_MINUTES) || 25)) * 60000;
-  const { lines, failed, more } = await runJob({ storage: db.storage, db, polly, max, until, limits });
-  console.log(lines.join("\n") + (more ? "\nMore to do: starting the next run." : ""));
+  console.log(legacy.already ? "Marin clips were already queued for Joanna." : `Requeue ${legacy.done ? "finished" : "paused"} (${legacy.queued} added this slice). Speaking what is already queued.`);
+  const { lines, failed, more } = await runJob({ storage: db.storage, db, polly, max, until, limits, preserveLegacy: legacy.done === false });
+  const keepGoing = more || legacy.done === false;
+  console.log(lines.join("\n") + (keepGoing ? "\nMore to do: starting the next run." : ""));
   if (process.env.GITHUB_OUTPUT) {
     const { appendFileSync } = await import("node:fs");
-    appendFileSync(process.env.GITHUB_OUTPUT, `more=${more ? "true" : "false"}\n`);
+    appendFileSync(process.env.GITHUB_OUTPUT, `more=${keepGoing ? "true" : "false"}\n`);
   }
   if (process.env.GITHUB_STEP_SUMMARY) {
     const { appendFileSync } = await import("node:fs");
