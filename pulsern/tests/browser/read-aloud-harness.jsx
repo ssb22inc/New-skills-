@@ -28,6 +28,8 @@ class FakeAudio {
   play() {
     // Like a real decoder: a WAV with no samples cannot be played.
     if (String(this.src).startsWith(SILENT_PREFIX) && wavSamples(this.src) === 0) return Promise.reject(Object.assign(new Error("no samples"), { name: "NotSupportedError" }));
+    if (env.hangPlay && !String(this.src).startsWith(SILENT_PREFIX)) return new Promise(() => {});
+    if (env.failPlay && !String(this.src).startsWith(SILENT_PREFIX)) return Promise.reject(new Error("media"));
     if (env.strict && env.refuseUnlock && String(this.src).startsWith(SILENT_PREFIX)) return Promise.reject(Object.assign(new Error("not allowed"), { name: "NotAllowedError" }));
     if (env.strict && !this.unlocked && !env.gesture) return Promise.reject(Object.assign(new Error("not allowed"), { name: "NotAllowedError" }));
     this.unlocked = true;

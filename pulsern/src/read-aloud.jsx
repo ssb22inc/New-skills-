@@ -334,6 +334,12 @@ export function useReadAloud(segments, key, ref = null) {
       setNote(step.note || null);
       setStatus("playing");
 
+      const showPart = () => {
+        setSilent(true); setSource("screen"); setNote("unavailable");
+        return wait(readingMs(segs[i].text, prefsRef.current.rate), signal);
+      };
+      /* The budget covers getting the sound started, not how long a clip
+         that has already started is allowed to play. */
       const playUrl = (url) => new Promise((resolve, reject) => {
         const audio = unlockPlayer();
         if (!audio) { reject(new Error("NO_AUDIO")); return; }
@@ -341,13 +347,21 @@ export function useReadAloud(segments, key, ref = null) {
         audio.playbackRate = prefsRef.current.rate;
         audio.preservesPitch = true;
         me.audio = audio;
-        audio.onended = resolve;
-        audio.onerror = () => reject(new Error("PLAYBACK"));
-        signal.addEventListener("abort", resolve, { once: true });
+        let began = false;
+        const begin = () => { if (began) return; began = true; clearTimeout(timer); audio.dataset.unlocked = "1"; };
+        const timer = setTimeout(() => {
+          if (began) return;
+          audio.onended = null; audio.onerror = null;
+          try { audio.pause(); } catch { /* already stopped */ }
+          reject(Object.assign(new Error("slow media"), { code: "SLOW" }));
+        }, FIRST_BUDGET_MS);
+        audio.onended = () => { begin(); resolve(); };
+        audio.onerror = () => { begin(); reject(new Error("PLAYBACK")); };
+        signal.addEventListener("abort", () => { begin(); resolve(); }, { once: true });
         clips.hold(String(url).startsWith("blob:") ? url : "");
         const started = audio.play();
-        if (started?.then) started.then(() => { audio.dataset.unlocked = "1"; }, reject);
-        else audio.dataset.unlocked = "1";
+        if (started?.then) started.then(begin, (err) => { if (!began) { began = true; clearTimeout(timer); } reject(err); });
+        else begin();
       });
 
       if (step.silent) {
@@ -358,16 +372,22 @@ export function useReadAloud(segments, key, ref = null) {
         } catch (e) {
           if (signal.aborted || run.current !== me) return;
           if (e?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
-          const again = await ask(segs[i], true);
-          if (signal.aborted || run.current !== me) return;
-          try {
-            if (!again.url) throw new Error("NO_URL");
-            await playUrl(again.url);
-          } catch (e2) {
+          if (e?.code === "SLOW") { await showPart(); }
+          else {
+            const raced = await Promise.race([
+              ask(segs[i], true).then((o) => ({ outcome: o })),
+              wait(FIRST_BUDGET_MS, signal).then(() => ({ slow: true })),
+            ]);
             if (signal.aborted || run.current !== me) return;
-            if (e2?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
-            setSilent(true); setSource("screen"); setNote("unavailable");
-            await wait(readingMs(segs[i].text, prefsRef.current.rate), signal);
+            if (raced.slow || !raced.outcome?.url) { await showPart(); }
+            else {
+              try { await playUrl(raced.outcome.url); }
+              catch (e2) {
+                if (signal.aborted || run.current !== me) return;
+                if (e2?.name === "NotAllowedError") { run.current = null; setActive(null); setStatus("blocked"); return; }
+                await showPart();
+              }
+            }
           }
         }
       } else {

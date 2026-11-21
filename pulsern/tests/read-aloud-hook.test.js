@@ -81,6 +81,35 @@ describe("useReadAloud, mounted in a browser", () => {
     expect(s.elements).toBe(1);
   });
 
+  it("shows a part whose audio never starts, then plays the next ready part", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await strict({ hangPlay: true });
+    await tap("play");
+    await answer(ALL_READY);
+    await gap(1200);
+    let s = await state();
+    expect(s.active).toBe("stem");
+    expect(s.silent).toBe(true);
+    expect(s.played).toEqual([]);
+    await strict({ hangPlay: false });
+    await gap(2500);
+    expect((await state()).played).toEqual(["https://signed.example/1/opt0"]);
+  });
+
+  it("does not wait out a fresh link that never arrives", async () => {
+    await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
+    await strict({ failPlay: true });
+    await tap("play");
+    await answer(ALL_READY);
+    await gap(1200);
+    let s = await state();
+    expect(s.silent).toBe(true);
+    expect(s.played).toEqual([]);
+    await strict({ failPlay: false });
+    await gap(2500);
+    expect((await state()).played).toEqual(["https://signed.example/1/opt0"]);
+  });
+
   it("shows a later part whose audio never arrives, and does not play it when the answer comes late", async () => {
     await render({ segments: SEGS, itemKey: "q:1", itemRef: REF(1) });
     await tap("play");
