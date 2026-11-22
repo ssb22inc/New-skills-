@@ -1,0 +1,64 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b089139331409cc80dcdb2c85a3b38af3dbd1824",
+    "head": "11bd80aea341b5c9020375975bcad9e78a596923",
+    "pr": "177"
+  },
+  "reviewedAt": "2026-11-22T18:16:05.813Z",
+  "filesReviewed": [
+    "pulsern/index.html",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/exam-leave.js",
+    "pulsern/src/exam.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/home-nav.js",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/session-report.js",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/exam-leave-harness.jsx",
+    "pulsern/tests/browser/exam-leave.html",
+    "pulsern/tests/browser/question-nav-harness.jsx",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/exam-leave.test.js",
+    "pulsern/tests/first-answer.test.js",
+    "pulsern/tests/home-nav.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/tests/tour.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 866,
+      "title": "Skipping the tour can leave Today scrolled past its start button",
+      "problem": "dismissTour switches to Today without resetting the window scroll position. The new tour deliberately scrolls down to targets such as Review misses and Stats performance. Unlike applyLeave(\"home\"), this exit path preserves that scroll offset.",
+      "failure_scenario": "An already-activated student replays the tour on a phone, advances to Stats, and taps Skip. Today renders at the retained scroll position, clamped to its page height, with \"Start today's round\" above the viewport. The student must scroll back or tap Home again to reach the primary action.",
+      "fix": "Reset scrolling when dismissing the tour onto Today, after the destination has rendered, while preserving the first-question kick for activating accounts. Add a browser test that skips from a lower-page tour target and asserts that Today's start button is in the viewport.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 110946,
+    "completionTokens": 10633,
+    "reasoningTokens": 10358,
+    "costUsd": 0.3836935
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One navigation regression found. No errors identified in the changed clinical image content. Tests and build were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
