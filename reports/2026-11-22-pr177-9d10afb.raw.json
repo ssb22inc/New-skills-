@@ -1,0 +1,62 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b089139331409cc80dcdb2c85a3b38af3dbd1824",
+    "head": "9d10afba015c82ec1d2c03bd2f13065ca6b883f5",
+    "pr": "177"
+  },
+  "reviewedAt": "2026-11-22T17:32:11.583Z",
+  "filesReviewed": [
+    "pulsern/index.html",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/exam-leave.js",
+    "pulsern/src/exam.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/home-nav.js",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/session-report.js",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/exam-leave-harness.jsx",
+    "pulsern/tests/browser/exam-leave.html",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/exam-leave.test.js",
+    "pulsern/tests/first-answer.test.js",
+    "pulsern/tests/home-nav.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/tests/tour.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/exam.jsx",
+      "line": 233,
+      "title": "Keep navigation guarded while scored-item updates are draining",
+      "problem": "sendSubmit changes the stage to \"results\" while pendingRecords still contains the scored items. At that point examLive becomes false and useSessionReport tells App that no session is active. Another Home or section request can therefore immediately unmount ExamCenter, discarding the remaining pendingRecords. Waiting in onScored protects the original queued navigation, but does not protect against subsequent navigation.",
+      "failure_scenario": "On a slow device, a student ends an exam through Home and confirms. When the score screen appears, per-item progress updates are still running. Tapping Home again or selecting another section bypasses confirmation and unmounts the exam. Only a prefix of the scored items reaches record(), leaving the answer log, ability estimate, XP, and related progress incomplete even though the exam result is saved and the form is permanently consumed.",
+      "fix": "Keep the exam/session guard and navigation lock active until pendingRecords is empty, or introduce a separate recording stage that queues navigation until draining finishes. Add browser coverage with multiple graded items and a navigation attempt during the drain; the current Home tests submit only one committed item.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 96774,
+    "completionTokens": 9128,
+    "reasoningTokens": 8774,
+    "costUsd": 0.3332135
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One blocker remains in the exam-exit handoff: navigation becomes unguarded before all scored items have updated student progress. The changed screenshots show no apparent new clinical error. Build and tests were not executed.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
