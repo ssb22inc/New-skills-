@@ -1,0 +1,64 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b089139331409cc80dcdb2c85a3b38af3dbd1824",
+    "head": "ceb617591e9c0210f3fa9f2bb7d4bf876a00f939",
+    "pr": "177"
+  },
+  "reviewedAt": "2026-11-22T17:55:56.234Z",
+  "filesReviewed": [
+    "pulsern/index.html",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/exam-leave.js",
+    "pulsern/src/exam.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/home-nav.js",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/session-report.js",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/exam-leave-harness.jsx",
+    "pulsern/tests/browser/exam-leave.html",
+    "pulsern/tests/browser/question-nav-harness.jsx",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/exam-leave.test.js",
+    "pulsern/tests/first-answer.test.js",
+    "pulsern/tests/home-nav.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/tests/tour.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/tour.js",
+      "line": 107,
+      "title": "Tall tour targets are scrolled above the viewport",
+      "problem": "The overlap correction aligns the target's bottom above the sheet without preserving its top below the sticky header. Several targets are entire cards, including the long QBank filter panel and flashcard panel. When a card exceeds the available space, this correction scrolls its heading and primary content off-screen, yet the function returns success because it checks only overlap with the sheet.",
+      "failure_scenario": "On a narrow phone, the Adaptive practice step targets the whole QBank card containing the category, item-type, and population filters. That card is taller than the area above the tour sheet. The extra scroll moves the top of the card above the viewport, hiding the feature being introduced. The supplied clearance test covers a short button row and never asserts that the target remains below the header.",
+      "fix": "Use smaller, step-specific targets that fit in the available space, or handle oversized targets without scrolling their primary content above the header. Add browser coverage using the actual QBank and flashcard tour targets, checking their intended visible content against both the header and sheet boundaries.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 108077,
+    "completionTokens": 9655,
+    "reasoningTokens": 9322,
+    "costUsd": 0.366741
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "One functional defect remains in the mobile tour. No new clinical-content error was identified in the changed screenshots. This assessment is based on static review; tests were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
