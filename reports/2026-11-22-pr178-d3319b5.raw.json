@@ -1,0 +1,40 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "578713a7aa9e66bbf53568467225d0a3b0954299",
+    "head": "d3319b5fbf7e179a288aa1e7bfc922f294350d5e",
+    "pr": "178"
+  },
+  "reviewedAt": "2026-11-22T21:13:08.936Z",
+  "filesReviewed": [
+    "pulsern/src/diagrams/item-map.json"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/diagrams/item-map.json",
+      "line": 1,
+      "title": "Do not discard the entire question-to-diagram registry",
+      "problem": "Replacing the populated pairs object with {} removes all existing diagram associations, not just stale or rejected entries. Every lookup through this registry now returns no diagram, weakening the existing question-linked visual feature.",
+      "failure_scenario": "A student opens a previously mapped question, such as item 12 (potassium) or item 1843 (ABG). Its diagram can no longer be resolved from this registry. This affects every previously mapped item. Whether the UI silently omits the visual or reports an error depends on consuming code that was not supplied.",
+      "fix": "Regenerate and review valid mappings for the new sourceKey through the existing approval/signing process before releasing. If the source change invalidated previous approvals, complete that re-review rather than shipping an empty registry or blindly retaining stale approvals.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 21769,
+    "completionTokens": 1296,
+    "reasoningTokens": 1004,
+    "costUsd": 0.067381
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Changes requested: the replacement deletes every existing item-to-diagram association. The supplied file does not include the consumer or validation tests, so the exact runtime handling of the empty, unsigned registry could not be verified.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
