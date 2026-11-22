@@ -11,8 +11,8 @@ export function isStudyLocked({ isOwner = false, ent = null } = {}) {
 
 /* Wait until entitlement is known. Opening earlier is what put the tour on
    top of "Your access has ended" while Start was already gone. */
-export function shouldAutoOpenTour({ loaded = false, tourSeen = false, ent = null, locked = false } = {}) {
-  if (!loaded || tourSeen || !ent || locked) return false;
+export function shouldAutoOpenTour({ loaded = false, tourSeen = false, ent = null, locked = false, sessionLive = false } = {}) {
+  if (!loaded || tourSeen || !ent || locked || sessionLive) return false;
   return true;
 }
 
@@ -30,6 +30,17 @@ export function needsFirstAnswer({ locked = false, ent = null, logLength = 0, is
    tour is not shown when the paywall is up). */
 export function tourSkipStartsQuestion(activating) {
   return !!activating;
+}
+
+/* A kick is a one-shot signal from the tour into Today. Today unmounts while
+   the tour visits other sections, so the counter has to be remembered outside
+   that screen. Replaying a kick that already opened the first question puts
+   an already-activated student back on "Answer this to unlock Today." A kick
+   that arrives while the tour is still covering Today waits until the tour
+   closes, then applies once. */
+export function shouldApplyQuizKick({ quizKick = 0, appliedKick = 0, tourHold = false } = {}) {
+  if (!quizKick || quizKick === appliedKick || tourHold) return false;
+  return true;
 }
 
 export function showProfilePrompt({ logLength = 0, hasProfile = false, dismissed = false, profileLoading = false } = {}) {

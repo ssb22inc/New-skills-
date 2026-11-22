@@ -151,4 +151,38 @@ describe("case-study steps", () => {
     expect(await page.getByRole("button", { name: "First action" }).isDisabled()).toBe(true);
     expect(await stats()).toMatch(/^1 recorded, 1 correct, 0 wrong/);
   }, 60_000);
+
+  it("returns to the top of Today when the tour is skipped from a lower screen", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.T.mountTourSkip());
+    await page.waitForFunction(() => window.scrollY > 400);
+    await page.getByRole("button", { name: "Skip" }).click();
+    await page.waitForFunction(() => {
+      const start = [...document.querySelectorAll("button")].find((button) => button.textContent.includes("Start today's round"));
+      if (!start) return false;
+      const box = start.getBoundingClientRect();
+      return window.scrollY < 20 && box.top >= 0 && box.bottom <= window.innerHeight;
+    });
+  });
+
+  it("keeps Review misses above the tour sheet on a phone", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.T.mountTourClearance());
+    expect(await page.evaluate(() => window.T.tourClearance())).toBe(true);
+  });
+
+  it("keeps the practice and flashcard highlights between the header and the tour sheet", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const settled = (focus, text) => page.waitForFunction(([id, needle]) => {
+      const box = window.T.tourBox(id);
+      return !!box
+        && box.text.includes(needle)
+        && box.top >= box.headerBottom - 1
+        && box.bottom <= box.sheetTop + 1;
+    }, [focus, text]);
+    await page.evaluate(() => window.T.mountTourPractice());
+    await settled("qbank", "Computer-adaptive practice");
+    await page.evaluate(() => window.T.mountTourCards());
+    await settled("cards", "Hold digoxin");
+  });
 });

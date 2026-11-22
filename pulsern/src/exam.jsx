@@ -4,6 +4,7 @@
    feedback until the end, and a proportional time limit. Scoring and the
    readiness verdict are deterministic plain code (rule 6). */
 import { useState, useEffect, useRef } from "react";
+import { useSessionReport } from "./session-report.js";
 import { GRADING_NOTE_LONG } from "./grading-note.js";
 import { supabase } from "./supabase.js";
 import { ngnExt } from "./ngn.js";
@@ -57,7 +58,7 @@ const fmtClock = (secs) => {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, isOwner = false, onRunning, onAttempt, onUpgrade }) {
+export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, isOwner = false, onRunning, onAttempt, onUpgrade, onSession, bindExit, onScored, onLeaveSubmit }) {
   const [stage, setStage] = useState("picker"); // picker | intro | running | submitting | results | review
   const [availability, setAvailability] = useState(null); // {form: {items, cases}}
   const [form, setForm] = useState(null);
@@ -86,12 +87,14 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
   /* lockdown: tell the app shell when the exam is live so it hides every
      menu, tab, and reference — the calculator on calc items is the only
      tool, exactly like the real testing center. It holds while the final
-     answers are being scored. */
+     answers are being scored, and while each scored item is still being
+     written into ability, streak, and XP. */
+  const recording = pendingRecords.length > 0;
   useEffect(() => {
-    onRunning?.(stage === "running" || (stage === "submitting" && !submitErr));
+    onRunning?.(stage === "running" || (stage === "submitting" && !submitErr) || recording);
     return () => onRunning?.(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, submitErr]);
+  }, [stage, submitErr, recording]);
 
   /* availability: how complete is each form's bank (counts only) */
   useEffect(() => {
@@ -109,13 +112,20 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     return () => { live = false; };
   }, [stage === "picker"]);
 
-  /* Ability/streak/XP updates, one per scored item. One per render, so each
-     update starts from the ability the previous one produced. */
+  /* Ability/streak/XP updates, one per scored item. The next item waits
+     until this one has been recorded, so a slow update cannot be skipped
+     by leaving the screen. */
   useEffect(() => {
-    if (!pendingRecords.length) return;
-    const [first, ...rest] = pendingRecords;
-    record(first.item, first.ok);
-    setPendingRecords(rest);
+    if (!pendingRecords.length) return undefined;
+    let cancel = false;
+    (async () => {
+      const [first, ...rest] = pendingRecords;
+      try {
+        await Promise.resolve(record(first.item, first.ok));
+      } catch { /* this item's update failed; the rest of the exam still counts */ }
+      if (!cancel) setPendingRecords(rest);
+    })();
+    return () => { cancel = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingRecords]);
 
@@ -205,7 +215,16 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     setResult(res);
     setExamResults((m) => ({ ...m, [f]: { ...res, attempts: (m[f]?.attempts ?? 0) + 1 } }));
     setStage("results");
+    awaitScoreHome.current = true;
   };
+  const awaitScoreHome = useRef(false);
+  const onScoredRef = useRef(onScored);
+  onScoredRef.current = onScored;
+  useEffect(() => {
+    if (!awaitScoreHome.current || stage !== "results" || pendingRecords.length) return;
+    awaitScoreHome.current = false;
+    onScoredRef.current?.();
+  }, [stage, pendingRecords.length]);
 
   const finish = (finalResponses, timedOut = false) => {
     clearInterval(timerRef.current);
@@ -215,6 +234,24 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     setStage("submitting");
     sendSubmit();
   };
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  /* A retryable scoring failure stays inside the exam. Home remembers the
+     destination and the same answers stay available for Try again. A final
+     refusal (already submitted, or the attempt is gone) lets Home leave.
+     Saving scored items also stays inside the exam: the score can be on
+     screen while ability, streak, and XP are still catching up, and leaving
+     then would drop the ones not written yet. */
+  const examLive = stage === "running" || (stage === "submitting" && !submitErr?.final) || recording;
+  useSessionReport(onSession, { exam: examLive, inSession: examLive });
+  useEffect(() => {
+    if (stage !== "running") {
+      bindExit?.(null);
+      return;
+    }
+    bindExit?.(() => finishRef.current(responsesRef.current, false));
+    return () => bindExit?.(null);
+  }, [stage, bindExit]);
 
   const cur = sequence[idx];
   const q = cur?.q;
@@ -336,7 +373,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
               <p className="small" role="alert">{submitErr.message}</p>
               <div className="row">
                 {!submitErr.final && <button className="btn" onClick={sendSubmit}>Try again</button>}
-                <button className="btn ghost" onClick={() => { pendingSubmitRef.current = null; setStage("picker"); }}>Back to exams</button>
+                <button className="btn ghost" onClick={() => { pendingSubmitRef.current = null; onLeaveSubmit?.(); setStage("picker"); }}>Back to exams</button>
               </div>
             </>}
       </section>
@@ -366,10 +403,14 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
             );
           })}
         </section>
-        <div className="row">
-          <button className="btn" onClick={() => setStage("review")}>Review missed questions ({result.total - result.correct})</button>
-          <button className="btn ghost" onClick={() => setStage("picker")}>Back to exams</button>
-        </div>
+        {recording ? (
+          <p className="small" role="status">Saving your progress…</p>
+        ) : (
+          <div className="row">
+            <button className="btn" onClick={() => setStage("review")}>Review missed questions ({result.total - result.correct})</button>
+            <button className="btn ghost" onClick={() => setStage("picker")}>Back to exams</button>
+          </div>
+        )}
       </div>
     );
   }

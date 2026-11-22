@@ -4,6 +4,7 @@ import {
   needsFirstAnswer,
   shouldAutoOpenTour,
   showProfilePrompt,
+  shouldApplyQuizKick,
   tourSkipStartsQuestion,
   trialBannerMessage,
 } from "../src/first-answer.js";
@@ -28,6 +29,9 @@ describe("first-answer activation", () => {
     expect(shouldAutoOpenTour({ loaded: false, tourSeen: false, ent: trial, locked: false })).toBe(false);
     expect(shouldAutoOpenTour({ loaded: true, tourSeen: true, ent: trial, locked: false })).toBe(false);
     expect(shouldAutoOpenTour({ loaded: true, tourSeen: false, ent: trial, locked: false })).toBe(true);
+    expect(shouldAutoOpenTour({ loaded: true, tourSeen: false, ent: trial, locked: false, sessionLive: true })).toBe(false);
+    expect(shouldAutoOpenTour({ loaded: true, tourSeen: false, ent: { status: "active" }, locked: false, sessionLive: true })).toBe(false);
+    expect(shouldAutoOpenTour({ loaded: true, tourSeen: false, ent: { status: "active" }, locked: false, sessionLive: false })).toBe(true);
   });
 
   it("forces one question only for an active free pass with no answers", () => {
@@ -38,6 +42,15 @@ describe("first-answer activation", () => {
     expect(needsFirstAnswer({ locked: false, ent: { status: "offline" }, logLength: 0 })).toBe(false);
     expect(needsFirstAnswer({ locked: false, ent: null, logLength: 0 })).toBe(false);
     expect(needsFirstAnswer({ locked: false, ent: trial, logLength: 0, isOwner: true })).toBe(false);
+  });
+
+  it("applies a new first-question kick once, and never replays it under the tour", () => {
+    expect(shouldApplyQuizKick({ quizKick: 0, appliedKick: 0, tourHold: false })).toBe(false);
+    expect(shouldApplyQuizKick({ quizKick: 1, appliedKick: 0, tourHold: false })).toBe(true);
+    expect(shouldApplyQuizKick({ quizKick: 1, appliedKick: 0, tourHold: true })).toBe(false);
+    expect(shouldApplyQuizKick({ quizKick: 1, appliedKick: 1, tourHold: false })).toBe(false);
+    expect(shouldApplyQuizKick({ quizKick: 1, appliedKick: 1, tourHold: true })).toBe(false);
+    expect(shouldApplyQuizKick({ quizKick: 2, appliedKick: 1, tourHold: false })).toBe(true);
   });
 
   it("sends tour Skip into the question while that first answer is still owed", () => {
