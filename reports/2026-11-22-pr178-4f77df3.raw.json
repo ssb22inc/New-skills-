@@ -1,0 +1,45 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "578713a7aa9e66bbf53568467225d0a3b0954299",
+    "head": "4f77df31c1d9bee73577ca5dec0aafcc56277af6",
+    "pr": "178"
+  },
+  "reviewedAt": "2026-11-22T22:46:03.024Z",
+  "filesReviewed": [
+    "pulsern/reports/diagram-map/run-2026-11-22T21-23-33-459Z.json",
+    "pulsern/reports/diagram-map/run-2026-11-22T21-23-33-459Z.md",
+    "pulsern/reports/diagram-map/run-2026-11-22T21-33-38-171Z.json",
+    "pulsern/reports/diagram-map/run-2026-11-22T21-33-38-171Z.md",
+    "pulsern/reports/diagram-review/index.json",
+    "pulsern/src/diagrams/item-map.json"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/reports/diagram-review/index.json",
+      "line": 1,
+      "title": "Preserve or replace the visual approvals before publishing the map",
+      "problem": "Replacing this index with {} removes the signed, completed PASS records for every diagram referenced by item-map.json. No replacement visual reviews are included; both new runs made zero review calls. Nevertheless, the map is retained with a new sourceKey and signature, and the later report declares completion with 678 shipped pairings and nothing held back. The resulting release artifacts have no indexed visual approvals supporting that published map.",
+      "failure_scenario": "A build or diagram lookup requiring a current indexed PASS can no longer authorize even an existing pairing such as question 12's potassium diagram, making previously available diagrams ineligible. If consumers instead trust the signed map alone, the retained pairings lack the indexed approval evidence required by the visual gate. I could not verify which consumer behavior applies from the supplied files.",
+      "fix": "Restore the passing index if its approvals remain valid. Otherwise, complete the required visual reviews and write replacement approval records before regenerating the signed map. Until then, hold back affected diagrams and report the run as incomplete rather than shipped.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 64320,
+    "completionTokens": 1838,
+    "reasoningTokens": 1484,
+    "costUsd": 0.1791785
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. All six indexed visual approvals are deleted while the populated item map is retained and the new report claims 678 shipped pairings. Consumer code was not supplied, so I could not verify whether this blocks publication, hides diagrams, or allows rendering without indexed approval.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
