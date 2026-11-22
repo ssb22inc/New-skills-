@@ -4,6 +4,17 @@ import { TOUR_STEPS, isLastTourStep, nextDialogFocus, scrollTourTarget, tourStep
 /* Follow the step's real screen. The tab change paints first. Positioning
    runs again when that screen replaces a placeholder, which is how the
    flashcard queue arrives after the empty heading. */
+/* Skip and the last-step return land on Today after the tour has scrolled
+   the window down to a lower target. Scroll back to the top once Today has
+   painted, so "Start today's round" is not left above the phone screen. */
+export function useTourDismissScroll(token, tourOpen, tab) {
+  useEffect(() => {
+    if (!token || tourOpen || tab !== "today") return undefined;
+    const frame = requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => cancelAnimationFrame(frame);
+  }, [token, tourOpen, tab]);
+}
+
 export function useTourPlacement(tourStep, tab, setTab) {
   useEffect(() => {
     if (tourStep == null) return undefined;

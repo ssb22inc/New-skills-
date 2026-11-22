@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Flashcards, QBank, CaseStudy, Style } from "../../src/App.jsx";
-import { Tour, useTourPlacement } from "../../src/tour.jsx";
+import { Tour, useTourDismissScroll, useTourPlacement } from "../../src/tour.jsx";
 import { blocksOverlap, scrollTourTarget } from "../../src/tour.js";
 import { emptyAbility, updateAbility } from "../../src/ability-engine.js";
 import { updateMissSchedule } from "../../src/question-review.js";
@@ -146,6 +146,39 @@ function TourCards() {
   );
 }
 
+function TourSkipHome() {
+  const [open, setOpen] = useState(true);
+  const [tab, setTab] = useState("stats");
+  const [token, setToken] = useState(0);
+  useTourDismissScroll(token, open, tab);
+  useTourPlacement(open ? 7 : null, tab, setTab);
+  const skip = () => {
+    setOpen(false);
+    setTab("today");
+    setToken((n) => n + 1);
+  };
+  return (
+    <div className="app" data-theme="light">
+      <Style />
+      <header className="top"><span className="brand-name">PULSERN</span></header>
+      <main className="body">
+        {tab === "today" ? (
+          <>
+            <button type="button">Start today's round</button>
+            <div style={{ height: 1800 }} />
+          </>
+        ) : (
+          <section className="card tour-target" data-tour="stats" style={{ marginTop: 1600 }}>
+            <h2 className="h2">Stats performance</h2>
+          </section>
+        )}
+        {open && <div className="tour-scroll-room" aria-hidden="true" />}
+      </main>
+      {open && <Tour step={7} activating={false} onBack={() => {}} onNext={() => {}} onSkip={skip} onHome={() => {}} onAnswer={() => {}} />}
+    </div>
+  );
+}
+
 function TourClearance() {
   return (
     <div className="app" data-theme="light">
@@ -184,6 +217,10 @@ window.T = {
     env.spoken.length = 0;
     env.cancels = 0;
     root.render(<div className="app"><Style /><Practice /></div>);
+    await settle();
+  },
+  async mountTourSkip() {
+    root.render(<TourSkipHome />);
     await settle();
   },
   async mountTourClearance() {

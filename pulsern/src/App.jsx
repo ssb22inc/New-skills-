@@ -291,7 +291,7 @@ import {
 import { hasDraftAnswer, planLeaveRequest } from "./home-nav.js";
 import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt } from "./tour.js";
-import { LeaveDialog, Tour, useTourPlacement } from "./tour.jsx";
+import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -522,6 +522,8 @@ export default function App() {
   /* The tour shows the real screen for the step. Positioning runs again
      when that screen replaces a placeholder, such as the flashcard queue. */
   useTourPlacement(tourStep, tab, setTab);
+  const [homeScroll, setHomeScroll] = useState(0);
+  useTourDismissScroll(homeScroll, tourStep != null, tab);
 
   const wasActivating = useRef(false);
   useEffect(() => {
@@ -858,6 +860,7 @@ export default function App() {
     setLeaveGuard(null);
     setTab("today");
     setQuizKick((n) => n + 1);
+    setHomeScroll((n) => n + 1);
   };
   const dismissTour = () => {
     setTourStep(null);
@@ -866,6 +869,7 @@ export default function App() {
     setTab("today");
     if (tourSkipStartsQuestion(activating)) setQuizKick((n) => n + 1);
     else setHomeEpoch((n) => n + 1);
+    setHomeScroll((n) => n + 1);
   };
   const applyLeave = (destination = "home") => {
     setLeaveGuard(null);
