@@ -1,0 +1,53 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b089139331409cc80dcdb2c85a3b38af3dbd1824",
+    "head": "913a82f52b7bfb00f9909ce01295957731d1d5a9",
+    "pr": "177"
+  },
+  "reviewedAt": "2026-11-22T18:25:05.462Z",
+  "filesReviewed": [
+    "pulsern/index.html",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/exam-leave.js",
+    "pulsern/src/exam.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/home-nav.js",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/session-report.js",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/exam-leave-harness.jsx",
+    "pulsern/tests/browser/exam-leave.html",
+    "pulsern/tests/browser/question-nav-harness.jsx",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/exam-leave.test.js",
+    "pulsern/tests/first-answer.test.js",
+    "pulsern/tests/home-nav.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/tests/tour.test.js"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 112357,
+    "completionTokens": 9546,
+    "reasoningTokens": 9500,
+    "costUsd": 0.376351
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No actionable defects identified in the supplied diffs or screenshots. Tests and the production build were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
