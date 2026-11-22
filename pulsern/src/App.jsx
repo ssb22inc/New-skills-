@@ -282,6 +282,7 @@ import {
   isStudyLocked,
   shouldAutoOpenTour,
   needsFirstAnswer,
+  shouldApplyQuizKick,
   tourSkipStartsQuestion,
   showProfilePrompt,
   trialBannerMessage,
@@ -432,6 +433,7 @@ export default function App() {
   const [tourStep, setTourStep] = useState(null);   // null = closed, otherwise an index into TOUR_STEPS
   const [tourSeen, setTourSeen] = useState(false);  // persisted in blob; blocks auto-open, not the menu
   const [quizKick, setQuizKick] = useState(0);      // bumps Today into the forced first question
+  const appliedQuizKick = useRef(0);                // survives Today unmounting during the tour
   const [homeEpoch, setHomeEpoch] = useState(0);    // explicit Home resets Today out of a round
   const [leaveGuard, setLeaveGuard] = useState(null);
   const [ent, setEnt] = useState(null);             // entitlement (server truth, not in blob)
@@ -1009,7 +1011,7 @@ export default function App() {
             profile={profile} setProfile={setProfile} showProfile={profilePrompt} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
-            needsFirstAnswer={activating} quizKick={quizKick} accessPending={accessPending}
+            needsFirstAnswer={activating} quizKick={quizKick} appliedQuizKick={appliedQuizKick} accessPending={accessPending}
             homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} onSession={onSession} />}
           {tab === "qbank" && <QBank record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
           {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
@@ -1219,7 +1221,6 @@ Both cases: plain text only (no markdown), educational exam-prep register only â
 function Today(props) {
   const { dueCount, streak } = props;
   const [stage, setStage] = useState(() => (props.tourHold || !props.needsFirstAnswer ? "home" : "first")); // home | first | cards | quiz | done
-  const kickSeen = useRef(0);
   const homeSeen = useRef(props.homeEpoch ?? 0);
   const released = useRef(!!props.tourHold);
 
@@ -1241,11 +1242,12 @@ function Today(props) {
   }, [props.homeEpoch]);
 
   useEffect(() => {
-    if (!props.quizKick || props.quizKick === kickSeen.current) return;
-    kickSeen.current = props.quizKick;
+    const applied = props.appliedQuizKick?.current ?? 0;
+    if (!shouldApplyQuizKick({ quizKick: props.quizKick, appliedKick: applied, tourHold: props.tourHold })) return;
+    props.appliedQuizKick.current = props.quizKick;
     released.current = false;
     setStage("first");
-  }, [props.quizKick]);
+  }, [props.quizKick, props.tourHold, props.appliedQuizKick]);
 
   const finishFirst = () => {
     released.current = true;

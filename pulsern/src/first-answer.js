@@ -32,6 +32,17 @@ export function tourSkipStartsQuestion(activating) {
   return !!activating;
 }
 
+/* A kick is a one-shot signal from the tour into Today. Today unmounts while
+   the tour visits other sections, so the counter has to be remembered outside
+   that screen. Replaying a kick that already opened the first question puts
+   an already-activated student back on "Answer this to unlock Today." A kick
+   that arrives while the tour is still covering Today waits until the tour
+   closes, then applies once. */
+export function shouldApplyQuizKick({ quizKick = 0, appliedKick = 0, tourHold = false } = {}) {
+  if (!quizKick || quizKick === appliedKick || tourHold) return false;
+  return true;
+}
+
 export function showProfilePrompt({ logLength = 0, hasProfile = false, dismissed = false, profileLoading = false } = {}) {
   if (profileLoading || hasProfile || dismissed) return false;
   return logLength >= 1;
