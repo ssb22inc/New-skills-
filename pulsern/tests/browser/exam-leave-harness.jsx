@@ -52,14 +52,26 @@ window.fetch = async (input, init = {}) => {
   return Response.json({ error: "unknown action" }, { status: 400 });
 };
 
+const gates = [];
+
 function Host() {
   const log = useRef([]);
   const [place, setPlace] = useState("exam");
+  const [locked, setLocked] = useState(false);
   const [session, setSession] = useState({ exam: false, inSession: false, hasDraft: false });
   const examLeave = useExamHomeExit((destination) => {
     log.current.push({ event: "home", destination });
     setPlace(destination);
   });
+  const requestLeave = (destination) => {
+    if (!session.exam) {
+      examLeave.clear();
+      log.current.push({ event: "home", destination });
+      setPlace(destination);
+      return;
+    }
+    examLeave.confirm(true, destination);
+  };
   useEffect(() => {
     window.T.ready = true;
   }, []);
@@ -74,14 +86,21 @@ function Host() {
   return (
     <div>
       <p data-testid="place">{place}</p>
-      <button type="button" onClick={() => examLeave.confirm(session.exam, "home")}>Home</button>
+      <p data-testid="locked">{locked ? "yes" : "no"}</p>
+      <button type="button" onClick={() => requestLeave("home")}>Home</button>
+      <button type="button" onClick={() => requestLeave("practice")}>Practice</button>
       {place === "exam" && (
         <ExamCenter
-          record={(item, ok) => { log.current.push({ event: "record", id: item.id, ok }); }}
+          record={(item, ok) => {
+            log.current.push({ event: "record", id: item.id, ok });
+            if (!window.T.hold) return undefined;
+            return new Promise((resolve) => { gates.push(resolve); });
+          }}
           examResults={{}}
           setExamResults={() => {}}
           cats={["Management of Care", "Safety & Infection Control"]}
           isOwner
+          onRunning={setLocked}
           onSession={setSession}
           bindExit={examLeave.bindExit}
           onScored={examLeave.onScored}
@@ -92,5 +111,9 @@ function Host() {
   );
 }
 
-window.T = { ready: false };
+window.T = {
+  ready: false,
+  hold: false,
+  releaseOne() { const release = gates.shift(); release?.(); },
+};
 createRoot(document.getElementById("host")).render(<Host />);

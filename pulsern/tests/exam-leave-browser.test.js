@@ -108,10 +108,36 @@ describe("leaving a readiness exam", () => {
     await page.getByRole("button", { name: "Next →" }).click();
     await page.getByRole("button", { name: "Gamma" }).click();
     await page.getByRole("button", { name: "Submit final answer" }).click();
-    await page.getByText("complete").waitFor();
+    await page.waitForFunction(() => window.T.log().filter((entry) => entry.event === "record").length === 2);
     expect(await page.getByTestId("place").innerText()).toBe("exam");
     const log = await page.evaluate(() => window.T.log());
     expect(log.map((entry) => entry.event)).toEqual(["record", "record"]);
     expect(log.map((entry) => entry.id)).toEqual([11, 12]);
+  });
+
+  it("keeps saving every scored item when the student leaves again during the update", async () => {
+    await page.evaluate(() => { window.T.hold = true; });
+    await beginExam();
+    await page.getByRole("button", { name: "Alpha" }).click();
+    await page.getByRole("button", { name: "Next →" }).click();
+    await page.getByRole("button", { name: "Gamma" }).click();
+    await page.getByRole("button", { name: "Submit final answer" }).click();
+    await page.getByText("Saving your progress…").waitFor();
+    await page.waitForFunction(() => window.T.log().filter((entry) => entry.event === "record").length === 1);
+    expect(await page.getByTestId("locked").innerText()).toBe("yes");
+    expect(await page.getByRole("button", { name: "Back to exams" }).count()).toBe(0);
+    await home().click();
+    expect(await page.getByTestId("place").innerText()).toBe("exam");
+    expect(await page.evaluate(() => window.T.log().filter((entry) => entry.event === "record").length)).toBe(1);
+    await page.evaluate(() => window.T.releaseOne());
+    await page.waitForFunction(() => window.T.log().filter((entry) => entry.event === "record").length === 2);
+    expect(await page.getByTestId("place").innerText()).toBe("exam");
+    await page.evaluate(() => window.T.releaseOne());
+    await page.waitForFunction(() => document.querySelector("[data-testid=place]")?.textContent === "home");
+    expect(await page.evaluate(() => window.T.log())).toEqual([
+      { event: "record", id: 11, ok: true },
+      { event: "record", id: 12, ok: true },
+      { event: "home", destination: "home" },
+    ]);
   });
 });
