@@ -1,0 +1,70 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b089139331409cc80dcdb2c85a3b38af3dbd1824",
+    "head": "4f8007d8810f0ea1600c4bfac0a7f9923b187f20",
+    "pr": "177"
+  },
+  "reviewedAt": "2026-11-22T16:47:01.170Z",
+  "filesReviewed": [
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/exam.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/home-nav.js",
+    "pulsern/src/session-report.js",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/first-answer.test.js",
+    "pulsern/tests/home-nav.test.js",
+    "pulsern/tests/tour.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 889,
+      "title": "Confirming a leave to the active section does not clear the round",
+      "problem": "For non-Home destinations, applyLeave only calls setTab(destination). When that destination is already active, React preserves the component and all its question, draft, and navigation state. This contradicts the confirmation's explicit promise that the open question and place in the round clear.",
+      "failure_scenario": "Start a Practice question, select an answer, click the already-active Practice tab, and confirm \"Leave round\". The same question and unchecked selection remain. The equivalent problem affects the Case Study and Cards tabs.",
+      "fix": "Treat selecting the current section as a no-op before showing a leave confirmation, or explicitly reset/remount that section after confirmation. Add interaction tests for active-section clicks with an open draft.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 909,
+      "title": "Abandoning failed scoring leaves the next exam's Home exit blocked",
+      "problem": "homeAfterExam is cleared on successful scoring or the specific \"Back to exams\" button, but not when another navigation control abandons a failed submission. The stale destination then prevents confirmLeave from invoking examExitRef for a later exam.",
+      "failure_scenario": "During exam A, confirm Home, then let the submit request fail. The failure unlocks navigation, so click the header Home button and later start exam B. Confirming Home in exam B now merely closes the dialog: homeAfterExam is still truthy, so no submission or navigation occurs. If B is completed normally instead, the stale destination unexpectedly sends the student Home and discards the locally held item-review screen.",
+      "fix": "Scope the queued destination to the current attempt and clear it whenever that attempt's failed submission is abandoned through any navigation path. Also ensure a new attempt cannot inherit a previous destination. Test the failed-submit, navigate-away, start-another-exam sequence.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/tour.jsx",
+      "line": 48,
+      "title": "The new modal dialogs leave keyboard focus in the underlying app",
+      "problem": "Neither LeaveDialog nor Tour moves focus into the dialog, traps focus, or makes the background inert. aria-modal does not implement those behaviors. Opening a leave confirmation from the header leaves focus on the underlying Home button, and subsequent Tab presses traverse background controls before reaching the dialog.",
+      "failure_scenario": "A keyboard user opens Home confirmation during a question. Instead of landing on the confirmation actions, focus remains behind the overlay and can reach question controls or navigation. The user can modify the underlying session while the modal is pending. During the multi-screen tour, background controls likewise remain keyboard-operable despite the modal presentation.",
+      "fix": "Implement shared modal focus management: focus an appropriate dialog action on opening, contain Tab and Shift+Tab within the dialog, make background content inert while open, and restore focus when closing. Add keyboard interaction tests for both dialogs.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 59667,
+    "completionTokens": 6267,
+    "reasoningTokens": 5512,
+    "costUsd": 0.211836
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. There are reproducible navigation-state defects and a keyboard-accessibility defect in the new dialogs. The added helper tests do not exercise these interaction paths.",
+  "counts": {
+    "blocker": 1,
+    "major": 2,
+    "minor": 0
+  }
+}
