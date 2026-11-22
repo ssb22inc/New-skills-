@@ -1,0 +1,72 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b089139331409cc80dcdb2c85a3b38af3dbd1824",
+    "head": "279bb8e4ed31c1a46cc2f8dab231c4e89617b09d",
+    "pr": "177"
+  },
+  "reviewedAt": "2026-11-22T17:44:14.664Z",
+  "filesReviewed": [
+    "pulsern/index.html",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/exam-leave.js",
+    "pulsern/src/exam.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/home-nav.js",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/session-report.js",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/exam-leave-harness.jsx",
+    "pulsern/tests/browser/exam-leave.html",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/exam-leave.test.js",
+    "pulsern/tests/first-answer.test.js",
+    "pulsern/tests/home-nav.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/tests/tour.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 527,
+      "title": "The missed-question tour target remains behind the bottom sheet",
+      "problem": "scrollIntoView cannot scroll beyond the document's bottom. For students, qbank-review is effectively the last content in Practice, with only card padding and the body's 96px bottom padding below it. The tour sheet is substantially taller than that space. scroll-margin-bottom does not create additional scrollable space, so the highlighted Review misses controls remain behind the sheet.",
+      "failure_scenario": "On a 390×844 phone, a non-owner advances to 'Misses come back on a calendar'. Scrolling clamps at the page bottom, leaving the final button row underneath the tour dialog rather than visibly demonstrating Review misses.",
+      "fix": "Provide enough tour-only trailing space to move the target above the sheet, or position the sheet based on the target's measured bounds. Add a browser assertion that the qbank-review target does not intersect the tour-card rectangle.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/tests/browser/exam-leave-harness.jsx",
+      "line": 66,
+      "title": "Exam-exit coverage bypasses the production confirmation and navigation logic",
+      "problem": "Host reimplements requestLeave and calls examLeave.confirm directly. None of these tests exercises App's requestLeave → LeaveDialog → confirmLeave → applyLeave path. That newly added path decides whether a live, already-consumed exam may be unmounted, so its failure could lose responses without any of the new tests failing.",
+      "failure_scenario": "If production requestLeave navigates directly while an exam is running, or confirmLeave incorrectly treats the exam as inactive, Home discards the one-shot attempt without submitting it. The browser tests still pass because their separate Host implementation always invokes the correct hook branch.",
+      "fix": "Exercise the real App Home control and confirmation dialog with mocked services, including Cancel, running, submitting, and recording states. Alternatively, extract the production request/confirm/navigation logic into a shared implementation used by both App and the harness instead of duplicating it.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 99542,
+    "completionTokens": 9709,
+    "reasoningTokens": 9160,
+    "costUsd": 0.3459435
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Two issues need revision: the tour can hide its highlighted control, and the exam-exit tests omit the production navigation path that protects one-shot attempts. Review was based on the supplied diffs and images; tests were not run.",
+  "counts": {
+    "blocker": 0,
+    "major": 2,
+    "minor": 0
+  }
+}
