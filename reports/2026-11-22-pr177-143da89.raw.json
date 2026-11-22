@@ -1,0 +1,57 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b089139331409cc80dcdb2c85a3b38af3dbd1824",
+    "head": "143da89ca6fd5736a2243d858997ba9a5d4723fd",
+    "pr": "177"
+  },
+  "reviewedAt": "2026-11-22T17:20:07.639Z",
+  "filesReviewed": [
+    "pulsern/index.html",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/exam.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/home-nav.js",
+    "pulsern/src/landing.jsx",
+    "pulsern/src/session-report.js",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/first-answer.test.js",
+    "pulsern/tests/home-nav.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/tests/tour.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/tests/home-nav.test.js",
+      "line": 19,
+      "title": "The exam-exit test never exercises scoring before navigation",
+      "problem": "The test named \"scores a live exam before going home\" only calls leaveConfirm() and checks strings. It never renders ExamCenter or exercises bindExit, confirmLeave, onScored, or the pendingRecords drain. Removing the exit binding or navigating before scoring finishes would leave this test green. This leaves new critical logic for a permanently consumed exam attempt without a test that would catch its failure.",
+      "failure_scenario": "A student confirms Home after submitting several exam answers. If the exit handshake fails to submit those responses, or unmounts ExamCenter before all scored items update ability, streak, and XP, the attempt can be consumed without the expected saved progress. All supplied new tests would still pass.",
+      "fix": "Add a component/integration test that starts an exam, submits answers, confirms Home, and verifies the submission payload, no navigation before scoring and record processing complete, and exactly-once progress updates. Also cover submission failure and retry without losing the pending responses.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 88691,
+    "completionTokens": 4300,
+    "reasoningTokens": 3962,
+    "costUsd": 0.264726
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "No new clinical error was evident in the changed screenshots. The new exam-exit workflow needs behavioral coverage before release; the supplied tests verify confirmation text but never exercise submission, scoring, or navigation. Review was limited to the supplied changes; tests were not run.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
