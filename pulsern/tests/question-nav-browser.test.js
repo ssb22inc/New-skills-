@@ -157,4 +157,21 @@ describe("case-study steps", () => {
     await page.evaluate(() => window.T.mountTourClearance());
     expect(await page.evaluate(() => window.T.tourClearance())).toBe(true);
   });
+
+  it("keeps the practice and flashcard highlights between the header and the tour sheet", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.T.mountTourPractice());
+    const practice = await page.evaluate(() => window.T.tourReport("qbank"));
+    expect(practice.text).toMatch(/Computer-adaptive practice/);
+    expect(practice.top).toBeGreaterThanOrEqual(practice.headerBottom - 1);
+    expect(practice.bottom).toBeLessThanOrEqual(practice.sheetTop + 1);
+    expect(practice.ok).toBe(true);
+
+    await page.evaluate(() => window.T.mountTourCards());
+    const cards = await page.evaluate(() => window.T.tourReport("cards"));
+    expect(cards.text).toMatch(/Hold digoxin/);
+    expect(cards.top).toBeGreaterThanOrEqual(cards.headerBottom - 1);
+    expect(cards.bottom).toBeLessThanOrEqual(cards.sheetTop + 1);
+    expect(cards.ok).toBe(true);
+  });
 });

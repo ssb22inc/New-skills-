@@ -96,16 +96,23 @@ export function blocksOverlap(a, b) {
 }
 
 /* Put the highlighted control under the header and above the tour sheet.
-   The sheet covers the bottom of a phone, and a target at the end of the
-   page cannot move up unless the page has room below it. */
-export function scrollTourTarget(target, sheet) {
+   A short control at the end of the page needs room below it before it can
+   move up. A tall control stops once its top meets the header, so the
+   heading is not scrolled off the screen to clear the sheet. */
+export function scrollTourTarget(target, sheet, header) {
   if (!target?.scrollIntoView) return false;
   target.scrollIntoView({ block: "start", inline: "nearest" });
-  if (!sheet?.getBoundingClientRect) return true;
-  const targetBox = target.getBoundingClientRect();
-  const sheetBox = sheet.getBoundingClientRect();
-  if (targetBox.bottom > sheetBox.top - 12) {
-    window.scrollBy({ top: targetBox.bottom - (sheetBox.top - 16), left: 0 });
+  const headerBottom = () => (header?.getBoundingClientRect?.().bottom ?? 0);
+  if (sheet?.getBoundingClientRect) {
+    const box = target.getBoundingClientRect();
+    const sheetTop = sheet.getBoundingClientRect().top - 12;
+    const overlap = box.bottom - sheetTop;
+    const room = box.top - (headerBottom() + 8);
+    if (overlap > 0 && room > 1) window.scrollBy({ top: Math.min(overlap, room), left: 0 });
   }
-  return !blocksOverlap(target.getBoundingClientRect(), sheet.getBoundingClientRect());
+  const box = target.getBoundingClientRect();
+  const sheetBox = sheet?.getBoundingClientRect?.();
+  const belowHeader = box.top >= headerBottom() - 1;
+  const aboveSheet = !sheetBox || !blocksOverlap(box, sheetBox);
+  return belowHeader && aboveSheet && box.height > 0;
 }

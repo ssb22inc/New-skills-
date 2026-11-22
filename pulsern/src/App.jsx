@@ -527,6 +527,7 @@ export default function App() {
     scrollTourTarget(
       document.querySelector(`[data-tour="${step.focus}"]`),
       document.querySelector(".tour-overlay:not(.leave-overlay) .tour-card"),
+      document.querySelector(".top"),
     );
   }, [tourStep, tab]);
 
@@ -1618,10 +1619,12 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
 
   if (phase === "pick") return (
     <div className="stack">
-      <section className={"card" + tourMark(tourFocus, "qbank")} data-tour="qbank">
-        <p className="eyebrow">Adaptive QBank</p>
-        <h2 className="h2">Computer-adaptive practice</h2>
-        <p className="small">Adaptive practice: difficulty adjusts to you.</p>
+      <section className="card">
+        <div className={tourMark(tourFocus, "qbank")} data-tour="qbank">
+          <p className="eyebrow">Adaptive QBank</p>
+          <h2 className="h2">Computer-adaptive practice</h2>
+          <p className="small">Adaptive practice: difficulty adjusts to you.</p>
+        </div>
         <Why>Built on the three highest-evidence techniques: retrieval practice (every item tests recall), interleaving (categories are deliberately mixed so back-to-back questions never share a topic), and spacing (questions come in short blocks of 8 with checkpoints, and every miss comes back on a scheduled review date: tomorrow, then 3, 7, and 15 days out as you keep getting it right). Difficulty adapts like the real NCLEX-RN (a computer-adaptive test), steering toward your weakest categories: categories where your ability estimate is lower come up more often, while every category stays in the mix. NGN items earn NCSBN-style partial credit.</Why>
 
         <p className="eyebrow" style={{ marginTop: 10 }}>Focus: leave everything off for the full adaptive mix</p>
@@ -2212,7 +2215,7 @@ const parseAntidote = (c) => {
 
 const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i.test(c.topic);
 
-function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onSession, tourFocus = null }) {
+export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onSession, tourFocus = null }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
   const [show, setShow] = useState(false);
@@ -2289,10 +2292,12 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
   if (!cur) return (
     <div className="stack">
       {chips}
-      <section className={"card" + tourMark(tourFocus, "cards")} data-tour="cards">
-        <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
-        <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
-        <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
+      <section className="card">
+        <div className={tourMark(tourFocus, "cards")} data-tour="cards">
+          <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
+          <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
+          <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
+        </div>
         <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day (a cap that holds for the whole day, even if you reopen the deck) so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
         {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
       </section>
@@ -2302,11 +2307,11 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
   return (
     <div className="stack">
       {chips}
-      <section className={"card" + tourMark(tourFocus, "cards")} data-tour="cards">
+      <section className="card">
         <p className="eyebrow">Spaced repetition · {sessionQueue.length} in today's queue · deck of {filtered.length}</p>
         <p className="small mono" style={{ marginBottom: 6 }}>{cur.cat.toUpperCase()} · {cur.topic.toUpperCase()}{cur.ai ? " · ✨ AI" : ""}</p>
         <ReadAloudBar reader={cardReader} label={show ? "Listen to the answer" : "Listen to the card"} />
-        <button className={ra(cardReader, show ? "card-back" : "card-front", "flashcard")} onClick={() => { if (!show) onFlip?.(); setShow((s) => !s); }}>
+        <button className={tourMark(tourFocus, "cards") + " " + ra(cardReader, show ? "card-back" : "card-front", "flashcard")} data-tour="cards" onClick={() => { if (!show) onFlip?.(); setShow((s) => !s); }}>
           <p className="fc-side mono">{show ? "ANSWER" : "PROMPT · TAP TO FLIP"}</p>
           <p className="fc-text">{show ? cur.back : cur.front}</p>
         </button>

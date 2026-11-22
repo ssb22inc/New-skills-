@@ -5,7 +5,7 @@
    recorded: a skip must leave them alone. */
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { QBank, CaseStudy, Style } from "../../src/App.jsx";
+import { Flashcards, QBank, CaseStudy, Style } from "../../src/App.jsx";
 import { Tour } from "../../src/tour.jsx";
 import { blocksOverlap, scrollTourTarget } from "../../src/tour.js";
 import { emptyAbility, updateAbility } from "../../src/ability-engine.js";
@@ -105,6 +105,45 @@ function CasePractice() {
   );
 }
 
+function TourFrame({ step, children }) {
+  return (
+    <div className="app" data-theme="light">
+      <Style />
+      <header className="top"><span className="brand-name">PULSERN</span></header>
+      <main className="body">
+        {children}
+        <div className="tour-scroll-room" aria-hidden="true" />
+      </main>
+      <Tour step={step} activating={false} onBack={() => {}} onNext={() => {}} onSkip={() => {}} onHome={() => {}} onAnswer={() => {}} />
+    </div>
+  );
+}
+
+function TourPractice() {
+  const [ability] = useState(() => emptyAbility(["Pharmacology"]));
+  return (
+    <TourFrame step={3}>
+      <QBank record={() => {}} log={[]} questions={QS} calibration={calibration} ability={ability} tourFocus="qbank" />
+    </TourFrame>
+  );
+}
+
+function TourCards() {
+  const [srs, setSrs] = useState({});
+  return (
+    <TourFrame step={6}>
+      <Flashcards
+        addXp={() => {}}
+        cards={[{ id: "c1", cat: "Pharmacology", topic: "Digoxin", front: "Hold digoxin if the apical pulse is below this rate.", back: "60 per minute" }]}
+        srsMap={srs}
+        setSrsMap={setSrs}
+        touchDay={() => {}}
+        tourFocus="cards"
+      />
+    </TourFrame>
+  );
+}
+
 function TourClearance() {
   return (
     <div className="app" data-theme="light">
@@ -150,13 +189,36 @@ window.T = {
     await settle();
     const target = document.querySelector("[data-tour=qbank-review]");
     const sheet = document.querySelector(".tour-overlay:not(.leave-overlay) .tour-card");
-    scrollTourTarget(target, sheet);
+    scrollTourTarget(target, sheet, document.querySelector(".top"));
     await settle();
     const targetBox = target.getBoundingClientRect();
     const sheetBox = sheet.getBoundingClientRect();
     window.T._clear = !blocksOverlap(targetBox, sheetBox) && targetBox.bottom <= sheetBox.top;
   },
   tourClearance: () => window.T._clear,
+  async mountTourPractice() {
+    root.render(<TourPractice />);
+    await settle();
+  },
+  async mountTourCards() {
+    root.render(<TourCards />);
+    await settle();
+  },
+  tourReport(focus) {
+    const target = document.querySelector(`[data-tour="${focus}"]`);
+    const sheet = document.querySelector(".tour-overlay:not(.leave-overlay) .tour-card");
+    const header = document.querySelector(".top");
+    const ok = scrollTourTarget(target, sheet, header);
+    const box = target.getBoundingClientRect();
+    return {
+      ok,
+      text: target.innerText,
+      top: box.top,
+      bottom: box.bottom,
+      headerBottom: header.getBoundingClientRect().bottom,
+      sheetTop: sheet.getBoundingClientRect().top,
+    };
+  },
   async mountCase() {
     localStorage.setItem("pulsern.readAloud.v1", JSON.stringify({ auto: false, rate: 1 }));
     root.render(<div className="app"><Style /><CasePractice /></div>);
