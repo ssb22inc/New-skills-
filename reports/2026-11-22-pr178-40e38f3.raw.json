@@ -1,0 +1,41 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "578713a7aa9e66bbf53568467225d0a3b0954299",
+    "head": "40e38f356ac69551c9d5b2cbd061782e569f54ba",
+    "pr": "178"
+  },
+  "reviewedAt": "2026-11-22T21:34:09.931Z",
+  "filesReviewed": [
+    "pulsern/reports/diagram-map/decisions.json",
+    "pulsern/reports/diagram-map/run-2026-11-22T21-23-33-459Z.json",
+    "pulsern/reports/diagram-map/run-2026-11-22T21-23-33-459Z.md",
+    "pulsern/reports/diagram-map/run-2026-11-22T21-33-38-171Z.json",
+    "pulsern/reports/diagram-map/run-2026-11-22T21-33-38-171Z.md",
+    "pulsern/reports/diagram-review/index.json",
+    "pulsern/src/diagrams/item-map.json"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "(whole change)",
+      "line": null,
+      "title": "Change too large to review in full",
+      "problem": "Not reviewed: the diff alone is 1,871,104 characters, over the 800,000-character review budget.",
+      "failure_scenario": "Approving a change no reviewer has read end to end.",
+      "fix": "Split the change into smaller pull requests and review each one.",
+      "confidence": "high"
+    }
+  ],
+  "usage": null,
+  "error": null,
+  "assessment": "Refused to review a partial change as if it were the whole change.",
+  "verdict": "FAIL",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
