@@ -1,10 +1,49 @@
-import { TOUR_STEPS, isLastTourStep } from "./tour.js";
+import { useEffect, useRef } from "react";
+import { TOUR_STEPS, isLastTourStep, nextDialogFocus } from "./tour.js";
+
+/* The dialog sits over the app. Focus starts on its primary action, Tab
+   stays inside it, and the rest of the app is inert until it closes. */
+function useModal(token, onEscape) {
+  const ref = useRef(null);
+  const escapeRef = useRef(onEscape);
+  escapeRef.current = onEscape;
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return undefined;
+    const previouslyFocused = document.activeElement;
+    const background = [...document.querySelectorAll(".app > *")].filter((node) => node !== dialog);
+    background.forEach((node) => { node.inert = true; });
+    const focusable = () => [...dialog.querySelectorAll("button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled])")];
+    (dialog.querySelector(".btn:not(.ghost):not([disabled])") || focusable()[0])?.focus();
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        escapeRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      const index = items.indexOf(document.activeElement);
+      if (!items.length) return;
+      event.preventDefault();
+      items[nextDialogFocus(items.length, index, event.shiftKey)]?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      background.forEach((node) => { node.inert = false; });
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+    };
+  }, [token]);
+  return ref;
+}
 
 /* Bottom sheet so the step stays on screen on a phone and on a wide fold.
    The screen behind it is the real section for this step. */
 export function Tour({ step, activating, onBack, onNext, onSkip, onHome, onAnswer }) {
   const current = TOUR_STEPS[step] ?? TOUR_STEPS[0];
   const last = isLastTourStep(step);
+  const ref = useModal(step, onSkip);
 
   const forward = () => {
     if (last) {
@@ -16,7 +55,7 @@ export function Tour({ step, activating, onBack, onNext, onSkip, onHome, onAnswe
   };
 
   return (
-    <div className="tour-overlay" role="dialog" aria-modal="true" aria-labelledby="tour-title">
+    <div className="tour-overlay" role="dialog" aria-modal="true" aria-labelledby="tour-title" ref={ref}>
       <div className="tour-card">
         <p className="eyebrow">Tour · {step + 1} of {TOUR_STEPS.length}</p>
         <h2 className="h2" id="tour-title">{current.title}</h2>
@@ -43,9 +82,10 @@ export function Tour({ step, activating, onBack, onNext, onSkip, onHome, onAnswe
 }
 
 export function LeaveDialog({ guard, onConfirm, onCancel }) {
+  const ref = useModal(guard?.title ?? "", onCancel);
   if (!guard) return null;
   return (
-    <div className="tour-overlay leave-overlay" role="dialog" aria-modal="true" aria-labelledby="leave-title">
+    <div className="tour-overlay leave-overlay" role="dialog" aria-modal="true" aria-labelledby="leave-title" ref={ref}>
       <div className="tour-card">
         <h2 className="h2" id="leave-title">{guard.title}</h2>
         <p className="small">{guard.body}</p>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOUR_STEPS, isLastTourStep, tourMark, tourStepAt } from "../src/tour.js";
+import { TOUR_STEPS, isLastTourStep, nextDialogFocus, tourMark, tourStepAt } from "../src/tour.js";
 
 const BANNED = [
   /pass(?:ing)? the nclex/i,
@@ -25,6 +25,10 @@ describe("guided tour", () => {
     expect(isLastTourStep(0)).toBe(false);
     expect(tourMark("monitor", "monitor")).toBe(" tour-target");
     expect(tourMark("monitor", "qbank")).toBe("");
+    expect(nextDialogFocus(4, 3, false)).toBe(0);
+    expect(nextDialogFocus(4, 0, true)).toBe(3);
+    expect(nextDialogFocus(4, -1, false)).toBe(0);
+    expect(nextDialogFocus(4, 1, false)).toBe(2);
   });
 
   it("describes the tools the app actually has, in a confident register", () => {

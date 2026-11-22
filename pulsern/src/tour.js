@@ -78,6 +78,14 @@ export function isLastTourStep(index) {
   return index === TOUR_STEPS.length - 1;
 }
 
+/* Tab wraps inside a dialog. A focus that is not on a control (index -1)
+   lands on the first control, or the last when shifting backward. */
+export function nextDialogFocus(count, index, shiftKey) {
+  if (count <= 0) return 0;
+  if (shiftKey) return index <= 0 ? count - 1 : index - 1;
+  return index >= count - 1 ? 0 : index + 1;
+}
+
 export function tourMark(activeFocus, id) {
   return activeFocus === id ? " tour-target" : "";
 }
