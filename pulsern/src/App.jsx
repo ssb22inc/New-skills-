@@ -270,6 +270,7 @@ import {
 import { QuestionNav } from "./question-nav.jsx";
 import Calculator from "./calculator.jsx";
 import ExamCenter from "./exam.jsx";
+import { useExamHomeExit } from "./exam-leave.js";
 import { Paywall, PlanCard, fetchEntitlement, grantFreePass } from "./billing.jsx";
 import InstallCard from "./install.jsx";
 import { ExhibitVisual } from "./exhibits.jsx";
@@ -441,10 +442,9 @@ export default function App() {
   const [profile, setProfile] = useProfile();       // name/phone/SMS consent (server truth)
   const [examLock, setExamLock] = useState(false);  // exam running → tabs, menu, and references lock
   const sessionRef = useRef({ exam: false, inSession: false, hasDraft: false });
-  const examExitRef = useRef(null);
-  const homeAfterExam = useRef(null);
+  const applyLeaveRef = useRef(() => {});
+  const examLeave = useExamHomeExit((destination) => applyLeaveRef.current(destination));
   const onSession = useCallback((snap) => { sessionRef.current = snap; }, []);
-  const bindExamExit = useCallback((fn) => { examExitRef.current = fn; }, []);
   const [profileCardDismissed, setProfileCardDismissed] = useState(false); // blob (additive)
   const [fcFlips, setFcFlips] = useState(0);        // blob (additive): lifetime card flips, gates first-run coaching
   const [scrolling, setScrolling] = useState(false); // floating UI hides while scrolling
@@ -891,9 +891,10 @@ export default function App() {
     }
     window.scrollTo(0, 0);
   };
+  applyLeaveRef.current = applyLeave;
   const requestLeave = (destination) => {
     setMenuOpen(false);
-    if (!sessionRef.current.exam) homeAfterExam.current = null;
+    if (!sessionRef.current.exam) examLeave.clear();
     if (destination !== "home" && destination !== "tour" && destination === tab && !sessionRef.current.inSession && !sessionRef.current.exam) return;
     if (destination === "home" && tourStep != null && !sessionRef.current.exam) {
       applyLeave("home");
@@ -908,14 +909,8 @@ export default function App() {
   };
   const confirmLeave = () => {
     const destination = leaveGuard?.destination ?? "home";
-    if (sessionRef.current.exam) {
-      homeAfterExam.current = destination;
-      setLeaveGuard(null);
-      examExitRef.current?.();
-      return;
-    }
-    homeAfterExam.current = null;
-    applyLeave(destination);
+    setLeaveGuard(null);
+    examLeave.confirm(sessionRef.current.exam, destination);
   };
   const openTour = () => requestLeave("tour");
   const goHome = () => requestLeave("home");
@@ -1018,7 +1013,7 @@ export default function App() {
           {tab === "qbank" && <QBank key={sectionEpoch} record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
           {tab === "case" && <CaseStudy key={sectionEpoch} record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
           {tab === "cards" && <Flashcards key={sectionEpoch} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
-          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={bindExamExit} onScored={() => { const destination = homeAfterExam.current; if (!destination) return; homeAfterExam.current = null; applyLeave(destination); }} onLeaveSubmit={() => { homeAfterExam.current = null; }} />}
+          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
           {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
         </>}

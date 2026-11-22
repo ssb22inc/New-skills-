@@ -227,7 +227,10 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
   };
   const finishRef = useRef(finish);
   finishRef.current = finish;
-  const examLive = stage === "running" || (stage === "submitting" && !submitErr);
+  /* A retryable scoring failure stays inside the exam. Home remembers the
+     destination and the same answers stay available for Try again. A final
+     refusal (already submitted, or the attempt is gone) lets Home leave. */
+  const examLive = stage === "running" || (stage === "submitting" && !submitErr?.final);
   useSessionReport(onSession, { exam: examLive, inSession: examLive });
   useEffect(() => {
     if (stage !== "running") {

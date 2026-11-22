@@ -16,7 +16,7 @@ describe("home navigation", () => {
     expect(tour.confirmLabel).toBe("Start the tour");
   });
 
-  it("scores a live exam before going home, because that form is taken once", () => {
+  it("explains that ending a live exam scores it, because that form is taken once", () => {
     const exam = leaveConfirm({ exam: true, inSession: true }, "home");
     expect(exam.title).toMatch(/End the exam/);
     expect(exam.body).toMatch(/taken once/);
