@@ -867,10 +867,9 @@ export default function App() {
     setTourStep(null);
     setTourSeen(true);
     setLeaveGuard(null);
-    if (tourSkipStartsQuestion(activating)) {
-      setTab("today");
-      setQuizKick((n) => n + 1);
-    }
+    setTab("today");
+    if (tourSkipStartsQuestion(activating)) setQuizKick((n) => n + 1);
+    else setHomeEpoch((n) => n + 1);
   };
   const applyLeave = (destination = "home") => {
     setLeaveGuard(null);
@@ -1223,9 +1222,12 @@ Both cases: plain text only (no markdown), educational exam-prep register only â
 
 function Today(props) {
   const { dueCount, streak } = props;
-  const [stage, setStage] = useState(() => (props.tourHold || !props.needsFirstAnswer ? "home" : "first")); // home | first | cards | quiz | done
+  const [stage, setStage] = useState(() => {
+    if (props.tourHold || (props.homeEpoch ?? 0) > 0) return "home";
+    return props.needsFirstAnswer ? "first" : "home";
+  }); // home | first | cards | quiz | done
   const homeSeen = useRef(props.homeEpoch ?? 0);
-  const released = useRef(!!props.tourHold);
+  const released = useRef(!!props.tourHold || (props.homeEpoch ?? 0) > 0);
 
   useEffect(() => {
     if (props.tourHold) {
