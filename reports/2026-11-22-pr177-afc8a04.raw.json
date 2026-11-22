@@ -1,0 +1,84 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "b089139331409cc80dcdb2c85a3b38af3dbd1824",
+    "head": "afc8a04a7900f34f98d7df5851e123c7dbd8c3d1",
+    "pr": "177"
+  },
+  "reviewedAt": "2026-11-22T17:10:52.761Z",
+  "filesReviewed": [
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/exam.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/home-nav.js",
+    "pulsern/src/session-report.js",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/first-answer.test.js",
+    "pulsern/tests/home-nav.test.js",
+    "pulsern/tests/tour.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 1226,
+      "title": "Explicit Home is ignored when Today remounts for an unanswered trial",
+      "problem": "Today initializes its stage from needsFirstAnswer, while homeSeen initializes to the current homeEpoch. When Home causes Today to mount, the home-reset effect therefore treats that explicit Home request as already handled and leaves the forced question open.",
+      "failure_scenario": "A trial learner with zero answers advances the tour to Practice or Case Study, then presses the tour's Home button. applyLeave closes the tour, selects Today and increments homeEpoch, but the newly mounted Today renders \"Answer this to unlock Today\" instead of the home dashboard. Home works differently when pressed on the earlier tour steps where Today remains mounted.",
+      "fix": "Make an explicit Home destination determine Today's initial view as well as subsequent resets. Preserve the forced-question behaviour for Skip and the answer action. Add a rendered regression test pressing Home from a tour step that has unmounted Today.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 866,
+      "title": "Skipping the tour no longer consistently returns to Today",
+      "problem": "dismissTour selects Today only when activating is true. That worked when the tour occupied one screen, but the new tour changes the actual tab. For an already-activated learner, Skip now leaves them on whichever section the tour last visited, contradicting the documented Skip-to-Today contract in first-answer.js.",
+      "failure_scenario": "An existing learner replays the tour, advances to Cards and presses Skip or Escape. The overlay closes onto the flashcard deck rather than Today.",
+      "fix": "Route to Today whenever the tour is dismissed, and keep only the first-question kick conditional on activating. Test dismissal from a non-Today step for both activated and unanswered-trial accounts.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/tests/home-nav.test.js",
+      "line": 19,
+      "title": "The exam-exit test checks text, not ending or scoring the exam",
+      "problem": "The test named \"scores a live exam before going home\" only calls the confirmation-message builder and asserts strings. It does not exercise confirmLeave, the bound exam exit, submission failure/retry, or waiting for pending ability/XP records before unmounting. No behavioural test for this new critical orchestration is included in the supplied changes; I could not verify coverage elsewhere.",
+      "failure_scenario": "Removing examExitRef.current?.() would leave this test green while confirming Home never submits the once-only exam. Navigating immediately instead of waiting for pendingRecords would also leave it green while dropping unprocessed progress updates.",
+      "fix": "Add a rendered integration test with a mocked exam API: cancel must keep the exam running; confirm must submit the committed responses; navigation must wait for successful scoring and all record updates; a submission error must retain the attempt for retry.",
+      "confidence": "medium"
+    },
+    {
+      "severity": "minor",
+      "file": "pulsern/public/product/product-screenshots.json",
+      "line": 74,
+      "title": "Practice screenshot description identifies the previous question",
+      "problem": "The adaptive screenshot's alt text still describes a Management of Care prioritization question, but the replacement image shows a Reduction of Risk question about continuous bubbling in a chest tube's water-seal chamber.",
+      "failure_scenario": "A page or accessibility consumer using this manifest describes a different clinical question and category from the image actually displayed.",
+      "fix": "Update the alt text to describe the chest-drainage assessment question, or use an accurate content-independent description that remains valid across recaptures.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 72608,
+    "completionTokens": 10713,
+    "reasoningTokens": 9798,
+    "costUsd": 0.2886485
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Changes requested. Home and Skip have reproducible routing errors in the multi-screen tour, and the new once-only exam exit flow lacks a behavioural regression test in the supplied changes. The recaptured practice screenshot also has stale descriptive metadata. Build and tests were not executed in this diff-only review.",
+  "counts": {
+    "blocker": 0,
+    "major": 3,
+    "minor": 1
+  }
+}
