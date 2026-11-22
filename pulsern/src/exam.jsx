@@ -4,6 +4,7 @@
    feedback until the end, and a proportional time limit. Scoring and the
    readiness verdict are deterministic plain code (rule 6). */
 import { useState, useEffect, useRef } from "react";
+import { useSessionReport } from "./session-report.js";
 import { GRADING_NOTE_LONG } from "./grading-note.js";
 import { supabase } from "./supabase.js";
 import { ngnExt } from "./ngn.js";
@@ -57,7 +58,7 @@ const fmtClock = (secs) => {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, isOwner = false, onRunning, onAttempt, onUpgrade }) {
+export default function ExamCenter({ record, examResults, setExamResults, cats, ent = null, isOwner = false, onRunning, onAttempt, onUpgrade, onSession, bindExit, onScored, onLeaveSubmit }) {
   const [stage, setStage] = useState("picker"); // picker | intro | running | submitting | results | review
   const [availability, setAvailability] = useState(null); // {form: {items, cases}}
   const [form, setForm] = useState(null);
@@ -205,7 +206,16 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     setResult(res);
     setExamResults((m) => ({ ...m, [f]: { ...res, attempts: (m[f]?.attempts ?? 0) + 1 } }));
     setStage("results");
+    awaitScoreHome.current = true;
   };
+  const awaitScoreHome = useRef(false);
+  const onScoredRef = useRef(onScored);
+  onScoredRef.current = onScored;
+  useEffect(() => {
+    if (!awaitScoreHome.current || stage !== "results" || pendingRecords.length) return;
+    awaitScoreHome.current = false;
+    onScoredRef.current?.();
+  }, [stage, pendingRecords.length]);
 
   const finish = (finalResponses, timedOut = false) => {
     clearInterval(timerRef.current);
@@ -215,6 +225,18 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
     setStage("submitting");
     sendSubmit();
   };
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
+  const examLive = stage === "running" || (stage === "submitting" && !submitErr);
+  useSessionReport(onSession, { exam: examLive, inSession: examLive });
+  useEffect(() => {
+    if (stage !== "running") {
+      bindExit?.(null);
+      return;
+    }
+    bindExit?.(() => finishRef.current(responsesRef.current, false));
+    return () => bindExit?.(null);
+  }, [stage, bindExit]);
 
   const cur = sequence[idx];
   const q = cur?.q;
@@ -336,7 +358,7 @@ export default function ExamCenter({ record, examResults, setExamResults, cats, 
               <p className="small" role="alert">{submitErr.message}</p>
               <div className="row">
                 {!submitErr.final && <button className="btn" onClick={sendSubmit}>Try again</button>}
-                <button className="btn ghost" onClick={() => { pendingSubmitRef.current = null; setStage("picker"); }}>Back to exams</button>
+                <button className="btn ghost" onClick={() => { pendingSubmitRef.current = null; onLeaveSubmit?.(); setStage("picker"); }}>Back to exams</button>
               </div>
             </>}
       </section>

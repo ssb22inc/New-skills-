@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 
 /* ================= DATA ================= */
 
@@ -286,6 +286,10 @@ import {
   showProfilePrompt,
   trialBannerMessage,
 } from "./first-answer.js";
+import { hasDraftAnswer, leaveConfirm } from "./home-nav.js";
+import { useSessionReport } from "./session-report.js";
+import { tourMark, tourStepAt } from "./tour.js";
+import { LeaveDialog, Tour } from "./tour.jsx";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -425,12 +429,19 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);  // header menu
   const [labOpen, setLabOpen] = useState(false);    // lab-values drawer
   const [helpOpen, setHelpOpen] = useState(false);  // help & contact center
-  const [tourStep, setTourStep] = useState(null);   // null = closed, 0 = the one screen
-  const [tourSeen, setTourSeen] = useState(false);  // persisted in blob
+  const [tourStep, setTourStep] = useState(null);   // null = closed, otherwise an index into TOUR_STEPS
+  const [tourSeen, setTourSeen] = useState(false);  // persisted in blob; blocks auto-open, not the menu
   const [quizKick, setQuizKick] = useState(0);      // bumps Today into the forced first question
+  const [homeEpoch, setHomeEpoch] = useState(0);    // explicit Home resets Today out of a round
+  const [leaveGuard, setLeaveGuard] = useState(null);
   const [ent, setEnt] = useState(null);             // entitlement (server truth, not in blob)
   const [profile, setProfile] = useProfile();       // name/phone/SMS consent (server truth)
-  const [examLock, setExamLock] = useState(false);  // exam running → whole app locks down
+  const [examLock, setExamLock] = useState(false);  // exam running → tabs, menu, and references lock
+  const sessionRef = useRef({ exam: false, inSession: false, hasDraft: false });
+  const examExitRef = useRef(null);
+  const homeAfterExam = useRef(null);
+  const onSession = useCallback((snap) => { sessionRef.current = snap; }, []);
+  const bindExamExit = useCallback((fn) => { examExitRef.current = fn; }, []);
   const [profileCardDismissed, setProfileCardDismissed] = useState(false); // blob (additive)
   const [fcFlips, setFcFlips] = useState(0);        // blob (additive): lifetime card flips, gates first-run coaching
   const [scrolling, setScrolling] = useState(false); // floating UI hides while scrolling
@@ -493,9 +504,25 @@ export default function App() {
   const locked = isStudyLocked({ isOwner, ent });
   const activating = needsFirstAnswer({ locked, ent, logLength: log.length, isOwner });
   useEffect(() => {
+    /* Auto-open only from the closed state. Rewinding an in-progress tour
+       back to step 0 is what made Next look like a dead control for anyone
+       who had not dismissed it yet. */
     if (locked && tourStep != null) setTourStep(null);
-    else if (shouldAutoOpenTour({ loaded, tourSeen, ent, locked })) setTourStep(0);
+    else if (tourStep == null && shouldAutoOpenTour({ loaded, tourSeen, ent, locked })) setTourStep(0);
   }, [loaded, tourSeen, ent, locked, tourStep]);
+
+  /* The tour shows the real screen for the step. The tab change lands on
+     the next render, so the scroll waits until that screen is mounted. */
+  useEffect(() => {
+    if (tourStep == null) return;
+    const step = tourStepAt(tourStep);
+    if (!step) return;
+    if (step.tab && step.tab !== tab) {
+      setTab(step.tab);
+      return;
+    }
+    document.querySelector(`[data-tour="${step.focus}"]`)?.scrollIntoView({ block: "start", inline: "nearest" });
+  }, [tourStep, tab]);
 
   const wasActivating = useRef(false);
   useEffect(() => {
@@ -829,34 +856,85 @@ export default function App() {
   const openFirstQuestion = () => {
     setTourStep(null);
     setTourSeen(true);
+    setLeaveGuard(null);
     setTab("today");
     setQuizKick((n) => n + 1);
   };
   const dismissTour = () => {
     setTourStep(null);
     setTourSeen(true);
+    setLeaveGuard(null);
     if (tourSkipStartsQuestion(activating)) {
       setTab("today");
       setQuizKick((n) => n + 1);
     }
   };
+  const applyLeave = (destination = "home") => {
+    setLeaveGuard(null);
+    setMenuOpen(false);
+    setLabOpen(false);
+    setHelpOpen(false);
+    if (destination === "tour") {
+      setTourStep(0);
+      return;
+    }
+    if (destination === "home") {
+      if (tourStep != null) setTourSeen(true);
+      setTourStep(null);
+      setTab("today");
+      setHomeEpoch((n) => n + 1);
+    } else {
+      setTab(destination);
+    }
+    window.scrollTo(0, 0);
+  };
+  const requestLeave = (destination) => {
+    setMenuOpen(false);
+    if (destination === "home" && tourStep != null && !sessionRef.current.exam) {
+      applyLeave("home");
+      return;
+    }
+    const guard = leaveConfirm(sessionRef.current, destination);
+    if (guard) {
+      setLeaveGuard({ ...guard, destination });
+      return;
+    }
+    applyLeave(destination);
+  };
+  const confirmLeave = () => {
+    const destination = leaveGuard?.destination ?? "home";
+    if (sessionRef.current.exam) {
+      if (!homeAfterExam.current) {
+        homeAfterExam.current = destination;
+        examExitRef.current?.();
+      }
+      setLeaveGuard(null);
+      return;
+    }
+    applyLeave(destination);
+  };
+  const openTour = () => requestLeave("tour");
+  const goHome = () => requestLeave("home");
+  const goSection = (next) => {
+    if (next === "today") goHome();
+    else requestLeave(next);
+  };
 
   return (
     <div className={"app" + (shield ? " shield" : "") + (isOwner ? " owner" : "") + (scrolling ? " scrolling" : "")} data-theme={theme}>
       <Style />
-      <header className="top">
+      <header className={"top" + (menuOpen ? " menu-open" : "")}>
         {/* Exam lockdown: while a readiness exam runs, all navigation and
             references disappear — only the exam (and its calculator) exists,
             just like the real testing center. */}
-        <button className="brand brand-btn" disabled={examLock}
-          onClick={() => { if (!examLock) { setTab("today"); setMenuOpen(false); } }}
-          title={examLock ? "Locked during the exam" : "Back to Today"}>
+        <button type="button" className="brand brand-btn" onClick={goHome} aria-label="PulseRN home">
           <span className="pulse-dot" aria-hidden="true" />
           <span className="brand-name">PULSE<em>RN</em></span>
         </button>
+        <button type="button" className="home-btn" onClick={goHome}>Home</button>
         <div className="top-stats mono">
           {examLock ? (
-            <span className="exam-lock-chip" title="Navigation is locked until you submit or end the exam">🔒 EXAM IN PROGRESS</span>
+            <span className="exam-lock-chip" title="References stay closed until you submit or end the exam">🔒 EXAM</span>
           ) : (
             <>
               <span title="Experience points">◆ {xp} XP</span>
@@ -878,14 +956,14 @@ export default function App() {
             <div className="menu-overlay" onClick={() => setMenuOpen(false)} />
             <nav className="menu-panel" aria-label="Main menu">
               {!locked && <>
-                <button className="menu-item" onClick={() => { setTab("today"); setMenuOpen(false); }}>🏠 Home (Today)</button>
-                <button className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
-                <button className="menu-item" onClick={() => { setTab("exams"); setMenuOpen(false); }}>📝 Readiness exams</button>
-                <button className="menu-item" onClick={() => { setTab("plans"); setMenuOpen(false); }}>💳 Plans & upgrades</button>
-                <button className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & contact</button>
-                <button className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 Meet the RN behind PulseRN</button>
-                <button className="menu-item" onClick={() => { setTourStep(0); setMenuOpen(false); }}>🎓 Quick tour</button>
-                <button className="menu-item" onClick={() => { setTab("stats"); setMenuOpen(false); }}>⚙ Settings & Stats</button>
+                <button type="button" className="menu-item" onClick={goHome}>🏠 Home</button>
+                <button type="button" className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
+                <button type="button" className="menu-item" onClick={() => goSection("exams")}>📝 Readiness exams</button>
+                <button type="button" className="menu-item" onClick={() => goSection("plans")}>💳 Plans & upgrades</button>
+                <button type="button" className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & contact</button>
+                <button type="button" className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 Meet the RN behind PulseRN</button>
+                <button type="button" className="menu-item" onClick={openTour}>🎓 Tour</button>
+                <button type="button" className="menu-item" onClick={() => goSection("stats")}>⚙ Settings & Stats</button>
               </>}
               {/* Owner only — students never see this entry, and the page and
                   its API refuse anyone who is not in the reviewers table. */}
@@ -920,31 +998,32 @@ export default function App() {
         {locked && !confirming && <Paywall ent={ent} onRefresh={refreshEnt} />}
         {!locked && !isOwner && ent?.status === "trial" && tab !== "plans" && (
           <section className="card trial-banner">
-            <p className="small"><strong>Free pass:</strong> {trialBannerMessage({ expiresAt: ent.expiresAt, answered: log.length >= 1 })} <button className="auth-switch" onClick={() => setTab("plans")}>See plans →</button></p>
+            <p className="small"><strong>Free pass:</strong> {trialBannerMessage({ expiresAt: ent.expiresAt, answered: log.length >= 1 })} <button className="auth-switch" onClick={() => goSection("plans")}>See plans →</button></p>
           </section>
         )}
         {!locked && <>
-          {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={setTab}
+          {tab === "today" && <Today xp={xp} streak={streak} bestRun={bestRun} log={log} readiness={readiness} readyLabel={readyLabel} catStats={catStats} daily={daily} dueCount={dueCount} go={goSection}
             record={record} questions={allQuestions} provider={provider}
             ability={ability} calibration={calibration} plan={plan} missSchedule={missSchedule}
             newAllowance={newAllowance} onNewCard={onNewCard}
             profile={profile} setProfile={setProfile} showProfile={profilePrompt} dismissProfileCard={() => setProfileCardDismissed(true)}
             fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)}
             cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} addXp={(n) => setXp((x) => x + n)}
-            needsFirstAnswer={activating} quizKick={quizKick} accessPending={accessPending} />}
-          {tab === "qbank" && <QBank record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} />}
-          {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} />}
-          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} />}
-          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => setTab("plans")} />}
+            needsFirstAnswer={activating} quizKick={quizKick} accessPending={accessPending}
+            homeEpoch={homeEpoch} tourHold={tourStep != null} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} onSession={onSession} />}
+          {tab === "qbank" && <QBank record={record} log={log} questions={allQuestions} provider={provider} addQuestions={addQuestions} ability={ability} calibration={calibration} missSchedule={missSchedule} isOwner={isOwner} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
+          {tab === "case" && <CaseStudy record={record} provider={provider} cases={allCases} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
+          {tab === "cards" && <Flashcards addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
+          {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={bindExamExit} onScored={() => { const destination = homeAfterExam.current; if (!destination) return; homeAfterExam.current = null; applyLeave(destination); }} onLeaveSubmit={() => { homeAfterExam.current = null; }} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => setTab("plans")} profile={profile} setProfile={setProfile} />}
+          {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
         </>}
       </main>
 
       {!locked && !examLock && !activating && !accessPending && (
         <nav className="tabs" aria-label="Sections">
           {[["today", "Today"], ["qbank", "Practice"], ["case", "Case Study"], ["cards", "Cards"], ["stats", "Stats"]].map(([k, label]) => (
-            <button key={k} className={tab === k ? "tab on" : "tab"} onClick={() => setTab(k)}>{label}</button>
+            <button key={k} type="button" className={tab === k ? "tab on" : "tab"} onClick={() => goSection(k)}>{label}</button>
           ))}
         </nav>
       )}
@@ -953,31 +1032,17 @@ export default function App() {
       {!examLock && <LabRef open={labOpen} setOpen={setLabOpen} />}
       <HelpCenter open={helpOpen} setOpen={setHelpOpen} provider={provider} />
       {tourStep != null && !locked && (
-        <Tour trial={ent?.status === "trial" && log.length < 1} onAnswer={openFirstQuestion} onSkip={dismissTour} />
+        <Tour
+          step={tourStep}
+          activating={activating}
+          onBack={() => setTourStep((n) => Math.max(0, (n ?? 0) - 1))}
+          onNext={() => setTourStep((n) => (n ?? 0) + 1)}
+          onSkip={dismissTour}
+          onHome={goHome}
+          onAnswer={openFirstQuestion}
+        />
       )}
-    </div>
-  );
-}
-
-/* ================= FIRST-RUN TOUR =================
-   One screen. The primary button opens a practice question. While a free
-   pass still has zero answers, Skip opens that same question — it must not
-   leave the student on the paywall. Replayable from the menu. */
-
-function Tour({ trial, onAnswer, onSkip }) {
-  return (
-    <div className="tour-overlay" role="dialog" aria-label="Start your first question">
-      <div className="tour-card">
-        <p className="tour-icon" aria-hidden="true">▶</p>
-        <h2 className="h2">{trial ? "Your free pass is on. Answer this question." : "One question starts Today"}</h2>
-        <p className="small">{trial
-          ? "Answer this one question to unlock Today. No need to look for a Start button. Skip opens the same question, so answer it before your pass ends."
-          : "Today is one round when you're ready. This button opens a single practice question first. Skip returns to Today."}</p>
-        <div className="row">
-          <button className="btn" onClick={onAnswer}>Answer this question</button>
-          <button className="btn ghost" onClick={onSkip}>Skip</button>
-        </div>
-      </div>
+      <LeaveDialog guard={leaveGuard} onConfirm={confirmLeave} onCancel={() => setLeaveGuard(null)} />
     </div>
   );
 }
@@ -988,7 +1053,7 @@ function Tour({ trial, onAnswer, onSkip }) {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Quick tour, Settings, Sign out.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Tour (a guided walk through Today, adaptive practice, missed-question review, case studies, flashcards, and Stats; students can open it again anytime), Settings, Sign out. A Home button in the header is on every screen. During a question it confirms before clearing the open round; checked answers stay saved. During a readiness exam it ends and scores the exam, then goes home.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 7-day pass with full study access (no exams). Access passes are one-time payments that do not auto-renew: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). Add-ons, also one-time: 7-day renewal pass $45 (content only, never charged automatically) or an extra self-assessment $45. Refunds: if paid access has not been used, a full refund can be requested within 7 days of purchase; after 7 days, or once paid access has been used, payments are non-refundable, except where the law requires otherwise (see the Terms). Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
@@ -1153,14 +1218,27 @@ Both cases: plain text only (no markdown), educational exam-prep register only �
 
 function Today(props) {
   const { dueCount, streak } = props;
-  const [stage, setStage] = useState(props.needsFirstAnswer ? "first" : "home"); // home | first | cards | quiz | done
+  const [stage, setStage] = useState(() => (props.tourHold || !props.needsFirstAnswer ? "home" : "first")); // home | first | cards | quiz | done
   const kickSeen = useRef(0);
-  const released = useRef(false);
+  const homeSeen = useRef(props.homeEpoch ?? 0);
+  const released = useRef(!!props.tourHold);
 
   useEffect(() => {
+    if (props.tourHold) {
+      released.current = true;
+      setStage("home");
+      return;
+    }
     if (released.current) return;
     if (props.needsFirstAnswer && stage === "home") setStage("first");
-  }, [props.needsFirstAnswer, stage]);
+  }, [props.tourHold, props.needsFirstAnswer, stage]);
+
+  useEffect(() => {
+    if (!props.homeEpoch || props.homeEpoch === homeSeen.current) return;
+    homeSeen.current = props.homeEpoch;
+    released.current = true;
+    setStage("home");
+  }, [props.homeEpoch]);
 
   useEffect(() => {
     if (!props.quizKick || props.quizKick === kickSeen.current) return;
@@ -1189,21 +1267,21 @@ function Today(props) {
     <div className="stack">
       <p className="eyebrow stage-label">Answer this to unlock Today</p>
       <p className="small">One question opens your daily plan. No need to look for a Start button.</p>
-      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto autoLimit={1} preferMc onDone={finishFirst} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto autoLimit={1} preferMc onDone={finishFirst} onSession={props.onSession} />
     </div>
   );
 
   if (stage === "cards") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 1 OF 2 · CARDS</p>
-      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} embedded onDone={() => setStage("quiz")} />
+      <Flashcards addXp={props.addXp} cards={props.cards} srsMap={props.srsMap} setSrsMap={props.setSrsMap} touchDay={props.touchDay} ready={props.ready} fcFlips={props.fcFlips} onFlip={props.onFlip} newAllowance={props.newAllowance} onNewCard={props.onNewCard} embedded onDone={() => setStage("quiz")} onSession={props.onSession} />
     </div>
   );
 
   if (stage === "quiz") return (
     <div className="stack">
       <p className="eyebrow stage-label">TODAY'S ROUND · STEP 2 OF 2 · QUESTIONS</p>
-      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto onDone={() => setStage("done")} />
+      <QBank record={props.record} log={props.log} questions={props.questions} provider={props.provider} ability={props.ability} calibration={props.calibration} missSchedule={props.missSchedule} auto onDone={() => setStage("done")} onSession={props.onSession} />
     </div>
   );
 
@@ -1223,7 +1301,7 @@ function Today(props) {
 
   return (
     <div className="stack">
-      <section className="card center">
+      <section className={"card center" + tourMark(props.tourFocus, "today-round")} data-tour="today-round">
         <p className="eyebrow">One tap. The app picks what you study.</p>
 
         <button className="bigbtn" onClick={() => setStage(dueCount ? "cards" : "quiz")}>▶ Start today's round</button>
@@ -1232,7 +1310,7 @@ function Today(props) {
       {props.showProfile && (
         <ProfileCard profile={null} setProfile={props.setProfile} prompt onDismiss={props.dismissProfileCard} />
       )}
-      <Monitor {...props} />
+      <Monitor {...props} tourFocus={props.tourFocus} />
       {Array.isArray(props.plan?.days) && props.plan.days.length > 0 && (
         <section className="card">
           <p className="eyebrow">This week's plan</p>
@@ -1254,13 +1332,13 @@ function Today(props) {
 
 /* ================= MONITOR (dashboard) ================= */
 
-function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go }) {
+function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go, tourFocus }) {
   const lvl = levelFor(xp);
   const weakest = catStats.filter((c) => c.pct != null).sort((a, b) => a.pct - b.pct)[0];
   const goalPct = Math.min(100, Math.round((daily.answered / DAILY_GOAL) * 100));
   return (
     <div className="stack">
-      <section className="monitor-card">
+      <section className={"monitor-card" + tourMark(tourFocus, "monitor")} data-tour="monitor">
         <div className="mono monitor-head">
           <span>CANDIDATE MONITOR</span>
           <span className="blink">● REC</span>
@@ -1343,7 +1421,7 @@ function blankAnswer(q) {
   return { sel: [], order: [] };
 }
 
-export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false }) {
+export function QBank({ record, log, auto = false, autoLimit = null, preferMc = false, onDone, questions = QUESTIONS, provider = "claude", addQuestions, ability = {}, calibration = {}, missSchedule = {}, isOwner = false, onSession, tourFocus = null }) {
   const [diffTarget, setDiffTarget] = useState(1);
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator
   const [q, setQ] = useState(null);
@@ -1515,6 +1593,15 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
      playing and, with "Read each new one" on, reads the question now shown. */
   const qReader = useReadAloud(qSegs, phase === "answering" && q ? `q:${q.id}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "question" } : null);
   const fbReader = useReadAloud(fbSegs, phase === "feedback" && q ? `fb:${q.id}:${nav.index}` : "off", inBank ? { kind: "question", id: q.id, part: "feedback", result } : null);
+  useSessionReport(onSession, {
+    inSession: phase === "answering" || phase === "feedback" || phase === "break",
+    hasDraft: phase === "answering" && hasDraftAnswer(q, sel, order),
+  });
+  /* A long filter list leaves the window scrolled. A new question should
+     start at the stem, below the sticky header, on a short phone. */
+  useEffect(() => {
+    if (phase === "answering" && q) window.scrollTo(0, 0);
+  }, [q?.id, phase]);
 
   const TYPE_CHIPS =[["mc", "Multiple choice"], ["sata", "Select all"], ["order", "Ordering"], ["matrix", "Matrix"], ["bowtie", "Bow-tie"], ["cloze", "Cloze"], ["calc", "Dosage calc"], ["highlight", "Highlight"]];
 
@@ -1524,7 +1611,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
 
   if (phase === "pick") return (
     <div className="stack">
-      <section className="card">
+      <section className={"card" + tourMark(tourFocus, "qbank")} data-tour="qbank">
         <p className="eyebrow">Adaptive QBank</p>
         <h2 className="h2">Computer-adaptive practice</h2>
         <p className="small">Adaptive practice: difficulty adjusts to you.</p>
@@ -1554,7 +1641,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
         )}
 
         <p className="small mono">{freshPool.length} new · {reviewPool.length} to review ({duePool.length} due today) · difficulty target {diffTarget}/3</p>
-        <div className="row">
+        <div className={"row" + tourMark(tourFocus, "qbank-review")} data-tour="qbank-review">
           <button className="btn" onClick={() => { setMode("new"); pickFrom(emptyNav(), "new"); }} disabled={!freshPool.length}>{freshPool.length ? "New questions" : "All questions seen"}</button>
           <button className="btn ghost" onClick={() => { setMode("review"); pickFrom(emptyNav(), "review"); }} disabled={!reviewPool.length}>Review misses ({reviewPool.length})</button>
         </div>
@@ -1853,7 +1940,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
 }
 /* ================= CASE STUDY ================= */
 
-export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES }) {
+export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, onSession, tourFocus = null }) {
   const [caseIdx, setCaseIdx] = useState(null); // null = case picker
   const [catFilter, setCatFilter] = useState([]);
   const [step, setStep] = useState(-1);
@@ -1951,6 +2038,10 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES })
   const introReader = useReadAloud(introSegs, cs && step === -1 ? `case:${caseKey}` : "off", caseRef("intro"));
   const stepReader = useReadAloud(stepSegs, s && phase === "answering" ? `cstep:${caseKey}:${step}` : "off", caseRef("step", { step }));
   const caseFbReader = useReadAloud(caseFbSegs, s && phase === "feedback" ? `cfb:${caseKey}:${step}` : "off", caseRef("feedback", { step, result: stepResult }));
+  useSessionReport(onSession, {
+    inSession: caseIdx != null,
+    hasDraft: phase === "answering" && Array.isArray(sel) && sel.length > 0,
+  });
 
   if (caseIdx == null) {
     // sub-category accordion: cases stay tucked away until a group is opened
@@ -1965,7 +2056,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES })
     const list = openGroup ? openGroup.items : [];
     return (
       <div className="stack">
-        <section className="card">
+        <section className={"card" + tourMark(tourFocus, "cases")} data-tour="cases">
           <p className="eyebrow">Next Generation NCLEX</p>
           <h2 className="h2">Case studies · {cases.length} in the library</h2>
           <p className="small">Full clinical-judgment cases: read the chart, then work the NCJMM steps (recognize cues, analyze cues, prioritize hypotheses, generate solutions, take action, evaluate outcomes). Each step is scored with NCSBN-style partial credit: select-all steps earn a point for each correct choice and lose one for each incorrect choice, never below zero.</p>
@@ -2114,7 +2205,7 @@ const parseAntidote = (c) => {
 
 const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i.test(c.topic);
 
-function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard }) {
+function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onSession, tourFocus = null }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
   const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
   const [show, setShow] = useState(false);
@@ -2174,6 +2265,10 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
   const cardSegs = useMemo(() => cardSegments(cur, show), [cur, show]);
   const cardBankId = /^c\d+$/.test(String(cur?.id ?? "")) ? Number(String(cur.id).slice(1)) : null; // bank cards are "c<id>"
   const cardReader = useReadAloud(cardSegs, cur ? `card:${cur.id}:${show ? "back" : "front"}` : "off", cardBankId ? { kind: "card", id: cardBankId, part: show ? "back" : "front" } : null);
+  useSessionReport(onSession, {
+    inSession: !!cur,
+    hasDraft: !!cur && !show && typed.trim().length > 0,
+  });
 
   const chips = !embedded && (
     <div className="fchips" role="group" aria-label="Filter cards by category">
@@ -2187,7 +2282,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
   if (!cur) return (
     <div className="stack">
       {chips}
-      <section className="card">
+      <section className={"card" + tourMark(tourFocus, "cards")} data-tour="cards">
         <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
         <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
         <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
@@ -2200,7 +2295,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
   return (
     <div className="stack">
       {chips}
-      <section className="card">
+      <section className={"card" + tourMark(tourFocus, "cards")} data-tour="cards">
         <p className="eyebrow">Spaced repetition · {sessionQueue.length} in today's queue · deck of {filtered.length}</p>
         <p className="small mono" style={{ marginBottom: 6 }}>{cur.cat.toUpperCase()} · {cur.topic.toUpperCase()}{cur.ai ? " · ✨ AI" : ""}</p>
         <ReadAloudBar reader={cardReader} label={show ? "Listen to the answer" : "Listen to the card"} />
@@ -2252,7 +2347,7 @@ function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, e
 
 /* ================= STATS ================= */
 
-function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile }) {
+function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
@@ -2268,7 +2363,7 @@ function Stats({ log, catStats, popStats = [], acc, resetAll, provider, setProvi
           onChange={(e) => setExamDate(e.target.value || null)} />
         <p className="small tip">Haven't registered yet? Apply through your state's Board of Nursing, then sign up for the NCLEX at <a href="https://www.nclex.com" target="_blank" rel="noopener" style={{ color: "inherit", fontWeight: 600 }}>nclex.com</a> (official NCSBN site) and schedule through <a href="https://www.pearsonvue.com/us/en/nclex.html" target="_blank" rel="noopener" style={{ color: "inherit", fontWeight: 600 }}>Pearson VUE</a>.</p>
       </section>
-      <section className="card">
+      <section className={"card" + tourMark(tourFocus, "stats")} data-tour="stats">
         <p className="eyebrow">Performance</p>
         <h2 className="h2">{log.length ? `${Math.round(acc * 100)}% overall accuracy` : "No questions answered yet"}</h2>
         <p className="small">{log.length} answered · {log.filter((l) => l.correct).length} correct</p>
@@ -2539,13 +2634,23 @@ export function Style() {
       *{box-sizing:border-box;margin:0}
       .app{min-height:100vh;background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sans-serif;display:flex;flex-direction:column;max-width:560px;margin:0 auto;transition:background .25s,color .25s}
       .mono{font-family:'IBM Plex Mono',monospace}
-      .top{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
-      .brand{display:flex;align-items:center;gap:8px}
+      .top{position:sticky;top:0;z-index:35;background:var(--paper);display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
+      .top.menu-open{z-index:55}
+      .brand{display:flex;align-items:center;gap:8px;flex:0 0 auto}
       .brand-name{font-weight:800;letter-spacing:.06em;font-size:17px}
       .brand-name em{font-style:normal;color:var(--teal)}
       .pulse-dot{width:9px;height:9px;border-radius:50%;background:var(--ecg);box-shadow:0 0 0 0 rgba(59,224,143,.5);animation:pulse 1.6s infinite}
       @keyframes pulse{70%{box-shadow:0 0 0 9px rgba(59,224,143,0)}100%{box-shadow:0 0 0 0 rgba(59,224,143,0)}}
-      .top-stats{display:flex;align-items:center;gap:12px;font-size:12px;font-weight:600;color:var(--accent-ink)}
+      .top-stats{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;font-size:12px;font-weight:600;color:var(--accent-ink)}
+      .home-btn{flex:0 0 auto;min-height:44px;padding:8px 14px;border-radius:999px;border:1.5px solid var(--teal);background:var(--teal);color:var(--btn-ink);font-family:'Archivo',sans-serif;font-weight:800;font-size:14px;cursor:pointer}
+      .home-btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+      @media (max-width: 400px) {
+        .top{flex-wrap:nowrap;padding:6px 8px;gap:6px}
+        .brand-name{font-size:15px;letter-spacing:.04em}
+        .home-btn{padding:8px 10px;font-size:13px}
+        .top-stats{gap:4px;font-size:11px}
+        .theme-btn{padding:4px 7px}
+      }
       .theme-btn{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--accent-ink);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:5px 10px;cursor:pointer}
       .theme-btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 
@@ -2620,11 +2725,11 @@ export function Style() {
       .cloze-dd{display:inline-block;margin:0 4px;background:var(--surface);color:var(--ink);border:1.5px solid var(--teal);border-radius:8px;padding:6px 8px;font-family:'Archivo',sans-serif;font-size:14px;font-weight:600;max-width:100%}
       .cloze-dd:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
       /* header: clickable brand + menu */
-      .brand-btn{background:none;border:none;padding:0;cursor:pointer;color:inherit}
+      .brand-btn{background:none;border:none;padding:0;min-height:44px;cursor:pointer;color:inherit}
       .brand-btn:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:6px}
       .menu-btn{font-size:15px;line-height:1;padding:5px 11px}
       .menu-overlay{position:fixed;inset:0;z-index:40}
-      .menu-panel{position:absolute;top:52px;right:12px;z-index:41;display:flex;flex-direction:column;min-width:230px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(10,25,20,.18);overflow:hidden}
+      .menu-panel{position:absolute;top:100%;right:8px;z-index:42;display:flex;flex-direction:column;min-width:min(280px, calc(100vw - 24px));max-height:min(70vh, 520px);overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(10,25,20,.18)}
       .menu-item{background:none;border:none;border-bottom:1px solid var(--line);text-align:left;padding:13px 16px;font-family:'Archivo',sans-serif;font-size:15px;font-weight:600;color:var(--ink);cursor:pointer}
       .menu-item:last-child{border-bottom:none}
       .menu-item:hover{background:var(--surface)}
@@ -2719,11 +2824,15 @@ export function Style() {
       .help-input{display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
       .help-input .btn{margin:0}
       /* tour */
-      .tour-overlay{position:fixed;inset:0;z-index:60;background:rgba(8,20,16,.55);display:flex;align-items:center;justify-content:center;padding:20px}
-      .tour-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;max-width:400px;width:100%;text-align:center}
-      .tour-icon{font-size:34px;margin-bottom:6px}
-      .tour-card .row{justify-content:center;margin-top:14px}
-      .tour-dots{display:flex;gap:6px;justify-content:center;margin-top:12px}
+      .tour-overlay{position:fixed;inset:0;z-index:60;background:rgba(8,20,16,.45);display:flex;align-items:flex-end;justify-content:center;padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
+      .leave-overlay{z-index:80;align-items:center;background:rgba(8,20,16,.62)}
+      .tour-card{position:relative;z-index:1;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px;max-width:560px;width:100%;max-height:min(58vh, 460px);overflow:auto;text-align:left;box-shadow:0 16px 40px rgba(8,20,16,.28)}
+      .tour-card .h2{font-size:18px}
+      .tour-card .small{margin-bottom:0}
+      .tour-actions{margin-top:12px}
+      .tour-actions .btn{min-height:44px;flex:1 1 120px}
+      .tour-target{scroll-margin-top:92px;scroll-margin-bottom:46vh;outline:3px solid var(--teal);outline-offset:3px}
+      .tour-dots{display:flex;gap:6px;justify-content:flex-start;margin-top:12px;flex-wrap:wrap}
       .tour-dots .dot{width:8px;height:8px;border-radius:99px;background:var(--bar-bg)}
       .tour-dots .dot.on{background:var(--teal)}
       .ord{min-width:20px;height:20px;border-radius:6px;background:var(--teal);color:var(--btn-ink);display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
