@@ -89,3 +89,23 @@ export function nextDialogFocus(count, index, shiftKey) {
 export function tourMark(activeFocus, id) {
   return activeFocus === id ? " tour-target" : "";
 }
+
+export function blocksOverlap(a, b) {
+  if (!a || !b || a.width <= 0 || a.height <= 0 || b.width <= 0 || b.height <= 0) return false;
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+/* Put the highlighted control under the header and above the tour sheet.
+   The sheet covers the bottom of a phone, and a target at the end of the
+   page cannot move up unless the page has room below it. */
+export function scrollTourTarget(target, sheet) {
+  if (!target?.scrollIntoView) return false;
+  target.scrollIntoView({ block: "start", inline: "nearest" });
+  if (!sheet?.getBoundingClientRect) return true;
+  const targetBox = target.getBoundingClientRect();
+  const sheetBox = sheet.getBoundingClientRect();
+  if (targetBox.bottom > sheetBox.top - 12) {
+    window.scrollBy({ top: targetBox.bottom - (sheetBox.top - 16), left: 0 });
+  }
+  return !blocksOverlap(target.getBoundingClientRect(), sheet.getBoundingClientRect());
+}

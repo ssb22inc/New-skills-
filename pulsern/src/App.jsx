@@ -288,9 +288,9 @@ import {
   showProfilePrompt,
   trialBannerMessage,
 } from "./first-answer.js";
-import { hasDraftAnswer, leaveConfirm } from "./home-nav.js";
+import { hasDraftAnswer, planLeaveRequest } from "./home-nav.js";
 import { useSessionReport } from "./session-report.js";
-import { tourMark, tourStepAt } from "./tour.js";
+import { scrollTourTarget, tourMark, tourStepAt } from "./tour.js";
 import { LeaveDialog, Tour } from "./tour.jsx";
 
 const STORE_KEY = "pulsern-v1";
@@ -524,7 +524,10 @@ export default function App() {
       setTab(step.tab);
       return;
     }
-    document.querySelector(`[data-tour="${step.focus}"]`)?.scrollIntoView({ block: "start", inline: "nearest" });
+    scrollTourTarget(
+      document.querySelector(`[data-tour="${step.focus}"]`),
+      document.querySelector(".tour-overlay:not(.leave-overlay) .tour-card"),
+    );
   }, [tourStep, tab]);
 
   const wasActivating = useRef(false);
@@ -894,18 +897,19 @@ export default function App() {
   applyLeaveRef.current = applyLeave;
   const requestLeave = (destination) => {
     setMenuOpen(false);
-    if (!sessionRef.current.exam) examLeave.clear();
-    if (destination !== "home" && destination !== "tour" && destination === tab && !sessionRef.current.inSession && !sessionRef.current.exam) return;
-    if (destination === "home" && tourStep != null && !sessionRef.current.exam) {
-      applyLeave("home");
+    const plan = planLeaveRequest({
+      session: sessionRef.current,
+      destination,
+      tab,
+      tourOpen: tourStep != null,
+    });
+    if (plan.clearExamWait) examLeave.clear();
+    if (plan.kind === "stay") return;
+    if (plan.kind === "ask") {
+      setLeaveGuard(plan.guard);
       return;
     }
-    const guard = leaveConfirm(sessionRef.current, destination);
-    if (guard) {
-      setLeaveGuard({ ...guard, destination });
-      return;
-    }
-    applyLeave(destination);
+    applyLeave(plan.destination);
   };
   const confirmLeave = () => {
     const destination = leaveGuard?.destination ?? "home";
@@ -1016,6 +1020,7 @@ export default function App() {
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
           {tab === "stats" && <Stats log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep)?.focus} />}
+          {tourStep != null && <div className="tour-scroll-room" aria-hidden="true" />}
         </>}
       </main>
 
@@ -2833,7 +2838,8 @@ export function Style() {
       .tour-card .small{margin-bottom:0}
       .tour-actions{margin-top:12px}
       .tour-actions .btn{min-height:44px;flex:1 1 120px}
-      .tour-target{scroll-margin-top:92px;scroll-margin-bottom:46vh;outline:3px solid var(--teal);outline-offset:3px}
+      .tour-target{scroll-margin-top:92px;scroll-margin-bottom:72vh;outline:3px solid var(--teal);outline-offset:3px}
+      .tour-scroll-room{height:72vh}
       .tour-dots{display:flex;gap:6px;justify-content:flex-start;margin-top:12px;flex-wrap:wrap}
       .tour-dots .dot{width:8px;height:8px;border-radius:99px;background:var(--bar-bg)}
       .tour-dots .dot.on{background:var(--teal)}

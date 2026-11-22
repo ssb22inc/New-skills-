@@ -44,6 +44,10 @@ beforeEach(async () => {
 
 const home = () => page.getByRole("button", { name: "Home", exact: true });
 const start = () => page.getByRole("button", { name: "Start exam (owner) →" }).first();
+const endExam = async () => {
+  await home().click();
+  await page.getByRole("dialog").getByRole("button", { name: "End exam and go home" }).click();
+};
 
 async function beginExam() {
   await start().waitFor({ state: "visible" });
@@ -53,13 +57,22 @@ async function beginExam() {
 }
 
 describe("leaving a readiness exam", () => {
+  it("asks before ending a running exam, and cancel leaves it running", async () => {
+    await beginExam();
+    await home().click();
+    await page.getByRole("dialog").getByRole("button", { name: "Stay in the exam" }).click();
+    await page.getByText("STEM ONE").waitFor();
+    expect(await page.getByTestId("place").innerText()).toBe("exam");
+    expect(await page.evaluate(() => window.T.submits())).toEqual([]);
+  });
+
   it("scores the committed answers and records each one before going home", async () => {
     await beginExam();
     await page.getByRole("button", { name: "Alpha" }).click();
     await page.getByRole("button", { name: "Next →" }).click();
     await page.getByText("STEM TWO").waitFor();
     expect(await page.getByTestId("place").innerText()).toBe("exam");
-    await home().click();
+    await endExam();
     await page.waitForFunction(() => document.querySelector("[data-testid=place]")?.textContent === "home");
     const submits = await page.evaluate(() => window.T.submits());
     const log = await page.evaluate(() => window.T.log());
@@ -79,7 +92,7 @@ describe("leaving a readiness exam", () => {
     await page.getByRole("button", { name: "Alpha" }).click();
     await page.getByRole("button", { name: "Next →" }).click();
     await page.getByText("STEM TWO").waitFor();
-    await home().click();
+    await endExam();
     await page.getByRole("button", { name: "Try again" }).waitFor();
     expect(await page.getByTestId("place").innerText()).toBe("exam");
     expect(await page.evaluate(() => window.T.log())).toEqual([]);
@@ -101,7 +114,7 @@ describe("leaving a readiness exam", () => {
     await page.getByRole("button", { name: "Alpha" }).click();
     await page.getByRole("button", { name: "Next →" }).click();
     await page.getByText("STEM TWO").waitFor();
-    await home().click();
+    await endExam();
     await page.getByRole("button", { name: "Back to exams" }).click();
     await beginExam();
     await page.getByRole("button", { name: "Alpha" }).click();
@@ -127,6 +140,9 @@ describe("leaving a readiness exam", () => {
     expect(await page.getByTestId("locked").innerText()).toBe("yes");
     expect(await page.getByRole("button", { name: "Back to exams" }).count()).toBe(0);
     await home().click();
+    await page.getByRole("dialog").getByRole("button", { name: "End exam and go home" }).waitFor();
+    expect(await page.getByTestId("place").innerText()).toBe("exam");
+    await page.getByRole("dialog").getByRole("button", { name: "End exam and go home" }).click();
     expect(await page.getByTestId("place").innerText()).toBe("exam");
     expect(await page.evaluate(() => window.T.log().filter((entry) => entry.event === "record").length)).toBe(1);
     await page.evaluate(() => window.T.releaseOne());

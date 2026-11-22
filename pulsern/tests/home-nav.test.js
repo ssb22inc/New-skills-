@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasDraftAnswer, leaveConfirm } from "../src/home-nav.js";
+import { hasDraftAnswer, leaveConfirm, planLeaveRequest } from "../src/home-nav.js";
 
 describe("home navigation", () => {
   it("asks before leaving an open round, and stays quiet on a resting screen", () => {
@@ -21,6 +21,22 @@ describe("home navigation", () => {
     expect(exam.title).toMatch(/End the exam/);
     expect(exam.body).toMatch(/taken once/);
     expect(exam.confirmLabel).toBe("End exam and go home");
+  });
+
+  it("asks before a live exam and leaves a quiet screen without a dialog", () => {
+    const asked = planLeaveRequest({ session: { exam: true, inSession: true }, destination: "home", tab: "exams" });
+    expect(asked.kind).toBe("ask");
+    expect(asked.clearExamWait).toBe(false);
+    expect(asked.guard.destination).toBe("home");
+    expect(asked.guard.confirmLabel).toBe("End exam and go home");
+    const recording = planLeaveRequest({ session: { exam: true, inSession: true }, destination: "qbank", tab: "exams" });
+    expect(recording.kind).toBe("ask");
+    const quiet = planLeaveRequest({ session: { exam: false, inSession: false }, destination: "home", tab: "qbank" });
+    expect(quiet).toEqual({ clearExamWait: true, kind: "leave", destination: "home" });
+    const sameTab = planLeaveRequest({ session: { exam: false, inSession: false }, destination: "qbank", tab: "qbank" });
+    expect(sameTab.kind).toBe("stay");
+    const fromTour = planLeaveRequest({ session: { exam: false, inSession: false }, destination: "home", tab: "cards", tourOpen: true });
+    expect(fromTour).toEqual({ clearExamWait: true, kind: "leave", destination: "home" });
   });
 
   it("treats an untouched item as clean and a started answer as open work", () => {

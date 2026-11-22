@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOUR_STEPS, isLastTourStep, nextDialogFocus, tourMark, tourStepAt } from "../src/tour.js";
+import { TOUR_STEPS, blocksOverlap, isLastTourStep, nextDialogFocus, tourMark, tourStepAt } from "../src/tour.js";
 
 const BANNED = [
   /pass(?:ing)? the nclex/i,
@@ -25,6 +25,8 @@ describe("guided tour", () => {
     expect(isLastTourStep(0)).toBe(false);
     expect(tourMark("monitor", "monitor")).toBe(" tour-target");
     expect(tourMark("monitor", "qbank")).toBe("");
+    expect(blocksOverlap({ left: 0, top: 700, right: 390, bottom: 760, width: 390, height: 60 }, { left: 12, top: 480, right: 378, bottom: 832, width: 366, height: 352 })).toBe(true);
+    expect(blocksOverlap({ left: 16, top: 120, right: 370, bottom: 180, width: 354, height: 60 }, { left: 12, top: 500, right: 378, bottom: 832, width: 366, height: 332 })).toBe(false);
     expect(nextDialogFocus(4, 3, false)).toBe(0);
     expect(nextDialogFocus(4, 0, true)).toBe(3);
     expect(nextDialogFocus(4, -1, false)).toBe(0);

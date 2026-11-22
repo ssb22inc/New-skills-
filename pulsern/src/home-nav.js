@@ -46,3 +46,19 @@ export function leaveConfirm(session, destination = "home") {
     : "Checked answers and graded cards stay saved. Your place in the round clears.";
   return { title, body, confirmLabel, cancelLabel: "Keep studying" };
 }
+
+/* What a Home or section tap does. The app and the exam test both follow
+   this, so a live exam asks before it is unmounted and a quiet screen does not. */
+export function planLeaveRequest({ session, destination, tab, tourOpen = false }) {
+  const exam = !!session?.exam;
+  const clearExamWait = !exam;
+  if (destination !== "home" && destination !== "tour" && destination === tab && !session?.inSession && !exam) {
+    return { clearExamWait, kind: "stay" };
+  }
+  if (destination === "home" && tourOpen && !exam) {
+    return { clearExamWait, kind: "leave", destination: "home" };
+  }
+  const message = leaveConfirm(session, destination);
+  if (message) return { clearExamWait, kind: "ask", guard: { ...message, destination } };
+  return { clearExamWait, kind: "leave", destination };
+}

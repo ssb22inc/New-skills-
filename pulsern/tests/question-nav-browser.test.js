@@ -151,4 +151,10 @@ describe("case-study steps", () => {
     expect(await page.getByRole("button", { name: "First action" }).isDisabled()).toBe(true);
     expect(await stats()).toMatch(/^1 recorded, 1 correct, 0 wrong/);
   }, 60_000);
+
+  it("keeps Review misses above the tour sheet on a phone", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.T.mountTourClearance());
+    expect(await page.evaluate(() => window.T.tourClearance())).toBe(true);
+  });
 });

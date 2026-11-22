@@ -7,6 +7,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ExamCenter from "../../src/exam.jsx";
 import { useExamHomeExit } from "../../src/exam-leave.js";
+import { planLeaveRequest } from "../../src/home-nav.js";
+import { LeaveDialog } from "../../src/tour.jsx";
 
 const QUESTIONS = [
   { key: "k1", q: { id: 11, type: "mc", cat: "Management of Care", diff: 0.4, stem: "STEM ONE", options: ["Alpha", "Beta"] } },
@@ -58,19 +60,27 @@ function Host() {
   const log = useRef([]);
   const [place, setPlace] = useState("exam");
   const [locked, setLocked] = useState(false);
+  const [guard, setGuard] = useState(null);
   const [session, setSession] = useState({ exam: false, inSession: false, hasDraft: false });
   const examLeave = useExamHomeExit((destination) => {
     log.current.push({ event: "home", destination });
     setPlace(destination);
   });
   const requestLeave = (destination) => {
-    if (!session.exam) {
-      examLeave.clear();
-      log.current.push({ event: "home", destination });
-      setPlace(destination);
+    const plan = planLeaveRequest({ session, destination, tab: place === "exam" ? "exams" : place, tourOpen: false });
+    if (plan.clearExamWait) examLeave.clear();
+    if (plan.kind === "stay") return;
+    if (plan.kind === "ask") {
+      setGuard(plan.guard);
       return;
     }
-    examLeave.confirm(true, destination);
+    log.current.push({ event: "home", destination: plan.destination });
+    setPlace(plan.destination);
+  };
+  const confirmLeave = () => {
+    const destination = guard?.destination ?? "home";
+    setGuard(null);
+    examLeave.confirm(session.exam, destination);
   };
   useEffect(() => {
     window.T.ready = true;
@@ -89,6 +99,7 @@ function Host() {
       <p data-testid="locked">{locked ? "yes" : "no"}</p>
       <button type="button" onClick={() => requestLeave("home")}>Home</button>
       <button type="button" onClick={() => requestLeave("practice")}>Practice</button>
+      <LeaveDialog guard={guard} onConfirm={confirmLeave} onCancel={() => setGuard(null)} />
       {place === "exam" && (
         <ExamCenter
           record={(item, ok) => {
