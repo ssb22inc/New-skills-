@@ -160,18 +160,16 @@ describe("case-study steps", () => {
 
   it("keeps the practice and flashcard highlights between the header and the tour sheet", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
+    const settled = (focus, text) => page.waitForFunction(([id, needle]) => {
+      const box = window.T.tourBox(id);
+      return !!box
+        && box.text.includes(needle)
+        && box.top >= box.headerBottom - 1
+        && box.bottom <= box.sheetTop + 1;
+    }, [focus, text]);
     await page.evaluate(() => window.T.mountTourPractice());
-    const practice = await page.evaluate(() => window.T.tourReport("qbank"));
-    expect(practice.text).toMatch(/Computer-adaptive practice/);
-    expect(practice.top).toBeGreaterThanOrEqual(practice.headerBottom - 1);
-    expect(practice.bottom).toBeLessThanOrEqual(practice.sheetTop + 1);
-    expect(practice.ok).toBe(true);
-
+    await settled("qbank", "Computer-adaptive practice");
     await page.evaluate(() => window.T.mountTourCards());
-    const cards = await page.evaluate(() => window.T.tourReport("cards"));
-    expect(cards.text).toMatch(/Hold digoxin/);
-    expect(cards.top).toBeGreaterThanOrEqual(cards.headerBottom - 1);
-    expect(cards.bottom).toBeLessThanOrEqual(cards.sheetTop + 1);
-    expect(cards.ok).toBe(true);
+    await settled("cards", "Hold digoxin");
   });
 });

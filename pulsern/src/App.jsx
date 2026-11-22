@@ -290,8 +290,8 @@ import {
 } from "./first-answer.js";
 import { hasDraftAnswer, planLeaveRequest } from "./home-nav.js";
 import { useSessionReport } from "./session-report.js";
-import { scrollTourTarget, tourMark, tourStepAt } from "./tour.js";
-import { LeaveDialog, Tour } from "./tour.jsx";
+import { tourMark, tourStepAt } from "./tour.js";
+import { LeaveDialog, Tour, useTourPlacement } from "./tour.jsx";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -444,7 +444,12 @@ export default function App() {
   const sessionRef = useRef({ exam: false, inSession: false, hasDraft: false });
   const applyLeaveRef = useRef(() => {});
   const examLeave = useExamHomeExit((destination) => applyLeaveRef.current(destination));
-  const onSession = useCallback((snap) => { sessionRef.current = snap; }, []);
+  const [sessionLive, setSessionLive] = useState(false);
+  const onSession = useCallback((snap) => {
+    sessionRef.current = snap;
+    const live = !!(snap?.inSession || snap?.exam);
+    setSessionLive((current) => (current === live ? current : live));
+  }, []);
   const [profileCardDismissed, setProfileCardDismissed] = useState(false); // blob (additive)
   const [fcFlips, setFcFlips] = useState(0);        // blob (additive): lifetime card flips, gates first-run coaching
   const [scrolling, setScrolling] = useState(false); // floating UI hides while scrolling
@@ -511,25 +516,12 @@ export default function App() {
        back to step 0 is what made Next look like a dead control for anyone
        who had not dismissed it yet. */
     if (locked && tourStep != null) setTourStep(null);
-    else if (tourStep == null && shouldAutoOpenTour({ loaded, tourSeen, ent, locked })) setTourStep(0);
-  }, [loaded, tourSeen, ent, locked, tourStep]);
+    else if (tourStep == null && shouldAutoOpenTour({ loaded, tourSeen, ent, locked, sessionLive })) setTourStep(0);
+  }, [loaded, tourSeen, ent, locked, tourStep, sessionLive]);
 
-  /* The tour shows the real screen for the step. The tab change lands on
-     the next render, so the scroll waits until that screen is mounted. */
-  useEffect(() => {
-    if (tourStep == null) return;
-    const step = tourStepAt(tourStep);
-    if (!step) return;
-    if (step.tab && step.tab !== tab) {
-      setTab(step.tab);
-      return;
-    }
-    scrollTourTarget(
-      document.querySelector(`[data-tour="${step.focus}"]`),
-      document.querySelector(".tour-overlay:not(.leave-overlay) .tour-card"),
-      document.querySelector(".top"),
-    );
-  }, [tourStep, tab]);
+  /* The tour shows the real screen for the step. Positioning runs again
+     when that screen replaces a placeholder, such as the flashcard queue. */
+  useTourPlacement(tourStep, tab, setTab);
 
   const wasActivating = useRef(false);
   useEffect(() => {

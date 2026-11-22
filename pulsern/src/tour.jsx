@@ -1,5 +1,39 @@
 import { useEffect, useRef } from "react";
-import { TOUR_STEPS, isLastTourStep, nextDialogFocus } from "./tour.js";
+import { TOUR_STEPS, isLastTourStep, nextDialogFocus, scrollTourTarget, tourStepAt } from "./tour.js";
+
+/* Follow the step's real screen. The tab change paints first. Positioning
+   runs again when that screen replaces a placeholder, which is how the
+   flashcard queue arrives after the empty heading. */
+export function useTourPlacement(tourStep, tab, setTab) {
+  useEffect(() => {
+    if (tourStep == null) return undefined;
+    const step = tourStepAt(tourStep);
+    if (!step) return undefined;
+    if (step.tab && step.tab !== tab) {
+      setTab(step.tab);
+      return undefined;
+    }
+    let frame = 0;
+    const place = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        scrollTourTarget(
+          document.querySelector(`[data-tour="${step.focus}"]`),
+          document.querySelector(".tour-overlay:not(.leave-overlay) .tour-card"),
+          document.querySelector(".top"),
+        );
+      });
+    };
+    place();
+    const root = document.querySelector("main.body");
+    const observer = root ? new MutationObserver(place) : null;
+    observer?.observe(root, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [tourStep, tab, setTab]);
+}
 
 /* The dialog sits over the app. Focus starts on its primary action, Tab
    stays inside it, and the rest of the app is inert until it closes. */

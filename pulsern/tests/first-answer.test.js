@@ -29,6 +29,9 @@ describe("first-answer activation", () => {
     expect(shouldAutoOpenTour({ loaded: false, tourSeen: false, ent: trial, locked: false })).toBe(false);
     expect(shouldAutoOpenTour({ loaded: true, tourSeen: true, ent: trial, locked: false })).toBe(false);
     expect(shouldAutoOpenTour({ loaded: true, tourSeen: false, ent: trial, locked: false })).toBe(true);
+    expect(shouldAutoOpenTour({ loaded: true, tourSeen: false, ent: trial, locked: false, sessionLive: true })).toBe(false);
+    expect(shouldAutoOpenTour({ loaded: true, tourSeen: false, ent: { status: "active" }, locked: false, sessionLive: true })).toBe(false);
+    expect(shouldAutoOpenTour({ loaded: true, tourSeen: false, ent: { status: "active" }, locked: false, sessionLive: false })).toBe(true);
   });
 
   it("forces one question only for an active free pass with no answers", () => {

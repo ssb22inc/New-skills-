@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Flashcards, QBank, CaseStudy, Style } from "../../src/App.jsx";
-import { Tour } from "../../src/tour.jsx";
+import { Tour, useTourPlacement } from "../../src/tour.jsx";
 import { blocksOverlap, scrollTourTarget } from "../../src/tour.js";
 import { emptyAbility, updateAbility } from "../../src/ability-engine.js";
 import { updateMissSchedule } from "../../src/question-review.js";
@@ -106,6 +106,8 @@ function CasePractice() {
 }
 
 function TourFrame({ step, children }) {
+  const [tab, setTab] = useState("today");
+  useTourPlacement(step, tab, setTab);
   return (
     <div className="app" data-theme="light">
       <Style />
@@ -204,14 +206,13 @@ window.T = {
     root.render(<TourCards />);
     await settle();
   },
-  tourReport(focus) {
+  tourBox(focus) {
     const target = document.querySelector(`[data-tour="${focus}"]`);
     const sheet = document.querySelector(".tour-overlay:not(.leave-overlay) .tour-card");
     const header = document.querySelector(".top");
-    const ok = scrollTourTarget(target, sheet, header);
+    if (!target || !sheet || !header) return null;
     const box = target.getBoundingClientRect();
     return {
-      ok,
       text: target.innerText,
       top: box.top,
       bottom: box.bottom,
