@@ -1,0 +1,21 @@
+{
+  "id": "pressure-injury",
+  "title": "Pressure injury stages",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-11-22T23:01:50.801Z",
+  "images": 16,
+  "key": "22f5789fe163bd1d",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.3188335
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No substantiated clinical errors, picture–text mismatches, or blocking accessibility defects found in the pressure-injury diagram or its relevant rendering logic. Actual narration audio and the app-level NCSBN footer were not supplied, so those remain unverified.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}

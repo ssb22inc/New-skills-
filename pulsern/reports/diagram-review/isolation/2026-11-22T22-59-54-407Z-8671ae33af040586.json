@@ -1,0 +1,21 @@
+{
+  "id": "isolation",
+  "title": "Isolation precautions",
+  "model": "openai/gpt-6.1-sol",
+  "reviewedAt": "2026-11-22T22:59:54.407Z",
+  "images": 14,
+  "key": "8671ae33af040586",
+  "findings": [],
+  "usage": {
+    "costUsd": 0.2843635
+  },
+  "error": null,
+  "completed": true,
+  "assessment": "No reportable defects found in the supplied isolation images, clinical claims, six explainer steps, or applicable rendering logic.",
+  "verdict": "PASS",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
