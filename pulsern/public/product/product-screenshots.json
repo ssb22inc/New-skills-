@@ -67,8 +67,8 @@
   "images": [
     {
       "file": "pulsern-adaptive-practice.png",
-      "sha256": "3b454ec0dbb8057bf648b6e787ae1d67c08fa4e7ff8f32409e9d0c9674dd3dfc",
-      "bytes": 47835,
+      "sha256": "43eca80389b54d983511e9b94b54ffed0700e2604d577be7cab89a2c77d348a1",
+      "bytes": 63503,
       "width": 720,
       "height": 620,
       "alt": "PulseRN adaptive NCLEX practice screen with a management of care prioritization question and four answer choices",
@@ -76,8 +76,8 @@
     },
     {
       "file": "pulsern-today-dashboard.png",
-      "sha256": "7ef5ef5438959d7e36bab16b3b5bf2faaa9f809a39aa11004d5c60553091dfd1",
-      "bytes": 69452,
+      "sha256": "ee3c1cca80bd0b1ac7cbb51f970862dc6c03cc36d4d3fe62dae8fcc100e34442",
+      "bytes": 85354,
       "width": 720,
       "height": 1000,
       "alt": "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards",
@@ -85,8 +85,8 @@
     },
     {
       "file": "pulsern-lab-reference.png",
-      "sha256": "5999233a190cf9dc6ab65d417f31e764d9431abee15b4bd9ab7c7fbec8a2de60",
-      "bytes": 80667,
+      "sha256": "539cce4d147ef6cd7591daf98ba003fdfc11a4289fc6a9e31715598bc4b0be9c",
+      "bytes": 76627,
       "width": 430,
       "height": 932,
       "alt": "PulseRN mobile lab-reference drawer open over an adaptive practice question",
