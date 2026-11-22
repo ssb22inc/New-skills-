@@ -1,0 +1,41 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "578713a7aa9e66bbf53568467225d0a3b0954299",
+    "head": "42dfddfadef2601515a5034ceb397e9281bf4233",
+    "pr": "178"
+  },
+  "reviewedAt": "2026-11-22T21:20:54.100Z",
+  "filesReviewed": [
+    "pulsern/reports/diagram-review/index.json",
+    "pulsern/src/diagrams/item-map.json"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/diagrams/item-map.json",
+      "line": 1,
+      "title": "Empty map removes all question-linked diagrams",
+      "problem": "The populated pairs registry is replaced with an empty object, deleting every existing diagram association and its question-specific parameters. Updating the review index does not restore these associations.",
+      "failure_scenario": "Question 12 previously resolved to the potassium diagram with k=6.8; pairs['12'] now returns undefined. The same happens for every formerly mapped question, leaving the question-linked diagram feature with no registered items.",
+      "fix": "Regenerate the map from the approved question and diagram sources, retaining the supported associations and parameters, and emit the required signed artifact instead of an empty registry.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 26406,
+    "completionTokens": 1270,
+    "reasoningTokens": 1034,
+    "costUsd": 0.0787135
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes: the change removes every existing question-to-diagram binding. The replacement signatures and sourceKey bindings could not be validated from the two supplied files.",
+  "counts": {
+    "blocker": 0,
+    "major": 1,
+    "minor": 0
+  }
+}
