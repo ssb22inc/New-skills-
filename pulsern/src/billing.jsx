@@ -5,6 +5,7 @@ import React, { useState } from "react";
 import { supabase } from "./supabase.js";
 import { PLANS, computeEntitlement, fmtUsd, planById } from "./pricing.js";
 import { freePassExpiresAt } from "./free-pass.js";
+import { CLINICAL_COHORT } from "./clinical.js";
 
 async function billing(action, extra = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -51,6 +52,13 @@ export async function grantFreePass() {
     throw new Error(`Free pass could not be started: ${error.message}`);
   }
   return fetchEntitlement();
+}
+
+/* Called from AuthGate before the app mounts. The spot, the membership
+   row, and the 30-day extension all happen here, so the first entitlement
+   read already reflects them. */
+export async function claimClinicalSpot() {
+  return billing("clinical-claim", { cohort: CLINICAL_COHORT });
 }
 
 export function Paywall({ ent, onRefresh, trialBanner = false }) {
@@ -113,7 +121,13 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
             onKeyDown={(e) => { if (e.key === "Enter") apply(); }} />
           <button className="btn ghost" onClick={apply}>Apply</button>
         </div>
-        {applied && <p className="small tip">✅ Code <strong>{applied.code}</strong> applied. Partner pricing is shown below.</p>}
+        {applied && (
+          <p className="small tip">
+            {applied.cohort === CLINICAL_COHORT
+              ? <>Code <strong>{applied.code}</strong> applied. Your 30-day pass is $40 once.</>
+              : <>Code <strong>{applied.code}</strong> applied. Partner pricing is shown below.</>}
+          </p>
+        )}
         {err && <p className="small" style={{ color: "var(--coral)" }}>{err}</p>}
       </section>
       {mains.map((p) => (

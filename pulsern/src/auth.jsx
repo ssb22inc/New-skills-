@@ -4,13 +4,26 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase.js";
 import App from "./App.jsx";
-import InstallCard from "./install.jsx";
-import { APP_ROOT, authModeFromUrl, authRedirectUrl } from "./app-routing.js";
+import InstallCard, { isStandalone } from "./install.jsx";
+import { APP_ROOT, authModeFromUrl, authRedirectUrl, cohortFromUrl } from "./app-routing.js";
 import { suggestEmail } from "./email-typo.js";
 import { explainAuthError } from "./auth-messages.js";
 import { captureAttribution, flushAttribution } from "./attribution.js";
+import { claimClinicalSpot } from "./billing.jsx";
+import ClinicalWelcome, { ClinicalPerk } from "./clinical-welcome.jsx";
+import {
+  CLINICAL_COHORT,
+  CLINICAL_COPY,
+  completeClinicalClaim,
+  dismissClinicalWelcome,
+  forgetCohort,
+  rememberCohort,
+  rememberedCohort,
+  signedInPath,
+  welcomeStillPending,
+} from "./clinical.js";
 
-export function AuthScreen({ initialMode = "signin", onBack }) {
+export function AuthScreen({ initialMode = "signin", onBack, cohort = null }) {
   const [mode, setMode] = useState(initialMode); // signin | signup | forgot
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,6 +35,13 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
   /* Recomputed per keystroke: the check is a couple of short string compares,
      far cheaper than the state a debounce would need. */
   const typoSuggestion = suggestEmail(email);
+  const clinical = cohort === CLINICAL_COHORT;
+
+  /* Same-tab OAuth and magic-link returns sometimes drop the query string.
+     The redirect URL still carries ?cohort=clinicals; this is the backup. */
+  useEffect(() => {
+    if (clinical) rememberCohort(window.sessionStorage);
+  }, [clinical]);
 
   /* Messages render above the form, but the buttons that produce them sit at
      the bottom of the card. On a phone — especially with the keyboard up — the
@@ -39,6 +59,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
     setBusy(true); setError(""); setNotice("");
     try {
       if (mode === "signup") {
+        if (clinical) rememberCohort(window.sessionStorage);
         const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: authRedirectUrl() } });
         if (error) throw error;
         if (data.user && !data.session) setNotice("Check your email to confirm your account, then sign in.");
@@ -86,6 +107,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
   const sendMagicLink = async () => {
     setError(""); setNotice("");
     if (!email) { setError("Enter your email first, then tap the link button."); return; }
+    if (clinical) rememberCohort(window.sessionStorage);
     setLinkBusy(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
@@ -104,6 +126,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
 
   const signInWithGoogle = async () => {
     setError(""); setNotice("");
+    if (clinical) rememberCohort(window.sessionStorage);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: authRedirectUrl() },
@@ -145,6 +168,11 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
           color: #0e7c6b; font-weight: 600; text-decoration: underline; cursor: pointer; }
         .auth-typo-fix:focus-visible { outline: 2px solid #0e7c6b; outline-offset: 2px; border-radius: 3px; }
         .auth-foot { color: #5b6472; font-size: 12px; margin-top: 18px; line-height: 1.5; }
+        .auth-perk { margin: 0 0 16px; padding: 14px; border-radius: 12px; background: #f2faf7; border: 1px solid #cfe6df; }
+        .auth-perk-kicker { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #0e6e5c; }
+        .auth-perk-title { margin: 0 0 6px; font-size: 20px; font-weight: 800; color: #102f2a; }
+        .auth-perk-body { margin: 0; font-size: 14px; line-height: 1.5; color: #1c2430; }
+        .auth-install-note { margin: 16px 0 0; font-size: 13px; line-height: 1.5; color: #244840; }
       `}</style>
       <div className="auth-card">
         {onBack && <button className="auth-switch" type="button" onClick={onBack} style={{ marginBottom: 16 }}>&larr; Back to PulseRN</button>}
@@ -154,6 +182,7 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
           mode === "signup" ? "Create your account. Your progress syncs to every device."
           : mode === "forgot" ? "Enter your email and we'll send a reset link."
           : "Sign in to continue studying."}</p>
+        {clinical && mode !== "forgot" && <ClinicalPerk />}
         <div ref={msgRef} role="status" aria-live="polite">
           {error && <p className="auth-err">{error}</p>}
           {notice && <p className="auth-note">{notice}</p>}
@@ -221,7 +250,11 @@ export function AuthScreen({ initialMode = "signin", onBack }) {
           </button>
         </p>
         <p className="auth-foot">Educational exam preparation only, not medical advice. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse this product. All questions and materials are the property of the owner of PulseRN and may not be used outside this app without the owner's explicit consent. <a href="/learn/" style={{ color: "#5b6472" }}>Guides</a> · <a href="/about/" style={{ color: "#5b6472" }}>About</a> · <a href="/legal/" style={{ color: "#5b6472" }}>Terms, Privacy, and Disclaimer</a></p>
-        <InstallCard scope="auth" headline="Install the PulseRN study app" message="Keep your study tools one tap away. Installation is handled by your browser; no app-store download is required." />
+        {clinical && mode === "signup" ? (
+          <p className="auth-install-note">{CLINICAL_COPY.installNote}</p>
+        ) : (
+          <InstallCard scope="auth" headline="Install the PulseRN study app" message="Keep your study tools one tap away. Installation is handled by your browser; no app-store download is required." />
+        )}
       </div>
     </main>
   );
@@ -286,10 +319,24 @@ export class ErrorBoundary extends React.Component {
   }
 }
 
+function initialEntry() {
+  if (typeof window === "undefined") return "booting";
+  const cohort = cohortFromUrl(window.location.href) || rememberedCohort(window.sessionStorage);
+  if (cohort === CLINICAL_COHORT) return "booting";
+  if (welcomeStillPending(window.localStorage, isStandalone())) return "welcome";
+  return "ready";
+}
+
 export default function AuthGate() {
   const [session, setSession] = useState(undefined); // undefined = still checking
   const [recovering, setRecovering] = useState(() => authModeFromUrl() === "reset");
   const [authMode] = useState(() => authModeFromUrl());
+  /* Clinical claims finish before <App> mounts, so the first entitlement
+     read already sees the 30-day pass. Everyone else stays "ready" and
+     mounts immediately, the way they did before this perk existed. */
+  const [entry, setEntry] = useState(initialEntry);
+  const screenCohort = cohortFromUrl(typeof window !== "undefined" ? window.location.href : "")
+    || rememberedCohort(typeof window !== "undefined" ? window.sessionStorage : null);
 
   useEffect(() => {
     /* An ad can point straight at /app/, so the tags must be captured here too
@@ -313,12 +360,62 @@ export default function AuthGate() {
   }, [session?.user?.id]);
 
   useEffect(() => {
-    if (!session || recovering || window.location.pathname === APP_ROOT) return;
-    window.history.replaceState({}, "", `${APP_ROOT}${window.location.search}${window.location.hash}`);
-  }, [session, recovering]);
+    const userId = session?.user?.id;
+    if (!userId || recovering) return;
+    let cancel = false;
+    const cohort = cohortFromUrl(window.location.href) || rememberedCohort(window.sessionStorage);
+    if (cohort !== CLINICAL_COHORT) {
+      if (window.location.pathname !== APP_ROOT) {
+        window.history.replaceState({}, "", signedInPath(window.location.href, APP_ROOT));
+      }
+      if (!cancel) setEntry(welcomeStillPending(window.localStorage, isStandalone()) ? "welcome" : "ready");
+      return;
+    }
+    (async () => {
+      try {
+        const result = await claimClinicalSpot();
+        if (cancel) return;
+        const decision = completeClinicalClaim({
+          status: result?.status,
+          href: window.location.href,
+          storage: window.localStorage,
+          standalone: isStandalone(),
+        });
+        forgetCohort(window.sessionStorage);
+        window.history.replaceState({}, "", decision.path);
+        setEntry(decision.showWelcome ? "welcome" : "ready");
+      } catch {
+        /* Leave ?cohort=clinicals in the address bar. A reload claims again.
+           Mounting now may grant the ordinary 7-day pass; a later claim
+           extends that row to 30 days and never shortens it. */
+        if (cancel) return;
+        if (window.location.pathname !== APP_ROOT) {
+          window.history.replaceState({}, "", signedInPath(window.location.href, APP_ROOT));
+        }
+        setEntry("ready");
+      }
+    })();
+    return () => { cancel = true; };
+  }, [session?.user?.id, recovering]);
 
   if (session === undefined) return null;
-  if (recovering && session) return <NewPasswordScreen onDone={() => { setRecovering(false); window.history.replaceState({}, "", APP_ROOT); }} />;
-  if (!session) return <AuthScreen initialMode={authMode} onBack={() => window.location.assign("/")} />;
+  if (recovering && session) return <NewPasswordScreen onDone={() => {
+    const cohort = cohortFromUrl(window.location.href);
+    setRecovering(false);
+    window.history.replaceState({}, "", cohort ? `${APP_ROOT}?cohort=${encodeURIComponent(cohort)}` : APP_ROOT);
+  }} />;
+  if (!session) return <AuthScreen initialMode={authMode} cohort={screenCohort} onBack={() => window.location.assign("/")} />;
+  if (entry === "welcome") {
+    return <ClinicalWelcome onStart={() => { dismissClinicalWelcome(window.localStorage); setEntry("ready"); }} />;
+  }
+  /* The study app stays unmounted until the claim returns, so its first
+     entitlement read already includes the 30-day pass. */
+  if (entry === "booting") {
+    return (
+      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "system-ui, sans-serif", color: "#0e6e5c" }}>
+        <p>Opening PulseRN.</p>
+      </main>
+    );
+  }
   return <App key={session.user.id} />;
 }

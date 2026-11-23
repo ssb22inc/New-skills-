@@ -4,6 +4,15 @@
 // in Vercel env vars (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET).
 import { createClient } from "@supabase/supabase-js";
 import { PLANS, planById, discountedCents, computeEntitlement } from "../src/pricing.js";
+import {
+  CLINICAL_CODE,
+  CLINICAL_COHORT,
+  CLINICAL_FULL_MESSAGE,
+  CLINICAL_INELIGIBLE_MESSAGE,
+  CLINICAL_SUB30_CENTS,
+  clinicalSpotCap,
+  isClinicalCode,
+} from "../src/clinical.js";
 
 const admin = () => createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
@@ -28,7 +37,30 @@ export default async function handler(req, res) {
   const user = await userFromToken(sb, token);
   if (!user) return res.status(401).json({ error: "Sign in first" });
 
+  if (action === "clinical-claim") {
+    const requested = String(req.body?.cohort || CLINICAL_COHORT).trim().toLowerCase();
+    if (requested !== CLINICAL_COHORT) return res.status(400).json({ error: "Unknown cohort" });
+    const claim = await claimCohort(sb, user.id, "link");
+    if (claim.error) return res.status(502).json({ error: "Could not start the clinical student perk" });
+    return res.status(200).json(claim.data);
+  }
+
   if (action === "code-check") {
+    if (isClinicalCode(codeRaw)) {
+      const claim = await claimCohort(sb, user.id, "code");
+      if (claim.error) return res.status(502).json({ error: "Could not check the clinical student code" });
+      const status = claim.data?.status;
+      if (status === "full") return res.status(409).json({ error: CLINICAL_FULL_MESSAGE });
+      if (status === "ineligible") return res.status(403).json({ error: CLINICAL_INELIGIBLE_MESSAGE });
+      if (status !== "claimed" && status !== "already") return res.status(400).json({ error: "Code not recognized" });
+      return res.status(200).json({
+        code: CLINICAL_CODE,
+        partner: "Clinical students",
+        cohort: CLINICAL_COHORT,
+        status,
+        prices: Object.fromEntries(PLANS.filter((p) => p.cents > 0).map((p) => [p.id, p.id === "sub30" ? CLINICAL_SUB30_CENTS : p.cents])),
+      });
+    }
     const code = await lookupCode(sb, codeRaw);
     if (!code) return res.status(404).json({ error: "Code not recognized" });
     return res.status(200).json({
@@ -45,9 +77,43 @@ export default async function handler(req, res) {
     if (plan.id === "renew7" && !ent.hadPaid) return res.status(403).json({ error: "Renewals are available after a paid pass" });
     if (plan.id === "exam1" && ent.status !== "active") return res.status(403).json({ error: "An active paid pass is required to add an exam" });
     if (plan.id === "exam1" && ent.examsLeft + ent.attempted.length >= 10) return res.status(403).json({ error: "All ten exam forms are already covered by your account" });
-    const code = await lookupCode(sb, codeRaw);
-    if (codeRaw && !code) return res.status(404).json({ error: "Code not recognized" });
-    const amount = discountedCents(plan.cents, code);
+
+    let member = false;
+    if (isClinicalCode(codeRaw)) {
+      const claim = await claimCohort(sb, user.id, "code");
+      if (claim.error) return res.status(502).json({ error: "Could not apply the clinical student code" });
+      const status = claim.data?.status;
+      member = status === "claimed" || status === "already";
+      if (!member && plan.id === "sub30") {
+        if (status === "full") return res.status(409).json({ error: CLINICAL_FULL_MESSAGE });
+        if (status === "ineligible") return res.status(403).json({ error: CLINICAL_INELIGIBLE_MESSAGE });
+        return res.status(400).json({ error: "Code not recognized" });
+      }
+    } else if (plan.id === "sub30") {
+      const found = await isClinicalMember(sb, user.id);
+      if (found.error) return res.status(502).json({ error: "Could not confirm clinical student pricing" });
+      member = found.member;
+    }
+
+    /* Clinical members pay $40 once for the 30-day pass, inline price_data,
+       so no new Stripe Price is required. Every other plan, including the
+       7-day pass, keeps its catalog price. Partner codes still apply there. */
+    let amount;
+    let metaCode = "";
+    let metaPartner = "";
+    let metaCohort = "";
+    if (member && plan.id === "sub30") {
+      amount = CLINICAL_SUB30_CENTS;
+      metaCode = CLINICAL_CODE;
+      metaPartner = "Clinical students";
+      metaCohort = CLINICAL_COHORT;
+    } else {
+      const code = isClinicalCode(codeRaw) ? null : await lookupCode(sb, codeRaw);
+      if (codeRaw && !code && !isClinicalCode(codeRaw)) return res.status(404).json({ error: "Code not recognized" });
+      amount = discountedCents(plan.cents, code);
+      metaCode = code?.code ?? "";
+      metaPartner = code?.partner ?? "";
+    }
 
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) return res.status(503).json({ error: "Payments aren't switched on yet. The owner still needs to connect Stripe." });
@@ -64,10 +130,11 @@ export default async function handler(req, res) {
       "line_items[0][price_data][product_data][name]": `PulseRN ${plan.name}`,
       "metadata[user_id]": user.id,
       "metadata[plan]": plan.id,
-      "metadata[code]": code?.code ?? "",
-      "metadata[partner]": code?.partner ?? "",
+      "metadata[code]": metaCode,
+      "metadata[partner]": metaPartner,
       "metadata[amount]": String(amount),
     });
+    if (metaCohort) form.set("metadata[cohort]", metaCohort);
     const r = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/x-www-form-urlencoded" },
@@ -79,6 +146,25 @@ export default async function handler(req, res) {
   }
 
   return res.status(400).json({ error: "Unknown action" });
+}
+
+function claimCohort(sb, userId, source) {
+  return sb.rpc("claim_cohort_spot", {
+    p_user_id: userId,
+    p_cohort: CLINICAL_COHORT,
+    p_cap: clinicalSpotCap(),
+    p_source: source,
+  });
+}
+
+async function isClinicalMember(sb, userId) {
+  const { data, error } = await sb.from("cohort_members")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("cohort", CLINICAL_COHORT)
+    .maybeSingle();
+  if (error) return { error, member: false };
+  return { error: null, member: Boolean(data) };
 }
 
 async function lookupCode(sb, raw) {

@@ -8,7 +8,7 @@ export const SERVER_MAX = 1000;
    make them. `unique` lists, per table, column sets that must not repeat
    (a primary key); a clash returns Postgres's 23505 error like PostgREST.
    `defaults` fills server-side column defaults on insert. */
-export function fakeSupabase(tables, { users = {}, unique = {}, defaults = {} } = {}) {
+export function fakeSupabase(tables, { users = {}, unique = {}, defaults = {}, rpc: rpcHandlers = {} } = {}) {
   const calls = [];
   const from = (table) => {
     const filters = [];
@@ -67,10 +67,22 @@ export function fakeSupabase(tables, { users = {}, unique = {}, defaults = {} } 
     };
     return b;
   };
+  const rpcCalls = [];
   return {
     from,
     calls,
+    rpcCalls,
     auth: { getUser: async (t) => (users[t] ? { data: { user: users[t] }, error: null } : { data: { user: null }, error: { message: "bad token" } }) },
+    rpc: async (name, args) => {
+      rpcCalls.push({ name, args });
+      const handler = rpcHandlers[name];
+      if (!handler) return { data: null, error: { message: `rpc ${name} is not defined` } };
+      try {
+        return { data: await handler(args, tables), error: null };
+      } catch (error) {
+        return { data: null, error: { message: error.message } };
+      }
+    },
   };
 }
 

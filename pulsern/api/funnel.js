@@ -14,6 +14,7 @@
    student has any reason to see it. */
 import { createClient } from "@supabase/supabase-js";
 import { buildFunnelReport, windowFromDays, sinceFor } from "../src/funnel-report.js";
+import { clinicalSpotCap } from "../src/clinical.js";
 import { readAll } from "../src/read-all.js";
 
 const admin = () =>
@@ -55,5 +56,28 @@ export default async function handler(req, res) {
     return res.status(502).json({ error: `Could not read the funnel: ${e.message}` });
   }
 
-  return res.status(200).json(buildFunnelReport({ rows, attrRows, windowDays }));
+  /* Cohort rows are optional until migration 019 is applied. A missing
+     table must not take down the rest of the funnel. */
+  const cohort = await readCohort(sb);
+
+  return res.status(200).json(buildFunnelReport({
+    rows,
+    attrRows,
+    windowDays,
+    cohortMembers: cohort.members,
+    internalUserIds: cohort.internalUserIds,
+    cohortCap: clinicalSpotCap(),
+  }));
+}
+
+async function readCohort(sb) {
+  try {
+    const [members, internalRows] = await Promise.all([
+      readAll(() => sb.from("cohort_members").select("user_id, cohort").order("user_id"), { ordered: true }),
+      readAll(() => sb.from("internal_accounts").select("user_id").order("user_id"), { ordered: true }),
+    ]);
+    return { members, internalUserIds: internalRows.map((r) => r.user_id) };
+  } catch {
+    return { members: [], internalUserIds: [] };
+  }
 }

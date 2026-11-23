@@ -1,8 +1,19 @@
+import { CLINICAL_COHORT } from "./clinical.js";
+
 export const APP_ROOT = "/app/";
 export const APP_SIGN_IN = "/app/sign-in";
 export const APP_SIGN_UP = "/app/sign-up";
 export const APP_RESET = "/app/reset";
 export const APP_SESSION_MIGRATION_KEY = "pulsern.app-path-session.v1";
+
+export function cohortFromUrl(href = typeof window !== "undefined" ? window.location.href : "") {
+  try {
+    const value = new URL(href, "https://www.pulsern.app").searchParams.get("cohort");
+    return value === CLINICAL_COHORT ? CLINICAL_COHORT : null;
+  } catch {
+    return null;
+  }
+}
 
 export function appUrl(pathname = APP_ROOT, origin = window.location.origin) {
   return new URL(pathname, origin).toString();
@@ -28,8 +39,17 @@ export function authCallbackAppUrl(href = window.location.href) {
   return url.toString();
 }
 
-export function authRedirectUrl(kind = "signin", origin = window.location.origin) {
-  return appUrl(kind === "recovery" ? APP_RESET : APP_ROOT, origin);
+/* Email confirmation, magic links, and Google OAuth all return here.
+   A clinical signup keeps ?cohort=clinicals on that return URL so the perk
+   can be claimed after the round trip. Other query values stay off the
+   callback; attribution is already stored before the student leaves. */
+export function authRedirectUrl(kind = "signin", origin = window.location.origin, href) {
+  const base = appUrl(kind === "recovery" ? APP_RESET : APP_ROOT, origin);
+  const source = href !== undefined ? href : (typeof window !== "undefined" ? window.location.href : "");
+  if (cohortFromUrl(source) !== CLINICAL_COHORT) return base;
+  const url = new URL(base);
+  url.searchParams.set("cohort", CLINICAL_COHORT);
+  return url.toString();
 }
 
 export async function enforceOneTimeAppRelogin({ auth, storage, href }) {
