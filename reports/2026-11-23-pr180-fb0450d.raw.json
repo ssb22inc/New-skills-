@@ -1,0 +1,83 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "e61b3b925bfda8a25f8d14e17df0157abecdc635",
+    "head": "fb0450d4eeeef58e2db10e8ca43326d1e31389ea",
+    "pr": "180"
+  },
+  "reviewedAt": "2026-11-23T09:41:15.704Z",
+  "filesReviewed": [
+    "pulsern/api/billing.js",
+    "pulsern/api/funnel.js",
+    "pulsern/api/marketing.js",
+    "pulsern/src/app-routing.js",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/billing.jsx",
+    "pulsern/src/clinical-welcome.jsx",
+    "pulsern/src/clinical.js",
+    "pulsern/src/funnel-report.js",
+    "pulsern/src/install.jsx",
+    "pulsern/supabase/migrations/019_clinical_cohort.sql",
+    "pulsern/tests/clinical.test.js",
+    "pulsern/tests/helpers/fake-supabase.js",
+    "pulsern/vercel.json"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/clinical.js",
+      "line": 215,
+      "title": "An expired membership produces a fresh-trial confirmation",
+      "problem": "An \"already\" response triggers the welcome screen without checking whether the existing pass is still active. The SQL deliberately does not extend an existing member's pass, but the welcome says \"Your 30 free days are on\" and \"The full study library is open.\"",
+      "failure_scenario": "After their clinical trial expires, a member follows /clinicals on another device or browser with no dismissal flag. The RPC returns \"already\" with an expired expires_at, and the student sees the active-trial confirmation before encountering the paywall.",
+      "fix": "Include the returned entitlement/expiry in the welcome decision. Only confirm an active grant when access is actually active; handle expired existing memberships separately. Test both an active duplicate claim and an expired duplicate claim.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/auth.jsx",
+      "line": 377,
+      "title": "Link-based claims silently discard full and ineligible results",
+      "problem": "The link flow treats every successful HTTP response as a completed claim. For \"full\" and \"ineligible\", it clears the cohort marker and mounts the ordinary app without displaying the rejection. Unlike the backup-code flow, students never receive the existing full/ineligible messages.",
+      "failure_scenario": "The twenty-first eligible student follows /clinicals and creates an account after seeing the 30-day offer. The RPC returns \"full\", but the application silently starts the ordinary seven-day pass instead, without explaining that the advertised perk was not granted.",
+      "fix": "Handle claimed/already, full, ineligible, and unexpected statuses explicitly before clearing the claim context. Show the applicable rejection and let the student knowingly continue with ordinary access. Exercise these states through AuthGate rather than source-text assertions.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/tests/clinical.test.js",
+      "line": 266,
+      "title": "Entitlement safety tests validate a duplicate implementation, not production SQL",
+      "problem": "Cap, eligibility, expiry, and idempotency tests execute claimCohortSpot(), which production never calls. Billing tests stub the RPC result, while the test claiming migration equivalence only searches SQL text. These tests can report the publication-critical entitlement rules as safe while the real implementation violates them.",
+      "failure_scenario": "Changing the SQL cap comparison from v_count >= v_cap to v_count > v_cap admits a twenty-first non-internal member. Every supplied cap test and migration assertion still passes because the JavaScript mirror remains correct and the SQL comparison is never executed.",
+      "fix": "Apply the real migrations to a test database and exercise claim_cohort_spot directly, including concurrent final-slot claims, repeat claims, paid/comp rejection, expiry preservation, and function permissions. Do not present the unused JavaScript mirror and substring checks as verification of production enforcement.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/api/marketing.js",
+      "line": 257,
+      "title": "Failed cohort reads advertise a fully available offer",
+      "problem": "A failed cohort/internal-account read is converted into empty arrays. buildCohortFunnels() nevertheless always emits a clinical cohort, so the response reports zero members and the entire cap available. Contrary to the catch comment, perk figures do not remain empty. The owner funnel has the same fallback.",
+      "failure_scenario": "All twenty spots are occupied, but a temporary database error prevents reading cohort_members. The marketing endpoint returns an offer with members: 0 and spotsLeft: 20, allowing the marketing agent to promote availability that does not exist. Before migration 019, it likewise advertises an offer that cannot be claimed.",
+      "fix": "Represent unavailable cohort data explicitly and omit or mark cohort/offers figures unavailable while preserving the rest of the report. Distinguish a successful empty result from a failed read, and test both endpoints under read failures.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 70758,
+    "completionTokens": 9783,
+    "reasoningTokens": 8804,
+    "costUsd": 0.2747235
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to ship. Claim handling can misrepresent a student's access, cohort-read failures produce invented availability, and the production entitlement function is not exercised by the new safety tests. This assessment is based on the supplied code; tests were not executed.",
+  "counts": {
+    "blocker": 2,
+    "major": 2,
+    "minor": 0
+  }
+}
