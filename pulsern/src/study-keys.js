@@ -17,7 +17,7 @@ export function studyKeyAction(event) {
   if (target?.isContentEditable) return null;
   const tag = target?.tagName?.toUpperCase?.() ?? "";
   if (FIELD.test(tag)) return null;
-  if (typeof target?.closest === "function" && target.closest("[role='dialog'], .lab-drawer, .fab-menu, .menu-panel, .sheet")) return null;
+  if (typeof target?.closest === "function" && target.closest("[role='dialog'], .lab-drawer, .lab-fab, .fab-menu, .menu-panel, .sheet")) return null;
   if (key === "ArrowLeft") return { type: "back" };
   if (key === "ArrowRight") return { type: "next" };
   if (key === "Enter") {

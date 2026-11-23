@@ -65,7 +65,7 @@ export const TOUR_STEPS = [
     tab: "today",
     focus: "today-round",
     title: "The tools around the questions",
-    body: "The round button opens lab reference ranges and Help, and every question has a Labs chip beside Next. Listen reads a question, case, or card aloud and highlights the words, then reads the rationale after you answer. Readiness exams are their own sitting: 85 questions, a clock, feedback after you finish, and each form once. Light and night mode live in the menu. The PulseRN logo brings you back here.",
+    body: "The floating 🧪 button opens the lab reference ranges, a quick lookup, and Help over any screen, mid-question too, and you can drag it anywhere. Listen reads a question, case, or card aloud and highlights the words, then reads the rationale after you answer. Readiness exams are their own sitting: 85 questions, a clock, feedback after you finish, and each form once. Light and night mode live in the menu. The PulseRN logo brings you back here.",
   },
 ];
 
@@ -91,7 +91,7 @@ export const QUICK_TOUR_STEPS = [
     tab: "today",
     focus: "monitor",
     title: "Tools and progress",
-    body: "Every question has a Labs chip beside Next. After 12 answers, the monitor shows a readiness range, labeled as an estimate. The full tour, night mode, and settings are in the menu.",
+    body: "The floating 🧪 button opens lab ranges, a quick lookup, and Help without leaving the question. Drag it anywhere. After 12 answers, the monitor shows a readiness range, labeled as an estimate. The full tour, night mode, and settings are in the menu.",
   },
 ];
 

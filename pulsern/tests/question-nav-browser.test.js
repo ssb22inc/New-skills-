@@ -40,8 +40,10 @@ beforeEach(async () => {
   page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   page.on("pageerror", (e) => { throw e; });
   await page.goto(`${base}tests/browser/question-nav.html`);
-  await page.waitForFunction(() => window.T?.ready, null, { timeout: 60_000 });
-}, 90_000);
+  /* Cold start: Vite compiles App.jsx on the first visit while other
+     browser suites compile too, which can take over a minute. */
+  await page.waitForFunction(() => window.T?.ready, null, { timeout: 110_000 });
+}, 130_000);
 
 const stem = () => page.locator(".stem").first().innerText();
 const stats = () => page.locator("[data-testid=stats]").innerText();

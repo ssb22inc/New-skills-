@@ -257,7 +257,6 @@ import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRatin
 import { migrateBlob } from "./state.js";
 import { ngnExt, fourFn, validQ, scoreItem, scoreCaseStep, isFullCredit, sumScores } from "./ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
-import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard } from "./srs.js";
 import {
@@ -275,6 +274,8 @@ import {
   heldIds, checkpointAfter,
 } from "./question-nav.js";
 import { QuestionNav, OPEN_LABS_EVENT } from "./question-nav.jsx";
+import { LabFab, resetLabFab } from "./lab-fab.jsx";
+import { LabPanel } from "./lab-panel.jsx";
 import { FocusBar } from "./focus-sheet.jsx";
 import { TabIcon } from "./tab-icons.jsx";
 import { useStudyKeys, SHORTCUT_HINT, CARD_SHORTCUT_HINT } from "./study-keys.js";
@@ -537,7 +538,7 @@ export default function App() {
   const tourSteps = tourStepsFor(tourMode);
   /* The 🧪 Labs chip in every question's nav row opens the drawer. */
   useEffect(() => {
-    const open = () => { setMenuOpen(false); setLabOpen(true); };
+    const open = () => { setMenuOpen(false); setHelpOpen(false); setLabOpen(true); };
     window.addEventListener(OPEN_LABS_EVENT, open);
     return () => window.removeEventListener(OPEN_LABS_EVENT, open);
   }, []);
@@ -996,10 +997,10 @@ export default function App() {
             <nav className="menu-panel" aria-label="Main menu">
               {!locked && <>
                 <button type="button" className="menu-item" onClick={goHome}>🏠 Home</button>
-                <button type="button" className="menu-item" onClick={() => { setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
+                <button type="button" className="menu-item" onClick={() => { setHelpOpen(false); setLabOpen(true); setMenuOpen(false); }}>🧪 Lab values reference</button>
                 <button type="button" className="menu-item" onClick={() => goSection("exams")}>📝 Readiness exams</button>
                 <button type="button" className="menu-item" onClick={() => goSection("plans")}>💳 Plans & upgrades</button>
-                <button type="button" className="menu-item" onClick={() => { setHelpOpen(true); setMenuOpen(false); }}>💬 Help & contact</button>
+                <button type="button" className="menu-item" onClick={() => { setLabOpen(false); setHelpOpen(true); setMenuOpen(false); }}>💬 Help & contact</button>
                 <button type="button" className="menu-item" onClick={() => setTheme(theme === "light" ? "dim" : "light")}
                   title="Light mode reads best for long study sessions; night mode cuts glare for late review">
                   {theme === "light" ? "🌙 Night mode" : "☀ Light mode"}
@@ -1074,11 +1075,16 @@ export default function App() {
         </nav>
       )}
 
-      {/* In a question, case step, or card the 🧪 Labs chip sits in the nav
-          row instead, so nothing floats over Next. */}
-      {!examLock && !locked && !sessionLive && tourStep == null && <Fab onLabs={() => setLabOpen(true)} onHelp={() => setHelpOpen(true)} />}
-      {!examLock && <LabRef open={labOpen} setOpen={setLabOpen} />}
-      <HelpCenter open={helpOpen} setOpen={setHelpOpen} provider={provider} />
+      {/* The draggable 🧪 study toolkit floats on every study screen, in a
+          question too, and settles clear of every button (src/float-pos.js).
+          Readiness exams keep exam conditions, so it is not shown there. */}
+      {!examLock && !locked && (
+        <LabFab hidden={tourStep != null || menuOpen || labOpen || helpOpen} open={labOpen || helpOpen}
+          settleKey={tab} onOpen={() => { setMenuOpen(false); setLabOpen(true); }} />
+      )}
+      <Toolkit open={!examLock && (labOpen || helpOpen)} section={helpOpen ? "help" : "labs"}
+        onSection={(k) => { setLabOpen(k === "labs"); setHelpOpen(k === "help"); }}
+        onClose={() => { setLabOpen(false); setHelpOpen(false); }} provider={provider} />
       {tourStep != null && !locked && (
         <Tour
           step={tourStep}
@@ -1102,12 +1108,12 @@ export default function App() {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; Back, Skip, and Next move through this sitting, and Skip does not change the schedule; dosage-calculation cards include an on-screen calculator). Left and Right arrow keys move between cards when you are not typing. Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Tour (a guided walk through Today, adaptive practice, missed-question review, case studies, flashcards, and Stats; students can open it again anytime), Settings, Sign out. A Home button in the header is on every screen. During a question it confirms before clearing the open round; checked answers stay saved. During a readiness exam it ends and scores the exam, then goes home.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; Back, Skip, and Next move through this sitting, and Skip does not change the schedule; dosage-calculation cards include an on-screen calculator). Left and Right arrow keys move between cards when you are not typing. Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The floating 🧪 button is on every study screen, including during a question; students can drag it anywhere and it moves itself off buttons. Tapping it opens the Study toolkit over the current screen without losing their place: Labs & lookup (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Tour (a guided walk through Today, adaptive practice, missed-question review, case studies, flashcards, and Stats; students can open it again anytime), Settings, Sign out. The PulseRN logo in the header is the Home button on every screen, and the ☰ menu also has night/light mode. During a question it confirms before clearing the open round; checked answers stay saved. During a readiness exam it ends and scores the exam, then goes home.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 7-day pass with full study access (no exams). Access passes are one-time payments that do not auto-renew: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). Add-ons, also one-time: 7-day renewal pass $45 (content only, never charged automatically) or an extra self-assessment $45. Refunds: if paid access has not been used, a full refund can be requested within 7 days of purchase; after 7 days, or once paid access has been used, payments are non-refundable, except where the law requires otherwise (see the Terms). Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
 
-function HelpCenter({ open, setOpen, provider }) {
+function HelpPanel({ provider, inputRef }) {
   const [msgs, setMsgs] = useState([]); // {role: "you"|"ai", text}
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1136,127 +1142,103 @@ function HelpCenter({ open, setOpen, provider }) {
     setBusy(false);
   };
 
-  if (!open) return null;
   return (
-    <>
-      <div className="lab-overlay" onClick={() => setOpen(false)} />
-      <aside className="lab-drawer open" aria-label="Help and contact">
-        <div className="lab-head">
-          <p className="eyebrow">Help & contact</p>
-          <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
-        </div>
-        <div className="help-contact">
-          <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
-        </div>
-        <div className="lab-body help-chat" aria-live="polite">
-          {!msgs.length && <p className="small">Ask me anything. For example: How does readiness work? Where do I set my exam date? What's the difference between preload and afterload? Account or billing questions go to the email above.</p>}
-          {msgs.map((m, i) => (
-            <p key={i} className={m.role === "you" ? "chat-msg you" : "chat-msg ai"}>{m.text}</p>
-          ))}
-          {busy && <p className="chat-msg ai">…</p>}
-        </div>
-        <div className="help-input">
-          <input className="select" style={{ marginTop: 0 }} placeholder="Type a question…" value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
-          <button className="btn" onClick={send} disabled={busy || !input.trim()}>Send</button>
-        </div>
-      </aside>
-    </>
+    <div className="hp">
+      <div className="help-contact">
+        <p className="small"><strong>Reach a human:</strong> <a href="mailto:sheldon@pulsern.app">sheldon@pulsern.app</a> · <a href="tel:+17864084357">786-408-4357</a></p>
+      </div>
+      <div className="lab-body help-chat" aria-live="polite">
+        {!msgs.length && <p className="small">Ask me anything. For example: How does readiness work? Where do I set my exam date? What's the difference between preload and afterload? Account or billing questions go to the email above.</p>}
+        {msgs.map((m, i) => (
+          <p key={i} className={m.role === "you" ? "chat-msg you" : "chat-msg ai"}>{m.text}</p>
+        ))}
+        {busy && <p className="chat-msg ai">…</p>}
+      </div>
+      <div className="help-input">
+        <input ref={inputRef} className="select" style={{ marginTop: 0 }} placeholder="Type a question…" aria-label="Type a question for the PulseRN helper" value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
+        <button className="btn" onClick={send} disabled={busy || !input.trim()}>Send</button>
+      </div>
+    </div>
   );
 }
 
-/* ================= FLOATING ACTION BUTTON =================
-   RN pack prompt 5, visible edition: the edge controls collapse into one
-   round floating button above the tab bar. Tap to expand Labs + Help;
-   it fades while scrolling and disappears entirely during exams. */
-function Fab({ onLabs, onHelp }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      {open && <div className="fab-overlay" onClick={() => setOpen(false)} />}
-      {open && (
-        <div className="fab-menu">
-          <button className="fab-mini" onClick={() => { setOpen(false); onLabs(); }}>🧪 <span>Lab values</span></button>
-          <button className="fab-mini" onClick={() => { setOpen(false); onHelp(); }}>💬 <span>Help</span></button>
-        </div>
-      )}
-      <button className={open ? "fab open" : "fab"} onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Close quick actions" : "Open quick actions: lab values and help"} aria-expanded={open}>
-        {open ? "✕" : "🧪"}
-      </button>
-    </>
-  );
-}
+/* ================= FLOATING STUDY TOOLKIT =================
+   One draggable 🧪 button (src/lab-fab.jsx) on every study screen opens
+   this toolkit over whatever the student is doing: lab ranges + the AI
+   lookup, and the help chat. Nothing navigates and nothing unmounts, so the
+   question, case step, or card underneath keeps its place and answers.
+   A bottom sheet on phones, a side panel on wider screens. Escape or ✕
+   closes and hands focus back to whatever opened it. */
 
-/* ================= LAB VALUES DRAWER =================
-   Always-available normal ranges so students never leave the app to look
-   one up — and see them so often they stick. Flip open from the LABS tab
-   on the right edge or the header menu. */
-
-function LabRef({ open, setOpen }) {
-  const [q, setQ] = useState("");
-  const [aiAnswers, setAiAnswers] = useState({}); // {query: text} — session cache
-  const [aiBusy, setAiBusy] = useState(false);
-  const needle = q.trim().toLowerCase();
-  const groups = LAB_GROUPS
-    .map((g) => ({ ...g, rows: g.rows.filter(([n, v]) => !needle || n.toLowerCase().includes(needle) || v.toLowerCase().includes(needle) || g.group.toLowerCase().includes(needle)) }))
-    .filter((g) => g.rows.length);
-
-  const askAi = async () => {
-    const query = q.trim();
-    if (!query || aiBusy) return;
-    setAiBusy(true);
-    try {
-      const t = await askModel("deepseek", `You are an NCLEX-review study reference. The student typed: "${query}"
-
-If it names a laboratory test, vital sign, or monitored parameter: reply with the standard adult normal reference range exactly as NCLEX review textbooks teach it, one short line formatted "Name: range (units)", plus one more short line for a commonly tested therapeutic or critical value if relevant.
-
-Otherwise, treat it as an NCLEX study question and answer it: plain, clear language, under 110 words, focused on what the exam tests. Verify silently first and give only the final, correct answer — no thinking out loud, no self-correction, no analogies outside the clinical domain.
-
-Both cases: plain text only (no markdown), educational exam-prep register only — never real-world dosing or treatment instructions.`, 400);
-      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: t }));
-    } catch (e) {
-      setAiAnswers((m) => ({ ...m, [query.toLowerCase()]: "The AI lookup is unavailable right now. Try again in a moment." }));
-    } finally {
-      setAiBusy(false);
+export function Toolkit({ open, section = "labs", onSection, onClose, provider, ask = askModel }) {
+  const asideRef = useRef(null);
+  const titleRef = useRef(null);
+  const returnTo = useRef(null);
+  const wasOpen = useRef(false);
+  const tabIds = { labs: "tk-tab-labs", help: "tk-tab-help" };
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      returnTo.current = document.activeElement;
+      requestAnimationFrame(() => titleRef.current?.focus());
     }
+    if (!open && wasOpen.current) {
+      const back = returnTo.current;
+      const target = back && document.contains(back) && back !== document.body ? back : document.querySelector(".lab-fab");
+      target?.focus?.();
+    }
+    wasOpen.current = open;
+  }, [open]);
+  useEffect(() => {
+    const el = asideRef.current;
+    if (el) el.inert = !open;
+  }, [open]);
+  /* Escape closes from anywhere, even after focus fell to the page (the
+     Ask AI button disappears once its answer arrives). */
+  useEffect(() => {
+    if (!open) return undefined;
+    const onEsc = (e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [open, onClose]);
+  const onKeyDown = (e) => {
+    if (e.key !== "Tab") return;
+    const f = [...asideRef.current.querySelectorAll("button:not([disabled]), input, a[href], [tabindex='0']")].filter((n) => n.offsetParent !== null);
+    if (!f.length) return;
+    const first = f[0]; const last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   };
-  const aiHit = aiAnswers[needle];
   return (
     <>
-      {open && <div className="lab-overlay" onClick={() => setOpen(false)} />}
-      <aside className={open ? "lab-drawer open" : "lab-drawer"} aria-hidden={!open} inert={open ? undefined : ""} aria-label="Normal lab and vital-sign reference ranges">
-        <div className="lab-head">
-          <p className="eyebrow">Normal reference ranges</p>
-          <button className="theme-btn" onClick={() => setOpen(false)} aria-label="Close">✕ Close</button>
+      {open && <div className="lab-overlay tk-overlay" onClick={onClose} />}
+      <aside ref={asideRef} className={open ? "lab-drawer toolkit open" : "lab-drawer toolkit"} role="dialog" aria-modal={open ? "true" : undefined}
+        aria-hidden={!open} aria-labelledby="tk-title" onKeyDown={onKeyDown}>
+        <div className="tk-grab" aria-hidden="true" />
+        <div className="tk-head">
+          <div>
+            <h2 id="tk-title" className="tk-title" ref={titleRef} tabIndex={-1}>Study toolkit</h2>
+            <p className="tk-sub">Your place is saved. Close anytime.</p>
+          </div>
+          <button type="button" className="tk-close" onClick={onClose} aria-label="Close study toolkit">✕</button>
         </div>
-        <input className="select lab-search" placeholder="Search a lab value or ask any NCLEX question…" value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !groups.length && !aiHit) askAi(); }} />
-        <div className="lab-body">
-          {groups.map((g) => (
-            <div key={g.group} className="lab-group">
-              <p className="lab-group-name mono">{g.group.toUpperCase()}</p>
-              {g.rows.map(([n, v]) => (
-                <div key={n} className="lab-row"><span>{n}</span><span className="mono lab-val">{v}</span></div>
-              ))}
-            </div>
+        <div className="tk-tabs" role="tablist" aria-label="Toolkit sections">
+          {[["labs", "🧪 Labs & lookup", "Normal lab and vital-sign reference ranges"], ["help", "💬 Help & contact", "Help and contact"]].map(([k, label, aria]) => (
+            <button key={k} type="button" role="tab" id={tabIds[k]} aria-selected={section === k} aria-controls={`tk-panel-${k}`}
+              className={section === k ? "tk-tab on" : "tk-tab"} onClick={() => onSection(k)} title={aria}>{label}</button>
           ))}
-          {!groups.length && !aiHit && (
-            <div className="lab-ai">
-              <p className="small">“{q}” isn't in the built-in list. Ask the AI: lab values come back as ranges, and study questions get a short explanation.</p>
-              <button className="btn" onClick={askAi} disabled={aiBusy}>{aiBusy ? "Thinking…" : "🧠 Ask AI"}</button>
-            </div>
-          )}
-          {aiHit && (
-            <div className="lab-ai">
-              <p className="lab-group-name mono">AI LOOKUP</p>
-              <p className="small" style={{ whiteSpace: "pre-wrap" }}>{aiHit}</p>
-              <p className="small">✨ AI answer. Verify it against your course materials before relying on it.</p>
-            </div>
-          )}
-          <p className="small tip">Study reference only. Ranges vary slightly by lab and textbook, so verify against your course materials.</p>
+        </div>
+        <div className="tk-body">
+          <div id="tk-panel-labs" role="tabpanel" aria-labelledby={tabIds.labs} hidden={section !== "labs"} aria-label="Normal lab and vital-sign reference ranges">
+            <LabPanel ask={ask} />
+          </div>
+          <div id="tk-panel-help" role="tabpanel" aria-labelledby={tabIds.help} hidden={section !== "help"} className="tk-help">
+            <HelpPanel provider={provider} />
+          </div>
+        </div>
+        <div className="tk-foot">
+          <button type="button" className="tk-reset" onClick={resetLabFab}>↺ Reset 🧪 button position</button>
         </div>
       </aside>
     </>
@@ -3197,7 +3179,69 @@ export function Style() {
       /* Labs chip in the nav row; the floating button stays off study screens */
       .q-skipped{gap:8px}
       .q-skipped-count{flex:1}
-      .labs-chip{min-height:48px;padding:10px 14px;margin:0;white-space:nowrap}
+      /* ---- Floating 🧪 study toolkit (draggable, settles clear of every target) ---- */
+      .fab.lab-fab{left:0;top:0;right:auto;bottom:auto;touch-action:none;user-select:none;-webkit-user-select:none;
+        transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .2s,box-shadow .2s;box-shadow:0 6px 18px rgba(8,20,16,.32),0 0 0 3px var(--card);font-size:24px;cursor:grab}
+      .fab.lab-fab.dragging{transition:none;cursor:grabbing;box-shadow:0 12px 28px rgba(8,20,16,.42),0 0 0 3px var(--card)}
+      .fab.lab-fab:focus-visible{outline:3px solid var(--accent-ink);outline-offset:3px}
+      .app.scrolling .fab.lab-fab{opacity:.25}
+      .lab-overlay.tk-overlay{background:rgba(8,20,16,.32)}
+      .lab-drawer.toolkit{width:min(420px,94vw);padding:0;gap:0;box-shadow:-12px 0 32px rgba(8,20,16,.18)}
+      .tk-grab{display:none}
+      .tk-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 16px 10px}
+      .tk-title{font-size:20px;font-weight:800;letter-spacing:-.01em;color:var(--ink);outline:none}
+      .tk-sub{font-size:13px;color:var(--muted);margin-top:2px}
+      .tk-close{width:44px;height:44px;flex:none;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:18px;font-weight:700;cursor:pointer}
+      .tk-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 16px 10px;padding:4px;border-radius:14px;background:var(--bar-bg)}
+      .tk-tab{min-height:44px;border:none;border-radius:10px;background:transparent;color:var(--muted);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+      .tk-tab.on{background:var(--card);color:var(--ink);box-shadow:0 1px 4px rgba(8,20,16,.14)}
+      .tk-body{flex:1;overflow-y:auto;padding:0 16px 8px;overscroll-behavior:contain}
+      .tk-body [role=tabpanel][hidden]{display:none}
+      .tk-help .hp{display:flex;flex-direction:column;min-height:100%}
+      .tk-foot{padding:8px 16px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line);display:flex;justify-content:center}
+      .tk-reset{min-height:44px;padding:0 14px;border:none;background:transparent;color:var(--accent-ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px}
+      .tk-reset:hover{background:var(--surface)}
+      .lp-search{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;background:var(--card);border:2px solid var(--teal);border-radius:14px;padding:0 4px 0 12px;margin-bottom:10px;box-shadow:0 4px 12px rgba(8,20,16,.06)}
+      .lp-search-icon{font-size:20px;color:var(--accent-ink);font-weight:700}
+      .lp-input{flex:1;min-width:0;min-height:50px;border:none;background:transparent;color:var(--ink);font:inherit;font-size:16px;outline:none}
+      .lp-input::placeholder{color:var(--muted);opacity:1}
+      .lp-input::-webkit-search-cancel-button{display:none}
+      .lp-clear{width:44px;height:44px;border:none;border-radius:10px;background:var(--surface);color:var(--ink);font-size:15px;font-weight:700;cursor:pointer}
+      .lp-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px}
+      .lp-count{font-size:13px;color:var(--muted)}
+      .lp-all{min-height:44px;padding:0 10px;border:none;background:transparent;color:var(--accent-ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;border-radius:10px}
+      .lp-groups{display:flex;flex-direction:column;gap:8px}
+      .lp-group{border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden}
+      .lp-group.open{border-color:var(--teal)}
+      .lp-group-h{margin:0;font-size:inherit}
+      .lp-group-btn{width:100%;min-height:52px;display:flex;align-items:center;gap:10px;padding:0 14px;border:none;background:var(--surface);color:var(--ink);font:inherit;font-size:15px;font-weight:700;text-align:left;cursor:pointer}
+      .lp-group-btn:disabled{cursor:default;opacity:1}
+      .lp-group-name{flex:1}
+      .lp-group-n{min-width:28px;padding:2px 8px;border-radius:999px;background:var(--chip-bg);color:var(--accent-ink);font-size:12px;font-weight:700;text-align:center}
+      .lp-chev{color:var(--muted);font-size:14px;width:14px;text-align:center}
+      .lp-rows{margin:0;padding:2px 14px 6px}
+      .lp-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-height:44px;padding:11px 0;border-top:1px solid var(--line)}
+      .lp-row:first-child{border-top:none}
+      .lp-row dt{font-size:14px;color:var(--ink);font-weight:500}
+      .lp-row dd{margin:0;font-size:13px;font-weight:700;color:var(--accent-ink);text-align:right}
+      .lp mark{background:var(--lab-bg);color:var(--ink);border-radius:3px;padding:0 1px}
+      .lp-ask{margin-top:4px;padding:16px;border:1px dashed var(--teal);border-radius:14px;background:var(--surface)}
+      .lp-ask-title{font-size:15px;font-weight:700;color:var(--ink)}
+      .lp-ask-body{font-size:14px;color:var(--muted);margin:4px 0 12px;line-height:1.5}
+      .lp-ask-btn{width:100%;min-height:48px;margin:0}
+      .lp-ai{margin-top:10px;padding:16px;border-radius:14px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--teal);box-shadow:0 4px 14px rgba(8,20,16,.08)}
+      .lp-ai:focus{outline:2px solid var(--accent-ink);outline-offset:2px}
+      .lp-ai-eyebrow{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--accent-ink);margin-bottom:8px;overflow-wrap:anywhere}
+      .lp-ai-text{font-size:15px;line-height:1.6;color:var(--ink);white-space:pre-wrap}
+      .lp-ai-note{font-size:12.5px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+      .lp-disclaimer{font-size:12.5px;color:var(--muted);margin:14px 2px 6px;line-height:1.5}
+      @media (max-width:760px){
+        .lab-drawer.toolkit{top:auto;left:0;right:0;bottom:0;width:auto;height:min(80vh,680px);border-left:none;border-top:1px solid var(--line);border-radius:20px 20px 0 0;transform:translateY(104%);box-shadow:0 -12px 32px rgba(8,20,16,.22)}
+        .lab-drawer.toolkit.open{transform:translateY(0)}
+        .tk-grab{display:block;width:44px;height:5px;border-radius:3px;background:var(--line);margin:8px auto 0}
+        .tk-head{padding-top:8px}
+      }
+      @media (prefers-reduced-motion:reduce){.fab.lab-fab,.lab-drawer.toolkit{transition:none}}
       .app.in-session .q-nav-wrap.card-nav{padding-right:0}
       /* Cards: session progress + flip */
       .card-progress{display:flex;align-items:center;gap:10px;margin-bottom:10px}

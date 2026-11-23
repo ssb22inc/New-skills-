@@ -1,7 +1,7 @@
 /* Back, Next, and Skip. Large targets for a phone held in one hand.
    The count is the way back to anything skipped this sitting.
-   The 🧪 Labs chip lives in this row so the lab reference is one tap away
-   without a floating button sitting on top of Next. nextPrimary=false
+   The lab reference is the draggable 🧪 study toolkit, which settles
+   clear of this row on its own (src/lab-fab.jsx). nextPrimary=false
    keeps Next secondary while "Check answer" is the one primary action. */
 
 export const OPEN_LABS_EVENT = "pulsern:open-labs";
@@ -27,18 +27,12 @@ export function QuestionNav({
   emptyReviewAria = "No skipped questions",
   layout = "sticky",
   nextPrimary = true,
-  labs = true,
 }) {
   const skippedLabel = skipped === 1 ? "1 skipped" : `${skipped} skipped`;
   return (
     <div className={layout === "inline" ? "q-nav-wrap card-nav" : "q-nav-wrap"}>
       <div className="q-skipped">
         <p className="small mono q-skipped-count">{skippedLabel}</p>
-        {labs && (
-          <button type="button" className="btn ghost labs-chip" onClick={openLabs} aria-label="Labs: normal reference ranges">
-            <span aria-hidden="true">🧪</span> Labs
-          </button>
-        )}
         <button
           type="button"
           className="btn ghost"
