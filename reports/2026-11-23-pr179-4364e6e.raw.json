@@ -1,0 +1,56 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "578713a7aa9e66bbf53568467225d0a3b0954299",
+    "head": "4364e6e1840c7ef3609cb31da6591078769db7bb",
+    "pr": "179"
+  },
+  "reviewedAt": "2026-11-23T09:32:30.432Z",
+  "filesReviewed": [
+    "pulsern/api/marketing.js",
+    "pulsern/index.html",
+    "pulsern/ops/build-public-pages.mjs",
+    "pulsern/ops/commercial-content.mjs",
+    "pulsern/ops/seo-guardian.mjs",
+    "pulsern/public/commercial-search-intents.json",
+    "pulsern/public/compare/best-affordable-nclex-prep/index.html",
+    "pulsern/public/compare/best-nclex-app-repeat-test-takers/index.html",
+    "pulsern/public/compare/best-nclex-question-banks/index.html",
+    "pulsern/public/compare/index.html",
+    "pulsern/public/compare/methodology/index.html",
+    "pulsern/public/compare/pulsern-vs-archer/index.html",
+    "pulsern/public/compare/pulsern-vs-kaplan/index.html",
+    "pulsern/public/compare/pulsern-vs-uworld/index.html",
+    "pulsern/public/comparison-evidence.json",
+    "pulsern/public/editorial-policy/index.html",
+    "pulsern/public/free-nclex-practice-test/index.html",
+    "pulsern/public/how-it-works/index.html",
+    "pulsern/public/llms.txt",
+    "pulsern/public/methodology/index.html",
+    "pulsern/public/pricing/index.html",
+    "pulsern/public/sitemap.xml",
+    "pulsern/src/landing.jsx",
+    "pulsern/tests/attribution-entry.test.js",
+    "pulsern/tests/retired-commercial.test.js",
+    "pulsern/tests/seo-commercial-links.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/vercel.json"
+  ],
+  "skipped": [],
+  "findings": [],
+  "usage": {
+    "promptTokens": 138171,
+    "completionTokens": 1681,
+    "reasoningTokens": 1605,
+    "costUsd": 0.362236
+  },
+  "error": null,
+  "verdict": "PASS",
+  "assessment": "No concrete defects found in the supplied change. Comparison retirement is consistently reflected in page generation, redirects, navigation, discovery files, and tests. I could not run the build or tests, or verify deployed Vercel redirect behavior, from the supplied material.",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0
+  }
+}
