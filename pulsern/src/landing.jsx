@@ -27,10 +27,11 @@ const SAMPLES = [
   ["NGN bow-tie", "Five text-based bow-tie examples connecting a condition, two actions, and two parameters.", "/learn/ngn-bow-tie-practice-questions/"],
 ];
 
-const COMPARISONS = [
-  ["PulseRN vs UWorld", "Compare AI study help, question-bank scale, lab access, media depth, RN accountability, and current public pricing.", "/compare/pulsern-vs-uworld/"],
-  ["PulseRN vs Archer Review", "Compare an app built by a working hospital RN with Archer's high-volume readiness, CAT, video, and live-support packages.", "/compare/pulsern-vs-archer/"],
-  ["PulseRN vs Kaplan", "Compare a focused, self-directed app with Kaplan's strategy instruction, CAT practice, classes, and tutoring tiers.", "/compare/pulsern-vs-kaplan/"],
+const WHY = [
+  ["How memory works", "Every session starts with a question. What you miss comes back on a real calendar date, and adaptive practice stays with a weak area until it is no longer the weak one.", "/how-it-works/"],
+  ["Built by a working hospital RN", "Sheldon Bennett, a working hospital RN, built PulseRN around how people learn and remember under pressure.", "/about/"],
+  ["Start free", "A 7-day free pass opens the study library. No card needed. Paid plans keep that same library open for a longer window.", "/pricing/"],
+  ["The method, in the open", "Read how retrieval practice, spaced repetition, adaptive questions, and the readiness estimate work.", "/methodology/"],
 ];
 
 export default function LandingPage({ onSignIn, onStart }) {
@@ -150,7 +151,7 @@ export default function LandingPage({ onSignIn, onStart }) {
           <div className="land-links">
             <a href="#features">Features</a>
             <a href="#product-tour">App preview</a>
-            <a href="/compare/">Compare</a>
+            <a href="/how-it-works/">How it works</a>
             <a href="/pricing/">Pricing</a>
             <a href="/learn/">RN-reviewed guides</a>
             <button className="land-button secondary keep" type="button" onClick={onSignIn}>Sign in</button>
@@ -246,19 +247,18 @@ export default function LandingPage({ onSignIn, onStart }) {
         <section className="land-section white">
           <div className="land-container">
             <div className="land-section-head">
-              <div className="land-eyebrow">Sourced comparisons</div>
-              <h2>See the fit before you choose a bank.</h2>
-              <p>Dated comparisons with UWorld, Archer Review, and Kaplan. Facts come from provider pages. No paid ranking.</p>
+              <div className="land-eyebrow">Why PulseRN</div>
+              <h2>Built around how memory works.</h2>
+              <p>You answer first. Missed items return before you forget them. The app was built by a working hospital RN, and you can start free.</p>
             </div>
-            <div className="land-grid">
-              {COMPARISONS.map(([title, text, href]) => (
+            <div className="land-sample-grid">
+              {WHY.map(([title, text, href]) => (
                 <a className="land-card land-card-link" href={href} key={href}>
-                  <div className="land-card-num" aria-hidden="true">↔</div>
+                  <div className="land-card-num" aria-hidden="true">RN</div>
                   <h3>{title}</h3><p>{text}</p>
                 </a>
               ))}
             </div>
-            <p className="land-note" style={{ marginTop: 18 }}><a href="/compare/">See every NCLEX-prep comparison and the methodology →</a></p>
           </div>
         </section>
 
@@ -304,7 +304,7 @@ export default function LandingPage({ onSignIn, onStart }) {
 
       <footer className="land-footer">
         <div className="land-container">
-          <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div></div>
+          <div className="land-footer-row"><strong>PulseRN</strong><div className="land-footer-links"><a href="/pricing/">Pricing</a><a href="/learn/">Guides</a><a href="/how-it-works/">How it works</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div></div>
           <p className="land-disclaimer">{GRADING_NOTE}</p>
           <p className="land-disclaimer">Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of the National Council of State Boards of Nursing, Inc. (NCSBN), which is not affiliated with and does not endorse PulseRN.</p>
         </div>

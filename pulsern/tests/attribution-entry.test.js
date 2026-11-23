@@ -134,7 +134,11 @@ describe("public pages load the existing capture", () => {
 
   it("puts that script on every static public page, ahead of the first link", () => {
     const files = htmlFiles(path.join(root, "public"));
-    expect(files.length).toBeGreaterThan(50);
+    const indexable = [...read("public/sitemap.xml").matchAll(/<loc>https:\/\/www\.pulsern\.app([^<]*)<\/loc>/g)].map((match) => match[1]).filter((route) => route !== "/");
+    /* The comparison pages are gone, so the public tree is smaller than the
+       old fixed floor. It still has to cover every indexable URL. */
+    expect(indexable.length).toBeGreaterThan(40);
+    expect(files.length).toBeGreaterThanOrEqual(indexable.length);
     for (const file of files) {
       const html = readFileSync(file, "utf8");
       const rel = path.relative(root, file);
@@ -230,7 +234,7 @@ describe("a tagged landing is what signup records", () => {
     const storage = memoryStorage();
     land(
       storage,
-      `${SITE}/compare/pulsern-vs-uworld/?utm_source=cs_g5&utm_medium=cpc&utm_campaign=reproof_20260928&utm_content=headline&utm_term=nclex`,
+      `${SITE}/how-it-works/?utm_source=cs_g5&utm_medium=cpc&utm_campaign=reproof_20260928&utm_content=headline&utm_term=nclex`,
       "https://www.google.com/",
     );
     const inserted = await continueToSignup(storage, "campaign-student");
@@ -240,7 +244,7 @@ describe("a tagged landing is what signup records", () => {
       utm_campaign: "reproof_20260928",
       utm_content: "headline",
       utm_term: "nclex",
-      landing_path: "/compare/pulsern-vs-uworld/",
+      landing_path: "/how-it-works/",
     });
     expect(creditedSource(inserted[0], "campaign-student")).toEqual([
       { source: "cs_g5 / reproof_20260928", signup: 1, activated: 0, purchase: 0 },
