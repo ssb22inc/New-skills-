@@ -260,6 +260,12 @@ import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 import { LAB_GROUPS } from "./labs.js";
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard } from "./srs.js";
+import {
+  startSession as startCardSession, currentCard, atFrontier, canGoBack as canGoBackCard,
+  canGoForward as canGoForwardCard, canSkip as canSkipCard, cardsLeft, skippedCount as skippedCardCount,
+  sessionOutcome, saveCardView, goBack as goBackCard, goForward as goForwardCard, skipCurrent as skipCard,
+  gradeCurrent as gradeCard, jumpToSkipped as jumpToSkippedCard, cardNavAction,
+} from "./card-nav.js";
 import { pickCategory, seededRandom, seedFrom, STARVE_WINDOW } from "./weak-spots.js";
 import { updateMissSchedule, reviewPools, sessionPool } from "./question-review.js";
 import {
@@ -1054,7 +1060,7 @@ export default function App() {
    to a human. */
 
 const SUPPORT_CONTEXT = `You are PulseRN's friendly in-app helper. PulseRN is an adaptive NCLEX-RN study app.
-How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; dosage-calculation cards include an on-screen calculator). Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Tour (a guided walk through Today, adaptive practice, missed-question review, case studies, flashcards, and Stats; students can open it again anytime), Settings, Sign out. A Home button in the header is on every screen. During a question it confirms before clearing the open round; checked answers stay saved. During a readiness exam it ends and scores the exam, then goes home.
+How the app works: Today tab = one-tap daily round (due flashcards + 8 adaptive questions) and shows a readiness range after 12+ answers, plus a weekly plan once an exam date is set in Stats. Practice tab = adaptive QBank covering all eight NCSBN client-needs categories (weaker categories come up more often) and eight item types (multiple choice, select-all, ordering, matrix, bow-tie, cloze, dosage-calculation math, highlight), some with chart/exhibit data; Focus chips at the top filter by category and/or question type; missed questions are scheduled to come back on a review date (tomorrow, then further out each time they are answered correctly), show up first in the Today round when due, and can be reviewed anytime in "Review misses". NGN items and case-study steps earn NCSBN-style partial credit. Case Study tab = a library of full NCJMM case walkthroughs (for example sepsis, DKA, and preeclampsia) with the AI tutor available on every step. Cards tab = spaced-repetition flashcards (type your answer, flip with Enter, self-grade; Back, Skip, and Next move through this sitting, and Skip does not change the schedule; dosage-calculation cards include an on-screen calculator). Left and Right arrow keys move between cards when you are not typing. Read aloud: practice questions (including the Today round and Review misses), case studies and flashcards have a 🔊 Listen button that reads the item aloud in a natural voice while highlighting the part being read; after answering, a second Listen button reads the result and rationale. Students can change the speed (0.8×, 1×, 1.25×) and turn on "Read each new one" for hands-free study. The answer is never read before the student answers. Read aloud is not available in readiness exams, which keep exam conditions. Stats tab = your plan, performance by category, exam date, sign out. The round floating button at the bottom right opens Lab values (searchable normal ranges; its AI lookup also answers general NCLEX study questions) and the Help chat. The ☰ menu has Home, Readiness exams (ten standardized 85-question NCLEX-style exams with a 2h50m clock, no feedback until the end, and a readiness estimate; each exam can be taken only ONCE per account, never repeated), Plans & upgrades, Lab values, Help & contact, Tour (a guided walk through Today, adaptive practice, missed-question review, case studies, flashcards, and Stats; students can open it again anytime), Settings, Sign out. A Home button in the header is on every screen. During a question it confirms before clearing the open round; checked answers stay saved. During a readiness exam it ends and scores the exam, then goes home.
 Profile & texts: Stats has a Profile card where students add their name and mobile number and can opt in to study-reminder texts and/or offer texts (each optional; reply STOP to any text to unsubscribe; msg & data rates may apply). Email is the account email.
 Plans: every new account gets a free 7-day pass with full study access (no exams). Access passes are one-time payments that do not auto-renew: 30-day $99 (1 self-assessment), 60-day $159 (2), 90-day $219 (3), 180-day $319 (4), 360-day $379 (5), 730-day $439 (6). Add-ons, also one-time: 7-day renewal pass $45 (content only, never charged automatically) or an extra self-assessment $45. Refunds: if paid access has not been used, a full refund can be requested within 7 days of purchase; after 7 days, or once paid access has been used, payments are non-refundable, except where the law requires otherwise (see the Terms). Partner discount codes can be entered on the Plans page. All content is the property of the app's owner and may not be used outside PulseRN. Under any answered question: an AI tutor button and a ⚠ button for reporting a problem with the question.
 Rules: help with app navigation and NCLEX study strategy; you may explain nursing concepts in an educational exam-prep register but NEVER give real-world medical or dosing advice. For account, billing, data-deletion, or anything you can't resolve, direct the user to email sheldon@pulsern.app or call 786-408-4357. Keep answers under 120 words, warm and plain. Plain text only — no markdown, no asterisks, no headers.`;
@@ -2211,54 +2217,71 @@ const parseAntidote = (c) => {
 
 const isCalcCard = (c) => /dosage|calculation|conversion|drip rate|drop factor/i.test(c.topic);
 
+const GRADE_WORD = { again: "Again", hard: "Hard", good: "Good", easy: "Easy" };
+
 export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = true, embedded = false, onDone, fcFlips = 99, onFlip, newAllowance = NEW_PER_DAY, onNewCard, onSession, tourFocus = null }) {
   const [catFilter, setCatFilter] = useState([]); // empty = all categories
-  const [sessionQueue, setSessionQueue] = useState(null); // card ids due today
-  const [show, setShow] = useState(false);
-  const [typed, setTyped] = useState(""); // typed recall attempt (optional, self-graded)
   const [calcOpen, setCalcOpen] = useState(false); // on-screen calculator for dosage cards
-
   const filtered = useMemo(
     () => (catFilter.length
       ? cards.filter((c) => catFilter.some((f) => (f === CALC_CHIP ? isCalcCard(c) : f === c.cat)))
       : cards),
     [cards, catFilter]
   );
-
-  /* (Re)build the queue when the deck or focus changes — not on every grade,
-     which would reshuffle the session underneath the student.
-
-     `ready` is in the deps because the saved schedule arrives asynchronously.
-     Building the queue before it lands makes every card look unseen, so the
-     first cards of the bank get served again to someone who has already
-     scheduled them days out. Rebuilding once the blob is in fixes that; it
-     does not fire again on grading, because `ready` only flips once.
-
-     `newAllowance` is what is left of today's NEW_PER_DAY budget (persisted
-     as fcNew), so remounting or changing focus cannot serve 20 more. */
-  useEffect(() => {
-    setSessionQueue(dueQueue(filtered, srsMap, newAllowance));
-    setShow(false); setTyped("");
+  const filterKey = catFilter.join("|");
+  /* Snapshot the queue when the deck is ready or the focus changes.
+     A grade updates srsMap and must not rebuild this list under the student.
+     newAllowance is read at those moments, so a remount cannot serve 20 more. */
+  const seedIds = useMemo(
+    () => (ready ? dueQueue(filtered, srsMap, newAllowance) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, filtered.length, catFilter.join("|")]);
-
-  const curId = sessionQueue?.[0];
-  const cur = curId != null ? cards.find((c) => c.id === curId) : null;
-
-  const grade = (g) => {
-    setShow(false);
-    setTyped("");
+    [ready, filtered.length, filterKey]
+  );
+  const seedKey = `${ready ? 1 : 0}|${filterKey}|${filtered.length}`;
+  const [builtKey, setBuiltKey] = useState(seedKey);
+  const [session, setSession] = useState(() => startCardSession(seedIds ?? []));
+  if (builtKey !== seedKey) {
+    setBuiltKey(seedKey);
+    setSession(startCardSession(seedIds ?? []));
     setCalcOpen(false);
+  }
+  const entry = currentCard(session);
+  const curId = entry?.id ?? null;
+  const cur = curId != null ? cards.find((c) => c.id === curId) ?? null : null;
+  const show = !!entry?.show;
+  const typed = entry?.typed ?? "";
+  const place = `${session.index}:${curId ?? ""}`;
+  const placeRef = useRef(place);
+  if (placeRef.current !== place) {
+    placeRef.current = place;
+    if (calcOpen) setCalcOpen(false);
+  }
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const action = cardNavAction(e);
+      if (!action) return;
+      e.preventDefault();
+      setSession((s) => (action === "back" ? goBackCard(s) : goForwardCard(s).nav));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const onBack = () => setSession((s) => goBackCard(s));
+  const onSkip = () => setSession((s) => skipCard(s).nav);
+  const onNext = () => setSession((s) => goForwardCard(s).nav);
+  const onReview = () => setSession((s) => jumpToSkippedCard(s));
+  const grade = (g) => {
+    const result = gradeCard(session, g);
+    if (!result.recorded) return;
+    const id = currentCard(session).id;
     touchDay();
-    if (!srsMap[curId]) onNewCard?.(); // first grade of a never-seen card counts against today's new-card cap
-    setSrsMap((m) => ({ ...m, [curId]: nextSchedule(m[curId], g) }));
+    if (!srsMap[id]) onNewCard?.(); // first grade of a never-seen card counts against today's new-card cap
+    setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
     if (g === "good") addXp(5);
     else if (g === "easy") addXp(8);
-    setSessionQueue((q) => {
-      const rest = q.slice(1);
-      if (g === "again") { const at = Math.min(2, rest.length); return [...rest.slice(0, at), curId, ...rest.slice(at)]; }
-      return rest; // scheduled to a future date — leaves today's queue
-    });
+    setSession(result.nav);
   };
 
   const interval = srsMap[curId]?.interval ?? 0;
@@ -2285,40 +2308,89 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
     </div>
   );
 
-  if (!cur) return (
+  const frontier = atFrontier(session);
+  const graded = !!entry?.grade;
+  const nextAria = !entry
+    ? "No further card"
+    : frontier && !graded
+      ? "Next card. This one stays ungraded and comes back later in this queue"
+      : "Forward to the next card";
+  const cardNav = (
+    <QuestionNav
+      layout="inline"
+      canBack={canGoBackCard(session)}
+      canSkip={canSkipCard(session)}
+      canNext={canGoForwardCard(session)}
+      skipped={skippedCardCount(session)}
+      onBack={onBack}
+      onSkip={onSkip}
+      onNext={onNext}
+      onReview={onReview}
+      backLabel="← Back"
+      backAria="Back to the previous card"
+      nextLabel="Next →"
+      nextAria={nextAria}
+      skipAria={graded ? "Leave this card and move on" : "Skip this card without grading it"}
+      emptyReviewAria="No skipped cards"
+    />
+  );
+  if (!ready) return (
     <div className="stack">
       {chips}
       <section className="card">
-        <div className={tourMark(tourFocus, "cards")} data-tour="cards">
-          <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
-          <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
-          <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
-        </div>
-        <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day (a cap that holds for the whole day, even if you reopen the deck) so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
-        {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
+        <p className="eyebrow">Spaced repetition</p>
+        <p className="small">Loading today's cards…</p>
       </section>
     </div>
   );
+
+  if (!cur) {
+    const skippedOut = sessionOutcome(session) === "skipped";
+    return (
+      <div className="stack">
+        {chips}
+        <section className="card">
+          <div className={tourMark(tourFocus, "cards")} data-tour="cards">
+            <p className="eyebrow">Spaced repetition · deck of {filtered.length} cards</p>
+            {skippedOut ? (
+              <>
+                <h2 className="h2">Skipped for now</h2>
+                <p className="small">Those cards were not graded, so the schedule is unchanged. They stay in today's queue. Back opens one if you want to grade it.</p>
+              </>
+            ) : (
+              <>
+                <h2 className="h2">Nothing due {catFilter.length ? "in this focus" : "today"} 🎉</h2>
+                <p className="small">Your queue is clear, and that's the point. {nextDue ? `Next cards unlock ${nextDue === addDays(1) ? "tomorrow" : `on ${nextDue}`}.` : ""}</p>
+              </>
+            )}
+          </div>
+          <Why>Reviews land right before you'd forget: graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further. New cards unlock at {NEW_PER_DAY} per day (a cap that holds for the whole day, even if you reopen the deck) so the deck never buries you. Your schedule syncs to your account. Come back on the due date, and the queue will be waiting. Early re-cramming actually weakens the spacing effect.</Why>
+          {session.entries.length > 0 && cardNav}
+          {embedded && <button className="btn" onClick={onDone}>Continue to questions →</button>}
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="stack">
       {chips}
       <section className="card">
-        <p className="eyebrow">Spaced repetition · {sessionQueue.length} in today's queue · deck of {filtered.length}</p>
+        <p className="eyebrow">Spaced repetition · {cardsLeft(session)} in today's queue · deck of {filtered.length}{frontier ? "" : " · looking back"}</p>
         <p className="small mono" style={{ marginBottom: 6 }}>{cur.cat.toUpperCase()} · {cur.topic.toUpperCase()}{cur.ai ? " · ✨ AI" : ""}</p>
         <ReadAloudBar reader={cardReader} label={show ? "Listen to the answer" : "Listen to the card"} />
-        <button className={tourMark(tourFocus, "cards") + " " + ra(cardReader, show ? "card-back" : "card-front", "flashcard")} data-tour="cards" onClick={() => { if (!show) onFlip?.(); setShow((s) => !s); }}>
+        <button className={tourMark(tourFocus, "cards") + " " + ra(cardReader, show ? "card-back" : "card-front", "flashcard")} data-tour="cards" onClick={() => { if (!show) onFlip?.(); setSession((s) => saveCardView(s, { show: !show, typed })); }}>
           <p className="fc-side mono">{show ? "ANSWER" : "PROMPT · TAP TO FLIP"}</p>
           <p className="fc-text">{show ? cur.back : cur.front}</p>
         </button>
-        {!show && (
+        {!show && !graded && (
           <input
             className="select fc-input"
             placeholder="Type your answer first, then flip…"
             value={typed}
             autoComplete="off"
-            onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { onFlip?.(); setShow(true); } }}
+            onChange={(e) => { const value = e.target.value; setSession((s) => saveCardView(s, { show: false, typed: value })); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { onFlip?.(); setSession((s) => saveCardView(s, { show: true, typed: currentCard(s)?.typed ?? "" })); } }}
             aria-label="Type your answer before flipping"
           />
         )}
@@ -2331,13 +2403,13 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
             <span className="chip">{parseAntidote(cur)}</span><span className="fc-arrow">→</span><span className="chip fc-anti">{cur.back}</span>
           </div>
         )}
-        {isCalcCard(cur) && (
+        {isCalcCard(cur) && !graded && (
           <>
             <button className="btn ghost tutor-btn" onClick={() => setCalcOpen((o) => !o)}>{calcOpen ? "Hide calculator" : "🧮 Open calculator"}</button>
-            {calcOpen && <Calculator onUse={(v) => { setTyped(v); }} />}
+            {calcOpen && <Calculator onUse={(v) => setSession((s) => saveCardView(s, { show, typed: v }))} />}
           </>
         )}
-        {show && (
+        {show && !graded && (
           <div className="grades">
             <button className="btn grade again" onClick={() => grade("again")}>Again</button>
             <button className="btn grade hard" onClick={() => grade("hard")}>Hard<span className="grade-sub">1d</span></button>
@@ -2345,9 +2417,14 @@ export function Flashcards({ addXp, cards, srsMap, setSrsMap, touchDay, ready = 
             <button className="btn grade easy" onClick={() => grade("easy")}>Easy<span className="grade-sub">{interval < 1 ? "7d" : `${Math.min(interval * 3 + 1, 90)}d`}</span></button>
           </div>
         )}
+        {graded && <p className="small tip">Graded {GRADE_WORD[entry.grade] ?? entry.grade}. This visit is not graded again.</p>}
+        {!graded && (session.skipPasses[cur.id] ?? 0) > 0 && (
+          <p className="small tip">Skipped earlier. It still has no grade, so the schedule has not changed.</p>
+        )}
+        {cardNav}
         {fcFlips < 3 && <p className="small tip">Typing (or saying) the answer before you flip is the retrieval attempt that builds the memory. The flip is just the check.</p>}
-        <p className="small tip">Enter flips the card · grades set real calendar dates.{cur.ai ? " ✨ AI-assisted card that passed automated quality checks." : ""}</p>
-        <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. Reviews land right before you'd forget. That's the spacing effect doing the work.</Why>
+        <p className="small tip">Enter flips the card · ← Back · → Next · grades set real calendar dates.{cur.ai ? " ✨ AI-assisted card that passed automated quality checks." : ""}</p>
+        <Why label="how grading works">Graded "Hard" returns tomorrow; "Good" stretches to 3, 7, then 15 days; "Easy" pushes even further; "Again" re-queues it in this session. Skip does not change the schedule. Reviews land right before you'd forget. That's the spacing effect doing the work.</Why>
       </section>
     </div>
   );
@@ -2699,6 +2776,11 @@ export function Style() {
       .q-skipped .btn{margin-top:0;min-height:48px;padding:10px 12px;font-size:14px}
       .q-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
       .q-nav .btn{margin-top:0;min-height:48px;padding:12px 4px;font-size:16px}
+      /* Cards use the same row, in the card itself. Sticky would pin it on
+         the tab bar, under the labs button. On a phone the labs button
+         covers the right edge, so the row stops short of it. */
+      .q-nav-wrap.card-nav{position:static;bottom:auto;z-index:auto;background:transparent}
+      @media (max-width:640px){.q-nav-wrap.card-nav{padding-right:96px}}
       .opt:disabled,.hl-token:disabled,.mx-cell:disabled{cursor:default}
       .bar{height:8px;background:var(--bar-bg);border-radius:99px;overflow:hidden;margin:8px 0 4px}
       .bar-fill{height:100%;background:var(--teal);border-radius:99px;transition:width .4s}
