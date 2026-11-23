@@ -2,6 +2,7 @@
    agents, and prospective learners need before entering the authenticated app. */
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { GRADING_NOTE, GRADING_NOTE_LONG } from "../src/grading-note.js";
+import { ON_PURPOSE } from "../src/on-purpose.js";
 import { PLANS, fmtUsd } from "../src/pricing.js";
 import { COMMERCIAL_PAGES, COMMERCIAL_SOURCES, commercialEvidence, relatedCommercial } from "./commercial-content.mjs";
 import { ATTRIBUTION_BOOT_TAG, writeAttributionBoot } from "./attribution-boot.mjs";
@@ -22,7 +23,19 @@ const CSS = `
   @media(max-width:650px){.links a:not(:last-child){display:none}.grid{grid-template-columns:1fr}main{padding-top:42px}h1{font-size:42px}table{font-size:13px}th,td{padding:9px}}
 `;
 
-function page({ slug, title, description, eyebrow, h1, body, schema, published, updated, sources = [], faq = [], contentSha256 }) {
+const PURPOSE_CSS = `.purpose{background:#0d302b;color:#fff;border-radius:16px;padding:18px 20px;margin:22px 0 8px}.purpose p{margin:0;color:#fff}.purpose .purpose-kicker{color:#8fd7c4;font-size:12px;font-weight:850;letter-spacing:.14em;margin-bottom:6px}.purpose .purpose-title{font-size:clamp(20px,3vw,26px);line-height:1.22;font-weight:850;letter-spacing:-.02em}.purpose .purpose-line{color:#d7ebe6;margin-top:6px;font-size:15px}`;
+
+function purposeBand() {
+  return `<aside class="purpose" aria-label="On purpose"><p class="purpose-kicker">${esc(ON_PURPOSE.eyebrow)}</p><p class="purpose-title">${esc(ON_PURPOSE.headline)}</p><p class="purpose-line">${esc(ON_PURPOSE.support)}</p></aside>`;
+}
+
+function withPurpose(body) {
+  const lead = body.match(/<p class="lead">[\s\S]*?<\/p>/);
+  if (!lead) return purposeBand() + body;
+  return body.replace(lead[0], `${lead[0]}${purposeBand()}`);
+}
+
+function page({ slug, title, description, eyebrow, h1, body, schema, published, updated, sources = [], faq = [], contentSha256, purpose = false }) {
   const url = `${SITE}/${slug}/`;
   const related = published ? relatedCommercial(slug) : [];
   const relatedSection = related.length ? `<section aria-labelledby="related-comparisons"><h2 id="related-comparisons">Compare related NCLEX preparation options</h2><div class="grid">${related.map((item) => `<article class="card"><h3><a href="/${item.slug}/">${esc(item.title)}</a></h3><p>${esc(item.description)}</p></article>`).join("")}</div></section>` : "";
@@ -37,9 +50,9 @@ function page({ slug, title, description, eyebrow, h1, body, schema, published, 
       ...(schema ? [schema] : []),
     ],
   };
-  return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image">${ATTRIBUTION_BOOT_TAG}<script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}</style></head><body>
+  return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image">${ATTRIBUTION_BOOT_TAG}<script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}${purpose ? PURPOSE_CSS : ""}</style></head><body>
   <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/pricing/">Pricing</a><a href="/app/sign-in">Sign in</a></div></nav></header>
-  <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${published ? `<p class="meta">Published <time datetime="${esc(published)}">${esc(published)}</time> · Last verified <time datetime="${esc(updated)}">${esc(updated)}</time> · editorial owner <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a> · Corrections: <a href="mailto:sheldon@pulsern.app?subject=Correction%20request">sheldon@pulsern.app</a></p>` : ""}${body}${relatedSection}
+  <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${published ? `<p class="meta">Published <time datetime="${esc(published)}">${esc(published)}</time> · Last verified <time datetime="${esc(updated)}">${esc(updated)}</time> · editorial owner <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a> · Corrections: <a href="mailto:sheldon@pulsern.app?subject=Correction%20request">sheldon@pulsern.app</a></p>` : ""}${purpose ? withPurpose(body) : body}${relatedSection}
   <div class="callout"><strong>Built to get you ready to walk into the NCLEX confident.</strong><br><a class="button" href="/app/sign-up">Start the ${esc(free.name.toLowerCase())}</a><a class="button alt" href="/learn/">Read the nursing-study guides</a></div></main>
   <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div><p class="grading">${esc(GRADING_NOTE)}</p><p>Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN.</p></div></footer></body></html>`;
 }
@@ -79,7 +92,7 @@ const pages = [
       <section><h2>What this free test shows</h2><div class="card"><p>The hub is a no-sign-in sample of PulseRN's question-and-rationale loop. Adaptive practice and readiness estimates live in the app. Read the <a href="/methodology/">methodology</a> for how they work, the <a href="/editorial-policy/">editorial policy</a> for how content is checked, or <a href="/pricing/">pricing</a> for current access.</p></div></section>`,
   },
   {
-    slug: "pricing", title: "NCLEX-RN prep pricing", eyebrow: "Clear pricing", h1: "Choose the study window that fits your plan.",
+    slug: "pricing", title: "NCLEX-RN prep pricing", eyebrow: "Clear pricing", h1: "Choose the study window that fits your plan.", purpose: true,
     description: `PulseRN NCLEX-RN prep, from a free ${free.days}-day pass with no card needed to 30- to 730-day plans. Every paid plan opens the same study library.`,
     schema: { "@type": "Product", "@id": `${SITE}/#app`, name: "PulseRN", description: "Adaptive NCLEX-RN exam preparation", brand: { "@type": "Brand", name: "PulseRN" }, offers },
     body: `<p class="lead">Built by a working hospital RN. Every paid plan opens the same library: 10,000+ practice questions, 500+ case studies, and 1,100+ flashcards, engineered around retrieval practice, spaced repetition, and adaptive practice. Paid plans add one to six readiness self-assessments, depending on plan length. The free pass includes study content but no readiness self-assessment, and no card is needed.</p>
@@ -92,7 +105,7 @@ const pages = [
       <div class="callout"><strong>Readiness:</strong> Readiness is an estimate built from your work in PulseRN. It suggests what to review next, so every session moves you closer to exam day.</div>`,
   },
   {
-    slug: "how-it-works", title: "How PulseRN works", eyebrow: "The study loop", h1: "Engineered around how you learn and remember.",
+    slug: "how-it-works", title: "How PulseRN works", eyebrow: "The study loop", h1: "Engineered around how you learn and remember.", purpose: true,
     description: "See how PulseRN uses retrieval practice, spaced repetition, adaptive questions, a Today round, and a weekly plan built around your exam date.",
     body: `<p class="lead">Built by Sheldon Bennett, a working hospital RN. PulseRN was researched and engineered around how people actually learn and remember under pressure. The loop is the product.</p>
       <section><h2>1. Retrieval practice</h2><div class="card"><p>Every session starts with a question, not a lecture. You commit to an answer, then read the rationale. Practice includes standard multiple choice and Next Generation formats: matrix, bow-tie, cloze, highlight, drag-and-drop, multiple response, and dosage calculation.</p></div></section>
@@ -103,7 +116,7 @@ const pages = [
       <p class="meta">Product description owner: <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a>. For the scoring and content-governance details, read the <a href="/methodology/">methodology</a> and <a href="/editorial-policy/">editorial policy</a>.</p>`,
   },
   {
-    slug: "methodology", title: "PulseRN methodology", eyebrow: "Methods and limits", h1: "How the PulseRN study loop works.",
+    slug: "methodology", title: "PulseRN methodology", eyebrow: "Methods and limits", h1: "How the PulseRN study loop works.", purpose: true,
     description: "How PulseRN uses retrieval practice, spaced repetition, adaptive questions, and a readiness estimate built from your work in the app.",
     body: `<p class="lead">Built by Sheldon Bennett, a working hospital RN. The methods below guide study inside PulseRN. Readiness is an estimate built from your work in PulseRN.</p>
       <section><h2>Retrieval practice</h2><div class="card"><p>Every session starts with a question, not a lecture. The answer is committed before the rationale or the flashcard answer is shown.</p></div></section>

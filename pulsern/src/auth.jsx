@@ -11,6 +11,7 @@ import { explainAuthError } from "./auth-messages.js";
 import { captureAttribution, flushAttribution } from "./attribution.js";
 import { claimClinicalSpot } from "./billing.jsx";
 import ClinicalWelcome, { ClinicalPerk } from "./clinical-welcome.jsx";
+import { ON_PURPOSE } from "./on-purpose.js";
 import {
   CLINICAL_COHORT,
   CLINICAL_COPY,
@@ -141,6 +142,10 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null }) {
           background: #f6f7f9; font-family: system-ui, -apple-system, sans-serif; padding: 16px; }
         .auth-card { background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 32px;
           width: 100%; max-width: 400px; box-shadow: 0 4px 24px rgba(20,30,50,.06); }
+        .auth-purpose { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: #0d302b; color: #fff; }
+        .auth-purpose-kicker { margin: 0 0 3px; color: #8fd7c4; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+        .auth-purpose-title { margin: 0; color: #fff; font-size: 14px; line-height: 1.3; font-weight: 750; }
+        .auth-purpose-line { margin: 3px 0 0; color: #d7ebe6; font-size: 12.5px; line-height: 1.35; }
         .auth-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #0e6e5c; margin: 0 0 2px; }
         .auth-logo a { color: inherit; text-decoration: none; }
         .auth-motto { font-size: 13px; font-style: italic; color: #0e6e5c; font-weight: 600; margin: 0 0 10px; }
@@ -173,11 +178,26 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null }) {
         .auth-perk-title { margin: 0 0 6px; font-size: 20px; font-weight: 800; color: #102f2a; }
         .auth-perk-body { margin: 0; font-size: 14px; line-height: 1.5; color: #1c2430; }
         .auth-install-note { margin: 16px 0 0; font-size: 13px; line-height: 1.5; color: #244840; }
+        @media (max-width: 480px) {
+          .auth-wrap { align-items: flex-start; padding: 12px 12px 20px; }
+          .auth-card { padding: 18px 16px 16px; }
+          .auth-sub { margin-bottom: 12px; }
+          .auth-purpose { margin-bottom: 12px; padding: 9px 11px; }
+          .auth-perk { margin-bottom: 12px; padding: 10px 12px; }
+          .auth-perk-title { font-size: 18px; }
+        }
       `}</style>
       <div className="auth-card">
         {onBack && <button className="auth-switch" type="button" onClick={onBack} style={{ marginBottom: 16 }}>&larr; Back to PulseRN</button>}
         <h1 className="auth-logo"><a href="/" aria-label="PulseRN home">PulseRN</a></h1>
         <p className="auth-motto">Built by a working hospital RN, for future RNs.</p>
+        {mode !== "forgot" && (
+          <aside className="auth-purpose" aria-label="On purpose">
+            <p className="auth-purpose-kicker">{ON_PURPOSE.eyebrow}</p>
+            <p className="auth-purpose-title">{ON_PURPOSE.headline}</p>
+            <p className="auth-purpose-line">{ON_PURPOSE.support}</p>
+          </aside>
+        )}
         <p className="auth-sub">{
           mode === "signup" ? "Create your account. Your progress syncs to every device."
           : mode === "forgot" ? "Enter your email and we'll send a reset link."
