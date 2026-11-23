@@ -1,6 +1,6 @@
 /* Build the public product and trust pages that search engines, answer engines,
    agents, and prospective learners need before entering the authenticated app. */
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { GRADING_NOTE, GRADING_NOTE_LONG } from "../src/grading-note.js";
 import { PLANS, fmtUsd } from "../src/pricing.js";
 import { COMMERCIAL_PAGES, COMMERCIAL_SOURCES, commercialEvidence, relatedCommercial } from "./commercial-content.mjs";
@@ -32,16 +32,16 @@ function page({ slug, title, description, eyebrow, h1, body, schema, published, 
     "@graph": [
       pageNode,
       { "@type": "Person", "@id": AUTHOR, name: AUTHOR_LABEL, url: AUTHOR, worksFor: { "@id": `${SITE}/#org` }, ...(REVIEWER_VERIFIED ? { jobTitle: REVIEW_LEDGER.reviewer.licenseType, sameAs: [REVIEW_LEDGER.reviewer.verificationUrl] } : {}) },
-      ...(published ? [{ "@type": "BreadcrumbList", "@id": `${url}#crumbs`, itemListElement: [{ "@type": "ListItem", position: 1, name: "PulseRN", item: `${SITE}/` }, { "@type": "ListItem", position: 2, name: "Comparisons", item: `${SITE}/compare/` }, { "@type": "ListItem", position: 3, name: title, item: url }] }] : []),
+      ...(published ? [{ "@type": "BreadcrumbList", "@id": `${url}#crumbs`, itemListElement: [{ "@type": "ListItem", position: 1, name: "PulseRN", item: `${SITE}/` }, { "@type": "ListItem", position: 2, name: title, item: url }] }] : []),
       ...(faq.length ? [{ "@type": "FAQPage", "@id": `${url}#faq`, mainEntity: faq.map((item) => ({ "@type": "Question", name: item.q, acceptedAnswer: { "@type": "Answer", text: item.a } })) }] : []),
       ...(schema ? [schema] : []),
     ],
   };
   return `<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | PulseRN</title><meta name="description" content="${esc(description)}"><link rel="canonical" href="${url}"><link rel="icon" type="image/svg+xml" href="/icon.svg"><meta name="theme-color" content="#0E7C6B"><meta property="og:type" content="website"><meta property="og:site_name" content="PulseRN"><meta property="og:url" content="${url}"><meta property="og:title" content="${esc(title)} | PulseRN"><meta property="og:description" content="${esc(description)}"><meta property="og:image" content="${SITE}/og.png"><meta name="twitter:card" content="summary_large_image">${ATTRIBUTION_BOOT_TAG}<script type="application/ld+json">${JSON.stringify(jsonld)}</script><style>${CSS}</style></head><body>
-  <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/compare/">Compare</a><a href="/pricing/">Pricing</a><a href="/app/sign-in">Sign in</a></div></nav></header>
+  <header class="wrap"><nav class="nav" aria-label="Primary navigation"><a class="brand" href="/">PulseRN</a><div class="links"><a href="/how-it-works/">How it works</a><a href="/learn/">Guides</a><a href="/pricing/">Pricing</a><a href="/app/sign-in">Sign in</a></div></nav></header>
   <main class="wrap"><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(h1)}</h1>${published ? `<p class="meta">Published <time datetime="${esc(published)}">${esc(published)}</time> · Last verified <time datetime="${esc(updated)}">${esc(updated)}</time> · editorial owner <a href="${AUTHOR}">${esc(AUTHOR_LABEL)}</a> · Corrections: <a href="mailto:sheldon@pulsern.app?subject=Correction%20request">sheldon@pulsern.app</a></p>` : ""}${body}${relatedSection}
   <div class="callout"><strong>Built to get you ready to walk into the NCLEX confident.</strong><br><a class="button" href="/app/sign-up">Start the ${esc(free.name.toLowerCase())}</a><a class="button alt" href="/learn/">Read the nursing-study guides</a></div></main>
-  <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/compare/">Compare</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div><p class="grading">${esc(GRADING_NOTE)}</p><p>Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN. Competitor trademarks belong to their respective owners; no affiliation or endorsement is implied.</p></div></footer></body></html>`;
+  <footer><div class="wrap"><div class="footlinks"><a href="/">Home</a><a href="/pricing/">Pricing</a><a href="/methodology/">Methodology</a><a href="/editorial-policy/">Editorial policy</a><a href="/about/">About</a><a href="/legal/">Terms, Privacy, and Disclaimer</a></div><p class="grading">${esc(GRADING_NOTE)}</p><p>Educational exam preparation only, not medical advice or a clinical reference. NCLEX® is a registered trademark of NCSBN, which is not affiliated with and does not endorse PulseRN.</p></div></footer></body></html>`;
 }
 
 const free = PLANS.find((p) => p.id === "pass1");
@@ -143,6 +143,8 @@ for (const data of [...pages, ...COMMERCIAL_PAGES.map((item) => ({ ...item, cont
 
 writeFileSync("public/comparison-evidence.json", JSON.stringify(evidence, null, 2) + "\n");
 writeFileSync("public/commercial-search-intents.json", JSON.stringify({ schemaVersion: 1, generatedAt: evidence.generatedAt, intents: Object.fromEntries(evidence.pages.map((item) => [item.route, item.intent])) }, null, 2) + "\n");
+if (!COMMERCIAL_PAGES.some((item) => item.slug === "compare" || item.slug.startsWith("compare/"))) rmSync("public/compare", { recursive: true, force: true });
+
 writeFileSync("public/release.json", JSON.stringify({
   schemaVersion: 1,
   commitSha: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || "local-unbound",

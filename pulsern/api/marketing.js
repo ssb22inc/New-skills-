@@ -160,7 +160,6 @@ export function buildMarketingPayload({ funnel, counts, byCategory, windowDays }
     pages: {
       home: `${SITE}/`,
       pricing: `${SITE}/pricing`,
-      compare: `${SITE}/compare`,
       product: `${SITE}/product`,
       howItWorks: `${SITE}/how-it-works`,
       learn: `${SITE}/learn`,
