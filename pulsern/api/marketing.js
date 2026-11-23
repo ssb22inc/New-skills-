@@ -24,7 +24,10 @@
    WHAT IT CARRIES, AND WHY EACH PART
 
      funnel     — signups through to sales, by step and by first-touch source.
-                  The only honest basis for an ad decision.
+                  The only honest basis for an ad decision. Includes
+                  funnel.cohorts for perk spots.
+     offers     — a short summary of each live perk: members, spots left,
+                  the trial, the cohort price, and revenue.
      catalogue  — how much content is actually live, by category. An agent
                   writing copy must get the number from the database, not from
                   last quarter's landing page.
@@ -44,6 +47,7 @@
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { buildFunnelReport, windowFromDays, sinceFor } from "../src/funnel-report.js";
+import { clinicalSpotCap, offerFromCohort } from "../src/clinical.js";
 import { readAll, tallyBy, reconcile } from "../src/read-all.js";
 import { PLANS, fmtUsd } from "../src/pricing.js";
 
@@ -145,6 +149,7 @@ export function buildMarketingPayload({ funnel, counts, byCategory, windowDays }
       note: "Every figure below is a count or a rate. No student can be identified from this response.",
     },
     funnel,
+    offers: (funnel?.cohorts ?? []).map(offerFromCohort).filter(Boolean),
     catalogue: {
       questions: counts.questions,
       caseStudies: counts.cases,
@@ -241,12 +246,28 @@ export default async function handler(req, res) {
       readAll(cats("case_studies", practice), { ordered: true }),
       readAll(cats("flashcards"), { ordered: true }),
     ]);
+    /* Same split as /api/funnel: migration 019 may not be applied yet. */
+    let cohortMembers = [];
+    let internalRows = [];
+    try {
+      [cohortMembers, internalRows] = await Promise.all([
+        readAll(() => sb.from("cohort_members").select("user_id, cohort").order("user_id"), { ordered: true }),
+        readAll(() => sb.from("internal_accounts").select("user_id").order("user_id"), { ordered: true }),
+      ]);
+    } catch { /* perk figures stay empty until the cohort table exists */ }
 
     for (const r of [questions, cases, cards]) {
       if (r.error) return res.status(502).json({ error: `Could not count the catalogue: ${r.error.message}` });
     }
 
-    const funnel = buildFunnelReport({ rows: eventRows, attrRows, windowDays });
+    const funnel = buildFunnelReport({
+      rows: eventRows,
+      attrRows,
+      windowDays,
+      cohortMembers,
+      internalUserIds: internalRows.map((r) => r.user_id),
+      cohortCap: clinicalSpotCap(),
+    });
 
     const counts = {
       questions: questions.count ?? null,

@@ -1,3 +1,5 @@
+import { CLINICAL_SPOTS_DEFAULT, buildCohortFunnels } from "./clinical.js";
+
 /* The acquisition funnel, as arithmetic.
    ------------------------------------------------------------------
    Lifted out of api/funnel.js so that every caller computes it ONE way. The
@@ -44,7 +46,14 @@ export function sourceIndex(attrRows) {
   return sourceOf;
 }
 
-export function buildFunnelReport({ rows = [], attrRows = [], windowDays = 30 } = {}) {
+export function buildFunnelReport({
+  rows = [],
+  attrRows = [],
+  windowDays = 30,
+  cohortMembers = [],
+  internalUserIds = [],
+  cohortCap = CLINICAL_SPOTS_DEFAULT,
+} = {}) {
   const sourceOf = sourceIndex(attrRows);
 
   /* Count distinct people per step, not rows: one student buying twice is one
@@ -121,6 +130,13 @@ export function buildFunnelReport({ rows = [], attrRows = [], windowDays = 30 } 
     generatedAt: new Date().toISOString(),
     steps,
     bySource,
+    cohorts: buildCohortFunnels({
+      members: cohortMembers,
+      events: rows,
+      internalUserIds,
+      cap: cohortCap,
+      steps: STEPS,
+    }),
     trialsEnded,
     revenue: { purchases, cents, usd: Math.round(cents) / 100, excludedInternal: internalPurchases },
     /* The numbers an ad budget is actually judged against. Break-even CAC is

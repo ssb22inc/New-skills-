@@ -15,34 +15,45 @@
 import React, { useEffect, useState } from "react";
 
 export function isStandalone() {
-  return (
-    window.matchMedia?.("(display-mode: standalone)").matches ||
-    window.navigator.standalone === true
-  );
+  if (typeof window === "undefined") return false;
+  const displayMode = window.matchMedia?.("(display-mode: standalone)");
+  return Boolean(displayMode?.matches || window.navigator?.standalone === true);
 }
 
-function platform() {
-  const ua = navigator.userAgent || "";
-  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+export function detectPlatform(nav) {
+  const source = nav ?? (typeof navigator !== "undefined" ? navigator : null);
+  const ua = source?.userAgent || "";
+  const ios = /iPad|iPhone|iPod/.test(ua) || (source?.platform === "MacIntel" && source?.maxTouchPoints > 1);
   if (ios) return /CriOS|FxiOS|EdgiOS/.test(ua) ? "ios-other" : "ios-safari";
   if (/Android/.test(ua)) return "android";
   return "desktop";
+}
+
+function platform() {
+  return detectPlatform();
 }
 
 /* One listener for the whole app, installed before React mounts so a prompt
    fired during boot is not lost. */
 let deferred = null;
 const waiting = new Set();
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault(); // stop Chrome's own mini-infobar; we choose the moment
-    deferred = e;
-    waiting.forEach((fn) => fn(true));
-  });
-  window.addEventListener("appinstalled", () => {
+
+/* The browser event and tests share this. Passing null clears a prompt so
+   a later placement does not inherit one it never received. */
+export function noteInstallPrompt(event) {
+  if (!event) {
     deferred = null;
     waiting.forEach((fn) => fn(false));
-  });
+    return;
+  }
+  event.preventDefault?.(); // stop Chrome's own mini-infobar; we choose the moment
+  deferred = event;
+  waiting.forEach((fn) => fn(true));
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => noteInstallPrompt(e));
+  window.addEventListener("appinstalled", () => noteInstallPrompt(null));
 }
 
 /* Dismissal is scoped per placement. There is only one placement today — after
