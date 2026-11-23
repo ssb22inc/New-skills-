@@ -1,11 +1,11 @@
 /* Paywall + plan picker. Shown full-screen when a student has no active
    access, and inside Stats as the "Your plan" card. All purchases round-trip
    through api/billing.js — the client never computes a price it can act on. */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "./supabase.js";
 import { PLANS, computeEntitlement, fmtUsd, planById } from "./pricing.js";
 import { freePassExpiresAt } from "./free-pass.js";
-import { CLINICAL_COHORT } from "./clinical.js";
+import { CLINICAL_COHORT, CLINICAL_COPY, planPriceCents } from "./clinical.js";
 
 async function billing(action, extra = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -61,17 +61,38 @@ export async function claimClinicalSpot() {
   return billing("clinical-claim", { cohort: CLINICAL_COHORT });
 }
 
-export function Paywall({ ent, onRefresh, trialBanner = false }) {
+export function Paywall({ ent, onRefresh, trialBanner = false, clinicalMember: startAsMember = false }) {
   const [code, setCode] = useState("");
   const [applied, setApplied] = useState(null); // {code, partner, prices}
+  const [clinicalMember, setClinicalMember] = useState(startAsMember);
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState("");
+
+  /* Link-based members never type CLINICALS. Ask once so the 30-day pass
+     shows $40 here, the same amount checkout will charge. */
+  useEffect(() => {
+    let live = true;
+    billing("clinical-prices")
+      .then((data) => { if (live && data?.member) setClinicalMember(true); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   const apply = async () => {
     setErr("");
     if (!code.trim()) { setApplied(null); return; }
-    try { setApplied(await billing("code-check", { code: code.trim() })); }
-    catch (e) { setApplied(null); setErr(e.message); }
+    try {
+      const result = await billing("code-check", { code: code.trim() });
+      setApplied(result);
+      /* The backup code can extend an expired free pass. Re-read access
+         before leaving the student on a paywall that the grant just opened. */
+      if (result?.cohort === CLINICAL_COHORT) {
+        setClinicalMember(true);
+        if (onRefresh) {
+          try { await onRefresh(); } catch { /* the price is applied; refresh stays available below */ }
+        }
+      }
+    } catch (e) { setApplied(null); setErr(e.message); }
   };
 
   const buy = async (planId) => {
@@ -84,7 +105,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
   };
 
   const price = (p) => {
-    const cents = applied?.prices?.[p.id] ?? p.cents;
+    const cents = planPriceCents(p, { applied, clinicalMember });
     const cut = cents !== p.cents;
     return (
       <span>
@@ -121,6 +142,7 @@ export function Paywall({ ent, onRefresh, trialBanner = false }) {
             onKeyDown={(e) => { if (e.key === "Enter") apply(); }} />
           <button className="btn ghost" onClick={apply}>Apply</button>
         </div>
+        {clinicalMember && <p className="small tip">{CLINICAL_COPY.planNote}</p>}
         {applied && (
           <p className="small tip">
             {applied.cohort === CLINICAL_COHORT

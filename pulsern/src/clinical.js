@@ -4,7 +4,7 @@
    (list price stays $99). The database function claim_cohort_spot is the
    lock that enforces the cap; claimCohortSpot below is the same rule, so
    the tests can prove it without a database. */
-import { planById } from "./pricing.js";
+import { PLANS, planById } from "./pricing.js";
 
 export const CLINICAL_COHORT = "clinicals";
 export const CLINICAL_CODE = "CLINICALS";
@@ -28,6 +28,7 @@ export const CLINICAL_COPY = {
   perkTitle: "30 days free",
   perkBody: "Then the 30-day pass is a one-time $40, normally $99. Limited spots. Built by a working hospital RN, for future RNs.",
   installNote: "After you create your account, you can add PulseRN straight to your phone's home screen",
+  planNote: "Clinical student rate: the 30-day pass is $40 once.",
   welcomeTitle: "Your 30 free days are on",
   welcomeBody: "The full study library is open: adaptive questions, case studies, and flashcards. Add PulseRN to your home screen so it is one tap away. Built by a working hospital RN, for future RNs.",
   startLabel: "Start studying →",
@@ -44,6 +45,22 @@ export function clinicalSpotCap(raw = process.env.PULSERN_CLINICAL_SPOTS) {
 
 export function isClinicalCode(raw) {
   return String(raw ?? "").trim().toUpperCase() === CLINICAL_CODE;
+}
+
+/* What the plan picker shows. Cohort members see $40 on the 30-day pass
+   before checkout, including when they never type the backup code. A
+   partner code still changes every other plan. */
+export function planPriceCents(plan, { applied = null, clinicalMember = false } = {}) {
+  const clinical = clinicalMember || applied?.cohort === CLINICAL_COHORT;
+  if (clinical && plan?.id === CLINICAL_PASS_PLAN) return CLINICAL_SUB30_CENTS;
+  if (applied?.cohort !== CLINICAL_COHORT && applied?.prices?.[plan?.id] != null) return applied.prices[plan.id];
+  return plan.cents;
+}
+
+export function clinicalPrices() {
+  return Object.fromEntries(
+    PLANS.filter((p) => p.cents > 0).map((p) => [p.id, p.id === CLINICAL_PASS_PLAN ? CLINICAL_SUB30_CENTS : p.cents]),
+  );
 }
 
 export function rememberCohort(storage) {

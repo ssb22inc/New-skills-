@@ -12,6 +12,7 @@ import { buildFunnelReport } from "../src/funnel-report.js";
 import { buildMarketingPayload } from "../api/marketing.js";
 import { AuthScreen } from "../src/auth.jsx";
 import ClinicalWelcome from "../src/clinical-welcome.jsx";
+import { Paywall } from "../src/billing.jsx";
 import InstallCard, { detectPlatform, isStandalone, noteInstallPrompt } from "../src/install.jsx";
 import {
   CLINICAL_COPY,
@@ -21,6 +22,7 @@ import {
   CLINICAL_WELCOME_PENDING,
   claimCohortSpot,
   clinicalSpotCap,
+  planPriceCents,
   completeClinicalClaim,
   dismissClinicalWelcome,
 } from "../src/clinical.js";
@@ -397,6 +399,23 @@ describe("checkout", () => {
     expect(globalThis.__pulsernBillingDb.rpcCalls[0].args.p_source).toBe("link");
   });
 
+  it("tells a cohort member the 30-day pass is $40 before checkout", async () => {
+    seed({ members: [{ user_id: "student", cohort: "clinicals" }] });
+    const res = await post({ action: "clinical-prices" });
+    expect(res.code).toBe(200);
+    expect(res.body).toMatchObject({ member: true, cohort: "clinicals", code: "CLINICALS" });
+    expect(res.body.prices.sub30).toBe(4000);
+    expect(res.body.prices.sub60).toBe(15900);
+    expect(globalThis.__pulsernBillingDb.rpcCalls).toHaveLength(0);
+  });
+
+  it("does not invent a cohort price for a student who has not joined", async () => {
+    seed();
+    const res = await post({ action: "clinical-prices" });
+    expect(res.code).toBe(200);
+    expect(res.body).toEqual({ member: false });
+  });
+
   it("still applies an ordinary partner code to a non-member", async () => {
     seed({ codes: [{ code: "PARTNER", partner: "Skills lab", amount_off_cents: 3000, active: true }] });
     const res = await post({ action: "checkout", plan: "sub30", code: "partner" });
@@ -470,6 +489,41 @@ describe("cohort funnel and offers", () => {
     })]);
     expect(JSON.stringify(payload.offers)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
     expect(JSON.stringify(payload.offers)).not.toContain("\"a\"");
+  });
+});
+
+describe("plan picker price", () => {
+  const sub30 = planById("sub30");
+  const sub60 = planById("sub60");
+
+  it("shows $40 to a member who never typed the code, and $99 to everyone else", () => {
+    expect(planPriceCents(sub30, { clinicalMember: true })).toBe(4000);
+    expect(planPriceCents(sub60, { clinicalMember: true })).toBe(15900);
+    expect(planPriceCents(sub30, {})).toBe(9900);
+  });
+
+  it("keeps a partner discount on other plans while the 30-day pass stays $40", () => {
+    const applied = { code: "PARTNER", prices: { sub30: 6900, sub60: 12900 } };
+    expect(planPriceCents(sub30, { applied, clinicalMember: true })).toBe(4000);
+    expect(planPriceCents(sub60, { applied, clinicalMember: true })).toBe(12900);
+  });
+
+  it("renders the member rate on the paywall, with the list price beside it", () => {
+    const html = renderToStaticMarkup(createElement(Paywall, {
+      ent: { status: "expired", hadPaid: false },
+      clinicalMember: true,
+    }));
+    expect(html).toContain(CLINICAL_COPY.planNote);
+    expect(html).toContain("$40");
+    expect(html).toContain("$99");
+  });
+
+  it("asks the app to re-read access after CLINICALS extends a pass", () => {
+    const src = readFileSync(new URL("../src/billing.jsx", import.meta.url), "utf8");
+    const apply = src.slice(src.indexOf("const apply"), src.indexOf("const buy"));
+    expect(apply).toContain("code-check");
+    expect(apply).toContain("CLINICAL_COHORT");
+    expect(apply).toContain("onRefresh");
   });
 });
 

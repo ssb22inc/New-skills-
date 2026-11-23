@@ -10,6 +10,7 @@ import {
   CLINICAL_FULL_MESSAGE,
   CLINICAL_INELIGIBLE_MESSAGE,
   CLINICAL_SUB30_CENTS,
+  clinicalPrices,
   clinicalSpotCap,
   isClinicalCode,
 } from "../src/clinical.js";
@@ -45,6 +46,18 @@ export default async function handler(req, res) {
     return res.status(200).json(claim.data);
   }
 
+  if (action === "clinical-prices") {
+    const found = await isClinicalMember(sb, user.id);
+    if (found.error) return res.status(502).json({ error: "Could not confirm clinical student pricing" });
+    if (!found.member) return res.status(200).json({ member: false });
+    return res.status(200).json({
+      member: true,
+      cohort: CLINICAL_COHORT,
+      code: CLINICAL_CODE,
+      prices: clinicalPrices(),
+    });
+  }
+
   if (action === "code-check") {
     if (isClinicalCode(codeRaw)) {
       const claim = await claimCohort(sb, user.id, "code");
@@ -58,7 +71,7 @@ export default async function handler(req, res) {
         partner: "Clinical students",
         cohort: CLINICAL_COHORT,
         status,
-        prices: Object.fromEntries(PLANS.filter((p) => p.cents > 0).map((p) => [p.id, p.id === "sub30" ? CLINICAL_SUB30_CENTS : p.cents])),
+        prices: clinicalPrices(),
       });
     }
     const code = await lookupCode(sb, codeRaw);
