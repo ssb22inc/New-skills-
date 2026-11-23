@@ -48,6 +48,8 @@ const stats = () => page.locator("[data-testid=stats]").innerText();
 const skip = () => page.getByRole("button", { name: "Skip this question without scoring it" });
 const next = () => page.getByRole("button", { name: "Next question" });
 const back = () => page.getByRole("button", { name: "Back to the previous question" });
+/* Answer options are real radios (one answer) or checkboxes (select all). */
+const choice = (name) => page.getByRole("radio", { name }).or(page.getByRole("checkbox", { name }));
 const visible = async (locator) => { await locator.waitFor({ state: "visible" }); };
 
 describe("practice questions", () => {
@@ -73,7 +75,7 @@ describe("practice questions", () => {
     await page.getByRole("button", { name: "Review 1 skipped" }).click();
     await page.waitForFunction((t) => document.querySelector(".stem")?.textContent === t, first);
 
-    await page.getByRole("button", { name: "Beta choice" }).click();
+    await choice("Beta choice").click();
     await page.getByRole("button", { name: "Check answer" }).click();
     await visible(page.getByText(/RATIONALE\d/));
     const afterWrong = await stats();
@@ -88,7 +90,7 @@ describe("practice questions", () => {
 
     await back().click();
     await visible(page.getByText(/RATIONALE\d/));
-    expect(await page.getByRole("button", { name: "Beta choice" }).isDisabled()).toBe(true);
+    expect(await choice("Beta choice").isDisabled()).toBe(true);
     await visible(page.getByText("Answered earlier"));
     expect(await stats()).toBe(afterWrong);
 
@@ -139,7 +141,7 @@ describe("case-study steps", () => {
 
     await back().click();
     await page.waitForFunction(() => /CASESTEP0/.test(document.querySelector(".stem")?.textContent ?? ""));
-    await page.getByRole("button", { name: "First action" }).click();
+    await choice("First action").click();
     await page.getByRole("button", { name: "Check answer" }).click();
     await visible(page.getByText(/CASERATIONALE0/));
     expect(await stats()).toMatch(/^1 recorded, 1 correct, 0 wrong/);
@@ -148,7 +150,7 @@ describe("case-study steps", () => {
     await page.waitForFunction(() => /CASESTEP1/.test(document.querySelector(".stem")?.textContent ?? ""));
     await back().click();
     await visible(page.getByText(/CASERATIONALE0/));
-    expect(await page.getByRole("button", { name: "First action" }).isDisabled()).toBe(true);
+    expect(await choice("First action").isDisabled()).toBe(true);
     expect(await stats()).toMatch(/^1 recorded, 1 correct, 0 wrong/);
   }, 60_000);
 

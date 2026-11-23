@@ -214,3 +214,39 @@ export function cardNavAction(event) {
   if (key === "ArrowRight") return "next";
   return null;
 }
+
+/* Where the student is in this sitting, for the "3 / 12" indicator.
+   total  = every distinct card offered in this sitting
+   done   = distinct cards whose latest grade is not "again"
+   position = distinct cards opened up to and including the one on screen */
+export function sessionProgress(nav) {
+  if (!nav) return { position: 0, total: 0, done: 0 };
+  const ids = new Set([...(nav.entries ?? []).map((e) => e.id), ...(nav.queue ?? [])]);
+  const latest = new Map();
+  for (const e of nav.entries ?? []) if (e.grade) latest.set(e.id, e.grade);
+  let done = 0;
+  for (const g of latest.values()) if (g !== "again") done += 1;
+  const upto = new Set((nav.entries ?? []).slice(0, Math.max(0, Math.min(nav.index, nav.entries.length - 1)) + 1).map((e) => e.id));
+  const total = ids.size;
+  const position = nav.index >= (nav.entries?.length ?? 0) ? total : Math.min(upto.size, total);
+  return { position, total, done: Math.min(done, total) };
+}
+
+/* Undo is offered on a graded card the student walked Back to, as long as
+   that card has not been opened again later in the sitting. */
+export function canUndoGrade(nav) {
+  const e = currentCard(nav);
+  if (!e || !e.grade) return false;
+  return !nav.entries.slice(nav.index + 1).some((later) => later.id === e.id);
+}
+
+/* Clear this visit's grade and show the answer again so it can be
+   re-graded. An "again" re-queue for this card is withdrawn. The caller
+   restores the card's previous schedule. */
+export function undoGrade(nav) {
+  if (!canUndoGrade(nav)) return nav;
+  const e = currentCard(nav);
+  const entries = nav.entries.slice();
+  entries[nav.index] = { ...e, grade: null, show: true };
+  return { ...nav, entries, queue: nav.queue.filter((id) => id !== e.id) };
+}

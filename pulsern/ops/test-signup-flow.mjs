@@ -71,7 +71,7 @@ try {
      IN the app, not on a "check your email" notice. Wait for either outcome
      rather than assuming, so a regression reports what actually happened. */
   const landedIn = await page
-    .waitForSelector("text=/Today|Practice|Case Study|Cards|Stats/i", { timeout: 45000 })
+    .waitForSelector("text=/Today|Practice|Cases|Case Study|Cards|Stats/i", { timeout: 45000 })
     .then(() => true)
     .catch(() => false);
   const elapsed = Date.now() - t1;

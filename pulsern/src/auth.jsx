@@ -139,11 +139,11 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null }) {
     <main className="auth-wrap">
       <style>{`
         .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center;
-          background: #f6f7f9; font-family: system-ui, -apple-system, sans-serif; padding: 16px; }
+          background: #f6f7f9; font-family: 'Archivo', system-ui, -apple-system, sans-serif; padding: 16px; }
         .auth-card { background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 32px;
           width: 100%; max-width: 400px; box-shadow: 0 4px 24px rgba(20,30,50,.06); }
         .auth-purpose { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; background: #0d302b; color: #fff; }
-        .auth-purpose-kicker { margin: 0 0 3px; color: #8fd7c4; font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+        .auth-purpose-kicker { margin: 0 0 3px; color: #8fd7c4; font-size: 12px; font-weight: 800; letter-spacing: .14em; }
         .auth-purpose-title { margin: 0; color: #fff; font-size: 14px; line-height: 1.3; font-weight: 750; }
         .auth-purpose-line { margin: 3px 0 0; color: #d7ebe6; font-size: 12.5px; line-height: 1.35; }
         .auth-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #0e6e5c; margin: 0 0 2px; }
@@ -151,13 +151,13 @@ export function AuthScreen({ initialMode = "signin", onBack, cohort = null }) {
         .auth-motto { font-size: 13px; font-style: italic; color: #0e6e5c; font-weight: 600; margin: 0 0 10px; }
         .auth-sub { color: #5b6472; font-size: 14px; margin: 0 0 20px; }
         .auth-field { display: block; width: 100%; box-sizing: border-box; padding: 11px 12px; margin-bottom: 10px;
-          border: 1px solid #d5dae1; border-radius: 10px; font-size: 15px; }
+          border: 1px solid #d5dae1; border-radius: 10px; font-size: 15px; font-family: inherit; min-height: 46px; }
         .auth-pw-wrap { position: relative; }
         .auth-pw-wrap .auth-field { padding-right: 64px; }
-        .auth-eye { position: absolute; right: 6px; top: 5px; height: 32px; padding: 0 10px; border: 0;
+        .auth-eye { position: absolute; right: 2px; top: 1px; height: 44px; min-width: 44px; font-family: inherit; padding: 0 10px; border: 0;
           background: none; color: #5b6472; font-size: 13px; font-weight: 600; cursor: pointer; }
         .auth-btn { display: block; width: 100%; padding: 11px 12px; border-radius: 10px; border: 0;
-          background: #0e7c6b; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+          background: #0e7c6b; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; min-height: 46px; font-family: inherit; }
         .auth-btn:disabled { opacity: .6; cursor: default; }
         .auth-btn.alt { background: #fff; color: #1c2430; border: 1px solid #d5dae1; margin-top: 10px; }
         .auth-btn.google { display: flex; align-items: center; justify-content: center; gap: 10px; }
@@ -432,7 +432,7 @@ export default function AuthGate() {
      entitlement read already includes the 30-day pass. */
   if (entry === "booting") {
     return (
-      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "system-ui, sans-serif", color: "#0e6e5c" }}>
+      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", fontFamily: "'Archivo', system-ui, sans-serif", color: "#0e6e5c" }}>
         <p>Opening PulseRN.</p>
       </main>
     );

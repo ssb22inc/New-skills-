@@ -11,8 +11,10 @@ export function isStudyLocked({ isOwner = false, ent = null } = {}) {
 
 /* Wait until entitlement is known. Opening earlier is what put the tour on
    top of "Your access has ended" while Start was already gone. */
-export function shouldAutoOpenTour({ loaded = false, tourSeen = false, ent = null, locked = false, sessionLive = false } = {}) {
-  if (!loaded || tourSeen || !ent || locked || sessionLive) return false;
+/* First question first: while a new student still owes their first answer,
+   the tour waits. It opens (the short version) right after that first win. */
+export function shouldAutoOpenTour({ loaded = false, tourSeen = false, ent = null, locked = false, sessionLive = false, firstAnswerOwed = false } = {}) {
+  if (!loaded || tourSeen || !ent || locked || sessionLive || firstAnswerOwed) return false;
   return true;
 }
 
