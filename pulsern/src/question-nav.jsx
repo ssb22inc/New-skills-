@@ -3,6 +3,8 @@
 
 export function QuestionNav({
   canBack,
+  canSkip = true,
+  canNext = true,
   skipped,
   onBack,
   onSkip,
@@ -11,10 +13,15 @@ export function QuestionNav({
   nextLabel = "Next",
   nextAria = "Next question",
   skipAria = "Skip this question without scoring it",
+  backLabel = "Back",
+  backAria = "Back to the previous question",
+  reviewLabel = "Review skipped",
+  emptyReviewAria = "No skipped questions",
+  layout = "sticky",
 }) {
   const skippedLabel = skipped === 1 ? "1 skipped" : `${skipped} skipped`;
   return (
-    <div className="q-nav-wrap">
+    <div className={layout === "inline" ? "q-nav-wrap card-nav" : "q-nav-wrap"}>
       <div className="q-skipped">
         <p className="small mono q-skipped-count">{skippedLabel}</p>
         <button
@@ -22,19 +29,19 @@ export function QuestionNav({
           className="btn ghost"
           disabled={skipped < 1}
           onClick={onReview}
-          aria-label={skipped < 1 ? "No skipped questions" : `Review ${skippedLabel}`}
+          aria-label={skipped < 1 ? emptyReviewAria : `Review ${skippedLabel}`}
         >
-          Review skipped
+          {reviewLabel}
         </button>
       </div>
       <div className="q-nav" role="group" aria-label="Question navigation">
-        <button type="button" className="btn ghost" disabled={!canBack} onClick={onBack} aria-label="Back to the previous question">
-          Back
+        <button type="button" className="btn ghost" disabled={!canBack} onClick={onBack} aria-label={backAria}>
+          {backLabel}
         </button>
-        <button type="button" className="btn ghost" onClick={onSkip} aria-label={skipAria}>
+        <button type="button" className="btn ghost" disabled={!canSkip} onClick={onSkip} aria-label={skipAria}>
           Skip
         </button>
-        <button type="button" className="btn" onClick={onNext} aria-label={nextAria}>
+        <button type="button" className="btn" disabled={!canNext} onClick={onNext} aria-label={nextAria}>
           {nextLabel}
         </button>
       </div>
