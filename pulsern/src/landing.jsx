@@ -1,5 +1,6 @@
 import React from "react";
 import { GRADING_NOTE, GRADING_NOTE_LONG } from "./grading-note.js";
+import { ON_PURPOSE } from "./on-purpose.js";
 import { planById } from "./pricing.js";
 
 const freePassLabel = planById("pass1").name.toLowerCase();
@@ -59,7 +60,12 @@ export default function LandingPage({ onSignIn, onStart }) {
         .land-hero h1 { max-width: 700px; font-size: clamp(42px, 6vw, 70px); line-height: 1.02; letter-spacing: -.052em; margin: 14px 0 20px; }
         .land-hero h1 span { color: #0e7c6b; }
         .land-lead { color: #36534d; font-size: clamp(18px, 2vw, 21px); max-width: 650px; margin: 0; }
-        .land-actions { display: flex; flex-wrap: wrap; gap: 11px; margin: 28px 0 17px; }
+        .land-purpose { max-width: 560px; margin: 22px 0 0; padding: 16px 18px; border-radius: 16px;
+          background: #0d302b; color: #fff; box-shadow: 0 14px 34px rgba(13,48,43,.18); }
+        .land-purpose-kicker { margin: 0 0 6px; color: #8fd7c4; font-size: 12px; font-weight: 800; letter-spacing: .14em; }
+        .land-purpose-title { margin: 0; color: #fff; font-size: clamp(18px, 2.1vw, 22px); line-height: 1.25; font-weight: 800; letter-spacing: -.02em; }
+        .land-purpose-line { margin: 6px 0 0; color: #d7ebe6; font-size: 15px; line-height: 1.4; }
+        .land-actions { display: flex; flex-wrap: wrap; gap: 11px; margin: 22px 0 17px; }
         .land-note { color: #4d665f; font-size: 13px; margin: 0; }
         .land-product { position: relative; margin:0; background: #0d302b; border-radius: 26px; padding: 14px;
           box-shadow: 0 30px 70px rgba(15,46,41,.22); transform: rotate(1deg); }
@@ -135,6 +141,8 @@ export default function LandingPage({ onSignIn, onStart }) {
           .land-links .land-button { padding:9px 11px; font-size:13px; }
           .land-hero { padding:42px 0 58px; }
           .land-hero h1 { font-size:43px; }
+          .land-purpose { padding: 14px; }
+          .land-purpose-title { font-size: 18px; }
           .land-proof-grid, .land-grid, .land-sample-grid, .land-faq, .land-screen-grid { grid-template-columns:1fr; }
           .land-proof-cell { min-height:auto; padding:20px; }
           .land-section { padding:58px 0; }
@@ -165,6 +173,11 @@ export default function LandingPage({ onSignIn, onStart }) {
             <div className="land-eyebrow">Built by a working hospital RN</div>
             <h1>NCLEX-RN prep engineered around <span>how you learn.</span></h1>
             <p className="land-lead">Every session starts with a question, not a lecture. What you miss comes back right before you'd forget it. Built to get you ready to walk into the NCLEX confident.</p>
+            <aside className="land-purpose" aria-label="On purpose">
+              <p className="land-purpose-kicker">{ON_PURPOSE.eyebrow}</p>
+              <p className="land-purpose-title">{ON_PURPOSE.headline}</p>
+              <p className="land-purpose-line">{ON_PURPOSE.support}</p>
+            </aside>
             <div className="land-actions">
               <button className="land-button" type="button" onClick={onStart}>Start the {freePassLabel}</button>
               <a className="land-button secondary" href="/how-it-works/">See how it works</a>
