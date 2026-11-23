@@ -1,0 +1,46 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "fb647896317f296ef486cd2452855a43498f91d4",
+    "head": "ac748768adbaf7990997ad3bc786ea59436bb301",
+    "pr": "182"
+  },
+  "reviewedAt": "2026-11-23T11:36:37.661Z",
+  "filesReviewed": [
+    "pulsern/src/App.jsx",
+    "pulsern/src/card-nav.js",
+    "pulsern/src/question-nav.jsx",
+    "pulsern/tests/browser/card-nav-harness.jsx",
+    "pulsern/tests/browser/card-nav.html",
+    "pulsern/tests/card-nav-browser.test.js",
+    "pulsern/tests/card-nav.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/card-nav.js",
+      "line": 169,
+      "title": "Obsolete skipped visits remain gradable after the card is completed",
+      "problem": "The grading guard checks only the current history entry's grade. When a skipped card returns, finishMove appends a new entry but leaves the original entry ungraded. Grading the new entry clears skippedVisit on the original without making it read-only. Returning to that original entry therefore permits another schedule write and XP award for an already-completed card.",
+      "failure_scenario": "Start with cards a, b, and c. Skip a, grade b and c Good, then grade the requeued a Good. Navigate Back to the original occurrence of a and flip it: the grade buttons are available again. Grading Good records another result, advancing a new card's interval from 3 days to 7 days and awarding another 5 XP without a legitimate subsequent review.",
+      "fix": "Track which occurrence is currently eligible for grading, or invalidate obsolete ungraded occurrences when a replacement visit opens. Completing a card must prevent older skipped occurrences from writing its schedule, while preserving legitimate later visits created by Again. Add a regression test covering skip, requeue, successful grade, then Back to the original occurrence; verify that neither the schedule nor XP changes.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 29174,
+    "completionTokens": 3440,
+    "reasoningTokens": 3072,
+    "costUsd": 0.1073335
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "The new navigation can grade a completed card again through an obsolete skipped visit, corrupting its persisted SRS schedule and awarding duplicate XP. The tests cover returning to an already-graded visit, but miss this duplicate-visit path.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
