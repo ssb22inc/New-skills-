@@ -10,8 +10,6 @@ import process from "node:process";
 const SITE = "https://www.pulsern.app";
 const REQUIRED = [
   "/", "/learn/", "/about/", "/pricing/", "/how-it-works/", "/methodology/", "/editorial-policy/",
-  "/compare/", "/compare/methodology/", "/compare/pulsern-vs-uworld/", "/compare/pulsern-vs-archer/", "/compare/pulsern-vs-kaplan/",
-  "/compare/best-nclex-question-banks/", "/compare/best-affordable-nclex-prep/", "/compare/best-nclex-app-repeat-test-takers/",
   "/learn/nclex-pharmacology-practice-questions/",
   "/learn/nclex-prioritization-practice-questions/",
   "/learn/nclex-dosage-calculation-practice-questions/",

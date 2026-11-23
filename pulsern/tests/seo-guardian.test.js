@@ -36,41 +36,28 @@ describe("SEO guardian", () => {
     expect(page.findings.some((item) => item.code === "H1_COUNT" && item.severity === "critical")).toBe(true);
   });
 
-  it("keeps eight distinct commercial pages source-bound and digest-bound", () => {
+  it("publishes no commercial comparison pages", () => {
     const evidence = commercialEvidence();
-    expect(COMMERCIAL_PAGES).toHaveLength(8);
-    expect(evidence.pages).toHaveLength(8);
-    expect(new Set(evidence.pages.map((page) => page.intent.primary.toLowerCase())).size).toBe(8);
-    for (const page of evidence.pages) {
-      const sourceIds = new Set(page.sources.map((source) => source.id));
-      expect(page.contentSha256).toMatch(/^[a-f0-9]{64}$/);
-      expect(page.sourceSetSha256).toMatch(/^[a-f0-9]{64}$/);
-      expect(page.sources.some((source) => new URL(source.url).hostname !== "www.pulsern.app")).toBe(true);
-      expect(page.claims.length).toBeGreaterThan(0);
-      expect(page.claims.every((claim) => claim.sourceIds.every((id) => sourceIds.has(id)))).toBe(true);
-    }
-    const pages = evidence.pages.map((page) => ({ route: page.route, identifiers: [`sha256:${page.contentSha256}`] }));
-    const intents = { intents: Object.fromEntries(evidence.pages.map((page) => [page.route, page.intent])) };
-    expect(auditCommercialGovernance({ evidence, intents, pages, now: new Date("2026-08-30T12:00:00Z") })).toEqual([]);
-  });
-
-  it("keeps the UWorld and Archer comparisons PulseRN-led without unsupported outcome claims", () => {
-    for (const slug of ["compare/pulsern-vs-uworld", "compare/pulsern-vs-archer"]) {
-      const page = COMMERCIAL_PAGES.find((item) => item.slug === slug);
-      expect(page.h1).toContain("why start with PulseRN?");
-      expect(page.body).toContain("Our recommendation: start with PulseRN.");
-      expect(page.body).toContain("PulseRN recommendation");
-      expect(page.body).toContain("Start the 7-day free pass");
-      expect(page.body).not.toMatch(/Where (?:UWorld|Archer) is the clearer fit/i);
-      expect(page.body).not.toMatch(/(?:guaranteed to pass|will pass the NCLEX|raises? your chance of passing)/i);
-    }
+    expect(COMMERCIAL_PAGES).toEqual([]);
+    expect(evidence.pages).toEqual([]);
+    expect(evidence.schemaVersion).toBe(1);
+    expect(auditCommercialGovernance({ evidence, intents: { intents: {} }, pages: [], now: new Date("2026-11-23T12:00:00Z") })).toEqual([]);
   });
 
   it("fails closed when a commercial claim cites an unresolved source", () => {
-    const evidence = commercialEvidence();
-    evidence.pages[0].claims[0].sourceIds.push("missing-provider-source");
-    const pages = evidence.pages.map((page) => ({ route: page.route, identifiers: [`sha256:${page.contentSha256}`] }));
-    const intents = { intents: Object.fromEntries(evidence.pages.map((page) => [page.route, page.intent])) };
+    const evidence = {
+      schemaVersion: 1,
+      pages: [{
+        route: "/compare/example/",
+        contentSha256: "a".repeat(64),
+        sourceSetSha256: "b".repeat(64),
+        intent: { primary: "example comparison", audience: "NCLEX-RN candidates", risk: "commercial" },
+        sources: [{ id: "provider-source", title: "Provider page", publisher: "Provider", url: "https://nursing.uworld.com/nclex-rn/", locator: "Features", accessedAt: "2026-08-30" }],
+        claims: [{ id: "claim-1", statement: "A sourced product claim.", sourceIds: ["provider-source", "missing-provider-source"] }],
+      }],
+    };
+    const pages = [{ route: "/compare/example/", identifiers: [`sha256:${"a".repeat(64)}`] }];
+    const intents = { intents: { "/compare/example/": evidence.pages[0].intent } };
     const findings = auditCommercialGovernance({ evidence, intents, pages, now: new Date("2026-08-30T12:00:00Z") });
     expect(findings.some((item) => item.code === "COMMERCIAL_CLAIM_BINDING" && item.severity === "critical")).toBe(true);
   });

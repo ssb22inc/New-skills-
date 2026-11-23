@@ -7,7 +7,24 @@
     { "source": "/clinicals", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 },
     { "source": "/clinicals/", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 },
     { "source": "/clinical", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 },
-    { "source": "/clinical/", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 }
+    { "source": "/clinical/", "destination": "/app/sign-up?cohort=clinicals&utm_source=clinicals&utm_medium=in-person&utm_campaign=clinical-students", "statusCode": 302 },
+    { "source": "/compare", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/methodology", "destination": "/methodology/", "permanent": true },
+    { "source": "/compare/methodology/", "destination": "/methodology/", "permanent": true },
+    { "source": "/compare/pulsern-vs-uworld", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/pulsern-vs-uworld/", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/pulsern-vs-archer", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/pulsern-vs-archer/", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/pulsern-vs-kaplan", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/pulsern-vs-kaplan/", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/best-nclex-question-banks", "destination": "/free-nclex-practice-test/", "permanent": true },
+    { "source": "/compare/best-nclex-question-banks/", "destination": "/free-nclex-practice-test/", "permanent": true },
+    { "source": "/compare/best-affordable-nclex-prep", "destination": "/pricing/", "permanent": true },
+    { "source": "/compare/best-affordable-nclex-prep/", "destination": "/pricing/", "permanent": true },
+    { "source": "/compare/best-nclex-app-repeat-test-takers", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/best-nclex-app-repeat-test-takers/", "destination": "/how-it-works/", "permanent": true },
+    { "source": "/compare/:path*", "destination": "/how-it-works/", "permanent": true }
   ],
   "headers": [
     {
