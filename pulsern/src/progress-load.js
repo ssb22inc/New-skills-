@@ -31,6 +31,7 @@ export async function readProgress(getRaw) {
     const raw = await getRaw();
     return raw == null ? { status: "new", raw: null } : { status: "ok", raw };
   } catch (error) {
+    if (error?.code === "cancelled") return { status: "cancelled", raw: null, error };
     return { status: "error", raw: null, error };
   }
 }

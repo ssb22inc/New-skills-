@@ -14,7 +14,7 @@
    with the same number is bank:<id> and is a different question. */
 import { answerXp, answerCountsForRun, emptyRewards, MAX_COVERS, advanceStreak, streakDayCounted, bumpDay } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
-import { emptyAbility, ABILITY_CATS, undoAbility } from "./ability-engine.js";
+import { emptyAbility, ABILITY_CATS, undoAbility, updateAbility } from "./ability-engine.js";
 import { canonicalKey } from "./question-key.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
@@ -486,6 +486,10 @@ function replayUnseen(base, rows) {
       const sig = legacySignature(row);
       if (knownLegacy.has(sig)) continue;
       knownLegacy.add(sig);
+      if (!row.source && !row.key && row.cat) {
+        state = { ...state, ability: updateAbility(state.ability, { id: row.id, cat: row.cat, diff: row.diff }, !!row.correct).ability };
+        continue;
+      }
     }
     const words = Number(row.words);
     const stem = Number.isFinite(words) && words > 0 ? Array.from({ length: words }, () => "w").join(" ") : (row.stem || "");

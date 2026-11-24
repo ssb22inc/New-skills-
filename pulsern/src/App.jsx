@@ -347,7 +347,7 @@ const store = {
   async get(key) {
     const seenEpoch = accountEpoch;
     const result = await supabase.auth.getSession();
-    if (seenEpoch !== accountEpoch) return null;
+    if (seenEpoch !== accountEpoch) { const err = new Error("cancelled"); err.code = "cancelled"; throw err; }
     const decision = sessionReadDecision(result);
     if (decision !== "read") {
       const err = new Error(result?.error?.message || "Could not confirm the signed-in account");
@@ -357,7 +357,7 @@ const store = {
     const session = result.data.session;
     const { data, error } = await supabase.from("progress")
       .select("blob, revision").eq("user_id", session.user.id).eq("key", key).maybeSingle();
-    if (seenEpoch !== accountEpoch) return data ? JSON.stringify(data.blob) : null;
+    if (seenEpoch !== accountEpoch) { const err = new Error("cancelled"); err.code = "cancelled"; throw err; }
     /* A read error must never look like "no saved progress": the caller
        would treat the account as new and autosave defaults over it. */
     if (error) throw new Error(error.message || "Could not read saved progress");
@@ -688,6 +688,7 @@ export default function App() {
   const [saveBlocked, setSaveBlocked] = useState(false); // saved row could not be opened: study, but never write over it
   const [saveFailed, setSaveFailed] = useState(false);
   const unreadableRaw = useRef(null);
+  const loadGeneration = useRef(0);
   const applyBlob = (s) => {
     setTheme(s.theme);
     setXp(s.xp);
@@ -716,6 +717,8 @@ export default function App() {
     setRewards(s.rewards);
   };
   const loadProgress = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const stillCurrent = () => generation === loadGeneration.current;
     setLoadState("loading");
     try {
       const storage = storageOrNull(() => window.localStorage);
@@ -723,9 +726,10 @@ export default function App() {
       sweepPendingProgress(storage);
     } catch { /* storage blocked */ }
     const read = await readProgress(() => store.get(STORE_KEY));
+    if (!stillCurrent() || read.status === "cancelled") return;
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
-    if (read.status === "error") { setLoadState("error"); return; }
+    if (read.status === "error") { setLoaded(false); setSaveBlocked(true); setLoadState("error"); return; }
     const parsed = parseProgress(read.raw, (b) => migrateBlob(b, CATS)); // legacy saves get defaults (§4)
     if (parsed.status === "corrupt") {
       /* A row exists but cannot be opened. Keep the server copy untouched
@@ -741,7 +745,8 @@ export default function App() {
     /* Try-before-sign-up handoff (src/progress-load.js guestHandoff). */
     let guest = null;
     guest = readGuestForHandoff(storageOrNull(() => window.localStorage), storageOrNull(() => window.sessionStorage));
-    try { const { data } = await supabase.auth.getSession(); accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown account */ }
+    try { const { data } = await supabase.auth.getSession(); if (!stillCurrent()) return; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown account */ }
+    if (!stillCurrent()) return;
     const handoff = guestHandoff({ guest, hasAnswers: accountHasAnswers(s?.log) });
     if (handoff === "merge") {
       const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), calibration, catalog: QUESTIONS });
@@ -760,7 +765,10 @@ export default function App() {
     setLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { loadProgress(); }, [loadProgress]);
+  useEffect(() => {
+    loadProgress();
+    return () => { loadGeneration.current += 1; };
+  }, [loadProgress]);
 
   /* ---- autosave on change ---- */
   useEffect(() => {

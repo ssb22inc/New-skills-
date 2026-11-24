@@ -7,6 +7,7 @@ import { emptyAbility, ABILITY_CATS, undoAbility, updateAbility } from "../src/a
 import { emptyRewards, bumpDay, reverseCardDay, recordCardGrade } from "../src/rewards.js";
 import { migrateBlob } from "../src/state.js";
 import { signOutAndForgetTrial } from "../src/sign-out.js";
+import { readProgress } from "../src/progress-load.js";
 import fs from "node:fs";
 import { recoverProgressWrite, blobForSave, reconcileProgress, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob, bindCommittedProgress, readGuestForHandoff, releaseHeldGuest, progressRevisionOnUpdate } from "../src/guest.js";
 import { refreshedUnresolved, latestResults } from "../src/question-review.js";
@@ -416,9 +417,18 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(rollback).toMatch(/revision = live\.revision \+ 1/);
   });
 
+  it("a cancelled progress read is not an empty account", async () => {
+    const error = new Error("cancelled");
+    error.code = "cancelled";
+    const read = await readProgress(async () => { throw error; });
+    expect(read.status).toBe("cancelled");
+    expect(read.status).not.toBe("new");
+  });
+
   it("keeps a save that does not send a revision and rejects one that sends an older revision", () => {
     const sql = fs.readFileSync(new URL("../supabase/migrations/022_progress_revision_guard.sql", import.meta.url), "utf8");
     expect(sql).toMatch(/new\.revision := old\.revision \+ 1/);
+    expect(sql).toMatch(/jsonb_array_elements/);
     expect(sql).not.toMatch(/new\.revision is null or new\.revision <= old\.revision then/);
     expect(progressRevisionOnUpdate(4, undefined)).toEqual({ revision: 5, legacy: true });
     expect(progressRevisionOnUpdate(4, 4)).toEqual({ revision: 5, legacy: true });
@@ -468,10 +478,12 @@ describe("a revision conflict keeps both devices' answers", () => {
     const pharm = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
     const care = { id: 2, key: "bank:2", source: "bank", cat: "Management of Care", diff: 1, stem: "eight words are enough here now" };
     const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300 };
-    const legacy = applyAnswer(blank, { q: pharm, correct: true, ...taken, calibration: { 1: { rating: 1300 } } }).state;
-    legacy.log = legacy.log.map(({ attempt, seq, ...row }) => row);
+    const legacyRow = { id: 1, cat: "Pharmacology", diff: 1, correct: true };
+    const legacyAbility = updateAbility(blank.ability, { id: 1, cat: "Pharmacology", diff: 1 }, true).ability;
+    const legacy = { ...blank, log: [legacyRow], xp: 10, ability: legacyAbility };
     const local = applyAnswer(blank, { q: care, correct: true, attempt: "local", ...taken, calibration: { 2: { rating: 1300 } } }).state;
-    const inOrder = applyAnswer(legacy, { q: care, correct: true, attempt: "local", ...taken, calibration: { 2: { rating: 1300 } } }).state;
+    const scored = { ...blank, ability: legacyAbility };
+    const inOrder = applyAnswer(scored, { q: care, correct: true, attempt: "local", ...taken, calibration: { 2: { rating: 1300 } } }).state;
     const merged = blobForSave(legacy, local, blank);
     expect(merged.log.some((row) => row.cat === "Pharmacology" && !row.attempt)).toBe(true);
     expect(merged.ability.Pharmacology.n).toBe(1);
