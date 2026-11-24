@@ -528,6 +528,7 @@ export default function App() {
     if (saved.timedOut) {
       stashPendingProgress(window.localStorage, {
         userId: accountId.current,
+        baseRaw: serverRawRef.current,
         payload: JSON.stringify({ theme, xp, bestRun, log, flagged, flaggedCases, streak, daily, srs, customQs, provider, ability, plan, examDate, tourSeen, srsMap, examResults, profileCardDismissed, fcFlips, missSchedule, fcNew, rewards }),
       });
       saveQueue.current.invalidate();
@@ -550,6 +551,7 @@ export default function App() {
   const [loadState, setLoadState] = useState("loading"); // loading | ok | error | corrupt
   const [saveBlocked, setSaveBlocked] = useState(false); // saved row could not be opened: study, but never write over it
   const unreadableRaw = useRef(null);
+  const serverRawRef = useRef(null);
   const [guestOffer, setGuestOffer] = useState(null);     // trial answers waiting for this account's consent
   const applyBlob = (s) => {
     setTheme(s.theme);
@@ -582,6 +584,7 @@ export default function App() {
     setLoadState("loading");
     try { clearLegacyProgressBackup(window.localStorage); } catch { /* storage blocked */ }
     const read = await readProgress(() => store.get(STORE_KEY));
+    serverRawRef.current = read.raw ?? null;
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
     if (read.status === "error") { setLoadState("error"); return; }
@@ -602,7 +605,7 @@ export default function App() {
     try { guest = readGuestForHandoff(window.localStorage, window.sessionStorage); } catch { /* storage blocked */ }
     let createdAt = null;
     try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
-    const pending = readPendingProgress(window.localStorage, accountId.current);
+    const pending = readPendingProgress(window.localStorage, accountId.current, read.raw ?? null);
     if (pending && parsed.status !== "corrupt") {
       const restored = parseProgress(pending.payload, (b) => migrateBlob(b, CATS));
       if (restored.status === "ok") s = restored.blob;
@@ -665,7 +668,7 @@ export default function App() {
         return;
       }
       if (guestClearOnSave(pendingAtStart)) { pendingGuestClear.current = false; clearGuest(window.localStorage); releaseHeldGuest(window.sessionStorage); }
-      clearPendingProgress(window.localStorage);
+      clearPendingProgress(window.localStorage, userId);
       if (outcome === "saved" && note) {
         setGuestNote(note);
         setGuestSaveError(false);

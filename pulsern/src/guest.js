@@ -263,8 +263,18 @@ export function guestImportIdentity(entry) {
   return stampedQuestion({ ...entry, id, source, key: entry?.key ?? canonicalKey(source, id) });
 }
 
+const TRIAL_ATTEMPTS = "__trialAttempts";
+
+function rememberedAttempts(s) {
+  const have = new Set();
+  for (const row of s.log ?? []) if (row?.attempt != null) have.add(String(row.attempt));
+  const marked = s.missSchedule?.[TRIAL_ATTEMPTS];
+  if (Array.isArray(marked)) for (const id of marked) have.add(String(id));
+  return have;
+}
+
 function trialEntries(s, guest, today) {
-  const have = new Set((s.log ?? []).map((l) => l?.attempt).filter((id) => id != null).map(String));
+  const have = rememberedAttempts(s);
   return guest.log
     .filter((l) => l && (typeof l.id === "number" || typeof l.id === "string") && typeof l.cat === "string" && typeof l.correct === "boolean")
     .slice(0, GUEST_LIMIT)
@@ -337,34 +347,35 @@ function importTrialOntoHistory(s, entries, today) {
     const key = questionIdentity(row);
     if (key) known.add(key);
   }
+  const attempts = rememberedAttempts(s);
+  for (const e of entries) attempts.add(e.attempt);
   const latest = new Map();
   for (const e of entries) {
     if (!e.key || known.has(e.key)) continue;
     latest.set(e.key, e);
   }
-  if (!latest.size) return { blob: s, summary: null };
+  const schedule = { ...(s.missSchedule ?? {}), [TRIAL_ATTEMPTS]: [...attempts] };
+  if (!latest.size) {
+    const changed = JSON.stringify(schedule[TRIAL_ATTEMPTS]) !== JSON.stringify(s.missSchedule?.[TRIAL_ATTEMPTS] ?? []);
+    return changed ? { blob: { ...s, missSchedule: schedule }, summary: null } : { blob: s, summary: null };
+  }
   let xp = s.xp ?? 0;
   let rewards = s.rewards;
-  let schedule = s.missSchedule ?? {};
-  const log = [...(s.log ?? [])];
+  let nextSchedule = schedule;
   let xpGain = 0;
   let correct = 0;
   for (const e of latest.values()) {
     const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
     const q = { id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, stem, population: e.pop };
-    const res = answerXp({ q, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: s.log ?? [] });
+    const res = answerXp({ q, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: [] });
     xpGain += res.xp || 0;
     xp += res.xp || 0;
     if (res.xp) rewards = bumpDay(rewards, today, { xp: res.xp });
-    if (!e.correct) schedule = updateMissSchedule(schedule, e.key, false, today);
-    else correct += 1;
-    log.push({
-      id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, correct: e.correct,
-      attempt: e.attempt, ...(e.day ? { day: e.day } : {}), origin: "recorded",
-    });
+    if (e.correct) correct += 1;
+    else nextSchedule = updateMissSchedule(nextSchedule, e.key, false, today);
   }
   return {
-    blob: { ...s, log, xp, rewards, missSchedule: schedule },
+    blob: { ...s, xp, rewards, missSchedule: nextSchedule },
     summary: { answers: latest.size, correct, xp: xpGain, streak: s.streak?.count ?? 0, streakStarted: false },
   };
 }

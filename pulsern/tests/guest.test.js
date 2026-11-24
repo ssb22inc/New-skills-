@@ -89,8 +89,12 @@ describe("guest XP uses the same rules as an account", () => {
     await signOutAndForgetTrial({ auth: { signOut: async () => {} }, storage, holdStorage: session });
     expect(loadGuest(storage)).toBeNull();
     expect(peekHeldGuest(session)).toBeNull();
-    expect(readPendingProgress(storage, "u1").payload).toBe(JSON.stringify({ xp: 9 }));
-    expect(readPendingProgress(storage, "someone-else")).toBeNull();
+    expect(readPendingProgress(storage, "u1", null).payload).toBe(JSON.stringify({ xp: 9 }));
+    expect(readPendingProgress(storage, "someone-else", null)).toBeNull();
+    expect(readPendingProgress(storage, "u1", "newer-cloud")).toBeNull();
+    const { clearPendingProgress } = await import("../src/progress-load.js");
+    clearPendingProgress(storage, "someone-else");
+    expect(readPendingProgress(storage, "u1", null).payload).toBe(JSON.stringify({ xp: 9 }));
     release();
   });
   it("flush finishes the newest queued save before sign-out can drop it", async () => {
@@ -182,9 +186,10 @@ describe("progress handoff into a new account", () => {
   it("a built-in answer does not collide with a shared-bank answer of the same number", () => {
     const blob = { ...migrateBlob({}, CATS), log: [{ id: 1, source: "bank", key: "bank:1", cat: "Pharmacology", diff: 2, correct: false }] };
     const { blob: out } = mergeGuestIntoBlob(blob, played(), { today: TODAY, now: NOW });
-    expect(out.log.map((l) => l.key)).toContain("bank:1");
-    expect(out.log.map((l) => l.key)).toContain("builtin:1");
+    expect(out.log.map((l) => l.key)).toEqual(["bank:1"]);
+    expect(out.missSchedule["builtin:2"]).toBeTruthy();
     expect(out.xp).toBeGreaterThan(0);
+    expect(out.ability).toEqual(blob.ability);
   });
 
   it("is idempotent: merging twice adds nothing the second time", () => {

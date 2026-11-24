@@ -75,11 +75,10 @@ export function settledResult(question, log, questions = null, index = null, pee
   const id = answerIdentity(question);
   if (id != null && Object.prototype.hasOwnProperty.call(idx.latest, id)) return { state: "known", correct: !!idx.latest[id] };
   const num = question?.id != null ? String(question.id) : null;
-  if (num && idx.unscoped.has(num)) {
-    const correct = idx.unscoped.get(num);
-    return (counts.get(num) ?? 0) === 1 ? { state: "known", correct } : { state: "unresolved", correct };
-  }
-  if (num && idx.unresolved.has(num)) return { state: "unresolved", correct: idx.unresolved.get(num) };
+  /* An unscoped number counts only when this catalog has exactly one
+     question with it. An unclassified row is deliberately neither, so
+     it is not painted onto a bank or bundled question that shares the number. */
+  if (num && idx.unscoped.has(num) && (counts.get(num) ?? 0) === 1) return { state: "known", correct: idx.unscoped.get(num) };
   return { state: "none" };
 }
 
@@ -92,11 +91,10 @@ export function scheduleEntry(question, schedule, questions = null, log = null, 
   const raw = schedule[question.id] ?? schedule[String(question.id)];
   if (!raw) return null;
   if (!questionIdentity(question)) return raw;
-  const idx = index ?? historyIndex(log);
-  const num = String(question.id);
-  if (idx.unresolved.has(num)) return raw;
   const counts = peers ?? peerCounts(questions ?? [question]);
-  if ((counts.get(num) ?? 0) !== 1) return null;
+  if ((counts.get(String(question.id)) ?? 0) !== 1) return null;
+  const idx = index ?? historyIndex(log);
+  if (idx.unresolved.has(String(question.id))) return null;
   return raw;
 }
 
@@ -169,7 +167,7 @@ export function reviewPools(questions, log, schedule, today = todayStr()) {
   const dueIds = new Set(due.map(idOf));
   const misses = questions.filter((q) => {
     const settled = settledResult(q, log, questions, index, peers);
-    return (settled.state === "known" || settled.state === "unresolved") && settled.correct === false;
+    return settled.state === "known" && settled.correct === false;
   });
   const review = [...due, ...misses.filter((q) => !dueIds.has(idOf(q)))];
   return { due, misses, review };

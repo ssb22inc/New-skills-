@@ -212,7 +212,7 @@ describe("review, restore, and import use the canonical key", () => {
     expect(merged.ability).toEqual(ability);
     expect(merged.streak).toEqual(streak);
     expect(merged.daily).toEqual({ day: TODAY, answered: 8 });
-    expect(merged.log[0]).toBe(account.log[0]);
+    expect(merged.log).toEqual(account.log);
     expect(merged.missSchedule["builtin:7"]).toBeUndefined();
     expect(merged.missSchedule["builtin:8"].interval).toBe(1);
     expect(merged.missSchedule["builtin:8"].due > TODAY).toBe(true);
@@ -233,9 +233,9 @@ describe("review, restore, and import use the canonical key", () => {
     const bundled = stampCatalogQuestion({ id: 7, stem: "Bundled stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Bundled stem." }]);
     const bankQ = stampCatalogQuestion({ id: 7, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, [{ id: 7, stem: "Bundled stem." }]);
     const ambiguous = [{ id: 7, correct: false }];
-    expect(settledResult(bankQ, ambiguous, [bankQ, bundled]).state).toBe("unresolved");
-    expect(reviewPools([bankQ, bundled], ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
-    expect(unseenQuestions([bankQ, bundled], ambiguous)).toEqual([]);
+    expect(settledResult(bankQ, ambiguous, [bankQ, bundled]).state).toBe("none");
+    expect(reviewPools([bankQ, bundled], ambiguous, { 7: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
+    expect(unseenQuestions([bankQ, bundled], ambiguous).map(questionIdentity)).toEqual(["bank:7", "builtin:7"]);
   });
 
   it("does not rebuild ability over legacy rows that have no key", () => {
@@ -254,12 +254,12 @@ describe("review, restore, and import use the canonical key", () => {
   it("does not treat an unclassified case row as the bank question with the same number", () => {
     const bankQ = stampCatalogQuestion({ id: 101, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, []);
     const log = [{ id: 101, cat: "Physiological Adaptation", correct: false, unclassified: true, key: null }];
-    expect(settledResult(bankQ, log, [bankQ]).state).toBe("unresolved");
-    expect(reviewPools([bankQ], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:101"]);
-    expect(unseenQuestions([bankQ], log)).toEqual([]);
+    expect(settledResult(bankQ, log, [bankQ]).state).toBe("none");
+    expect(reviewPools([bankQ], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
+    expect(unseenQuestions([bankQ], log)).toEqual([bankQ]);
     const bundled = stampCatalogQuestion({ id: 101, stem: "Bundled 101.", cat: "Pharmacology", diff: 2 }, [{ id: 101, stem: "Bundled 101." }]);
-    expect(reviewPools([bankQ, bundled], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review.map(questionIdentity)).toEqual(["bank:101", "builtin:101"]);
-    expect(unseenQuestions([bankQ, bundled], log)).toEqual([]);
+    expect(reviewPools([bankQ, bundled], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
+    expect(unseenQuestions([bankQ, bundled], log)).toEqual([bankQ, bundled]);
   });
 
   it("a correct review of an ambiguous miss advances that question's schedule", () => {
@@ -270,10 +270,9 @@ describe("review, restore, and import use the canonical key", () => {
       missSchedule: { 7: { interval: 1, due: TODAY } },
     };
     const next = applyAnswer(state, { q, correct: true, ms: 9000, today: TODAY, attempt: "review-bank" }).state;
-    expect(next.missSchedule[7]).toBeUndefined();
-    expect(next.missSchedule["bank:7"].interval).toBe(3);
-    expect(next.missSchedule["bank:7"].due > TODAY).toBe(true);
-    expect(reviewPools([q], next.log, next.missSchedule, TODAY).due).toEqual([]);
+    expect(next.missSchedule[7]).toEqual({ interval: 1, due: TODAY });
+    expect(next.missSchedule["bank:7"]).toBeUndefined();
+    expect(reviewPools([q], next.log, next.missSchedule, TODAY).review).toEqual([]);
   });
 
   it("builds review pools from one pass over a large bank and history", () => {

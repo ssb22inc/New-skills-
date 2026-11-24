@@ -14,7 +14,7 @@ function adoptRawSchedule(schedule, q, log) {
   if (!raw) return map;
   const id = String(q.id);
   const claimed = Object.keys(map).some((key) => key !== q.key && key.endsWith(`:${id}`));
-  const otherSource = (log ?? []).some((row) => String(row?.id) === id && row.source && row.source !== q.source && !row.unclassified);
+  const otherSource = (log ?? []).some((row) => String(row?.id) === id && (row.unclassified || (row.source && row.source !== q.source)));
   if (claimed || otherSource) return map;
   map[q.key] = raw;
   delete map[q.id];

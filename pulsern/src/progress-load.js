@@ -59,24 +59,32 @@ export const LEGACY_PROGRESS_BACKUP_KEY = "pulsern-progress-backup-v1";
    for the same account applies it and the autosave sends it up. */
 export const PENDING_PROGRESS_KEY = "pulsern-pending-progress-v1";
 
-export function stashPendingProgress(storage, { userId, payload }) {
+export function pendingProgressKey(userId) {
+  return userId ? `${PENDING_PROGRESS_KEY}:${userId}` : PENDING_PROGRESS_KEY;
+}
+
+/* `baseRaw` is the server row this snapshot was saved against. A later
+   cloud row is left alone. The key is per account, so one person's save
+   cannot delete another's recovery copy. */
+export function stashPendingProgress(storage, { userId, payload, baseRaw = null }) {
   try {
-    storage.setItem(PENDING_PROGRESS_KEY, JSON.stringify({ v: 1, userId: userId ?? null, payload }));
+    storage.setItem(pendingProgressKey(userId), JSON.stringify({ v: 1, userId: userId ?? null, payload, baseRaw }));
     return true;
   } catch { return false; }
 }
 
-export function readPendingProgress(storage, userId) {
+export function readPendingProgress(storage, userId, serverRaw = null) {
   try {
-    const parsed = JSON.parse(storage?.getItem(PENDING_PROGRESS_KEY) ?? "null");
+    const parsed = JSON.parse(storage?.getItem(pendingProgressKey(userId)) ?? "null");
     if (!parsed || parsed.v !== 1 || typeof parsed.payload !== "string") return null;
-    if (parsed.userId && userId && parsed.userId !== userId) return null;
+    if ((parsed.userId ?? null) !== (userId ?? null)) return null;
+    if ((parsed.baseRaw ?? null) !== (serverRaw ?? null)) return null;
     return parsed;
   } catch { return null; }
 }
 
-export function clearPendingProgress(storage) {
-  try { storage?.removeItem(PENDING_PROGRESS_KEY); } catch { /* storage blocked */ }
+export function clearPendingProgress(storage, userId) {
+  try { storage?.removeItem(pendingProgressKey(userId)); } catch { /* storage blocked */ }
 }
 
 export function clearLegacyProgressBackup(storage) {
