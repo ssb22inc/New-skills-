@@ -71,6 +71,7 @@ export async function enforceOneTimeAppRelogin({ auth, storage, href }) {
     /* A forced sign-out forgets trial answers on this device too (same rule
        as src/sign-out.js; the key is GUEST_KEY in src/guest.js). */
     try { storage.removeItem(GUEST_TRIAL_KEY); } catch { /* storage blocked */ }
+    try { storage.removeItem("pulsern-progress-backup-v1"); } catch { /* storage blocked */ } // old device backup (REVIEW-4 R4-2)
   }
   storage.setItem(APP_SESSION_MIGRATION_KEY, "complete");
   return { action: data?.session ? "signed-out-existing-session" : "no-existing-session" };

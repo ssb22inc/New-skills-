@@ -3,7 +3,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { parseProgress, backupUnreadableProgress, PROGRESS_BACKUP_KEY } from "../src/progress-load.js";
+import { parseProgress, clearLegacyProgressBackup, LEGACY_PROGRESS_BACKUP_KEY } from "../src/progress-load.js";
 import { signOutAndForgetTrial } from "../src/sign-out.js";
 import { enforceOneTimeAppRelogin, GUEST_TRIAL_KEY } from "../src/app-routing.js";
 import { GUEST_KEY } from "../src/guest.js";
@@ -27,11 +27,19 @@ describe("N1: unreadable saved progress", () => {
     expect(parseProgress("{bad", migrate)).toMatchObject({ status: "corrupt", reason: "unreadable" });
     expect(parseProgress('{"xp":5}', () => { throw new Error("boom"); })).toMatchObject({ status: "corrupt", reason: "migrate-failed" });
   });
-  it("keeps up to 3 device backups, newest first, without duplicates", () => {
-    const st = mem();
-    for (const raw of ["a", "b", "b", "c", "d"]) backupUnreadableProgress(st, { userId: "u", raw, at: 1 });
-    expect(JSON.parse(st.getItem(PROGRESS_BACKUP_KEY)).map((b) => b.raw)).toEqual(["d", "c", "b"]);
-    expect(backupUnreadableProgress({ getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } }, { raw: "x" })).toBe(false);
+  it("R4-2: no device backup is written; an old one is removed, even with blocked storage", () => {
+    expect(LEGACY_PROGRESS_BACKUP_KEY).toBe("pulsern-progress-backup-v1");
+    const st = mem({ [LEGACY_PROGRESS_BACKUP_KEY]: "[{\"raw\":\"x\"}]", other: "keep" });
+    clearLegacyProgressBackup(st);
+    expect(st.getItem(LEGACY_PROGRESS_BACKUP_KEY)).toBeNull();
+    expect(st.getItem("other")).toBe("keep");
+    expect(() => clearLegacyProgressBackup({ removeItem() { throw new Error("blocked"); } })).not.toThrow();
+    const src = fs.readdirSync("src").filter((f) => /\.(jsx?|mjs)$/.test(f)).map((f) => fs.readFileSync(path.join("src", f), "utf8")).join("\n");
+    expect(src).not.toMatch(/setItem\([^)]*(PROGRESS_BACKUP|progress-backup)/);
+    expect(app).not.toContain("a copy is kept");
+  });
+  it("R4-1: reset never runs while not saving", () => {
+    expect(app).toMatch(/const resetAll = async \(\) => \{[^]*?if \(saveBlocked\) return;[^]*?store\.delete/);
   });
   it("autosave is blocked while the saved row cannot be opened", () => {
     expect(app).toContain("if (!loaded || saveBlocked) return;");
@@ -39,19 +47,21 @@ describe("N1: unreadable saved progress", () => {
 });
 
 describe("N2: sign-out forgets the trial", () => {
-  it("signOutAndForgetTrial clears the trial key, then signs out", async () => {
-    const st = mem({ [GUEST_KEY]: "{}" });
+  it("signOutAndForgetTrial clears the trial key and any old progress backup, then signs out", async () => {
+    const st = mem({ [GUEST_KEY]: "{}", [LEGACY_PROGRESS_BACKUP_KEY]: "[]" });
     let calls = 0;
     await signOutAndForgetTrial({ auth: { signOut: async () => { calls++; return { error: null }; } }, storage: st });
     expect(st.getItem(GUEST_KEY)).toBeNull();
+    expect(st.getItem(LEGACY_PROGRESS_BACKUP_KEY)).toBeNull();
     expect(calls).toBe(1);
   });
   it("the one-time forced re-login clears it too, with the same key", async () => {
     expect(GUEST_TRIAL_KEY).toBe(GUEST_KEY);
-    const st = mem({ [GUEST_KEY]: "{}" });
+    const st = mem({ [GUEST_KEY]: "{}", [LEGACY_PROGRESS_BACKUP_KEY]: "[]" });
     const auth = { getSession: async () => ({ data: { session: { user: { id: "u" } } }, error: null }), signOut: async () => ({ error: null }) };
     await enforceOneTimeAppRelogin({ auth, storage: st, href: "https://pulsern.app/app" });
     expect(st.getItem(GUEST_KEY)).toBeNull();
+    expect(st.getItem(LEGACY_PROGRESS_BACKUP_KEY)).toBeNull();
   });
   it("no sign-out call in src bypasses the trial-clearing paths", () => {
     const hits = [];

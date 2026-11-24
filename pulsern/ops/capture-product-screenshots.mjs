@@ -233,6 +233,9 @@ export async function captureProductScreenshots() {
     await page.emulateMedia({ reducedMotion: "reduce" });
     const fontFailures = [];
     page.on("response", (res) => { if (/\.woff2?(\?|$)/.test(res.url()) && res.status() !== 200 && res.status() !== 304) fontFailures.push(`${res.status()} ${res.url()}`); });
+    /* Every pinned face is a woff2. A .woff request means a woff2 failed
+       and the browser fell back to another file (REVIEW-4 R4-3). */
+    page.on("request", (req) => { if (/\.woff(\?|$)/.test(req.url())) fontFailures.push(`woff fallback requested ${req.url()}`); });
     page.on("requestfailed", (req) => { if (/\.woff2?(\?|$)/.test(req.url())) fontFailures.push(`failed ${req.url()}`); });
     await page.goto("http://127.0.0.1:4174/ops/product-screenshot.html", { waitUntil: "networkidle" });
     await assertCaptureFontsLoaded(page, fontFailures);

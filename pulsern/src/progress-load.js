@@ -4,8 +4,8 @@
    Data-safety rules:
      - A saved row the app cannot open (null, not an object, bad JSON, or a
        migration that throws) is NOT a connection problem and NOT a new
-       account. It is kept untouched on the server, copied to this device as
-       a backup, and the app runs without saving until it can be read.
+       account. It is kept untouched on the server (the student can download
+       a copy), and the app runs without saving until it can be read.
      - A failed read is NOT a new account. The app shows a retry, and
        autosave and the trial merge stay blocked until a read succeeds, so
        defaults can never be written over a real progress row.
@@ -40,19 +40,14 @@ export function parseProgress(raw, migrate) {
   }
 }
 
-/* Device backups of saved rows the app could not open (newest first, 3 kept). */
-export const PROGRESS_BACKUP_KEY = "pulsern-progress-backup-v1";
-export function backupUnreadableProgress(storage, { userId = null, raw, at = Date.now() }) {
-  try {
-    let list = [];
-    try { list = JSON.parse(storage.getItem(PROGRESS_BACKUP_KEY) || "[]"); } catch { list = []; }
-    if (!Array.isArray(list)) list = [];
-    if (!list.some((b) => b && b.raw === raw && b.userId === userId)) list.unshift({ userId, at, raw });
-    storage.setItem(PROGRESS_BACKUP_KEY, JSON.stringify(list.slice(0, 3)));
-    return true;
-  } catch {
-    return false;
-  }
+/* Earlier builds of this branch copied an unreadable row to localStorage.
+   That copy held study history on a possibly shared device and was never
+   cleared (REVIEW-4 R4-2). It is no longer written: the server row stays
+   untouched and "Download a copy" uses the in-memory copy. Any old copy is
+   removed on load and on sign-out. */
+export const LEGACY_PROGRESS_BACKUP_KEY = "pulsern-progress-backup-v1";
+export function clearLegacyProgressBackup(storage) {
+  try { storage.removeItem(LEGACY_PROGRESS_BACKUP_KEY); } catch { /* storage blocked */ }
 }
 
 /* Slack for clock skew between this device and the auth server. */

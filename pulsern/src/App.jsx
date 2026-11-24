@@ -317,7 +317,7 @@ import {
 } from "./rewards-ui.jsx";
 import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary } from "./guest.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
-import { readProgress, parseProgress, backupUnreadableProgress, guestHandoff } from "./progress-load.js";
+import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -533,18 +533,17 @@ export default function App() {
   };
   const loadProgress = useCallback(async () => {
     setLoadState("loading");
+    try { clearLegacyProgressBackup(window.localStorage); } catch { /* storage blocked */ }
     const read = await readProgress(() => store.get(STORE_KEY));
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
     if (read.status === "error") { setLoadState("error"); return; }
     const parsed = parseProgress(read.raw, (b) => migrateBlob(b, CATS)); // legacy saves get defaults (§4)
     if (parsed.status === "corrupt") {
-      /* A row exists but cannot be opened. Keep the server copy untouched,
-         keep a device backup, and never autosave or merge over it. */
-      let userId = null;
-      try { const { data } = await supabase.auth.getSession(); userId = data?.session?.user?.id ?? null; } catch { /* unknown */ }
+      /* A row exists but cannot be opened. Keep the server copy untouched
+         and never autosave, merge or delete over it. The raw row stays in
+         memory only, for "Download a copy". */
       unreadableRaw.current = read.raw;
-      try { backupUnreadableProgress(window.localStorage, { userId, raw: read.raw }); } catch { /* storage blocked */ }
       setSaveBlocked(true);
       setLoadState("corrupt");
       return;
@@ -1022,6 +1021,8 @@ export default function App() {
   }, [momentKey, sessionLive]);
 
   const resetAll = async () => {
+    /* Never while not saving: the only server copy is the row we couldn't open (REVIEW-4 R4-1). */
+    if (saveBlocked) return;
     try { await store.delete(STORE_KEY); } catch (e) { /* nothing saved */ }
     setXp(0); setRun(0); setBestRun(0); setLog([]); setFlagged([]); setCustomQs([]);
     setStreak({ count: 0, lastDay: null, shield: true }); setDaily({ day: todayStr(), answered: 0 });
@@ -1088,7 +1089,7 @@ export default function App() {
         <section className="card rw-load-error rw-load-corrupt" role="alert" aria-labelledby="load-corrupt-title">
           <p className="eyebrow">Saved progress</p>
           <h2 id="load-corrupt-title" className="h2">Your saved progress couldn't be opened</h2>
-          <p className="small">This isn't a connection problem. Your account has saved progress, but it's in a form the app can't read. We haven't changed it, and a copy is kept on this device.</p>
+          <p className="small">This isn't a connection problem. Your account has saved progress, but it's in a form the app can't read. We haven't changed it.</p>
           <p className="small">You can keep studying now, but nothing will be saved until this is fixed. Email <a href="mailto:sheldon@pulsern.app?subject=PulseRN%20saved%20progress%20won%27t%20open">sheldon@pulsern.app</a> and we'll restore it.</p>
           <div className="row">
             <button type="button" className="btn" onClick={studyWithoutSaving}>Study without saving</button>
@@ -1318,7 +1319,7 @@ export default function App() {
           {tab === "cards" && <Flashcards key={sectionEpoch} onGrade={noteCard} onUngrade={unnoteCard} addXp={(n) => { setXp((x) => x + n); }} cards={allCards} srsMap={srsMap} setSrsMap={setSrsMap} touchDay={touchDay} ready={loaded} fcFlips={fcFlips} onFlip={() => setFcFlips((n) => n + 1)} newAllowance={newAllowance} onNewCard={onNewCard} onRefundNewCard={onRefundNewCard} onSession={onSession} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tab === "exams" && <ExamCenter record={record} examResults={examResults} setExamResults={setExamResults} cats={CATS} ent={ent} isOwner={isOwner} onRunning={setExamLock} onAttempt={(f) => setEnt((e) => (e ? { ...e, examsLeft: Math.max(0, e.examsLeft - 1), attempted: [...e.attempted, f] } : e))} onUpgrade={() => goSection("plans")} onSession={onSession} bindExit={examLeave.bindExit} onScored={examLeave.onScored} onLeaveSubmit={examLeave.onLeaveSubmit} />}
           {tab === "plans" && <Paywall ent={ent} onRefresh={refreshEnt} trialBanner={ent?.status === "trial"} />}
-          {tab === "stats" && <Stats setPref={setPref} rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
+          {tab === "stats" && <Stats setPref={setPref} rewards={rewards} career={career} board={board} week={week} xp={xp} streak={streak} bestRun={bestRun} readiness={readiness} readyLabel={readyLabel} log={log} catStats={catStats} popStats={popStats} acc={acc} resetAll={resetAll} saveBlocked={saveBlocked} provider={provider} setProvider={setProvider} customCount={customQs.length} examDate={examDate} setExamDate={setExamDate} isOwner={isOwner} ent={ent} onManagePlan={() => goSection("plans")} profile={profile} setProfile={setProfile} tourFocus={tourStep == null ? null : tourStepAt(tourStep, tourSteps)?.focus} />}
           {tourStep != null && <div className="tour-scroll-room" aria-hidden="true" />}
         </>}
       </main>
@@ -2939,7 +2940,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
 
 /* ================= STATS ================= */
 
-function Stats({ setPref = null, rewards = null, career = null, board = null, week = null, xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
+function Stats({ setPref = null, rewards = null, career = null, board = null, week = null, xp = 0, streak = null, bestRun = 0, readiness = null, readyLabel = "", log, catStats, popStats = [], acc, resetAll, saveBlocked = false, provider, setProvider, customCount, examDate, setExamDate, isOwner = false, ent = null, onManagePlan, profile, setProfile, tourFocus = null }) {
 
   const [confirm, setConfirm] = useState(false);
   const p = AI_PROVIDERS.find((x) => x.id === provider) || AI_PROVIDERS[0];
@@ -3010,7 +3011,9 @@ function Stats({ setPref = null, rewards = null, career = null, board = null, we
       <section className="card">
         <p className="eyebrow">Saved progress</p>
         <p className="small">Your XP, streak, answer history, and flashcard schedule sync to your account and reload on any device.</p>
-        {!confirm
+        {saveBlocked
+          ? <p className="small rw-reset-off">Reset is off while this session isn't being saved, so the saved progress we couldn't open stays untouched.</p>
+          : !confirm
           ? <button className="btn ghost" onClick={() => setConfirm(true)}>Reset all progress…</button>
           : <div className="row">
               <button className="btn danger" onClick={() => { setConfirm(false); resetAll(); }}>Yes, erase everything</button>

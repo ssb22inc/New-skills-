@@ -15,6 +15,7 @@ const offline = { data: null, error: { message: "offline" } };
 const q = new Proxy({}, { get(_t, p) { if (p === "then") return (res) => Promise.resolve(offline).then(res); return () => q; } });
 const progress = new Proxy({}, { get(_t, p) {
   if (p === "then") return (res) => Promise.resolve(window.__readError ? { data: null, error: { message: "network" } } : window.__nullBlob ? { data: { blob: null }, error: null } : window.__row ? { data: { blob: window.__row }, error: null } : { data: null, error: null }).then(res);
+  if (p === "delete") { window.__deletes = (window.__deletes || 0) + 1; return () => progress; }
   if (p === "upsert") return async (row) => { (window.__upserts ||= []).push(row.blob); return { error: null }; };
   return () => progress;
 } });
@@ -54,16 +55,17 @@ const guest = (startedAt) => ({ v: 1, startedAt, lastAt: startedAt + 60_000, day
 ], xp: 20, run: 0, bestRun: 1, ability: null, missSchedule: {} });
 const existingRow = { theme: "light", tourSeen: true, xp: 500, bestRun: 7, log: Array.from({ length: 30 }, (_, i) => ({ id: 1000 + i, cat: "Pharmacology", diff: 1, correct: true })), streak: { count: 20, lastDay: "2020-01-01", shield: true } };
 
-async function open({ session, row = null, readError = false, guestData = null, nullBlob = false }) {
+async function open({ session, row = null, readError = false, guestData = null, nullBlob = false, oldBackup = false }) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
-  await page.addInitScript(({ session, row, readError, guestData, nullBlob }) => {
+  await page.addInitScript(({ session, row, readError, guestData, nullBlob, oldBackup }) => {
+    if (oldBackup && !sessionStorage.getItem("backupSeeded")) { localStorage.setItem("pulsern-progress-backup-v1", JSON.stringify([{ userId: "someone-else", raw: "{}" }])); sessionStorage.setItem("backupSeeded", "1"); }
     window.__session = session; window.__row = row; window.__readError = readError; window.__nullBlob = nullBlob; window.__upserts = [];
     if (guestData && !sessionStorage.getItem("seeded")) { localStorage.setItem("pulsern-guest-v1", JSON.stringify(guestData)); sessionStorage.setItem("seeded", "1"); }
-  }, { session, row, readError, guestData, nullBlob });
+  }, { session, row, readError, guestData, nullBlob, oldBackup });
   await page.goto(`${base}ops/product-screenshot.html`, { waitUntil: "networkidle" });
   return { ctx, page, errors };
 }
@@ -130,19 +132,27 @@ describe("M2: trial answers and an existing account", () => {
 });
 
 describe("N1: a saved row the app cannot open", () => {
-  it("is not blamed on the connection, is backed up, never overwritten, and can be studied without saving", async () => {
-    const { ctx, page, errors } = await open({ session: sessionFor(NOW - 90 * 86400000), nullBlob: true, guestData: guest(NOW - 3600_000) });
+  it("is not blamed on the connection, never overwritten or copied to the device, and can be studied without saving", async () => {
+    const { ctx, page, errors } = await open({ session: sessionFor(NOW - 90 * 86400000), nullBlob: true, guestData: guest(NOW - 3600_000), oldBackup: true });
     try {
       await page.getByRole("heading", { name: "Your saved progress couldn't be opened" }).waitFor({ timeout: 30_000 });
       expect(await page.getByText("This isn't a connection problem").count()).toBe(1);
       expect(await page.getByRole("button", { name: "Try again" }).count()).toBe(0);
-      const backup = await page.evaluate(() => JSON.parse(localStorage.getItem("pulsern-progress-backup-v1")));
-      expect(backup).toEqual([expect.objectContaining({ userId: "u1", raw: "null" })]);
+      // R4-2: nothing written to the device, and an old backup from an earlier build is gone
+      expect(await page.evaluate(() => localStorage.getItem("pulsern-progress-backup-v1"))).toBeNull();
+      expect(await page.getByText(/copy is kept/).count()).toBe(0);
       await page.getByRole("button", { name: "Study without saving" }).click();
       await page.getByRole("heading", { name: "This session isn't being saved" }).waitFor();
       expect(await page.locator(".tour-card").count()).toBe(0); // no first-run tour over a student whose data we could not read
       await page.getByRole("button", { name: "Start today's round" }).first().waitFor();
       await page.waitForTimeout(1500);
+      expect(await page.evaluate(() => window.__upserts.length)).toBe(0);
+      // R4-1: Stats offers no Reset while not saving, so nothing can delete the unreadable row
+      await page.getByRole("button", { name: "Stats", exact: true }).click();
+      await page.getByText("Reset is off while this session isn't being saved").waitFor();
+      expect(await page.getByRole("button", { name: /Reset all progress/ }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: /erase everything/ }).count()).toBe(0);
+      expect(await page.evaluate(() => window.__deletes || 0)).toBe(0);
       expect(await page.evaluate(() => window.__upserts.length)).toBe(0);
       // the trial is neither merged nor offered into an account we cannot read
       expect(await page.getByRole("heading", { name: /trial answers to this account\?/ }).count()).toBe(0);
@@ -205,6 +215,37 @@ describe("N2: every sign-out path forgets the trial on this device", () => {
       await page.waitForFunction(() => (window.__signOuts || 0) === 1);
       expect(await trialKey(page)).toBeNull();
       expect(await signOuts(page)).toBe(1);
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
+describe("REVIEW-4", () => {
+  it("R4-2: an old device backup is removed on a normal load too", async () => {
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, oldBackup: true });
+    try {
+      await page.getByRole("button", { name: "Stats", exact: true }).waitFor({ timeout: 30_000 });
+      await page.waitForFunction(() => localStorage.getItem("pulsern-progress-backup-v1") === null);
+    } finally { await ctx.close(); }
+  }, 120_000);
+
+  it("R4-2: sign-out removes an old device backup", async () => {
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, readError: true, oldBackup: true });
+    try {
+      await page.getByRole("heading", { name: "We couldn't load your progress" }).waitFor({ timeout: 30_000 });
+      await page.evaluate(() => localStorage.setItem("pulsern-progress-backup-v1", "[]")); // put back after the load-time clear
+      await page.getByRole("button", { name: "Sign out" }).click();
+      await page.waitForFunction(() => (window.__signOuts || 0) === 1);
+      expect(await page.evaluate(() => localStorage.getItem("pulsern-progress-backup-v1"))).toBeNull();
+    } finally { await ctx.close(); }
+  }, 120_000);
+
+  it("R4-1: Reset still works when progress loaded normally", async () => {
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow });
+    try {
+      await page.getByRole("button", { name: "Stats", exact: true }).click({ timeout: 30_000 });
+      await page.getByRole("button", { name: /Reset all progress/ }).click();
+      await page.getByRole("button", { name: /Yes, erase everything/ }).click();
+      await page.waitForFunction(() => (window.__deletes || 0) === 1);
     } finally { await ctx.close(); }
   }, 120_000);
 });
