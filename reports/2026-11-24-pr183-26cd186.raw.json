@@ -1,0 +1,84 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "da6c612a142b75910987b47f8e9e542896e96a3f",
+    "head": "26cd18614a48073334b989b5a5066cc0065809fc",
+    "pr": "183"
+  },
+  "reviewedAt": "2026-11-24T01:02:21.604Z",
+  "filesReviewed": [
+    "pulsern/app/index.html",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/ops/test-signup-flow.mjs",
+    "pulsern/src/App.jsx",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/card-nav.js",
+    "pulsern/src/choice-state.js",
+    "pulsern/src/clinical-welcome.jsx",
+    "pulsern/src/first-answer.js",
+    "pulsern/src/float-pos.js",
+    "pulsern/src/focus-sheet.jsx",
+    "pulsern/src/focus-trap.js",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-lookup.js",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/question-nav.jsx",
+    "pulsern/src/srs.js",
+    "pulsern/src/state.js",
+    "pulsern/src/study-keys.js",
+    "pulsern/src/tab-icons.jsx",
+    "pulsern/src/tour.js",
+    "pulsern/src/tour.jsx",
+    "pulsern/tests/browser/lab-fab-harness.jsx",
+    "pulsern/tests/browser/lab-fab.html",
+    "pulsern/tests/card-nav.test.js",
+    "pulsern/tests/fixtures/lab-ai-prompt.txt",
+    "pulsern/tests/flagship-ux.test.js",
+    "pulsern/tests/float-pos.test.js",
+    "pulsern/tests/focus-trap.test.js",
+    "pulsern/tests/grade-contrast.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/lab-lookup.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/seo-guardian.test.js",
+    "pulsern/tests/srs-daily-cap.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 2174,
+      "title": "Preserve AI provenance while case steps are open",
+      "problem": "The new chartBody omits the cs.ai label. After Begin case, it replaces the section containing the only AI-case label, and the step renderer provides no replacement. AI-generated case content therefore stops being labeled during the actual questions, violating the standing requirement that AI content stay labeled.",
+      "failure_scenario": "Open any bank case with cs.ai=true and select Begin case. Neither the patient chart nor the question identifies the case as AI-assisted.",
+      "fix": "Keep the AI-case label and required verify-against-your-materials note visible throughout the case, outside the intro-only branch and the collapsible chart body. Add a rendered test covering an AI case after Begin case.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/card-nav.js",
+      "line": 228,
+      "title": "Exclude undone grades from the reviewed-card count",
+      "problem": "gradeCurrent mirrors a grade onto earlier ungraded visits of the same card, but undoGrade clears only the current visit. sessionProgress ignores ungraded entries when building latest, so an older mirrored grade survives the undo and incorrectly counts the card as completed.",
+      "failure_scenario": "With cards a and b, skip a, grade b Good, then grade the requeued a Good. Go Back and undo a. Its schedule is removed and it is pending again, but sessionProgress still reports two reviewed cards instead of one because the first visit to a retains the mirrored Good grade.",
+      "fix": "Make an undone latest visit override earlier grades when calculating completion, and distinguish mirrored history locks from actual recorded grades if necessary. Add the skip → requeued grade → Undo sequence to the progress tests.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 143196,
+    "completionTokens": 12180,
+    "reasoningTokens": 11692,
+    "costUsd": 0.4797885
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The active-case layout removes required AI provenance, and flashcard Undo can leave the progress indicator counting an unfinished card as reviewed. This was a source-only review; I could not run the build or tests.",
+  "counts": {
+    "blocker": 1,
+    "major": 1,
+    "minor": 0
+  }
+}
