@@ -201,7 +201,7 @@ export async function captureProductScreenshots() {
     }
 
     const images = [];
-    images.push(await screenshot(page, "pulsern-today-dashboard.png", ["Start today's round", "CANDIDATE MONITOR", "Today's goal"]));
+    images.push(await screenshot(page, "pulsern-today-dashboard.png", ["Start today's round", "CANDIDATE MONITOR", "Today's shift"]));
 
     await page.getByRole("button", { name: "Practice", exact: true }).click();
     await page.getByRole("button", { name: "New questions", exact: true }).click();
