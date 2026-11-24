@@ -536,6 +536,23 @@ export default function App() {
   const accountId = useRef(null);
   if (!saveQueue.current) saveQueue.current = createSaveQueue();
   useEffect(() => () => { saveQueue.current?.invalidate(); }, []);
+  const openAbout = async () => {
+    setMenuOpen(false);
+    if (saveQueue.current.pending()) {
+      const saved = await waitForFlush(() => saveQueue.current.flush());
+      if (!saved.ok) { setSaveFailed(true); return; }
+    }
+    window.location.assign("/about/");
+  };
+  useEffect(() => {
+    const warn = (event) => {
+      if (!saveQueue.current?.pending()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
   const finishSignOut = () => {
     saveQueue.current.invalidate();
     accountId.current = null;
@@ -1334,7 +1351,7 @@ export default function App() {
                   title="Light mode reads best for long study sessions; night mode cuts glare for late review">
                   {theme === "light" ? "🌙 Night mode" : "☀ Light mode"}
                 </button>
-                <button type="button" className="menu-item" onClick={() => { window.location.assign("/about/"); }}>🩺 Meet the RN behind PulseRN</button>
+                <button type="button" className="menu-item" onClick={openAbout}>🩺 Meet the RN behind PulseRN</button>
                 <button type="button" className="menu-item" onClick={openTour}>🎓 Tour</button>
                 <button type="button" className="menu-item" onClick={() => goSection("stats")}>⚙ Settings & Stats</button>
               </>}
@@ -2021,7 +2038,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     const which = poolMode ?? (auto ? "today" : (mode === "review" ? "review" : "new"));
     /* Held questions are dropped inside sessionPool, before a due-only
        pool can hide everything else. */
-    const deferred = [...resolvedLegacy.current].map((id) => `unresolved:${id}`);
+    const deferred = [...resolvedLegacy.current].flatMap((id) => (
+      String(id).includes(":") ? [String(id)] : [`unresolved:${id}`]
+    ));
     let pool = sessionPool(reviewQuestions, {
       log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail), deferred, allow: inFocus,
     });
@@ -2221,24 +2240,29 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
       <button className="btn" onClick={endSession}>Back to session menu</button></section>
   );
 
+  const continuePastHeld = () => {
+    if (!auto) { endSession(); return; }
+    const moved = forward(nav, { skipIfOpen: true });
+    if (moved.effect.type !== "need-question") { reveal(moved.nav); return; }
+    pickFrom(moved.nav);
+  };
+
   if (q.catalogMiss) {
     return (
       <section className="card">
         <p className="eyebrow">Saved miss</p>
         <h2 className="h2">This question didn't load</h2>
         <p className="small">{q.stem}</p>
-        <button type="button" className="btn" onClick={() => onRetryCatalog?.()}>Retry</button>
+        <div className="row">
+          <button type="button" className="btn" onClick={() => onRetryCatalog?.()}>Retry</button>
+          <button type="button" className="btn ghost" onClick={() => { resolvedLegacy.current.add(String(q.key)); continuePastHeld(); }}>Leave for now</button>
+        </div>
       </section>
     );
   }
 
   if (q.unresolved) {
-    const resume = () => {
-      if (!auto) { endSession(); return; }
-      const moved = forward(nav, { skipIfOpen: true });
-      if (moved.effect.type !== "need-question") { reveal(moved.nav); return; }
-      pickFrom(moved.nav);
-    };
+    const resume = continuePastHeld;
     const choose = (candidate) => {
       resolvedLegacy.current.add(String(q.legacyId));
       onResolveLegacy?.(q.legacyId, candidate, q.logIndex);

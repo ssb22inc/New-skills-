@@ -163,11 +163,14 @@ export const SAVE_ATTEMPT_MS = 8000;
 export function createSaveQueue({ attemptMs = SAVE_ATTEMPT_MS } = {}) {
   let chain = Promise.resolve();
   let latest = 0;
+  let settled = 0;
   let active = null;
   return {
     next() { latest += 1; return latest; },
+    pending() { return settled !== latest; },
     invalidate() {
       latest += 1;
+      settled = latest;
       active?.abort();
     },
     enqueue(seq, task) {
@@ -189,6 +192,7 @@ export function createSaveQueue({ attemptMs = SAVE_ATTEMPT_MS } = {}) {
             timeout,
           ]);
           if (!isCurrent()) return { stale: true };
+          if (seq === latest) settled = seq;
           return { ok: true };
         } catch (error) {
           if (seq !== latest) return { stale: true };

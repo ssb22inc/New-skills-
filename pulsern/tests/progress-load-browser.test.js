@@ -492,4 +492,59 @@ describe("a stalled save does not block the next one", () => {
       expect(saved.log[0].correct === true || saved.log[0].correct === false).toBe(true);
     } finally { await ctx.close(); }
   }, 120_000);
+
+  it("does not open another page while a save is still unfinished", async () => {
+    const row = {
+      theme: "light", tourSeen: true, xp: 0, bestRun: 0, log: [],
+      streak: { count: 0, lastDay: null, shield: true },
+      fcNew: { day: todayStr(), count: 20 },
+      srsMap: {},
+    };
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row });
+    try {
+      await page.getByRole("button", { name: /Start today's round/ }).waitFor({ timeout: 30_000 });
+      await page.evaluate(() => { window.__stallSaves = 1; });
+      await page.getByRole("button", { name: /Start today's round/ }).click();
+      await page.getByRole("radio").first().click();
+      await page.getByRole("button", { name: "Check answer" }).click();
+      await page.getByRole("button", { name: "Menu" }).click();
+      await page.getByRole("button", { name: /Meet the RN behind PulseRN/ }).click();
+      await page.getByRole("heading", { name: "Your latest answers aren't saved yet" }).waitFor({ timeout: 20_000 });
+      expect(page.url()).not.toContain("/about/");
+      expect(await page.getByRole("button", { name: "Menu" }).count()).toBe(1);
+    } finally { await ctx.close(); }
+  }, 120_000);
+});
+
+describe("a loaded catalog that omits a saved miss can be left", () => {
+  it("Leave for now continues without deleting the miss", async () => {
+    const row = {
+      theme: "light", tourSeen: true, xp: 10, bestRun: 1,
+      log: [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", diff: 1, correct: false }],
+      streak: { count: 1, lastDay: "2020-01-01", shield: true },
+      fcNew: { day: todayStr(), count: 20 },
+      srsMap: {},
+    };
+    const questionPages = [{
+      data: [{
+        id: 1, cat: "Pharmacology", diff: 1, type: "mc",
+        stem: "A different loaded question that is not the saved miss.",
+        options: ["Alpha choice", "Beta choice", "Gamma choice"], answer: 0,
+        rationale: "A rationale long enough to pass the catalog validator for this row.",
+        elo_rating: 1200,
+      }],
+      error: null,
+    }];
+    const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row, questionPages, casesOk: true });
+    try {
+      await page.getByRole("button", { name: "Practice", exact: true }).click({ timeout: 30_000 });
+      await page.getByRole("button", { name: /Review misses/ }).click();
+      await page.getByRole("heading", { name: "This question didn't load" }).waitFor({ timeout: 15_000 });
+      await page.getByRole("button", { name: "Leave for now" }).click();
+      await page.getByRole("button", { name: /Review misses/ }).waitFor({ timeout: 15_000 });
+      expect(await page.getByRole("heading", { name: "This question didn't load" }).count()).toBe(0);
+      const saved = await page.evaluate(() => window.__upserts.at(-1));
+      expect(saved.log.some((item) => item.key === "bank:2500" && item.correct === false)).toBe(true);
+    } finally { await ctx.close(); }
+  }, 120_000);
 });

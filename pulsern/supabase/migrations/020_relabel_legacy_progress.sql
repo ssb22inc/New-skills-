@@ -106,21 +106,21 @@ begin
   with hits as (
     select 'builtin'::text as source, 'builtin:' || b.id as key
     from backup_20261124.builtin_questions b
-    where b.id = v_id and b.cat = v_cat
+    where b.id = v_id and backup_20261124.cats_agree(v_cat, b.cat)
     union
     select 'bank', 'bank:' || q.id::text
     from public.questions q
-    where q.id::text = v_id and q.cat = v_cat
+    where q.id::text = v_id and backup_20261124.cats_agree(v_cat, q.cat)
     union
     select 'case', 'case:' || c.case_id
     from backup_20261124.bundled_cases c
-    where c.legacy_id = v_id and c.cat = v_cat
+    where c.legacy_id = v_id and backup_20261124.cats_agree(v_cat, c.cat)
     union
     select 'case', 'case:case-db' || cs.id::text || '-' || step.i::text
     from public.case_studies cs
     cross join lateral generate_series(0, coalesce(jsonb_array_length(cs.steps), 0) - 1) as step(i)
     where (50000 + cs.id * 10 + step.i)::text = v_id
-      and cs.cat = v_cat
+      and backup_20261124.cats_agree(v_cat, cs.cat)
   )
   select count(distinct hits.source), count(distinct hits.key), min(hits.source), min(hits.key)
     into n_source, n_key, chosen_source, chosen_key
@@ -130,6 +130,17 @@ begin
   end if;
   return jsonb_build_object('status','unresolved','elem', elem || jsonb_build_object('unresolved', true, 'legacyId', elem->'id', 'unclassified', true));
 end;
+$$;
+
+create or replace function backup_20261124.cats_agree(saved text, catalog text)
+returns boolean
+language sql
+immutable
+as $$
+  select saved is not null and catalog is not null and (
+    saved = catalog
+    or (saved = 'Psychosocial & Health Promotion' and catalog = 'Psychosocial Integrity')
+  );
 $$;
 
 -- Latest built-in or bank answer that can own a QBank review date for
@@ -236,6 +247,7 @@ begin
 end;
 $$;
 
+revoke all on function backup_20261124.cats_agree(text, text) from public, anon, authenticated;
 revoke all on function backup_20261124.relabel_answer(jsonb) from public, anon, authenticated;
 revoke all on function backup_20261124.schedule_owner(jsonb, text) from public, anon, authenticated;
 revoke all on function backup_20261124.relabel_blob(jsonb) from public, anon, authenticated;
@@ -297,6 +309,20 @@ begin
   delete from backup_20261124.builtin_questions where id = 'fixture-sched';
   delete from backup_20261124.bundled_cases where legacy_id = 'fixture-sched';
 end $$;
+
+-- Snapshot before the relabel. An existing pre-change row is kept.
+create table if not exists backup_20261124.progress (
+  user_id uuid not null,
+  key text not null,
+  blob jsonb,
+  updated_at timestamptz,
+  primary key (user_id, key)
+);
+revoke all on table backup_20261124.progress from public, anon, authenticated;
+insert into backup_20261124.progress (user_id, key, blob, updated_at)
+select p.user_id, p.key, p.blob, p.updated_at
+from public.progress p
+on conflict (user_id, key) do nothing;
 
 -- Idempotent: a second run leaves canonical and unresolved rows untouched.
 update public.progress

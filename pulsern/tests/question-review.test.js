@@ -185,6 +185,18 @@ describe("Today round and Review Misses pools", () => {
     const fresh = unseenQuestions(list, log);
     expect(fresh.some((item) => item.candidateOnly || item.source === "case")).toBe(false);
     expect(sessionPool(list, { log, schedule: {}, fresh, mode: "new" }).some((item) => item.candidateOnly)).toBe(false);
+    const retired = [{ id: 19, unclassified: true, cat: "Psychosocial & Health Promotion", correct: false }];
+    const current = [{ id: 19, source: "builtin", key: "builtin:19", cat: "Psychosocial Integrity", type: "mc", stem: "Which finding matters most for this client?" }];
+    const named = reviewPools(legacyCandidates(current, retired, current), retired, {}).review.find((item) => item.unresolved);
+    expect(named.candidates.map((item) => item.key)).toEqual(["builtin:19"]);
+    const held = sessionPool(current, {
+      log: [{ id: 2500, source: "bank", key: "bank:2500", cat: "Pharmacology", correct: false }],
+      schedule: {},
+      fresh: current,
+      mode: "today",
+      deferred: ["bank:2500"],
+    });
+    expect(held.map((item) => item.key)).toEqual(["builtin:19"]);
   });
 
   it("keeps a canonical bank miss visible when that question is not in the loaded catalog", () => {

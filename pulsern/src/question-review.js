@@ -158,6 +158,12 @@ export function questionByIdentity(questions, id) {
 /* The active bank list drops bundled questions. A legacy miss whose
    number is also a built-in still needs that built-in as a candidate,
    or the student can only assign the miss to the bank question. */
+function catsAgree(saved, catalog) {
+  if (!saved || !catalog) return true;
+  if (saved === catalog) return true;
+  return saved === "Psychosocial & Health Promotion" && catalog === "Psychosocial Integrity";
+}
+
 function unresolvedCat(log, num) {
   let cat = null;
   for (const row of log ?? []) {
@@ -179,7 +185,7 @@ function legacyCaseSteps(cases, num, rowCat) {
         ? caseStepIds({ dbId: c.dbId, step: stepIndex })
         : caseStepIds({ key: c.key, index, step: stepIndex });
       if (!ids.legacyAliases.map(String).includes(want)) return;
-      if (rowCat && c.cat && c.cat !== rowCat) return;
+      if (rowCat && c.cat && !catsAgree(rowCat, c.cat)) return;
       const key = canonicalKey("case", ids.id);
       if (!key) return;
       out.push({
@@ -279,7 +285,7 @@ function unresolvedCards(log, questions, index) {
     const rowCat = typeof row?.cat === "string" ? row.cat : "";
     const candidates = (questions ?? []).filter((q) => {
       if (!q || q.unresolved || q.catalogMiss || String(q.id) !== num) return false;
-      if (rowCat && q.cat && q.cat !== rowCat) return false;
+      if (rowCat && q.cat && !catsAgree(rowCat, q.cat)) return false;
       return true;
     });
     cards.push({
