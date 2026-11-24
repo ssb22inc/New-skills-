@@ -307,7 +307,7 @@ import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 import {
-  emptyRewards, answerXp, answerCountsForRun, sameAnswer, xpNote, comboFor, cardXp, questionsOn, caseStepIds, bumpDay, reverseCardDay, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
+  emptyRewards, answerXp, answerCountsForRun, sameAnswer, xpNote, comboFor, cardXp, questionsOn, todayQuestionCount, shiftCompleteNote, caseStepIds, bumpDay, reverseCardDay, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
   careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
 } from "./rewards.js";
 import { motionAllowed, rewardBeat } from "./effects.js";
@@ -317,7 +317,7 @@ import {
 } from "./rewards-ui.jsx";
 import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, readGuestForHandoff, releaseHeldGuest } from "./guest.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
-import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff } from "./progress-load.js";
+import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision } from "./progress-load.js";
 
 const STORE_KEY = "pulsern-v1";
 
@@ -335,8 +335,14 @@ const STORE_KEY = "pulsern-v1";
 ------------------------------------------------------------------------ */
 const store = {
   async get(key) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
+    const result = await supabase.auth.getSession();
+    const decision = sessionReadDecision(result);
+    if (decision !== "read") {
+      const err = new Error(result?.error?.message || "Could not confirm the signed-in account");
+      err.code = decision;
+      throw err;
+    }
+    const session = result.data.session;
     const { data, error } = await supabase.from("progress")
       .select("blob").eq("user_id", session.user.id).eq("key", key).maybeSingle();
     /* A read error must never look like "no saved progress": the caller
@@ -1004,7 +1010,8 @@ export default function App() {
   const board = useMemo(() => badgeBoard(log, CATS, rewards.badgesSeen), [log, rewards.badgesSeen]);
   const career = useMemo(() => careerStatus({ xp, log, cats: CATS, rankHigh: rewards.rankHigh }), [xp, log, rewards.rankHigh]);
   const missesOpen = useMemo(() => reviewPools(expandTrialQuestions(allQuestions, log, QUESTIONS), log, missSchedule, today).review.length, [allQuestions, log, missSchedule, today]);
-  const shift = shiftStatus({ day: rewards.days[today], answeredToday: questionsOn(rewards, today), dueCount, missesOpen });
+  const qToday = todayQuestionCount({ rewards, daily, today });
+  const shift = shiftStatus({ day: rewards.days[today], answeredToday: qToday.known ? qToday.count : 0, questionsKnown: qToday.known, dueCount, missesOpen });
   const week = weekRounds(rewards, today);
   const nextDue = useMemo(() => {
     let m = null;
@@ -1739,6 +1746,7 @@ function GuestAiNote({ onSignIn }) {
 function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, daily, dueCount, go, tourFocus, rewards, shift, career }) {
   const lvl = levelFor(xp);
   const weakest = catStats.filter((c) => c.pct != null).sort((a, b) => a.pct - b.pct)[0];
+  const qToday = todayQuestionCount({ rewards, daily, today: todayStr() });
   const goalPct = Math.min(100, Math.round((daily.answered / DAILY_GOAL) * 100));
   return (
     <div className="stack">
@@ -1760,7 +1768,7 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
           </div>
           <div className="vital">
             {/* Questions only, the same count as the shift's Assessments (REVIEW-3 N8). */}
-            <span className="vital-num">{questionsOn(rewards, todayStr())}</span>
+            <span className="vital-num">{qToday.known ? qToday.count : "—"}</span>
             <span className="vital-lab">Q TODAY</span>
           </div>
           <div className="vital">
@@ -1774,7 +1782,7 @@ function Monitor({ xp, streak, bestRun, log, readiness, readyLabel, catStats, da
       {shift && rewards ? (
         <ShiftCard shift={shift} streak={streak} rewards={rewards}>
           <Why>{shift.complete
-            ? "One block a day beats a weekend marathon. Your reviews are done and your misses are corrected, so rest now: the forgetting curve is doing the work."
+            ? shiftCompleteNote({ missesOpen })
             : "Each task is a learning behavior: questions are retrieval practice, due cards are spacing, and fixing a miss is error correction. A streak counts days, not hours. A shield covers one missed day and refills every 7 days; a shift cover, earned by 5 shifts in a week, covers another."}</Why>
         </ShiftCard>
       ) : (

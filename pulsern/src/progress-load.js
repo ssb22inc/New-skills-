@@ -14,6 +14,15 @@
        account is asked first, and nothing merges unless the student says so. */
 import { guestFresh } from "./guest.js";
 
+/* A session lookup that errors, or returns no user, is not "no saved row".
+   Only a confirmed signed-in user with an empty SELECT is a new account. */
+export function sessionReadDecision(result) {
+  if (!result || typeof result !== "object" || result.error) return "auth-error";
+  const session = result.data?.session ?? result.session ?? null;
+  if (!session?.user?.id) return "signed-out";
+  return "read";
+}
+
 /* getRaw resolves to the saved JSON string, or null when the account has
    no saved row yet, and throws on any read error. */
 export async function readProgress(getRaw) {

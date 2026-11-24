@@ -130,16 +130,17 @@ describe("N7: case steps already answered stay answered", () => {
   });
   it("a step answered under the old id pays no first-try XP again", () => {
     const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });
-    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }];
+    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true, source: "case" }];
     expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3 }, correct: true, log }).reason).toBe("repeat");
     const db = caseStepIds({ dbId: 12, step: 0 });
-    expect(answerXp({ q: { ...db, cat: "Pharmacology", diff: 3 }, correct: true, log: [{ id: 50120, cat: "Pharmacology", diff: 3, correct: true }] }).xp).toBe(0);
+    expect(answerXp({ q: { ...db, cat: "Pharmacology", diff: 3 }, correct: true, log: [{ id: 50120, cat: "Pharmacology", diff: 3, correct: true, source: "case" }] }).xp).toBe(0);
   });
-  it("a bank question with the same number and category does not spend the case step", () => {
+  it("a difficulty-3 bank question with the same number is not an old case step", () => {
     const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });
-    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 1, correct: true }];
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem: "Which findings require immediate follow-up? Select all that apply." }, correct: true, ms: 9000, log }).reason).toBe("correct");
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3 }, correct: true, log }).xp).toBe(30);
+    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }];
+    const stem = "Which findings require immediate follow-up? Select all that apply.";
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log }).reason).toBe("correct");
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log }).xp).toBe(30);
   });
 });
 
@@ -155,7 +156,9 @@ describe("N5: toolkit button avoid list", () => {
 
 describe("N8-N10 quick fixes", () => {
   it("N8: the monitor's Q TODAY counts questions only, like the shift", () => {
-    expect(app).toMatch(/questionsOn\(rewards, todayStr\(\)\)\}<\/span>\s*<span className="vital-lab">Q TODAY/);
+    expect(app).toContain("todayQuestionCount({ rewards, daily, today: todayStr() })");
+    expect(app).toContain('qToday.known ? qToday.count : "—"');
+    expect(app).toMatch(/vital-lab">Q TODAY/);
   });
   it("N9: the consent card does not call the student 'someone'", () => {
     expect(app).not.toContain("Someone answered");

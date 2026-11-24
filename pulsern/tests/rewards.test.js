@@ -3,7 +3,7 @@
    covers protect missed days; milestones fire once. */
 import { describe, it, expect } from "vitest";
 import {
-  answerXp, minThinkMs, answerCountsForRun, xpNote, comboFor, bumpDay, reverseCardDay, shiftStatus, weekRounds, maybeGrantCover, advanceStreak, streakDayCounted,
+  answerXp, minThinkMs, answerCountsForRun, xpNote, comboFor, bumpDay, reverseCardDay, shiftStatus, shiftCompleteNote, todayQuestionCount, weekRounds, maybeGrantCover, advanceStreak, streakDayCounted,
   categoryMastery, badgeBoard, careerStatus, legacyRankIndex, detectMoments, markMomentsSeen, sessionRecap,
   emptyRewards, migrateRewards, daysBetween, shiftDay, mondayOf, TIERS, CAREER, REVIEW_FIX_BONUS, MAX_COVERS, TEST_PLAN,
 } from "../src/rewards.js";
@@ -187,6 +187,23 @@ describe("Today's shift and weekly rounds", () => {
     expect(s.tasks.map((t) => t.key)).toEqual(["questions", "cards", "fix"]);
     expect(s.complete).toBe(true);
     expect(shiftStatus({ day: { q: 8, cards: 0, fixes: 0 }, answeredToday: 8, dueCount: 4, missesOpen: 2 }).done).toBe(1);
+  });
+  it("does not say every miss is corrected when more misses are still open", () => {
+    const open = shiftCompleteNote({ missesOpen: 20 });
+    expect(open).toMatch(/a miss was corrected/);
+    expect(open).toMatch(/still waiting in review/);
+    expect(open).not.toMatch(/your misses are corrected/);
+    expect(shiftCompleteNote({ missesOpen: 0 })).toMatch(/your misses are corrected/);
+  });
+  it("does not report zero questions today for a legacy save that already studied", () => {
+    const today = "2026-11-24";
+    const legacy = todayQuestionCount({ rewards: emptyRewards(), daily: { day: today, answered: 8 }, today });
+    expect(legacy).toEqual({ known: false, count: null });
+    const shift = shiftStatus({ day: undefined, answeredToday: 0, questionsKnown: false, dueCount: 0, missesOpen: 2 });
+    expect(shift.tasks[0].detail).toBe("Question count starts with this update");
+    expect(shift.tasks[0].done).toBe(false);
+    const after = todayQuestionCount({ rewards: bumpDay(emptyRewards(), today, { q: 1 }), daily: { day: today, answered: 8 }, today });
+    expect(after).toEqual({ known: true, count: 1 });
   });
   it("earns one shift cover per week of 5 shifts, banked up to the cap", () => {
     let r = emptyRewards();

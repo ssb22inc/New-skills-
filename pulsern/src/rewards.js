@@ -149,11 +149,9 @@ export function sameAnswer(q, row) {
   if (String(row.id) === String(q.id)) return true;
   const id = String(row.id);
   if ((q.aliases ?? []).map(String).includes(id)) return true;
-  /* Case steps were logged at difficulty 3. An unsourced row at that
-     difficulty is a pre-change case answer. Any other difficulty is a
-     bank question that happens to share the number. */
-  const legacyCase = row.source === "case" || (row.source == null && row.diff === 3);
-  return (q.legacyAliases ?? []).map(String).includes(id) && legacyCase && row.cat === q.cat;
+  /* Only a row recorded as a case. An unsourced difficulty-3 bank answer
+     shares that shape, so difficulty alone never spends a case step. */
+  return (q.legacyAliases ?? []).map(String).includes(id) && row.source === "case" && row.cat === q.cat;
 }
 
 export function answerXp({ q, correct, ms = Infinity, log = [], skipped = false }) {
@@ -234,10 +232,24 @@ export function reverseCardDay(rewards, day, cardXpGain = 0) {
      assessments = retrieval practice (8 questions)
      due cards   = spacing (clear what is due today)
      fix a miss  = error correction (one earlier miss answered correctly) */
-export function shiftStatus({ day, answeredToday = 0, dueCount = 0, missesOpen = 0 }) {
+export function shiftCompleteNote({ missesOpen = 0 } = {}) {
+  if (missesOpen > 0) return "One block a day beats a weekend marathon. Today's questions are done and scheduled cards are cleared, and a miss was corrected. More misses are still waiting in review.";
+  return "One block a day beats a weekend marathon. Today's questions are done and scheduled cards are cleared, and your misses are corrected, so rest now: the forgetting curve is doing the work.";
+}
+
+/* A legacy save has today's answers on `daily` and no rewards day yet.
+   That counter also included flashcards, so it is not a question count.
+   Missing history is shown as unknown, never as zero. */
+export function todayQuestionCount({ rewards, daily, today }) {
+  if (rewards?.days && Object.prototype.hasOwnProperty.call(rewards.days, today)) return { known: true, count: num(rewards.days[today].q) };
+  if (daily?.day === today && num(daily.answered) > 0) return { known: false, count: null };
+  return { known: true, count: 0 };
+}
+
+export function shiftStatus({ day, answeredToday = 0, questionsKnown = true, dueCount = 0, missesOpen = 0 }) {
   const d = day ?? { q: 0, cards: 0, fixes: 0 };
   const tasks = [
-    { key: "questions", label: "Assessments", detail: `${Math.min(answeredToday, SHIFT_QUESTIONS)} of ${SHIFT_QUESTIONS} questions`, done: answeredToday >= SHIFT_QUESTIONS, progress: Math.min(1, answeredToday / SHIFT_QUESTIONS) },
+    { key: "questions", label: "Assessments", detail: questionsKnown ? `${Math.min(answeredToday, SHIFT_QUESTIONS)} of ${SHIFT_QUESTIONS} questions` : "Question count starts with this update", done: questionsKnown && answeredToday >= SHIFT_QUESTIONS, progress: questionsKnown ? Math.min(1, answeredToday / SHIFT_QUESTIONS) : 0 },
     { key: "cards", label: "Scheduled reviews", detail: dueCount ? `${dueCount} card${dueCount === 1 ? "" : "s"} due` : (d.cards ? `${d.cards} reviewed` : "Nothing due"), done: dueCount === 0, progress: dueCount === 0 ? 1 : (d.cards ? d.cards / (d.cards + dueCount) : 0) },
     { key: "fix", label: "Fix a miss", detail: d.fixes ? `${d.fixes} corrected` : missesOpen ? `${missesOpen} waiting in review` : "No misses to fix", done: d.fixes > 0 || missesOpen === 0, progress: d.fixes > 0 || missesOpen === 0 ? 1 : 0 },
   ];

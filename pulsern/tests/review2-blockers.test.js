@@ -8,7 +8,7 @@ import {
   cardXp, CARD_MIN_GRADE_MS, advanceStreak, comboFor, SHORT_CAT,
 } from "../src/rewards.js";
 import { emptyGuest, guestAnswer, guestFresh, GUEST_TTL_DAYS } from "../src/guest.js";
-import { readProgress, guestHandoff, NEW_ACCOUNT_SKEW_MS } from "../src/progress-load.js";
+import { readProgress, guestHandoff, NEW_ACCOUNT_SKEW_MS, sessionReadDecision } from "../src/progress-load.js";
 import { migrateBlob } from "../src/state.js";
 import { hapticsAllowed, GUEST_PREFS, buzz } from "../src/effects.js";
 
@@ -121,6 +121,14 @@ describe("M5: existing students keep their title (what the screenshots must show
 
 describe("M6: a failed read is never a new account", () => {
   it("readProgress separates error, new and ok", async () => {
+    expect(sessionReadDecision({ data: { session: null }, error: { message: "refresh failed" } })).toBe("auth-error");
+    expect(sessionReadDecision({ data: { session: null }, error: null })).toBe("signed-out");
+    expect(sessionReadDecision({ data: { session: { user: { id: "user-1" } } }, error: null })).toBe("read");
+    const get = fs.readFileSync("src/App.jsx", "utf8");
+    const reader = get.slice(get.indexOf("async get(key)"), get.indexOf("async set(key"));
+    expect(reader).toContain('decision !== "read"');
+    expect(reader).not.toMatch(/if \(!session\) return null/);
+    expect((await readProgress(async () => { throw new Error("auth-error"); })).status).toBe("error");
     expect((await readProgress(async () => { throw new Error("network"); })).status).toBe("error");
     expect((await readProgress(async () => null)).status).toBe("new");
     expect((await readProgress(async () => "{}")).status).toBe("ok");
