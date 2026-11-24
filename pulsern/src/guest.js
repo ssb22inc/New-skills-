@@ -166,7 +166,16 @@ function mergeLogs(serverLog, localLog) {
   (localLog ?? []).forEach((row, index) => {
     if (row && !used.has(index)) out.push(row);
   });
-  return out;
+  const timed = (row) => Number.isFinite(Number(row?.at)) ? Number(row.at) : null;
+  return out
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const at = timed(a.row);
+      const bt = timed(b.row);
+      if (at == null || bt == null || at === bt) return a.index - b.index;
+      return at - bt;
+    })
+    .map((item) => item.row);
 }
 
 function addDelta(base, server, local, key) {
@@ -235,13 +244,13 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const replayed = replayUnseen(base, log);
   const unseen = log.some((row) => row?.attempt && !(base.log ?? []).some((item) => item?.attempt === row.attempt));
   const merged = { ...local, log };
-  const nextXp = unseen ? replayed.xp : Math.max(Number(server.xp) || 0, Number(local.xp) || 0);
+  const nextXp = unseen ? replayed.xp : (Number(local.xp) || 0);
   if (nextXp !== (Number(local.xp) || 0)) merged.xp = nextXp;
   if (unseen) {
     merged.ability = replayed.ability;
     merged.daily = replayed.daily;
-    merged.rewards = replayed.rewards;
     merged.streak = replayed.streak;
+    if (!local.rewards) merged.rewards = replayed.rewards;
   }
   if (base.bestRun != null || server.bestRun != null || local.bestRun != null || unseen) {
     const nextBest = Math.max(Number(base.bestRun) || 0, Number(server.bestRun) || 0, Number(local.bestRun) || 0, Number(replayed.bestRun) || 0);
@@ -564,12 +573,14 @@ function importTrialLive(s, entries, { today, calibration }) {
   let correct = 0;
   for (const e of entries) {
     const stem = e.stem || (e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "");
+    const words = stem.trim() ? stem.trim().split(/\s+/).filter(Boolean).length : e.words;
     const applied = applyAnswer(state, {
       q: { id: e.id, key: e.key, source: e.source, cat: e.cat, diff: e.diff, stem, population: e.pop },
       correct: e.correct,
       ms: Number.isFinite(e.ms) ? e.ms : Infinity,
       today: e.day ?? today,
       attempt: e.attempt,
+      words: Number.isFinite(words) ? words : undefined,
       calibration,
     });
     if (applied.duplicate) continue;
