@@ -1,0 +1,103 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "607421664bcfc2abbaedd107d389d1eb621d1520",
+    "head": "aa19e8cab6e828a7cde19bf6f8496de422b85604",
+    "pr": "184"
+  },
+  "reviewedAt": "2026-11-24T08:29:26.692Z",
+  "filesReviewed": [
+    "pulsern/PULSERN_BUILD.md",
+    "pulsern/assets/App.portable.jsx",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/app-routing.js",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/case-studies.js",
+    "pulsern/src/effects.js",
+    "pulsern/src/guest.js",
+    "pulsern/src/guest.jsx",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/progress-load.js",
+    "pulsern/src/question-review.js",
+    "pulsern/src/rewards-ui.jsx",
+    "pulsern/src/rewards.js",
+    "pulsern/src/sign-out.js",
+    "pulsern/src/state.js",
+    "pulsern/tests/browser/announcer-harness.jsx",
+    "pulsern/tests/browser/announcer.html",
+    "pulsern/tests/browser/guest-harness.jsx",
+    "pulsern/tests/browser/guest.html",
+    "pulsern/tests/capture-fonts.test.js",
+    "pulsern/tests/card-nav-browser.test.js",
+    "pulsern/tests/effects.test.js",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/flashcards-undo-browser.test.js",
+    "pulsern/tests/guest-browser.test.js",
+    "pulsern/tests/guest.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/progress-load-browser.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/question-review.test.js",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/review2-blockers.test.js",
+    "pulsern/tests/review2-fixes.test.js",
+    "pulsern/tests/review3-browser.test.js",
+    "pulsern/tests/review3.test.js",
+    "pulsern/tests/rewards.test.js",
+    "pulsern/tests/state-migration.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 945,
+      "title": "Batched exam results no longer accumulate correct-answer runs",
+      "problem": "The previous functional run update has been replaced with `nextRun = counts ? run + 1 : 0`, using the render's captured value. Multiple calls to record before React commits a render therefore calculate from the same run, rather than from the preceding answer. This also corrupts best-run and combo calculations.",
+      "failure_scenario": "When a readiness exam records multiple results during submission, an all-correct batch starting from run 0 can finish at run 1 instead of the number of correct answers. A wrong answer inside the batch also fails to reset the starting point used by subsequent correct answers. The exam browser tests replace record with a harness callback, so they do not exercise this App-level regression.",
+      "fix": "Accumulate run transitions through a reducer or synchronously maintained ref so each recorded result sees the preceding result, while still returning the appropriate feedback data. Add an integration test that records a mixed batch through App's actual recording logic.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/rewards.js",
+      "line": 245,
+      "title": "Weekly rounds mark incomplete daily shifts as complete",
+      "problem": "`shiftStatus` requires assessments, scheduled reviews, and fixing a miss to complete a shift, but `dayShiftDone` checks only eight questions. Weekly rounds use that weaker predicate to announce \"shift complete\" and award shift covers.",
+      "failure_scenario": "A student answers eight questions while four flashcards remain due and misses remain uncorrected. Today correctly shows only 1/3 tasks done, but weekly rounds marks that same day as a completed shift. Five such incomplete days earn a cover despite none satisfying Today's completion rule.",
+      "fix": "Use one completion definition for Today, weekly rounds, and cover awards, retaining the per-day evidence needed to evaluate it. If covers intentionally require only eight questions, label those historical counts as eight-question days rather than completed shifts. Test the case with eight answers and unfinished review tasks.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/auth.jsx",
+      "line": 464,
+      "title": "Guest sign-in preserves a flag that switches reloads back to sign-up",
+      "problem": "`toAuth(\"signin\")` preserves the entire query string, including the legacy `start=1` sign-up flag. `authModeFromUrl` gives that flag precedence over the explicit `/app/sign-in` path.",
+      "failure_scenario": "A visitor enters through `/app/?start=1`, tries the guest questions, and selects Sign in or \"I have an account\". The address becomes `/app/sign-in?start=1`. Reloading that page displays Create account and submits through `auth.signUp` instead of signing in.",
+      "fix": "Remove the legacy start flag when making an explicit auth-mode choice, or give explicit sign-in/reset paths precedence over it. Preserve unrelated attribution and cohort parameters. Add a routing regression test for `/app/sign-in?start=1`.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 233637,
+    "completionTokens": 10846,
+    "reasoningTokens": 10059,
+    "costUsd": 0.692551
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Changes needed. The new answer-run accounting fails for batched results, shift completion disagrees between screens, and the guest-to-sign-in flow can reopen as sign-up. The warfarin correction is appropriate. Review was based on the supplied code and images; tests were not executed.",
+  "counts": {
+    "blocker": 0,
+    "major": 3,
+    "minor": 0
+  }
+}
