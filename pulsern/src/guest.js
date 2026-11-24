@@ -147,20 +147,28 @@ function sameLegacyOccurrence(serverRow, localRow) {
     && (serverRow.ms ?? "") === (localRow.ms ?? "");
 }
 
-function mergeLogs(serverLog, localLog) {
+function logMatch(row, list, used) {
+  if (!row) return -1;
+  if (row.attempt != null && row.attempt !== "") {
+    return (list ?? []).findIndex((item, index) => !used.has(index) && item?.attempt === row.attempt);
+  }
+  return (list ?? []).findIndex((item, index) => !used.has(index) && sameLegacyOccurrence(row, item));
+}
+
+function mergeLogs(serverLog, localLog, baselineLog = null) {
   const used = new Set();
+  const baseUsed = new Set();
   const out = [];
   for (const row of serverLog ?? []) {
     if (!row) continue;
-    let match = -1;
-    if (row.attempt != null && row.attempt !== "") {
-      match = (localLog ?? []).findIndex((item, index) => !used.has(index) && item?.attempt === row.attempt);
-    } else {
-      match = (localLog ?? []).findIndex((item, index) => !used.has(index) && sameLegacyOccurrence(row, item));
-    }
+    const match = logMatch(row, localLog, used);
     if (match >= 0) {
       used.add(match);
-      out.push(localLog[match]);
+      const localRow = localLog[match];
+      const baseAt = baselineLog ? logMatch(row, baselineLog, baseUsed) : -1;
+      if (baseAt >= 0) baseUsed.add(baseAt);
+      const baseRow = baseAt >= 0 ? baselineLog[baseAt] : undefined;
+      out.push(baseRow && sameJson(localRow, baseRow) ? row : localRow);
     } else out.push(row);
   }
   (localLog ?? []).forEach((row, index) => {
@@ -275,7 +283,39 @@ function dayNum(rewards, day, key) {
   return Number(rewards?.days?.[day]?.[key]) || 0;
 }
 
-function mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen) {
+function changedEntries(baseMap, sideMap) {
+  const out = {};
+  const keys = new Set([...Object.keys(baseMap ?? {}), ...Object.keys(sideMap ?? {})]);
+  for (const key of keys) if (!sameJson(baseMap?.[key], sideMap?.[key])) out[key] = sideMap?.[key] ?? null;
+  return out;
+}
+
+function opSum(ops, day, key) {
+  return (ops ?? []).filter((op) => op?.day === day).reduce((total, op) => total + (Number(op?.[key]) || 0), 0);
+}
+
+/* A card grade carries an id. The same id on both devices is one grade.
+   Removing an id that the baseline had is an undo. */
+function mergeCardOps(base, server, local) {
+  const present = [base, server, local].some((blob) => Array.isArray(blob?.rewards?.cardOps));
+  if (!present) return null;
+  const lists = [base, server, local].map((blob) => new Map((blob?.rewards?.cardOps ?? []).filter((op) => op?.id != null).map((op) => [op.id, op])));
+  const seen = new Set();
+  const out = [];
+  for (const [id] of [...lists[0], ...lists[1], ...lists[2]]) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const inBase = lists[0].has(id);
+    const inServer = lists[1].has(id);
+    const inLocal = lists[2].has(id);
+    if (inBase && (!inServer || !inLocal)) continue;
+    const op = lists[2].get(id) ?? lists[1].get(id);
+    if (op) out.push(op);
+  }
+  return out;
+}
+
+function mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen, sameCards = false, mergedOps = null) {
   const b = base?.rewards;
   const s = server?.rewards;
   const l = local?.rewards;
@@ -287,7 +327,7 @@ function mergeRewards(base, server, local, replayed, localReplay, serverReplay, 
   if (sameJson(l, b) && !unseen) return s === undefined ? l : s;
   if (sameJson(s, b) && !unseen) return l;
   const replayRewards = replayed.rewards ?? b ?? emptyRewards();
-  const duplicate = sameJson(l, s) && sameJson(local.srsMap, server.srsMap);
+  const duplicate = sameCards || (sameJson(l, s) && sameJson(local.srsMap, server.srsMap));
   const days = {};
   const dayKeys = new Set([
     ...Object.keys(b?.days ?? {}),
@@ -296,11 +336,14 @@ function mergeRewards(base, server, local, replayed, localReplay, serverReplay, 
     ...Object.keys(replayRewards.days ?? {}),
   ]);
   for (const day of dayKeys) {
-    const localCardXp = dayNum(l, day, "xp") - dayNum(localReplay?.rewards, day, "xp");
-    const serverCardXp = dayNum(s, day, "xp") - dayNum(serverReplay?.rewards, day, "xp");
-    const cards = addNum(dayNum(b, day, "cards"), dayNum(s, day, "cards"), dayNum(l, day, "cards"));
-    const cardCards = duplicate ? dayNum(l, day, "cards") : cards;
-    const xp = dayNum(replayRewards, day, "xp") + localCardXp + (duplicate ? 0 : serverCardXp);
+    const baseOps = Array.isArray(b?.cardOps) ? b.cardOps : [];
+    const localCardXp = mergedOps ? opSum(mergedOps, day, "xp") - opSum(baseOps, day, "xp") : dayNum(l, day, "xp") - dayNum(localReplay?.rewards, day, "xp");
+    const serverCardXp = mergedOps ? 0 : dayNum(s, day, "xp") - dayNum(serverReplay?.rewards, day, "xp");
+    const cards = mergedOps
+      ? dayNum(b, day, "cards") + opSum(mergedOps, day, "cards") - opSum(baseOps, day, "cards")
+      : addNum(dayNum(b, day, "cards"), dayNum(s, day, "cards"), dayNum(l, day, "cards"));
+    const cardCards = !mergedOps && duplicate ? dayNum(l, day, "cards") : cards;
+    const xp = dayNum(replayRewards, day, "xp") + localCardXp + (duplicate && !mergedOps ? 0 : serverCardXp);
     const q = dayNum(replayRewards, day, "q");
     const ok = dayNum(replayRewards, day, "ok");
     const fixes = dayNum(replayRewards, day, "fixes");
@@ -333,7 +376,15 @@ function mergeRewards(base, server, local, replayed, localReplay, serverReplay, 
     rankHigh: ranks.length ? Math.max(...ranks) : (l?.rankHigh ?? s?.rankHigh ?? b?.rankHigh ?? null),
     badgesSeen,
     prefs,
+    ...(mergedOps ? { cardOps: mergedOps } : {}),
   };
+}
+
+/* A save that is no longer the newest snapshot must not become the
+   baseline. The next save still has to see what the other device wrote. */
+export function bindCommittedProgress(state, commit) {
+  if (!commit?.current || commit.seenEpoch !== commit.epoch) return state;
+  return { accepted: commit.blob, baseline: commit.blob, revision: Number(commit.revision) || 0 };
 }
 
 function addDelta(base, server, local, key) {
@@ -410,7 +461,7 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const local = localBlob && typeof localBlob === "object" && !Array.isArray(localBlob) ? localBlob : {};
   const hasBaseline = baselineBlob != null && typeof baselineBlob === "object" && !Array.isArray(baselineBlob);
   const base = hasBaseline ? baselineBlob : server;
-  const log = mergeLogs(server.log, local.log);
+  const log = mergeLogs(server.log, local.log, hasBaseline ? (base.log ?? []) : null);
   const replayed = replayUnseen(base, log);
   const unseen = log.some((row) => row?.attempt && !(base.log ?? []).some((item) => item?.attempt === row.attempt));
   const localReplay = hasBaseline ? replayUnseen(base, local.log) : null;
@@ -423,8 +474,12 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
     const extra = (blob, replay) => (Number(blob?.xp) || 0) - (Number(replay?.xp) || 0);
     const localExtra = extra(local, localReplay);
     const serverExtra = extra(server, serverReplay);
-    const once = localExtra === serverExtra && sameJson(local.rewards, server.rewards) && sameJson(local.srsMap, server.srsMap);
-    nextXp = (Number(replayed.xp) || 0) + localExtra + (once ? 0 : serverExtra);
+    const mergedOps = mergeCardOps(base, server, local);
+    const sameCards = localExtra === serverExtra && sameJson(changedEntries(base.srsMap, local.srsMap), changedEntries(base.srsMap, server.srsMap));
+    if (mergedOps) {
+      const sum = (ops) => (ops ?? []).reduce((total, op) => total + (Number(op?.xp) || 0), 0);
+      nextXp = (Number(replayed.xp) || 0) + sum(mergedOps) - sum(base.rewards?.cardOps);
+    } else nextXp = (Number(replayed.xp) || 0) + localExtra + (sameCards ? 0 : serverExtra);
   }
   put(merged, "xp", nextXp);
   if (base.bestRun != null || server.bestRun != null || local.bestRun != null || unseen) {
@@ -443,7 +498,7 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
     put(merged, "missSchedule", mergeMap(base.missSchedule, server.missSchedule, unseen ? replayed.missSchedule : local.missSchedule));
   }
   if (base.srsMap || server.srsMap || local.srsMap) put(merged, "srsMap", mergeMap(base.srsMap, server.srsMap, local.srsMap));
-  put(merged, "rewards", mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen));
+  put(merged, "rewards", mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen, hasBaseline && sameJson(changedEntries(base.srsMap, local.srsMap), changedEntries(base.srsMap, server.srsMap)) && ((Number(local.xp) || 0) - (Number(localReplay?.xp) || 0)) === ((Number(server.xp) || 0) - (Number(serverReplay?.xp) || 0)), mergeCardOps(base, server, local)));
   put(merged, "examResults", mergeExamResults(base.examResults, server.examResults, local.examResults));
   put(merged, "fcNew", mergeFcNew(base.fcNew, server.fcNew, local.fcNew));
   put(merged, "flagged", mergeList(base.flagged, server.flagged, local.flagged));

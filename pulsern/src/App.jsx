@@ -309,7 +309,7 @@ import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 import {
-  emptyRewards, answerXp, answerCountsForRun, sameAnswer, xpNote, comboFor, cardXp, questionsOn, todayQuestionCount, shiftCompleteNote, caseStepIds, bumpDay, reverseCardDay, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
+  emptyRewards, answerXp, answerCountsForRun, sameAnswer, xpNote, comboFor, cardXp, questionsOn, todayQuestionCount, shiftCompleteNote, caseStepIds, bumpDay, reverseCardDay, recordCardGrade, undoCardGrade, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
   careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
 } from "./rewards.js";
 import { motionAllowed, rewardBeat } from "./effects.js";
@@ -317,7 +317,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, blobForSave, createProgressEpoch, storageOrNull, noteAccountRead } from "./guest.js";
+import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers, reconcileProgress, blobForSave, createProgressEpoch, storageOrNull, noteAccountRead, bindCommittedProgress } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
 import { claimLegacyAt, claimLegacySchedule } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
@@ -402,7 +402,6 @@ const store = {
       if (signal && request && typeof request.abortSignal === "function") request = request.abortSignal(signal);
       const { data, error } = await request ?? {};
       const revision = Array.isArray(data) ? Number(data[0]?.revision) || null : null;
-      if (revision) progressGate.note(revision, epoch);
       if (error) throw new Error(error.message || "Could not save progress");
       if (epoch !== progressGate.epoch()) throw aborted();
       return revision;
@@ -425,15 +424,28 @@ const store = {
         const merged = reconcileProgress(fresh.blob, raw, loadedBaseline);
         const unchanged = JSON.stringify(merged) === JSON.stringify(fresh.blob);
         if (unchanged) {
-          progressGate.note(Number(fresh.revision) || 0, epoch);
-          acceptedBlob = fresh.blob;
-          loadedBaseline = fresh.blob;
+          const bound = bindCommittedProgress(
+            { accepted: acceptedBlob, baseline: loadedBaseline, revision: progressGate.revision() },
+            { blob: fresh.blob, revision: Number(fresh.revision) || 0, current: current(), epoch, seenEpoch: epoch },
+          );
+          if (bound !== loadedBaseline && bound.baseline === fresh.blob) {
+            acceptedBlob = bound.accepted;
+            loadedBaseline = bound.baseline;
+            progressGate.note(bound.revision, epoch);
+          }
           return JSON.stringify(merged) === JSON.stringify(raw) ? undefined : { reconciled: true, blob: merged };
         }
         revision = await finish(writeAt(Number(fresh.revision) || 0, merged));
         if (revision) {
-          acceptedBlob = merged;
-          loadedBaseline = merged;
+          const bound = bindCommittedProgress(
+            { accepted: acceptedBlob, baseline: loadedBaseline, revision: progressGate.revision() },
+            { blob: merged, revision, current: current(), epoch, seenEpoch: epoch },
+          );
+          if (bound.baseline === merged) {
+            acceptedBlob = bound.accepted;
+            loadedBaseline = bound.baseline;
+            progressGate.note(bound.revision, epoch);
+          }
           return { reconciled: true, blob: merged };
         }
       }
@@ -443,8 +455,15 @@ const store = {
       err.code = "conflict";
       throw err;
     }
-    acceptedBlob = blob;
-    loadedBaseline = blob;
+    const bound = bindCommittedProgress(
+      { accepted: acceptedBlob, baseline: loadedBaseline, revision: progressGate.revision() },
+      { blob, revision, current: current(), epoch, seenEpoch: epoch },
+    );
+    if (bound.baseline === blob) {
+      acceptedBlob = bound.accepted;
+      loadedBaseline = bound.baseline;
+      progressGate.note(bound.revision, epoch);
+    }
     return JSON.stringify(blob) === JSON.stringify(raw) ? undefined : { reconciled: true, blob };
   },
   releaseAccount() {
@@ -1099,10 +1118,14 @@ export default function App() {
   /* A graded card counts toward today's cards and its XP toward the day's
      XP (so the weekly view matches the header). Undo reverses all of it,
      including the day count touchDay added, so grade → undo → grade counts once. */
-  const noteCard = (cardXpGain = 0) => setRewards((r) => bumpDay(r, todayStr(), { cards: 1, xp: cardXpGain || 0 }));
-  const unnoteCard = (cardXpGain = 0, day) => {
+  const noteCard = (cardXpGain = 0, op) => setRewards((r) => (op?.id
+    ? recordCardGrade(r, { id: op.id, day: op.day || todayStr(), xp: cardXpGain || 0 })
+    : bumpDay(r, todayStr(), { cards: 1, xp: cardXpGain || 0 })));
+  const unnoteCard = (cardXpGain = 0, day, op) => {
     const credited = day || todayStr();
-    setRewards((r) => reverseCardDay(r, credited, cardXpGain));
+    setRewards((r) => (op?.id
+      ? undoCardGrade(r, { id: op.id, day: credited, xp: cardXpGain })
+      : reverseCardDay(r, credited, cardXpGain)));
     setDaily((d) => (d.day === credited && d.answered > 0 ? { ...d, answered: d.answered - 1 } : d));
   };
   const resolveLegacy = (legacyId, chosen, logIndex = -1) => {
@@ -3073,10 +3096,11 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
     // Undo refunds that charge; grading the card again counts it once.
     if (!srsMap[id] && !countedNew.current.has(id)) { countedNew.current.add(id); onNewCard?.(id); }
     const xpGain = cardXp(g, Date.now() - flipAt.current);
-    undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr() };
+    const opId = `card:${id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+    undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr(), opId };
     setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
     if (xpGain) addXp(xpGain);
-    onGrade?.(xpGain);
+    onGrade?.(xpGain, { id: opId, day: todayStr() });
     setSession(result.nav);
   };
   /* Undo: back on a card graded this sitting, put its previous schedule
@@ -3096,7 +3120,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
         return n;
       });
       if (rec.xp) addXp(-rec.xp);
-      onUngrade?.(rec.xp, rec.day);
+      onUngrade?.(rec.xp, rec.day, rec.opId ? { id: rec.opId } : null);
       delete undoLog.current[id];
     }
     flipAt.current = Date.now(); // the answer is shown again: the 1.5 s floor restarts (REVIEW-3 N10)

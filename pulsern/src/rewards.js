@@ -251,6 +251,20 @@ export function bumpDay(rewards, day, delta) {
 
 /* Undo a card on the local day it was graded. Looking at "today" instead
    leaves yesterday's cards and XP in place once midnight has passed. */
+/* One grade, one id. A later save of the same grade is the same id,
+   so a lost acknowledgement cannot pay the card again. */
+export function recordCardGrade(rewards, { id, day, xp = 0 } = {}) {
+  const next = bumpDay(rewards ?? emptyRewards(), day, { cards: 1, xp: xp || 0 });
+  const ops = (Array.isArray(rewards?.cardOps) ? rewards.cardOps : []).filter((op) => op?.id !== id);
+  return { ...next, cardOps: [...ops, { id, day, xp: xp || 0, cards: 1 }] };
+}
+
+export function undoCardGrade(rewards, { id, day, xp = 0 } = {}) {
+  const next = reverseCardDay(rewards, day, xp);
+  const ops = (Array.isArray(rewards?.cardOps) ? rewards.cardOps : []).filter((op) => op?.id !== id);
+  return { ...next, cardOps: ops };
+}
+
 export function reverseCardDay(rewards, day, cardXpGain = 0) {
   const d = rewards?.days?.[day];
   if (!d) return rewards;

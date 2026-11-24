@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { applyAnswer } from "../src/answer-apply.js";
 import { emptyRewards, bumpDay, reverseCardDay } from "../src/rewards.js";
-import { recoverProgressWrite, blobForSave, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob } from "../src/guest.js";
+import { recoverProgressWrite, blobForSave, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob, bindCommittedProgress } from "../src/guest.js";
 import { refreshedUnresolved, latestResults } from "../src/question-review.js";
 
 const answer = (attempt, id = 1) => ({ id, key: `bank:${id}`, source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt });
@@ -206,6 +206,68 @@ describe("a revision conflict keeps both devices' answers", () => {
     const inOrder = applyAnswer(older, { q, correct: false, attempt: "newer", at: 2000, ...taken }).state;
     expect(merged.xp).toBe(inOrder.xp);
     expect(merged.ability.Pharmacology.theta).toBe(inOrder.ability.Pharmacology.theta);
+  });
+
+  it("counts one saved card operation once when a later question changes the reward ledger", () => {
+    const op = { id: "card:c17:1", day: "2026-11-24", xp: 5, cards: 1 };
+    const card = { ...bumpDay(emptyRewards(), "2026-11-24", { cards: 1, xp: 5 }), cardOps: [op] };
+    const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), srsMap: {}, bestRun: 0 };
+    const server = { ...baseline, xp: 5, rewards: card, srsMap: { c17: { interval: 3, due: "2026-12-01", seen: "2026-11-24" } } };
+    const q = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const local = applyAnswer({ ...server }, {
+      q, correct: true, ms: 9000, today: "2026-11-24", attempt: "q", words: 8, rating: 1300, calibration: { 1: { rating: 1300 } },
+    }).state;
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.rewards.cardOps.map((item) => item.id)).toEqual(["card:c17:1"]);
+    expect(merged.xp).toBe(15);
+    expect(merged.rewards.days["2026-11-24"].cards).toBe(1);
+  });
+
+  it("counts a card grade once when its acknowledgement was lost and a question was answered afterward", () => {
+    const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), srsMap: {}, bestRun: 0 };
+    const grade = { interval: 3, due: "2026-12-01", seen: "2026-11-24" };
+    const card = bumpDay(emptyRewards(), "2026-11-24", { cards: 1, xp: 5 });
+    const server = { ...baseline, xp: 5, rewards: card, srsMap: { c17: grade } };
+    const q = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const local = applyAnswer({ ...server }, {
+      q, correct: true, ms: 9000, today: "2026-11-24", attempt: "q", words: 8, rating: 1300, calibration: { 1: { rating: 1300 } },
+    }).state;
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.xp).toBe(15);
+    expect(merged.rewards.days["2026-11-24"].cards).toBe(1);
+    expect(merged.rewards.days["2026-11-24"].q).toBe(1);
+    expect(merged.log).toHaveLength(1);
+  });
+
+  it("keeps a remote resolution of an old answer when this device only changes a setting", () => {
+    const original = { id: 7, correct: false, day: "2026-11-20" };
+    const named = { ...original, source: "builtin", key: "builtin:7" };
+    const baseline = { log: [original], xp: 0, theme: "light" };
+    const server = { ...baseline, log: [named] };
+    const local = { ...baseline, theme: "dim" };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.log).toHaveLength(1);
+    expect(merged.log[0].key).toBe("builtin:7");
+    expect(merged.log[0].source).toBe("builtin");
+    expect(merged.theme).toBe("dim");
+  });
+
+  it("does not move the baseline to a conflict write the screen never applied", () => {
+    const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), bestRun: 0 };
+    const q = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300, calibration: { 1: { rating: 1300 } } };
+    const a = applyAnswer(baseline, { q: { ...q, id: 1, key: "bank:1" }, correct: true, attempt: "a", ...taken }).state;
+    const b = applyAnswer(baseline, { q: { ...q, id: 2, key: "bank:2", cat: "Management of Care" }, correct: true, attempt: "b", ...taken, calibration: { 2: { rating: 1300 } } }).state;
+    const held = { accepted: baseline, baseline, revision: 1 };
+    const stale = bindCommittedProgress(held, { blob: { ...a, log: [...a.log, ...b.log], xp: 20 }, revision: 2, current: false, epoch: 1, seenEpoch: 1 });
+    expect(stale).toBe(held);
+    const bc = applyAnswer(b, { q: { ...q, id: 3, key: "bank:3", cat: "Safety" }, correct: true, attempt: "c", ...taken, calibration: { 3: { rating: 1300 } } }).state;
+    const saved = blobForSave({ ...a, log: [a.log[0], b.log[0]], xp: 20 }, bc, stale.baseline);
+    expect(saved.log.map((row) => row.attempt)).toEqual(["a", "b", "c"]);
+    expect(saved.xp).toBe(30);
+    const live = bindCommittedProgress(held, { blob: saved, revision: 3, current: true, epoch: 1, seenEpoch: 1 });
+    expect(live.baseline).toBe(saved);
+    expect(live.revision).toBe(3);
   });
 
   it("keeps the time a trial answer was taken", () => {
