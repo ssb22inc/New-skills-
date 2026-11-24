@@ -1,0 +1,47 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "9f43c95a300abc5b2bb99c03161eaf16e0145674",
+    "head": "856303dce99162f44037b9ef37de200ae2a367ea",
+    "pr": "187"
+  },
+  "reviewedAt": "2026-11-24T22:58:11.158Z",
+  "filesReviewed": [
+    ".github/workflows/pulsern-astra-review.yml",
+    "pulsern/ops/astra-review.mjs",
+    "pulsern/ops/llm.mjs",
+    "pulsern/ops/models.mjs",
+    "pulsern/ops/review.mjs",
+    "pulsern/tests/astra-review.test.js",
+    "pulsern/tests/content-gate.test.js",
+    "pulsern/tests/llm-client.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/ops/review.mjs",
+      "line": 100,
+      "title": "Reject preliminary approval JSON inside inline thinking",
+      "problem": "The model migration explicitly accommodates DeepSeek responses containing <think> blocks in astra-review.mjs, but review() returns that form unchanged and parseJson() extracts JSON from anywhere in it. For example, parseJson('<think>[{\"verdict\":\"pass\",\"confidence\":0.99}]</think>\\nI could not complete the review.') returns the passing array even though there is no final JSON verdict. I could not verify whether OpenRouter always separates this model's reasoning; the failure applies whenever it emits the inline form supported elsewhere in this PR.",
+      "failure_scenario": "A content reviewer includes a preliminary passing batch, with the factory's expected fields and confidence >=0.85, inside <think>, then ends with a refusal or incomplete prose answer. The shared parser returns the preliminary batch as the completed review, allowing a publication gate to consume approvals that were never finalized.",
+      "fix": "Give the shared content parser the same final-payload discipline as the code-review parser: remove only an explicitly supported leading thinking block, unwrap at most one outer fence, and parse the entire remaining payload rather than extracting a JSON substring. Preserve support for both object and array verdicts. Add a regression test proving that passing JSON inside thinking followed by a non-verdict throws.",
+      "confidence": "medium"
+    }
+  ],
+  "usage": {
+    "promptTokens": 44379,
+    "completionTokens": 6073,
+    "reasoningTokens": 5696,
+    "costUsd": 0.171676
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. The code-review parser handles inline thinking defensively, but the shared content-publication parser can still mistake preliminary JSON inside that thinking for a completed approval.",
+  "counts": {
+    "blocker": 1,
+    "major": 0,
+    "minor": 0
+  }
+}
