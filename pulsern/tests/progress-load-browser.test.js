@@ -98,7 +98,7 @@ describe("M6: a failed progress read never overwrites the account", () => {
 });
 
 describe("M2: trial answers and an existing account", () => {
-  it("asks first; Discard merges nothing and clears the device copy", async () => {
+  it("a returning account does not import the trial and clears the device copy", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
       await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });
@@ -111,7 +111,7 @@ describe("M2: trial answers and an existing account", () => {
     } finally { await ctx.close(); }
   }, 120_000);
 
-  it("Add merges once, then clears the device copy after the save", async () => {
+  it("a returning account keeps its rows and does not add trial XP", async () => {
     const { ctx, page } = await open({ session: sessionFor(NOW - 90 * 86400000), row: existingRow, guestData: guest(NOW - 3600_000) });
     try {
       await page.getByRole("heading", { name: "Welcome back." }).waitFor({ timeout: 30_000 });

@@ -95,6 +95,16 @@ export function scheduleEntry(question, schedule, questions = null, log = null, 
   if ((counts.get(String(question.id)) ?? 0) !== 1) return null;
   const idx = index ?? historyIndex(log);
   if (idx.unresolved.has(String(question.id))) return null;
+  /* A date left under the old number belongs to the latest classified
+     row with that number. It is not a review for a different question
+     that happens to be the only one on screen. */
+  let owner = null;
+  for (const row of log ?? []) {
+    if (!row || String(row.id) !== String(question.id)) continue;
+    const key = questionIdentity(row);
+    if (key) owner = key;
+  }
+  if (owner && owner !== id) return null;
   return raw;
 }
 
