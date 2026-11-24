@@ -87,8 +87,28 @@ describe("revision-less saves wait for the client merge", () => {
     expect(pending.rows).toEqual([]);
   });
 
+  it("does not park an older snapshot after progress was reset", async () => {
+    await db.query(`delete from public.progress_pending_merge where user_id = $1`, [userId]);
+    await db.query(
+      `update public.progress set blob = '{"log":[]}'::jsonb, revision = 8, legacy_hold = true where user_id = $1 and key = 'pulsern-v1'`,
+      [userId],
+    );
+    await db.query(
+      `update public.progress set blob = '{"log":[{"id":9,"cat":"Pharmacology","diff":1,"correct":true}]}'::jsonb where user_id = $1 and key = 'pulsern-v1'`,
+      [userId],
+    );
+    const saved = await row(db);
+    expect(saved.blob).toEqual({ log: [] });
+    const pending = await db.query(`select id from public.progress_pending_merge where user_id = $1`, [userId]);
+    expect(pending.rows).toEqual([]);
+  });
+
   it("rejects a client that sends an older revision", async () => {
-    await db.query(`update public.progress set revision = 6, blob = '{"log":[]}'::jsonb where user_id = $1`, [userId]);
+    await db.query(`delete from public.progress where user_id = $1`, [userId]);
+    await db.query(
+      `insert into public.progress (user_id, key, blob, revision) values ($1, 'pulsern-v1', '{"log":[]}'::jsonb, 6)`,
+      [userId],
+    );
     await expect(db.query(
       `update public.progress set blob = '{"log":[{"id":3}]}'::jsonb, revision = 4 where user_id = $1`,
       [userId],

@@ -2,7 +2,7 @@
    devices already use. Doing it twice does not score the answer again. */
 import { describe, it, expect } from "vitest";
 import { reconcileProgress, foldPendingProgress } from "../src/guest.js";
-import { emptyAbility, ABILITY_CATS } from "../src/ability-engine.js";
+import { emptyAbility, ABILITY_CATS, updateAbility } from "../src/ability-engine.js";
 import { emptyRewards } from "../src/rewards.js";
 
 const answer = (attempt, id, cat, day) => ({
@@ -38,6 +38,48 @@ describe("a parked snapshot uses the device conflict merge", () => {
     expect(folded.streak.shield).toBe(false);
     expect(folded.ability["Management of Care"].n).toBe(1);
     expect(folded.theme).toBe("light");
+  });
+
+  it("scores an old-app answer that has no attempt id and keeps rewards", () => {
+    const stored = {
+      log: [answer("a", 1, "Pharmacology", "2026-11-24")],
+      xp: 10,
+      ability: updateAbility(emptyAbility(ABILITY_CATS), { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1 }, true).ability,
+      rewards: emptyRewards(),
+      streak: { count: 1, lastDay: "2026-11-24", shield: false },
+    };
+    const pending = {
+      log: [{ id: 9, cat: "Pharmacology", diff: 1, correct: true }],
+      xp: 10,
+    };
+    const folded = foldPendingProgress(stored, [pending]);
+    expect(folded.log.map((row) => row.id)).toEqual([1, 9]);
+    expect(folded.ability.Pharmacology.n).toBe(stored.ability.Pharmacology.n + 1);
+    expect(folded.xp).toBe(20);
+    expect(folded.rewards.badgesSeen).toEqual(emptyRewards().badgesSeen);
+    expect(folded.streak.shield).toBe(false);
+  });
+
+  it("keeps a card grade from an old app that did not record a card operation", () => {
+    const stored = {
+      log: [],
+      xp: 10,
+      ability: emptyAbility(ABILITY_CATS),
+      rewards: emptyRewards(),
+      streak: { count: 1, lastDay: "2026-11-24", shield: false },
+      srsMap: { c1: { interval: 1, due: "2026-11-25", seen: "2026-11-24" } },
+    };
+    const pending = {
+      log: [],
+      xp: 18,
+      srsMap: { c1: { interval: 7, due: "2026-12-01", seen: "2026-11-25" } },
+    };
+    const folded = foldPendingProgress(stored, [pending]);
+    expect(folded.srsMap.c1).toMatchObject({ interval: 7, due: "2026-12-01", seen: "2026-11-25" });
+    expect(folded.xp).toBe(18);
+    expect(folded.rewards.badgesSeen).toEqual(emptyRewards().badgesSeen);
+    expect(folded.streak.shield).toBe(false);
+    expect(foldPendingProgress(folded, [pending]).srsMap.c1.due).toBe("2026-12-01");
   });
 
   it("does not score the parked snapshot again the second time", () => {

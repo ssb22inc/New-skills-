@@ -30,6 +30,8 @@ create table if not exists public.progress_pending_merge (
   received_at timestamptz not null default now()
 );
 
+alter table public.progress add column if not exists legacy_hold boolean not null default false;
+
 create index if not exists progress_pending_merge_user_key_idx
   on public.progress_pending_merge (user_id, key, received_at, id);
 
@@ -52,7 +54,7 @@ as $$
 begin
   if new.revision is null or new.revision = old.revision then
     if old.revision > 0 then
-      if new.blob is not null then
+      if old.legacy_hold is not true and new.blob is not null then
         insert into public.progress_pending_merge (user_id, key, snapshot)
         values (old.user_id, old.key, new.blob);
       end if;

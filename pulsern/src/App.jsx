@@ -343,6 +343,7 @@ let acceptedBlob = null;
 let loadedBaseline = null;
 let accountEpoch = 0;
 let accountRead = { user: null, blob: null, revision: 0, epoch: 0 };
+let legacyHold = false;
 const store = {
   async get(key) {
     const seenEpoch = accountEpoch;
@@ -394,7 +395,7 @@ const store = {
     const raw = JSON.parse(value);
     const blob = blobForSave(acceptedBlob, raw, loadedBaseline);
     const writeAt = (expected, payload) => {
-      const patch = { blob: payload, revision: expected + 1, updated_at: new Date().toISOString() };
+      const patch = { blob: payload, revision: expected + 1, updated_at: new Date().toISOString(), legacy_hold: false };
       return supabase.from("progress").update(patch)
         .eq("user_id", session.user.id).eq("key", key).eq("revision", expected)
         .select("revision");
@@ -408,9 +409,10 @@ const store = {
       return revision;
     };
     const insertAt = (payload) => supabase.from("progress").insert({
-      user_id: session.user.id, key, blob: payload, revision: 1, updated_at: new Date().toISOString(),
+      user_id: session.user.id, key, blob: payload, revision: 1, updated_at: new Date().toISOString(), legacy_hold: legacyHold,
     }).select("revision");
     let revision = await finish(writeAt(progressGate.revision(), blob));
+    if (revision) legacyHold = false;
     if (!revision && progressGate.revision() === 0 && epoch === progressGate.epoch()) {
       try { revision = await finish(insertAt(blob)); } catch { revision = null; }
     }
@@ -437,6 +439,7 @@ const store = {
           return JSON.stringify(merged) === JSON.stringify(raw) ? undefined : { reconciled: true, blob: merged };
         }
         revision = await finish(writeAt(Number(fresh.revision) || 0, merged));
+        if (revision) legacyHold = false;
         if (revision) {
           const bound = bindCommittedProgress(
             { accepted: acceptedBlob, baseline: loadedBaseline, revision: progressGate.revision() },
@@ -492,6 +495,7 @@ const store = {
         blob: merged,
         revision: expected + 1,
         updated_at: new Date().toISOString(),
+        legacy_hold: false,
       }).eq("user_id", session.user.id).eq("key", key).eq("revision", expected).select("revision");
       if (seenEpoch !== accountEpoch) return null;
       if (writeError) throw new Error(writeError.message || "Could not save progress");
@@ -500,6 +504,7 @@ const store = {
       acceptedBlob = merged;
       loadedBaseline = merged;
       progressGate.note(revision, progressGate.epoch());
+      legacyHold = false;
     }
     const { error: deleteError } = await supabase.from("progress_pending_merge").delete()
       .in("id", ids).eq("user_id", session.user.id).eq("key", key);
@@ -518,9 +523,13 @@ const store = {
     const { data: { session } } = await supabase.auth.getSession();
     if (seenEpoch !== accountEpoch) return;
     if (!session) return;
+    const { error: pendingError } = await supabase.from("progress_pending_merge").delete().eq("user_id", session.user.id).eq("key", key);
+    if (seenEpoch !== accountEpoch) return;
+    if (pendingError) throw new Error(pendingError.message || "Could not erase saved progress");
     const { error } = await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
     if (seenEpoch !== accountEpoch) return;
     if (error) throw new Error(error.message || "Could not erase saved progress");
+    legacyHold = true;
     accountEpoch += 1;
     progressGate.abandon();
     acceptedBlob = null;

@@ -446,41 +446,71 @@ function pendingRowKey(row) {
   return `l:${row.id}:${row.correct}:${row.day ?? ""}:${row.at ?? ""}:${row.ms ?? ""}`;
 }
 
-function pendingAddsWork(current, snapshot) {
-  const have = new Set((current?.log ?? []).map(pendingRowKey));
-  for (const row of snapshot?.log ?? []) if (!have.has(pendingRowKey(row))) return true;
-  const ops = new Set((current?.rewards?.cardOps ?? []).map((op) => op?.id).filter((id) => id != null));
-  for (const op of snapshot?.rewards?.cardOps ?? []) if (op?.id != null && !ops.has(op.id)) return true;
-  return false;
+function answerInput(row) {
+  const words = Number(row?.words);
+  const stem = Number.isFinite(words) && words > 0 ? Array.from({ length: words }, () => "w").join(" ") : (row?.stem || "");
+  const rating = Number(row?.rating);
+  return {
+    q: { id: row.id, key: row.key, source: row.source, cat: row.cat, diff: row.diff, stem },
+    correct: !!row.correct,
+    ms: Number.isFinite(Number(row?.ms)) ? Number(row.ms) : Infinity,
+    calibration: Number.isFinite(rating) && row?.source !== "builtin" && row?.source !== "case" ? { [row.id]: { rating } } : {},
+  };
 }
 
-/* Parked snapshots from an older open app. Each one is the other
-   device's blob. The current row is both the server copy and the
-   baseline, which is how a conflict save already keeps answers, card
-   XP, and a spent shield. A snapshot whose answers are already in the
-   row does not get scored again. */
+/* Parked snapshots from an older open app. The conflict merge unions
+   the logs. Scoring starts from the stored row, and only an answer that
+   was not already there is applied, so a second pass is a no-op. A
+   snapshot that omits rewards does not delete them. A card grade is
+   kept even when that older app did not write a card-operation ledger.
+   A shield that was already spent stays spent. */
 export function foldPendingProgress(stored, snapshots) {
   let current = stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
   for (const snapshot of snapshots ?? []) {
     if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) continue;
-    if (!pendingAddsWork(current, snapshot)) {
-      const next = reconcileProgress(current, snapshot, current);
+    const reconciled = reconcileProgress(current, snapshot, current);
+    const newRows = (reconciled.log ?? []).filter((row) => !((current.log ?? []).some((item) => pendingRowKey(item) === pendingRowKey(row))));
+    let ability = current.ability ?? {};
+    let xp = Number(current.xp) || 0;
+    let log = [...(current.log ?? [])];
+    for (const row of newRows) {
+      const input = answerInput(row);
+      xp += answerXp({ q: input.q, correct: input.correct, ms: input.ms, log }).xp || 0;
+      if (row?.cat) ability = updateAbility(ability, input.q, input.correct, input.calibration).ability;
+      log = [...log, row];
+    }
+    const scheduleChanged = snapshot.srsMap && !sameJson(snapshot.srsMap, current.srsMap);
+    if (newRows.length) xp = Math.max(xp, Number(reconciled.xp) || 0);
+    if (!newRows.length && scheduleChanged) xp = Math.max(xp, Number(snapshot.xp) || 0, Number(reconciled.xp) || 0);
+    if (!newRows.length && !scheduleChanged) {
       current = {
-        ...next,
+        ...reconciled,
         log: current.log,
         ability: current.ability,
         xp: current.xp,
         rewards: current.rewards,
         streak: current.streak,
         daily: current.daily,
+        srsMap: current.srsMap,
+        missSchedule: current.missSchedule,
         bestRun: current.bestRun,
         run: current.run,
-        missSchedule: current.missSchedule,
-        srsMap: current.srsMap,
       };
       continue;
     }
-    current = reconcileProgress(current, snapshot, current);
+    const streak = snapshot.streak == null ? current.streak : (reconciled.streak ?? current.streak);
+    current = {
+      ...reconciled,
+      log,
+      ability,
+      xp,
+      rewards: snapshot.rewards == null ? current.rewards : (reconciled.rewards ?? current.rewards),
+      streak: current.streak?.shield === false && streak ? { ...streak, shield: false } : streak,
+      daily: snapshot.daily == null ? current.daily : (reconciled.daily ?? current.daily),
+      srsMap: reconciled.srsMap ?? current.srsMap,
+      examResults: reconciled.examResults ?? current.examResults,
+      missSchedule: snapshot.missSchedule == null ? current.missSchedule : (reconciled.missSchedule ?? current.missSchedule),
+    };
   }
   return current;
 }
