@@ -264,6 +264,48 @@ describe("review, restore, and import use the canonical key", () => {
       "2026-11-25",
     ).review.map(questionIdentity)).toEqual(["builtin:7"]);
   });
+
+  it("does not rebuild ability over legacy rows that have no key", () => {
+    const account = {
+      ...blank(),
+      ability: { ...blank().ability, "Management of Care": { theta: 1450, n: 100 } },
+      log: [{ id: 3, cat: "Management of Care", diff: 2, correct: true }],
+    };
+    const imported = applyAnswer(account, {
+      q: builtin, correct: false, ms: 9000, today: "2026-11-23", at: 1_000, attempt: "older",
+    }).state;
+    expect(imported.ability["Management of Care"]).toEqual({ theta: 1450, n: 100 });
+    expect(imported.ability.Pharmacology.n).toBe(1);
+  });
+
+  it("does not treat an unclassified case row as the bank question with the same number", () => {
+    const bankQ = stampCatalogQuestion({ id: 101, stem: "Bank stem.", cat: "Pharmacology", diff: 2 }, []);
+    const log = [{ id: 101, cat: "Physiological Adaptation", correct: false, unclassified: true, key: null }];
+    expect(settledResult(bankQ, log, [bankQ]).state).toBe("none");
+    expect(reviewPools([bankQ], log, { 101: { interval: 1, due: "2026-01-16" } }, "2026-01-16").review).toEqual([]);
+    expect(unseenQuestions([bankQ], log)).toEqual([bankQ]);
+  });
+
+  it("a correct review moves a legacy numeric schedule onto the canonical key", () => {
+    const q = stampCatalogQuestion({ id: 42, cat: "Pharmacology", diff: 2, stem: "Loaded bank stem." }, []);
+    const state = {
+      ...blank(),
+      log: [{ id: 42, cat: "Pharmacology", diff: 2, correct: false }],
+      missSchedule: { 42: { interval: 1, due: TODAY } },
+    };
+    const next = applyAnswer(state, { q, correct: true, ms: 9000, today: TODAY, attempt: "fix" }).state;
+    expect(next.missSchedule[42]).toBeUndefined();
+    expect(next.missSchedule["bank:42"].interval).toBe(3);
+    expect(next.missSchedule["bank:42"].due > TODAY).toBe(true);
+  });
+
+  it("an imported day immediately before the streak lengthens it", () => {
+    const account = { ...blank(), streak: { count: 1, lastDay: TODAY, shield: true } };
+    const monday = applyAnswer(account, {
+      q: builtin, correct: true, ms: 9000, today: "2026-11-23", at: 1_000, attempt: "monday",
+    }).state;
+    expect(monday.streak).toMatchObject({ count: 2, lastDay: TODAY });
+  });
 });
 
 function trialOf(q, outcomes) {

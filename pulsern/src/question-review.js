@@ -43,7 +43,7 @@ function numericPeers(questions, id) {
 }
 
 function unscopedRows(log, id) {
-  return (log ?? []).filter((row) => row && questionIdentity(row) == null && row.id != null && String(row.id) === String(id));
+  return (log ?? []).filter((row) => row && !row.unclassified && questionIdentity(row) == null && row.id != null && String(row.id) === String(id));
 }
 
 /* A canonical row wins. An old save that only has the number counts
@@ -63,7 +63,7 @@ export function settledResult(question, log, questions = null) {
 
 /* Review date for this question. A date stored under the old number
    is used only when the number identifies one question in the catalog. */
-export function scheduleEntry(question, schedule, questions = null) {
+export function scheduleEntry(question, schedule, questions = null, log = null) {
   if (!schedule || !question) return null;
   const id = answerIdentity(question);
   if (id != null && schedule[id]) return schedule[id];
@@ -71,7 +71,9 @@ export function scheduleEntry(question, schedule, questions = null) {
   if (!raw) return null;
   if (!questionIdentity(question)) return raw;
   const pool = questions ?? [question];
-  return numericPeers(pool, question.id).length === 1 ? raw : null;
+  if (numericPeers(pool, question.id).length !== 1) return null;
+  const namedUnresolved = (log ?? []).some((row) => row?.unclassified && String(row.id) === String(question.id));
+  return namedUnresolved ? null : raw;
 }
 
 /* Legacy saves predate the schedule. Every question whose latest logged
@@ -131,7 +133,7 @@ export function expandTrialQuestions(questions, log, registry = null) {
 
 export function reviewPools(questions, log, schedule, today = todayStr()) {
   const idOf = (q) => answerIdentity(q) ?? String(q.id);
-  const dueOf = (q) => scheduleEntry(q, schedule, questions);
+  const dueOf = (q) => scheduleEntry(q, schedule, questions, log);
   const due = questions.filter((q) => {
     const entry = dueOf(q);
     return !!entry && typeof entry.due === "string" && entry.due <= today;
@@ -153,7 +155,7 @@ export function todayPool(questions, log, schedule, freshPool, today = todayStr(
   const { due, misses } = reviewPools(questions, log, schedule, today);
   if (due.length) return due;
   const waiting = (q) => {
-    const entry = scheduleEntry(q, schedule, questions);
+    const entry = scheduleEntry(q, schedule, questions, log);
     return !!entry && !(typeof entry.due === "string" && entry.due <= today);
   };
   return [...misses.filter((q) => !waiting(q)), ...freshPool];

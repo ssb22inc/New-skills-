@@ -1,7 +1,7 @@
 /* One answer, whether it was just tapped or folded in from a trial.
    Ability, the day's XP ledger, the streak, and the review date all
    move here. Import does not keep a second copy of these rules. */
-import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer } from "./rewards.js";
+import { answerXp, answerCountsForRun, bumpDay, advanceStreak, streakDayCounted, sameAnswer, shiftDay } from "./rewards.js";
 import { emptyAbility, updateAbility } from "./ability-engine.js";
 import { updateMissSchedule } from "./question-review.js";
 import { canonicalKey, questionIdentity } from "./question-identity.js";
@@ -32,6 +32,33 @@ function insertByTime(log, row) {
 /* Elo's K depends on how many answers came before this one. An import
    that lands in the middle of the log has to be replayed from the start
    of the category, or a later answer keeps the K it earned too early. */
+function canReplay(log) {
+  return (log ?? []).every((row) => !row || row.unclassified || questionIdentity(row));
+}
+
+/* A day that sits immediately before a streak already on the books
+   lengthens that streak. The live helper refuses any day before
+   lastDay, which is right for a clock change and wrong for an import. */
+function noteEarlierDay(streak, day) {
+  if (!day || !streak?.lastDay || day >= streak.lastDay || !(streak.count > 0)) return streak;
+  const start = shiftDay(streak.lastDay, 1 - streak.count);
+  if (day >= start) return streak;
+  if (day !== shiftDay(start, -1)) return streak;
+  return { ...streak, count: streak.count + 1 };
+}
+
+function adoptRawSchedule(schedule, q) {
+  if (!q?.key) return schedule ?? {};
+  const map = { ...(schedule ?? {}) };
+  if (map[q.key]) return map;
+  const raw = map[q.id] ?? map[String(q.id)];
+  if (!raw) return map;
+  map[q.key] = raw;
+  delete map[q.id];
+  delete map[String(q.id)];
+  return map;
+}
+
 function replayAbility(log, ability, calibration) {
   let next = emptyAbility(Object.keys(ability ?? {}));
   for (const row of log) {
@@ -115,7 +142,7 @@ export function applyAnswer(state, input) {
   }
   const prior = [...log].reverse().find((r) => sameAnswer(q, r));
   const calibration = input.calibration ?? {};
-  const ability = insertedBehind
+  const ability = insertedBehind && canReplay(placed)
     ? replayAbility(placed, state.ability, calibration)
     : updateAbility(state.ability, q, correct, calibration).ability;
   let rewards = bumpDay(state.rewards, today, { q: 1, ok: correct ? 1 : 0, xp: res.xp, fixes: correct && prior && prior.correct === false ? 1 : 0 });
@@ -123,16 +150,19 @@ export function applyAnswer(state, input) {
   let streakNote = null;
   if (!streakDayCounted(streak, null, today)) {
     const adv = advanceStreak(streak, rewards, today);
-    streak = adv.streak;
-    rewards = { ...adv.rewards, best: { ...adv.rewards.best, streak: Math.max(adv.rewards.best?.streak ?? 0, adv.streak.count), run: Math.max(adv.rewards.best?.run ?? 0, run) } };
+    streak = noteEarlierDay(adv.streak, today);
+    rewards = { ...adv.rewards, best: { ...adv.rewards.best, streak: Math.max(adv.rewards.best?.streak ?? 0, streak.count), run: Math.max(adv.rewards.best?.run ?? 0, run) } };
     streakNote = adv;
   } else if (run > (rewards.best?.run ?? 0)) {
     rewards = { ...rewards, best: { ...rewards.best, run } };
   }
   const daily = dailyAfter(state.daily, today);
+  const baseSchedule = adoptRawSchedule(state.missSchedule, q);
   const missSchedule = input.schedule === false
     ? state.missSchedule
-    : (insertedBehind ? replayKeySchedule(placed, q.key, state.missSchedule) : updateMissSchedule(state.missSchedule, q.key, correct, today));
+    : (insertedBehind && canReplay(placed)
+      ? replayKeySchedule(placed, q.key, baseSchedule)
+      : updateMissSchedule(baseSchedule, q.key, correct, today));
   return {
     state: {
       ...state,
