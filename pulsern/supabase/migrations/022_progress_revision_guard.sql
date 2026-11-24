@@ -21,8 +21,9 @@ set search_path = public
 as $$
   select case
     when jsonb_typeof(entry) <> 'object' then null
-    when jsonb_typeof(entry->'at') = 'number' then to_char((entry->>'at')::numeric, 'FM00000000000000000000')
-    when coalesce(entry->>'seen', '') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then entry->>'seen'
+    when jsonb_typeof(entry->'reviewedAt') = 'number' then 't' || to_char((entry->>'reviewedAt')::numeric, 'FM00000000000000000000')
+    when jsonb_typeof(entry->'at') = 'number' then 'n' || to_char((entry->>'at')::numeric, 'FM00000000000000000000')
+    when coalesce(entry->>'seen', '') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' then 'd' || (entry->>'seen')
     else null
   end
 $$;
@@ -44,6 +45,13 @@ as $$
            public.progress_review_stamp(stored_map->keys.key) is null
            or public.progress_review_stamp(incoming_map->keys.key) > public.progress_review_stamp(stored_map->keys.key)
          ) then incoming_map->keys.key
+        when public.progress_review_stamp(incoming_map->keys.key) is not distinct from public.progress_review_stamp(stored_map->keys.key)
+         and coalesce(incoming_map->keys.key->>'due', '9999-99-99') < coalesce(stored_map->keys.key->>'due', '9999-99-99')
+          then incoming_map->keys.key
+        when public.progress_review_stamp(incoming_map->keys.key) is not distinct from public.progress_review_stamp(stored_map->keys.key)
+         and coalesce(incoming_map->keys.key->>'due', '') = coalesce(stored_map->keys.key->>'due', '')
+         and coalesce((incoming_map->keys.key->>'interval')::numeric, 0) < coalesce((stored_map->keys.key->>'interval')::numeric, 0)
+          then incoming_map->keys.key
         else stored_map->keys.key
       end as chosen
     from (

@@ -82,7 +82,12 @@ export function nextSchedule(entry, grade, fromDay = null) {
   const steps = Math.max(0, next);
   const base = typeof fromDay === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fromDay) ? fromDay : null;
   // `seen` orders same-day reviews so a card just graded does not jump the queue.
-  return { interval: next, due: base ? addDaysFrom(base, steps) : addDays(steps), seen: base || todayStr() };
+  return {
+    interval: next,
+    due: base ? addDaysFrom(base, steps) : addDays(steps),
+    seen: base || todayStr(),
+    reviewedAt: Date.now(),
+  };
 }
 
 /* Runs once on load. Two jobs: fold the legacy fixed-position array into

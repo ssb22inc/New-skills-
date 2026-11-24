@@ -477,6 +477,26 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.ability.Pharmacology.n).toBe(inOrder.ability.Pharmacology.n);
   });
 
+  it("keeps two identical legacy misses when a new answer is merged", () => {
+    const miss = { id: 4, cat: "Pharmacology", diff: 1, correct: false };
+    const blank = { log: [], xp: 0, ability: emptyAbility(ABILITY_CATS), rewards: emptyRewards(), missSchedule: {}, daily: null, streak: null, bestRun: 0 };
+    const care = { id: 5, key: "bank:5", source: "bank", cat: "Management of Care", diff: 1, stem: "eight words are enough here now" };
+    const server = { ...blank, log: [miss, miss], ability: updateAbility(updateAbility(blank.ability, { id: 4, cat: "Pharmacology", diff: 1 }, false).ability, { id: 4, cat: "Pharmacology", diff: 1 }, false).ability };
+    const local = applyAnswer(blank, { q: care, correct: true, attempt: "live", ms: 9000, today: "2026-11-24", words: 8, rating: 1300, calibration: { 5: { rating: 1300 } } }).state;
+    const merged = blobForSave(server, local, blank);
+    expect(merged.log.filter((row) => row.correct === false)).toHaveLength(2);
+    expect(merged.ability.Pharmacology.n).toBe(2);
+    expect(merged.ability["Management of Care"].n).toBe(1);
+  });
+
+  it("keeps a same-day miss when an older pass arrives later", () => {
+    const baseline = { log: [], xp: 0, rewards: emptyRewards(), srsMap: { c1: { interval: 3, due: "2026-11-26", seen: "2026-11-22" } } };
+    const server = { ...baseline, srsMap: { c1: { interval: 0, due: "2026-11-24", seen: "2026-11-24", reviewedAt: 2000 } } };
+    const local = { ...baseline, srsMap: { c1: { interval: 7, due: "2026-12-01", seen: "2026-11-24", reviewedAt: 1000 } } };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.srsMap.c1).toMatchObject({ interval: 0, due: "2026-11-24", reviewedAt: 2000 });
+  });
+
   it("keeps the later flashcard grade when the older device saves second", () => {
     const baseline = { log: [], xp: 0, rewards: emptyRewards(), srsMap: { c1: { interval: 3, due: "2026-11-26", seen: "2026-11-22" } } };
     const server = { ...baseline, srsMap: { c1: { interval: 7, due: "2026-12-01", seen: "2026-11-24" } } };

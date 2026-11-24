@@ -446,12 +446,27 @@ function addDelta(base, server, local, key) {
 }
 
 function reviewStamp(entry) {
+  if (entry && Number.isFinite(Number(entry.reviewedAt))) return `t:${String(Math.trunc(Number(entry.reviewedAt))).padStart(16, "0")}`;
   if (entry && Number.isFinite(Number(entry.at))) return `n:${String(Math.trunc(Number(entry.at))).padStart(16, "0")}`;
   return typeof entry?.seen === "string" ? `d:${entry.seen}` : "";
 }
 
-/* Two devices can grade the same card. The later review stands. A tie
-   keeps this device's copy, which is the save being written. */
+/* The later review stands. When two grades only share a calendar day,
+   the one due sooner stays, so a same-day miss is not replaced by an
+   older longer interval. */
+function preferSchedule(serverEntry, localEntry) {
+  const serverStamp = reviewStamp(serverEntry);
+  const localStamp = reviewStamp(localEntry);
+  if (serverStamp !== localStamp) return serverStamp > localStamp ? serverEntry : localEntry;
+  const serverDue = serverEntry?.due ?? "9999-99-99";
+  const localDue = localEntry?.due ?? "9999-99-99";
+  if (serverDue !== localDue) return serverDue < localDue ? serverEntry : localEntry;
+  const serverInterval = Number(serverEntry?.interval) || 0;
+  const localInterval = Number(localEntry?.interval) || 0;
+  if (serverInterval !== localInterval) return serverInterval < localInterval ? serverEntry : localEntry;
+  return localEntry;
+}
+
 function mergeScheduleMap(base, server, local) {
   const keys = new Set([...Object.keys(base ?? {}), ...Object.keys(server ?? {}), ...Object.keys(local ?? {})]);
   const out = {};
@@ -461,7 +476,7 @@ function mergeScheduleMap(base, server, local) {
     const l = local?.[key];
     const localChanged = !sameJson(l, b);
     const serverChanged = !sameJson(s, b);
-    if (localChanged && serverChanged) out[key] = reviewStamp(s) > reviewStamp(l) ? s : l;
+    if (localChanged && serverChanged) out[key] = preferSchedule(s, l);
     else if (localChanged) out[key] = l;
     else if (serverChanged) out[key] = s;
     else if (s !== undefined) out[key] = s;
@@ -491,7 +506,12 @@ function legacySignature(row) {
 
 function replayUnseen(base, rows) {
   const seen = new Set((base.log ?? []).map((row) => row?.attempt).filter((id) => id != null && id !== "").map(String));
-  const knownLegacy = new Set((base.log ?? []).filter((row) => row && (row.attempt == null || row.attempt === "")).map(legacySignature));
+  const legacyCounts = new Map();
+  for (const row of base.log ?? []) {
+    if (!row || (row.attempt != null && row.attempt !== "")) continue;
+    const sig = legacySignature(row);
+    legacyCounts.set(sig, (legacyCounts.get(sig) ?? 0) + 1);
+  }
   let state = {
     log: Array.isArray(base.log) ? [...base.log] : [],
     xp: Number(base.xp) || 0,
@@ -510,8 +530,11 @@ function replayUnseen(base, rows) {
       seen.add(String(row.attempt));
     } else {
       const sig = legacySignature(row);
-      if (knownLegacy.has(sig)) continue;
-      knownLegacy.add(sig);
+      const remaining = legacyCounts.get(sig) ?? 0;
+      if (remaining > 0) {
+        legacyCounts.set(sig, remaining - 1);
+        continue;
+      }
       if (!row.source && !row.key && row.cat) {
         state = { ...state, ability: updateAbility(state.ability, { id: row.id, cat: row.cat, diff: row.diff }, !!row.correct).ability };
         continue;
