@@ -27,9 +27,11 @@ function Screen() {
     primary: () => setChecked(true),
   };
   const [crowded, setCrowded] = useState(true);
+  const [flippedCard, setFlippedCard] = useState(false);
   useEffect(() => {
     window.T.setStem = setStemText;
     window.T.setCrowded = setCrowded;
+    window.T.setFlippedCard = setFlippedCard;
     window.T.checked = checked;
     window.T.pick = pick;
   }, [checked, pick]);
@@ -38,8 +40,28 @@ function Screen() {
       <Style />
       <header className="top"><span className="brand-name">PULSERN</span></header>
       <main className="body">
-        <FocusBar open={focusOpen} setOpen={setFocusOpen} groups={[{ label: "Category", options: [["pharm", "Pharmacology"]], selected: [], onToggle() {} }]} />
-        <section className="card stack study-col">
+        {flippedCard ? (
+          <div className="stack study-col" style={{ minHeight: "100%" }}>
+            {/* The column stops 44px from the screen edge, the way a full card,
+                grade row, and nav leave no full-size gap but still leave a
+                tappable strip. */}
+            <section className="card" style={{ minHeight: "calc(100dvh - 150px)", display: "flex", flexDirection: "column", width: "calc(100% - 16px)" }}>
+              <button type="button" className="flashcard" style={{ flex: "1 1 auto" }} aria-label="Answer: decreased cardiac output. Tap to see the prompt again">
+                <p className="fc-side mono">ANSWER</p>
+                <p className="fc-text">Decreased cardiac output. The right edge of this answer is what a thumb reaches for.</p>
+              </button>
+              <div className="grades">
+                <button type="button" className="btn grade again">Again</button>
+                <button type="button" className="btn grade hard">Hard</button>
+                <button type="button" className="btn grade good">Good</button>
+                <button type="button" className="btn grade easy">Easy</button>
+              </div>
+              <QuestionNav layout="inline" canBack={false} skipped={0} onBack={() => {}} onSkip={() => {}} onNext={() => {}} onReview={() => {}} nextPrimary={false} />
+            </section>
+          </div>
+        ) : null}
+        {!flippedCard && <FocusBar open={focusOpen} setOpen={setFocusOpen} groups={[{ label: "Category", options: [["pharm", "Pharmacology"]], selected: [], onToggle() {} }]} />}
+        {!flippedCard && <section className="card stack study-col">
           <p className="stem">{stemText}</p>
           <div className="ngn-matrix" role="group" aria-label="Answer grid">
             <div className="mx-row"><span className="small">Continuous bubbling in the water seal</span></div>
@@ -60,7 +82,7 @@ function Screen() {
           {crowded && <p className="rationale"><strong>Rationale.</strong> Beta choice treats the immediate risk and is the priority.</p>}
           {crowded && <div className="chart mono"><span className="chip">HR 88/min</span><span className="chip lab">K 4.0 mEq/L</span></div>}
           {crowded && <QuestionNav canBack={false} skipped={0} onBack={() => {}} onSkip={() => {}} onNext={() => {}} onReview={() => {}} nextPrimary={false} />}
-        </section>
+        </section>}
       </main>
       <nav className="tabs" aria-label="Sections">
         {["Today", "Practice", "Cases", "Cards", "Stats"].map((t) => <button key={t} type="button" className={t === "Practice" ? "tab on" : "tab"}>{t}</button>)}

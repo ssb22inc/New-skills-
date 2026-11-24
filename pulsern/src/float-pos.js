@@ -12,7 +12,10 @@ export const FAB_SIZE = 52;
 export const FAB_MARGIN = 10;
 /* When a full-size button has no clear edge, a short tab still has to
    stay off every control. It can hang halfway off the screen. */
-export const PARK_W = 28;
+/* Half the parked button hangs off the nearest edge. The half that stays
+   on screen is a 44px hit target, so it can still be tapped and dragged. */
+export const PARK_HIT = 44;
+export const PARK_W = PARK_HIT * 2;
 export const PARK_H = 44;
 export const FAB_STORE_KEY = "pulsern-labfab-v1";
 export const DEFAULT_ANCHOR = Object.freeze({ side: "right", y: 0.62 });
@@ -128,26 +131,50 @@ function overlapArea(rect, block) {
    visible edge tab; if the whole screen is blocked, hang fully outside
    rather than sit on a button. Primary controls (Next, Check, grades,
    the tab bar) are never covered, same as every other control. */
-function parkTab(preferY, view, blocks, side) {
-  const w = PARK_W;
+function tucked(side, view, onScreen, y) {
+  const w = onScreen * 2;
   const h = PARK_H;
-  const xs = side === "left"
-    ? [0, -Math.round(w / 2), view.vw - w, view.vw - Math.round(w / 2), -w, view.vw]
-    : [view.vw - w, view.vw - Math.round(w / 2), 0, -Math.round(w / 2), view.vw, -w];
-  let best = null;
-  for (const x of xs) {
-    for (let y = -h; y <= view.vh; y += 4) {
-      const rect = { x, y, w, h };
-      if (blocks.some((b) => overlapArea(rect, b) > 0)) continue;
-      const onW = Math.max(0, Math.min(x + w, view.vw) - Math.max(x, 0));
-      const onH = Math.max(0, Math.min(y + h, view.vh) - Math.max(y, 0));
-      const visible = onW * onH;
-      const score = visible * 1000 - Math.abs(y - preferY);
-      if (!best || score > best.score) best = { x, y, w, h, side: x + w / 2 < view.vw / 2 ? "left" : "right", score };
+  const x = side === "left" ? -onScreen : view.vw - onScreen;
+  return { x, y, w, h, side };
+}
+
+function overlapsAny(rect, blocks) {
+  return (blocks ?? []).some((b) => overlapArea(rect, b) > 0);
+}
+
+/* Half off the requested edge, with `onScreen` pixels kept inside. The
+   nearest edge is tried first. A shorter tuck is used only when a 44px
+   target would still cover something. */
+function parkTab(preferY, view, blocks, side) {
+  const preferred = side === "left" ? "left" : "right";
+  const sides = [preferred, preferred === "left" ? "right" : "left"];
+  const maxY = Math.max(0, view.vh - PARK_H);
+  const ay = clamp(preferY, 0, maxY);
+  const search = (onScreen, allowed) => {
+    let best = null;
+    for (const s of allowed) {
+      for (let d = 0; d <= maxY; d += 4) {
+        for (const y of d === 0 ? [ay] : [ay - d, ay + d]) {
+          if (y < 0 || y > maxY) continue;
+          const rect = tucked(s, view, onScreen, Math.round(y));
+          if (overlapsAny(rect, blocks)) continue;
+          const cost = Math.abs(rect.y - ay) + (s === preferred ? 0 : 10000);
+          if (!best || cost < best.cost) best = { ...rect, cost };
+          break;
+        }
+        if (best && best.side === s && Math.abs(best.y - ay) <= d) break;
+      }
+      if (best?.side === preferred) break;
     }
+    return best;
+  };
+  const full = search(PARK_HIT, sides);
+  if (full) return { x: full.x, y: full.y, w: full.w, h: full.h, side: full.side, clear: true, parked: true };
+  for (let on = PARK_HIT - 4; on >= 0; on -= 4) {
+    const shorter = search(on, [preferred]);
+    if (shorter) return { x: shorter.x, y: shorter.y, w: shorter.w, h: shorter.h, side: shorter.side, clear: true, parked: true };
   }
-  if (!best) return { x: side === "left" ? -w : view.vw, y: 0, w, h, side, clear: true, parked: true };
-  return { x: best.x, y: best.y, w, h, side: best.side, clear: true, parked: true };
+  return { x: preferred === "left" ? -PARK_W : view.vw, y: 0, w: PARK_W, h: PARK_H, side: preferred, clear: true, parked: true };
 }
 
 export function loadAnchor(storage) {

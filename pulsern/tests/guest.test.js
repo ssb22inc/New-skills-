@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  GUEST_KEY, GUEST_LIMIT, GUEST_HOLD_KEY, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, holdGuestTrial, clearHeldMemory, peekHeldGuest, releaseHeldGuest, readGuestForHandoff, guestFresh, guestSummary,
+  GUEST_KEY, GUEST_LIMIT, GUEST_HOLD_KEY, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, linkBuiltInGuest, holdGuestTrial, clearHeldMemory, peekHeldGuest, releaseHeldGuest, readGuestForHandoff, guestFresh, guestSummary, guestImportIdentity,
 } from "../src/guest.js";
 import { QUESTIONS } from "../src/App.jsx";
 import { migrateBlob } from "../src/state.js";
@@ -336,6 +336,28 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     expect(twice.blob.streak.count).toBe(once.blob.streak.count);
   });
 
+  it("does not pay or extend a streak for a built-in the account already answered, and still records the attempt", () => {
+    const builtIns = [mk(7)];
+    let correct = emptyGuest(NOW, TODAY);
+    correct = guestAnswer(correct, mk(7), true, { ms: 9000, today: TODAY }).guest;
+    const account = { ...migrateBlob({}, CATS), log: [{ id: 7, cat: "Pharmacology", diff: 2, correct: true }], xp: 20, streak: { count: 4, lastDay: "2026-11-22", shield: true } };
+    const paid = mergeGuestIntoBlob(account, correct, { today: TODAY, now: NOW, builtIns });
+    expect(paid.summary.xp).toBe(0);
+    expect(paid.blob.xp).toBe(20);
+    expect(paid.blob.streak).toMatchObject({ count: 4, lastDay: "2026-11-22" });
+    expect(paid.blob.log.map((row) => row.id)).toEqual([7, "guest-7"]);
+    expect(paid.blob.rewards.days[TODAY]).toBeUndefined();
+    expect(paid.blob.bestRun).toBe(0);
+    let missed = emptyGuest(NOW, TODAY);
+    missed = guestAnswer(missed, mk(7), false, { ms: 9000, today: TODAY }).guest;
+    const scheduled = mergeGuestIntoBlob(account, missed, { today: TODAY, now: NOW, builtIns });
+    expect(scheduled.blob.xp).toBe(20);
+    expect(scheduled.blob.missSchedule["guest-7"]).toEqual({ interval: 1, due: TODAY });
+    const unrelated = mergeGuestIntoBlob(account, correct, { today: TODAY, now: NOW, builtIns: [{ id: 8 }] });
+    expect(unrelated.blob.xp).toBe(40);
+    expect(guestImportIdentity({ id: 7 }, builtIns).aliases).toEqual(["7"]);
+    expect(guestImportIdentity({ id: 7 }, []).aliases).toEqual([]);
+  });
   it("sign-out forgets a held trial in session storage, not only the device copy", async () => {
     releaseHeldGuest();
     const local = memStore();
@@ -350,6 +372,27 @@ describe("a trial cannot be lost, duplicated, or over-paid", () => {
     expect(guestSrc).toContain("const leaveForAuth");
     expect(guestSrc).toContain("onClick={() => leaveForAuth(onSignIn)}");
     expect(guestSrc).toContain("onGuestSignIn={() => leaveForAuth(onSignUp)}");
+  });
+  it("a sign-out in another tab clears this tab's memory and sessionStorage hold", async () => {
+    releaseHeldGuest();
+    const local = memStore();
+    const session = memStore();
+    const g = trial(NOW, true);
+    saveGuest(local, g);
+    holdGuestTrial(g, session);
+    const { forgetTrialOnRemoteSignOut, remoteSignOutStorageEvent } = await import("../src/sign-out.js");
+    expect(forgetTrialOnRemoteSignOut("SIGNED_IN", { storage: local, holdStorage: session })).toBe(false);
+    expect(peekHeldGuest(session)?.log.length).toBe(1);
+    expect(remoteSignOutStorageEvent({ key: "theme", newValue: null })).toBe(false);
+    expect(remoteSignOutStorageEvent({ key: GUEST_KEY, newValue: null })).toBe(true);
+    expect(remoteSignOutStorageEvent({ key: "sb-example-auth-token", newValue: null })).toBe(true);
+    expect(forgetTrialOnRemoteSignOut("SIGNED_OUT", { storage: local, holdStorage: session })).toBe(true);
+    expect(local.getItem(GUEST_KEY)).toBeNull();
+    expect(session.getItem(GUEST_HOLD_KEY)).toBeNull();
+    expect(peekHeldGuest(session)).toBeNull();
+    const auth = readFileSync("src/auth.jsx", "utf8");
+    expect(auth).toContain('if (event === "SIGNED_OUT") forgetTrial()');
+    expect(auth).toContain('addEventListener("storage", onStorage)');
   });
 });
 

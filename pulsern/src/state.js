@@ -5,15 +5,15 @@
    (readiness, weak areas) are recomputed elsewhere, never stored. */
 import { emptyAbility } from "./ability-engine.js";
 import { deriveMissSchedule } from "./question-review.js";
-import { migrateRewards, legacyRankIndex } from "./rewards.js";
+import { migrateRewards, legacyRankIndex, tagLegacyCaseRows } from "./rewards.js";
 
 /* Category renames from the test-plan alignment: ability history recorded
    under an old name moves to its closest official category. */
 const CAT_RENAMES = { "Psychosocial & Health Promotion": "Psychosocial Integrity" };
 
-export function migrateBlob(s, cats) {
+export function migrateBlob(s, cats, questionIds = []) {
   const ability = {};
-  const log = Array.isArray(s.log) ? s.log : [];
+  const log = tagLegacyCaseRows(Array.isArray(s.log) ? s.log : [], questionIds);
   for (const [k, v] of Object.entries(s.ability ?? {})) ability[CAT_RENAMES[k] ?? k] = v;
   return {
     theme: s.theme ?? "light",

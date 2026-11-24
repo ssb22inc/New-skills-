@@ -7,7 +7,8 @@ import { parseProgress, clearLegacyProgressBackup, LEGACY_PROGRESS_BACKUP_KEY } 
 import { signOutAndForgetTrial } from "../src/sign-out.js";
 import { enforceOneTimeAppRelogin, GUEST_TRIAL_KEY } from "../src/app-routing.js";
 import { GUEST_KEY } from "../src/guest.js";
-import { answerXp, caseStepIds } from "../src/rewards.js";
+import { answerXp, caseStepIds, legacyCaseAllowlist } from "../src/rewards.js";
+import { migrateBlob } from "../src/state.js";
 import { CASE_STUDIES } from "../src/case-studies.js";
 
 const mem = (init = {}) => {
@@ -135,12 +136,24 @@ describe("N7: case steps already answered stay answered", () => {
     const db = caseStepIds({ dbId: 12, step: 0 });
     expect(answerXp({ q: { ...db, cat: "Pharmacology", diff: 3 }, correct: true, log: [{ id: 50120, cat: "Pharmacology", diff: 3, correct: true, source: "case" }] }).xp).toBe(0);
   });
-  it("a difficulty-3 bank question with the same number is not an old case step", () => {
+  it("tags only the historical bundled case-step ids, and leaves every other row a bank answer", () => {
+    expect(legacyCaseAllowlist().size).toBe(15);
+    expect([...legacyCaseAllowlist().keys()].sort()).toEqual(["100", "101", "102", "110", "111", "112", "113", "114", "115", "120", "121", "122", "123", "124", "125"]);
     const step = caseStepIds({ key: "sepsis", index: 0, step: 1 });
-    const log = [{ id: 101, cat: "Physiological Adaptation", diff: 3, correct: true }];
     const stem = "Which findings require immediate follow-up? Select all that apply.";
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log }).reason).toBe("correct");
-    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log }).xp).toBe(30);
+    const historical = { id: 101, cat: "Physiological Adaptation", diff: 3, correct: true };
+    const tagged = migrateBlob({ log: [historical] }, ["Physiological Adaptation"]).log[0];
+    expect(tagged).toMatchObject({ ...historical, source: "case" });
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [tagged] }).reason).toBe("repeat");
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [tagged] }).xp).toBe(0);
+    const bank = migrateBlob({ log: [{ id: 80, cat: "Physiological Adaptation", diff: 3, correct: true }] }, ["Physiological Adaptation"]).log[0];
+    expect(bank.source).toBeUndefined();
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [bank] }).xp).toBe(30);
+    const wrongCategory = migrateBlob({ log: [{ id: 101, cat: "Pharmacology", diff: 3, correct: true }] }, ["Pharmacology"]).log[0];
+    expect(wrongCategory.source).toBeUndefined();
+    const alsoAQuestion = migrateBlob({ log: [historical] }, ["Physiological Adaptation"], ["101"]).log[0];
+    expect(alsoAQuestion.source).toBeUndefined();
+    expect(answerXp({ q: { ...step, cat: "Physiological Adaptation", diff: 3, stem }, correct: true, ms: 9000, log: [alsoAQuestion] }).reason).toBe("correct");
   });
 });
 

@@ -8,6 +8,7 @@ import InstallCard, { isStandalone } from "./install.jsx";
 import { APP_ROOT, APP_SIGN_IN, APP_SIGN_UP, APP_TRY, authModeFromUrl, authRedirectUrl, cohortFromUrl } from "./app-routing.js";
 import GuestTrial from "./guest.jsx";
 import { GUEST_LIMIT, loadGuest, guestFresh, guestSummary } from "./guest.js";
+import { forgetTrialOnRemoteSignOut, remoteSignOutStorageEvent } from "./sign-out.js";
 import { suggestEmail } from "./email-typo.js";
 import { explainAuthError } from "./auth-messages.js";
 import { captureAttribution, flushAttribution } from "./attribution.js";
@@ -395,11 +396,18 @@ export default function AuthGate() {
        and not only on the marketing site. */
     captureAttribution();
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
+    const forgetTrial = () => forgetTrialOnRemoteSignOut("SIGNED_OUT", { storage: window.localStorage, holdStorage: window.sessionStorage });
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
+      if (event === "SIGNED_OUT") forgetTrial();
       setSession(s);
     });
-    return () => sub.subscription.unsubscribe();
+    const onStorage = (event) => { if (remoteSignOutStorageEvent(event)) forgetTrial(); };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      sub.subscription.unsubscribe();
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   /* Write the first touch once there is a user to attach it to. The sign-up

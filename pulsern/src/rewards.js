@@ -13,6 +13,8 @@
        right the first time: missing on purpose can never pay.
      - Ranks and badges need accuracy over a recent window, not volume. */
 
+import { CASE_STUDIES } from "./case-studies.js";
+
 /* ---------------- dates (LOCAL) ---------------- */
 export function parseDay(s) {
   const [y, m, d] = String(s).split("-").map(Number);
@@ -142,15 +144,47 @@ export function caseStepIds({ dbId = null, key = null, title = "", index = 0, st
   return { id: `case-${name}-${step}`, aliases: [`case:${name}:${step}`], legacyAliases: [100 + index * 10 + step] };
 }
 
+/* The ids the pre-change app actually wrote. CaseStudy on main logged
+   `100 + caseIdx * 10 + step` with CASE_STUDIES first: sepsis (3 steps,
+   100–102), dka (6 steps, 110–115), preeclampsia-magnesium (6 steps,
+   120–125). Database cases used `50000 + dbId * 10 + step`, but those db
+   ids are not in this repo, so they are not inferred. Difficulty is not
+   an identity. */
+export function legacyCaseAllowlist(cases = CASE_STUDIES) {
+  const byId = new Map();
+  cases.forEach((c, index) => {
+    (c.steps ?? []).forEach((_, step) => {
+      const ids = caseStepIds({ key: c.key, index, step });
+      for (const legacy of ids.legacyAliases) byId.set(String(legacy), { cat: c.cat, caseId: ids.id });
+    });
+  });
+  return byId;
+}
+
+/* A saved row is one of those steps when its id is on the allowlist, its
+   category is that case's category, and the id is not also a bundled
+   question. Every other numeric row stays a bank or built-in answer. */
+export function legacyCaseMatch(row, questionIds = []) {
+  if (!row || row.source != null) return false;
+  const hit = legacyCaseAllowlist().get(String(row.id));
+  if (!hit || hit.cat !== row.cat) return false;
+  const blocked = questionIds instanceof Set ? questionIds : new Set((questionIds ?? []).map(String));
+  return !blocked.has(String(row.id));
+}
+
+export function tagLegacyCaseRows(log, questionIds = []) {
+  if (!Array.isArray(log)) return [];
+  return log.map((row) => (legacyCaseMatch(row, questionIds) ? { ...row, source: "case" } : row));
+}
+
 /* A log row is this question. Namespaced case aliases never match a bank
-   id. A bare legacy case number matches only a row recorded as a case. */
+   id. A bare legacy number matches only after migrateBlob has tagged that
+   allowlisted id as a case. Difficulty never decides it. */
 export function sameAnswer(q, row) {
   if (!q || !row) return false;
   if (String(row.id) === String(q.id)) return true;
   const id = String(row.id);
   if ((q.aliases ?? []).map(String).includes(id)) return true;
-  /* Only a row recorded as a case. An unsourced difficulty-3 bank answer
-     shares that shape, so difficulty alone never spends a case step. */
   return (q.legacyAliases ?? []).map(String).includes(id) && row.source === "case" && row.cat === q.cat;
 }
 

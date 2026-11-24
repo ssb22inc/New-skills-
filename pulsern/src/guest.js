@@ -12,7 +12,7 @@
    existing per-user progress blob (no new table, no migration). Merged log
    ids get a "guest-" prefix so a built-in id can never collide with a
    shared-bank id of the same number. */
-import { answerXp, answerCountsForRun, advanceStreak, bumpDay, daysBetween } from "./rewards.js";
+import { answerXp, answerCountsForRun, advanceStreak, bumpDay, daysBetween, sameAnswer } from "./rewards.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
 export const GUEST_HOLD_KEY = "pulsern-guest-hold-v1";
@@ -220,7 +220,17 @@ export function guestSummary(guest) {
 /* Fold a guest's work into a migrated account blob. `s` is the output of
    migrateBlob. Returns the new blob and a summary (null when nothing was
    merged). Idempotent: a merged entry is never added twice. */
-export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAbility = null, calibration = {} } = {}) {
+/* guest-<built-in id> is the same question as that built-in id, and as an
+   earlier guest import of it. The alias is added only when the id is in
+   the bundled question list, so a shared-bank item that merely uses the
+   same number is not treated as that question. */
+export function guestImportIdentity(entry, builtIns = []) {
+  const raw = String(entry?.id ?? "").replace(/^guest-/, "");
+  const known = (builtIns ?? []).some((q) => q && String(q.id) === raw);
+  return { id: `guest-${raw}`, aliases: known ? [raw] : [] };
+}
+
+export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAbility = null, calibration = {}, builtIns = [] } = {}) {
   if (!guestFresh(guest, now)) return { blob: s, summary: null };
   /* Import identity is the attempt, never the question id. guest-1 from a
      later trial is a new answer. The same attempt merged again is a no-op. */
@@ -247,20 +257,31 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
   {
     /* Score against answers already in the account, so a second attempt of
        guest-1 is a fix or a repeat, never another full payout. */
-    const seen = [...(s.log ?? [])];
+    const accountLog = [...(s.log ?? [])];
+    const seen = [...accountLog];
     for (const e of entries) {
+      const ident = guestImportIdentity(e, builtIns);
       const stem = e.words ? Array.from({ length: e.words }, () => "w").join(" ") : "";
-      const earned = answerXp({ q: { id: e.id, diff: e.diff, stem }, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: seen }).xp;
+      const q = { id: ident.id, aliases: ident.aliases, diff: e.diff, stem };
+      const alreadyAnswered = accountLog.some((row) => sameAnswer(q, row));
+      /* Already in the account: answerXp pays a repeat 0 or a one-time fix,
+         never another full first answer. A repeat does not credit the streak.
+         The row is still stored, and a miss still gets a review date below. */
+      const earned = answerXp({ q, correct: e.correct, ms: Number.isFinite(e.ms) ? e.ms : Infinity, log: seen }).xp;
       gxp += earned;
-      scored.push({ ...e, earned });
+      scored.push({ ...e, earned, alreadyAnswered });
       seen.push(e);
     }
   }
-  const logged = scored.map(({ ms, words, earned, day, ...row }) => row);
-  guest = { ...guest, xp: gxp, bestRun: Math.min(guest.bestRun ?? 0, entries.length) };
+  const logged = scored.map(({ ms, words, earned, day, alreadyAnswered, ...row }) => row);
+  const freshBest = scored.filter((e) => !e.alreadyAnswered).length;
+  guest = { ...guest, xp: gxp, bestRun: freshBest ? Math.min(guest.bestRun ?? 0, freshBest) : 0 };
   let ability = s.ability;
   if (typeof updateAbility === "function") {
-    for (const e of entries) ability = updateAbility(ability, { id: e.id, cat: e.cat, diff: e.diff }, e.correct, calibration).ability;
+    for (const e of scored) {
+      if (e.alreadyAnswered) continue;
+      ability = updateAbility(ability, { id: e.id, cat: e.cat, diff: e.diff }, e.correct, calibration).ability;
+    }
   }
   const groups = new Map();
   for (const e of scored) {
@@ -273,14 +294,15 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
   let streakStarted = false;
   for (const day of [...groups.keys()].sort()) {
     const rows = groups.get(day);
-    if (!streak.lastDay || daysBetween(streak.lastDay, day) >= 1) {
+    const fresh = rows.filter((r) => !r.alreadyAnswered);
+    if (fresh.length && (!streak.lastDay || daysBetween(streak.lastDay, day) >= 1)) {
       const adv = advanceStreak(streak, rewards, day);
       streak = adv.streak; rewards = adv.rewards; streakStarted = true;
     }
-    rewards = bumpDay(rewards, day, { q: rows.length, ok: rows.filter((r) => r.correct).length, xp: rows.reduce((n, r) => n + r.earned, 0) });
+    if (fresh.length) rewards = bumpDay(rewards, day, { q: fresh.length, ok: fresh.filter((r) => r.correct).length, xp: rows.reduce((n, r) => n + r.earned, 0) });
   }
   rewards = { ...rewards, best: { ...rewards.best, run: Math.max(rewards.best.run, guest.bestRun ?? 0) } };
-  const todayRows = groups.get(today) ?? [];
+  const todayRows = (groups.get(today) ?? []).filter((r) => !r.alreadyAnswered);
   const daily = todayRows.length
     ? (s.daily?.day === today ? { ...s.daily, answered: s.daily.answered + todayRows.length } : { day: today, answered: todayRows.length })
     : s.daily;
@@ -296,7 +318,7 @@ export function mergeGuestIntoBlob(s, guest, { today, now = Date.now(), updateAb
     else if (!e.correct && !missSchedule[id]) missSchedule[id] = { interval: 1, due: e.day ?? today };
   }
   return {
-    blob: { ...s, log: [...s.log, ...logged], xp: s.xp + (guest.xp ?? 0), bestRun: Math.max(s.bestRun ?? 0, guest.bestRun ?? 0), ability, streak, rewards, daily, missSchedule },
+    blob: { ...s, log: [...s.log, ...logged], xp: s.xp + (guest.xp ?? 0), bestRun: freshBest ? Math.max(s.bestRun ?? 0, guest.bestRun ?? 0) : (s.bestRun ?? 0), ability, streak, rewards, daily, missSchedule },
     summary: { answers: entries.length, correct: entries.filter((e) => e.correct).length, xp: guest.xp ?? 0, streak: streak.count, streakStarted },
   };
 }

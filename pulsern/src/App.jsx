@@ -257,6 +257,8 @@ import { emptyAbility, updateAbility, itemRating, readinessFrom, pickTargetRatin
 import { migrateBlob } from "./state.js";
 import { ngnExt, fourFn, validQ, scoreItem, scoreCaseStep, isFullCredit, sumScores } from "./ngn.js";
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
+
+const BUNDLED_QUESTION_IDS = [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES].map((q) => q.id);
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard, refundNewCard } from "./srs.js";
 import {
@@ -568,7 +570,7 @@ export default function App() {
     /* Failed read: stay unloaded. Autosave and the trial merge both wait
        for `loaded`, so nothing is written over the real row. */
     if (read.status === "error") { setLoadState("error"); return; }
-    const parsed = parseProgress(read.raw, (b) => migrateBlob(b, CATS)); // legacy saves get defaults (§4)
+    const parsed = parseProgress(read.raw, (b) => migrateBlob(b, CATS, BUNDLED_QUESTION_IDS)); // legacy saves get defaults (§4)
     if (parsed.status === "corrupt") {
       /* A row exists but cannot be opened. Keep the server copy untouched
          and never autosave, merge or delete over it. The raw row stays in
@@ -587,7 +589,7 @@ export default function App() {
     try { const { data } = await supabase.auth.getSession(); createdAt = data?.session?.user?.created_at ?? null; accountId.current = data?.session?.user?.id ?? null; } catch { /* unknown = ask */ }
     const handoff = guestHandoff({ guest, accountCreatedAt: createdAt, hasSavedProgress: !!read.raw });
     if (handoff === "merge") {
-      const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), updateAbility });
+      const merged = mergeGuestIntoBlob(s ?? migrateBlob({}, CATS), guest, { today: todayStr(), updateAbility, builtIns: QUESTIONS });
       if (merged.summary) { s = merged.blob; pendingHandoff.current = merged.summary; }
       pendingGuestClear.current = true;
     } else if (handoff === "ask") {
@@ -610,7 +612,7 @@ export default function App() {
     setGuestOffer(null);
     if (!offer) return;
     if (add && loaded) {
-      const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily, missSchedule }, offer.guest, { today: todayStr(), updateAbility, calibration });
+      const merged = mergeGuestIntoBlob({ log, xp, bestRun, ability, streak, rewards, daily, missSchedule }, offer.guest, { today: todayStr(), updateAbility, calibration, builtIns: QUESTIONS });
       if (merged.summary) {
         const b = merged.blob;
         setLog(b.log); setXp(b.xp); setBestRun(b.bestRun); setAbility(b.ability); setStreak(b.streak); setRewards(b.rewards); setDaily(b.daily); setMissSchedule(b.missSchedule ?? {});

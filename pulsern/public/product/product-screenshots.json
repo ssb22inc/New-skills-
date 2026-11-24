@@ -89,8 +89,8 @@
   "images": [
     {
       "file": "pulsern-adaptive-practice.png",
-      "sha256": "4cb0df82609796b911ff6ee86727a31b3e7cd98efebd232458c9a11865ea714f",
-      "bytes": 66570,
+      "sha256": "851db2f9063027f32cda7d25893bee27a901b2f68d34358154320e5ba6122ddb",
+      "bytes": 66516,
       "width": 720,
       "height": 620,
       "alt": "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer",
@@ -98,8 +98,8 @@
     },
     {
       "file": "pulsern-today-dashboard.png",
-      "sha256": "d269ff01656dbd0b78212c53095ee516b87fb988a4410d2b456b1cb8d74d5649",
-      "bytes": 86126,
+      "sha256": "814eb743a87b62ecf8c1f07d88482da1acacb8c647d3d4044188260d13fc84dd",
+      "bytes": 86129,
       "width": 720,
       "height": 1000,
       "alt": "PulseRN Today dashboard showing the daily round, candidate monitor, study goal, and progress cards",
@@ -107,7 +107,7 @@
     },
     {
       "file": "pulsern-lab-reference.png",
-      "sha256": "22222b5de35a9c2bfb25964c641c36f5189416c996d80f403e63f3aab821a766",
+      "sha256": "5e4468029d169895588cbc61d0ab99f587571ca480adc21880542555f3b71efd",
       "bytes": 73645,
       "width": 430,
       "height": 932,
