@@ -352,6 +352,26 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(between.log).toHaveLength(1);
   });
 
+  it("keeps a cover-protected streak when an older day arrives and this device only changes a setting", () => {
+    const friday = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt: "fri", at: 2, day: "2026-11-27", ms: 9000, words: 8, rating: 1300 };
+    const monday = { id: 2, key: "bank:2", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt: "mon", at: 3, day: "2026-11-30", ms: 9000, words: 8, rating: 1300 };
+    const thursday = { id: 3, key: "bank:3", source: "bank", cat: "Safety & Infection Control", diff: 1, correct: true, attempt: "thu", at: 1, day: "2026-11-26", ms: 9000, words: 8, rating: 1300 };
+    const baseline = {
+      log: [friday, monday],
+      xp: 20,
+      ability: emptyAbility(ABILITY_CATS),
+      rewards: { ...emptyRewards(), covers: 0, coverDays: ["2026-11-28", "2026-11-29"] },
+      streak: { count: 2, lastDay: "2026-11-30", shield: false },
+      daily: { day: "2026-11-30", answered: 1 },
+      bestRun: 1,
+      theme: "light",
+    };
+    const server = { ...baseline, log: [thursday, friday, monday], streak: { count: 3, lastDay: "2026-11-30", shield: false } };
+    const merged = blobForSave(server, { ...baseline, theme: "dim" }, baseline);
+    expect(merged.theme).toBe("dim");
+    expect(merged.streak).toMatchObject({ count: 3, lastDay: "2026-11-30", shield: false });
+  });
+
   it("keeps the corrected streak when this device only changes a setting", () => {
     const answerRow = (attempt, at, day) => ({ id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt, at, day, ms: 9000, words: 8, rating: 1300 });
     const tuesday = {

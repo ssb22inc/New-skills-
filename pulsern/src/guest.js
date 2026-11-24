@@ -743,7 +743,8 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
     }
     put(merged, "daily", daily);
     const rebuilt = streakBeforeInsertedDay(base, log, [server, local]);
-    put(merged, "streak", rebuilt ?? (ordered.redo && sameJson(local.streak, base.streak) && server.streak ? server.streak : (cardDays.length ? streakFrom(base, days) : replayed.streak)));
+    const keptServerStreak = sameJson(local.streak, base.streak) && server.streak ? server.streak : null;
+    put(merged, "streak", keptServerStreak ?? rebuilt ?? (cardDays.length ? streakFrom(base, days) : replayed.streak));
   } else if (cardDays.length) {
     if (base.ability || server.ability || local.ability) put(merged, "ability", mergeMap(base.ability, server.ability, local.ability));
     if (base.daily != null || server.daily != null || local.daily != null) put(merged, "daily", choose(base.daily, server.daily, local.daily));
