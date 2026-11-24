@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-24T17:18:57.771Z",
+  "capturedAt": "2026-11-24T17:34:26.368Z",
   "sourceCommitSha": "74619ed1b537ec484cb8d3bccd124c78dda131c0",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
-  "sourceSetSha256": "bd288564ce03cd400bef5057f7ae61907a68cf1401260c796edece9898d58403",
+  "sourceSetSha256": "f4e2430a6c9eaddeb4d7f92dbb3089518f50ce5ab3feffc5a8ab414bf37c518f",
   "sourceFiles": {
     "src/App.jsx": "731f70511df38a3997d9daa0f5ec58c20ab5c77db62a78c164df05e4494c67cc",
     "src/ability-engine.js": "8c3b6f5c5e576b0131e1037ebfbc33d449bb272dd5b72f9aad926c95a8836245",
-    "src/answer-apply.js": "e393cf488d6ad6fd35108a3f0d41327b689f826f5c6579dca671cd509bba7eee",
+    "src/answer-apply.js": "316b07fb744fb60b64219ea6829397264bbe6f92612d7e30d285cf7cdd6b5e76",
     "src/app-main.jsx": "cbac9414c71d5b0e0237211f947023f54b6730c4fe5c6144ff6d48169b76bab6",
     "src/app-routing.js": "56fe5561e0ab1077ebfba64b8205f8eda6389e26b0a2bcda5ede2f466fd3222d",
     "src/attribution.js": "8ed24d3a415d9d727aaec28bf02ff4b621bd1ffeac057f9a52d62c6509eb6d0d",
@@ -49,7 +49,7 @@
     "src/free-pass.js": "03bc74d6ac8be924226382ad313b7607306ded19c2b23fc1723f506e291c7661",
     "src/funnel-report.js": "64e130a05ba9bf3c025af2b31f70997be1bfb1cea15ccb74e01513a40a21a424",
     "src/grading-note.js": "cdec544ffaa7d21550d2b21b56fea4baac1d1680e0c14712e2258d47d18335ee",
-    "src/guest.js": "0179d7caff60267aba6e65cdf5cf90237c9f93ec55c2a2593eb8b97908911486",
+    "src/guest.js": "2da2d640e3e1e7d6b68760329d29c37f8c6306bb59fb038c9ddf8a57f61a3f5e",
     "src/guest.jsx": "06dfe0f5071ae306bfbf2c6e55eecaec1767917bfd1db49882cd088f2146e3f7",
     "src/home-nav.js": "134679ed33b81b8884107dc32d1dd91e5e5bae52a4cafc590a78be34fbb9985c",
     "src/install.jsx": "d299929219a2e8b909b1991c6c1427db691fb27713f4a3001f17277e7c6bcae3",
@@ -92,8 +92,8 @@
   "images": [
     {
       "file": "pulsern-adaptive-practice.png",
-      "sha256": "851db2f9063027f32cda7d25893bee27a901b2f68d34358154320e5ba6122ddb",
-      "bytes": 66516,
+      "sha256": "a40b52f23360842e87c496c05f80be421cb4d29992bc39f5eb4cc76c38e78925",
+      "bytes": 66514,
       "width": 720,
       "height": 620,
       "alt": "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer",

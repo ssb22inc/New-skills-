@@ -3,9 +3,9 @@
    that throws, and an unresolved card whose catalog arrives late. */
 import { describe, it, expect } from "vitest";
 import { applyAnswer } from "../src/answer-apply.js";
-import { emptyRewards } from "../src/rewards.js";
-import { recoverProgressWrite, blobForSave, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial } from "../src/guest.js";
-import { refreshedUnresolved } from "../src/question-review.js";
+import { emptyRewards, bumpDay, reverseCardDay } from "../src/rewards.js";
+import { recoverProgressWrite, blobForSave, storageOrNull, createProgressEpoch, noteAccountRead, saveGuest, holdGuestTrial, mergeGuestIntoBlob } from "../src/guest.js";
+import { refreshedUnresolved, latestResults } from "../src/question-review.js";
 
 const answer = (attempt, id = 1) => ({ id, key: `bank:${id}`, source: "bank", cat: "Pharmacology", diff: 1, correct: true, attempt });
 
@@ -125,6 +125,99 @@ describe("a revision conflict keeps both devices' answers", () => {
   it("leaves an unchanged snapshot untouched so an idle save does not rewrite it", () => {
     const local = { log: [answer("mine")], xp: 10, theme: "light" };
     expect(blobForSave(local, local, local)).toBe(local);
+  });
+
+  it("keeps flashcard XP earned beside a question the other device saved", () => {
+    const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), srsMap: {}, bestRun: 0 };
+    const q = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const answered = applyAnswer(baseline, {
+      q, correct: true, ms: 9000, today: "2026-11-24", attempt: "q", words: 8, rating: 1300, calibration: { 1: { rating: 1300 } },
+    }).state;
+    const local = {
+      ...baseline,
+      xp: 5,
+      rewards: bumpDay(emptyRewards(), "2026-11-24", { cards: 1, xp: 5 }),
+      srsMap: { c17: { interval: 3, due: "2026-12-01", seen: "2026-11-24" } },
+    };
+    const merged = blobForSave(answered, local, baseline);
+    expect(merged.xp).toBe(answered.xp + 5);
+    expect(merged.log.map((row) => row.attempt)).toEqual(["q"]);
+    expect(merged.rewards.days["2026-11-24"]).toMatchObject({ q: 1, cards: 1, xp: answered.rewards.days["2026-11-24"].xp + 5 });
+    expect(merged.srsMap.c17.due).toBe("2026-12-01");
+  });
+
+  it("keeps a card undo when the other device saved a question", () => {
+    const card = bumpDay(emptyRewards(), "2026-11-24", { cards: 1, xp: 5 });
+    const baseline = { log: [], xp: 5, ability: {}, rewards: card, srsMap: { c17: { interval: 3, due: "2026-12-01", seen: "2026-11-24" } }, bestRun: 0 };
+    const q = { id: 1, key: "bank:1", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const server = applyAnswer(baseline, {
+      q, correct: true, ms: 9000, today: "2026-11-24", attempt: "q", words: 8, rating: 1300, calibration: { 1: { rating: 1300 } },
+    }).state;
+    const local = { ...baseline, xp: 0, rewards: reverseCardDay(card, "2026-11-24", 5), srsMap: {} };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.xp).toBe(server.xp - 5);
+    expect(merged.rewards.days["2026-11-24"].cards).toBe(0);
+    expect(merged.rewards.days["2026-11-24"].q).toBe(1);
+    expect(merged.srsMap.c17).toBeUndefined();
+  });
+
+  it("does not count one saved card grade a second time when the acknowledgement was lost", () => {
+    const rewards = bumpDay(emptyRewards(), "2026-11-24", { cards: 1, xp: 5 });
+    const baseline = { log: [], xp: 0, rewards: emptyRewards(), srsMap: {} };
+    const saved = { log: [], xp: 5, rewards, srsMap: { c17: { interval: 3, due: "2026-12-01", seen: "2026-11-24" } } };
+    const merged = blobForSave(saved, saved, baseline);
+    expect(merged.xp).toBe(5);
+    expect(merged.rewards.days["2026-11-24"].cards).toBe(1);
+  });
+
+  it("keeps an exam finished on the other device when this device changes a setting", () => {
+    const baseline = { log: [], xp: 0, theme: "light", examResults: {}, rewards: emptyRewards(), fcNew: { day: null, count: 0 }, customQs: [] };
+    const server = {
+      ...baseline,
+      xp: 5,
+      examResults: { readiness: { pct: 80, verdict: "pass", attempts: 1 } },
+      rewards: bumpDay(emptyRewards(), "2026-11-24", { cards: 1, xp: 5 }),
+      fcNew: { day: "2026-11-24", count: 1, ids: ["c9"] },
+      customQs: [{ id: "cq1", stem: "Remote custom" }],
+    };
+    const local = { ...baseline, theme: "dim", examResults: { pharm: { pct: 70, verdict: "pass", attempts: 1 } } };
+    const merged = blobForSave(server, local, baseline);
+    expect(merged.theme).toBe("dim");
+    expect(merged.examResults.readiness.pct).toBe(80);
+    expect(merged.examResults.pharm.pct).toBe(70);
+    expect(merged.xp).toBe(5);
+    expect(merged.rewards.days["2026-11-24"].cards).toBe(1);
+    expect(merged.fcNew).toEqual({ day: "2026-11-24", count: 1, ids: ["c9"] });
+    expect(merged.customQs).toEqual([{ id: "cq1", stem: "Remote custom" }]);
+  });
+
+  it("replays a newer remote miss after an older local correct answer", () => {
+    const baseline = { log: [], xp: 0, ability: {}, rewards: emptyRewards(), daily: null, bestRun: 0, missSchedule: {} };
+    const q = { id: 3, key: "bank:3", source: "bank", cat: "Pharmacology", diff: 1, stem: "eight words are enough here now" };
+    const taken = { ms: 9000, today: "2026-11-24", words: 8, rating: 1300, calibration: { 3: { rating: 1300 } } };
+    const older = applyAnswer(baseline, { q, correct: true, attempt: "older", at: 1000, ...taken }).state;
+    const newer = applyAnswer(baseline, { q, correct: false, attempt: "newer", at: 2000, ...taken }).state;
+    expect(older.log[0].at).toBe(1000);
+    expect(newer.log[0].at).toBe(2000);
+    const merged = blobForSave(newer, older, baseline);
+    expect(merged.log.map((row) => row.attempt)).toEqual(["older", "newer"]);
+    expect(latestResults(merged.log)["bank:3"]).toBe(false);
+    expect(merged.missSchedule["bank:3"]).toMatchObject({ interval: 1, due: "2026-11-25" });
+    const inOrder = applyAnswer(older, { q, correct: false, attempt: "newer", at: 2000, ...taken }).state;
+    expect(merged.xp).toBe(inOrder.xp);
+    expect(merged.ability.Pharmacology.theta).toBe(inOrder.ability.Pharmacology.theta);
+  });
+
+  it("keeps the time a trial answer was taken", () => {
+    const catalog = [{ id: 1, cat: "Pharmacology", diff: 1, stem: "eight words are enough here now", type: "mc" }];
+    const guest = {
+      v: 1, startedAt: 1700000000000, lastAt: Date.now(), day: "2026-11-24", xp: 0, run: 0, bestRun: 0,
+      log: [{ id: 1, source: "builtin", correct: true, attempt: "1700000000000:0", day: "2026-11-24", at: 1700000000100, ms: 9000 }],
+    };
+    const imported = mergeGuestIntoBlob({ log: [], xp: 0, rewards: emptyRewards(), ability: {}, streak: null }, guest, {
+      today: "2026-11-24", now: Date.now(), catalog,
+    });
+    expect(imported.blob.log[0].at).toBe(1700000000100);
   });
 });
 

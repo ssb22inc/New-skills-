@@ -61,6 +61,7 @@ export function applyAnswer(state, input) {
   const ms = input.ms ?? Infinity;
   const correct = !!input.correct;
   const calibration = input.calibration ?? {};
+  const at = Number.isFinite(Number(input.at)) ? Number(input.at) : Date.now();
   const res = q.unclassified
     ? { xp: 0, reason: "unclassified", base: 0, bonus: 0, fix: false }
     : answerXp({ q, correct, ms, log });
@@ -75,6 +76,7 @@ export function applyAnswer(state, input) {
     diff: q.diff,
     correct,
     ...(input.attempt != null ? { attempt: String(input.attempt) } : {}),
+    at,
     ...(today ? { day: today } : {}),
     ...(q.population ? { pop: q.population } : {}),
     ...(Number.isFinite(ms) ? { ms } : {}),

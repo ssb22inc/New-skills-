@@ -12,7 +12,7 @@
    account that already has answer history does not take the trial.
    Each trial answer is stored as builtin:<id>. A shared-bank question
    with the same number is bank:<id> and is a different question. */
-import { answerXp, answerCountsForRun, emptyRewards } from "./rewards.js";
+import { answerXp, answerCountsForRun, emptyRewards, MAX_COVERS } from "./rewards.js";
 import { applyAnswer, stampedQuestion } from "./answer-apply.js";
 import { canonicalKey } from "./question-key.js";
 
@@ -166,16 +166,174 @@ function mergeLogs(serverLog, localLog) {
   (localLog ?? []).forEach((row, index) => {
     if (row && !used.has(index)) out.push(row);
   });
-  const timed = (row) => Number.isFinite(Number(row?.at)) ? Number(row.at) : null;
-  return out
-    .map((row, index) => ({ row, index }))
-    .sort((a, b) => {
-      const at = timed(a.row);
-      const bt = timed(b.row);
-      if (at == null || bt == null || at === bt) return a.index - b.index;
-      return at - bt;
-    })
-    .map((item) => item.row);
+  return orderAnswers(out);
+}
+
+/* Rows that remember when they were taken trade places by that time.
+   Rows that do not stay where the merge left them, so an old history
+   is not reshuffled just because a new answer carries a clock. */
+function orderAnswers(rows) {
+  const timed = [];
+  rows.forEach((row, index) => {
+    const at = Number(row?.at);
+    if (Number.isFinite(at)) timed.push({ index, at });
+  });
+  if (timed.length < 2) return rows;
+  const slots = timed.map((item) => item.index);
+  const ordered = [...timed].sort((a, b) => a.at - b.at || a.index - b.index);
+  const out = rows.slice();
+  slots.forEach((slot, i) => { out[slot] = rows[ordered[i].index]; });
+  return out;
+}
+
+function sameJson(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/* Local kept a field: the server's copy is the one that changed.
+   The server kept it: this device's edit stands. Both changed a
+   single value: this save is the edit being written. */
+function choose(base, server, local) {
+  if (sameJson(local, base)) return server === undefined ? local : server;
+  if (sameJson(server, base)) return local;
+  return local;
+}
+
+function addNum(base, server, local) {
+  const b = Number(base) || 0;
+  const s = server == null ? b : (Number(server) || 0);
+  const l = local == null ? b : (Number(local) || 0);
+  return b + (s - b) + (l - b);
+}
+
+function mergeIdSet(base, server, local) {
+  const b = new Set(base ?? []);
+  const s = new Set(server ?? []);
+  const l = new Set(local ?? []);
+  const out = [];
+  const push = (id) => { if (!out.includes(id)) out.push(id); };
+  for (const id of b) if (s.has(id) && l.has(id)) push(id);
+  for (const id of s) if (!b.has(id)) push(id);
+  for (const id of l) if (!b.has(id)) push(id);
+  return out;
+}
+
+function mergeList(base, server, local) {
+  if (base == null && server == null && local == null) return undefined;
+  if (sameJson(local, base)) return server === undefined ? local : server;
+  if (sameJson(server, base)) return local;
+  return mergeIdSet(base ?? [], server ?? [], local ?? []);
+}
+
+function mergeById(base, server, local) {
+  if (base == null && server == null && local == null) return undefined;
+  if (sameJson(local, base)) return server === undefined ? local : server;
+  if (sameJson(server, base)) return local;
+  const idOf = (item, index) => (item && item.id != null ? `id:${item.id}` : `at:${index}`);
+  const baseIds = new Map((base ?? []).map((item, index) => [idOf(item, index), item]));
+  const serverIds = new Map((server ?? []).map((item, index) => [idOf(item, index), item]));
+  const localIds = new Map((local ?? []).map((item, index) => [idOf(item, index), item]));
+  const ids = new Set([...baseIds.keys(), ...serverIds.keys(), ...localIds.keys()]);
+  const out = [];
+  for (const id of ids) {
+    const value = choose(baseIds.get(id), serverIds.get(id), localIds.get(id));
+    if (value !== undefined) out.push(value);
+  }
+  return out;
+}
+
+function mergeExamResults(base, server, local) {
+  if (base == null && server == null && local == null) return undefined;
+  if (sameJson(local, base)) return server === undefined ? local : server;
+  if (sameJson(server, base)) return local;
+  const keys = new Set([...Object.keys(base ?? {}), ...Object.keys(server ?? {}), ...Object.keys(local ?? {})]);
+  const out = {};
+  for (const key of keys) {
+    const value = choose(base?.[key], server?.[key], local?.[key]);
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+function mergeFcNew(base, server, local) {
+  if (base == null && server == null && local == null) return undefined;
+  if (sameJson(local, base)) return server === undefined ? local : server;
+  if (sameJson(server, base)) return local;
+  const b = base ?? { day: null, count: 0 };
+  const s = server ?? { day: null, count: 0 };
+  const l = local ?? { day: null, count: 0 };
+  if (s.day !== l.day) {
+    const day = [s.day, l.day].filter((item) => typeof item === "string").sort().pop() ?? null;
+    return l.day === day ? l : s;
+  }
+  const ids = mergeIdSet(b.ids, s.ids, l.ids);
+  const counted = Array.isArray(s.ids) || Array.isArray(l.ids) || Array.isArray(b.ids);
+  return { day: s.day ?? null, count: counted ? ids.length : Math.max(0, addNum(b.count, s.count, l.count)), ...(ids.length ? { ids } : {}) };
+}
+
+function dayNum(rewards, day, key) {
+  return Number(rewards?.days?.[day]?.[key]) || 0;
+}
+
+function mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen) {
+  const b = base?.rewards;
+  const s = server?.rewards;
+  const l = local?.rewards;
+  if (b == null && s == null && l == null) return undefined;
+  if (!hasBaseline) {
+    if (unseen && !l) return replayed.rewards;
+    return l === undefined ? s : l;
+  }
+  if (sameJson(l, b) && !unseen) return s === undefined ? l : s;
+  if (sameJson(s, b) && !unseen) return l;
+  const replayRewards = replayed.rewards ?? b ?? emptyRewards();
+  const duplicate = sameJson(l, s) && sameJson(local.srsMap, server.srsMap);
+  const days = {};
+  const dayKeys = new Set([
+    ...Object.keys(b?.days ?? {}),
+    ...Object.keys(s?.days ?? {}),
+    ...Object.keys(l?.days ?? {}),
+    ...Object.keys(replayRewards.days ?? {}),
+  ]);
+  for (const day of dayKeys) {
+    const localCardXp = dayNum(l, day, "xp") - dayNum(localReplay?.rewards, day, "xp");
+    const serverCardXp = dayNum(s, day, "xp") - dayNum(serverReplay?.rewards, day, "xp");
+    const cards = addNum(dayNum(b, day, "cards"), dayNum(s, day, "cards"), dayNum(l, day, "cards"));
+    const cardCards = duplicate ? dayNum(l, day, "cards") : cards;
+    const xp = dayNum(replayRewards, day, "xp") + localCardXp + (duplicate ? 0 : serverCardXp);
+    const q = dayNum(replayRewards, day, "q");
+    const ok = dayNum(replayRewards, day, "ok");
+    const fixes = dayNum(replayRewards, day, "fixes");
+    const ms = duplicate ? dayNum(l, day, "ms") : addNum(dayNum(b, day, "ms"), dayNum(s, day, "ms"), dayNum(l, day, "ms"));
+    if (q || ok || xp || cardCards || fixes || ms) days[day] = { q, ok, xp, cards: cardCards, fixes, ms };
+  }
+  const best = {};
+  for (const key of ["run", "sessionAcc", "sessionN", "dayQ", "streak"]) {
+    best[key] = Math.max(Number(b?.best?.[key]) || 0, Number(s?.best?.[key]) || 0, Number(l?.best?.[key]) || 0, Number(replayRewards.best?.[key]) || 0);
+  }
+  const prefKeys = new Set([...Object.keys(b?.prefs ?? {}), ...Object.keys(s?.prefs ?? {}), ...Object.keys(l?.prefs ?? {})]);
+  const prefs = {};
+  for (const key of prefKeys) prefs[key] = choose(b?.prefs?.[key], s?.prefs?.[key], l?.prefs?.[key]);
+  const badgeKeys = new Set([...Object.keys(b?.badgesSeen ?? {}), ...Object.keys(s?.badgesSeen ?? {}), ...Object.keys(l?.badgesSeen ?? {})]);
+  const badgesSeen = {};
+  for (const key of badgeKeys) {
+    badgesSeen[key] = Math.max(Number(b?.badgesSeen?.[key]) || 0, Number(s?.badgesSeen?.[key]) || 0, Number(l?.badgesSeen?.[key]) || 0);
+  }
+  const ranks = [b?.rankHigh, s?.rankHigh, l?.rankHigh].filter((rank) => Number.isInteger(rank));
+  const coverOf = (side, replay) => (Number(side?.covers) || 0) - (Number(replay?.rewards?.covers) || 0);
+  const covers = Math.max(0, Math.min(MAX_COVERS, (Number(replayRewards.covers) || 0) + coverOf(l, localReplay) + (duplicate ? 0 : coverOf(s, serverReplay))));
+  return {
+    ...(l ?? s ?? b),
+    days,
+    covers,
+    coverWeeks: [...new Set([...(b?.coverWeeks ?? []), ...(s?.coverWeeks ?? []), ...(l?.coverWeeks ?? [])])],
+    coverDays: [...new Set([...(b?.coverDays ?? []), ...(s?.coverDays ?? []), ...(l?.coverDays ?? [])])],
+    best,
+    milestones: [...new Set([...(b?.milestones ?? []), ...(s?.milestones ?? []), ...(l?.milestones ?? [])])].filter(Number.isFinite),
+    rankHigh: ranks.length ? Math.max(...ranks) : (l?.rankHigh ?? s?.rankHigh ?? b?.rankHigh ?? null),
+    badgesSeen,
+    prefs,
+  };
 }
 
 function addDelta(base, server, local, key) {
@@ -223,6 +381,7 @@ function replayUnseen(base, rows) {
       ms: Number.isFinite(row.ms) ? row.ms : Infinity,
       today: row.day,
       attempt: row.attempt,
+      at: Number.isFinite(Number(row.at)) ? Number(row.at) : undefined,
       words: Number.isFinite(words) ? words : undefined,
       rating: Number.isFinite(rating) ? rating : undefined,
       calibration: Number.isFinite(rating) ? { [row.id]: { rating } } : {},
@@ -233,31 +392,74 @@ function replayUnseen(base, rows) {
   return state;
 }
 
+function put(merged, key, value) {
+  if (value === undefined) {
+    if (merged[key] !== undefined) delete merged[key];
+    return;
+  }
+  if (!sameJson(merged[key], value)) merged[key] = value;
+}
+
 /* Rows already stored stay rows. A legacy identity correction updates the
    matching row. New live attempts are scored once from the shared baseline,
-   so a lost acknowledgement cannot add their XP a second time. */
+   so a lost acknowledgement cannot add their XP a second time. Card XP is
+   not in that replay: it is the part of the total the questions do not
+   explain, kept once when both copies are the same grade. */
 export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const server = serverBlob && typeof serverBlob === "object" && !Array.isArray(serverBlob) ? serverBlob : {};
   const local = localBlob && typeof localBlob === "object" && !Array.isArray(localBlob) ? localBlob : {};
-  const base = baselineBlob && typeof baselineBlob === "object" && !Array.isArray(baselineBlob) ? baselineBlob : server;
+  const hasBaseline = baselineBlob != null && typeof baselineBlob === "object" && !Array.isArray(baselineBlob);
+  const base = hasBaseline ? baselineBlob : server;
   const log = mergeLogs(server.log, local.log);
   const replayed = replayUnseen(base, log);
   const unseen = log.some((row) => row?.attempt && !(base.log ?? []).some((item) => item?.attempt === row.attempt));
-  const merged = { ...local, log };
-  const nextXp = unseen ? replayed.xp : (Number(local.xp) || 0);
-  if (nextXp !== (Number(local.xp) || 0)) merged.xp = nextXp;
-  if (unseen) {
-    merged.ability = replayed.ability;
-    merged.daily = replayed.daily;
-    merged.streak = replayed.streak;
-    if (!local.rewards) merged.rewards = replayed.rewards;
+  const localReplay = hasBaseline ? replayUnseen(base, local.log) : null;
+  const serverReplay = hasBaseline ? replayUnseen(base, server.log) : null;
+  const merged = { ...local };
+  put(merged, "log", log);
+  let nextXp;
+  if (!hasBaseline) nextXp = unseen ? replayed.xp : (Number(local.xp) || 0);
+  else {
+    const extra = (blob, replay) => (Number(blob?.xp) || 0) - (Number(replay?.xp) || 0);
+    const localExtra = extra(local, localReplay);
+    const serverExtra = extra(server, serverReplay);
+    const once = localExtra === serverExtra && sameJson(local.rewards, server.rewards) && sameJson(local.srsMap, server.srsMap);
+    nextXp = (Number(replayed.xp) || 0) + localExtra + (once ? 0 : serverExtra);
   }
+  put(merged, "xp", nextXp);
   if (base.bestRun != null || server.bestRun != null || local.bestRun != null || unseen) {
-    const nextBest = Math.max(Number(base.bestRun) || 0, Number(server.bestRun) || 0, Number(local.bestRun) || 0, Number(replayed.bestRun) || 0);
-    if (nextBest !== (Number(local.bestRun) || 0)) merged.bestRun = nextBest;
+    put(merged, "bestRun", Math.max(Number(base.bestRun) || 0, Number(server.bestRun) || 0, Number(local.bestRun) || 0, Number(replayed.bestRun) || 0));
   }
-  if (base.missSchedule || server.missSchedule || local.missSchedule) merged.missSchedule = mergeMap(base.missSchedule, server.missSchedule, unseen ? replayed.missSchedule : local.missSchedule);
-  if (base.srsMap || server.srsMap || local.srsMap) merged.srsMap = mergeMap(base.srsMap, server.srsMap, local.srsMap);
+  if (unseen) {
+    put(merged, "ability", replayed.ability);
+    put(merged, "daily", replayed.daily);
+    put(merged, "streak", replayed.streak);
+  } else {
+    if (base.ability || server.ability || local.ability) put(merged, "ability", mergeMap(base.ability, server.ability, local.ability));
+    if (base.daily != null || server.daily != null || local.daily != null) put(merged, "daily", choose(base.daily, server.daily, local.daily));
+    if (base.streak != null || server.streak != null || local.streak != null) put(merged, "streak", choose(base.streak, server.streak, local.streak));
+  }
+  if (base.missSchedule || server.missSchedule || local.missSchedule) {
+    put(merged, "missSchedule", mergeMap(base.missSchedule, server.missSchedule, unseen ? replayed.missSchedule : local.missSchedule));
+  }
+  if (base.srsMap || server.srsMap || local.srsMap) put(merged, "srsMap", mergeMap(base.srsMap, server.srsMap, local.srsMap));
+  put(merged, "rewards", mergeRewards(base, server, local, replayed, localReplay, serverReplay, hasBaseline, unseen));
+  put(merged, "examResults", mergeExamResults(base.examResults, server.examResults, local.examResults));
+  put(merged, "fcNew", mergeFcNew(base.fcNew, server.fcNew, local.fcNew));
+  put(merged, "flagged", mergeList(base.flagged, server.flagged, local.flagged));
+  put(merged, "flaggedCases", mergeList(base.flaggedCases, server.flaggedCases, local.flaggedCases));
+  put(merged, "customQs", mergeById(base.customQs, server.customQs, local.customQs));
+  if (base.fcFlips != null || server.fcFlips != null || local.fcFlips != null) {
+    const flips = sameJson(local.fcFlips, base.fcFlips) || sameJson(server.fcFlips, base.fcFlips)
+      ? choose(base.fcFlips, server.fcFlips, local.fcFlips)
+      : addNum(base.fcFlips, server.fcFlips, local.fcFlips);
+    put(merged, "fcFlips", flips);
+  }
+  const handled = new Set(["log", "xp", "bestRun", "ability", "daily", "streak", "missSchedule", "srsMap", "rewards", "examResults", "fcNew", "flagged", "flaggedCases", "customQs", "fcFlips"]);
+  for (const key of new Set([...Object.keys(base), ...Object.keys(server), ...Object.keys(local)])) {
+    if (handled.has(key)) continue;
+    put(merged, key, choose(base[key], server[key], local[key]));
+  }
   return merged;
 }
 
@@ -526,6 +728,7 @@ function builtinTrialQuestion(entry, catalog) {
     attempt: entry.attempt,
     ...(found.population ? { pop: found.population } : {}),
     ...(Number.isFinite(entry.ms) ? { ms: entry.ms } : {}),
+    ...(Number.isFinite(Number(entry.at)) ? { at: Number(entry.at) } : {}),
     day: entry.day,
     source: "builtin",
     key: canonicalKey("builtin", found.id),
@@ -580,6 +783,7 @@ function importTrialLive(s, entries, { today, calibration }) {
       ms: Number.isFinite(e.ms) ? e.ms : Infinity,
       today: e.day ?? today,
       attempt: e.attempt,
+      at: e.at,
       words: Number.isFinite(words) ? words : undefined,
       calibration,
     });
