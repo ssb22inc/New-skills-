@@ -121,6 +121,19 @@ describe("Today round and Review Misses pools", () => {
     expect(todayPool(bank, log, schedule, fresh).map((x) => x.id)).toContain(2);
   });
 
+  it("an unresolved card follows the same category filter as other reviews", () => {
+    const pharmacology = { id: "unresolved:7", unresolved: true, legacyId: "7", cat: "Pharmacology", type: "mc", diff: 1 };
+    const care = q(4, CATS[2]);
+    const log = [{ id: 7, unclassified: true, key: null, correct: false, cat: "Pharmacology" }];
+    const schedule = { 7: { interval: 1, due: "2026-10-16" } };
+    const pool = sessionPool([care], {
+      log, schedule, fresh: [care], mode: "today",
+      allow: (item) => item.cat === "Health Promotion & Maintenance",
+    });
+    expect(pool.map((item) => item.id)).toEqual([4]);
+    expect(pool.some((item) => item.id === pharmacology.id)).toBe(false);
+  });
+
   it("a deferred unresolved due card falls through to new questions", () => {
     const fresh = [q(4, CATS[2]), q(5, CATS[3])];
     const log = [{ id: 7, unclassified: true, key: null, correct: false, cat: "Pharmacology" }];

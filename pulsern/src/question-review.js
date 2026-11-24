@@ -281,18 +281,19 @@ function reviewWaiting(q, schedule, questions, log, index, peers, today) {
   return !!entry && !(typeof entry.due === "string" && entry.due <= today);
 }
 
-export function todayPool(questions, log, schedule, freshPool, today = todayStr(), skip = null) {
+export function todayPool(questions, log, schedule, freshPool, today = todayStr(), skip = null, allow = null) {
   const held = asSkip(skip);
   const index = historyIndex(log);
   const peers = peerCounts(questions);
   const { due, misses } = reviewPools(questions, log, schedule, today);
-  /* Held and deferred cards, including ones synthesized from an old
-     number, are removed before a due-only list can hide everything else. */
-  const openDue = due.filter((q) => stillOpen(q, held));
+  const visible = (q) => stillOpen(q, held) && (!allow || allow(q));
+  /* Held, deferred, and out-of-focus cards are removed before a due-only
+     list can hide everything else. */
+  const openDue = due.filter(visible);
   if (openDue.length) return openDue;
   const waiting = (q) => reviewWaiting(q, schedule, questions, log, index, peers, today);
-  const fresh = (freshPool ?? []).filter((q) => stillOpen(q, held));
-  return [...misses.filter((q) => stillOpen(q, held) && !waiting(q)), ...fresh];
+  const fresh = (freshPool ?? []).filter(visible);
+  return [...misses.filter((q) => visible(q) && !waiting(q)), ...fresh];
 }
 
 /* The questions a sitting may draw next. Ids already opened this sitting
@@ -307,14 +308,15 @@ function stillOpen(q, skip) {
   return q && !skip.has(String(answerIdentity(q) ?? q.id));
 }
 
-export function sessionPool(questions, { log, schedule, fresh, mode, held = [], deferred = [], today = todayStr() } = {}) {
+export function sessionPool(questions, { log, schedule, fresh, mode, held = [], deferred = [], today = todayStr(), allow = null } = {}) {
   const skip = heldKeys([...(held ?? []), ...(deferred ?? [])]);
+  const visible = (q) => stillOpen(q, skip) && (!allow || allow(q));
   if (mode === "review") {
     const { due, review } = reviewPools(questions, log, schedule, today);
-    const openDue = due.filter((q) => stillOpen(q, skip));
+    const openDue = due.filter(visible);
     if (openDue.length) return openDue;
-    return review.filter((q) => stillOpen(q, skip));
+    return review.filter(visible);
   }
-  if (mode === "today") return todayPool(questions, log, schedule, fresh, today, skip);
-  return (fresh ?? []).filter((q) => stillOpen(q, skip));
+  if (mode === "today") return todayPool(questions, log, schedule, fresh, today, skip, allow);
+  return (fresh ?? []).filter(visible);
 }

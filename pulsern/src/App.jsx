@@ -259,7 +259,6 @@ import { ngnExt, fourFn, validQ, scoreItem, scoreCaseStep, isFullCredit, sumScor
 import { NGN_SAMPLES, CALC_SAMPLES, COVERAGE_SAMPLES } from "./ngn-samples.js";
 
 const BUNDLED_QUESTIONS = [...QUESTIONS, ...NGN_SAMPLES, ...CALC_SAMPLES, ...COVERAGE_SAMPLES];
-const BUNDLED_QUESTION_IDS = BUNDLED_QUESTIONS.map((q) => q.id);
 import { CASE_STUDIES } from "./case-studies.js";
 import { dueQueue, nextSchedule, migrateLegacySrs, NEW_PER_DAY, newCardAllowance, noteNewCard, refundNewCard } from "./srs.js";
 import {
@@ -320,7 +319,7 @@ import {
 } from "./rewards-ui.jsx";
 import { mergeGuestIntoBlob, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, readGuestForHandoff, releaseHeldGuest, waitForFlush, accountHasAnswers } from "./guest.js";
 import { applyAnswer, commitLiveAnswer, stampedQuestion, newAttemptId } from "./answer-apply.js";
-import { classifyLog, rekeySchedule, claimLegacyRow } from "./question-key.js";
+import { claimLegacyRow } from "./question-key.js";
 import { stampCatalogQuestion, stampLoadedCatalog } from "./question-identity.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff, sessionReadDecision, sweepPendingProgress } from "./progress-load.js";
@@ -846,7 +845,10 @@ export default function App() {
      and re-runs when access opens. On any failure the built-in local array
      stays in place as the offline fallback. */
   const bankOpen = (isOwner || !!ent) && !locked;
-  const [catalog, setCatalog] = useState(null);
+  const [catalogAttempt, setCatalogAttempt] = useState(0);
+  const [bankFailed, setBankFailed] = useState(false);
+  const [casesFailed, setCasesFailed] = useState(false);
+  const catalogError = bankFailed || casesFailed;
   useEffect(() => {
     if (!bankOpen) return;
     (async () => {
@@ -862,7 +864,7 @@ export default function App() {
         data.push(...page);
         if (page.length < 1000) break;
       }
-      setCatalog((c) => ({ ...(c ?? {}), bankIds: data.map((r) => r.id), bankCats: Object.fromEntries(data.map((r) => [String(r.id), r.cat])), bankKnown: !failed }));
+      setBankFailed(failed);
       if (!data.length) return;
       setCalibration(Object.fromEntries(data.map((r) => [r.id, { rating: r.elo_rating }])));
       const items = data
@@ -890,32 +892,12 @@ export default function App() {
       const { data, error } = await supabase.from("case_studies")
         .select("id, cat, title, blurb, intro, vitals, labs, note, steps, population")
         .eq("approved", true).is("exam_form", null); // exam cases stay quarantined
-      setCatalog((c) => ({ ...(c ?? {}), dbCases: !error && Array.isArray(data) ? data : [], casesKnown: !error }));
+      setCasesFailed(!!error);
       if (!error && data?.length) {
         setBankCases(data.map((r) => ({ ...r, dbId: r.id, ai: true })));
       }
     })();
-  }, [bankOpen]);
-  /* Legacy rows have no source. Name them only after the bank and the
-     case catalog have both been read, and only when exactly one catalog
-     contains the id. */
-  useEffect(() => {
-    if (!loaded || !catalog?.bankKnown || !catalog?.casesKnown) return;
-    const current = log;
-    const next = classifyLog(current, {
-      builtinIds: BUNDLED_QUESTION_IDS,
-      builtinCats: Object.fromEntries(BUNDLED_QUESTIONS.map((item) => [String(item.id), item.cat])),
-      bankIds: catalog.bankIds,
-      bankCats: catalog.bankCats,
-      dbCases: catalog.dbCases,
-      bankKnown: true,
-    });
-    if (next.every((row, i) => row.key === current[i]?.key && !!row.unclassified === !!current[i]?.unclassified && row.source === current[i]?.source)) return;
-    setLog(next);
-    setMissSchedule((schedule) => rekeySchedule(schedule, current, next));
-    // The catalog is the input. The log it rewrites is read once per catalog.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, catalog]);
+  }, [bankOpen, catalogAttempt]);
 
   const acc = log.length ? log.filter((l) => l.correct).length / log.length : 0;
 
@@ -1380,6 +1362,13 @@ export default function App() {
             <h2 id="not-saving-title" className="h2">This session isn't being saved</h2>
             <p className="small">Your saved progress couldn't be opened, so we're leaving it untouched. Email <a href="mailto:sheldon@pulsern.app?subject=PulseRN%20saved%20progress%20won%27t%20open">sheldon@pulsern.app</a> to restore it.</p>
             <button type="button" className="btn ghost" onClick={downloadUnreadable}>Download a copy</button>
+          </section>
+        )}
+        {catalogError && loaded && !saveBlocked && (
+          <section className="card rw-saved" role="alert">
+            <h2 className="h2">The question catalog didn't load</h2>
+            <p className="small">Saved misses stay in Review misses. Retry to open the rest of the bank.</p>
+            <button type="button" className="btn" onClick={() => setCatalogAttempt((n) => n + 1)}>Retry</button>
           </section>
         )}
         {saveStall && (
@@ -1953,8 +1942,9 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
      duePool = scheduled reviews whose LOCAL date has arrived; reviewPool =
      those plus every current miss, so Review Misses still serves all misses
      on demand, due ones first. */
-  const focused = reviewQuestions.filter(inFocus);
-  const { due: duePool, review: reviewPool } = reviewPools(focused, log, missSchedule, todayStr());
+  const { due: dueAll, review: reviewAll } = reviewPools(reviewQuestions, log, missSchedule, todayStr());
+  const duePool = dueAll.filter(inFocus);
+  const reviewPool = reviewAll.filter(inFocus);
 
   const remember = (item) => {
     const id = item ? answerIdentity(item) : null;
@@ -1996,8 +1986,8 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
     /* Held questions are dropped inside sessionPool, before a due-only
        pool can hide everything else. */
     const deferred = [...resolvedLegacy.current].map((id) => `unresolved:${id}`);
-    let pool = sessionPool(focused, {
-      log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail), deferred,
+    let pool = sessionPool(reviewQuestions, {
+      log, schedule: missSchedule, fresh: freshPool, mode: which, held: heldIds(trail), deferred, allow: inFocus,
     });
     if (!pool.length) {
       const fb = fallbackSkip(trail);
@@ -2097,7 +2087,7 @@ export function QBank({ record, log, auto = false, autoLimit = null, preferMc = 
   // autopilot: start immediately: due reviews first, then new questions
   useEffect(() => {
     if (auto && phase === "pick") {
-      const pool = sessionPool(focused, { log, schedule: missSchedule, fresh: freshPool, mode: "today", held: [] });
+      const pool = sessionPool(reviewQuestions, { log, schedule: missSchedule, fresh: freshPool, mode: "today", held: [] });
       if (pool.length) pickFrom(emptyNav(), "today"); else onDone?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
