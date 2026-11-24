@@ -1,0 +1,103 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "a03e6abbfe440e152c31623a2a10db57492b427f",
+    "head": "d0bb6c6af28689952e1355cf7470ccc3f7a5dc47",
+    "pr": "184"
+  },
+  "reviewedAt": "2026-11-24T08:46:28.763Z",
+  "filesReviewed": [
+    "pulsern/PULSERN_BUILD.md",
+    "pulsern/assets/App.portable.jsx",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/app-routing.js",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/case-studies.js",
+    "pulsern/src/effects.js",
+    "pulsern/src/guest.js",
+    "pulsern/src/guest.jsx",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/progress-load.js",
+    "pulsern/src/question-review.js",
+    "pulsern/src/rewards-ui.jsx",
+    "pulsern/src/rewards.js",
+    "pulsern/src/sign-out.js",
+    "pulsern/src/state.js",
+    "pulsern/tests/browser/announcer-harness.jsx",
+    "pulsern/tests/browser/announcer.html",
+    "pulsern/tests/browser/guest-harness.jsx",
+    "pulsern/tests/browser/guest.html",
+    "pulsern/tests/capture-fonts.test.js",
+    "pulsern/tests/card-nav-browser.test.js",
+    "pulsern/tests/effects.test.js",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/flashcards-undo-browser.test.js",
+    "pulsern/tests/guest-browser.test.js",
+    "pulsern/tests/guest.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/progress-load-browser.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/question-review.test.js",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/review2-blockers.test.js",
+    "pulsern/tests/review2-fixes.test.js",
+    "pulsern/tests/review3-browser.test.js",
+    "pulsern/tests/review3.test.js",
+    "pulsern/tests/rewards.test.js",
+    "pulsern/tests/state-migration.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/auth.jsx",
+      "line": 461,
+      "title": "Creating an account discards an unstored trial before authentication starts",
+      "problem": "When saveGuest fails, the trial exists only in GuestTrial's React state. toAuth immediately unmounts GuestTrial without transferring that state anywhere. App subsequently attempts the handoff exclusively through loadGuest(localStorage), so it cannot recover those answers. The save screen nevertheless tells this student to create an account before leaving the tab to keep the answers.",
+      "failure_scenario": "localStorage reads work but writes fail because storage is full. A visitor completes five questions, sees the storage-failure message, and taps Create free account. The only copy disappears as the authentication form opens; signing up in that same tab imports no answers, XP, or ability history.",
+      "fix": "Keep an in-memory trial in AuthGate or another owner that survives the authentication-screen transition, and pass it through the guarded account handoff until the account save succeeds. Where an authentication redirect cannot preserve it, disclose that limitation instead of promising preservation. Add an end-to-end test with failing storage writes that proceeds through authentication and checks the saved account blob.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/guest.js",
+      "line": 185,
+      "title": "Question-ID deduplication discards answers from a subsequent trial",
+      "problem": "mergeGuestIntoBlob uses previously logged question IDs as import receipts. Once an account contains guest-1, every future trial answer to built-in question 1 is filtered out, even when it belongs to a different trial. resolveGuestOffer then clears the device copy, including when every incoming answer was filtered out.",
+      "failure_scenario": "A student imports a trial containing an incorrect answer to question 1, signs out, and later takes another trial. They answer question 1 correctly, sign back into the existing account, and choose Add to my account. That new answer is discarded because guest-1 already exists. The account retains the old miss and ability state, and the new device copy is removed.",
+      "fix": "Use a stable trial/import token and an imported-trial receipt for idempotence, rather than treating question identity as answer-import identity. Preserve canonical question identity for review and XP repeat detection. Test both retrying the same trial and importing a distinct trial containing the same question.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/rewards.js",
+      "line": 151,
+      "title": "Legacy case aliases also match unrelated current bank answers",
+      "problem": "The alias comparison treats numeric ID plus category as proof that a log row belongs to a case step. Those numeric IDs also belong to real bank questions, and aliases are applied even for accounts created after this change, whose case answers have always used string IDs. A bank answer can therefore make a never-attempted case step count as a repeat.",
+      "failure_scenario": "A new student correctly answers bank question 101 in Physiological Adaptation, then correctly answers the sepsis case's step 1 after the reading-time floor. caseStepIds supplies alias 101, so answerXp returns repeat and awards 0 XP instead of the first-answer 30 XP. The bank question can even have difficulty 1; the comparison ignores that distinction. The tests cover a collision in another category, but not this same-category collision.",
+      "fix": "Distinguish bank answers from case-step answers with additive source metadata, and do not apply legacy numeric aliases to current bank rows. Handle ambiguous legacy rows explicitly rather than treating category equality as identity. Add a regression test for different items sharing both numeric ID and category.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 224687,
+    "completionTokens": 14472,
+    "reasoningTokens": 13587,
+    "costUsd": 0.706436
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Request changes. Two guest-handoff paths discard answers, and the legacy case-ID matching can suppress XP for unrelated bank questions. This was a static review; I did not run the tests or build.",
+  "counts": {
+    "blocker": 2,
+    "major": 1,
+    "minor": 0
+  }
+}
