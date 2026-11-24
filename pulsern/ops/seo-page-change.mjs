@@ -70,7 +70,7 @@ const SOURCES = marketingSourcePaths();
 
 export function isMarketingPagePath(path) {
   const p = String(path ?? "").replace(/\\/g, "/").replace(/^\.\//, "");
-  if (p === "pulsern/public/robots.txt" || p === "pulsern/public/llms.txt") return true;
+  if (p === "pulsern/index.html" || p === "pulsern/public/robots.txt" || p === "pulsern/public/llms.txt") return true;
   if (p.startsWith("pulsern/public/") && /\.(html|xml)$/.test(p)) return true;
   return SOURCES.has(p);
 }
@@ -101,6 +101,11 @@ async function readStdin() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  if (process.argv.includes("--assume-changed")) {
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, "changed=true\n");
+    console.log("no commit range; model review required");
+    process.exit(0);
+  }
   const skipAt = process.argv.indexOf("--skip-report");
   if (skipAt >= 0) {
     writeSkippedReview(process.argv[skipAt + 1], process.argv[skipAt + 2]);

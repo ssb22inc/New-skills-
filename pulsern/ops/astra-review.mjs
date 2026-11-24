@@ -526,31 +526,27 @@ export function parseReviewText(text) {
   if (typeof text !== "string" || !text.trim()) throw new Error("review result is empty");
   const stripped = text.replace(/^\uFEFF/, "").trim();
   if (unclosedReview(stripped)) throw new Error("review result contains an incomplete verdict");
-  const unfenced = stripped.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  const strict = [...jsonObjectSpans(stripped)];
-  for (const m of stripped.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) strict.push(m[1].trim());
-  const verdicts = new Map();
-  let invalid = null;
-  const consider = (obj) => {
-    if (!looksLikeReview(obj)) return;
-    const key = JSON.stringify(obj);
-    if (verdicts.has(key)) return;
-    try { verdicts.set(key, validateResult(obj)); }
-    catch (e) { invalid = e; }
-  };
-  for (const candidate of strict) {
-    if (!candidate) continue;
-    try { consider(JSON.parse(candidate)); }
-    catch (e) {
-      if (e instanceof SyntaxError && reviewish(candidate)) throw new Error("review result contains a malformed verdict");
-      if (!(e instanceof SyntaxError)) throw e;
-    }
+  const spans = jsonObjectSpans(stripped);
+  if (!spans.length) {
+    let obj;
+    try { obj = JSON.parse(stripped.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim()); }
+    catch { throw new Error("review result is not JSON"); }
+    if (!looksLikeReview(obj)) throw new Error("review result is not a verdict");
+    return validateResult(obj);
   }
-  try { consider(JSON.parse(unfenced)); } catch { /* prose around one object is not a second verdict */ }
-  if (invalid) throw new Error(invalid.message);
-  if (verdicts.size === 0) throw new Error("review result is not JSON");
-  if (verdicts.size > 1) throw new Error("review result contains more than one verdict");
-  return [...verdicts.values()][0];
+  const reviews = [];
+  let invalid = null;
+  for (const span of spans) {
+    let obj;
+    try { obj = JSON.parse(span); }
+    catch { throw new Error("review result contains a malformed verdict"); }
+    if (!looksLikeReview(obj)) { invalid = new Error("review result is not a verdict"); continue; }
+    try { reviews.push(validateResult(obj)); }
+    catch (e) { invalid = e; }
+  }
+  if (invalid) throw invalid;
+  if (reviews.length !== 1) throw new Error("review result contains more than one verdict");
+  return reviews[0];
 }
 
 /* Top-level {...} spans, ignoring braces that sit inside strings. */

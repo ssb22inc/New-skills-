@@ -127,7 +127,7 @@ jobs:
               node ops/seo-page-change.mjs --nul </dev/null
             fi
           else
-            node ops/seo-page-change.mjs --nul </dev/null
+            node ops/seo-page-change.mjs --assume-changed
           fi
       - name: Adversarial model review (advisory, owner decision 2026-10-29)
         id: adversary

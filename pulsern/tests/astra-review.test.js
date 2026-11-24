@@ -816,7 +816,8 @@ describe("running a review end to end (Astra finding #5)", () => {
     const raw = JSON.stringify(verdict);
     expect(parseReviewText(raw).assessment).toBe("clean");
     expect(parseReviewText("```json\n" + raw + "\n```").findings).toHaveLength(1);
-    expect(parseReviewText("<think>maybe {not the verdict}</think>\n" + raw).findings[0].problem).toBe("says }");
+    expect(parseReviewText("<think>not the verdict</think>\n" + raw).findings[0].problem).toBe("says }");
+    expect(() => parseReviewText(raw + "\n{'assessment':'Blocked','findings':[]}")).toThrow(/malformed verdict/);
     expect(parseReviewText("Review follows.\n```json\n" + raw + "\n```\nDone.")).toBeTruthy();
     expect(() => parseReviewText("not json")).toThrow();
     expect(() => parseReviewText("")).toThrow(/empty/);

@@ -856,6 +856,8 @@ describe("SEO guardian", () => {
     expect(workflow).toContain("seo-page-change.mjs --nul");
     expect(workflow).not.toMatch(/names=\$\(git diff/);
     expect(isMarketingPagePath("pulsern/public/learn/nclex-fees-and-payment/index.html")).toBe(true);
+    expect(workflow).toContain("--assume-changed");
+    expect(isMarketingPagePath("pulsern/index.html")).toBe(true);
     expect(isMarketingPagePath("pulsern/src/landing.jsx")).toBe(true);
     expect(isMarketingPagePath("pulsern/ops/learn-content.mjs")).toBe(true);
     expect(isMarketingPagePath("pulsern/ops/learn-clinical.mjs")).toBe(true);
