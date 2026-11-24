@@ -79,8 +79,10 @@ describe("floating 🧪 study toolkit", () => {
     it(`starts clear of every button, option, nav row and the tab bar (${name})`, async () => {
       const { ctx, page } = await open(viewport);
       const f = await fab(page).boundingBox();
-      expect(f.width).toBeGreaterThanOrEqual(44);
+      /* A phone whose reading column fills the screen has no full-size
+         gap, so the button shrinks to an edge tab. That tab stays 44px tall. */
       expect(f.height).toBeGreaterThanOrEqual(44);
+      expect(f.width).toBeGreaterThanOrEqual(name === "phone" ? 28 : 44);
       expect(await clearOfAll(page)).toBe(true);
       expect(f.x + f.width).toBeLessThanOrEqual(viewport.width);
       expect(f.y + f.height).toBeLessThanOrEqual(viewport.height);
@@ -118,6 +120,36 @@ describe("floating 🧪 study toolkit", () => {
     await page.waitForTimeout(450);
     expect((await fab(page).boundingBox()).x).toBeLessThan(195);
     expect(await page.locator(".toolkit.open").count()).toBe(0);
+    await ctx.close();
+  }, 120_000);
+
+  it("never covers the stem, rationale, or chart after a drag or a snap", async () => {
+    const { ctx, page } = await open({ width: 390, height: 844 });
+    const reading = async () => {
+      const boxes = [];
+      for (const handle of await page.locator(".stem, .rationale, .chart").all()) {
+        const box = await handle.boundingBox();
+        if (box) boxes.push(box);
+      }
+      return boxes;
+    };
+    const clearOfReading = async () => {
+      const button = await fab(page).boundingBox();
+      for (const region of await reading()) if (overlaps(button, region)) return false;
+      return true;
+    };
+    expect(await clearOfReading()).toBe(true);
+    for (const selector of [".stem", ".rationale", ".chart"]) {
+      const region = await page.locator(selector).boundingBox();
+      await mouseDrag(page, { x: region.x + Math.min(region.width - 4, 40), y: region.y + region.height / 2 });
+      expect(await clearOfReading(), selector).toBe(true);
+    }
+    await fab(page).focus();
+    for (const key of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
+      await page.keyboard.press(key);
+      await page.waitForTimeout(250);
+      expect(await clearOfReading(), key).toBe(true);
+    }
     await ctx.close();
   }, 120_000);
 

@@ -18,12 +18,15 @@ export function resetLabFab() {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(LABFAB_RESET_EVENT));
 }
 
-/* Everything a tap can land on. Header and tab bar are kept out through
-   the usable band instead. */
+/* Controls, and the reading surfaces a student needs to answer: the stem,
+   the choices, the rationale, an exhibit, the case chart, and any other
+   visible text. Header and tab bar are kept out through the usable band. */
 const TARGETS = [
   "button", "a[href]", "input", "select", "textarea", "summary", "label",
   "[role=radio]", "[role=checkbox]", "[role=button]", "[role=tab]", "[tabindex]:not([tabindex='-1'])",
   ".flashcard", ".grades", ".q-nav-wrap", ".bigbtn", ".fchip",
+  ".stem", ".rationale", ".exhibit", ".exhibit-body", ".chart", ".case-chart", ".note", ".fc-text",
+  "p", "li", "td", "th", "h1", "h2", "h3",
 ].join(",");
 
 function storage() {

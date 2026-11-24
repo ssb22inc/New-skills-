@@ -2187,6 +2187,7 @@ export function CaseStudy({ record, provider = "claude", cases = CASE_STUDIES, o
             <span aria-hidden="true">📋</span> Chart <span className="case-chart-sum">{chartSummary}</span>
             <span aria-hidden="true">{chartOpen ? "▴" : "▾"}</span>
           </button>
+          <ReportIssue key={`rc${caseKey}`} caseId={cs.dbId ?? null} label="case study" />
           <div className="case-chart-body">{chartBody}</div>
         </div>
       ) : (
@@ -3139,6 +3140,7 @@ export function Style() {
       .stage-label{text-align:center;margin-bottom:0}
       .rationale.tutor{border-left:4px solid var(--teal)}
       .tutor-btn{margin-bottom:8px;display:block}
+      .case-chart-bar > .tutor-btn{margin:0 14px 12px}
       /* Read aloud: a big, obvious Listen button, then small chips for stop,
          speed and auto-read. The part being read gets a soft teal wash
          (follow-along), never a new color. */

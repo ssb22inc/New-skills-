@@ -137,6 +137,11 @@ describe("case-study steps", () => {
     await visible(page.getByText("CASESTEP0"));
     await visible(page.getByText(/AI-assisted case that passed automated quality checks/));
     await visible(page.getByText(/Verify it against your course materials/));
+    await visible(page.getByRole("button", { name: "Report a problem with this case study" }));
+    await choice("First action").click();
+    await page.getByRole("button", { name: "Check answer" }).click();
+    await visible(page.getByText(/CASERATIONALE0/));
+    await visible(page.getByRole("button", { name: "Report a problem with this case study" }));
   }, 60_000);
 
   it("skips a step without scoring it, and Back shows an answer read-only", async () => {

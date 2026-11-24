@@ -22,11 +22,13 @@ function Screen() {
       <main className="body">
         <FocusBar open={focusOpen} setOpen={setFocusOpen} groups={[{ label: "Category", options: [["pharm", "Pharmacology"]], selected: [], onToggle() {} }]} />
         <section className="card stack study-col">
-          <p className="stem">Which client should the nurse see first? STEM-ONE</p>
+          <p className="stem">Which client should the nurse see first? STEM-ONE The finding that decides priority is written out to the end of this line.</p>
           {OPTIONS.map((o, i) => (
             <button key={o} type="button" role="radio" aria-checked={pick === i} className={pick === i ? "opt picked" : "opt"} onClick={() => setPick(i)}>{o}</button>
           ))}
           <button type="button" className="btn" disabled={pick == null}>Check answer</button>
+          <p className="rationale"><strong>Rationale.</strong> Beta choice treats the immediate risk and is the priority.</p>
+          <div className="chart mono"><span className="chip">HR 88/min</span><span className="chip lab">K 4.0 mEq/L</span></div>
           <QuestionNav canBack={false} skipped={0} onBack={() => {}} onSkip={() => {}} onNext={() => {}} onReview={() => {}} nextPrimary={false} />
         </section>
       </main>
