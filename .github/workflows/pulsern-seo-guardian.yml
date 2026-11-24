@@ -131,13 +131,18 @@ jobs:
           fi
       - name: Adversarial model review (advisory, owner decision 2026-10-29)
         id: adversary
-        if: always() && steps.pages.outputs.changed == 'true'
+        if: always()
         continue-on-error: true
-        # The review's findings go into the log too, so a FAIL can be read
-        # without downloading the evidence artifact.
+        # The model is called only when a public marketing page changed
+        # (owner order 2026-11-24). Every run still leaves a complete report.
         run: |
           set +e
-          npm run seo:adversary; rc=$?
+          if [ "${{ steps.pages.outputs.changed }}" = "true" ] || [ "${{ steps.pages.outcome }}" != "success" ]; then
+            npm run seo:adversary; rc=$?
+          else
+            node ops/seo-page-change.mjs --skip-report reports/seo/adversary.json reports/seo/adversary.md
+            rc=$?
+          fi
           [ -f reports/seo/adversary.md ] && cat reports/seo/adversary.md
           exit $rc
       - name: Bind evidence to commit
@@ -168,16 +173,8 @@ jobs:
           test "${{ steps.commercial.outcome }}" = "success"
           test "${{ steps.exam_rules.outcome }}" = "success"
           test "${{ steps.accessibility.outcome }}" = "success"
-          # The model review is advisory (pulsern/CLAUDE.md). It runs only when
-          # a public marketing page changed. When it runs, a missing or
-          # malformed report fails this gate; a completed FAIL is a warning.
-          # Every check above stays required.
-          if [ "${{ steps.pages.outcome }}" != "success" ]; then
-            echo "Could not tell whether a public marketing page changed"
-            exit 1
-          fi
-          if [ "${{ steps.pages.outputs.changed }}" = "true" ]; then
-            npm run seo:enforce -- --advisory
-          else
-            echo "adversarial review skipped: no public marketing page changed"
-          fi
+          # The model review is advisory (pulsern/CLAUDE.md). The model is
+          # called only when a public marketing page changed. A report is
+          # still required: a missing or malformed report fails this gate,
+          # and a completed FAIL is a warning. Every check above stays required.
+          npm run seo:enforce -- --advisory

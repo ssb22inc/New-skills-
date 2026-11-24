@@ -494,6 +494,10 @@ FORMS YOU WILL SEE
 /* DeepSeek often wraps the verdict in a fence, or writes a thought before
    the object. The object is the review. Anything that is not that object
    is a failure, not a pass. */
+function looksLikeReview(obj) {
+  return !!obj && typeof obj === "object" && !Array.isArray(obj) && ("assessment" in obj || "findings" in obj);
+}
+
 export function parseReviewText(text) {
   if (typeof text !== "string" || !text.trim()) throw new Error("review result is empty");
   const stripped = text.replace(/^\uFEFF/, "").trim();
@@ -502,13 +506,18 @@ export function parseReviewText(text) {
   for (const m of stripped.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) candidates.push(m[1].trim());
   candidates.push(...jsonObjectSpans(stripped));
   const verdicts = new Map();
+  let invalid = null;
   for (const candidate of candidates) {
     if (!candidate) continue;
-    try {
-      const parsed = validateResult(JSON.parse(candidate));
-      verdicts.set(JSON.stringify(parsed), parsed);
-    } catch { /* a thought, a fence, or prose is not a second verdict */ }
+    let obj;
+    try { obj = JSON.parse(candidate); } catch { continue; }
+    if (!looksLikeReview(obj)) continue;
+    const key = JSON.stringify(obj);
+    if (verdicts.has(key)) continue;
+    try { verdicts.set(key, validateResult(obj)); }
+    catch (e) { invalid = e; }
   }
+  if (invalid) throw new Error(invalid.message);
   if (verdicts.size === 0) throw new Error("review result is not JSON");
   if (verdicts.size > 1) throw new Error("review result contains more than one verdict");
   return [...verdicts.values()][0];
