@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "capturedAt": "2026-11-24T07:42:11.218Z",
-  "sourceCommitSha": "3307cf268b25513b031093d0ecab984530fedad9",
+  "capturedAt": "2026-11-24T07:51:52.044Z",
+  "sourceCommitSha": "74619ed1b537ec484cb8d3bccd124c78dda131c0",
   "renderer": "PulseRN App.jsx deterministic built-in-content harness",
   "browser": "151.0.7922.34",
   "containsLearnerData": false,
-  "sourceSetSha256": "6782f26259cc01addb6e028064620838fa3fc55d1f19e0c5d4e5b2f79a6746d8",
+  "sourceSetSha256": "c59866f27039a3816b271eda994d331c5860bf1d8bd5f33b35adacc9e9c9fcda",
   "sourceFiles": {
     "src/App.jsx": "292f7de4fe87a42fb7d51801fd2e47f69a0a826cb18cf560da2e43e3358ec833",
     "src/ability-engine.js": "a4a3c018359cf2128407cf31c3059f4bd2fcde84138aacb68c7614d963e3f462",
@@ -89,8 +89,8 @@
   "images": [
     {
       "file": "pulsern-adaptive-practice.png",
-      "sha256": "0b671465d892e72182607a26882cbc69934ce3cfc3c7344d5daad8bf58421499",
-      "bytes": 65871,
+      "sha256": "4cb0df82609796b911ff6ee86727a31b3e7cd98efebd232458c9a11865ea714f",
+      "bytes": 66570,
       "width": 720,
       "height": 620,
       "alt": "PulseRN adaptive NCLEX practice screen with one question, four answer choices, and the control to check the answer",

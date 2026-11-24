@@ -42,7 +42,7 @@ export default function GuestTrial({ onSignUp, onSignIn }) {
     const r = guestAnswer(guest, q, correct, { ms: opts.ms ?? Infinity, today: todayStr() });
     if (!r.accepted) return r.res;
     const newBest = r.res.run >= 3 && r.res.run > guest.bestRun;
-    const out = { ...r.res, combo: correct && r.res.reason !== "too-fast" ? comboFor(r.res.run) : null, newBest };
+    const out = { ...r.res, combo: r.res.run > (guest.run || 0) ? comboFor(r.res.run) : null, newBest };
     setGuest({
       ...r.guest,
       ability: updateAbility(guest.ability ?? emptyAbility(CATS), q, correct, {}).ability,

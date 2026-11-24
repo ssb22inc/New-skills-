@@ -3,7 +3,7 @@
    covers protect missed days; milestones fire once. */
 import { describe, it, expect } from "vitest";
 import {
-  answerXp, minThinkMs, xpNote, comboFor, bumpDay, shiftStatus, weekRounds, maybeGrantCover, advanceStreak, streakDayCounted,
+  answerXp, minThinkMs, answerCountsForRun, xpNote, comboFor, bumpDay, reverseCardDay, shiftStatus, weekRounds, maybeGrantCover, advanceStreak, streakDayCounted,
   categoryMastery, badgeBoard, careerStatus, legacyRankIndex, detectMoments, markMomentsSeen, sessionRecap,
   emptyRewards, migrateRewards, daysBetween, shiftDay, mondayOf, TIERS, CAREER, REVIEW_FIX_BONUS, MAX_COVERS, TEST_PLAN,
 } from "../src/rewards.js";
@@ -41,6 +41,13 @@ describe("answer XP", () => {
   it("pays nothing for repeating a question already answered correctly", () => {
     const log = [{ id: 7, cat: "Pharmacology", diff: 2, correct: true }];
     expect(answerXp({ q, correct: true, ms: 9000, log })).toMatchObject({ xp: 0, reason: "repeat" });
+  });
+  it("a rapid repeat still fails the reading-time floor for a run", () => {
+    const log = [{ id: 7, cat: "Pharmacology", diff: 2, correct: true }];
+    const ms = minThinkMs(q) - 1;
+    expect(answerXp({ q, correct: true, ms, log }).reason).toBe("repeat");
+    expect(answerCountsForRun({ correct: true, q, ms })).toBe(false);
+    expect(answerCountsForRun({ correct: true, q, ms: minThinkMs(q) })).toBe(true);
   });
   it("adds a bonus for correcting an earlier miss", () => {
     const log = [{ id: 7, cat: "Pharmacology", diff: 2, correct: false }];
@@ -225,5 +232,22 @@ describe("persisted shape", () => {
   });
   it("sound is off by default", () => {
     expect(emptyRewards().prefs.sound).toBe(false);
+  });
+  it("drops a rank or badge marker outside the real ladder", () => {
+    const m = migrateRewards({ rankHigh: 99, badgesSeen: { Pharmacology: 5, Safety: 1, nope: "x" } });
+    expect(m.rankHigh).toBeNull();
+    expect(m.badgesSeen).toEqual({ Safety: 1 });
+    expect(() => badgeBoard([], ["Pharmacology"], { Pharmacology: 5 })).not.toThrow();
+    expect(badgeBoard([], ["Pharmacology"], { Pharmacology: 5 })[0].earnedName).toBe(TIERS[TIERS.length - 1].name);
+    const career = careerStatus({ xp: 5000, log: [], cats: [], rankHigh: 99 });
+    expect(career.rank).toBe(CAREER[0]);
+    expect(career.rank.name).toBe("Student Nurse");
+  });
+  it("undo after midnight reverses the day the card was graded", () => {
+    const graded = bumpDay(emptyRewards(), "2026-11-23", { cards: 1, xp: 5 });
+    const undone = reverseCardDay(graded, "2026-11-23", 5);
+    expect(undone.days["2026-11-23"]).toMatchObject({ cards: 0, xp: 0 });
+    expect(undone.days["2026-11-24"]).toBeUndefined();
+    expect(reverseCardDay(graded, "2026-11-24", 5)).toBe(graded);
   });
 });

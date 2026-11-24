@@ -29,9 +29,9 @@ const QUESTIONS = [
   {
     id: 3, cat: "Pharmacology", diff: 2, type: "mc",
     stem: "A client on warfarin has an INR of 4.8 and no active bleeding. Which prescription should the nurse anticipate?",
-    options: ["Protamine sulfate IV", "An increased warfarin dose", "Vitamin K and holding the next warfarin dose", "A unit of packed red blood cells"],
+    options: ["Protamine sulfate IV", "An increased warfarin dose", "Hold the next warfarin dose and recheck the INR", "A unit of packed red blood cells"],
     answer: 2,
-    rationale: "The usual therapeutic INR on warfarin is 2–3. At 4.8 the client is over-anticoagulated, so the antidote vitamin K is anticipated along with holding warfarin. Protamine sulfate reverses heparin, not warfarin. Increasing the dose would worsen bleeding risk, and PRBCs are not indicated without hemorrhage or anemia.",
+    rationale: "The usual therapeutic INR on warfarin is 2–3. An INR of 4.8 without bleeding is managed by holding warfarin and rechecking the INR; routine vitamin K is not indicated at this level. Protamine sulfate reverses heparin, not warfarin. Increasing the dose would worsen bleeding risk, and packed red blood cells are not indicated without hemorrhage or anemia.",
   },
   {
     id: 4, cat: "Pharmacology", diff: 1, type: "mc",

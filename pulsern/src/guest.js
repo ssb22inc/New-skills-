@@ -12,7 +12,7 @@
    existing per-user progress blob (no new table, no migration). Merged log
    ids get a "guest-" prefix so a built-in id can never collide with a
    shared-bank id of the same number. */
-import { answerXp, advanceStreak, bumpDay, daysBetween } from "./rewards.js";
+import { answerXp, answerCountsForRun, advanceStreak, bumpDay, daysBetween } from "./rewards.js";
 
 export const GUEST_KEY = "pulsern-guest-v1";
 export const GUEST_LIMIT = 5;
@@ -61,6 +61,14 @@ export function handoffAfterSave({ ok, pending }) {
   return ok ? "saved" : "error";
 }
 
+/* A missing session is not a successful write. Callers must keep the device
+   copy and must not tell the student the answers are in the account. */
+export function persistDecision(session, expectedUserId) {
+  if (!session?.user?.id) return "signed-out";
+  if (expectedUserId && session.user.id !== expectedUserId) return "account-changed";
+  return "write";
+}
+
 /* One account, one write at a time, newest payload wins. A save that was
    scheduled earlier never runs once a later one exists, so it cannot land
    after the merged trial and erase those answers. */
@@ -102,7 +110,7 @@ export const guestRemaining = (guest) => Math.max(0, GUEST_LIMIT - (guest?.log?.
 export function guestAnswer(guest, q, correct, { ms = Infinity, today } = {}) {
   if (guestRemaining(guest) === 0) return { guest, res: { xp: 0, reason: "limit" }, accepted: false };
   const res = answerXp({ q, correct, ms, log: guest.log });
-  const run = correct && res.reason !== "too-fast" ? guest.run + 1 : 0;
+  const run = answerCountsForRun({ correct, q, ms }) ? guest.run + 1 : 0;
   const words = String(q?.stem ?? "").trim().split(/\s+/).filter(Boolean).length;
   const studyDay = today ?? guest.day;
   const entry = {

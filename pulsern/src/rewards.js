@@ -104,8 +104,8 @@ export function migrateRewards(r) {
     coverDays: Array.isArray(r.coverDays) ? r.coverDays.filter((x) => typeof x === "string") : [],
     best: { ...base.best, ...Object.fromEntries(Object.entries(r.best ?? {}).filter(([, v]) => Number.isFinite(v))) },
     milestones: Array.isArray(r.milestones) ? r.milestones.filter(Number.isFinite) : [],
-    rankHigh: Number.isInteger(r.rankHigh) ? r.rankHigh : null,
-    badgesSeen: r.badgesSeen && typeof r.badgesSeen === "object" ? { ...r.badgesSeen } : {},
+    rankHigh: Number.isInteger(r.rankHigh) && r.rankHigh >= 0 && r.rankHigh < CAREER.length ? r.rankHigh : null,
+    badgesSeen: Object.fromEntries(Object.entries(r.badgesSeen && typeof r.badgesSeen === "object" ? r.badgesSeen : {}).filter(([, tier]) => Number.isInteger(tier) && tier >= 0 && tier < TIERS.length)),
     prefs: { ...base.prefs, ...(r.prefs && typeof r.prefs === "object" ? r.prefs : {}) },
   };
 }
@@ -117,6 +117,16 @@ export function migrateRewards(r) {
 export function minThinkMs(q) {
   const words = String(q?.stem ?? "").trim().split(/\s+/).filter(Boolean).length;
   return Math.max(2500, Math.min(6000, 1500 + 60 * words));
+}
+
+/* Time is its own gate. A repeat, a skip, or any other XP rejection still
+   has to clear this floor before it can build a correct run. */
+export function consideredAnswer(q, ms = Infinity) {
+  return !(Number.isFinite(ms) && ms < minThinkMs(q));
+}
+
+export function answerCountsForRun({ correct, q, ms = Infinity }) {
+  return !!correct && consideredAnswer(q, ms);
 }
 
 /* log = the answer log BEFORE this answer. */
@@ -196,6 +206,17 @@ export function bumpDay(rewards, day, delta) {
   for (const k of Object.keys(days)) if (k < cutoff) delete days[k];
   const best = { ...rewards.best, dayQ: Math.max(rewards.best.dayQ, next.q) };
   return { ...rewards, days, best };
+}
+
+/* Undo a card on the local day it was graded. Looking at "today" instead
+   leaves yesterday's cards and XP in place once midnight has passed. */
+export function reverseCardDay(rewards, day, cardXpGain = 0) {
+  const d = rewards?.days?.[day];
+  if (!d) return rewards;
+  const cards = d.cards ?? 0;
+  const xpCut = Math.min(d.xp ?? 0, Math.max(0, cardXpGain || 0));
+  if (cards <= 0 && xpCut <= 0) return rewards;
+  return bumpDay(rewards, day, { cards: cards > 0 ? -1 : 0, xp: -xpCut });
 }
 
 /* ---------------- Today's shift ---------------- */
@@ -331,7 +352,7 @@ export function categoryMastery(log, cat) {
 export function badgeBoard(log, cats, seen = {}) {
   return cats.map((cat) => {
     const m = categoryMastery(log, cat);
-    const earned = Math.max(m.tier, Number.isInteger(seen[cat]) ? seen[cat] : 0);
+    const earned = Math.min(TIERS.length - 1, Math.max(0, Math.max(m.tier, Number.isInteger(seen[cat]) ? seen[cat] : 0)));
     return { ...m, earned, earnedName: TIERS[earned].name, slipping: earned > m.tier, plan: TEST_PLAN[cat] ?? null };
   });
 }
@@ -387,7 +408,8 @@ export function careerStatus({ xp = 0, log = [], cats = [], rankHigh = null, see
   for (let i = 1; i < CAREER.length; i++) {
     if (rankReqs(CAREER[i], { xp, log, board }).every((r) => r.met)) earned = i; else break;
   }
-  const held = Math.max(earned, Number.isInteger(rankHigh) ? rankHigh : 0);
+  const high = Number.isInteger(rankHigh) && rankHigh >= 0 && rankHigh < CAREER.length ? rankHigh : 0;
+  const held = Math.max(earned, high);
   const nextRank = CAREER[held + 1] ?? null;
   const reqs = nextRank ? rankReqs(nextRank, { xp, log, board }) : [];
   const progress = reqs.length

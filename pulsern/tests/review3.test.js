@@ -26,6 +26,11 @@ describe("Codex P2 wiring", () => {
     expect(save).toContain("store.set(STORE_KEY, payload, userId)");
     expect(save).toContain("guestClearOnSave(pendingAtStart)");
     expect(save).toContain("handoffAfterSave");
+    expect(save).toContain('res.error?.code === "signed-out"');
+    expect(app).toContain("persistDecision(session, expectedUserId)");
+    expect(app).toContain("undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr() }");
+    expect(app).toContain("onUngrade?.(rec.xp, rec.day)");
+    expect(app).toContain("reverseCardDay(r, credited, cardXpGain)");
     expect(app).toContain("createSaveQueue");
     expect(save).toContain("saveQueue.current.enqueue");
     expect(app).toMatch(/useState\(\(\) => \(\{ \.\.\.emptyRewards\(\), rankHigh: 0 \}\)\)/);

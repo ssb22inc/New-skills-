@@ -33,9 +33,9 @@ export const QUESTIONS = [
   {
     id: 3, cat: "Pharmacology", diff: 2, type: "mc",
     stem: "A client on warfarin has an INR of 4.8 and no active bleeding. Which prescription should the nurse anticipate?",
-    options: ["Protamine sulfate IV", "An increased warfarin dose", "Vitamin K and holding the next warfarin dose", "A unit of packed red blood cells"],
+    options: ["Protamine sulfate IV", "An increased warfarin dose", "Hold the next warfarin dose and recheck the INR", "A unit of packed red blood cells"],
     answer: 2,
-    rationale: "The usual therapeutic INR on warfarin is 2–3. At 4.8 the client is over-anticoagulated, so the antidote vitamin K is anticipated along with holding warfarin. Protamine sulfate reverses heparin, not warfarin. Increasing the dose would worsen bleeding risk, and PRBCs are not indicated without hemorrhage or anemia.",
+    rationale: "The usual therapeutic INR on warfarin is 2–3. An INR of 4.8 without bleeding is managed by holding warfarin and rechecking the INR; routine vitamin K is not indicated at this level. Protamine sulfate reverses heparin, not warfarin. Increasing the dose would worsen bleeding risk, and packed red blood cells are not indicated without hemorrhage or anemia.",
   },
   {
     id: 4, cat: "Pharmacology", diff: 1, type: "mc",
@@ -307,7 +307,7 @@ import { useSessionReport } from "./session-report.js";
 import { tourMark, tourStepAt, tourStepsFor } from "./tour.js";
 import { LeaveDialog, Tour, useTourDismissScroll, useTourPlacement } from "./tour.jsx";
 import {
-  emptyRewards, answerXp, xpNote, comboFor, cardXp, questionsOn, caseStepIds, bumpDay, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
+  emptyRewards, answerXp, answerCountsForRun, xpNote, comboFor, cardXp, questionsOn, caseStepIds, bumpDay, reverseCardDay, advanceStreak, streakDayCounted, shiftStatus, weekRounds, maybeGrantCover,
   careerStatus, badgeBoard, detectMoments, markMomentsSeen, sessionRecap, MAX_COVERS,
 } from "./rewards.js";
 import { motionAllowed, rewardBeat } from "./effects.js";
@@ -315,7 +315,7 @@ import {
   RewardsStyle, StreakGlyph, EcgBeat, ComboChip, MomentSheet, streakMoment, ShiftCard, CareerCard,
   BadgeGrid, RoundsCard, BestsCard, SessionRecap, EffectsCard, comboSpeech, useAnnouncer,
 } from "./rewards-ui.jsx";
-import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue } from "./guest.js";
+import { loadGuest, mergeGuestIntoBlob, clearGuest, guestSummary, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision } from "./guest.js";
 import { signOutAndForgetTrial as signOut } from "./sign-out.js";
 import { readProgress, parseProgress, clearLegacyProgressBackup, guestHandoff } from "./progress-load.js";
 
@@ -347,10 +347,10 @@ const store = {
   },
   async set(key, value, expectedUserId) {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    if (expectedUserId && session.user.id !== expectedUserId) {
-      const err = new Error("account-changed");
-      err.code = "account-changed";
+    const decision = persistDecision(session, expectedUserId);
+    if (decision !== "write") {
+      const err = new Error(decision);
+      err.code = decision;
       throw err;
     }
     const { error } = await supabase.from("progress").upsert({
@@ -507,6 +507,7 @@ export default function App() {
   const saveQueue = useRef(null);
   const accountId = useRef(null);
   if (!saveQueue.current) saveQueue.current = createSaveQueue();
+  useEffect(() => () => { saveQueue.current?.invalidate(); }, []);
   const signOutAndForgetTrial = () => {
     if (pendingHandoff.current && typeof window.confirm === "function" && !window.confirm("Your trial answers are not in this account yet. Sign out anyway? They will be removed from this device.")) return;
     saveQueue.current?.invalidate();
@@ -617,6 +618,10 @@ export default function App() {
     const userId = accountId.current;
     saveQueue.current.enqueue(seq, () => store.set(STORE_KEY, payload, userId)).then((res) => {
       if (!res || res.stale || res.error?.code === "account-changed") return;
+      if (res.error?.code === "signed-out") {
+        if (pendingAtStart) setGuestSaveError(true);
+        return;
+      }
       const outcome = handoffAfterSave({ ok: res.ok, pending: pendingAtStart });
       if (!res.ok) {
         console.error("Save failed", res.error);
@@ -928,8 +933,8 @@ export default function App() {
       }).catch(() => {});
     }
     if (res.xp) setXp((x) => x + res.xp);
-    /* A too-fast tap never builds a run, even when it happens to be right. */
-    const counts = correct && res.reason !== "too-fast";
+    /* A too-fast tap never builds a run, even when the XP reason is "repeat". */
+    const counts = answerCountsForRun({ correct, q, ms: opts.ms ?? Infinity });
     const nextRun = counts ? run + 1 : 0;
     const newBest = nextRun >= 3 && nextRun > bestRun;
     setRun(nextRun);
@@ -945,14 +950,10 @@ export default function App() {
      XP (so the weekly view matches the header). Undo reverses all of it,
      including the day count touchDay added, so grade → undo → grade counts once. */
   const noteCard = (cardXpGain = 0) => setRewards((r) => bumpDay(r, todayStr(), { cards: 1, xp: cardXpGain || 0 }));
-  const unnoteCard = (cardXpGain = 0) => {
-    const t = todayStr();
-    setRewards((r) => {
-      const d = r.days[t];
-      if (!d || (d.cards ?? 0) <= 0) return r;
-      return bumpDay(r, t, { cards: -1, xp: -Math.min(d.xp ?? 0, cardXpGain || 0) });
-    });
-    setDaily((d) => (d.day === t && d.answered > 0 ? { ...d, answered: d.answered - 1 } : d));
+  const unnoteCard = (cardXpGain = 0, day) => {
+    const credited = day || todayStr();
+    setRewards((r) => reverseCardDay(r, credited, cardXpGain));
+    setDaily((d) => (d.day === credited && d.answered > 0 ? { ...d, answered: d.answered - 1 } : d));
   };
   const setPref = (k, v) => setRewards((r) => ({ ...r, prefs: { ...r.prefs, [k]: v } }));
   const motion = motionAllowed(rewards.prefs);
@@ -2777,7 +2778,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
     // Undo refunds that charge; grading the card again counts it once.
     if (!srsMap[id] && !countedNew.current.has(id)) { countedNew.current.add(id); onNewCard?.(id); }
     const xpGain = cardXp(g, Date.now() - flipAt.current);
-    undoLog.current[id] = { prev: srsMap[id], xp: xpGain };
+    undoLog.current[id] = { prev: srsMap[id], xp: xpGain, day: todayStr() };
     setSrsMap((m) => ({ ...m, [id]: nextSchedule(m[id], g) }));
     if (xpGain) addXp(xpGain);
     onGrade?.(xpGain);
@@ -2800,7 +2801,7 @@ export function Flashcards({ addXp, onGrade, onUngrade, cards, srsMap, setSrsMap
         return n;
       });
       if (rec.xp) addXp(-rec.xp);
-      onUngrade?.(rec.xp);
+      onUngrade?.(rec.xp, rec.day);
       delete undoLog.current[id];
     }
     flipAt.current = Date.now(); // the answer is shown again: the 1.5 s floor restarts (REVIEW-3 N10)

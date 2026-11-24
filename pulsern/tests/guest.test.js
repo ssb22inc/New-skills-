@@ -3,8 +3,9 @@
    collision-free handoff into the account blob. */
 import { describe, it, expect } from "vitest";
 import {
-  GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, guestFresh, guestSummary,
+  GUEST_KEY, GUEST_LIMIT, guestPool, emptyGuest, guestAnswer, guestRemaining, mergeGuestIntoBlob, loadGuest, saveGuest, clearGuest, guestClearOnSave, handoffAfterSave, createSaveQueue, persistDecision, guestFresh, guestSummary,
 } from "../src/guest.js";
+import { QUESTIONS } from "../src/App.jsx";
 import { migrateBlob } from "../src/state.js";
 import { emptyAbility, updateAbility } from "../src/ability-engine.js";
 import { authModeFromUrl } from "../src/app-routing.js";
@@ -36,6 +37,12 @@ describe("guest content boundary", () => {
 });
 
 describe("guest XP uses the same rules as an account", () => {
+  it("does not teach routine vitamin K for an INR under 10 without bleeding", () => {
+    const item = QUESTIONS.find((q) => q.id === 3);
+    expect(guestPool(QUESTIONS).some((q) => q.id === 3)).toBe(true);
+    expect(item.options[item.answer]).toBe("Hold the next warfarin dose and recheck the INR");
+    expect(item.rationale).toMatch(/routine vitamin K is not indicated/);
+  });
   it("a too-fast tap earns no XP and does not build a run", () => {
     const r = guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 300, today: TODAY });
     expect(r.res).toMatchObject({ xp: 0, reason: "too-fast", run: 0 });
@@ -55,6 +62,19 @@ describe("guest XP uses the same rules as an account", () => {
     pending = true;
     expect(guestClearOnSave(earlierSave)).toBe(false);
     expect(guestClearOnSave(pending)).toBe(true);
+  });
+  it("a rapid repeat of a known answer does not build a run", () => {
+    const first = guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 9000, today: TODAY });
+    const again = guestAnswer(first.guest, mk(1), true, { ms: 100, today: TODAY });
+    expect(again.res).toMatchObject({ xp: 0, reason: "repeat", run: 0 });
+    expect(again.guest.bestRun).toBe(1);
+    expect(again.guest.run).toBe(0);
+  });
+  it("a missing session is not a successful save", () => {
+    expect(persistDecision(null, "user-1")).toBe("signed-out");
+    expect(persistDecision({ user: {} }, "user-1")).toBe("signed-out");
+    expect(persistDecision({ user: { id: "user-2" } }, "user-1")).toBe("account-changed");
+    expect(persistDecision({ user: { id: "user-1" } }, "user-1")).toBe("write");
   });
   it("a considered correct answer earns 10 × difficulty", () => {
     const r = guestAnswer(emptyGuest(NOW, TODAY), mk(1), true, { ms: 9000, today: TODAY });
