@@ -83,6 +83,28 @@ describe("a parked snapshot uses the device conflict merge", () => {
     expect(foldPendingProgress(folded, [pending]).srsMap.c1.due).toBe("2026-12-01");
   });
 
+  it("keeps a newer card when an older snapshot grades a different card", () => {
+    const stored = {
+      log: [],
+      xp: 10,
+      ability: emptyAbility(ABILITY_CATS),
+      rewards: emptyRewards(),
+      streak: { count: 1, lastDay: "2026-11-24", shield: false },
+      srsMap: {
+        c1: { interval: 1, due: "2026-11-24", seen: "2026-11-20" },
+        c2: { interval: 7, due: "2026-12-01", seen: "2026-11-25", reviewedAt: 3000 },
+      },
+    };
+    const pending = {
+      log: [],
+      xp: 15,
+      srsMap: { c1: { interval: 3, due: "2026-11-27", seen: "2026-11-24", reviewedAt: 2000 } },
+    };
+    const folded = foldPendingProgress(stored, [pending]);
+    expect(folded.srsMap.c1).toMatchObject({ interval: 3, seen: "2026-11-24" });
+    expect(folded.srsMap.c2).toMatchObject({ interval: 7, due: "2026-12-01" });
+  });
+
   it("keeps a second identical undated miss in a parked snapshot", () => {
     const miss = { id: 9, cat: "Pharmacology", diff: 1, correct: false };
     const ability = updateAbility(emptyAbility(ABILITY_CATS), { id: 9, cat: "Pharmacology", diff: 1 }, false).ability;

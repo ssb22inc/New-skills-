@@ -477,6 +477,21 @@ describe("a revision conflict keeps both devices' answers", () => {
     expect(merged.ability.Pharmacology.n).toBe(inOrder.ability.Pharmacology.n);
   });
 
+  it("keeps the older client's calibrated ability when the answer has no rating", () => {
+    const start = emptyAbility(ABILITY_CATS);
+    const calibrated = updateAbility(start, { id: 9, cat: "Pharmacology", diff: 1, source: "bank" }, true, { 9: { rating: 1700 } }).ability;
+    const seeded = updateAbility(start, { id: 9, cat: "Pharmacology", diff: 1 }, true).ability;
+    const server = { log: [{ id: 9, cat: "Pharmacology", diff: 1, correct: true }], xp: 10, ability: calibrated, rewards: emptyRewards() };
+    const localAnswer = { id: 2, key: "bank:2", source: "bank", cat: "Management of Care", diff: 1, correct: true, attempt: "live", at: 2, seq: 1, day: "2026-11-24", ms: 9000, words: 8, rating: 1300 };
+    const local = { log: [localAnswer], xp: 10, ability: updateAbility(start, { id: 2, key: "bank:2", source: "bank", cat: "Management of Care", diff: 1 }, true, { 2: { rating: 1300 } }).ability, rewards: emptyRewards() };
+    const merged = reconcileProgress(server, local, {});
+    expect(merged.log.map((row) => row.id)).toEqual([9, 2]);
+    expect(merged.ability.Pharmacology.n).toBe(1);
+    expect(merged.ability.Pharmacology.theta).toBeCloseTo(calibrated.Pharmacology.theta, 4);
+    expect(Math.abs(merged.ability.Pharmacology.theta - seeded.Pharmacology.theta)).toBeGreaterThan(1);
+    expect(merged.ability["Management of Care"].n).toBe(1);
+  });
+
   it("does not score a named legacy miss as a second answer", () => {
     const legacy = { id: 4, cat: "Pharmacology", diff: 1, correct: false };
     const named = { ...legacy, source: "bank", key: "bank:4" };

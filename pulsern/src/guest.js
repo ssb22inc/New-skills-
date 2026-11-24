@@ -469,6 +469,36 @@ function savedItemRating(row) {
   return Number.isFinite(rating) && row?.source !== "builtin" && row?.source !== "case";
 }
 
+/* An older snapshot lists the cards it knew. A card only the newer
+   save has was not deleted. */
+function keepUnmentionedCards(currentMap, snapshotMap, reconciledMap) {
+  if (!snapshotMap || typeof snapshotMap !== "object") return currentMap ?? reconciledMap ?? {};
+  const out = { ...(reconciledMap ?? {}) };
+  for (const [id, entry] of Object.entries(currentMap ?? {})) {
+    if (!Object.prototype.hasOwnProperty.call(snapshotMap, id)) out[id] = entry;
+  }
+  return out;
+}
+
+/* A legacy row often has no item rating. If one device already stored
+   the ability for exactly those answers, keep that theta instead of
+   replaying the difficulty seed. */
+function adoptRecordedAbility(replayed, server, local, log) {
+  const ability = { ...(replayed ?? {}) };
+  const cats = new Set([
+    ...Object.keys(ability),
+    ...Object.keys(server?.ability ?? {}),
+    ...Object.keys(local?.ability ?? {}),
+  ]);
+  for (const cat of cats) {
+    const rows = (log ?? []).filter((row) => row?.cat === cat);
+    if (!rows.length || rows.some(savedItemRating)) continue;
+    const recorded = [server?.ability?.[cat], local?.ability?.[cat]].find((entry) => entry && Number(entry.n) === rows.length && Number.isFinite(Number(entry.theta)));
+    if (recorded) ability[cat] = { theta: Number(recorded.theta), n: Number(recorded.n) };
+  }
+  return ability;
+}
+
 function answerInput(row) {
   const words = Number(row?.words);
   const stem = Number.isFinite(words) && words > 0 ? Array.from({ length: words }, () => "w").join(" ") : (row?.stem || "");
@@ -550,9 +580,9 @@ export function foldPendingProgress(stored, snapshots) {
       rewards: snapshot.rewards == null ? current.rewards : (reconciled.rewards ?? current.rewards),
       streak: current.streak?.shield === false && streak ? { ...streak, shield: false } : streak,
       daily: snapshot.daily == null ? current.daily : (reconciled.daily ?? current.daily),
-      srsMap: reconciled.srsMap ?? current.srsMap,
+      srsMap: keepUnmentionedCards(current.srsMap, snapshot.srsMap, reconciled.srsMap),
       examResults: reconciled.examResults ?? current.examResults,
-      missSchedule: snapshot.missSchedule == null ? current.missSchedule : (reconciled.missSchedule ?? current.missSchedule),
+      missSchedule: snapshot.missSchedule == null ? current.missSchedule : keepUnmentionedCards(current.missSchedule, snapshot.missSchedule, reconciled.missSchedule),
     };
   }
   return current;
@@ -901,7 +931,7 @@ export function reconcileProgress(serverBlob, localBlob, baselineBlob = null) {
   const days = activityDays(base, log, [server, local]);
   const cardDays = days.filter((day) => [server, local].some((blob) => (blob?.rewards?.cardOps ?? []).some((op) => op?.day === day && !(base.rewards?.cardOps ?? []).some((item) => item?.id === op.id))));
   if (unseen) {
-    put(merged, "ability", replayed.ability);
+    put(merged, "ability", adoptRecordedAbility(replayed.ability, server, local, log));
     let daily = replayed.daily;
     if (daily?.day && cardDays.includes(daily.day)) {
       const known = new Set((base.rewards?.cardOps ?? []).map((op) => op?.id));
