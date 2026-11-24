@@ -1,0 +1,122 @@
+{
+  "model": "openai/gpt-6.1-sol",
+  "mode": "trusted",
+  "meta": {
+    "base": "dbbf4eb6843d0939351ec1438217118e4607f959",
+    "head": "74619ed1b537ec484cb8d3bccd124c78dda131c0",
+    "pr": "184"
+  },
+  "reviewedAt": "2026-11-24T07:53:04.241Z",
+  "filesReviewed": [
+    "pulsern/PULSERN_BUILD.md",
+    "pulsern/ops/capture-product-screenshots.mjs",
+    "pulsern/public/product/product-screenshots.json",
+    "pulsern/public/product/pulsern-adaptive-practice.png",
+    "pulsern/public/product/pulsern-lab-reference.png",
+    "pulsern/public/product/pulsern-today-dashboard.png",
+    "pulsern/src/App.jsx",
+    "pulsern/src/app-routing.js",
+    "pulsern/src/auth.jsx",
+    "pulsern/src/case-studies.js",
+    "pulsern/src/effects.js",
+    "pulsern/src/guest.js",
+    "pulsern/src/guest.jsx",
+    "pulsern/src/lab-fab.jsx",
+    "pulsern/src/lab-panel.jsx",
+    "pulsern/src/progress-load.js",
+    "pulsern/src/question-review.js",
+    "pulsern/src/rewards-ui.jsx",
+    "pulsern/src/rewards.js",
+    "pulsern/src/sign-out.js",
+    "pulsern/src/state.js",
+    "pulsern/tests/browser/announcer-harness.jsx",
+    "pulsern/tests/browser/announcer.html",
+    "pulsern/tests/browser/guest-harness.jsx",
+    "pulsern/tests/browser/guest.html",
+    "pulsern/tests/capture-fonts.test.js",
+    "pulsern/tests/card-nav-browser.test.js",
+    "pulsern/tests/effects.test.js",
+    "pulsern/tests/exam-leave-browser.test.js",
+    "pulsern/tests/flashcards-undo-browser.test.js",
+    "pulsern/tests/guest-browser.test.js",
+    "pulsern/tests/guest.test.js",
+    "pulsern/tests/lab-fab-browser.test.js",
+    "pulsern/tests/progress-load-browser.test.js",
+    "pulsern/tests/question-nav-browser.test.js",
+    "pulsern/tests/question-review.test.js",
+    "pulsern/tests/read-aloud-hook.test.js",
+    "pulsern/tests/review2-blockers.test.js",
+    "pulsern/tests/review2-fixes.test.js",
+    "pulsern/tests/review3-browser.test.js",
+    "pulsern/tests/review3.test.js",
+    "pulsern/tests/rewards.test.js",
+    "pulsern/tests/state-migration.test.js"
+  ],
+  "skipped": [],
+  "findings": [
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/guest.jsx",
+      "line": 32,
+      "title": "Correct the warfarin item before serving it in the guest trial",
+      "problem": "The new guest pool includes built-in question id 3 (App.jsx lines 34–38), which keys vitamin K plus holding warfarin for an INR of 4.8 without bleeding. For INR 4.5–10 without bleeding, routine vitamin K is not recommended; holding warfarin with INR follow-up is usual unless additional bleeding-risk factors justify reversal. The stem supplies no such factors, and no option offers standard management.",
+      "failure_scenario": "An anonymous student receives question 3 and is taught that an INR of 4.8 without bleeding routinely warrants vitamin K.",
+      "fix": "Revise the keyed option and rationale to reflect holding warfarin and monitoring/follow-up in the stated scenario, then pass the corrected item through the clinical accuracy gate.",
+      "confidence": "high"
+    },
+    {
+      "severity": "blocker",
+      "file": "pulsern/src/App.jsx",
+      "line": 350,
+      "title": "A skipped save is reported as success and deletes trial answers",
+      "problem": "store.set returns normally when getSession yields no session. createSaveQueue interprets that return as a successful write, so the autosave completion handler clears the guest copy and can announce that the answers are in the account even though no upsert occurred. Queue invalidation only covers this component's explicit sign-out handler, not session expiration or an auth-driven unmount.",
+      "failure_scenario": "An existing user accepts the trial handoff as their session expires. The autosave's getSession returns null after a failed refresh; the task resolves successfully, and the only persisted copy of the trial answers is removed.",
+      "fix": "Distinguish a persisted write from a signed-out/skipped operation. Clear the guest copy and show confirmation only after a successful upsert for the expected account. Invalidate pending save callbacks on unmount/auth changes, and test session loss between handoff and save.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/rewards.js",
+      "line": 108,
+      "title": "Malformed reward markers escape migration and crash the app",
+      "problem": "migrateRewards accepts any integer rankHigh and copies badgesSeen without validating tier bounds. badgeBoard subsequently dereferences TIERS[earned].name, and CareerCard dereferences career.rank.name. Values such as badgesSeen.Pharmacology = 5 or rankHigh = 99 therefore pass parseProgress as readable progress but crash during rendering, bypassing the new unreadable-progress recovery screen.",
+      "failure_scenario": "A saved blob contains an out-of-range reward marker. Signing in repeatedly reaches the error boundary instead of loading with safe defaults or offering the protected recovery flow.",
+      "fix": "Validate rank indices and badge tiers against their actual ranges during migration, defaulting invalid optional markers safely. Add both malformed-marker migration tests and a mounted-App recovery test.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 931,
+      "title": "Rapid repeats still build correct runs and personal bests",
+      "problem": "Run eligibility only excludes results whose reason is \"too-fast\". answerXp returns \"repeat\" before checking elapsed time, so a previously correct question answered in milliseconds is counted toward the run. guestAnswer uses the same eligibility check. This contradicts the adjacent guarantee that a too-fast tap never builds a run.",
+      "failure_scenario": "A student repeatedly reopens a completed case and rapidly taps its known answers. XP remains zero, but combos and longest-correct-run records continue increasing without meeting the reading-time floor.",
+      "fix": "Compute time eligibility independently of the XP rejection reason and use it consistently for account and guest runs. Add a test with an earlier correct answer and an elapsed time below minThinkMs, asserting that the run does not advance.",
+      "confidence": "high"
+    },
+    {
+      "severity": "major",
+      "file": "pulsern/src/App.jsx",
+      "line": 948,
+      "title": "Undoing a card after midnight reverses the wrong day's ledger",
+      "problem": "unnoteCard always adjusts today's reward entry, while the undo record stores only the prior schedule and XP—not the day originally credited. An undo after local midnight therefore leaves the original day's card count and XP intact. If no cards were graded on the new day, the early return skips the ledger reversal entirely even though lifetime XP is subtracted.",
+      "failure_scenario": "Grade Good for 5 XP before midnight, leave the tab open, then undo and regrade after midnight. The header ends with 5 XP, but the two daily entries total 10 XP and two reviewed cards for the single retained grade.",
+      "fix": "Store the credited local day with each undo record and pass it to the reward-ledger reversal. Only decrement daily.answered when it belongs to that credited day. Test grade → midnight → undo → regrade through the actual handlers.",
+      "confidence": "high"
+    }
+  ],
+  "usage": {
+    "promptTokens": 226327,
+    "completionTokens": 13272,
+    "reasoningTokens": 12072,
+    "costUsd": 0.698536
+  },
+  "error": null,
+  "verdict": "FAIL",
+  "assessment": "Not ready to ship. The new guest flow exposes an incorrect anticoagulation item, and the save/reward integration has concrete data-loss and state-handling defects. Review was based on the supplied diff and images; tests and build were not executed.",
+  "counts": {
+    "blocker": 2,
+    "major": 3,
+    "minor": 0
+  }
+}
