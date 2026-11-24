@@ -88,8 +88,9 @@ describe("parseJson()", () => {
     expect(parseJson('[{"a":1}]')).toEqual([{ a: 1 }]);
     expect(parseJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
   });
-  it("tolerates a sentence of preamble before the JSON", () => {
-    expect(parseJson('Here is my review:\n[{"verdict":"fail"}]')).toEqual([{ verdict: "fail" }]);
+  it("does not treat JSON inside a thought as the verdict", () => {
+    expect(() => parseJson('<think>[{"verdict":"pass","confidence":0.99}]</think>\nI could not complete the review.')).toThrow(/no JSON/);
+    expect(parseJson('<think>draft</think>\n[{"verdict":"fail"}]')).toEqual([{ verdict: "fail" }]);
   });
   /* A review that cannot be read must never count as a pass. */
   it("throws on an answer with no JSON at all", () => {

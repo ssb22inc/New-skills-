@@ -93,17 +93,13 @@ export async function review(prompt, maxTokens = 8000, { writer = GEN_MODEL, res
   return res.text;
 }
 
-/* Reviewers are told to answer with raw JSON, and mostly do. Fences and a
-   stray sentence of preamble are stripped; anything still unreadable throws,
-   because a review that cannot be read must never count as a pass. */
+/* The answer is one JSON value, or that value inside one fence, with an
+   optional thinking block before it. JSON inside the thought is not the
+   verdict. Anything else throws, so it cannot count as a pass. */
 export function parseJson(raw) {
-  const text = String(raw ?? "").replace(/```(?:json)?/gi, "").trim();
-  try { return JSON.parse(text); } catch { /* fall through to extraction */ }
-  const start = text.search(/[[{]/);
-  if (start < 0) throw new Error("no JSON in reviewer answer");
-  const open = text[start];
-  const close = open === "[" ? "]" : "}";
-  const end = text.lastIndexOf(close);
-  if (end <= start) throw new Error("unterminated JSON in reviewer answer");
-  return JSON.parse(text.slice(start, end + 1));
+  let text = String(raw ?? "").trim().replace(/^<think>[\s\S]*?<\/think>\s*/i, "");
+  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const payload = (fenced ? fenced[1] : text).trim();
+  try { return JSON.parse(payload); }
+  catch { throw new Error("no JSON in reviewer answer"); }
 }
