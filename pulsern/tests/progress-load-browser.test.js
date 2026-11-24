@@ -33,7 +33,7 @@ const questions = new Proxy({}, { get(_t, p) {
 } });
 const progress = new Proxy({}, { get(_t, p) {
   if (p === "then") return (res) => Promise.resolve(window.__readError ? { data: null, error: { message: "network" } } : window.__nullBlob ? { data: { blob: null }, error: null } : window.__row ? { data: { blob: window.__row }, error: null } : { data: null, error: null }).then(res);
-  if (p === "delete") { window.__deletes = (window.__deletes || 0) + 1; return () => progress; }
+  if (p === "delete") { window.__deletes = (window.__deletes || 0) + 1; window.__row = null; window.__hasRow = false; window.__revision = 0; return () => progress; }
   if (p === "update" || p === "insert" || p === "upsert") return (row) => {
     const kind = p;
     const filters = [];
@@ -69,14 +69,17 @@ const progress = new Proxy({}, { get(_t, p) {
           }
           const expected = filters.find((pair) => pair[0] === "revision")?.[1];
           const current = window.__revision || 0;
-          const exists = !!window.__row || (window.__upserts || []).length > 0;
+          if (typeof window.__hasRow !== "boolean") window.__hasRow = !!window.__row;
+          const exists = window.__hasRow;
           if (kind === "insert") {
             if (exists) return { data: [], error: { code: "23505", message: "duplicate" } };
+            window.__hasRow = true;
             window.__revision = 1;
             (window.__upserts ||= []).push(row.blob);
             return { data: [{ revision: 1 }], error: null };
           }
           if (!exists || expected !== current) return { data: [], error: null };
+          window.__hasRow = true;
           window.__revision = current + 1;
           (window.__upserts ||= []).push(row.blob);
           return { data: [{ revision: window.__revision }], error: null };
@@ -332,6 +335,11 @@ describe("REVIEW-4", () => {
       await page.getByRole("button", { name: /Reset all progress/ }).click();
       await page.getByRole("button", { name: /Yes, erase everything/ }).click();
       await page.waitForFunction(() => (window.__deletes || 0) === 1);
+      await page.getByRole("button", { name: "Practice", exact: true }).click();
+      await page.getByRole("button", { name: /New questions/ }).click();
+      await page.getByRole("radio").first().click();
+      await page.getByRole("button", { name: "Check answer" }).click();
+      await page.waitForFunction(() => (window.__upserts || []).some((blob) => Array.isArray(blob.log) && blob.log.length === 1));
     } finally { await ctx.close(); }
   }, 120_000);
 });

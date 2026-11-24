@@ -386,10 +386,11 @@ const store = {
       if (signal && request && typeof request.abortSignal === "function") request = request.abortSignal(signal);
       if (!current()) throw aborted();
       const { data, error } = await request ?? {};
-      if (!current()) throw aborted();
+      const revision = Array.isArray(data) ? Number(data[0]?.revision) || null : null;
+      if (revision) progressRevision = revision;
       if (error) throw new Error(error.message || "Could not save progress");
-      const revision = Array.isArray(data) ? data[0]?.revision : data?.revision;
-      return Number(revision) || null;
+      if (!current()) throw aborted();
+      return revision;
     };
     let revision = await finish(writeAt(progressRevision));
     if (!revision && progressRevision === 0 && current()) {
@@ -409,6 +410,7 @@ const store = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     await supabase.from("progress").delete().eq("user_id", session.user.id).eq("key", key);
+    progressRevision = 0;
   },
 };
 
